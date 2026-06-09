@@ -156,7 +156,7 @@ wheels = [
 ]
 
 [[package]]
-name = "w3x-extract"
+name = "w3xray"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

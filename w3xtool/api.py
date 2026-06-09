@@ -222,25 +222,36 @@ def _add_base_objects(md: "MapData"):
         md.obj_index[code] = obj
 
 
-def _add_script_refs(md: "MapData", script_text: str):
-    """把脚本里引用、但对象数据缺失的 物品/单位 代码补进分类（标注脚本引用）。"""
+def _add_script_refs(md: "MapData", script_text: str, shared_index: dict | None = None):
+    """把脚本里引用、但对象数据缺失的 物品/单位 代码补进分类。
+
+    战役子地图：若该码在战役共享对象(shared_index)里有定义，用其真名/分类/字段
+    （标〔战役共享〕）；否则只能按脚本引用补一个光秃秃的码。
+    """
     from .script_scan import scan_object_refs
     refs = scan_object_refs(script_text)
     for cat, codes in refs.items():
-        bucket = md.objects.setdefault(cat, [])
-        added = 0
         for code in sorted(codes):
             if code in md.obj_index:
                 continue                      # 对象数据已有，跳过
-            name = BASE_NAMES.get(code) or code
-            obj = GameObject(
-                category=cat, ext="script", obj_id=code, base_id=code,
-                name=name, is_custom=(code not in BASE_NAMES),
-                fields=[("来源", "脚本引用（无对象数据，可能缺属性/名称）")],
-                search_text=f"{code} {name}".lower())
-            bucket.append(obj)
+            shared = shared_index.get(code) if shared_index else None
+            if shared is not None:
+                obj = GameObject(
+                    category=shared.category, ext="campaign",
+                    obj_id=code, base_id=shared.base_id, name=shared.name,
+                    is_custom=shared.is_custom,
+                    fields=[("来源", "战役共享对象")] + list(shared.fields),
+                    search_text=shared.search_text, icon=shared.icon)
+                md.objects.setdefault(shared.category, []).append(obj)
+            else:
+                name = BASE_NAMES.get(code) or code
+                obj = GameObject(
+                    category=cat, ext="script", obj_id=code, base_id=code,
+                    name=name, is_custom=(code not in BASE_NAMES),
+                    fields=[("来源", "脚本引用（无对象数据，可能缺属性/名称）")],
+                    search_text=f"{code} {name}".lower())
+                md.objects.setdefault(cat, []).append(obj)
             md.obj_index[code] = obj
-            added += 1
 
 
 def _map_name(archive: MPQArchive) -> str:
@@ -287,7 +298,7 @@ def _add_binary_objects(md: "MapData", archive: MPQArchive, wts: dict,
             md.obj_index.setdefault(o.base_id, o)
 
 
-def load_map(path: str, _depth: int = 0) -> MapData:
+def load_map(path: str, _depth: int = 0, shared_index: dict | None = None) -> MapData:
     path = os.fspath(path)
     archive = MPQArchive(path)
     wts = {}
@@ -328,9 +339,10 @@ def load_map(path: str, _depth: int = 0) -> MapData:
                 pass
 
     # 脚本兜底：把脚本引用、但对象数据里没有的 物品/单位 代码补进来
+    # （战役子地图会回退查战役共享对象 shared_index 取真名）
     script_text = _best_script_text(md.scripts)
     if script_text:
-        _add_script_refs(md, script_text)
+        _add_script_refs(md, script_text, shared_index)
 
     # 基础对象库：仅在地图本身解析出内容时才补原版对象
     own = sum(len(v) for v in md.objects.values())
@@ -347,7 +359,8 @@ def load_map(path: str, _depth: int = 0) -> MapData:
                 tmp = os.path.join(os.environ.get("TEMP", "."), "_w3n_" + os.path.basename(inner))
                 with open(tmp, "wb") as f:
                     f.write(data)
-                sub = load_map(tmp, _depth + 1)
+                # 把战役共享对象索引传给子地图，让它的脚本引用能取到真名
+                sub = load_map(tmp, _depth + 1, shared_index=md.obj_index)
                 sub.name = inner
                 md.sub_maps.append(sub)
             except Exception:
