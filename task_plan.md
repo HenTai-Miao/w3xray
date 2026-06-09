@@ -66,6 +66,7 @@
 | Phase 34: 目录/交互细节(用户反馈) | complete | 每模式各记目录各扫列表(不互相覆盖)+两模式目录持久化；战役选目录零解析(点战役才加载)；左侧地图列表改双击加载；右键复制/粘贴(_attach_ctx_menu)；测试51例全过 |
 | Phase 35: 子图脚本引用取共享真名+全图审计 | complete | _add_script_refs 加 shared_index 回退(子图引用 war3campaign.* 对象显示真名,XSHZ-1光秃秃33→0)；逐文件审计2战役+对战图:对象文件零失败/名字解析96~99%/无漏掉的数据文件类型；测试52例全过 |
 | Phase 36: 去无名原版对象噪声 | complete | _add_base_objects 跳过无显示名的原版对象(BASE_OBJECTS有但*Strings没名的6个系统内部码 edol/Ansp等)；战役子图光秃秃清零；测试54例全过 |
+| Phase 37: 补评审缺口 | complete | Lua FourCC("xxxx")识别;聊天指令支持...ChatEventBJ封装;_build_objects失败打告警不全静默;explode实测占0%划掉;测试62例全过 |
 
 > **会话 4 起范围调整**：放弃加密保护图(千风物语类)提取，移除地图视图与运行时 dump。Phase 6/10-14/24 相关功能已删除，仅保留正常地图的对象/脚本/指令/配方提取与导出。
 

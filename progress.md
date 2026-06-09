@@ -148,4 +148,13 @@
 - 审计发现的"每图都冒的 6 个光秃秃码"(edol/htws/ugsp 单位 + Ansp/Stpm/Stpr 技能)根因：它们在 BASE_OBJECTS(游戏 *Data.slk)里有、但 *Strings/*Func 没给显示名（系统内部对象）。`_add_base_objects` 现在跳过无名原版对象。
 - 效果：战役子图光秃秃条目清零(XSHZ-1: 6→0)，杂交版去掉这 6 个 base 噪声。剩余少量光秃秃码是地图自己定义但作者没起名的内部技能/buff（字段都在，无名可查，非漏提）。
 - 测试 54 例全过；onedir 重新打包。
-- 剩余优化：explode 原生扩展（需 C/Rust）；配方识别仅覆盖标准 YDWE 写法（实测这些图本就无编辑器配方）。
+
+### 会话 5 续6：补评审缺口（脚本扫描覆盖面 + 不再全静默）
+- 评审结论：对用户实际地图(JASS)已完善实测正确；以下为其它地图类型的缺口，本次补可补的：
+  - ① Lua `FourCC("xxxx")`：`_codes_in` 增 `_FOURCC_FN` 识别双引号/FourCc 函数写法。
+  - ② 聊天指令 `...ChatEventBJ`：`scan_chat_commands` 增 `_CHAT_BJ`（参数顺序不同）。
+  - ③ `_build_objects` 解析失败打 stderr 告警(cli/控制台可见)，不再完全静默；畸形文件仍优雅返回空。
+- 核实为误报/不改：`.doo`(放置实例,非定义)、战役 `text_cats`(顶层 text 与 war3campaign 同归档,逻辑一致)。
+- explode 原生提速：实测 explode 占加载时间 0%（这些图用 zlib 非 PKWARE），划掉不做。
+- 测试 62 例全过；onedir 重新打包。
+- 剩余(可选)：Lua 配方按函数切分仍是 JASS 风、.doo 放置解析、UI 内可见的解析失败提示。
