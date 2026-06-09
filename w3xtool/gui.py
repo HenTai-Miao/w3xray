@@ -194,6 +194,7 @@ class App(ctk.CTk):
             vsb.pack(side="right", fill="y")
             tv.pack(side="left", fill="both", expand=True)
             tv.bind("<<TreeviewSelect>>", lambda e, c=cat: self._on_col_select(c))  # 单击看详情
+            self._attach_tree_copy(tv)                                            # 右键复制名字
             self.col_trees[cat] = tv
             self.col_results[cat] = []
             paned.add(col, weight=3)
@@ -239,6 +240,7 @@ class App(ctk.CTk):
         self.cmd_tree.configure(yscrollcommand=vsb.set)
         vsb.pack(side="right", fill="y")
         self.cmd_tree.pack(side="left", fill="both", expand=True)
+        self._attach_tree_copy(self.cmd_tree)
 
     def _build_rec_tab(self, parent):
         top = ctk.CTkFrame(parent, fg_color=BG)
@@ -266,6 +268,7 @@ class App(ctk.CTk):
         self.rec_tree.configure(yscrollcommand=vsb.set)
         vsb.pack(side="right", fill="y")
         self.rec_tree.pack(side="left", fill="both", expand=True)
+        self._attach_tree_copy(self.rec_tree)
 
     def _item_name(self, code):
         if self.map_data:
@@ -350,6 +353,36 @@ class App(ctk.CTk):
             self.clipboard_append(txt)
         except Exception:
             pass
+
+    def _attach_tree_copy(self, tree):
+        """给表格(Treeview)挂右键「复制选中行」。"""
+        menu = tk.Menu(self, tearoff=0)
+        menu.add_command(label="复制", command=lambda: self._copy_tree_row(tree))
+
+        def popup(e):
+            row = tree.identify_row(e.y)
+            if row and row not in tree.selection():
+                tree.selection_set(row)
+                tree.focus(row)
+            try:
+                menu.tk_popup(e.x_root, e.y_root)
+            finally:
+                menu.grab_release()
+        tree.bind("<Button-3>", popup)
+
+    def _copy_tree_row(self, tree):
+        sel = tree.selection()
+        if not sel:
+            return
+        lines = []
+        for iid in sel:
+            text = str(tree.item(iid, "text")).strip()
+            vals = [str(v) for v in tree.item(iid, "values") if str(v).strip()]
+            parts = ([text] if text else []) + vals
+            lines.append("\t".join(parts))
+        if lines:
+            self.clipboard_clear()
+            self.clipboard_append("\n".join(lines))
 
     # ---------- 地图目录列表 ----------
     def _config_path(self):

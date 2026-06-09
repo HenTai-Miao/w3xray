@@ -158,3 +158,7 @@
 - explode 原生提速：实测 explode 占加载时间 0%（这些图用 zlib 非 PKWARE），划掉不做。
 - 测试 62 例全过；onedir 重新打包。
 - 剩余(可选)：Lua 配方按函数切分仍是 JASS 风、.doo 放置解析、UI 内可见的解析失败提示。
+
+### 会话 5 续7：隐藏指令/合成配方/对象列 右键复制
+- 之前只有搜索框/详情框能右键复制；表格(Treeview)不能。新增 `_attach_tree_copy`/`_copy_tree_row`：右键复制选中行（指令="指令\t说明"、配方="成品\t材料"、对象列=名字），挂到 cmd_tree/rec_tree/四个 col_trees。
+- 测试 `tests/test_gui_copy.py`（3 例，验证剪贴板内容）；共 65 例全过；onedir 重新打包。
