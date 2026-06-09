@@ -207,11 +207,17 @@ def _add_text_objects(md: "MapData", archive: MPQArchive):
 
 
 def _add_base_objects(md: "MapData"):
-    """把游戏原版对象(默认字段)中地图未包含的补进来，标记原版。"""
+    """把游戏原版对象(默认字段)中地图未包含的补进来，标记原版。
+
+    无显示名的原版对象（游戏数据表里有、但 *Strings/*Func 没给名字的系统内部对象）
+    跳过——它们对用户是光秃秃的码，加进来只是噪声。
+    """
     for code, (cat, fields) in BASE_OBJECTS.items():
         if code in md.obj_index:
             continue
-        name = BASE_NAMES.get(code) or code
+        name = BASE_NAMES.get(code)
+        if not name:                  # 无名的系统内部对象，不加（避免每张图都冒光秃秃码）
+            continue
         search = (code + " " + name + " " +
                   " ".join(str(v) for _, v in fields)).lower()
         obj = GameObject(category=cat, ext="base", obj_id=code, base_id=code,
