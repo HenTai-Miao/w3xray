@@ -12,6 +12,7 @@ import threading
 import traceback
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
+from tkinter import font as tkfont
 
 import customtkinter as ctk
 
@@ -265,11 +266,13 @@ class App(ctk.CTk):
                                      show="headings", selectmode="browse")
         self.rec_tree.heading("result", text="成品")
         self.rec_tree.heading("ingredients", text="材料（合成所需）")
-        self.rec_tree.column("result", width=220, anchor="w")
-        self.rec_tree.column("ingredients", width=620, anchor="w")
+        self.rec_tree.column("result", width=220, anchor="w", stretch=False)
+        self.rec_tree.column("ingredients", width=620, anchor="w", stretch=False)
         vsb = ttk.Scrollbar(inner, orient="vertical", command=self.rec_tree.yview)
-        self.rec_tree.configure(yscrollcommand=vsb.set)
+        hsb = ttk.Scrollbar(inner, orient="horizontal", command=self.rec_tree.xview)
+        self.rec_tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         vsb.pack(side="right", fill="y")
+        hsb.pack(side="bottom", fill="x")
         self.rec_tree.pack(side="left", fill="both", expand=True)
         self._attach_tree_copy(self.rec_tree)
 
@@ -281,10 +284,18 @@ class App(ctk.CTk):
         bn = BASE_NAMES.get(code)
         return f"{bn}({code})" if bn else code
 
+    def _measure_font(self):
+        """缓存一个与表格行同字体的测量用 Font，用来算材料列该多宽。"""
+        if not hasattr(self, "_rec_font"):
+            self._rec_font = tkfont.Font(family=FONT, size=11)
+        return self._rec_font
+
     def _refresh_recipes(self):
         q = self.rec_search.get().strip().lower()
         self.rec_tree.delete(*self.rec_tree.get_children())
         n = 0
+        widest = 0
+        f = self._measure_font()
         for r in self.recipes:
             res_name = self._item_name(r.result)
             counts = Counter(r.ingredients)
@@ -297,7 +308,10 @@ class App(ctk.CTk):
                 continue
             self.rec_tree.insert("", "end", values=(res_name, ing_str),
                                  tags=("odd" if n % 2 else "even",))
+            widest = max(widest, f.measure(ing_str))
             n += 1
+        # 材料列按最长内容自适应宽度，配合横向滚动条看全（不会自动换行）
+        self.rec_tree.column("ingredients", width=max(620, widest + 28))
         self.rec_tree.tag_configure("odd", background=ROW_ALT)
         self.rec_tree.tag_configure("even", background=CARD)
         if self.recipes:
@@ -326,6 +340,8 @@ class App(ctk.CTk):
         style.map("Treeview.Heading", background=[("active", "#3a3d3f")])
         # 细化滚动条，融入深色
         style.configure("Vertical.TScrollbar", background=CARD, troughcolor=BG,
+                        borderwidth=0, arrowsize=12)
+        style.configure("Horizontal.TScrollbar", background=CARD, troughcolor=BG,
                         borderwidth=0, arrowsize=12)
 
     # ---------- 右键菜单 ----------
