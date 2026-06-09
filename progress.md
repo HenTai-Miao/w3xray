@@ -162,3 +162,9 @@
 ### 会话 5 续7：隐藏指令/合成配方/对象列 右键复制
 - 之前只有搜索框/详情框能右键复制；表格(Treeview)不能。新增 `_attach_tree_copy`/`_copy_tree_row`：右键复制选中行（指令="指令\t说明"、配方="成品\t材料"、对象列=名字），挂到 cmd_tree/rec_tree/四个 col_trees。
 - 测试 `tests/test_gui_copy.py`（3 例，验证剪贴板内容）；共 65 例全过；onedir 重新打包。
+
+### 会话 5 续8：右键去剪切 + 搜索独立 + 搜索框居中（用户反馈）
+- 右键菜单去掉「剪切」，只留复制/粘贴（`_attach_ctx_menu`）。
+- 切换对战图/战役图时清空左侧搜索框（`_on_mode_change` 加 `map_search.set("")`）——战役与对战是两套独立列表。三个标签页搜索框本就各搜各的（已确认）。
+- 4 个搜索框文字改居中（CTkEntry `justify="center"`）。
+- 65 例全过；onedir 重新打包。

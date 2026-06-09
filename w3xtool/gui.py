@@ -135,6 +135,7 @@ class App(ctk.CTk):
         self.search_var = tk.StringVar()
         self.search_var.trace_add("write", lambda *_: self._refresh_list())
         se = ctk.CTkEntry(ctrl, textvariable=self.search_var, height=32, font=(FONT, 12),
+                          justify="center",
                           placeholder_text="🔍  搜索名称/ID/描述　空格=且　竖线|=或　例：智力 剑|法杖")
         se.pack(fill="x")
         self._attach_ctx_menu(se, paste=True)
@@ -161,7 +162,7 @@ class App(ctk.CTk):
         self.map_search = tk.StringVar()
         self.map_search.trace_add("write", lambda *_: self._populate_left())
         mse = ctk.CTkEntry(leftp, textvariable=self.map_search, height=28, font=(FONT, 11),
-                           placeholder_text="🔍 搜索…")
+                           justify="center", placeholder_text="🔍 搜索…")
         mse.pack(fill="x", padx=8, pady=(0, 4))
         self._attach_ctx_menu(mse, paste=True)
         mlw = tk.Frame(leftp, bg=CARD)
@@ -220,6 +221,7 @@ class App(ctk.CTk):
         self.cmd_search = tk.StringVar()
         self.cmd_search.trace_add("write", lambda *_: self._refresh_cmds())
         cse = ctk.CTkEntry(top, textvariable=self.cmd_search, height=38, font=(FONT, 14),
+                           justify="center",
                            placeholder_text="🔍  搜索指令/说明　空格=且　竖线|=或")
         cse.pack(fill="x")
         self._attach_ctx_menu(cse, paste=True)
@@ -248,6 +250,7 @@ class App(ctk.CTk):
         self.rec_search = tk.StringVar()
         self.rec_search.trace_add("write", lambda *_: self._refresh_recipes())
         rse = ctk.CTkEntry(top, textvariable=self.rec_search, height=38, font=(FONT, 14),
+                           justify="center",
                            placeholder_text="🔍  搜索材料/成品名称　空格=且　竖线|=或")
         rse.pack(fill="x")
         self._attach_ctx_menu(rse, paste=True)
@@ -327,7 +330,7 @@ class App(ctk.CTk):
 
     # ---------- 右键菜单 ----------
     def _attach_ctx_menu(self, ctk_widget, paste=False, copy_all=False):
-        """给输入框/文本框挂右键复制/粘贴/剪切菜单。"""
+        """给输入框/文本框挂右键复制/粘贴菜单。"""
         inner = (getattr(ctk_widget, "_entry", None)
                  or getattr(ctk_widget, "_textbox", None) or ctk_widget)
         menu = tk.Menu(self, tearoff=0)
@@ -336,7 +339,6 @@ class App(ctk.CTk):
                              command=lambda: self._copy_all_text(ctk_widget))
         menu.add_command(label="复制", command=lambda: inner.event_generate("<<Copy>>"))
         if paste:
-            menu.add_command(label="剪切", command=lambda: inner.event_generate("<<Cut>>"))
             menu.add_command(label="粘贴", command=lambda: inner.event_generate("<<Paste>>"))
 
         def popup(e):
@@ -553,6 +555,7 @@ class App(ctk.CTk):
 
     def _on_mode_change(self, mode):
         self.mode = "campaign" if mode == "战役图" else "battle"
+        self.map_search.set("")      # 战役与对战是两套独立列表，切模式清空搜索
         self._populate_left()
 
     def _on_tree_open(self, _evt):
