@@ -1,0 +1,15 @@
+[project]
+name = "w3xray"
+version = "0.1.0"
+description = "X-ray your Warcraft III maps — extract units, items, abilities, tech, scripts, hidden chat commands and recipes from .w3x/.w3m/.w3n (pure Python, no StormLib)."
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "customtkinter>=5.2.2",
+    "pillow>=12.2.0",
+]
+
+[dependency-groups]
+dev = [
+    "pyinstaller>=6.20.0",
+]

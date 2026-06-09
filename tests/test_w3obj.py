@@ -1,0 +1,76 @@
+"""对象编辑器数据(w3u/w3t/w3a…)二进制解析测试。
+
+格式：version(i32) + 原始表 + 自定义表；每表 count(i32) 个对象，
+每对象 oldId(4)+newId(4)+numMods(i32)+mods；带等级类型(w3a/w3q/w3d)每个 mod 多 level+dataPtr 两个 i32。
+"""
+import struct
+import unittest
+
+from w3xtool.w3obj import parse_object_data
+
+
+def _tag(s):
+    return s.encode("latin-1")
+
+
+def _mod(field_id, var_type, value, level=None):
+    b = _tag(field_id) + struct.pack("<i", var_type)
+    if level is not None:
+        b += struct.pack("<i", level) + struct.pack("<i", 0)   # level + data ptr(忽略)
+    if var_type == 0:
+        b += struct.pack("<i", value)
+    elif var_type in (1, 2):
+        b += struct.pack("<f", value)
+    elif var_type == 3:
+        b += value.encode("utf-8") + b"\x00"
+    b += struct.pack("<I", 0)                                  # 末尾校验，忽略
+    return b
+
+
+def _obj(old_id, new_id, mods):
+    return _tag(old_id) + _tag(new_id) + struct.pack("<i", len(mods)) + b"".join(mods)
+
+
+def _build(original, custom, version=2):
+    out = struct.pack("<i", version)
+    out += struct.pack("<i", len(original)) + b"".join(original)
+    out += struct.pack("<i", len(custom)) + b"".join(custom)
+    return out
+
+
+class TestParseObjectData(unittest.TestCase):
+    def test_original_and_custom_tables(self):
+        original = [_obj("hpea", "hpea", [_mod("unam", 3, "Peasant"), _mod("uhpm", 0, 100)])]
+        custom = [_obj("hpea", "x000", [_mod("unam", 3, "My Peasant")])]
+        objs = parse_object_data(_build(original, custom), "w3u")
+        self.assertEqual(len(objs), 2)
+
+        base = objs[0]
+        self.assertFalse(base.is_custom)
+        self.assertEqual(base.old_id, "hpea")
+        self.assertEqual([(m.field_id, m.value) for m in base.mods],
+                         [("unam", "Peasant"), ("uhpm", 100)])
+
+        cust = objs[1]
+        self.assertTrue(cust.is_custom)
+        self.assertEqual(cust.new_id, "x000")
+        self.assertEqual(cust.mods[0].value, "My Peasant")
+
+    def test_leveled_ability_format(self):
+        # w3a 每个 mod 多 level + dataPtr
+        ab = [_obj("AHbz", "A000", [_mod("ahdu", 1, 5.0, level=2)])]
+        objs = parse_object_data(_build(ab, []), "w3a")
+        self.assertEqual(len(objs), 1)
+        m = objs[0].mods[0]
+        self.assertEqual(m.field_id, "ahdu")
+        self.assertEqual(m.level, 2)
+        self.assertAlmostEqual(m.value, 5.0, places=4)
+
+    def test_unknown_var_type_raises(self):
+        bad = [_obj("hpea", "hpea", [_mod("unam", 99, 0)])]
+        with self.assertRaises(ValueError):
+            parse_object_data(_build(bad, []), "w3u")
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,51 @@
+"""BLP2 调色板解码特征测试：锁定 索引→RGBA 的精确输出。
+
+BLP 调色板是 BGRA 存储；解码应映射成 RGBA（B/R 交换），无 alpha 通道时 alpha=255。
+用于在把逐像素循环改成向量化(PIL "P" 模式)时保证输出不变。
+"""
+import struct
+import unittest
+
+from w3xtool.blp import decode_blp
+
+
+def _build_blp2_palette(width, height, palette_bgra, indices, alpha=None):
+    """构造一张最小 BLP2 调色板图。palette_bgra: list[(B,G,R,A)]；indices: list[int]。"""
+    buf = bytearray(20 + 128 + 1024)
+    buf[0:4] = b"BLP2"
+    alpha_depth = 8 if alpha is not None else 0
+    struct.pack_into("<BBBBB", buf, 4, 0, 1, alpha_depth, 0, 0)  # type,encoding=1,alpha_depth,...
+    struct.pack_into("<II", buf, 12, width, height)
+    data_off = 20 + 128 + 1024
+    struct.pack_into("<I", buf, 20, data_off)                    # mip_offsets[0]
+    pal = bytearray(1024)
+    for i, (b, g, r, a) in enumerate(palette_bgra):
+        pal[i * 4:i * 4 + 4] = bytes([b, g, r, a])
+    buf[20 + 128:20 + 128 + 1024] = pal
+    buf += bytes(indices)
+    if alpha is not None:
+        buf += bytes(alpha)
+    return bytes(buf)
+
+
+class TestBlp2Palette(unittest.TestCase):
+    def test_palette_indices_map_to_rgba(self):
+        pal = [(10, 20, 30, 255), (40, 50, 60, 255), (70, 80, 90, 255), (100, 110, 120, 255)]
+        data = _build_blp2_palette(2, 2, pal, [0, 1, 2, 3])
+        img = decode_blp(data)
+        self.assertEqual(img.size, (2, 2))
+        self.assertEqual(img.mode, "RGBA")
+        # BGRA(b,g,r) -> RGBA(r,g,b,255)，按像素展开成字节比较
+        self.assertEqual(img.tobytes(), bytes([
+            30, 20, 10, 255,  60, 50, 40, 255,
+            90, 80, 70, 255,  120, 110, 100, 255]))
+
+    def test_palette_with_8bit_alpha(self):
+        pal = [(10, 20, 30, 255), (40, 50, 60, 255)]
+        data = _build_blp2_palette(2, 1, pal, [0, 1], alpha=[128, 64])
+        img = decode_blp(data)
+        self.assertEqual(img.tobytes(), bytes([30, 20, 10, 128, 60, 50, 40, 64]))
+
+
+if __name__ == "__main__":
+    unittest.main()
