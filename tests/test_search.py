@@ -49,6 +49,19 @@ class TestFuzzyScore(unittest.TestCase):
     def test_combo_missing_and_term(self):
         self.assertIsNone(fuzzy_score("力量 剑|法杖", "智力法杖"))
 
+    # ---- 竖线两侧带空格仍是 OR（用户常这么打）----
+    def test_or_with_spaces_around_bar(self):
+        # "敏捷 | 全属性" 应是 (敏捷 或 全属性)，而不是 敏捷 且 全属性
+        self.assertIsNotNone(fuzzy_score("敏捷 | 全属性", "全属性指环"))
+        self.assertIsNotNone(fuzzy_score("敏捷 | 全属性", "敏捷之靴"))
+
+    def test_and_with_spaced_or_group(self):
+        # "等级C 敏捷 | 全属性" = 含"等级C" 且 (含"敏捷"或"全属性")
+        self.assertIsNotNone(fuzzy_score("等级C 敏捷 | 全属性", "等级C全属性指环"))
+        self.assertIsNotNone(fuzzy_score("等级C 敏捷 | 全属性", "等级C敏捷之靴"))
+        # 没有"等级C"的不该命中
+        self.assertIsNone(fuzzy_score("等级C 敏捷 | 全属性", "等级A敏捷之靴"))
+
 
 if __name__ == "__main__":
     unittest.main()

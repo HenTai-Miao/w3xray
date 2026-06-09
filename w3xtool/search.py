@@ -5,6 +5,10 @@
 """
 from __future__ import annotations
 
+import re
+
+_BAR_WS = re.compile(r"\s*\|\s*")   # 竖线两侧的空格都吃掉，保证 "a | b" 仍是 OR
+
 
 def _single_score(query: str, text: str):
     if not query:
@@ -28,7 +32,8 @@ def fuzzy_score(query: str, text: str):
     """支持 AND + OR 的多关键词搜索。命中返回累加分数，未命中返回 None。"""
     if not query:
         return 0
-    groups = query.replace("｜", "|").split()   # 空格分隔 → AND 各段
+    normalized = _BAR_WS.sub("|", query.replace("｜", "|"))   # "a | b" → "a|b"
+    groups = normalized.split()                  # 空格分隔 → AND 各段
     if not groups:
         return 0
     total = 0
