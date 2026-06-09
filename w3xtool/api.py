@@ -100,8 +100,13 @@ def _build_objects(archive: MPQArchive, ext: str, wts: dict, prefix: str = "war3
     try:
         raw = archive.read_file(fn)
         parsed = parse_object_data(raw, ext)
-    except Exception:
-        return []          # 单个对象文件解析失败时不拖垮整张图
+    except Exception as e:
+        # 单个对象文件解析失败时不拖垮整张图；但打条告警(cli/控制台可见)，
+        # 避免"解析失败"被完全静默成"没有该类对象"。
+        import sys
+        print(f"[w3xray] 警告：解析 {fn} 失败（{type(e).__name__}: {e}），"
+              f"该类对象可能不全", file=sys.stderr)
+        return []
     category = EXT_CATEGORY.get(ext, ext)
     name_field = NAME_FIELD.get(ext)
     result = []

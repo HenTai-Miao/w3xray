@@ -10,6 +10,10 @@ from dataclasses import dataclass
 
 _CHAT = re.compile(
     r'TriggerRegisterPlayerChatEvent\s*\(\s*([A-Za-z0-9_]+)\s*,[^,]+,\s*"((?:[^"\\]|\\.)*)"\s*,\s*(true|false)')
+# GUI 触发器常用 BJ 封装：TriggerRegisterPlayerChatEventBJ(trig, "cmd", exactMatch, player)
+# 注意参数顺序不同：字符串在第 2 位、exactMatch 在第 3 位
+_CHAT_BJ = re.compile(
+    r'TriggerRegisterPlayerChatEventBJ\s*\(\s*([A-Za-z0-9_]+)\s*,\s*"((?:[^"\\]|\\.)*)"\s*,\s*(true|false)')
 # Lua 写法：TriggerRegisterPlayerChatEvent(trig, player, "cmd", true)
 _CHAT_LUA = _CHAT
 
@@ -30,13 +34,14 @@ class ChatCommand:
 def scan_chat_commands(script: str) -> list:
     cmds = []
     seen = set()
-    for m in _CHAT.finditer(script):
-        trig, cmd, exact = m.group(1), m.group(2), m.group(3) == "true"
-        key = (cmd, exact)
-        if key in seen:
-            continue
-        seen.add(key)
-        cmds.append(ChatCommand(cmd, exact, trig, _find_hint(script, trig)))
+    for pat in (_CHAT, _CHAT_BJ):
+        for m in pat.finditer(script):
+            trig, cmd, exact = m.group(1), m.group(2), m.group(3) == "true"
+            key = (cmd, exact)
+            if key in seen:
+                continue
+            seen.add(key)
+            cmds.append(ChatCommand(cmd, exact, trig, _find_hint(script, trig)))
     # 按指令排序，空串/单字符靠后
     cmds.sort(key=lambda c: (len(c.command) == 0, not c.command.startswith("-"), c.command))
     return cmds
@@ -70,11 +75,14 @@ class Recipe:
 
 _FOURCC = re.compile(r"'([A-Za-z0-9]{4})'")
 _HEXCC = re.compile(r"\$([0-9A-Fa-f]{8})")
+# Lua 写法：FourCC("xxxx") / FourCC('xxxx')（双引号码不被 _FOURCC 捕获）
+_FOURCC_FN = re.compile(r"""FourCC\s*\(\s*["']([A-Za-z0-9]{4})["']\s*\)""")
 
 
 def _codes_in(s: str):
-    """从一段代码里取所有对象码：'xxxx' 文本码 + $XXXXXXXX 十六进制码。"""
+    """从一段代码里取所有对象码：'xxxx' 文本码 + $XXXXXXXX 十六进制码 + FourCC("xxxx")。"""
     out = list(_FOURCC.findall(s))
+    out += _FOURCC_FN.findall(s)
     for h in _HEXCC.findall(s):
         try:
             cc = bytes.fromhex(h).decode("latin-1")
