@@ -136,8 +136,9 @@ def _build_objects(archive: MPQArchive, ext: str, wts: dict, prefix: str = "war3
             if m.level:
                 label = f"{label} (等级{m.level})"
             fields_list.append((label, _fmt_value(val)))
+        # 原样保留大小写：模糊搜索不分大小写、引号精准搜索区分大小写（在 fuzzy_score 内处理）
         search_text = " ".join([obj_id, o.old_id, name] +
-                               [str(v) for _, v in fields_list]).lower()
+                               [str(v) for _, v in fields_list])
         result.append(GameObject(
             category=category, ext=ext, obj_id=obj_id, base_id=o.old_id,
             name=str(name), is_custom=o.is_custom, fields=fields_list,
@@ -197,7 +198,7 @@ def _add_text_objects(md: "MapData", archive: MPQArchive):
                     disp.append((k, clean_text(v)))
             search = (code + " " + name + " " +
                       clean_text(fields.get("Ubertip", "")) + " " +
-                      clean_text(fields.get("Tip", ""))).lower()
+                      clean_text(fields.get("Tip", "")))
             icon = (fields.get("Art") or fields.get("art") or "").split(",")[0].strip()
             obj = GameObject(category=cat, ext="txt", obj_id=code, base_id=code,
                              name=name, is_custom=True, fields=disp,
@@ -224,7 +225,7 @@ def _add_base_objects(md: "MapData"):
         if not name:                  # 无名的系统内部对象，不加（避免每张图都冒光秃秃码）
             continue
         search = (code + " " + name + " " +
-                  " ".join(str(v) for _, v in fields)).lower()
+                  " ".join(str(v) for _, v in fields))
         obj = GameObject(category=cat, ext="base", obj_id=code, base_id=code,
                          name=str(name), is_custom=False,
                          fields=[(str(k), str(v)) for k, v in fields],
@@ -260,7 +261,7 @@ def _add_script_refs(md: "MapData", script_text: str, shared_index: dict | None 
                     category=cat, ext="script", obj_id=code, base_id=code,
                     name=name, is_custom=(code not in BASE_NAMES),
                     fields=[("来源", "脚本引用（无对象数据，可能缺属性/名称）")],
-                    search_text=f"{code} {name}".lower())
+                    search_text=f"{code} {name}")
                 md.objects.setdefault(cat, []).append(obj)
             md.obj_index[code] = obj
 

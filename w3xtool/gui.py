@@ -135,7 +135,7 @@ class App(ctk.CTk):
         self.search_var.trace_add("write", lambda *_: self._refresh_list())
         se = ctk.CTkEntry(ctrl, textvariable=self.search_var, height=32, font=(FONT, 12),
                           justify="center",
-                          placeholder_text="🔍  搜索名称/ID/描述　空格=且　竖线|=或　例：智力 剑|法杖")
+                          placeholder_text='🔍  搜索名称/ID/描述　空格=且　竖线|=或　"…"=精准　例：蓝宝石 "等级:E"')
         se.pack(fill="x")
         self._attach_ctx_menu(se, paste=True)
 
@@ -221,7 +221,7 @@ class App(ctk.CTk):
         self.cmd_search.trace_add("write", lambda *_: self._refresh_cmds())
         cse = ctk.CTkEntry(top, textvariable=self.cmd_search, height=38, font=(FONT, 14),
                            justify="center",
-                           placeholder_text="🔍  搜索指令/说明　空格=且　竖线|=或")
+                           placeholder_text='🔍  搜索指令/说明　空格=且　竖线|=或　"…"=精准')
         cse.pack(fill="x")
         self._attach_ctx_menu(cse, paste=True)
         self.cmd_hint = ctk.CTkLabel(parent, text="打开地图后这里列出脚本里的全部聊天指令（含隐藏指令）",
@@ -250,7 +250,7 @@ class App(ctk.CTk):
         self.rec_search.trace_add("write", lambda *_: self._refresh_recipes())
         rse = ctk.CTkEntry(top, textvariable=self.rec_search, height=38, font=(FONT, 14),
                            justify="center",
-                           placeholder_text="🔍  搜索材料/成品名称　空格=且　竖线|=或")
+                           placeholder_text='🔍  搜索材料/成品名称　空格=且　竖线|=或　"…"=精准')
         rse.pack(fill="x")
         self._attach_ctx_menu(rse, paste=True)
         self.rec_hint = ctk.CTkLabel(parent, text="打开地图后这里列出脚本里识别到的物品合成配方",
@@ -289,7 +289,7 @@ class App(ctk.CTk):
         return self._rec_font
 
     def _refresh_recipes(self):
-        q = self.rec_search.get().strip().lower()
+        q = self.rec_search.get().strip()
         self.rec_tree.delete(*self.rec_tree.get_children())
         n = 0
         widest = 0
@@ -302,7 +302,7 @@ class App(ctk.CTk):
                 nm = self._item_name(code)
                 ing_parts.append(f"{nm}×{cnt}" if cnt > 1 else nm)
             ing_str = "  +  ".join(ing_parts)
-            if q and fuzzy_score(q, (res_name + " " + ing_str).lower()) is None:
+            if q and fuzzy_score(q, res_name + " " + ing_str) is None:
                 continue
             self.rec_tree.insert("", "end", values=(res_name, ing_str),
                                  tags=("odd" if n % 2 else "even",))
@@ -747,7 +747,7 @@ class App(ctk.CTk):
     def _refresh_list(self):
         if not self.map_data:
             return
-        query = self.search_var.get().strip().lower()
+        query = self.search_var.get().strip()   # 原样大小写：模糊不分大小写、引号精准区分
         self._row_imgs = []
         summary = []
         for cat in PARALLEL_CATS:
@@ -850,11 +850,11 @@ class App(ctk.CTk):
 
     # ---------- 指令 ----------
     def _refresh_cmds(self):
-        q = self.cmd_search.get().strip().lower()
+        q = self.cmd_search.get().strip()
         self.cmd_tree.delete(*self.cmd_tree.get_children())
         n = 0
         for c in self.commands:
-            blob = (c.command + " " + c.hint).lower()
+            blob = c.command + " " + c.hint
             if q and fuzzy_score(q, blob) is None:
                 continue
             self.cmd_tree.insert("", "end",
