@@ -31,10 +31,15 @@ def _obj(old_id, new_id, mods):
     return _tag(old_id) + _tag(new_id) + struct.pack("<i", len(mods)) + b"".join(mods)
 
 
-def _obj_v3(old_id, new_id, mods):
-    # 格式版本 3：oldId+newId 之后多两个 uint32 头字段，再是 numMods
-    return (_tag(old_id) + _tag(new_id) + struct.pack("<II", 0, 0)
-            + struct.pack("<i", len(mods)) + b"".join(mods))
+def _obj_v3(old_id, new_id, mods, sets=None):
+    # 格式版本 3（重制版）：oldId+newId 后是 sets 数量，每个 set = setsFlag(u32) + 修改数 + 修改项
+    # 默认单 set；sets 可传 [(flag,[mods]),...] 表示多 set(HD/SD 皮肤)
+    if sets is None:
+        sets = [(0, mods)]
+    b = _tag(old_id) + _tag(new_id) + struct.pack("<I", len(sets))
+    for flag, smods in sets:
+        b += struct.pack("<I", flag) + struct.pack("<i", len(smods)) + b"".join(smods)
+    return b
 
 
 def _build(original, custom, version=2):
@@ -94,6 +99,18 @@ class TestParseObjectData(unittest.TestCase):
         objs = parse_object_data(_build(ab, [], version=3), "w3a")
         self.assertEqual(objs[0].mods[0].level, 2)
         self.assertAlmostEqual(objs[0].mods[0].value, 5.0, places=4)
+
+    def test_version3_multiple_sets(self):
+        # 重制版 HD/SD 皮肤：一个对象可有多个修改 set，全部 mods 都要收进来
+        s0 = [_mod("unam", 3, "标准")]
+        s1 = [_mod("umdl", 3, "HD模型"), _mod("uhpm", 0, 200)]
+        obj = _obj_v3("hpea", "x001", [], sets=[(0, s0), (1, s1)])
+        objs = parse_object_data(_build([obj], [], version=3), "w3u")
+        self.assertEqual(len(objs), 1)
+        fields = [(m.field_id, m.value) for m in objs[0].mods]
+        self.assertIn(("unam", "标准"), fields)
+        self.assertIn(("umdl", "HD模型"), fields)
+        self.assertIn(("uhpm", 200), fields)
 
 
 class _FakeArchive:

@@ -78,7 +78,7 @@ def parse_object_data(data: bytes, ext: str) -> list:
     """解析一个对象数据文件，返回 W3Object 列表。"""
     has_level = ext.lower() in _LEVEL_EXTS
     r = _Reader(data)
-    version = r.i32()  # 1=RoC 2=TFT 3=1.32+/新编辑器（对象头多两个 u32）
+    version = r.i32()  # 1=RoC 2=TFT 3=1.32+/重制版（对象头改成 sets 分组）
     objects = []
     for table_idx in range(2):           # 0=原始表 1=自定义表
         is_custom = table_idx == 1
@@ -86,28 +86,32 @@ def parse_object_data(data: bytes, ext: str) -> list:
         for _ in range(count):
             old_id = r.tag()
             new_id = r.tag()
-            if version >= 3:
-                r.u32()                  # 格式 3 头：未知字段 1
-                r.u32()                  # 格式 3 头：未知字段 2
-            num_mods = r.i32()
             obj = W3Object(old_id=old_id, new_id=new_id, is_custom=is_custom)
-            for _ in range(num_mods):
-                field_id = r.tag()
-                var_type = r.i32()
-                level = 0
-                if has_level:
-                    level = r.i32()
-                    r.i32()              # data pointer（列），忽略
-                if var_type == 0:
-                    value = r.i32()
-                elif var_type in (1, 2):
-                    value = r.f32()
-                elif var_type == 3:
-                    value = r.cstr()
-                else:
-                    raise ValueError("未知字段类型 %d @ %d" % (var_type, r.p))
-                r.u32()                  # 末尾校验（=oldId/newId），跳过
-                obj.mods.append(Modification(field_id, var_type, level, value))
+            # 格式 3（重制版）：oldId/newId 后是 sets 数量，再按 set 循环
+            #   每个 set = setsFlag(u32 位掩码，HD/SD 皮肤分组) + 该 set 的修改数 + 修改项
+            # 格式 1/2：没有 sets 概念，等价于单个 set（无 setsFlag）。
+            num_sets = r.u32() if version >= 3 else 1
+            for _ in range(num_sets):
+                if version >= 3:
+                    r.u32()              # setsFlag 位掩码，只读提取无需用到
+                num_mods = r.i32()
+                for _ in range(num_mods):
+                    field_id = r.tag()
+                    var_type = r.i32()
+                    level = 0
+                    if has_level:
+                        level = r.i32()
+                        r.i32()          # data pointer（列），忽略
+                    if var_type == 0:
+                        value = r.i32()
+                    elif var_type in (1, 2):
+                        value = r.f32()
+                    elif var_type == 3:
+                        value = r.cstr()
+                    else:
+                        raise ValueError("未知字段类型 %d @ %d" % (var_type, r.p))
+                    r.u32()              # 末尾校验（=oldId/newId），跳过
+                    obj.mods.append(Modification(field_id, var_type, level, value))
             objects.append(obj)
     # 注：部分工具保存的文件末尾有几字节尾巴，对象已按声明数量读全，
     # 故不再因剩余字节抛错（只要每个对象都成功解析即视为有效）。

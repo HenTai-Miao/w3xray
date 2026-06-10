@@ -400,11 +400,30 @@ def _read_script(archive: MPQArchive):
     return _standard_script_text(archive)
 
 
+def _map_wts(md: "MapData") -> dict:
+    """从 md.scripts 里的 war3map.wts 文本解析字符串表（commands 提示还原用）。"""
+    raw = md.scripts.get("war3map.wts")
+    if not raw:
+        return {}
+    try:
+        return parse_wts(raw.encode("utf-8", "replace"))
+    except Exception:
+        return {}
+
+
 def commands_from_map(md: "MapData") -> list:
     """从已解析的 MapData 扫描隐藏聊天指令（复用 md.scripts，不重开 MPQ）。"""
     from .script_scan import scan_chat_commands
     txt = _best_script_text(md.scripts)
-    return scan_chat_commands(txt) if txt else []
+    if not txt:
+        return []
+    cmds = scan_chat_commands(txt)
+    wts = _map_wts(md)                       # 把提示里的 TRIGSTR_n 还原成真文本
+    if wts:
+        for c in cmds:
+            if c.hint:
+                c.hint = str(resolve(c.hint, wts))
+    return cmds
 
 
 def recipes_from_map(md: "MapData") -> list:
