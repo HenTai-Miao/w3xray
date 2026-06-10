@@ -59,6 +59,20 @@ class TestMpqHeader(unittest.TestCase):
         path = _write_mpq(_hdr(0xFFFFFFFF, 1), 64)
         self._expect_reject(path)
 
+    def test_block_table_past_eof_tolerated(self):
+        # 保护图常见手法：block 表声明的长度超出文件尾（block_count 注水）。
+        # StormLib 只读实际存在的条目即可加载，我们也应容忍：hash 表完整、
+        # block 表起点在文件内 → 不拒绝（截断的尾部由 _read_tables 自然丢弃）。
+        # hash: pos=32 count=4 → 占 32..96；block: pos=96 count=4 → 声明 96..160；
+        # 文件只有 112 字节 → block 表尾越界 32 字节，但起点(96)在文件内。
+        path = _write_mpq(_hdr(4, 4, hash_pos=32, block_pos=96), 112)
+        try:
+            a = MPQArchive(path)                       # 不应抛异常
+            self.assertEqual(a.archive_offset, 0)
+            self.assertLessEqual(len(a.block_table), 4)  # 只读到实际存在的条目
+        finally:
+            os.remove(path)
+
 
 class TestDecoyHeader(unittest.TestCase):
     def test_skips_decoy_header_and_finds_real(self):

@@ -223,7 +223,10 @@ class MPQArchive:
     def _validate_header(self):
         """拒绝非法/恶意的表大小，防止 range(hash_count) 跑数十亿次卡死(DoS)。
 
-        合法 MPQ：hash 表大小是 2 的幂；hash/block 表都能放进文件内。
+        合法 MPQ：hash 表大小是 2 的幂、且整张表在文件内（这也把 hash_count 卡死在
+        文件大小/16 以内，挡住 DoS）。block 表则容忍"尾部越界"——保护图常把 block_count
+        注水、声明长度超过文件尾；StormLib 只读实际存在的条目即可加载，故这里只要求
+        block 表起点在文件内，越界的尾部交给 _read_tables 自然截断（avail = 实际字节//16）。
         """
         n = len(self._data)
         if self.hash_count <= 0 or (self.hash_count & (self.hash_count - 1)) != 0:
@@ -232,8 +235,8 @@ class MPQArchive:
             raise ValueError("MPQ block 表大小非法：%d" % self.block_count)
         if self.hash_table_pos < 0 or self.hash_table_pos + self.hash_count * 16 > n:
             raise ValueError("MPQ hash 表越界（文件损坏或非标准）")
-        if self.block_table_pos < 0 or self.block_table_pos + self.block_count * 16 > n:
-            raise ValueError("MPQ block 表越界（文件损坏或非标准）")
+        if self.block_table_pos < 0 or self.block_table_pos > n:
+            raise ValueError("MPQ block 表起点越界（文件损坏或非标准）")
 
     def _read_tables(self):
         data = self._data
