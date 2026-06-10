@@ -1,7 +1,12 @@
-"""一次性脚本：从游戏 MPQ 提取 原版对象 码→中文名，生成 w3xtool/base_names.py。
+"""一次性脚本：从游戏数据提取 原版对象 码→中文名/默认字段，生成 w3xtool/*.py。
 
-数据来源：war3/{war3,War3x,War3Patch,War3xLocal}.mpq 里的 Units\\*Strings.txt。
-重装/换语言后可重跑本脚本刷新。
+经典版（<=1.29，MPQ）：默认从 war3/{war3,War3x,War3Patch,War3xLocal}.mpq 读
+    Units\\*Strings.txt / *Func.txt / *Data.slk。可用 --game 覆盖安装目录。
+重制版（1.30+，CASC）：游戏数据改为 CASC，本脚本不内置 CASC 读取。先用 CascView
+    或 wc3tools/casc-extract 把 war3.w3mod 下的 units/* 等导到一个文件夹，再：
+        python build_base_names.py --from-dir <该文件夹>
+    匹配大小写/斜杠不敏感、容忍 war3.w3mod\\ 前缀；--from-dir 会打印找到/未找到清单。
+重装/换语言/升级后可重跑本脚本刷新。
 """
 import re
 import sys

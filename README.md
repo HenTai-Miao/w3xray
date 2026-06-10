@@ -25,6 +25,18 @@ uv run main.py cli <地图路径>   # 命令行快速查看分类统计
 uv run pyinstaller --noconfirm "魔兽地图提取器.spec"
 ```
 
+## 刷新原版数据（base_names / base_objects / westrings）
+`w3xtool/base_names.py` 等三份内置数据由 `build_base_names.py` 从**游戏本体**一次性生成，运行时不读游戏。换语言/升级后想刷新：
+
+- **经典版（≤1.29，MPQ）**：
+  ```bash
+  uv run build_base_names.py                 # 默认硬编码安装目录
+  uv run build_base_names.py --game "D:/Warcraft III/war3"
+  ```
+- **重制版（1.30+，CASC）**：游戏数据改为 CASC，本脚本不内置 CASC 读取。先用外部工具导出，再指向文件夹：
+  1. 用 [CascView](http://www.zezula.net/en/casc/main.html)（GUI）或 `wc3tools/casc-extract`（CLI，如 `casc-extract war3.w3mod:units/*` ）把游戏 `units/` 下的 `*Strings.txt`/`*Func.txt`/`*Data.slk` 与 `ui/WorldEdit*Strings.txt` 导到一个文件夹。
+  2. `uv run build_base_names.py --from-dir <该文件夹>`，按打印的「找到/未找到」清单确认覆盖。
+
 ## 功能
 - **解包**：把地图(MPQ 压缩包)内部文件全部解出
 - **对象信息**：解析对象编辑器数据，名称经 war3map.wts 还原为中文
