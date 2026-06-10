@@ -1,56 +1,37 @@
-"""搜索打分：空格=AND（每段都要命中），竖线|=OR（任一命中即可），引号=精准。
+"""搜索打分：SQL 风格查询语法。
 
-- 不加引号的词 → 模糊（中等）：连续子串优先；纯 ASCII 还保留子序列（"fb"→"foobar"）。
-- "…" 双引号 → 精准：必须原样连续出现；引号内的空格、|、冒号都当普通字符
-  （所以能搜带空格/竖线的整句）。
-例：'智力 剑|法杖' → 含「智力」且（含「剑」或「法杖」）；
-    '蓝宝石 "等级:E"' → 模糊「蓝宝石」且 精准「等级:E」。
-命中返回累加分数（越靠前/越连续分越高），未命中返回 None；空查询返回 0。
+- `%x%` 包含 / `x%` 前缀 / `%x` 后缀 / `a%b` 中间通配：`%` 是通配符，**不分大小写**。
+  裸词（不含 `%`）按 `%词%`（包含）处理。SQL `LIKE` 语义，**不做子序列**匹配。
+- `="x"` 精准：必须原样连续出现，**区分大小写**，ASCII 端点按词边界
+  （`="等级:E"` 不会命中 `等级:EX`）；引号内一切字符（空格/`&`/`|`/`%`）都当字面量。
+- `&&` 且、`||` 或、`( )` 分组；`&&` 优先级高于 `||`；相邻词缺运算符时默认 `&&`。
+- 反斜杠转义：`\\%` `\\&` `\\|` `\\(` `\\)` `\\\\` 表示对应字面量。
+
+例：`(%敏捷% || %全属性%) && ="等级:E"`
+  → （包含「敏捷」或「全属性」）且 精准「等级:E」。
+命中返回累加分数（越靠前/越贴边分越高），未命中返回 None；空查询返回 0。
+
+解析为 AST：词法(_lex) → 递归下降(_Parser) → 求分(_eval)。
+节点：('like', segs, anchored_start, anchored_end) | ('eq', needle)
+      | ('and', lhs, rhs) | ('or', lhs, rhs)
 """
 from __future__ import annotations
 
 
-def _single_score(query: str, text: str):
-    """模糊（中等）：连续子串优先；纯 ASCII 允许子序列，含中文则只认子串。"""
-    if not query:
-        return 0
-    if query in text:
-        return 1000 - text.index(query)
-    # 含中文等非 ASCII 字符的关键词只认子串：每个汉字都是一个词义单位，
-    # 若退化成子序列匹配（字符可在长描述里分散命中），会把"全属性"匹配到
-    # "全村…攻击属性"这类无关项，造成大量误命中。子序列仅保留给纯 ASCII。
-    if any(ord(ch) > 127 for ch in query):
-        return None
-    qi = 0
-    score = 0
-    last = -1
-    for i, ch in enumerate(text):
-        if qi < len(query) and ch == query[qi]:
-            score += 10 if i == last + 1 else 1
-            last = i
-            qi += 1
-    if qi == len(query):
-        return score
-    return None
-
-
 def _is_word_char(ch: str) -> bool:
-    """"词内字符"：ASCII 字母/数字，外加 '+'。
+    """词内字符：ASCII 字母/数字，外加 '+'（物品等级档 S 与 S+ 是两档）。
 
-    中文等非 ASCII 不算（每个汉字自成单位，精准词允许 全属→全属性 这类紧邻
-    匹配；词边界只约束 ASCII 串）。'+' 计入是因为物品等级档用它分级（S 与 S+
-    是两档），算粘连字符才能让"等级:S"不误命中"等级:S+"。"""
+    中文等非 ASCII 不算（每个汉字自成单位，精准词允许 全属→全属性 这类紧邻匹配；
+    词边界只约束 ASCII 串）。"""
     return ch == "+" or (ch.isascii() and ch.isalnum())
 
 
-def _exact_score(query: str, text: str):
-    """精准：必须原样连续出现（子串），且 ASCII 端点不可粘进更长的词。
+def _eq_score(query: str, text: str):
+    """精准（=）：原样连续子串，ASCII 端点不可粘进更长的词。区分大小写。
 
-    若精准词以词内字符(ASCII 字母/数字或 '+')结尾，则其后一字符不能也是词内
-    字符——否则把"等级:E"误命中"等级:EX"、"等级:S"误命中"等级:S+"；开头同理。
-    中文端点不设边界（保持 全属→全属性 这类紧邻匹配可命中）。
-    命中返回分数（越靠前分越高），否则 None。
-    """
+    若精准词以词内字符结尾，则其后一字符不能也是词内字符——否则把 `等级:E`
+    误命中 `等级:EX`；开头同理。中文端点不设边界（保持 全属→全属性 可命中）。
+    命中返回分数（越靠前分越高），否则 None。"""
     if not query:
         return 0
     head_word = _is_word_char(query[0])
@@ -68,93 +49,210 @@ def _exact_score(query: str, text: str):
         start = idx + 1            # 这处粘进了更长的词，找下一处
 
 
-def _tokenize(query: str):
-    """把查询切成 AND 组，每组是若干 OR 候选 (term, precise)。
+def _like_score(segs, anchored_start: bool, anchored_end: bool, text: str):
+    """LIKE（%）：segs 是被 % 切开的字面段（均已小写），text 已小写。
 
-    双引号内的内容为精准词：原样连续匹配，内部的空格/竖线/冒号都不作分隔。
-    引号外：竖线 | 连接 OR 候选（两侧的空格会被吃掉，"a | b" 仍是 OR），
-    其余空格分隔 AND 组。未闭合的引号按到行尾处理（边打边搜也不报错）。
-    """
-    query = (query.replace("“", '"').replace("”", '"').replace("｜", "|"))
-    # 先扁平收集每个词，并记录它与前一个词的连接关系：竖线→OR，否则→AND。
-    # 竖线/空格只是“间隙标记”，跨越多个空格与竖线累积，遇到下一个实词时才结算。
-    terms: list[tuple[str, bool, str]] = []   # (term, precise, join: 'or'|'and')
-    buf: list[str] = []
-    in_quote = False
-    from_quote = False        # 当前 buf 是否来自引号（精准）
-    saw_bar = False           # 自上个词以来出现过竖线
-    have_prev = False
+    anchored_start/end：模式两端是否**无** %（无 % 即需贴边）。各段须按序出现；
+    首段贴开头、末段贴结尾（若锚定）。命中返回分数（首段越靠前越高），否则 None。
+    segs 为空（如纯 `%`）表示匹配一切。"""
+    if not segs:
+        return 1000
+    n = len(segs)
+    pos = 0
+    first_idx = 0
+    for i, seg in enumerate(segs):
+        last = i == n - 1
+        if i == 0 and anchored_start:
+            if not text.startswith(seg):       # 首段须贴开头
+                return None
+            idx = 0
+        elif last and anchored_end:
+            tail = len(text) - len(seg)         # 末段须贴结尾，且在游标之后
+            if tail < pos or not text.endswith(seg):
+                return None
+            idx = tail
+        else:
+            idx = text.find(seg, pos)
+            if idx < 0:
+                return None
+        if i == 0:
+            first_idx = idx
+        pos = idx + len(seg)
+    if anchored_end and pos != len(text):       # 单段同时首尾锚定（全等）兜底
+        return None
+    return 1000 - first_idx
 
-    def flush_term():
-        nonlocal buf, from_quote, saw_bar, have_prev
-        term = "".join(buf)
-        precise = from_quote
-        buf = []
-        from_quote = False
-        if not term:                      # 空缓冲：保留间隙标记给下一个实词
-            return
-        join = "or" if (have_prev and saw_bar) else "and"
-        terms.append((term, precise, join))
-        have_prev = True
-        saw_bar = False                   # 间隙标记已结算，复位
 
-    for ch in query:
-        if ch == '"':
-            if in_quote:                  # 引号结束 → 当前 buf 是一个精准候选
-                in_quote = False
-                from_quote = True
-                flush_term()
-            else:                         # 引号开始 → 先收掉前面未加引号的缓冲
-                flush_term()
-                in_quote = True
-            continue
-        if in_quote:
-            buf.append(ch)
-            continue
+# ---- 词法：把查询切成 token 流 ----
+# token: ('and',) ('or',) ('lp',) ('rp',)
+#        ('like', segs, anchored_start, anchored_end) ('eq', needle)
+def _lex(query: str):
+    query = (query.replace("“", '"').replace("”", '"')
+                  .replace("｜", "|").replace("（", "(").replace("）", ")"))
+    toks = []
+    i, n = 0, len(query)
+    while i < n:
+        ch = query[i]
         if ch.isspace():
-            flush_term()                  # 空格只断词，间隙标记(saw_bar)保留
-        elif ch == "|":
-            flush_term()
-            saw_bar = True                # 标记 OR，跨越两侧空格仍生效
-        else:
-            buf.append(ch)
+            i += 1
+            continue
+        if ch == "(":
+            toks.append(("lp",)); i += 1; continue
+        if ch == ")":
+            toks.append(("rp",)); i += 1; continue
+        if ch == "&" and i + 1 < n and query[i + 1] == "&":
+            toks.append(("and",)); i += 2; continue
+        if ch == "|" and i + 1 < n and query[i + 1] == "|":
+            toks.append(("or",)); i += 2; continue
+        if ch == "=" and i + 1 < n and query[i + 1] == '"':
+            j = i + 2
+            buf = []
+            while j < n and query[j] != '"':       # 引号内一切字面量
+                buf.append(query[j]); j += 1
+            if j < n:                                # 跳过闭合引号（未闭合则到行尾）
+                j += 1
+            toks.append(("eq", "".join(buf)))
+            i = j
+            continue
+        # 否则是一个 LIKE 词，读到下一个边界为止
+        parts = []          # 元素: ('pct',) 通配符 | ('lit', ch) 字面量
+        has_pct = False
+        while i < n:
+            c = query[i]
+            if c.isspace() or c in "()":
+                break
+            if c == "&" and i + 1 < n and query[i + 1] == "&":
+                break
+            if c == "|" and i + 1 < n and query[i + 1] == "|":
+                break
+            if c == "=" and i + 1 < n and query[i + 1] == '"':
+                break
+            if c == "\\" and i + 1 < n:              # 转义：下一个字符取字面量
+                parts.append(("lit", query[i + 1])); i += 2; continue
+            if c == "%":
+                parts.append(("pct",)); has_pct = True; i += 1; continue
+            parts.append(("lit", c)); i += 1
+        if not has_pct:
+            needle = "".join(p[1] for p in parts)
+            if needle:                               # 裸词 → %词%（包含）
+                toks.append(("like", [needle.lower()], False, False))
+            continue
+        # 含 %：按 % 切成字面段
+        segs, cur = [], []
+        for p in parts:
+            if p[0] == "pct":
+                if cur:
+                    segs.append("".join(cur).lower()); cur = []
+            else:
+                cur.append(p[1])
+        if cur:
+            segs.append("".join(cur).lower())
+        anchored_start = parts[0][0] != "pct"
+        anchored_end = parts[-1][0] != "pct"
+        toks.append(("like", segs, anchored_start, anchored_end))
+    return toks
 
-    if in_quote:                          # 未闭合引号：剩余按精准词收尾
-        from_quote = True
-    flush_term()
 
-    groups: list[list[tuple[str, bool]]] = []
-    for term, precise, join in terms:
-        if join == "or" and groups:
-            groups[-1].append((term, precise))
-        else:
-            groups.append([(term, precise)])
-    return groups
+# ---- 递归下降：or := and ('||' and)* ; and := atom ('&&'? atom)* ; atom := '(' or ')' | leaf ----
+class _Parser:
+    def __init__(self, toks):
+        self.toks = toks
+        self.i = 0
+
+    def _peek(self):
+        return self.toks[self.i] if self.i < len(self.toks) else None
+
+    def _next(self):
+        t = self.toks[self.i]
+        self.i += 1
+        return t
+
+    def parse_or(self):
+        node = self.parse_and()
+        while True:
+            t = self._peek()
+            if t and t[0] == "or":
+                self._next()
+                rhs = self.parse_and()
+                if rhs is None:
+                    break
+                node = ("or", node, rhs) if node is not None else rhs
+            else:
+                break
+        return node
+
+    def parse_and(self):
+        node = self.parse_atom()
+        while True:
+            t = self._peek()
+            if t is None or t[0] in ("or", "rp"):
+                break
+            if t[0] == "and":               # 显式 &&
+                self._next()
+            # 否则相邻词缺运算符 → 隐式 &&
+            rhs = self.parse_atom()
+            if rhs is None:
+                break
+            node = ("and", node, rhs) if node is not None else rhs
+        return node
+
+    def parse_atom(self):
+        t = self._peek()
+        if t is None:
+            return None
+        if t[0] == "lp":
+            self._next()
+            node = self.parse_or()
+            nxt = self._peek()
+            if nxt and nxt[0] == "rp":
+                self._next()
+            return node
+        if t[0] in ("like", "eq"):
+            self._next()
+            return t
+        # 游离的运算符 / 右括号：跳过
+        self._next()
+        return self.parse_atom()
+
+
+def _eval(node, text: str, text_lower: str):
+    if node is None:
+        return 0
+    tag = node[0]
+    if tag == "like":
+        return _like_score(node[1], node[2], node[3], text_lower)
+    if tag == "eq":
+        return _eq_score(node[1], text)                # 区分大小写：用原文
+    if tag == "and":
+        a = _eval(node[1], text, text_lower)
+        if a is None:
+            return None
+        b = _eval(node[2], text, text_lower)
+        if b is None:
+            return None
+        return a + b
+    if tag == "or":
+        a = _eval(node[1], text, text_lower)
+        b = _eval(node[2], text, text_lower)
+        if a is None:
+            return b
+        if b is None:
+            return a
+        return max(a, b)
+    return None
 
 
 def fuzzy_score(query: str, text: str):
-    """支持 AND + OR + 引号精准的多关键词搜索。命中返回累加分数，未命中返回 None。
+    """SQL 风格多关键词搜索。命中返回累加分数，未命中返回 None，空查询返回 0。
 
-    传入原始大小写的 query 与 text：模糊词不分大小写（双方转小写比较），
-    引号精准词区分大小写（原样比较）。空查询返回 0。
-    """
-    if not query:
+    传入原始大小写的 query 与 text：LIKE 不分大小写（双方转小写比较），
+    引号精准词区分大小写（原样比较）。"""
+    if not query or not query.strip():
         return 0
-    groups = _tokenize(query)
-    if not groups:
+    toks = _lex(query)
+    if not toks:
         return 0
-    text_lower = text.lower()
-    total = 0
-    for group in groups:
-        best = None
-        for term, precise in group:
-            if precise:
-                sc = _exact_score(term, text)                  # 区分大小写
-            else:
-                sc = _single_score(term.lower(), text_lower)   # 不分大小写
-            if sc is not None and (best is None or sc > best):
-                best = sc
-        if best is None:        # 该 AND 段没有任何 OR 候选命中
-            return None
-        total += best
-    return total
+    node = _Parser(toks).parse_or()
+    if node is None:
+        return 0
+    return _eval(node, text, text.lower())
