@@ -79,6 +79,7 @@ class App(ctk.CTk):
         self._blank = None
         self._ai_config = load_ai_config()   # AI CLI 配置（命令模板/当前选择）
         self._settings_win = None
+        self._ai_busy = False                # AI 任务进行中标志（防并发 git 操作互相破坏）
 
         self._build_topbar()
         self._build_tabs()
@@ -303,6 +304,11 @@ class App(ctk.CTk):
             if not pre:
                 return
             md, active = pre
+        if self._ai_busy:                  # 防并发：已有 AI 任务在跑就别再起
+            if not auto:
+                messagebox.showinfo("提示", "已有 AI 任务在进行，请稍候")
+            return
+        self._ai_busy = True
         if not auto:                       # 自动模式不抢占当前标签页，静默填充
             try:
                 self.tabs.set("AI 质检")
@@ -317,7 +323,8 @@ class App(ctk.CTk):
                 text = ai_annotate(diag, active)
             except Exception as e:
                 text = f"AI 质检失败：{e}"
-            self.after(0, lambda: (self._ai_set_text(text), self.status.configure(text="就绪")))
+            self.after(0, lambda: (self._ai_set_text(text), self.status.configure(text="就绪"),
+                                   setattr(self, "_ai_busy", False)))
         threading.Thread(target=work, daemon=True).start()
 
     def _on_ai_attribute(self):
@@ -368,12 +375,17 @@ class App(ctk.CTk):
         if not repo:
             messagebox.showinfo("提示", "「AI 自动优化」仅在源码仓库下可用（打包后的 exe 没有源码/git）。")
             return
+        if self._ai_busy:
+            messagebox.showinfo("提示", "已有 AI 任务在进行，请稍候")
+            return
         if not messagebox.askyesno(
                 "AI 自动优化（开发）",
-                "将让 AI 直接修改解析源码 → 跑全套测试 →\n"
-                "全部通过就自动提交并推送当前分支；任何失败都自动回滚到改前。\n\n"
+                "将让 AI 直接修改 w3xtool/ 源码 → 跑全套测试 →\n"
+                "全部通过就自动提交并推送当前分支（main/master 不自动推送）；\n"
+                "任何失败都自动回滚到改前。AI 不能改 tests/ 与配置（保证门禁诚实）。\n\n"
                 "要求工作区干净（请先提交/暂存未保存的改动）。确定继续？"):
             return
+        self._ai_busy = True
         try:
             self.tabs.set("AI 质检")
         except Exception:
@@ -386,22 +398,26 @@ class App(ctk.CTk):
                 diag = audit_loaded(md)
                 r = run_auto_optimize(diag, active, repo=repo, push=True)
                 head = {"committed": "✅ 已自动应用、测试通过、提交并推送",
-                        "committed-no-push": "✅ 已提交（推送失败，需手动 push）",
+                        "committed-no-push": "✅ 已提交（推送失败/未推送，详见下方）",
                         "tests-failed": "❌ 测试未通过，已自动回滚（未改动仓库）",
                         "apply-failed": "❌ AI 的补丁无法应用，已回滚",
+                        "rejected-scope": "⚠️ AI 想改测试/配置文件，已拒绝（测试门禁须保持诚实）",
                         "no-diff": "ℹ️ AI 认为无需修改（未产出补丁）",
                         "dirty": "⚠️ 工作区有未提交改动，已中止",
                         "ai-failed": "❌ AI 调用失败",
                         "no-repo": "❌ 未找到源码仓库",
-                        "commit-failed": "❌ 提交失败"}.get(r.stage, r.stage)
+                        "commit-failed": "❌ 提交失败，已回滚"}.get(r.stage, r.stage)
                 msg = f"{head}\n\n{r.message}"
+                if r.touched:
+                    msg += "\n\n本次改动文件：" + "、".join(r.touched)
                 if r.test_tail:
                     msg += f"\n\n——— 测试输出（尾部）———\n{r.test_tail}"
                 if r.diff:
                     msg += f"\n\n——— 本次 AI 改动 diff ———\n{r.diff}"
             except Exception as e:
                 msg = f"AI 自动优化失败：{e}"
-            self.after(0, lambda: (self._ai_set_text(msg), self.status.configure(text="就绪")))
+            self.after(0, lambda: (self._ai_set_text(msg), self.status.configure(text="就绪"),
+                                   setattr(self, "_ai_busy", False)))
         threading.Thread(target=work, daemon=True).start()
 
     # ---------- 标签页 ----------

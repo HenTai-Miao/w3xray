@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import dataclasses
 
@@ -23,17 +23,24 @@ _FENCE = re.compile(r"```(?:diff|patch)?[ \t]*\n(.*?)```", re.S)
 _DEFAULT_TEST_CMD = ["uv", "run", "python", "-m", "unittest", "discover", "-s", "tests"]
 
 
+# 禁止 AI 改动的路径：测试与构建/CI 配置。允许改测试 = 门禁可被绕过，故一律拒绝。
+_FORBIDDEN_PREFIX = ("tests/", ".github/")
+_FORBIDDEN_EXACT = {"pyproject.toml", ".gitignore", "uv.lock"}
+_DIFF_LINE = ("diff --git", "index ", "--- ", "+++ ", "@@", "+", "-", " ", "\\")
+
+
 @dataclass
 class AutoResult:
     ok: bool
-    stage: str          # no-diff/dirty/apply-failed/tests-failed/commit-failed/committed/committed-no-push
+    stage: str          # no-diff/dirty/rejected-scope/apply-failed/tests-failed/commit-failed/committed/committed-no-push
     message: str
     diff: str = ""
     test_tail: str = ""
+    touched: list = field(default_factory=list)   # 该 diff 改动的文件（透明展示）
 
 
 def extract_diff(text: str) -> str:
-    """从 AI 输出里取统一 diff：优先 ```diff 围栏，否则从 'diff --git' 起到末尾。"""
+    """从 AI 输出里取统一 diff：优先 ```diff 围栏，否则从 'diff --git' 起，遇到非 diff 行即止。"""
     if not text:
         return ""
     for m in _FENCE.finditer(text):
@@ -41,9 +48,36 @@ def extract_diff(text: str) -> str:
         if "diff --git" in blk or blk.lstrip().startswith("--- "):
             return blk.strip("\n") + "\n"
     i = text.find("diff --git ")
-    if i >= 0:
-        return text[i:].rstrip() + "\n"
-    return ""
+    if i < 0:
+        return ""
+    out = []
+    for line in text[i:].splitlines():
+        if line and not line.startswith(_DIFF_LINE):   # 非空且不像 diff 行 → 后面是解释文字，截断
+            break
+        out.append(line)
+    return "\n".join(out).rstrip("\n") + "\n"
+
+
+def _touched_paths(diff: str):
+    """从统一 diff 解析被改动的文件路径。"""
+    paths = set()
+    for line in diff.splitlines():
+        if line.startswith("+++ ") or line.startswith("--- "):
+            p = line[4:].split("\t")[0].strip()
+            if p in ("/dev/null", ""):
+                continue
+            if p[:2] in ("a/", "b/"):
+                p = p[2:]
+            paths.add(p.replace("\\", "/"))
+    return paths
+
+
+def _forbidden(paths):
+    bad = []
+    for p in paths:
+        if p.startswith(_FORBIDDEN_PREFIX) or p in _FORBIDDEN_EXACT or p.endswith(".spec"):
+            bad.append(p)
+    return sorted(bad)
 
 
 def _run(args, cwd, stdin=None):
@@ -83,31 +117,50 @@ def apply_test_and_commit(repo: str, diff: str, test_cmd, commit_msg: str,
     if not _is_clean(repo):
         return AutoResult(False, "dirty", "工作区有未提交改动，请先提交或暂存后再自动优化")
 
+    touched = sorted(_touched_paths(diff))
+    bad = _forbidden(touched)
+    if bad:
+        # 拒绝改测试/构建配置：否则 AI 能改测试让坏改动"过门禁"，安全网就破了
+        return AutoResult(False, "rejected-scope",
+                          "AI 试图修改测试/配置文件，已拒绝（测试门禁必须保持诚实）：" + "、".join(bad),
+                          diff=diff, touched=touched)
+
     ap = _run(["git", "apply", "--whitespace=nowarn"], repo, stdin=diff)
     if ap.returncode != 0:
         ap = _run(["git", "apply", "--3way", "--whitespace=nowarn"], repo, stdin=diff)
     if ap.returncode != 0:
         _rollback(repo)
-        return AutoResult(False, "apply-failed", "diff 无法应用，已回滚：" + ap.stderr[:300], diff=diff)
+        return AutoResult(False, "apply-failed", "diff 无法应用，已回滚：" + ap.stderr[:300],
+                          diff=diff, touched=touched)
 
     t = subprocess.run(test_cmd, cwd=repo, capture_output=True, text=True,
                        encoding="utf-8", errors="replace")
     tail = ((t.stdout or "") + "\n" + (t.stderr or "")).strip()[-2000:]
     if t.returncode != 0:
         _rollback(repo)
-        return AutoResult(False, "tests-failed", "测试未通过，已回滚到改前", diff=diff, test_tail=tail)
+        return AutoResult(False, "tests-failed", "测试未通过，已回滚到改前",
+                          diff=diff, test_tail=tail, touched=touched)
 
     _run(["git", "add", "-A"], repo)
     c = _run(["git", "commit", "-m", commit_msg], repo)
     if c.returncode != 0:
-        return AutoResult(False, "commit-failed", "提交失败：" + c.stderr[:200], diff=diff, test_tail=tail)
+        _rollback(repo)        # 提交失败也回滚，保持"始终干净"
+        return AutoResult(False, "commit-failed", "提交失败，已回滚：" + c.stderr[:200],
+                          diff=diff, test_tail=tail, touched=touched)
     if push:
-        p = _run(["git", "push"], repo)
+        branch = _run(["git", "rev-parse", "--abbrev-ref", "HEAD"], repo).stdout.strip()
+        if branch in ("main", "master"):
+            # 安全：绝不把 AI 自动生成的提交直推主干，留给人工
+            return AutoResult(True, "committed",
+                              "已应用、测试通过、提交；当前在 %s 分支，出于安全未自动推送（请人工 push）" % branch,
+                              diff=diff, test_tail=tail, touched=touched)
+        p = _run(["git", "push", "origin", "HEAD"], repo)
         if p.returncode != 0:
             return AutoResult(True, "committed-no-push", "已提交，但推送失败：" + p.stderr[:200],
-                              diff=diff, test_tail=tail)
+                              diff=diff, test_tail=tail, touched=touched)
     return AutoResult(True, "committed",
-                      "已应用、测试通过、提交" + ("并推送" if push else ""), diff=diff, test_tail=tail)
+                      "已应用、测试通过、提交" + ("并推送" if push else ""),
+                      diff=diff, test_tail=tail, touched=touched)
 
 
 def run_auto_optimize(diag, profile: AIProfile, repo: str | None = None,

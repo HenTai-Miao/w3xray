@@ -27,6 +27,13 @@ class TestExtractDiff(unittest.TestCase):
     def test_no_diff_returns_empty(self):
         self.assertEqual(extract_diff("这里完全没有补丁，只是普通文字"), "")
 
+    def test_raw_diff_trailing_prose_truncated(self):
+        text = ("diff --git a/z.py b/z.py\n--- a/z.py\n+++ b/z.py\n@@ -1 +1 @@\n-a\n+b\n"
+                "\n以上就是修改说明，希望对你有帮助。")
+        d = extract_diff(text)
+        self.assertIn("+b", d)
+        self.assertNotIn("以上就是修改说明", d)        # 尾部解释被截掉
+
 
 class TestApplyTestCommit(unittest.TestCase):
     def setUp(self):
@@ -84,6 +91,42 @@ class TestApplyTestCommit(unittest.TestCase):
         r = apply_test_and_commit(self.repo, "", PASS, "x")
         self.assertFalse(r.ok)
         self.assertEqual(r.stage, "no-diff")
+
+    def test_rejects_diff_touching_tests(self):
+        # AI 改测试以让坏改动"过门禁" → 必须拒绝（门禁要保持诚实）
+        os.makedirs(os.path.join(self.repo, "tests"), exist_ok=True)
+        with open(os.path.join(self.repo, "tests", "t.py"), "w", encoding="utf-8") as fp:
+            fp.write("x=1\n")
+        self._git("add", "-A")
+        self._git("commit", "-qm", "add test")
+        bad = ("diff --git a/tests/t.py b/tests/t.py\n--- a/tests/t.py\n+++ b/tests/t.py\n"
+               "@@ -1 +1 @@\n-x=1\n+x=2\n")
+        r = apply_test_and_commit(self.repo, bad, PASS, "改测试")
+        self.assertFalse(r.ok)
+        self.assertEqual(r.stage, "rejected-scope")
+        with open(os.path.join(self.repo, "tests", "t.py"), encoding="utf-8") as fp:
+            self.assertEqual(fp.read(), "x=1\n")        # 测试文件没被动
+
+    def test_does_not_push_to_main(self):
+        # 当前在 main 分支时不自动推送（防 AI 代码直推主干）
+        self._git("branch", "-m", "main")
+        r = apply_test_and_commit(self.repo, self._diff_change_f(), PASS, "在main改", push=True)
+        self.assertTrue(r.ok, r.message)
+        self.assertEqual(r.stage, "committed")
+        self.assertIn("main", r.message)               # 提示未推送
+        self.assertIn("在main改", self._git("log", "-1", "--pretty=%s").stdout)
+
+    def test_commit_failure_rolls_back(self):
+        # pre-commit 钩子拒绝 → 提交失败 → 应回滚（保持"始终干净"承诺）
+        hook = os.path.join(self.repo, ".git", "hooks", "pre-commit")
+        with open(hook, "w", encoding="utf-8", newline="\n") as fp:
+            fp.write("#!/bin/sh\nexit 1\n")
+        os.chmod(hook, 0o755)
+        r = apply_test_and_commit(self.repo, self._diff_change_f(), PASS, "会失败")
+        self.assertFalse(r.ok)
+        self.assertEqual(r.stage, "commit-failed")
+        with open(os.path.join(self.repo, "f.txt"), encoding="utf-8") as fp:
+            self.assertEqual(fp.read(), "hello\n")       # 已回滚
 
 
 if __name__ == "__main__":
