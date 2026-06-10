@@ -4,17 +4,11 @@
 """
 import unittest
 
+from tests.gui_base import GuiTestCase
 from w3xtool.api import MapData
-from w3xtool.gui import App
 
 
-class TestModeAndLeftList(unittest.TestCase):
-    def setUp(self):
-        self.app = App()
-
-    def tearDown(self):
-        self.app.destroy()
-
+class TestModeAndLeftList(GuiTestCase):
     def _roots(self):
         return self.app.map_list.get_children()
 

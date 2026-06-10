@@ -1,17 +1,11 @@
 """合成配方表：横向滚动 + 材料列按内容自适应宽度（材料多时也能看全）。"""
 import unittest
 
-from w3xtool.gui import App
+from tests.gui_base import GuiTestCase
 from w3xtool.script_scan import Recipe
 
 
-class TestRecipeScroll(unittest.TestCase):
-    def setUp(self):
-        self.app = App()
-
-    def tearDown(self):
-        self.app.destroy()
-
+class TestRecipeScroll(GuiTestCase):
     def test_recipe_tree_has_hscroll(self):
         # 材料一长就被裁，必须有横向滚动条才能看全
         self.assertTrue(self.app.rec_tree.cget("xscrollcommand"),
