@@ -46,6 +46,11 @@ class TestGuiAI(unittest.TestCase):
         self.assertTrue(hasattr(self.app, "ai_box"))
         self.assertTrue(hasattr(self.app, "_auto_audit_var"))
 
+    def test_autopt_button_method_and_repo(self):
+        from w3xtool.aicli.autopt import find_repo
+        self.assertTrue(hasattr(self.app, "_on_ai_autopt"))
+        self.assertIsNotNone(find_repo())     # 源码运行时应能定位 git 仓库
+
     def test_ai_set_text_updates_box(self):
         self.app._ai_set_text("质检结果示例")
         self.assertIn("质检结果示例", self.app.ai_box.get("1.0", "end"))

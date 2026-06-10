@@ -357,6 +357,53 @@ class App(ctk.CTk):
             self.after(0, done)
         threading.Thread(target=work, daemon=True).start()
 
+    def _on_ai_autopt(self):
+        """开发用·全自动：AI 直接改解析逻辑 → 跑测试 → 绿了自动提交推送，红了自动回滚。"""
+        pre = self._ai_precheck()
+        if not pre:
+            return
+        md, active = pre
+        from .aicli.autopt import find_repo, run_auto_optimize
+        repo = find_repo()
+        if not repo:
+            messagebox.showinfo("提示", "「AI 自动优化」仅在源码仓库下可用（打包后的 exe 没有源码/git）。")
+            return
+        if not messagebox.askyesno(
+                "AI 自动优化（开发）",
+                "将让 AI 直接修改解析源码 → 跑全套测试 →\n"
+                "全部通过就自动提交并推送当前分支；任何失败都自动回滚到改前。\n\n"
+                "要求工作区干净（请先提交/暂存未保存的改动）。确定继续？"):
+            return
+        try:
+            self.tabs.set("AI 质检")
+        except Exception:
+            pass
+        self._ai_set_text("AI 自动优化中…（AI 改码 → 跑测试 → 提交/回滚，可能数分钟，期间请勿改动源码）")
+        self.status.configure(text="AI 自动优化中…")
+
+        def work():
+            try:
+                diag = audit_loaded(md)
+                r = run_auto_optimize(diag, active, repo=repo, push=True)
+                head = {"committed": "✅ 已自动应用、测试通过、提交并推送",
+                        "committed-no-push": "✅ 已提交（推送失败，需手动 push）",
+                        "tests-failed": "❌ 测试未通过，已自动回滚（未改动仓库）",
+                        "apply-failed": "❌ AI 的补丁无法应用，已回滚",
+                        "no-diff": "ℹ️ AI 认为无需修改（未产出补丁）",
+                        "dirty": "⚠️ 工作区有未提交改动，已中止",
+                        "ai-failed": "❌ AI 调用失败",
+                        "no-repo": "❌ 未找到源码仓库",
+                        "commit-failed": "❌ 提交失败"}.get(r.stage, r.stage)
+                msg = f"{head}\n\n{r.message}"
+                if r.test_tail:
+                    msg += f"\n\n——— 测试输出（尾部）———\n{r.test_tail}"
+                if r.diff:
+                    msg += f"\n\n——— 本次 AI 改动 diff ———\n{r.diff}"
+            except Exception as e:
+                msg = f"AI 自动优化失败：{e}"
+            self.after(0, lambda: (self._ai_set_text(msg), self.status.configure(text="就绪")))
+        threading.Thread(target=work, daemon=True).start()
+
     # ---------- 标签页 ----------
     def _build_tabs(self):
         # 一级：对战图 | 战役图（左右切换）
@@ -384,9 +431,9 @@ class App(ctk.CTk):
         bar.pack(fill="x", padx=4, pady=(6, 4))
         ctk.CTkButton(bar, text="AI 质检当前图", font=(FONT, 12), height=32, width=120,
                       command=self._on_ai_audit).pack(side="left", padx=4)
-        ctk.CTkButton(bar, text="AI 归因 + 提补丁（开发）", font=(FONT, 12), height=32, width=170,
+        ctk.CTkButton(bar, text="AI 自动优化（开发）", font=(FONT, 12), height=32, width=150,
                       fg_color=SECONDARY, hover_color=SECONDARY_HOVER, text_color=TEXT,
-                      command=self._on_ai_attribute).pack(side="left", padx=4)
+                      command=self._on_ai_autopt).pack(side="left", padx=4)
         self._auto_audit_var = tk.BooleanVar(value=bool(self._ai_config.auto_audit))
         ctk.CTkCheckBox(bar, text="解析后自动质检", font=(FONT, 12),
                         variable=self._auto_audit_var,
