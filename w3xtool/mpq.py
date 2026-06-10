@@ -16,6 +16,7 @@ import zlib
 from dataclasses import dataclass
 
 from .explode import explode
+from .huffman import huff_decompress
 
 # ---- 文件标志 ----
 FLAG_IMPLODE = 0x00000100      # 整文件 PKWARE 压缩（无掩码字节）
@@ -109,6 +110,8 @@ def _decompress_sector(data: bytes, out_size: int) -> bytes:
         payload = zlib.decompressobj().decompress(payload, limit)
     elif mask & COMP_SPARSE:
         payload = _sparse_decompress(payload, max_output=limit)
+    elif mask & COMP_HUFFMAN:
+        payload = huff_decompress(payload, limit)
     elif mask == 0:
         pass
     else:

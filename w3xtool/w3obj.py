@@ -10,6 +10,17 @@ from dataclasses import dataclass, field
 # 带 等级/变体 额外两个 int 的文件类型
 _LEVEL_EXTS = {"w3a", "w3q", "w3d"}
 
+
+def _decode_str(b: bytes) -> str:
+    """字符串解码：优先 UTF-8（新版/重制版），失败回退 GBK（1.20~1.27 老中文图）。"""
+    try:
+        return b.decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            return b.decode("gbk")
+        except UnicodeDecodeError:
+            return b.decode("utf-8", "replace")
+
 # 文件扩展名 → 中文分类名
 EXT_CATEGORY = {
     "w3u": "单位",
@@ -66,7 +77,7 @@ class _Reader:
 
     def cstr(self) -> str:
         end = self.d.index(b"\x00", self.p)
-        s = self.d[self.p:end].decode("utf-8", "replace")
+        s = _decode_str(self.d[self.p:end])
         self.p = end + 1
         return s
 

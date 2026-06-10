@@ -74,6 +74,7 @@
 | Phase 42: 指令提示 TRIGSTR 还原 | complete | 实测狼人图 -brewing 提示显示 TRIGSTR_3482 未还原；commands_from_map 用 md.scripts 里的 war3map.wts 解析字符串表,把指令提示的 TRIGSTR_n 查回真文本(_map_wts+resolve);狼人图24条指令 TRIGSTR 未解析 0；测试74例全过 |
 | Phase 43: 头部混淆图(_w3p)兜底 | complete | Zombie_Defense_0.25z6_w3p：打包工具在真 MPQ 头(偏移1536)前塞了 MPQ\x1b 假userdata头(字段全填1337)+512处垃圾诱饵 MPQ\x1a 头骗解析器。原 _parse_header 取第一个 MPQ\x1a 即诱饵→校验失败直接抛错。改为扫描 512 对齐位置,跳过校验不过的诱饵,取第一个合法头(_read_header_fields+_validate_header)。该图数据未加密,定位真头后完整提取 1714 对象(单位840/技能636…),名字正常("坟场""农民")。真加密(KKWE)图仍不支持。Downloads 全部图 0 失败；测试76例全过 |
 | 研究结论存档 | note | MPQ 容器**所有 WC3 版本恒为 v1**(无需分版本分支),HM3W 包裹头通用;压缩按扇区掩码字节派发(zlib0x02主,PKWARE0x08,bzip2,huffman/adpcm音频)与游戏版本无关;w3i 版本阈值18/25/28/31/33(脚本JASS/Lua由v28+ scriptMode标识,本工具读 .j/.lua 已覆盖);对象数据 sets 是唯一版本特有的对象层分支 |
+| Phase 44: 85图全量审计+三处修复 | complete | 写 tools_audit.py 深度审计(解析率/乱码/告警/脚本)跑遍 Downloads 85 图。(1)**GBK 回退**:w3obj.cstr 与 wts.parse_wts 改 UTF-8 失败回退 GBK,wts 改字节层逐条解码(兼容 UTF-8 为主、个别 GBK 的混合编码);(2)**Huffman(0x01)**:腐朽之渊 war3map.j 用自适应 Huffman 压缩,原 _decompress_sector 不支持致脚本静默丢失→从 StormLib huff.cpp 移植 huffman.py(FGK 自适应,9 张权重表照抄,LSB 比特流,0x100结束/0x101转义,out_size 封顶防炸弹),实测解出 4399915 字节合法 JASS+22 指令;(3)诊断 a_herorpg(韩文图)=block表/文件偏移被彻底破坏的真加密保护(不支持)、HolyWar D001 乱码=地图存档时已损坏(文件里直接是 U+FFFD,无法恢复)。85图:84成功提取/1真加密失败;测试82例全过 |
 
 > **会话 4 起范围调整**：放弃加密保护图(千风物语类)提取，移除地图视图与运行时 dump。Phase 6/10-14/24 相关功能已删除，仅保留正常地图的对象/脚本/指令/配方提取与导出。
 

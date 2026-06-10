@@ -82,6 +82,15 @@ class TestParseObjectData(unittest.TestCase):
         with self.assertRaises(ValueError):
             parse_object_data(_build(bad, []), "w3u")
 
+    def test_gbk_string_value_decoded(self):
+        # 老地图(1.20~1.27)的字符串可能是 GBK 编码；UTF-8 解会乱码 → 应回退 GBK
+        gbk = "测试".encode("gbk")          # b'\xb2\xe2\xca\xd4'，非法 UTF-8（首字节是续字节）
+        self.assertRaises(UnicodeDecodeError, gbk.decode, "utf-8")   # 确认确实非法 UTF-8
+        mod = _tag("unam") + struct.pack("<i", 3) + gbk + b"\x00" + struct.pack("<I", 0)
+        obj = _tag("hpea") + _tag("hpea") + struct.pack("<i", 1) + mod
+        objs = parse_object_data(_build([obj], []), "w3u")
+        self.assertEqual(objs[0].mods[0].value, "测试")
+
     def test_version3_extra_header_fields(self):
         # 1.32+/新编辑器存的格式版本 3：每个对象头多两个 uint32
         original = [_obj_v3("hpea", "hpea", [_mod("unam", 3, "Peasant"), _mod("uhpm", 0, 100)])]
