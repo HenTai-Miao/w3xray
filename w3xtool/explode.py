@@ -97,6 +97,19 @@ def _decode(s: _State, h) -> int:
             raise ValueError("explode: 无效的 Huffman 码")
 
 
+def _copy_match(out: bytearray, start: int, length: int) -> None:
+    """LZ77 回溯拷贝：把 out[start:] 起的 length 字节追加到 out 末尾。
+
+    无重叠（回溯距离 ≥ length，即 len(out)-start ≥ length）时整段切片批量拷贝（快）；
+    重叠（RLE，如 dist=1 重复末字节）时必须逐字节边写边读，故走慢路径。
+    两条路径输出完全一致，仅前者更快。"""
+    if len(out) - start >= length:
+        out += out[start:start + length]
+    else:
+        for i in range(length):
+            out.append(out[start + i])
+
+
 def explode(data: bytes, max_output: int | None = None) -> bytes:
     """解压一段 PKWARE DCL 压缩数据，返回原始字节。
 
@@ -123,8 +136,7 @@ def explode(data: bytes, max_output: int | None = None) -> bytes:
             start = len(out) - dist
             if start < 0:
                 raise ValueError("explode: 距离越界")
-            for i in range(length):
-                out.append(out[start + i])
+            _copy_match(out, start, length)
         else:
             sym = _decode(s, _LITCODE) if lit else _bits(s, 8)
             out.append(sym & 0xFF)

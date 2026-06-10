@@ -9,7 +9,7 @@
 """
 import unittest
 
-from w3xtool.search import fuzzy_score
+from w3xtool.search import compile_query, fuzzy_score
 
 
 class TestEmptyAndBasic(unittest.TestCase):
@@ -209,6 +209,35 @@ class TestRobustnessNoCrash(unittest.TestCase):
             t = rnd.choice(texts)
             r = fuzzy_score(q, t)
             self.assertTrue(r is None or isinstance(r, int), (repr(q), repr(r)))
+
+
+class TestCompiledQuery(unittest.TestCase):
+    """compile_query().score() 必须与一次性 fuzzy_score() 完全等价（只是少解析几次）。"""
+
+    QUERIES = [
+        "", "  ", "%剑%", "智力", "剑%", "%法杖", "a%b",
+        '="等级:E"', "%智力% && %圣剑%", "%剑% || %法杖%",
+        "(%敏捷% || %全属性%) && \"等级:E\"".replace('"', '="', 1),
+        r"攻击+20\%", "%ABC%", "%力量% && %巨剑% || %戒指%",
+    ]
+    TEXTS = [
+        "高级智力圣剑 等级:E 攻击+20%", "审判圣剑", "奥术法杖", "敏捷之靴",
+        "全属性指环 等级:EX", "ABCDEF", "力量巨剑", "敏捷戒指", "",
+    ]
+
+    def test_compiled_matches_fuzzy_score(self):
+        for q in self.QUERIES:
+            cq = compile_query(q)
+            for t in self.TEXTS:
+                self.assertEqual(cq.score(t), fuzzy_score(q, t), (repr(q), repr(t)))
+
+    def test_compile_once_reusable_across_texts(self):
+        cq = compile_query("%剑% || %法杖%")
+        self.assertIsNotNone(cq.score("圣剑"))
+        self.assertIsNotNone(cq.score("法杖"))
+        self.assertIsNone(cq.score("盾牌"))
+        # 复用不改变内部状态：重复打分结果稳定
+        self.assertEqual(cq.score("圣剑"), cq.score("圣剑"))
 
 
 class TestLikeOracle(unittest.TestCase):

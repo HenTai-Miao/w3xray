@@ -13,6 +13,8 @@ def main():
         for cat, objs in md.objects.items():
             print(f"  {cat}: {len(objs)}")
         return
+    from w3xtool.single_instance import ensure_single_instance
+    ensure_single_instance()          # 单实例：先关掉上一个实例再启动，不允许多开
     from w3xtool.gui import main as gui_main
     gui_main()
 

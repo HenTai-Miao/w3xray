@@ -83,12 +83,15 @@ def _like_score(segs, anchored_start: bool, anchored_end: bool, text: str):
     return 1000 - first_idx
 
 
+# 全角标点 → 半角（引号/竖线/括号）。一次 translate 取代多次 replace。
+_NORMALIZE = str.maketrans({"“": '"', "”": '"', "｜": "|", "（": "(", "）": ")"})
+
+
 # ---- 词法：把查询切成 token 流 ----
 # token: ('and',) ('or',) ('lp',) ('rp',)
 #        ('like', segs, anchored_start, anchored_end) ('eq', needle)
 def _lex(query: str):
-    query = (query.replace("“", '"').replace("”", '"')
-                  .replace("｜", "|").replace("（", "(").replace("）", ")"))
+    query = query.translate(_NORMALIZE)
     toks = []
     i, n = 0, len(query)
     while i < n:
@@ -264,17 +267,45 @@ def _eval(node, text: str, text_lower: str):
     return None
 
 
+class CompiledQuery:
+    """预编译好的查询：词法+解析只做一次，之后对每条文本调用 score() 复用 AST。
+
+    GUI 每次按键要对**成千上万**个对象打分；若每个对象都重新 _lex+解析同一条
+    查询，纯属浪费。先 compile_query() 一次，再对每条文本 .score()，省掉 N-1 次解析。
+    空查询用 _empty 标记，score() 恒返回 0（与 fuzzy_score 的空查询语义一致）。"""
+
+    __slots__ = ("_node", "_empty")
+
+    def __init__(self, node, empty: bool):
+        self._node = node
+        self._empty = empty
+
+    def score(self, text: str):
+        """命中返回累加分数，未命中返回 None，空查询返回 0。"""
+        if self._empty:
+            return 0
+        return _eval(self._node, text, text.lower())
+
+
+def compile_query(query: str) -> CompiledQuery:
+    """把查询编译成可复用的 CompiledQuery（词法+解析一次完成）。"""
+    if not query or not query.strip():
+        return CompiledQuery(None, True)
+    toks = _lex(query)
+    if not toks:
+        return CompiledQuery(None, True)
+    node = _Parser(toks).parse_or()
+    if node is None:
+        return CompiledQuery(None, True)
+    return CompiledQuery(node, False)
+
+
 def fuzzy_score(query: str, text: str):
-    """SQL 风格多关键词搜索。命中返回累加分数，未命中返回 None，空查询返回 0。
+    """SQL 风格多关键词搜索（一次性接口）。命中返回累加分数，未命中 None，空查询 0。
+
+    内部即 compile_query(query).score(text)。批量打分（同一查询、多条文本）请改用
+    compile_query() 编译一次再循环 .score()，避免重复解析。
 
     传入原始大小写的 query 与 text：LIKE 不分大小写（双方转小写比较），
     引号精准词区分大小写（原样比较）。"""
-    if not query or not query.strip():
-        return 0
-    toks = _lex(query)
-    if not toks:
-        return 0
-    node = _Parser(toks).parse_or()
-    if node is None:
-        return 0
-    return _eval(node, text, text.lower())
+    return compile_query(query).score(text)

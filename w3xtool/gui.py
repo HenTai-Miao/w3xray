@@ -20,7 +20,7 @@ from collections import Counter
 
 from .api import (load_map, commands_from_map, recipes_from_map,
                   export_all_files, tmp_extract_dir, quick_map_name, MapData)
-from .search import fuzzy_score
+from .search import compile_query
 from .icons import IconResolver
 from PIL import Image, ImageTk
 try:
@@ -290,6 +290,7 @@ class App(ctk.CTk):
 
     def _refresh_recipes(self):
         q = self.rec_search.get().strip()
+        cq = compile_query(q)                 # 编译一次，下面每条配方复用
         self.rec_tree.delete(*self.rec_tree.get_children())
         n = 0
         widest = 0
@@ -302,7 +303,7 @@ class App(ctk.CTk):
                 nm = self._item_name(code)
                 ing_parts.append(f"{nm}×{cnt}" if cnt > 1 else nm)
             ing_str = "  +  ".join(ing_parts)
-            if q and fuzzy_score(q, res_name + " " + ing_str) is None:
+            if q and cq.score(res_name + " " + ing_str) is None:
                 continue
             self.rec_tree.insert("", "end", values=(res_name, ing_str),
                                  tags=("odd" if n % 2 else "even",))
@@ -748,13 +749,14 @@ class App(ctk.CTk):
         if not self.map_data:
             return
         query = self.search_var.get().strip()   # 原样大小写：%LIKE 不分大小写、="精准" 区分
+        cq = compile_query(query)                # 编译一次，下面成千上万对象复用同一 AST
         self._row_imgs = []
         summary = []
         for cat in PARALLEL_CATS:
             objs = self.map_data.objects.get(cat, [])
             scored = []
             for o in objs:
-                sc = fuzzy_score(query, o.search_text) if query else 0
+                sc = cq.score(o.search_text)
                 if sc is not None:
                     scored.append((sc, o))
             if query:
@@ -851,11 +853,12 @@ class App(ctk.CTk):
     # ---------- 指令 ----------
     def _refresh_cmds(self):
         q = self.cmd_search.get().strip()
+        cq = compile_query(q)                 # 编译一次，下面每条指令复用
         self.cmd_tree.delete(*self.cmd_tree.get_children())
         n = 0
         for c in self.commands:
             blob = c.command + " " + c.hint
-            if q and fuzzy_score(q, blob) is None:
+            if q and cq.score(blob) is None:
                 continue
             self.cmd_tree.insert("", "end",
                                  values=(c.command or "(空)",
