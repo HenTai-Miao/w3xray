@@ -20,6 +20,10 @@ from collections import Counter
 
 from .api import (load_map, commands_from_map, recipes_from_map,
                   export_all_files, tmp_extract_dir, quick_map_name, MapData)
+from .aicli.config import load_config as load_ai_config, save_config as save_ai_config, \
+    get_active as get_active_ai, AIConfig
+from .aicli.runner import AIProfile, run_ai
+from .aicli.improve import run_annotation
 from .search import fuzzy_score
 from .icons import IconResolver
 from PIL import Image, ImageTk
@@ -72,6 +76,8 @@ class App(ctk.CTk):
         self._photo_cache = {}     # icon path -> PhotoImage
         self._row_imgs = []        # 保持引用防止被回收
         self._blank = None
+        self._ai_config = load_ai_config()   # AI CLI 配置（命令模板/当前选择）
+        self._settings_win = None
 
         self._build_topbar()
         self._build_tabs()
@@ -97,8 +103,14 @@ class App(ctk.CTk):
         ctk.CTkLabel(bar, text="  ⚔  魔兽地图提取器", font=(FONT, 16, "bold")).pack(side="left", padx=10)
         ctk.CTkButton(bar, text="打开地图 / 战役", font=(FONT, 14, "bold"),
                       width=140, height=38, command=self.on_open).pack(side="left", padx=8)
+        ctk.CTkButton(bar, text="⚙ 设置", font=(FONT, 13), width=70, height=38,
+                      fg_color=SECONDARY, hover_color=SECONDARY_HOVER, text_color=TEXT,
+                      command=self._open_settings).pack(side="left", padx=4)
         self.map_label = ctk.CTkLabel(bar, text="未打开", font=(FONT, 13), text_color=SUBTLE)
         self.map_label.pack(side="left", padx=12)
+        ctk.CTkButton(bar, text="AI 质检", font=(FONT, 13), width=84, height=34,
+                      fg_color=SECONDARY, hover_color=SECONDARY_HOVER, text_color=TEXT,
+                      command=self._on_ai_audit).pack(side="right", padx=6)
         ctk.CTkButton(bar, text="导出全部文件", font=(FONT, 13), width=110, height=34,
                       fg_color=SECONDARY, hover_color=SECONDARY_HOVER, text_color=TEXT,
                       command=self.on_export_all).pack(side="right", padx=6)
@@ -108,6 +120,169 @@ class App(ctk.CTk):
         ctk.CTkButton(bar, text="导出ID列表", font=(FONT, 12), width=92, height=30,
                       fg_color=SECONDARY, hover_color=SECONDARY_HOVER, text_color=TEXT,
                       command=self.on_export_ids).pack(side="right", padx=5)
+
+    # ---------- AI 设置 / 质检 ----------
+    def _open_settings(self):
+        """AI CLI 设置对话框：管理命令模板、选当前、测试连通。"""
+        if self._settings_win is not None and self._settings_win.winfo_exists():
+            self._settings_win.lift()
+            return
+        win = ctk.CTkToplevel(self)
+        self._settings_win = win
+        win.title("AI CLI 设置")
+        win.geometry("620x520")
+        win.transient(self)
+
+        ctk.CTkLabel(win, text="AI CLI 配置（用于解析质检 / 自改进）",
+                     font=(FONT, 15, "bold")).pack(anchor="w", padx=16, pady=(14, 2))
+        ctk.CTkLabel(win, text="登录交给各 CLI 自己：请先在终端登录好 claude / codex / opencode。\n"
+                              "命令里用 {prompt} 占位提示词（或选 stdin/file 输入方式）。",
+                     font=(FONT, 11), text_color=SUBTLE, justify="left").pack(anchor="w", padx=16)
+
+        names = [p.name for p in self._ai_config.profiles] or ["claude"]
+        self._set_sel = ctk.StringVar(value=self._ai_config.active or names[0])
+
+        row = ctk.CTkFrame(win, fg_color="transparent")
+        row.pack(fill="x", padx=16, pady=(12, 4))
+        ctk.CTkLabel(row, text="配置项：", font=(FONT, 12)).pack(side="left")
+        self._set_menu = ctk.CTkOptionMenu(row, values=names, variable=self._set_sel,
+                                           width=180, command=lambda _=None: self._settings_load_sel())
+        self._set_menu.pack(side="left", padx=6)
+        ctk.CTkButton(row, text="新建", width=56, command=self._settings_new).pack(side="left", padx=3)
+        ctk.CTkButton(row, text="删除", width=56, command=self._settings_delete).pack(side="left", padx=3)
+
+        form = ctk.CTkFrame(win, fg_color="transparent")
+        form.pack(fill="both", expand=True, padx=16, pady=6)
+        self._set_fields = {}
+        for key, label in (("name", "名称"), ("command", "命令（整行，空格分隔）"),
+                           ("input_mode", "输入方式 arg/stdin/file"),
+                           ("cwd", "工作目录（留空=默认）"), ("timeout", "超时(秒)")):
+            ctk.CTkLabel(form, text=label, font=(FONT, 12)).pack(anchor="w", pady=(6, 0))
+            e = ctk.CTkEntry(form, font=(FONT, 12), width=560)
+            e.pack(anchor="w")
+            self._set_fields[key] = e
+
+        btns = ctk.CTkFrame(win, fg_color="transparent")
+        btns.pack(fill="x", padx=16, pady=10)
+        ctk.CTkButton(btns, text="设为当前并保存", command=self._settings_save).pack(side="left", padx=4)
+        ctk.CTkButton(btns, text="测试连通", fg_color=SECONDARY, hover_color=SECONDARY_HOVER,
+                      command=self._settings_test).pack(side="left", padx=4)
+        self._set_status = ctk.CTkLabel(btns, text="", font=(FONT, 11), text_color=SUBTLE)
+        self._set_status.pack(side="left", padx=8)
+
+        self._settings_load_sel()
+        win.protocol("WM_DELETE_WINDOW", lambda: (setattr(self, "_settings_win", None), win.destroy()))
+
+    def _settings_find(self, name):
+        for p in self._ai_config.profiles:
+            if p.name == name:
+                return p
+        return None
+
+    def _settings_load_sel(self):
+        p = self._settings_find(self._set_sel.get())
+        if not p:
+            return
+        vals = {"name": p.name, "command": " ".join(p.command),
+                "input_mode": p.input_mode, "cwd": p.cwd or "", "timeout": str(p.timeout)}
+        for k, e in self._set_fields.items():
+            e.delete(0, "end")
+            e.insert(0, vals[k])
+
+    def _settings_form_profile(self):
+        import shlex
+        f = self._set_fields
+        try:
+            timeout = float(f["timeout"].get() or "300")
+        except ValueError:
+            timeout = 300.0
+        cmd = shlex.split(f["command"].get())
+        mode = f["input_mode"].get().strip() or "arg"
+        if mode not in ("arg", "stdin", "file"):
+            mode = "arg"
+        return AIProfile(name=f["name"].get().strip() or "ai", command=cmd,
+                         cwd=f["cwd"].get().strip() or None, timeout=timeout, input_mode=mode)
+
+    def _settings_save(self):
+        prof = self._settings_form_profile()
+        if not prof.command:
+            self._set_status.configure(text="命令不能为空")
+            return
+        old = self._set_sel.get()
+        profs = [p for p in self._ai_config.profiles if p.name != old and p.name != prof.name]
+        profs.append(prof)
+        self._ai_config = AIConfig(profiles=profs, active=prof.name)
+        save_ai_config(self._ai_config)
+        names = [p.name for p in profs]
+        self._set_menu.configure(values=names)
+        self._set_sel.set(prof.name)
+        self._set_status.configure(text=f"已保存，当前：{prof.name}")
+
+    def _settings_new(self):
+        n = "新配置"
+        i = 1
+        while self._settings_find(n):
+            i += 1
+            n = f"新配置{i}"
+        self._ai_config.profiles.append(AIProfile(name=n, command=["claude", "-p", "{prompt}"]))
+        self._set_menu.configure(values=[p.name for p in self._ai_config.profiles])
+        self._set_sel.set(n)
+        self._settings_load_sel()
+
+    def _settings_delete(self):
+        name = self._set_sel.get()
+        self._ai_config.profiles = [p for p in self._ai_config.profiles if p.name != name]
+        if not self._ai_config.profiles:
+            self._ai_config = AIConfig(profiles=[AIProfile(name="claude", command=["claude", "-p", "{prompt}"])],
+                                       active="claude")
+        if self._ai_config.active == name:
+            self._ai_config.active = self._ai_config.profiles[0].name
+        save_ai_config(self._ai_config)
+        names = [p.name for p in self._ai_config.profiles]
+        self._set_menu.configure(values=names)
+        self._set_sel.set(names[0])
+        self._settings_load_sel()
+
+    def _settings_test(self):
+        prof = self._settings_form_profile()
+        self._set_status.configure(text="测试中…")
+
+        def work():
+            r = run_ai(prof, "回复 OK 即可（连通性测试）。")
+            msg = "连通成功 ✓" if r.ok else f"失败：{r.error}"
+            self.after(0, lambda: self._set_status.configure(text=msg))
+        threading.Thread(target=work, daemon=True).start()
+
+    def _on_ai_audit(self):
+        """对当前地图跑 AI 质检（诊断 → AI 标注），结果弹窗展示。"""
+        if not self.map_data:
+            messagebox.showinfo("提示", "请先打开一张地图")
+            return
+        active = get_active_ai(self._ai_config)
+        if not active:
+            messagebox.showinfo("提示", "请先在「⚙ 设置」里配置并选择一个 AI")
+            return
+        path = self.map_data.path
+        self.status.configure(text="AI 质检中…（耗时取决于 AI，可能数十秒）")
+
+        def work():
+            try:
+                text = run_annotation(path, active)
+            except Exception as e:
+                text = f"AI 质检失败：{e}"
+            self.after(0, lambda: (self._show_text_popup("AI 质检结果", text),
+                                   self.status.configure(text="就绪")))
+        threading.Thread(target=work, daemon=True).start()
+
+    def _show_text_popup(self, title, text):
+        win = ctk.CTkToplevel(self)
+        win.title(title)
+        win.geometry("680x560")
+        win.transient(self)
+        box = ctk.CTkTextbox(win, font=(FONT, 12), wrap="word")
+        box.pack(fill="both", expand=True, padx=12, pady=12)
+        box.insert("end", text or "(无输出)")
+        box.configure(state="disabled")
 
     # ---------- 标签页 ----------
     def _build_tabs(self):

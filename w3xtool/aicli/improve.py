@@ -7,12 +7,20 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 
 from ..audit import audit_map, report_text
 from .runner import AIProfile, run_ai
 
-# 提示词目录：项目根下的 prompts/
-_PROMPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "prompts")
+
+def _default_prompts_dir() -> str:
+    """提示词目录：打包(PyInstaller)后在 _MEIPASS/prompts，源码运行在项目根/prompts。"""
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return os.path.join(sys._MEIPASS, "prompts")
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "prompts")
+
+
+_PROMPTS_DIR = _default_prompts_dir()
 
 
 def load_prompt(name: str, prompts_dir: str | None = None) -> str:

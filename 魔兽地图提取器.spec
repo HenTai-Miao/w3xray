@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = []
+datas = [('prompts', 'prompts')]   # AI 提示词模板，运行时 AI 质检要读
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('customtkinter')
