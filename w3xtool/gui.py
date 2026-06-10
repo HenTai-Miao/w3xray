@@ -171,7 +171,12 @@ class App(ctk.CTk):
         self._set_status.pack(side="left", padx=8)
 
         self._settings_load_sel()
-        win.protocol("WM_DELETE_WINDOW", lambda: (setattr(self, "_settings_win", None), win.destroy()))
+
+        def _close():
+            self._settings_save_silent()    # 关窗即保存当前表单，避免编辑后忘点保存而丢失
+            self._settings_win = None
+            win.destroy()
+        win.protocol("WM_DELETE_WINDOW", _close)
 
     def _settings_find(self, name):
         for p in self._ai_config.profiles:
@@ -202,6 +207,21 @@ class App(ctk.CTk):
             mode = "arg"
         return AIProfile(name=f["name"].get().strip() or "ai", command=cmd,
                          cwd=f["cwd"].get().strip() or None, timeout=timeout, input_mode=mode)
+
+    def _settings_save_silent(self):
+        """关窗时静默保存当前表单（命令为空则跳过，不弹任何提示）。"""
+        try:
+            prof = self._settings_form_profile()
+            if not prof.command:
+                return
+            old = self._set_sel.get()
+            profs = [p for p in self._ai_config.profiles if p.name != old and p.name != prof.name]
+            profs.append(prof)
+            self._ai_config = AIConfig(profiles=profs, active=prof.name,
+                                       auto_audit=self._ai_config.auto_audit)
+            save_ai_config(self._ai_config)
+        except Exception:
+            pass
 
     def _settings_save(self):
         prof = self._settings_form_profile()
@@ -730,6 +750,10 @@ class App(ctk.CTk):
                     break
             self._save_config(geometry=self.geometry(), sashes=sashes,
                               layout=_LAYOUT_VERSION)
+        except Exception:
+            pass
+        try:
+            save_ai_config(self._ai_config)   # AI 配置也一并落盘，下次启动自动恢复
         except Exception:
             pass
         self.destroy()

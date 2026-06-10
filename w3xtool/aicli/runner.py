@@ -12,6 +12,7 @@ prompt 通过三种方式之一传给 CLI：
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import tempfile
 import time
@@ -51,6 +52,22 @@ def _render(command, prompt, prompt_file):
     return out
 
 
+def _resolve_launch(command):
+    """把命令首项解析成真实可执行路径。
+
+    Windows 上 npm/nvm 装的 CLI(claude/codex/opencode)是 .cmd/.ps1 包装脚本，
+    裸名 `claude` 交给 subprocess(不带 shell) 会"命令未找到"。这里用 shutil.which
+    按 PATHEXT 找到 claude.CMD，并对 .cmd/.bat 走 `cmd /c`（CreateProcess 不能直接跑批处理）。
+    """
+    if not command:
+        return command
+    exe = shutil.which(command[0]) or command[0]
+    rest = list(command[1:])
+    if os.name == "nt" and exe.lower().endswith((".cmd", ".bat")):
+        return ["cmd", "/c", exe] + rest
+    return [exe] + rest
+
+
 def run_ai(profile: AIProfile, prompt: str) -> AIResult:
     """按 profile 调一次 AI CLI，把 prompt 传进去，返回统一结果（绝不抛异常）。"""
     tmp_path = None
@@ -68,18 +85,17 @@ def run_ai(profile: AIProfile, prompt: str) -> AIResult:
         else:  # arg
             command = _render(profile.command, prompt, None)
 
+        command = _resolve_launch(command)    # 解析 .cmd/.ps1 包装脚本（Windows npm CLI）
+        kwargs = dict(capture_output=True, text=True, encoding="utf-8",
+                      errors="replace", cwd=profile.cwd or None, timeout=profile.timeout)
+        if stdin_data is not None:
+            kwargs["input"] = stdin_data
+        else:
+            # 不走 stdin 时关掉它，免得 CLI(如 claude)空等几秒 stdin
+            kwargs["stdin"] = subprocess.DEVNULL
         start = time.monotonic()
         try:
-            proc = subprocess.run(
-                command,
-                input=stdin_data,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                cwd=profile.cwd or None,
-                timeout=profile.timeout,
-            )
+            proc = subprocess.run(command, **kwargs)
         except FileNotFoundError:
             return AIResult(ok=False, error="命令未找到：%s" % (command[0] if command else "?"))
         except subprocess.TimeoutExpired:

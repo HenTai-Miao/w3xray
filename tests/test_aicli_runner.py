@@ -2,6 +2,7 @@
 
 不依赖真实 AI，可离线跑。
 """
+import os
 import sys
 import unittest
 
@@ -62,6 +63,24 @@ class TestRunAI(unittest.TestCase):
         r = run_ai(prof, "x")
         self.assertFalse(r.ok)
         self.assertTrue(r.error)
+
+    @unittest.skipUnless(os.name == "nt", "仅 Windows：npm/nvm CLI 是 .cmd 包装脚本")
+    def test_windows_cmd_shim_resolved_by_bare_name(self):
+        # 复刻真实场景：CLI 是 PATH 上的 .cmd（裸名调用），应能解析并执行
+        import tempfile
+        d = tempfile.mkdtemp()
+        cmd = os.path.join(d, "faketool.cmd")
+        with open(cmd, "w", encoding="ascii") as f:
+            f.write("@echo off\r\necho SHIM:%1\r\n")
+        old = os.environ.get("PATH", "")
+        os.environ["PATH"] = d + os.pathsep + old
+        try:
+            prof = AIProfile(name="shim", command=["faketool", "{prompt}"], input_mode="arg")
+            r = run_ai(prof, "hi")
+            self.assertTrue(r.ok, r.error)
+            self.assertIn("SHIM:hi", r.stdout)
+        finally:
+            os.environ["PATH"] = old
 
 
 if __name__ == "__main__":
