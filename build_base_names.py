@@ -132,15 +132,29 @@ def parse_strings(text: str, out: dict, fill_only=False):
     flush(section)
 
 
-def main():
-    names = {}
-    total_files = 0
-    archives = []
+def build_sources(args):
+    """按 CLI 参数返回数据源列表。
+
+    --from-dir: 单个 DirSource（CASC 已是当前 build 最终态，无需多层覆盖）。
+    否则: 经典 MPQ 列表（低->高优先级，后者覆盖前者）。
+    """
+    if getattr(args, "from_dir", None):
+        return [DirSource(args.from_dir)]
+    game = getattr(args, "game", None) or GAME
+    sources = []
     for mq in MPQS:
         try:
-            archives.append(MPQArchive(f"{GAME}/{mq}"))
+            sources.append(MPQArchive(f"{game}/{mq}"))
         except Exception as e:
             print("跳过", mq, e)
+    return sources
+
+
+def main(args):
+    out_dir = getattr(args, "out_dir", None) or "w3xtool"
+    names = {}
+    total_files = 0
+    archives = build_sources(args)
     strings_files = [f for f in FILES if "Strings" in f]
     func_files = [f for f in FILES if "Func" in f]
     # 第一遍：*Strings.txt（中文名，补丁包覆盖基础包）
@@ -169,7 +183,7 @@ def main():
         nm = names[code].replace("\\", "\\\\").replace('"', '\\"')
         lines.append(f'    {code!r}: "{nm}",')
     lines.append("}")
-    with open("w3xtool/base_names.py", "w", encoding="utf-8") as f:
+    with open(os.path.join(out_dir, "base_names.py"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
     print("已写出 w3xtool/base_names.py")
     # 抽查
@@ -196,11 +210,11 @@ def main():
         v = west[k].replace("\\", "\\\\").replace('"', '\\"')
         wl.append(f'    "{k}": "{v}",')
     wl.append("}")
-    with open("w3xtool/westrings.py", "w", encoding="utf-8") as f:
+    with open(os.path.join(out_dir, "westrings.py"), "w", encoding="utf-8") as f:
         f.write("\n".join(wl) + "\n")
     print(f"已写出 w3xtool/westrings.py（{len(west)} 条）")
 
-    build_base_objects(archives)
+    build_base_objects(archives, out_dir)
 
 
 # ---- 基础对象字段库（解析游戏 *Data.slk，jass.slk 同款数据层）----
@@ -223,7 +237,7 @@ SLK_LABEL = {
 }
 
 
-def build_base_objects(archives):
+def build_base_objects(archives, out_dir):
     from w3xtool.slk import parse_slk
 
     def read(fn):
@@ -264,10 +278,20 @@ def build_base_objects(archives):
         fl = ", ".join(f'("{lab}", {val!r})' for lab, val in fields)
         lines.append(f'    {code!r}: ({cat!r}, [{fl}]),')
     lines.append("}")
-    with open("w3xtool/base_objects.py", "w", encoding="utf-8") as f:
+    with open(os.path.join(out_dir, "base_objects.py"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
     print(f"已写出 w3xtool/base_objects.py（{len(out)} 个基础对象）")
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    p = argparse.ArgumentParser(
+        description="从游戏数据生成原版对象内置数据（base_names/base_objects/westrings）")
+    p.add_argument("--from-dir", dest="from_dir",
+                   help="从已提取的散文件夹读（CASC/重制版：先用 CascView 或 "
+                        "casc-extract 导出，再指向该文件夹）")
+    p.add_argument("--game", help="经典 MPQ 安装目录（默认硬编码 GAME 路径）")
+    p.add_argument("--out-dir", dest="out_dir", default="w3xtool",
+                   help="生成的 .py 写到哪个目录（默认 w3xtool）")
+    main(p.parse_args())
