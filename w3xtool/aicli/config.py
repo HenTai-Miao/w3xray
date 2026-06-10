@@ -23,6 +23,7 @@ PRESETS = {
 class AIConfig:
     profiles: list = field(default_factory=list)   # list[AIProfile]
     active: str = ""                               # 当前选中 profile 的 name
+    auto_audit: bool = False                        # 解析地图后自动跑 AI 质检
 
 
 def default_config() -> AIConfig:
@@ -60,7 +61,8 @@ def _profile_from_dict(d: dict) -> AIProfile:
 def save_config(cfg: AIConfig, path: str | None = None):
     path = path or config_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    data = {"active": cfg.active, "profiles": [_profile_to_dict(p) for p in cfg.profiles]}
+    data = {"active": cfg.active, "auto_audit": bool(cfg.auto_audit),
+            "profiles": [_profile_to_dict(p) for p in cfg.profiles]}
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
@@ -74,6 +76,7 @@ def load_config(path: str | None = None) -> AIConfig:
         profiles = [_profile_from_dict(d) for d in data.get("profiles", [])]
         if not profiles:
             return default_config()
-        return AIConfig(profiles=profiles, active=data.get("active", ""))
+        return AIConfig(profiles=profiles, active=data.get("active", ""),
+                        auto_audit=bool(data.get("auto_audit", False)))
     except (OSError, ValueError, TypeError):
         return default_config()

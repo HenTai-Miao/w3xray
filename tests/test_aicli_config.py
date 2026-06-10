@@ -35,13 +35,17 @@ class TestRoundtrip(unittest.TestCase):
     def test_save_then_load_roundtrip(self):
         cfg = AIConfig(profiles=[AIProfile(name="x", command=["foo", "{prompt}"],
                                            timeout=42.0, input_mode="stdin")],
-                       active="x")
+                       active="x", auto_audit=True)
         save_config(cfg, self.path)
         loaded = load_config(self.path)
         self.assertEqual(loaded.active, "x")
         self.assertEqual(loaded.profiles[0].command, ["foo", "{prompt}"])
         self.assertEqual(loaded.profiles[0].timeout, 42.0)
         self.assertEqual(loaded.profiles[0].input_mode, "stdin")
+        self.assertTrue(loaded.auto_audit)         # 解析后自动质检开关持久化
+
+    def test_auto_audit_defaults_false(self):
+        self.assertFalse(default_config().auto_audit)
 
     def test_load_missing_file_returns_default(self):
         cfg = load_config(self.path)               # 文件不存在

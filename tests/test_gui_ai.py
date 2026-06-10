@@ -32,6 +32,20 @@ class TestGuiAI(unittest.TestCase):
         self.assertEqual(prof.input_mode, "stdin")
         self.assertEqual(prof.timeout, 60.0)
 
+    def test_ai_tab_widgets_exist(self):
+        self.assertTrue(hasattr(self.app, "ai_box"))
+        self.assertTrue(hasattr(self.app, "_auto_audit_var"))
+
+    def test_ai_set_text_updates_box(self):
+        self.app._ai_set_text("质检结果示例")
+        self.assertIn("质检结果示例", self.app.ai_box.get("1.0", "end"))
+
+    def test_ai_audit_without_map_is_safe(self):
+        # 没打开地图时自动模式应静默返回，不抛
+        self.app.map_data = None
+        self.app._ai_config.auto_audit = True
+        self.app._on_ai_audit(auto=True)   # 不应抛异常
+
 
 if __name__ == "__main__":
     unittest.main()

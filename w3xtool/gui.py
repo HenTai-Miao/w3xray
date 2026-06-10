@@ -211,7 +211,8 @@ class App(ctk.CTk):
         old = self._set_sel.get()
         profs = [p for p in self._ai_config.profiles if p.name != old and p.name != prof.name]
         profs.append(prof)
-        self._ai_config = AIConfig(profiles=profs, active=prof.name)
+        self._ai_config = AIConfig(profiles=profs, active=prof.name,
+                                   auto_audit=self._ai_config.auto_audit)
         save_ai_config(self._ai_config)
         names = [p.name for p in profs]
         self._set_menu.configure(values=names)
@@ -234,7 +235,7 @@ class App(ctk.CTk):
         self._ai_config.profiles = [p for p in self._ai_config.profiles if p.name != name]
         if not self._ai_config.profiles:
             self._ai_config = AIConfig(profiles=[AIProfile(name="claude", command=["claude", "-p", "{prompt}"])],
-                                       active="claude")
+                                       active="claude", auto_audit=self._ai_config.auto_audit)
         if self._ai_config.active == name:
             self._ai_config.active = self._ai_config.profiles[0].name
         save_ai_config(self._ai_config)
@@ -253,36 +254,86 @@ class App(ctk.CTk):
             self.after(0, lambda: self._set_status.configure(text=msg))
         threading.Thread(target=work, daemon=True).start()
 
-    def _on_ai_audit(self):
-        """对当前地图跑 AI 质检（诊断 → AI 标注），结果弹窗展示。"""
+    def _ai_suggestions_dir(self):
+        return os.path.join(os.path.expanduser("~"), ".w3xray", "ai_suggestions")
+
+    def _ai_precheck(self):
+        """返回 (map_path, profile) 或 None（并已弹提示）。"""
         if not self.map_data:
             messagebox.showinfo("提示", "请先打开一张地图")
-            return
+            return None
         active = get_active_ai(self._ai_config)
         if not active:
             messagebox.showinfo("提示", "请先在「⚙ 设置」里配置并选择一个 AI")
-            return
-        path = self.map_data.path
-        self.status.configure(text="AI 质检中…（耗时取决于 AI，可能数十秒）")
+            return None
+        return self.map_data.path, active
+
+    def _on_ai_audit(self, auto=False):
+        """对当前地图跑 AI 质检（诊断 → AI 标注），结果写入「AI 质检」标签页。"""
+        if auto:
+            if not (self.map_data and self._ai_config.auto_audit):
+                return
+            active = get_active_ai(self._ai_config)
+            if not active:
+                return
+            path = self.map_data.path
+        else:
+            pre = self._ai_precheck()
+            if not pre:
+                return
+            path, active = pre
+        if not auto:                       # 自动模式不抢占当前标签页，静默填充
+            try:
+                self.tabs.set("AI 质检")
+            except Exception:
+                pass
+        self._ai_set_text("AI 质检中…（耗时取决于 AI，可能数十秒）")
+        self.status.configure(text="AI 质检中…")
 
         def work():
             try:
                 text = run_annotation(path, active)
             except Exception as e:
                 text = f"AI 质检失败：{e}"
-            self.after(0, lambda: (self._show_text_popup("AI 质检结果", text),
-                                   self.status.configure(text="就绪")))
+            self.after(0, lambda: (self._ai_set_text(text), self.status.configure(text="就绪")))
         threading.Thread(target=work, daemon=True).start()
 
-    def _show_text_popup(self, title, text):
-        win = ctk.CTkToplevel(self)
-        win.title(title)
-        win.geometry("680x560")
-        win.transient(self)
-        box = ctk.CTkTextbox(win, font=(FONT, 12), wrap="word")
-        box.pack(fill="both", expand=True, padx=12, pady=12)
-        box.insert("end", text or "(无输出)")
-        box.configure(state="disabled")
+    def _on_ai_attribute(self):
+        """开发用：让 AI 对诊断归因 + 提修复补丁，结果存到 ai_suggestions/ 供人工审阅。"""
+        pre = self._ai_precheck()
+        if not pre:
+            return
+        path, active = pre
+        out_root = self._ai_suggestions_dir()
+        try:
+            self.tabs.set("AI 质检")
+        except Exception:
+            pass
+        self._ai_set_text("AI 归因中…（让 AI 分析诊断并提出修复补丁，结果会存到 ai_suggestions/，人工审阅后应用）")
+        self.status.configure(text="AI 归因中…")
+
+        def work():
+            folder = None
+            try:
+                from .aicli.improve import run_attribution
+                folder, res = run_attribution(path, active, out_root=out_root)
+                if res.ok:
+                    msg = f"建议已生成到：\n{folder}\n\n——— AI 输出 ———\n{res.stdout}"
+                else:
+                    msg = f"AI 调用失败：{res.error}\n（诊断报告仍已存到 {folder}）"
+            except Exception as e:
+                msg = f"AI 归因失败：{e}"
+
+            def done():
+                self._ai_set_text(msg)
+                self.status.configure(text="就绪")
+                if folder and os.path.isdir(folder):
+                    try:
+                        os.startfile(folder)
+                    except Exception:
+                        pass
+            self.after(0, done)
+        threading.Thread(target=work, daemon=True).start()
 
     # ---------- 标签页 ----------
     def _build_tabs(self):
@@ -300,9 +351,43 @@ class App(ctk.CTk):
         self.tab_obj = self.tabs.add("对象浏览")
         self.tab_cmd = self.tabs.add("隐藏指令")
         self.tab_rec = self.tabs.add("合成配方")
+        self.tab_ai = self.tabs.add("AI 质检")
         self._build_obj_tab(self.tab_obj)
         self._build_cmd_tab(self.tab_cmd)
         self._build_rec_tab(self.tab_rec)
+        self._build_ai_tab(self.tab_ai)
+
+    def _build_ai_tab(self, parent):
+        bar = ctk.CTkFrame(parent, fg_color=BG)
+        bar.pack(fill="x", padx=4, pady=(6, 4))
+        ctk.CTkButton(bar, text="AI 质检当前图", font=(FONT, 12), height=32, width=120,
+                      command=self._on_ai_audit).pack(side="left", padx=4)
+        ctk.CTkButton(bar, text="AI 归因 + 提补丁（开发）", font=(FONT, 12), height=32, width=170,
+                      fg_color=SECONDARY, hover_color=SECONDARY_HOVER, text_color=TEXT,
+                      command=self._on_ai_attribute).pack(side="left", padx=4)
+        self._auto_audit_var = tk.BooleanVar(value=bool(self._ai_config.auto_audit))
+        ctk.CTkCheckBox(bar, text="解析后自动质检", font=(FONT, 12),
+                        variable=self._auto_audit_var,
+                        command=self._on_toggle_auto_audit).pack(side="left", padx=12)
+        ctk.CTkLabel(parent, text="质检=工具自查 + AI 归因。会调用你配置的 AI CLI（耗时取决于 AI，可能数十秒，按各 CLI 计费）。"
+                                  "运行时只做结果层标注，绝不自改解析代码。",
+                     font=(FONT, 11), text_color=SUBTLE, justify="left", anchor="w").pack(fill="x", padx=10)
+        self.ai_box = ctk.CTkTextbox(parent, font=(FONT, 12), wrap="word")
+        self.ai_box.pack(fill="both", expand=True, padx=8, pady=8)
+        self._ai_set_text("点「AI 质检当前图」对当前地图做质检；或在「⚙ 设置」配置 AI 并勾选「解析后自动质检」。")
+
+    def _ai_set_text(self, text):
+        self.ai_box.configure(state="normal")
+        self.ai_box.delete("1.0", "end")
+        self.ai_box.insert("end", text or "(无输出)")
+        self.ai_box.configure(state="disabled")
+
+    def _on_toggle_auto_audit(self):
+        self._ai_config.auto_audit = bool(self._auto_audit_var.get())
+        try:
+            save_ai_config(self._ai_config)
+        except Exception:
+            pass
 
     def _build_obj_tab(self, parent):
         # 顶部搜索（过滤所有列）
@@ -891,6 +976,10 @@ class App(ctk.CTk):
                               f"{len(cmds)} 指令 · "
                               f"{len(self.recipes)} 合成 · "
                               + "  ".join(f"{k}{v}" for k, v in counts.items()))
+
+        # 解析后自动 AI 质检（opt-in，静默填充 AI 标签页）
+        if getattr(self._ai_config, "auto_audit", False):
+            self.after(100, lambda: self._on_ai_audit(auto=True))
 
     # ---------- 战役视图 ----------
     def _set_campaign_views(self, views, path=None):
