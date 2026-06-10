@@ -8,6 +8,7 @@
     匹配大小写/斜杠不敏感、容忍 war3.w3mod\\ 前缀；--from-dir 会打印找到/未找到清单。
 重装/换语言/升级后可重跑本脚本刷新。
 """
+import os
 import re
 import sys
 
@@ -16,8 +17,6 @@ try:
 except Exception:
     pass
 from w3xtool.mpq import MPQArchive
-
-import os
 
 
 class DirSource:
@@ -217,7 +216,7 @@ def main(args):
     west = {}
     we_re = re.compile(r"^(WESTRING_\w+)\s*=\s*(.*)$")
     for a in archives:                      # 后面的(补丁/本地化)覆盖前面的
-        for fn in (r"UI\WorldEditStrings.txt", r"UI\WorldEditGameStrings.txt"):
+        for fn in WESTRING_FILES:
             if not a.has_file(fn):
                 continue
             txt = a.read_file(fn).decode("utf-8", "replace")

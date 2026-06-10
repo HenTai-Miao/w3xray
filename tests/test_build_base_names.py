@@ -3,6 +3,7 @@
 只用合成数据，不读真实游戏文件，因此在经典 1.27（甚至无游戏）环境下也能跑。
 """
 import os
+import types
 
 import pytest
 
@@ -69,7 +70,18 @@ def test_dirsource_nonexistent_raises(tmp_path):
         bbn.DirSource(str(tmp_path / "nope"))
 
 
-import types
+def test_dirsource_multi_candidate_picks_shortest_and_warns(tmp_path, capsys):
+    # 同名 units/itemdata.slk 在两条带前缀的路径下（均非精确匹配，触发 endswith 多候选）：
+    # 取最短路径并打 warning
+    shallow = tmp_path / "sd" / "units"
+    shallow.mkdir(parents=True)
+    (shallow / "itemdata.slk").write_text("shallow", encoding="utf-8")
+    deep = tmp_path / "war3.w3mod" / "hd" / "units"
+    deep.mkdir(parents=True)
+    (deep / "itemdata.slk").write_text("deep", encoding="utf-8")
+    src = bbn.DirSource(str(tmp_path))
+    assert src.read_file("Units\\ItemData.slk").decode() == "shallow"
+    assert "warning" in capsys.readouterr().out.lower()
 
 
 def test_folder_mode_end_to_end(tmp_path):
