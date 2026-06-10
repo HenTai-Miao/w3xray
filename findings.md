@@ -40,3 +40,9 @@
 - war3map.w3u 单位 / w3t 物品 / w3a 技能 / w3q 升级(科技) / w3b 可破坏物 / w3d 装饰物 / w3h buff
 - war3mapUnits.doo 预放置单位
 - 已有参考：盒子目录 `提取的ID/` 里的 单位ID.txt 等是成品样例
+
+## 保护图：block 表注水越界（幻想未来v1.366）
+- 加固手法：MPQ 头 `header_size` 填 `0xFFFFFFFF`(垃圾哨兵)、`block_count` 注水(2049，比 hash_count 多 1)，使 block 表声明长度超出文件尾约 16KB(实际只 ~1006 条在档内)；hash 表本身完整。
+- StormLib 容忍：只读落在文件内的 block 条目即可加载。本项目 `_read_tables` 本就按 `avail=实际字节//16` 截断、`read_file` 也挡 `block_index ≥ len(block_table)`；唯一卡点是 `_validate_header` 过严(要求整张 block 表在文件内)。
+- 修法：block 表只校验"起点在文件内"，越界尾部丢弃；hash 表仍要求整表在文件内(既是正确性——hash_count 是查找取模基数，也是反 DoS——把 hash_count 卡在 文件大小/16 内)。
+- 与"真·加密保护图"的区别：本类只是头部字段注水，文件数据本身在档且未加密；真加密图(如千风同类)是 war3map.w3u 哈希从档里剥离/偏移彻底打乱，静态无解，需内存 dump(box 的 Get.dll 路线)。

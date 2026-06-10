@@ -168,3 +168,11 @@
 - 切换对战图/战役图时清空左侧搜索框（`_on_mode_change` 加 `map_search.set("")`）——战役与对战是两套独立列表。三个标签页搜索框本就各搜各的（已确认）。
 - 4 个搜索框文字改居中（CTkEntry `justify="center"`）。
 - 65 例全过；onedir 重新打包。
+
+### 会话 6：删 AI 功能 + 修保护图提取（block 表注水越界）
+- 用 superpowers 流程删除全部 AI 调用层(`w3xtool/aicli/`)与本地诊断层(`audit.py`/`tools_audit.py`)及对应 UI/标签页/测试/提示词；工具回归纯提取/浏览，顶栏只剩打开+导出，标签页三个。
+- 修复保护图提取：`|cffff99cc幻想未来v1.366`(war3/Maps/dz/rpg/46419190…w3x) 原报 `MPQ block 表越界` 打不开。根因=该图把 MPQ 头 `block_count` 注水(2049)、block 表声明长度超出文件尾约 16KB(实际仅 ~1006 条在档内)，`header_size` 也填成 0xFFFFFFFF 哨兵。`_validate_header` 原要求整张 block 表落在文件内→直接拒。
+- 修法(最小面)：block 表只校验"起点在文件内"，越界尾部交给 `_read_tables` 既有截断(avail=实际字节//16)，下游 `read_file` 本就挡 `block_index ≥ len(block_table)`；与 StormLib 行为一致。hash 表保持严格(既正确性也反 DoS，挡 range(hash_count) 卡死)。
+- TDD：新增 `test_block_table_past_eof_tolerated`(先看它以 block 表越界失败→改后通过)；反 DoS/诱饵头测试不受影响。全套 97 例通过。
+- 实测该图现可提取：4320 对象(物品1080/技能1954/单位870/科技165/增益246/装饰物5/可破坏物3)、war3map.j、2 隐藏指令、14 合成配方、导出 13 个文件。
+- onedir 重新打包。
