@@ -207,7 +207,7 @@ def main(args):
     lines.append("}")
     with open(os.path.join(out_dir, "base_names.py"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
-    print("已写出 w3xtool/base_names.py")
+    print(f"已写出 {os.path.join(out_dir, 'base_names.py')}")
     # 抽查
     for c in ("hfoo", "nckb", "Hblm", "ratf", "Rhme"):
         print(f"  {c} -> {names.get(c, '(无)')}")
@@ -234,7 +234,7 @@ def main(args):
     wl.append("}")
     with open(os.path.join(out_dir, "westrings.py"), "w", encoding="utf-8") as f:
         f.write("\n".join(wl) + "\n")
-    print(f"已写出 w3xtool/westrings.py（{len(west)} 条）")
+    print(f"已写出 {os.path.join(out_dir, 'westrings.py')}（{len(west)} 条）")
 
     build_base_objects(archives, out_dir)
 
@@ -302,7 +302,7 @@ def build_base_objects(archives, out_dir):
     lines.append("}")
     with open(os.path.join(out_dir, "base_objects.py"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
-    print(f"已写出 w3xtool/base_objects.py（{len(out)} 个基础对象）")
+    print(f"已写出 {os.path.join(out_dir, 'base_objects.py')}（{len(out)} 个基础对象）")
 
 
 if __name__ == "__main__":
