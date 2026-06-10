@@ -154,10 +154,16 @@ def _lex(query: str):
 
 
 # ---- 递归下降：or := and ('||' and)* ; and := atom ('&&'? atom)* ; atom := '(' or ')' | leaf ----
+# AND/OR 节点用**扁平 n 元**列表 ('and', [kids]) / ('or', [kids])，而非左偏二叉树，
+# 这样 _eval 对超长 `a && a && …` 链只迭代不递归（递归深度仅随括号嵌套增长）。
+# 括号嵌套设上限 _MAX_DEPTH：超限即忽略多余括号，保证递归深度有界（防 RecursionError）。
 class _Parser:
+    _MAX_DEPTH = 100
+
     def __init__(self, toks):
         self.toks = toks
         self.i = 0
+        self.depth = 0
 
     def _peek(self):
         return self.toks[self.i] if self.i < len(self.toks) else None
@@ -167,52 +173,69 @@ class _Parser:
         self.i += 1
         return t
 
+    @staticmethod
+    def _wrap(tag, kids):
+        if not kids:
+            return None
+        if len(kids) == 1:
+            return kids[0]
+        return (tag, kids)
+
     def parse_or(self):
-        node = self.parse_and()
+        kids = []
+        first = self.parse_and()
+        if first is not None:
+            kids.append(first)
         while True:
             t = self._peek()
-            if t and t[0] == "or":
-                self._next()
-                rhs = self.parse_and()
-                if rhs is None:
-                    break
-                node = ("or", node, rhs) if node is not None else rhs
-            else:
+            if t is None or t[0] != "or":
                 break
-        return node
+            self._next()
+            nxt = self.parse_and()
+            if nxt is not None:
+                kids.append(nxt)
+        return self._wrap("or", kids)
 
     def parse_and(self):
-        node = self.parse_atom()
+        kids = []
+        first = self.parse_atom()
+        if first is not None:
+            kids.append(first)
         while True:
             t = self._peek()
             if t is None or t[0] in ("or", "rp"):
                 break
-            if t[0] == "and":               # 显式 &&
+            if t[0] == "and":               # 显式 &&；否则相邻词缺运算符 → 隐式 &&
                 self._next()
-            # 否则相邻词缺运算符 → 隐式 &&
-            rhs = self.parse_atom()
-            if rhs is None:
+            before = self.i
+            nxt = self.parse_atom()
+            if nxt is not None:
+                kids.append(nxt)
+            elif self.i == before:          # 无进展（已到 rp/末尾）→ 收尾，防死循环/越界
                 break
-            node = ("and", node, rhs) if node is not None else rhs
-        return node
+        return self._wrap("and", kids)
 
     def parse_atom(self):
-        t = self._peek()
-        if t is None:
-            return None
-        if t[0] == "lp":
-            self._next()
-            node = self.parse_or()
-            nxt = self._peek()
-            if nxt and nxt[0] == "rp":
+        # 迭代跳过游离运算符（不递归），避免长运算符链撑爆栈
+        while True:
+            t = self._peek()
+            if t is None or t[0] == "rp":
+                return None
+            if t[0] == "lp":
                 self._next()
-            return node
-        if t[0] in ("like", "eq"):
-            self._next()
-            return t
-        # 游离的运算符 / 右括号：跳过
-        self._next()
-        return self.parse_atom()
+                if self.depth >= self._MAX_DEPTH:
+                    continue                # 嵌套超限：忽略此括号，继续在当前层扫描
+                self.depth += 1
+                node = self.parse_or()
+                self.depth -= 1
+                nxt = self._peek()
+                if nxt and nxt[0] == "rp":
+                    self._next()
+                return node
+            if t[0] in ("like", "eq"):
+                self._next()
+                return t
+            self._next()                    # 游离的 && / ||：跳过，循环继续
 
 
 def _eval(node, text: str, text_lower: str):
@@ -224,21 +247,20 @@ def _eval(node, text: str, text_lower: str):
     if tag == "eq":
         return _eq_score(node[1], text)                # 区分大小写：用原文
     if tag == "and":
-        a = _eval(node[1], text, text_lower)
-        if a is None:
-            return None
-        b = _eval(node[2], text, text_lower)
-        if b is None:
-            return None
-        return a + b
+        total = 0
+        for child in node[1]:
+            s = _eval(child, text, text_lower)
+            if s is None:
+                return None
+            total += s
+        return total
     if tag == "or":
-        a = _eval(node[1], text, text_lower)
-        b = _eval(node[2], text, text_lower)
-        if a is None:
-            return b
-        if b is None:
-            return a
-        return max(a, b)
+        best = None
+        for child in node[1]:
+            s = _eval(child, text, text_lower)
+            if s is not None and (best is None or s > best):
+                best = s
+        return best
     return None
 
 

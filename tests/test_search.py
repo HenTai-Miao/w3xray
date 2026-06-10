@@ -157,5 +157,83 @@ class TestRealisticQueries(unittest.TestCase):
         self.assertIsNone(fuzzy_score(q, miss))
 
 
+class TestRobustnessNoCrash(unittest.TestCase):
+    """暴力/边界输入：解析器与求分器都不许崩溃或死循环，返回必为 int 或 None。"""
+
+    def _ok(self, q, t):
+        r = fuzzy_score(q, t)
+        self.assertTrue(r is None or isinstance(r, int), (repr(q), repr(r)))
+        return r
+
+    def test_deeply_nested_parens(self):
+        self._ok("(" * 5000 + "%x%" + ")" * 5000, "x")
+        self._ok("(" * 20000 + "%x%" + ")" * 20000, "x")
+
+    def test_unbalanced_parens(self):
+        self._ok("(" * 5000 + "%x%", "x")
+        self._ok("%x%" + ")" * 5000, "x")
+
+    def test_long_lone_operator_chains(self):
+        # 大量纯运算符无操作数 → 退化为空查询
+        self.assertEqual(fuzzy_score("||" * 5000, "x"), 0)
+        self.assertEqual(fuzzy_score("&&" * 5000, "x"), 0)
+        self.assertEqual(fuzzy_score("(" * 5000 + ")" * 5000, "x"), 0)
+
+    def test_long_and_chain_of_terms(self):
+        self.assertIsNotNone(self._ok(" && ".join(["%x%"] * 5000), "x"))
+        self.assertIsNone(self._ok(" && ".join(["%x%"] * 2500 + ["%zzz%"]), "x"))
+
+    def test_long_or_chain_of_terms(self):
+        self.assertIsNotNone(self._ok(" || ".join(["%zzz%"] * 4999 + ["%x%"]), "x"))
+        self.assertIsNone(self._ok(" || ".join(["%zzz%"] * 5000), "x"))
+
+    def test_huge_text_and_query(self):
+        self.assertIsNotNone(self._ok("%needle%", "x" * 1_000_000 + "needle"))
+        self._ok("%" + "a" * 100_000 + "%", "a" * 50)
+
+    def test_trailing_and_lone_backslash(self):
+        self._ok("%x\\", "x")
+        self._ok("\\", "x")
+
+    def test_unclosed_quote_to_eol(self):
+        self.assertIsNotNone(fuzzy_score('="' + "a" * 100, "a" * 100))
+
+    def test_random_fuzz_never_crashes(self):
+        import random
+        rnd = random.Random(0xC0FFEE)
+        alph = list('%&|()="\\ 智力剑abAB12:+')
+        texts = ["", " ", "智力圣剑 等级:E 攻击+20% (冷却:5)", "a" * 300,
+                 "I06Y 等级:EX", "&&||(())", '"q" || %z%']
+        for _ in range(20_000):
+            q = "".join(rnd.choice(alph) for _ in range(rnd.randint(0, 16)))
+            t = rnd.choice(texts)
+            r = fuzzy_score(q, t)
+            self.assertTrue(r is None or isinstance(r, int), (repr(q), repr(r)))
+
+
+class TestLikeOracle(unittest.TestCase):
+    """差分测试：简单字母 needle 的 LIKE 行为必须与 Python 原生子串语义一致。"""
+
+    def test_contains_matches_python_in(self):
+        import random
+        rnd = random.Random(7)
+        for _ in range(8000):
+            needle = "".join(rnd.choice("abcd") for _ in range(rnd.randint(1, 4)))
+            text = "".join(rnd.choice("abcd") for _ in range(rnd.randint(0, 12)))
+            got = fuzzy_score("%" + needle + "%", text) is not None
+            self.assertEqual(got, needle in text, (needle, text))
+
+    def test_prefix_suffix_match_startswith_endswith(self):
+        import random
+        rnd = random.Random(11)
+        for _ in range(8000):
+            needle = "".join(rnd.choice("abcd") for _ in range(rnd.randint(1, 4)))
+            text = "".join(rnd.choice("abcd") for _ in range(rnd.randint(0, 12)))
+            self.assertEqual(fuzzy_score(needle + "%", text) is not None,
+                             text.startswith(needle), ("prefix", needle, text))
+            self.assertEqual(fuzzy_score("%" + needle, text) is not None,
+                             text.endswith(needle), ("suffix", needle, text))
+
+
 if __name__ == "__main__":
     unittest.main()
