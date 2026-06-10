@@ -12,3 +12,6 @@ wheels/
 # 杂项 / 本地产物
 BsodInfo.bin
 *.png
+
+# AI 自改进产出（人工审阅用，不入库）
+ai_suggestions/
