@@ -69,6 +69,32 @@ def test_dirsource_nonexistent_raises(tmp_path):
         bbn.DirSource(str(tmp_path / "nope"))
 
 
+import types
+
+
+def test_folder_mode_end_to_end(tmp_path):
+    # 合成一个最小的「游戏数据文件夹」
+    units = tmp_path / "src" / "Units"
+    units.mkdir(parents=True)
+    (units / "HumanUnitStrings.txt").write_text(
+        "[hfoo]\nName=步兵\n", encoding="utf-8")
+    (units / "ItemData.slk").write_text(
+        'ID;PWIDTH\nB;Y2;X2\nC;Y1;X1;K"code"\nC;Y1;X2;K"goldcost"\nC;Y2;X1;K"ratf"\nC;Y2;X2;K"200"\nE\n',
+        encoding="utf-8")
+
+    out = tmp_path / "out"
+    out.mkdir()
+    args = types.SimpleNamespace(
+        from_dir=str(tmp_path / "src"), game=None, out_dir=str(out))
+    bbn.main(args)
+
+    names_py = (out / "base_names.py").read_text(encoding="utf-8")
+    assert "hfoo" in names_py and "步兵" in names_py
+    # 三个产物都应生成
+    assert (out / "base_objects.py").exists()
+    assert (out / "westrings.py").exists()
+
+
 def test_report_dir_coverage_runs(tmp_path, capsys):
     d = tmp_path / "Units"
     d.mkdir()
