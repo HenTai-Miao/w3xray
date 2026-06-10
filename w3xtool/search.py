@@ -34,12 +34,38 @@ def _single_score(query: str, text: str):
     return None
 
 
+def _is_word_char(ch: str) -> bool:
+    """"词内字符"：ASCII 字母/数字，外加 '+'。
+
+    中文等非 ASCII 不算（每个汉字自成单位，精准词允许 全属→全属性 这类紧邻
+    匹配；词边界只约束 ASCII 串）。'+' 计入是因为物品等级档用它分级（S 与 S+
+    是两档），算粘连字符才能让"等级:S"不误命中"等级:S+"。"""
+    return ch == "+" or (ch.isascii() and ch.isalnum())
+
+
 def _exact_score(query: str, text: str):
-    """精准：必须原样连续出现（子串），命中返回分数，否则 None。"""
+    """精准：必须原样连续出现（子串），且 ASCII 端点不可粘进更长的词。
+
+    若精准词以词内字符(ASCII 字母/数字或 '+')结尾，则其后一字符不能也是词内
+    字符——否则把"等级:E"误命中"等级:EX"、"等级:S"误命中"等级:S+"；开头同理。
+    中文端点不设边界（保持 全属→全属性 这类紧邻匹配可命中）。
+    命中返回分数（越靠前分越高），否则 None。
+    """
     if not query:
         return 0
-    idx = text.find(query)
-    return (1000 - idx) if idx >= 0 else None
+    head_word = _is_word_char(query[0])
+    tail_word = _is_word_char(query[-1])
+    start = 0
+    while True:
+        idx = text.find(query, start)
+        if idx < 0:
+            return None
+        left_ok = not (head_word and idx > 0 and _is_word_char(text[idx - 1]))
+        end = idx + len(query)
+        right_ok = not (tail_word and end < len(text) and _is_word_char(text[end]))
+        if left_ok and right_ok:
+            return 1000 - idx
+        start = idx + 1            # 这处粘进了更长的词，找下一处
 
 
 def _tokenize(query: str):

@@ -104,6 +104,42 @@ class TestFuzzyScore(unittest.TestCase):
         self.assertIsNone(fuzzy_score('"fb"', "foobar"))
         self.assertIsNotNone(fuzzy_score('"fb"', "a fb c"))
 
+    # ---- 精准词以 ASCII 字母/数字结尾时，不可粘进更长的词 ----
+    def test_quoted_ascii_tail_respects_word_boundary(self):
+        # 幽罗世界物品等级：E / EX 是两档。精准"等级:E"不该命中"等级:EX"
+        self.assertIsNotNone(fuzzy_score('"等级:E"', "全村最好的剑 等级:E 攻击力+ 50"))
+        self.assertIsNone(fuzzy_score('"等级:E"', "天地圣枪 等级:EX 增加攻击"))
+        # 行内（换行分隔）同样成立
+        self.assertIsNotNone(fuzzy_score('"等级:E"', "武器\n等级:E\n敏捷+ 10"))
+        self.assertIsNone(fuzzy_score('"等级:E"', "武器\n等级:EX\n敏捷+ 10"))
+        # 文本里同时有 EX 和 E，应跳过 EX 命中真正的 E
+        self.assertIsNotNone(fuzzy_score('"等级:E"', "套装 等级:EX 升级后 等级:E"))
+
+    def test_quoted_ascii_head_respects_word_boundary(self):
+        # 前缘同理：以 ASCII 字母/数字开头的精准词，不可从词中切入
+        self.assertIsNone(fuzzy_score('"06Y"', "item I06Y gem"))
+        self.assertIsNotNone(fuzzy_score('"I06Y"', "item I06Y gem"))
+
+    def test_quoted_full_grade_real_query(self):
+        # 用户真实输入：(敏捷 或 全属性) 且 精准 等级:E —— EX 物品不该混进来
+        q = '"敏捷" | "全属性" "等级:E"'
+        e_item = "全村最好的剑 武器\n等级:E\n攻击力+ 50\n敏捷+ 10"
+        ex_item = "残月之追星云霄弓 武器\n等级:EX\n增加攻击\n增加敏捷"
+        self.assertIsNotNone(fuzzy_score(q, e_item))
+        self.assertIsNone(fuzzy_score(q, ex_item))
+
+    def test_quoted_plus_grade_respects_boundary(self):
+        # S 与 S+ 是两档：加号也算"粘连字符"，精准"等级:S"不该命中"等级:S+"
+        self.assertIsNotNone(fuzzy_score('"等级:S"', "苍穹剑 等级:S 增加攻击"))
+        self.assertIsNone(fuzzy_score('"等级:S"', "忍冬剑 等级:S+ 增加攻击"))
+        # 行内同样成立
+        self.assertIsNotNone(fuzzy_score('"等级:S"', "武器\n等级:S\n力量+ 10"))
+        self.assertIsNone(fuzzy_score('"等级:S"', "武器\n等级:S+\n力量+ 10"))
+        # 想要 S+ 档就带上加号，依然能命中
+        self.assertIsNotNone(fuzzy_score('"等级:S+"', "忍冬剑 等级:S+ 增加攻击"))
+        # 同时含 S+ 与 S，应跳过 S+ 命中真正的 S
+        self.assertIsNotNone(fuzzy_score('"等级:S"', "套装 等级:S+ 降级后 等级:S"))
+
     def test_mix_fuzzy_and_exact_in_one_query(self):
         # 同一行混用：模糊"蓝宝石" 且 精准"等级:e"
         q = '蓝宝石 "等级:e"'.lower()
