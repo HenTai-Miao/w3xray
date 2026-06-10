@@ -31,6 +31,12 @@ def _obj(old_id, new_id, mods):
     return _tag(old_id) + _tag(new_id) + struct.pack("<i", len(mods)) + b"".join(mods)
 
 
+def _obj_v3(old_id, new_id, mods):
+    # 格式版本 3：oldId+newId 之后多两个 uint32 头字段，再是 numMods
+    return (_tag(old_id) + _tag(new_id) + struct.pack("<II", 0, 0)
+            + struct.pack("<i", len(mods)) + b"".join(mods))
+
+
 def _build(original, custom, version=2):
     out = struct.pack("<i", version)
     out += struct.pack("<i", len(original)) + b"".join(original)
@@ -70,6 +76,24 @@ class TestParseObjectData(unittest.TestCase):
         bad = [_obj("hpea", "hpea", [_mod("unam", 99, 0)])]
         with self.assertRaises(ValueError):
             parse_object_data(_build(bad, []), "w3u")
+
+    def test_version3_extra_header_fields(self):
+        # 1.32+/新编辑器存的格式版本 3：每个对象头多两个 uint32
+        original = [_obj_v3("hpea", "hpea", [_mod("unam", 3, "Peasant"), _mod("uhpm", 0, 100)])]
+        custom = [_obj_v3("hpea", "x000", [_mod("unam", 3, "村民")])]
+        data = _build(original, custom, version=3)
+        objs = parse_object_data(data, "w3u")
+        self.assertEqual(len(objs), 2)
+        self.assertEqual([(m.field_id, m.value) for m in objs[0].mods],
+                         [("unam", "Peasant"), ("uhpm", 100)])
+        self.assertEqual(objs[1].new_id, "x000")
+        self.assertEqual(objs[1].mods[0].value, "村民")
+
+    def test_version3_leveled_ability(self):
+        ab = [_obj_v3("AHbz", "A000", [_mod("ahdu", 1, 5.0, level=2)])]
+        objs = parse_object_data(_build(ab, [], version=3), "w3a")
+        self.assertEqual(objs[0].mods[0].level, 2)
+        self.assertAlmostEqual(objs[0].mods[0].value, 5.0, places=4)
 
 
 class _FakeArchive:

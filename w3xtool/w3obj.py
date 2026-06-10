@@ -78,7 +78,7 @@ def parse_object_data(data: bytes, ext: str) -> list:
     """解析一个对象数据文件，返回 W3Object 列表。"""
     has_level = ext.lower() in _LEVEL_EXTS
     r = _Reader(data)
-    version = r.i32()  # noqa: F841  （1=RoC 2=TFT）
+    version = r.i32()  # 1=RoC 2=TFT 3=1.32+/新编辑器（对象头多两个 u32）
     objects = []
     for table_idx in range(2):           # 0=原始表 1=自定义表
         is_custom = table_idx == 1
@@ -86,6 +86,9 @@ def parse_object_data(data: bytes, ext: str) -> list:
         for _ in range(count):
             old_id = r.tag()
             new_id = r.tag()
+            if version >= 3:
+                r.u32()                  # 格式 3 头：未知字段 1
+                r.u32()                  # 格式 3 头：未知字段 2
             num_mods = r.i32()
             obj = W3Object(old_id=old_id, new_id=new_id, is_custom=is_custom)
             for _ in range(num_mods):
