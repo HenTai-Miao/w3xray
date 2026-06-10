@@ -132,6 +132,22 @@ def parse_strings(text: str, out: dict, fill_only=False):
     flush(section)
 
 
+WESTRING_FILES = [r"UI\WorldEditStrings.txt", r"UI\WorldEditGameStrings.txt"]
+
+
+def report_dir_coverage(src):
+    """文件夹模式：打印关键文件找到/未找到清单，便于排查重制版布局差异。"""
+    slk = ["Units\\" + f for fs in SLK_GROUPS.values() for f in fs]
+    groups = [("名称(Strings/Func)", FILES), ("基础字段(SLK)", slk),
+              ("编辑器字符串", WESTRING_FILES)]
+    print("\n[--from-dir 覆盖报告]")
+    for label, files in groups:
+        missing = [f for f in files if not src.has_file(f)]
+        print(f"  {label}: 找到 {len(files) - len(missing)}/{len(files)}")
+        for m in missing:
+            print(f"    未找到 {m}")
+
+
 def build_sources(args):
     """按 CLI 参数返回数据源列表。
 
@@ -155,6 +171,8 @@ def main(args):
     names = {}
     total_files = 0
     archives = build_sources(args)
+    if getattr(args, "from_dir", None):
+        report_dir_coverage(archives[0])
     strings_files = [f for f in FILES if "Strings" in f]
     func_files = [f for f in FILES if "Func" in f]
     # 第一遍：*Strings.txt（中文名，补丁包覆盖基础包）
@@ -235,6 +253,12 @@ SLK_LABEL = {
     "maxlevel": "最大等级", "goldbase": "基础金", "goldmod": "金增量",
     "lumberbase": "基础木", "lumbermod": "木增量", "global": "全局",
 }
+SLK_GROUPS = {
+    "单位": ["UnitData.slk", "UnitBalance.slk", "UnitUI.slk", "UnitWeapons.slk", "UnitAbilities.slk"],
+    "物品": ["ItemData.slk"],
+    "技能": ["AbilityData.slk"],
+    "科技": ["UpgradeData.slk"],
+}
 
 
 def build_base_objects(archives, out_dir):
@@ -256,14 +280,8 @@ def build_base_objects(archives, out_dir):
                 merged.setdefault(code, {}).update(row)
         return merged
 
-    groups = {
-        "单位": ["UnitData.slk", "UnitBalance.slk", "UnitUI.slk", "UnitWeapons.slk", "UnitAbilities.slk"],
-        "物品": ["ItemData.slk"],
-        "技能": ["AbilityData.slk"],
-        "科技": ["UpgradeData.slk"],
-    }
     out = {}
-    for cat, files in groups.items():
+    for cat, files in SLK_GROUPS.items():
         for code, row in load_merge(files).items():
             fields = []
             for k, v in row.items():

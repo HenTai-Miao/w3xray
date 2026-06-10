@@ -67,3 +67,14 @@ def test_dirsource_empty_dir_raises(tmp_path):
 def test_dirsource_nonexistent_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         bbn.DirSource(str(tmp_path / "nope"))
+
+
+def test_report_dir_coverage_runs(tmp_path, capsys):
+    d = tmp_path / "Units"
+    d.mkdir()
+    (d / "ItemData.slk").write_text("a", encoding="utf-8")
+    src = bbn.DirSource(str(tmp_path))
+    bbn.report_dir_coverage(src)
+    out = capsys.readouterr().out
+    assert "覆盖报告" in out
+    assert "未找到" in out  # 绝大多数文件缺失
