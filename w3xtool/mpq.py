@@ -189,16 +189,25 @@ class MPQArchive:
     # ---- 头与表 ----
     def _parse_header(self):
         data = self._data
-        # 在 512 对齐位置扫描 MPQ\x1a
-        offset = -1
+        # 在 512 对齐位置扫描 MPQ\x1a。某些打包/混淆工具(_w3p 等)会在真头前面
+        # 放一个垃圾"诱饵"头来骗解析器，故不取第一个，而是取第一个**校验通过**的头。
+        last_err = None
         pos = 0
-        while pos + 4 <= len(data):
+        while pos + 32 <= len(data):
             if data[pos:pos + 4] == b"MPQ\x1a":
-                offset = pos
-                break
+                try:
+                    self._read_header_fields(pos)
+                    self._validate_header()
+                    return
+                except (ValueError, struct.error) as e:
+                    last_err = e          # 诱饵/垃圾头，继续找下一个
             pos += 512
-        if offset < 0:
-            raise ValueError("没找到 MPQ 头（不是有效的 .w3x/.w3n？）")
+        if last_err is not None:
+            raise last_err
+        raise ValueError("没找到 MPQ 头（不是有效的 .w3x/.w3n？）")
+
+    def _read_header_fields(self, offset: int):
+        data = self._data
         self.archive_offset = offset
         hdr = data[offset:offset + 32]
         (magic, self.header_size, self.archive_size, self.format_version,
@@ -207,7 +216,6 @@ class MPQArchive:
         self.sector_size = 512 << self.sector_size_shift
         self.hash_table_pos = offset + hash_pos
         self.block_table_pos = offset + block_pos
-        self._validate_header()
 
     def _validate_header(self):
         """拒绝非法/恶意的表大小，防止 range(hash_count) 跑数十亿次卡死(DoS)。

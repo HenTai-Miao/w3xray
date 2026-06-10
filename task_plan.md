@@ -72,6 +72,7 @@
 | Phase 40: 对象格式版本3兼容(初版) | complete | 新编辑器(1.32+/重制版)存的 w3u/w3t/w3a… 格式版本3：旧解析错位致整文件丢弃只剩脚本；初版按"跳过8字节"处理(仅 sets==1 正确)；村庄守护者152 由0对象→单位677/物品433/技能882…；测试71例全过 |
 | Phase 41: 版本3 sets 分组正解(deep-research校正) | complete | superpowers 深度研究(99 agents,3票对抗验证)查权威实现 mdx-m3-viewer：版本3 是 oldId+newId 后先读 **sets 数量**,再循环每个 set=setsFlag(u32 位掩码,HD/SD皮肤分组)+该set修改数+修改项。"跳过8字节"只在 sets==1 成立。w3obj 改成真正的 sets 循环,把各 set 的 mods 全收进对象；Downloads 23 张图实测 22 成功(剩1张 Zombie_Defense_w3p 是 1337 混淆保护图,与千风同类,不支持);maxsets 实测均为1但代码已健壮支持>1。测试72例全过 |
 | Phase 42: 指令提示 TRIGSTR 还原 | complete | 实测狼人图 -brewing 提示显示 TRIGSTR_3482 未还原；commands_from_map 用 md.scripts 里的 war3map.wts 解析字符串表,把指令提示的 TRIGSTR_n 查回真文本(_map_wts+resolve);狼人图24条指令 TRIGSTR 未解析 0；测试74例全过 |
+| Phase 43: 头部混淆图(_w3p)兜底 | complete | Zombie_Defense_0.25z6_w3p：打包工具在真 MPQ 头(偏移1536)前塞了 MPQ\x1b 假userdata头(字段全填1337)+512处垃圾诱饵 MPQ\x1a 头骗解析器。原 _parse_header 取第一个 MPQ\x1a 即诱饵→校验失败直接抛错。改为扫描 512 对齐位置,跳过校验不过的诱饵,取第一个合法头(_read_header_fields+_validate_header)。该图数据未加密,定位真头后完整提取 1714 对象(单位840/技能636…),名字正常("坟场""农民")。真加密(KKWE)图仍不支持。Downloads 全部图 0 失败；测试76例全过 |
 | 研究结论存档 | note | MPQ 容器**所有 WC3 版本恒为 v1**(无需分版本分支),HM3W 包裹头通用;压缩按扇区掩码字节派发(zlib0x02主,PKWARE0x08,bzip2,huffman/adpcm音频)与游戏版本无关;w3i 版本阈值18/25/28/31/33(脚本JASS/Lua由v28+ scriptMode标识,本工具读 .j/.lua 已覆盖);对象数据 sets 是唯一版本特有的对象层分支 |
 
 > **会话 4 起范围调整**：放弃加密保护图(千风物语类)提取，移除地图视图与运行时 dump。Phase 6/10-14/24 相关功能已删除，仅保留正常地图的对象/脚本/指令/配方提取与导出。
