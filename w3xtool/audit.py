@@ -135,6 +135,19 @@ def audit_map(path: str) -> MapDiagnostic:
     return diag
 
 
+def audit_loaded(md) -> MapDiagnostic:
+    """从已加载的 MapData 直接出诊断（复用内存数据，不重开 MPQ / 不重新解析）。"""
+    files = list(getattr(md, "all_files", []) or [])
+    diag = diagnose(md, files)
+    try:
+        from .api import commands_from_map, recipes_from_map
+        diag.commands = len(commands_from_map(md))
+        diag.recipes = len(recipes_from_map(md))
+    except Exception:
+        pass
+    return diag
+
+
 def batch_audit(directory: str) -> list:
     """审计一个目录下所有 .w3x/.w3m/.w3n。"""
     maps = sorted(glob.glob(os.path.join(directory, "*.w3x"))

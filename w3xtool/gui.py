@@ -23,7 +23,8 @@ from .api import (load_map, commands_from_map, recipes_from_map,
 from .aicli.config import load_config as load_ai_config, save_config as save_ai_config, \
     get_active as get_active_ai, AIConfig
 from .aicli.runner import AIProfile, run_ai
-from .aicli.improve import run_annotation
+from .aicli.improve import annotate as ai_annotate, attribute as ai_attribute
+from .audit import audit_loaded
 from .search import fuzzy_score
 from .icons import IconResolver
 from PIL import Image, ImageTk
@@ -278,7 +279,7 @@ class App(ctk.CTk):
         return os.path.join(os.path.expanduser("~"), ".w3xray", "ai_suggestions")
 
     def _ai_precheck(self):
-        """返回 (map_path, profile) 或 None（并已弹提示）。"""
+        """返回 (MapData, profile) 或 None（并已弹提示）。"""
         if not self.map_data:
             messagebox.showinfo("提示", "请先打开一张地图")
             return None
@@ -286,7 +287,7 @@ class App(ctk.CTk):
         if not active:
             messagebox.showinfo("提示", "请先在「⚙ 设置」里配置并选择一个 AI")
             return None
-        return self.map_data.path, active
+        return self.map_data, active
 
     def _on_ai_audit(self, auto=False):
         """对当前地图跑 AI 质检（诊断 → AI 标注），结果写入「AI 质检」标签页。"""
@@ -296,12 +297,12 @@ class App(ctk.CTk):
             active = get_active_ai(self._ai_config)
             if not active:
                 return
-            path = self.map_data.path
+            md = self.map_data
         else:
             pre = self._ai_precheck()
             if not pre:
                 return
-            path, active = pre
+            md, active = pre
         if not auto:                       # 自动模式不抢占当前标签页，静默填充
             try:
                 self.tabs.set("AI 质检")
@@ -312,7 +313,8 @@ class App(ctk.CTk):
 
         def work():
             try:
-                text = run_annotation(path, active)
+                diag = audit_loaded(md)            # 复用内存数据，不重新解析
+                text = ai_annotate(diag, active)
             except Exception as e:
                 text = f"AI 质检失败：{e}"
             self.after(0, lambda: (self._ai_set_text(text), self.status.configure(text="就绪")))
@@ -323,7 +325,7 @@ class App(ctk.CTk):
         pre = self._ai_precheck()
         if not pre:
             return
-        path, active = pre
+        md, active = pre
         out_root = self._ai_suggestions_dir()
         try:
             self.tabs.set("AI 质检")
@@ -335,8 +337,8 @@ class App(ctk.CTk):
         def work():
             folder = None
             try:
-                from .aicli.improve import run_attribution
-                folder, res = run_attribution(path, active, out_root=out_root)
+                diag = audit_loaded(md)            # 复用内存数据，不重新解析
+                folder, res = ai_attribute(diag, active, out_root=out_root)
                 if res.ok:
                     msg = f"建议已生成到：\n{folder}\n\n——— AI 输出 ———\n{res.stdout}"
                 else:
@@ -974,7 +976,7 @@ class App(ctk.CTk):
             self._populate_left()
         self._render_map(md, cmds, recipes, resolver)
 
-    def _render_map(self, md, cmds, recipes, resolver):
+    def _render_map(self, md, cmds, recipes, resolver, fresh=True):
         self.map_data = md
         self.icons = resolver
         self._photo_cache = {}
@@ -1001,8 +1003,9 @@ class App(ctk.CTk):
                               f"{len(self.recipes)} 合成 · "
                               + "  ".join(f"{k}{v}" for k, v in counts.items()))
 
-        # 解析后自动 AI 质检（opt-in，静默填充 AI 标签页）
-        if getattr(self._ai_config, "auto_audit", False):
+        # 解析后自动 AI 质检（opt-in，静默填充 AI 标签页）。
+        # 仅在「真正新打开一张图」时触发；战役子图来回切换(fresh=False)不重复烧 AI。
+        if fresh and getattr(self._ai_config, "auto_audit", False):
             self.after(100, lambda: self._on_ai_audit(auto=True))
 
     # ---------- 战役视图 ----------
@@ -1031,7 +1034,8 @@ class App(ctk.CTk):
 
     def _switch_worker(self, md):
         cmds, recipes, resolver = self._prepare(md, self._campaign_path)
-        self.after(0, lambda: self._render_map(md, cmds, recipes, resolver))
+        # 子图切换不算"新打开一张图"，fresh=False → 不触发自动 AI 质检
+        self.after(0, lambda: self._render_map(md, cmds, recipes, resolver, fresh=False))
 
     # ---------- 对象浏览（多列）----------
     def _refresh_list(self):

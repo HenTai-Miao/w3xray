@@ -13,11 +13,12 @@ from .runner import AIProfile
 
 # 内置预设：命令为最佳猜测，用户可在设置里改成自己环境里的实际用法。
 # Windows 上 claude/codex/opencode 多为 npm/nvm 的 .cmd 包装脚本，runner 会自动解析。
-# claude 走 stdin（大提示词不受命令行长度限制，已实测可用）；其余默认 arg，用户可按需改。
+# 一律走 stdin：提示词不进命令行 → 不受命令行长度限制，也避免 .cmd 经 cmd /c 二次解析
+# 导致的命令注入（地图名等不可信内容会进提示词）。某 CLI 若不读 stdin，用户可在设置里改。
 PRESETS = {
     "claude": AIProfile(name="claude", command=["claude", "-p"], input_mode="stdin"),
-    "codex": AIProfile(name="codex", command=["codex", "exec", "{prompt}"], input_mode="arg"),
-    "opencode": AIProfile(name="opencode", command=["opencode", "run", "{prompt}"], input_mode="arg"),
+    "codex": AIProfile(name="codex", command=["codex", "exec"], input_mode="stdin"),
+    "opencode": AIProfile(name="opencode", command=["opencode", "run"], input_mode="stdin"),
 }
 
 

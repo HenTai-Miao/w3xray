@@ -85,7 +85,13 @@ def run_ai(profile: AIProfile, prompt: str) -> AIResult:
         else:  # arg
             command = _render(profile.command, prompt, None)
 
-        command = _resolve_launch(command)    # 解析 .cmd/.ps1 包装脚本（Windows npm CLI）
+        command = _resolve_launch(command)    # 解析 .cmd/.bat 包装脚本（Windows npm CLI）
+        # 安全护栏：.cmd/.bat shim 经 cmd /c 会二次解析命令行，arg 模式下把（含地图名等
+        # 不可信内容的）提示词放进命令行参数时，" & | 等会造成命令注入。拒绝这种组合，
+        # 引导改用 stdin/file（提示词不进命令行，cmd 不会二次解析）。
+        if mode == "arg" and command[:2] == ["cmd", "/c"]:
+            return AIResult(ok=False, error="安全限制：.cmd 包装的 CLI 不能用 arg 输入"
+                            "（有命令注入风险）。请在「⚙ 设置」把「输入方式」改为 stdin 或 file。")
         kwargs = dict(capture_output=True, text=True, encoding="utf-8",
                       errors="replace", cwd=profile.cwd or None, timeout=profile.timeout)
         if stdin_data is not None:

@@ -64,21 +64,44 @@ class TestRunAI(unittest.TestCase):
         self.assertFalse(r.ok)
         self.assertTrue(r.error)
 
-    @unittest.skipUnless(os.name == "nt", "仅 Windows：npm/nvm CLI 是 .cmd 包装脚本")
-    def test_windows_cmd_shim_resolved_by_bare_name(self):
-        # 复刻真实场景：CLI 是 PATH 上的 .cmd（裸名调用），应能解析并执行
+    @unittest.skipUnless(os.name == "nt", "仅 Windows：.cmd 经 cmd /c 二次解析才有注入风险")
+    def test_cmd_shim_arg_mode_blocked_no_injection(self):
+        # 安全：.cmd 走 cmd /c 会二次解析命令行，arg 模式下提示词里的 " & 会命令注入。
+        # 这种组合必须被拒绝，且绝不执行注入的命令。
         import tempfile
         d = tempfile.mkdtemp()
         cmd = os.path.join(d, "faketool.cmd")
         with open(cmd, "w", encoding="ascii") as f:
-            f.write("@echo off\r\necho SHIM:%1\r\n")
+            f.write("@echo off\r\necho GOT:%1\r\n")
+        marker = os.path.join(d, "PWNED.txt")
         old = os.environ.get("PATH", "")
         os.environ["PATH"] = d + os.pathsep + old
         try:
             prof = AIProfile(name="shim", command=["faketool", "{prompt}"], input_mode="arg")
-            r = run_ai(prof, "hi")
+            payload = 'x" & echo pwned> "%s" & "y' % marker
+            r = run_ai(prof, payload)
+            self.assertFalse(r.ok)                       # 被安全护栏拒绝
+            self.assertIn("stdin", r.error)              # 指引改用 stdin/file
+            self.assertFalse(os.path.exists(marker))     # 没有命令注入
+        finally:
+            os.environ["PATH"] = old
+
+    @unittest.skipUnless(os.name == "nt", "仅 Windows：npm/nvm CLI 是 .cmd 包装脚本")
+    def test_windows_cmd_shim_resolved_by_bare_name(self):
+        # 复刻真实场景：CLI 是 PATH 上的 .cmd（裸名调用），应能解析并执行。
+        # 用 file 模式（安全路径：提示词进临时文件，命令行只有无害的文件路径）。
+        import tempfile
+        d = tempfile.mkdtemp()
+        cmd = os.path.join(d, "faketool.cmd")
+        with open(cmd, "w", encoding="ascii") as f:
+            f.write("@echo off\r\ntype %1\r\n")        # 把提示词文件内容吐回
+        old = os.environ.get("PATH", "")
+        os.environ["PATH"] = d + os.pathsep + old
+        try:
+            prof = AIProfile(name="shim", command=["faketool", "{prompt_file}"], input_mode="file")
+            r = run_ai(prof, "SHIMOK")
             self.assertTrue(r.ok, r.error)
-            self.assertIn("SHIM:hi", r.stdout)
+            self.assertIn("SHIMOK", r.stdout)
         finally:
             os.environ["PATH"] = old
 

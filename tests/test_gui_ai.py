@@ -1,15 +1,25 @@
-"""GUI AI 设置冒烟测试：配置加载、设置对话框可建、表单解析往返。"""
+"""GUI AI 设置冒烟测试：配置加载、设置对话框可建、表单解析往返。
+
+测试期把 AI 配置的读/写打桩成内存默认 + 空操作，保证不读写开发者真实
+~/.w3xray/ai_config.json（hermetic）。
+"""
 import unittest
 
+import w3xtool.gui as g
+from w3xtool.aicli.config import default_config
 from w3xtool.gui import App
 
 
 class TestGuiAI(unittest.TestCase):
     def setUp(self):
+        self._orig_load, self._orig_save = g.load_ai_config, g.save_ai_config
+        g.load_ai_config = lambda *a, **k: default_config()
+        g.save_ai_config = lambda *a, **k: None
         self.app = App()
 
     def tearDown(self):
         self.app.destroy()
+        g.load_ai_config, g.save_ai_config = self._orig_load, self._orig_save
 
     def test_ai_config_loaded_with_profiles(self):
         self.assertTrue(self.app._ai_config.profiles)

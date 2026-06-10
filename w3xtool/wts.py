@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 
 _HEADER = re.compile(rb"STRING\s+(\d+)", re.IGNORECASE)
+_CLOSE = re.compile(rb"(?m)^\}")          # 闭合括号锚定行首（避免误伤 GBK 尾字节 0x7D）
 
 
 def _decode_str(b: bytes) -> str:
@@ -41,12 +42,12 @@ def parse_wts(data: bytes) -> dict:
         brace = data.find(b"{", m.end())
         if brace < 0:
             break
-        end = data.find(b"}", brace + 1)
-        if end < 0:
+        m2 = _CLOSE.search(data, brace + 1)      # 行首的 '}'，而非字节流里第一个 '}'
+        if not m2:
             break
-        body = data[brace + 1:end].strip(b"\n")
+        body = data[brace + 1:m2.start()].strip(b"\n")
         table[sid] = _decode_str(body)
-        i = end + 1
+        i = m2.end()
     return table
 
 

@@ -13,6 +13,11 @@ from w3xtool.audit import diagnose
 PY = [sys.executable, "-X", "utf8"]
 
 
+def _read_all(folder):
+    from pathlib import Path
+    return "".join(Path(folder, f).read_text(encoding="utf-8") for f in os.listdir(folder))
+
+
 def _diag():
     md = MapData(path="p", name="测试图",
                  objects={"物品": [GameObject("物品", "w3t", "I001", "I001", "药水", False)]},
@@ -38,8 +43,7 @@ class TestSaveSuggestion(unittest.TestCase):
             res = AIResult(ok=True, stdout="AI 的修复建议在这里", exit_code=0)
             folder = save_suggestion(d, "测试图", "诊断报告正文", res)
             self.assertTrue(os.path.isdir(folder))
-            files = os.listdir(folder)
-            blob = "".join(open(os.path.join(folder, f), encoding="utf-8").read() for f in files)
+            blob = _read_all(folder)
             self.assertIn("诊断报告正文", blob)
             self.assertIn("AI 的修复建议在这里", blob)
 
@@ -54,8 +58,7 @@ class TestAttributeEndToEnd(unittest.TestCase):
             folder, res = attribute(_diag(), prof, out_root=d)
             self.assertTrue(res.ok, res.error)
             self.assertTrue(os.path.isdir(folder))
-            blob = "".join(open(os.path.join(folder, f), encoding="utf-8").read()
-                           for f in os.listdir(folder))
+            blob = _read_all(folder)
             self.assertIn("测试图", blob)          # 报告进了提示、回显、并存档
 
 
