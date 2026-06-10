@@ -12,6 +12,68 @@ except Exception:
     pass
 from w3xtool.mpq import MPQArchive
 
+import os
+
+
+class DirSource:
+    """把一个普通文件夹伪装成与 MPQArchive 同接口的数据源（has_file/read_file）。
+
+    用于读 CASC/重制版数据：先用 CascView 或 wc3tools/casc-extract 把游戏文件导到
+    一个文件夹，再让本脚本从该文件夹读。匹配大小写不敏感、斜杠方向不敏感，并容忍
+    war3.w3mod\\ 等命名空间前缀。
+    """
+
+    def __init__(self, root):
+        if not os.path.isdir(root):
+            raise FileNotFoundError(f"--from-dir 目录不存在: {root}")
+        self.root = root
+        self._by_rel = {}        # 规范化相对路径 -> 实际磁盘绝对路径
+        self._by_base = {}       # 文件名(小写) -> [规范化相对路径, ...]
+        for dirpath, _dirs, files in os.walk(root):
+            for fn in files:
+                full = os.path.join(dirpath, fn)
+                norm = os.path.relpath(full, root).replace("\\", "/").lower()
+                self._by_rel[norm] = full
+                self._by_base.setdefault(fn.lower(), []).append(norm)
+        if not self._by_rel:
+            raise FileNotFoundError(f"--from-dir 目录为空（无任何文件）: {root}")
+
+    @staticmethod
+    def _norm(name):
+        return name.replace("\\", "/").lstrip("/").lower()
+
+    def _resolve(self, name):
+        q = self._norm(name)
+        # 1. 精确相对路径
+        if q in self._by_rel:
+            return self._by_rel[q]
+        # 2. 以查询路径结尾（吃掉 war3.w3mod/ 等命名空间前缀）
+        cands = [r for r in self._by_rel if r.endswith("/" + q)]
+        if cands:
+            best = min(cands, key=len)
+            if len(cands) > 1:
+                print(f"  [warning] {name} 有 {len(cands)} 个候选，取最短: {best}")
+            return self._by_rel[best]
+        # 3. 文件名兜底
+        bcands = self._by_base.get(q.rsplit("/", 1)[-1], [])
+        if bcands:
+            best = min(bcands, key=len)
+            if len(bcands) > 1:
+                print(f"  [warning] {name} 按文件名有 {len(bcands)} 个候选，取最短: {best}")
+            return self._by_rel[best]
+        return None
+
+    def has_file(self, name):
+        return self._resolve(name) is not None
+
+    def read_file(self, name):
+        path = self._resolve(name)
+        if path is None:
+            raise FileNotFoundError(name)
+        with open(path, "rb") as f:
+            return f.read()
+
+
 GAME = r"C:/Program Files (x86)/Warcraft III/war3"
 # 优先级从低到高（后者覆盖前者）：基础 < 资料片 < 补丁 < 本地化
 MPQS = ["war3.mpq", "War3x.mpq", "War3Patch.mpq", "War3xLocal.mpq"]
