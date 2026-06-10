@@ -6,7 +6,10 @@
 import re
 import sys
 
-sys.stdout.reconfigure(encoding="utf-8")
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 from w3xtool.mpq import MPQArchive
 
 GAME = r"C:/Program Files (x86)/Warcraft III/war3"
