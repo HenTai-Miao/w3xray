@@ -20,11 +20,6 @@ from collections import Counter
 
 from .api import (load_map, commands_from_map, recipes_from_map,
                   export_all_files, tmp_extract_dir, quick_map_name, MapData)
-from .aicli.config import load_config as load_ai_config, save_config as save_ai_config, \
-    get_active as get_active_ai, AIConfig
-from .aicli.runner import AIProfile, run_ai
-from .aicli.improve import annotate as ai_annotate, attribute as ai_attribute
-from .audit import audit_loaded
 from .search import fuzzy_score
 from .icons import IconResolver
 from PIL import Image, ImageTk
@@ -77,10 +72,6 @@ class App(ctk.CTk):
         self._photo_cache = {}     # icon path -> PhotoImage
         self._row_imgs = []        # 保持引用防止被回收
         self._blank = None
-        self._ai_config = load_ai_config()   # AI CLI 配置（命令模板/当前选择）
-        self._settings_win = None
-        self._ai_busy = False                # AI 任务进行中标志（防并发 git 操作互相破坏）
-
         self._build_topbar()
         self._build_tabs()
         self._build_statusbar()
@@ -105,14 +96,8 @@ class App(ctk.CTk):
         ctk.CTkLabel(bar, text="  ⚔  魔兽地图提取器", font=(FONT, 16, "bold")).pack(side="left", padx=10)
         ctk.CTkButton(bar, text="打开地图 / 战役", font=(FONT, 14, "bold"),
                       width=140, height=38, command=self.on_open).pack(side="left", padx=8)
-        ctk.CTkButton(bar, text="⚙ 设置", font=(FONT, 13), width=70, height=38,
-                      fg_color=SECONDARY, hover_color=SECONDARY_HOVER, text_color=TEXT,
-                      command=self._open_settings).pack(side="left", padx=4)
         self.map_label = ctk.CTkLabel(bar, text="未打开", font=(FONT, 13), text_color=SUBTLE)
         self.map_label.pack(side="left", padx=12)
-        ctk.CTkButton(bar, text="AI 质检", font=(FONT, 13), width=84, height=34,
-                      fg_color=SECONDARY, hover_color=SECONDARY_HOVER, text_color=TEXT,
-                      command=self._on_ai_audit).pack(side="right", padx=6)
         ctk.CTkButton(bar, text="导出全部文件", font=(FONT, 13), width=110, height=34,
                       fg_color=SECONDARY, hover_color=SECONDARY_HOVER, text_color=TEXT,
                       command=self.on_export_all).pack(side="right", padx=6)
@@ -123,304 +108,6 @@ class App(ctk.CTk):
                       fg_color=SECONDARY, hover_color=SECONDARY_HOVER, text_color=TEXT,
                       command=self.on_export_ids).pack(side="right", padx=5)
 
-    # ---------- AI 设置 / 质检 ----------
-    def _open_settings(self):
-        """AI CLI 设置对话框：管理命令模板、选当前、测试连通。"""
-        if self._settings_win is not None and self._settings_win.winfo_exists():
-            self._settings_win.lift()
-            return
-        win = ctk.CTkToplevel(self)
-        self._settings_win = win
-        win.title("AI CLI 设置")
-        win.geometry("620x520")
-        win.transient(self)
-
-        ctk.CTkLabel(win, text="AI CLI 配置（用于解析质检 / 自改进）",
-                     font=(FONT, 15, "bold")).pack(anchor="w", padx=16, pady=(14, 2))
-        ctk.CTkLabel(win, text="登录交给各 CLI 自己：请先在终端登录好 claude / codex / opencode。\n"
-                              "命令里用 {prompt} 占位提示词（或选 stdin/file 输入方式）。",
-                     font=(FONT, 11), text_color=SUBTLE, justify="left").pack(anchor="w", padx=16)
-
-        names = [p.name for p in self._ai_config.profiles] or ["claude"]
-        self._set_sel = ctk.StringVar(value=self._ai_config.active or names[0])
-
-        row = ctk.CTkFrame(win, fg_color="transparent")
-        row.pack(fill="x", padx=16, pady=(12, 4))
-        ctk.CTkLabel(row, text="配置项：", font=(FONT, 12)).pack(side="left")
-        self._set_menu = ctk.CTkOptionMenu(row, values=names, variable=self._set_sel,
-                                           width=180, command=lambda _=None: self._settings_load_sel())
-        self._set_menu.pack(side="left", padx=6)
-        ctk.CTkButton(row, text="新建", width=56, command=self._settings_new).pack(side="left", padx=3)
-        ctk.CTkButton(row, text="删除", width=56, command=self._settings_delete).pack(side="left", padx=3)
-
-        form = ctk.CTkFrame(win, fg_color="transparent")
-        form.pack(fill="both", expand=True, padx=16, pady=6)
-        self._set_fields = {}
-        for key, label in (("name", "名称"), ("command", "命令（整行，空格分隔）"),
-                           ("input_mode", "输入方式 arg/stdin/file"),
-                           ("cwd", "工作目录（留空=默认）"), ("timeout", "超时(秒)")):
-            ctk.CTkLabel(form, text=label, font=(FONT, 12)).pack(anchor="w", pady=(6, 0))
-            e = ctk.CTkEntry(form, font=(FONT, 12), width=560)
-            e.pack(anchor="w")
-            self._set_fields[key] = e
-
-        btns = ctk.CTkFrame(win, fg_color="transparent")
-        btns.pack(fill="x", padx=16, pady=10)
-        ctk.CTkButton(btns, text="设为当前并保存", command=self._settings_save).pack(side="left", padx=4)
-        ctk.CTkButton(btns, text="测试连通", fg_color=SECONDARY, hover_color=SECONDARY_HOVER,
-                      command=self._settings_test).pack(side="left", padx=4)
-        self._set_status = ctk.CTkLabel(btns, text="", font=(FONT, 11), text_color=SUBTLE)
-        self._set_status.pack(side="left", padx=8)
-
-        self._settings_load_sel()
-
-        def _close():
-            self._settings_save_silent()    # 关窗即保存当前表单，避免编辑后忘点保存而丢失
-            self._settings_win = None
-            win.destroy()
-        win.protocol("WM_DELETE_WINDOW", _close)
-
-    def _settings_find(self, name):
-        for p in self._ai_config.profiles:
-            if p.name == name:
-                return p
-        return None
-
-    def _settings_load_sel(self):
-        p = self._settings_find(self._set_sel.get())
-        if not p:
-            return
-        vals = {"name": p.name, "command": " ".join(p.command),
-                "input_mode": p.input_mode, "cwd": p.cwd or "", "timeout": str(p.timeout)}
-        for k, e in self._set_fields.items():
-            e.delete(0, "end")
-            e.insert(0, vals[k])
-
-    def _settings_form_profile(self):
-        import shlex
-        f = self._set_fields
-        try:
-            timeout = float(f["timeout"].get() or "300")
-        except ValueError:
-            timeout = 300.0
-        cmd = shlex.split(f["command"].get())
-        mode = f["input_mode"].get().strip() or "arg"
-        if mode not in ("arg", "stdin", "file"):
-            mode = "arg"
-        return AIProfile(name=f["name"].get().strip() or "ai", command=cmd,
-                         cwd=f["cwd"].get().strip() or None, timeout=timeout, input_mode=mode)
-
-    def _settings_save_silent(self):
-        """关窗时静默保存当前表单（命令为空则跳过，不弹任何提示）。"""
-        try:
-            prof = self._settings_form_profile()
-            if not prof.command:
-                return
-            old = self._set_sel.get()
-            profs = [p for p in self._ai_config.profiles if p.name != old and p.name != prof.name]
-            profs.append(prof)
-            self._ai_config = AIConfig(profiles=profs, active=prof.name,
-                                       auto_audit=self._ai_config.auto_audit)
-            save_ai_config(self._ai_config)
-        except Exception:
-            pass
-
-    def _settings_save(self):
-        prof = self._settings_form_profile()
-        if not prof.command:
-            self._set_status.configure(text="命令不能为空")
-            return
-        old = self._set_sel.get()
-        profs = [p for p in self._ai_config.profiles if p.name != old and p.name != prof.name]
-        profs.append(prof)
-        self._ai_config = AIConfig(profiles=profs, active=prof.name,
-                                   auto_audit=self._ai_config.auto_audit)
-        save_ai_config(self._ai_config)
-        names = [p.name for p in profs]
-        self._set_menu.configure(values=names)
-        self._set_sel.set(prof.name)
-        self._set_status.configure(text=f"已保存，当前：{prof.name}")
-
-    def _settings_new(self):
-        n = "新配置"
-        i = 1
-        while self._settings_find(n):
-            i += 1
-            n = f"新配置{i}"
-        self._ai_config.profiles.append(AIProfile(name=n, command=["claude", "-p", "{prompt}"]))
-        self._set_menu.configure(values=[p.name for p in self._ai_config.profiles])
-        self._set_sel.set(n)
-        self._settings_load_sel()
-
-    def _settings_delete(self):
-        name = self._set_sel.get()
-        self._ai_config.profiles = [p for p in self._ai_config.profiles if p.name != name]
-        if not self._ai_config.profiles:
-            self._ai_config = AIConfig(profiles=[AIProfile(name="claude", command=["claude", "-p", "{prompt}"])],
-                                       active="claude", auto_audit=self._ai_config.auto_audit)
-        if self._ai_config.active == name:
-            self._ai_config.active = self._ai_config.profiles[0].name
-        save_ai_config(self._ai_config)
-        names = [p.name for p in self._ai_config.profiles]
-        self._set_menu.configure(values=names)
-        self._set_sel.set(names[0])
-        self._settings_load_sel()
-
-    def _settings_test(self):
-        prof = self._settings_form_profile()
-        self._set_status.configure(text="测试中…")
-
-        def work():
-            r = run_ai(prof, "回复 OK 即可（连通性测试）。")
-            msg = "连通成功 ✓" if r.ok else f"失败：{r.error}"
-            self.after(0, lambda: self._set_status.configure(text=msg))
-        threading.Thread(target=work, daemon=True).start()
-
-    def _ai_suggestions_dir(self):
-        return os.path.join(os.path.expanduser("~"), ".w3xray", "ai_suggestions")
-
-    def _ai_precheck(self):
-        """返回 (MapData, profile) 或 None（并已弹提示）。"""
-        if not self.map_data:
-            messagebox.showinfo("提示", "请先打开一张地图")
-            return None
-        active = get_active_ai(self._ai_config)
-        if not active:
-            messagebox.showinfo("提示", "请先在「⚙ 设置」里配置并选择一个 AI")
-            return None
-        return self.map_data, active
-
-    def _on_ai_audit(self, auto=False):
-        """对当前地图跑 AI 质检（诊断 → AI 标注），结果写入「AI 质检」标签页。"""
-        if auto:
-            if not (self.map_data and self._ai_config.auto_audit):
-                return
-            active = get_active_ai(self._ai_config)
-            if not active:
-                return
-            md = self.map_data
-        else:
-            pre = self._ai_precheck()
-            if not pre:
-                return
-            md, active = pre
-        if self._ai_busy:                  # 防并发：已有 AI 任务在跑就别再起
-            if not auto:
-                messagebox.showinfo("提示", "已有 AI 任务在进行，请稍候")
-            return
-        self._ai_busy = True
-        if not auto:                       # 自动模式不抢占当前标签页，静默填充
-            try:
-                self.tabs.set("AI 质检")
-            except Exception:
-                pass
-        self._ai_set_text("AI 质检中…（耗时取决于 AI，可能数十秒）")
-        self.status.configure(text="AI 质检中…")
-
-        def work():
-            try:
-                diag = audit_loaded(md)            # 复用内存数据，不重新解析
-                text = ai_annotate(diag, active)
-            except Exception as e:
-                text = f"AI 质检失败：{e}"
-            self.after(0, lambda: (self._ai_set_text(text), self.status.configure(text="就绪"),
-                                   setattr(self, "_ai_busy", False)))
-        threading.Thread(target=work, daemon=True).start()
-
-    def _on_ai_attribute(self):
-        """开发用：让 AI 对诊断归因 + 提修复补丁，结果存到 ai_suggestions/ 供人工审阅。"""
-        pre = self._ai_precheck()
-        if not pre:
-            return
-        md, active = pre
-        out_root = self._ai_suggestions_dir()
-        try:
-            self.tabs.set("AI 质检")
-        except Exception:
-            pass
-        self._ai_set_text("AI 归因中…（让 AI 分析诊断并提出修复补丁，结果会存到 ai_suggestions/，人工审阅后应用）")
-        self.status.configure(text="AI 归因中…")
-
-        def work():
-            folder = None
-            try:
-                diag = audit_loaded(md)            # 复用内存数据，不重新解析
-                folder, res = ai_attribute(diag, active, out_root=out_root)
-                if res.ok:
-                    msg = f"建议已生成到：\n{folder}\n\n——— AI 输出 ———\n{res.stdout}"
-                else:
-                    msg = f"AI 调用失败：{res.error}\n（诊断报告仍已存到 {folder}）"
-            except Exception as e:
-                msg = f"AI 归因失败：{e}"
-
-            def done():
-                self._ai_set_text(msg)
-                self.status.configure(text="就绪")
-                if folder and os.path.isdir(folder):
-                    try:
-                        os.startfile(folder)
-                    except Exception:
-                        pass
-            self.after(0, done)
-        threading.Thread(target=work, daemon=True).start()
-
-    def _on_ai_autopt(self):
-        """开发用·全自动：AI 直接改解析逻辑 → 跑测试 → 绿了自动提交推送，红了自动回滚。"""
-        pre = self._ai_precheck()
-        if not pre:
-            return
-        md, active = pre
-        from .aicli.autopt import find_repo, run_auto_optimize
-        repo = find_repo()
-        if not repo:
-            messagebox.showinfo("提示", "「AI 自动优化」仅在源码仓库下可用（打包后的 exe 没有源码/git）。")
-            return
-        if self._ai_busy:
-            messagebox.showinfo("提示", "已有 AI 任务在进行，请稍候")
-            return
-        if not messagebox.askyesno(
-                "AI 自动优化（开发）",
-                "将让 AI 直接修改 w3xtool/ 源码 → 跑全套测试 →\n"
-                "全部通过就自动提交并推送当前分支（main/master 不自动推送）；\n"
-                "任何失败都自动回滚到改前。AI 不能改 tests/ 与配置（保证门禁诚实）。\n\n"
-                "要求工作区干净（请先提交/暂存未保存的改动）。确定继续？"):
-            return
-        self._ai_busy = True
-        try:
-            self.tabs.set("AI 质检")
-        except Exception:
-            pass
-        self._ai_set_text("AI 自动优化中…（AI 改码 → 跑测试 → 提交/回滚，可能数分钟，期间请勿改动源码）")
-        self.status.configure(text="AI 自动优化中…")
-
-        def work():
-            try:
-                diag = audit_loaded(md)
-                r = run_auto_optimize(diag, active, repo=repo, push=True)
-                head = {"committed": "✅ 已自动应用、测试通过、提交并推送",
-                        "committed-no-push": "✅ 已提交（推送失败/未推送，详见下方）",
-                        "tests-failed": "❌ 测试未通过，已自动回滚（未改动仓库）",
-                        "apply-failed": "❌ AI 的补丁无法应用，已回滚",
-                        "rejected-scope": "⚠️ AI 想改测试/配置文件，已拒绝（测试门禁须保持诚实）",
-                        "no-diff": "ℹ️ AI 认为无需修改（未产出补丁）",
-                        "dirty": "⚠️ 工作区有未提交改动，已中止",
-                        "ai-failed": "❌ AI 调用失败",
-                        "no-repo": "❌ 未找到源码仓库",
-                        "commit-failed": "❌ 提交失败，已回滚"}.get(r.stage, r.stage)
-                msg = f"{head}\n\n{r.message}"
-                if r.touched:
-                    msg += "\n\n本次改动文件：" + "、".join(r.touched)
-                if r.test_tail:
-                    msg += f"\n\n——— 测试输出（尾部）———\n{r.test_tail}"
-                if r.diff:
-                    msg += f"\n\n——— 本次 AI 改动 diff ———\n{r.diff}"
-            except Exception as e:
-                msg = f"AI 自动优化失败：{e}"
-            self.after(0, lambda: (self._ai_set_text(msg), self.status.configure(text="就绪"),
-                                   setattr(self, "_ai_busy", False)))
-        threading.Thread(target=work, daemon=True).start()
-
-    # ---------- 标签页 ----------
     def _build_tabs(self):
         # 一级：对战图 | 战役图（左右切换）
         self.mode_seg = ctk.CTkSegmentedButton(
@@ -436,43 +123,9 @@ class App(ctk.CTk):
         self.tab_obj = self.tabs.add("对象浏览")
         self.tab_cmd = self.tabs.add("隐藏指令")
         self.tab_rec = self.tabs.add("合成配方")
-        self.tab_ai = self.tabs.add("AI 质检")
         self._build_obj_tab(self.tab_obj)
         self._build_cmd_tab(self.tab_cmd)
         self._build_rec_tab(self.tab_rec)
-        self._build_ai_tab(self.tab_ai)
-
-    def _build_ai_tab(self, parent):
-        bar = ctk.CTkFrame(parent, fg_color=BG)
-        bar.pack(fill="x", padx=4, pady=(6, 4))
-        ctk.CTkButton(bar, text="AI 质检当前图", font=(FONT, 12), height=32, width=120,
-                      command=self._on_ai_audit).pack(side="left", padx=4)
-        ctk.CTkButton(bar, text="AI 自动优化（开发）", font=(FONT, 12), height=32, width=150,
-                      fg_color=SECONDARY, hover_color=SECONDARY_HOVER, text_color=TEXT,
-                      command=self._on_ai_autopt).pack(side="left", padx=4)
-        self._auto_audit_var = tk.BooleanVar(value=bool(self._ai_config.auto_audit))
-        ctk.CTkCheckBox(bar, text="解析后自动质检", font=(FONT, 12),
-                        variable=self._auto_audit_var,
-                        command=self._on_toggle_auto_audit).pack(side="left", padx=12)
-        ctk.CTkLabel(parent, text="质检=工具自查 + AI 归因。会调用你配置的 AI CLI（耗时取决于 AI，可能数十秒，按各 CLI 计费）。"
-                                  "运行时只做结果层标注，绝不自改解析代码。",
-                     font=(FONT, 11), text_color=SUBTLE, justify="left", anchor="w").pack(fill="x", padx=10)
-        self.ai_box = ctk.CTkTextbox(parent, font=(FONT, 12), wrap="word")
-        self.ai_box.pack(fill="both", expand=True, padx=8, pady=8)
-        self._ai_set_text("点「AI 质检当前图」对当前地图做质检；或在「⚙ 设置」配置 AI 并勾选「解析后自动质检」。")
-
-    def _ai_set_text(self, text):
-        self.ai_box.configure(state="normal")
-        self.ai_box.delete("1.0", "end")
-        self.ai_box.insert("end", text or "(无输出)")
-        self.ai_box.configure(state="disabled")
-
-    def _on_toggle_auto_audit(self):
-        self._ai_config.auto_audit = bool(self._auto_audit_var.get())
-        try:
-            save_ai_config(self._ai_config)
-        except Exception:
-            pass
 
     def _build_obj_tab(self, parent):
         # 顶部搜索（过滤所有列）
@@ -817,10 +470,6 @@ class App(ctk.CTk):
                               layout=_LAYOUT_VERSION)
         except Exception:
             pass
-        try:
-            save_ai_config(self._ai_config)   # AI 配置也一并落盘，下次启动自动恢复
-        except Exception:
-            pass
         self.destroy()
 
     def on_pick_dir(self):
@@ -1039,7 +688,7 @@ class App(ctk.CTk):
             self._populate_left()
         self._render_map(md, cmds, recipes, resolver)
 
-    def _render_map(self, md, cmds, recipes, resolver, fresh=True):
+    def _render_map(self, md, cmds, recipes, resolver):
         self.map_data = md
         self.icons = resolver
         self._photo_cache = {}
@@ -1065,11 +714,6 @@ class App(ctk.CTk):
                               f"{len(cmds)} 指令 · "
                               f"{len(self.recipes)} 合成 · "
                               + "  ".join(f"{k}{v}" for k, v in counts.items()))
-
-        # 解析后自动 AI 质检（opt-in，静默填充 AI 标签页）。
-        # 仅在「真正新打开一张图」时触发；战役子图来回切换(fresh=False)不重复烧 AI。
-        if fresh and getattr(self._ai_config, "auto_audit", False):
-            self.after(100, lambda: self._on_ai_audit(auto=True))
 
     # ---------- 战役视图 ----------
     def _set_campaign_views(self, views, path=None):
@@ -1097,8 +741,7 @@ class App(ctk.CTk):
 
     def _switch_worker(self, md):
         cmds, recipes, resolver = self._prepare(md, self._campaign_path)
-        # 子图切换不算"新打开一张图"，fresh=False → 不触发自动 AI 质检
-        self.after(0, lambda: self._render_map(md, cmds, recipes, resolver, fresh=False))
+        self.after(0, lambda: self._render_map(md, cmds, recipes, resolver))
 
     # ---------- 对象浏览（多列）----------
     def _refresh_list(self):
