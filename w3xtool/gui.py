@@ -72,7 +72,6 @@ class App(ctk.CTk):
         self._photo_cache = {}     # icon path -> PhotoImage
         self._row_imgs = []        # 保持引用防止被回收
         self._blank = None
-        self._debounce = {}        # 搜索去抖：fn 名 -> after id（合并连续按键，大图不卡）
         self._build_topbar()
         self._build_tabs()
         self._build_statusbar()
@@ -133,11 +132,11 @@ class App(ctk.CTk):
         ctrl = ctk.CTkFrame(parent, fg_color=BG)
         ctrl.pack(fill="x", padx=4, pady=(6, 6))
         self.search_var = tk.StringVar()
-        self.search_var.trace_add("write", lambda *_: self._schedule(self._refresh_list))
         se = ctk.CTkEntry(ctrl, textvariable=self.search_var, height=32, font=(FONT, 12),
                           justify="center",
-                          placeholder_text='🔍  搜索名称/ID/描述　%词%=包含　="…"=精准　&&=且　||=或　例：%蓝宝石% && ="等级:E"')
+                          placeholder_text='🔍  回车搜索　名称/ID/描述　%词%=包含　="…"=精准　&&=且　||=或　例：%蓝宝石% && ="等级:E"')
         se.pack(fill="x")
+        se.bind("<Return>", lambda *_: self._refresh_list())   # 回车再搜：逐键不重建，大图不卡
         self._attach_ctx_menu(se, paste=True)
 
         body = ctk.CTkFrame(parent, fg_color=BG)
@@ -160,10 +159,10 @@ class App(ctk.CTk):
                                        anchor="w")
         self.left_title.pack(fill="x", padx=10)
         self.map_search = tk.StringVar()
-        self.map_search.trace_add("write", lambda *_: self._populate_left())
         mse = ctk.CTkEntry(leftp, textvariable=self.map_search, height=28, font=(FONT, 11),
-                           justify="center", placeholder_text="🔍 搜索…")
+                           justify="center", placeholder_text="🔍 回车搜索…")
         mse.pack(fill="x", padx=8, pady=(0, 4))
+        mse.bind("<Return>", lambda *_: self._populate_left())   # 回车再过滤地图列表
         self._attach_ctx_menu(mse, paste=True)
         mlw = tk.Frame(leftp, bg=CARD)
         mlw.pack(fill="both", expand=True, padx=6, pady=6)
@@ -224,11 +223,11 @@ class App(ctk.CTk):
         top = ctk.CTkFrame(parent, fg_color=BG)
         top.pack(fill="x", padx=4, pady=(8, 6))
         self.cmd_search = tk.StringVar()
-        self.cmd_search.trace_add("write", lambda *_: self._schedule(self._refresh_cmds))
         cse = ctk.CTkEntry(top, textvariable=self.cmd_search, height=38, font=(FONT, 14),
                            justify="center",
-                           placeholder_text='🔍  搜索指令/说明　%词%=包含　="…"=精准　&&=且　||=或')
+                           placeholder_text='🔍  回车搜索　指令/说明　%词%=包含　="…"=精准　&&=且　||=或')
         cse.pack(fill="x")
+        cse.bind("<Return>", lambda *_: self._refresh_cmds())   # 回车再搜
         self._attach_ctx_menu(cse, paste=True)
         self.cmd_hint = ctk.CTkLabel(parent, text="打开地图后这里列出脚本里的全部聊天指令（含隐藏指令）",
                                      font=(FONT, 12), text_color=SUBTLE, anchor="w")
@@ -255,11 +254,11 @@ class App(ctk.CTk):
         top = ctk.CTkFrame(parent, fg_color=BG)
         top.pack(fill="x", padx=4, pady=(8, 6))
         self.rec_search = tk.StringVar()
-        self.rec_search.trace_add("write", lambda *_: self._schedule(self._refresh_recipes))
         rse = ctk.CTkEntry(top, textvariable=self.rec_search, height=38, font=(FONT, 14),
                            justify="center",
-                           placeholder_text='🔍  搜索材料/成品名称　%词%=包含　="…"=精准　&&=且　||=或')
+                           placeholder_text='🔍  回车搜索　材料/成品名称　%词%=包含　="…"=精准　&&=且　||=或')
         rse.pack(fill="x")
+        rse.bind("<Return>", lambda *_: self._refresh_recipes())   # 回车再搜
         self._attach_ctx_menu(rse, paste=True)
         self.rec_hint = ctk.CTkLabel(parent, text="打开地图后这里列出脚本里识别到的物品合成配方",
                                      font=(FONT, 12), text_color=SUBTLE, anchor="w")
@@ -295,17 +294,6 @@ class App(ctk.CTk):
         if not hasattr(self, "_rec_font"):
             self._rec_font = tkfont.Font(family=FONT, size=11)
         return self._rec_font
-
-    def _schedule(self, fn, delay=220):
-        """去抖调度：连续触发只执行最后一次（搜索框逐键输入时合并，避免大图每键重建卡顿）。"""
-        key = fn.__name__
-        prev = self._debounce.get(key)
-        if prev:
-            try:
-                self.after_cancel(prev)
-            except Exception:
-                pass
-        self._debounce[key] = self.after(delay, fn)
 
     def _autosize_tree(self, tree, col="#0", minw=120, pad=46):
         """按 col 列(默认树主列 #0)里最长文本自适应列宽，配合横向滚动条把长名字看全。

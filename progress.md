@@ -228,3 +228,9 @@
   - `_terminate` 由 `os.kill(pid)` 改 **句柄式**：`OpenProcess(TERMINATE|QUERY)` 拿句柄→用同一句柄复核映像==期望→`TerminateProcess`。句柄锁定进程对象，杜绝 `_decide` 与终止之间 pid 被复用导致误杀的 TOCTOU 窗口。
   - 测试：`test_single_instance.py` +4 例（同名不同目录不杀、路径大小写不敏感、真实子进程映像匹配则杀/不符则不杀）；并端到端实测两进程接管（A 起→B 起杀 A→B 存活）通过。
 - 测试 **165→170 通过, 1 skipped**（+5 例）；single_instance 改了，onedir 重新打包。
+
+### 会话 11：搜索改回车触发（用户反馈逐键搜索卡顿）
+- **现象**：用户反馈"搜索一卡一卡的很烦"。原四个搜索框逐键触发（去抖 `_schedule`，220ms 合并），大图下每次仍要重建多列 Treeview，输入中途仍会卡。
+- **改动**（`gui.py`）：四个框（物体主搜 `search_var`→`_refresh_list`、地图列表 `map_search`→`_populate_left`、隐藏指令 `cmd_search`→`_refresh_cmds`、合成配方 `rec_search`→`_refresh_recipes`）一律去掉 `trace_add("write")` 逐键触发，改为 `entry.bind("<Return>")` **回车才搜**；逐键输入不再重建列表，清空后回车即恢复全部。
+- 删掉不再使用的去抖 `_schedule` 方法与 `self._debounce`（CTkEntry.bind 已确认转发到内部 Entry）。占位符加"回车搜索"提示。
+- README 同步：搜索小节加"回车触发"说明、列表交互项"去抖"改"回车才搜"。`gui.py` 导入自检通过；onedir 重新打包。
