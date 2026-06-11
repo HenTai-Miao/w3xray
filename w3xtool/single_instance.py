@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import json
 import os
-import signal
 import sys
 import tempfile
 import time
@@ -21,22 +20,32 @@ import time
 _LOCK_NAME = "w3xray.instance.lock"
 
 
+def _same_image(a, b) -> bool:
+    """两条映像路径是否指向同一可执行体（Windows 大小写不敏感、规范化分隔符）。
+
+    用**完整路径**而非仅文件名比较：不同目录下的同名 exe（便携版 vs 安装版、
+    或攻击者放的同名进程）不算「本程序的上一个实例」，避免误杀。"""
+    if not a or not b:
+        return False
+    return os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
+
+
 def _decide(my_pid, my_image, lock_data, *, alive, image_of):
     """返回需要终止的旧实例 pid，或 None。纯逻辑，依赖经参数注入。
 
-    仅当：锁里记录了别的 pid、它仍存活、且其当前映像路径与锁记录一致
-    （未被 pid 复用）时，才判定为「上一个本程序实例」。"""
+    仅当：锁里记录了别的 pid、它仍存活、且其当前完整映像路径与锁记录一致
+    （未被 pid 复用）、且与本程序是同一可执行体时，才判定为「上一个本程序实例」。"""
     if not lock_data:
         return None
     old_pid = lock_data.get("pid")
     old_image = lock_data.get("image")
     if not isinstance(old_pid, int) or old_pid == my_pid:
         return None
-    if os.path.basename(old_image or "") != os.path.basename(my_image):
-        return None                       # 锁记录的是别的可执行体，不动它
+    if not _same_image(old_image, my_image):
+        return None                       # 锁记录的是别的可执行体（含同名不同目录），不动它
     if not alive(old_pid):
         return None                       # 旧实例已退出
-    if image_of(old_pid) != old_image:
+    if not _same_image(image_of(old_pid), old_image):
         return None                       # pid 已被复用成别的进程，别误杀
     return old_pid
 
@@ -51,13 +60,24 @@ def _kernel32():
     k.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
     k.QueryFullProcessImageNameW.argtypes = (
         wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD))
+    k.TerminateProcess.argtypes = (wintypes.HANDLE, wintypes.UINT)
+    k.TerminateProcess.restype = wintypes.BOOL
     k.CloseHandle.argtypes = (wintypes.HANDLE,)
     return k, ctypes, wintypes
 
 
 _SYNCHRONIZE = 0x00100000
 _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+_PROCESS_TERMINATE = 0x0001
 _WAIT_TIMEOUT = 0x102
+
+
+def _image_via_handle(k, ctypes, wintypes, handle):
+    buf = ctypes.create_unicode_buffer(32768)
+    size = wintypes.DWORD(len(buf))
+    if k.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
+        return buf.value
+    return None
 
 
 def _pid_alive(pid: int) -> bool:
@@ -81,22 +101,31 @@ def _image_path(pid: int):
         if not h:
             return None
         try:
-            buf = ctypes.create_unicode_buffer(32768)
-            size = wintypes.DWORD(len(buf))
-            if k.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
-                return buf.value
-            return None
+            return _image_via_handle(k, ctypes, wintypes, h)
         finally:
             k.CloseHandle(h)
     except Exception:
         return None
 
 
-def _terminate(pid: int, timeout: float = 3.0) -> None:
-    """终止 pid 并等它真正退出（最多 timeout 秒）。"""
+def _terminate(pid: int, expected_image: str, timeout: float = 3.0) -> None:
+    """终止 pid，但先用**同一句柄**复核映像，杜绝 _decide 与终止之间 pid 被复用的竞态。
+
+    OpenProcess 拿到的句柄指向具体进程对象；只要持有它，该 pid 不会在我们眼皮底下
+    被复用成另一个进程。故"用此句柄查到的映像 == 期望映像"成立后再 TerminateProcess，
+    即使 _decide 之后旧实例恰好退出、pid 被别的程序占用，也不会误杀。"""
     try:
-        os.kill(pid, signal.SIGTERM)          # Windows 上即 TerminateProcess
-    except (OSError, ProcessLookupError):
+        k, ctypes, wintypes = _kernel32()
+        h = k.OpenProcess(_PROCESS_TERMINATE | _PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not h:
+            return
+        try:
+            if not _same_image(_image_via_handle(k, ctypes, wintypes, h), expected_image):
+                return                        # 句柄指向的已不是目标程序（pid 复用/篡改）→ 不杀
+            k.TerminateProcess(h, 1)
+        finally:
+            k.CloseHandle(h)
+    except Exception:
         return
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
@@ -143,7 +172,7 @@ def ensure_single_instance():
         victim = _decide(my_pid, my_image, _read_lock(path),
                          alive=_pid_alive, image_of=_image_path)
         if victim is not None:
-            _terminate(victim)
+            _terminate(victim, my_image)      # 复核映像须与本程序一致(同一可执行体)
         _write_lock(path, my_pid, my_image)
         return victim
     except Exception:

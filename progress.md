@@ -220,3 +220,11 @@
 - **新需求：每个框加横向滚动**（用户反馈地图列表名字看不全）：地图列表、物品/单位/技能/科技四列、隐藏指令表都加横向滚动条 + 列宽随最长内容自适应（`_autosize_tree`，stretch=False 才有可滚区间）。合成配方表本就有。实测物品列 80→289px。测试 `test_gui_scroll.py`。
 - **暂缓**（见记忆 `w3xray-audit-deferred`）：① huffman 0x101 疑似重复加权——需真实 Huffman 样本往返验证，盲改有风险；② single_instance 改完整路径比较 + kill 前 TOCTOU 复核（低概率本地攻击，不在本次范围）。
 - 测试 **136→165 通过, 1 skipped**（+29 例）；onedir 重新打包。
+
+### 会话 10：清掉会话 9 暂缓的两项（huffman 验证 + single_instance 加固）
+- **Huffman 新符号加权——证伪审计怀疑，无 bug**：会话 9 审计怀疑 `huffman.py` 新符号(0x101)路径重复加权(sparse)。用 systematic-debugging 实测裁决：从 `War3x.mpq` 捕获 **2000 条真实 StormLib 编码的 Huffman 扇区**（其中 1845 条触发新符号路径、共 2958 次插入），用当前解码逻辑解到自然终止——**2000/2000 恰好在编码器写入的 0x100 结束符处停下且输入读尽**。自适应树一旦重复加权必在第一个新符号后失步、不可能在上千条真实流上对齐。结论：移植与 StormLib 完全一致（StormLib 的 InsertNewBranchAndRebalance 内部也对新符号 IncWeights 一次、调用方再 IncWeights 一次，本就是"两次"，并非 bug）。**不改代码**，改为新增锁定测试 `test_huffman.py::TestHuffmanRealStormLibStreams`（有游戏 MPQ 时实跑真实流的位级同步校验）。
+- **single_instance 加固**（防误杀）：
+  - `_decide` 由 **basename 比较改完整路径比较**（`_same_image`：normcase+normpath，Windows 大小写不敏感）——不同目录的同名 exe（便携版 vs 安装版、或攻击者放的同名进程）不再被当成"上一个实例"。
+  - `_terminate` 由 `os.kill(pid)` 改 **句柄式**：`OpenProcess(TERMINATE|QUERY)` 拿句柄→用同一句柄复核映像==期望→`TerminateProcess`。句柄锁定进程对象，杜绝 `_decide` 与终止之间 pid 被复用导致误杀的 TOCTOU 窗口。
+  - 测试：`test_single_instance.py` +4 例（同名不同目录不杀、路径大小写不敏感、真实子进程映像匹配则杀/不符则不杀）；并端到端实测两进程接管（A 起→B 起杀 A→B 存活）通过。
+- 测试 **165→170 通过, 1 skipped**（+5 例）；single_instance 改了，onedir 重新打包。
