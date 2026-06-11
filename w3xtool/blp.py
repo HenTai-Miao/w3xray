@@ -7,6 +7,10 @@ from __future__ import annotations
 import struct
 from io import BytesIO
 
+# 单边像素上限：真实地图图标(64)/纹理/载入图远小于此。BLP 来自不可信地图，
+# 头里 width*height 直接驱动内存分配，必须设硬上限防解压炸弹(否则可被构造成 ~17GB)。
+_MAX_DIM = 4096
+
 
 def _palette_rgba(Image, pal, idx, alpha_data, width, height):
     """调色板(BGRA)+索引 → RGBA 图。
@@ -62,11 +66,13 @@ def decode_blp(data: bytes):
 
 
 def _decode_blp1(data, Image):
+    if len(data) < 28 + 128 + 4:        # 头(24)+mip偏移表(64)+mip大小表(64)+jpeg头长(4)
+        return None
     (compression, flags, width, height, pic_type, pic_subtype) = struct.unpack_from("<IIIIII", data, 4)
+    if not (0 < width <= _MAX_DIM and 0 < height <= _MAX_DIM):
+        return None
     mip_offsets = struct.unpack_from("<16I", data, 28)
     mip_sizes = struct.unpack_from("<16I", data, 28 + 64)
-    if width == 0 or height == 0:
-        return None
 
     if compression == 0:
         # JPEG 内容：共享头 + 第0级数据 拼成完整 JPEG
@@ -101,8 +107,12 @@ def _decode_blp1(data, Image):
 
 def _decode_blp2(data, Image):
     # BLP2: type(1=JPEG,?) ; encoding(1=palette,2=DXT)
+    if len(data) < 20 + 128 + 1024:     # 头(16)+mip偏移表(64)+mip大小表(64)+调色板(1024)
+        return None
     typ, encoding, alpha_depth, alpha_enc, has_mips = struct.unpack_from("<BBBBB", data, 4)
     width, height = struct.unpack_from("<II", data, 12)
+    if not (0 < width <= _MAX_DIM and 0 < height <= _MAX_DIM):
+        return None
     mip_offsets = struct.unpack_from("<16I", data, 20)
     mip_sizes = struct.unpack_from("<16I", data, 20 + 64)
     pal = data[20 + 128: 20 + 128 + 1024]

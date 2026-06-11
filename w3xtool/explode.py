@@ -116,30 +116,36 @@ def explode(data: bytes, max_output: int | None = None) -> bytes:
     max_output 为输出字节上限，达到即停（防解压炸弹）；None 表示不限。
     """
     s = _State(data)
-    lit = _bits(s, 8)
-    if lit > 1:
-        raise ValueError("explode: 非法字面量标志 %d" % lit)
-    dict_bits = _bits(s, 8)
-    if dict_bits < 4 or dict_bits > 6:
-        raise ValueError("explode: 非法字典大小 %d" % dict_bits)
     out = s.out
-    while True:
-        if max_output is not None and len(out) >= max_output:
-            break
-        if _bits(s, 1):
-            sym = _decode(s, _LENCODE)
-            length = _BASE[sym] + _bits(s, _EXTRA[sym])
-            if length == 519:      # 结束标记
+    # 输入耗尽时 _bits/_decode 会 s.inp[越界] 抛 IndexError；
+    # 统一转成清晰的 ValueError（与 blast.c 输入耗尽返回错误码 2 对应），
+    # 避免损坏的 PKWARE 流让上层收到莫名其妙的 IndexError。
+    try:
+        lit = _bits(s, 8)
+        if lit > 1:
+            raise ValueError("explode: 非法字面量标志 %d" % lit)
+        dict_bits = _bits(s, 8)
+        if dict_bits < 4 or dict_bits > 6:
+            raise ValueError("explode: 非法字典大小 %d" % dict_bits)
+        while True:
+            if max_output is not None and len(out) >= max_output:
                 break
-            dist_bits = 2 if length == 2 else dict_bits
-            dist = (_decode(s, _DISTCODE) << dist_bits) + _bits(s, dist_bits) + 1
-            start = len(out) - dist
-            if start < 0:
-                raise ValueError("explode: 距离越界")
-            _copy_match(out, start, length)
-        else:
-            sym = _decode(s, _LITCODE) if lit else _bits(s, 8)
-            out.append(sym & 0xFF)
+            if _bits(s, 1):
+                sym = _decode(s, _LENCODE)
+                length = _BASE[sym] + _bits(s, _EXTRA[sym])
+                if length == 519:      # 结束标记
+                    break
+                dist_bits = 2 if length == 2 else dict_bits
+                dist = (_decode(s, _DISTCODE) << dist_bits) + _bits(s, dist_bits) + 1
+                start = len(out) - dist
+                if start < 0:
+                    raise ValueError("explode: 距离越界")
+                _copy_match(out, start, length)
+            else:
+                sym = _decode(s, _LITCODE) if lit else _bits(s, 8)
+                out.append(sym & 0xFF)
+    except IndexError:
+        raise ValueError("explode: 输入数据不完整（损坏的 PKWARE 流）") from None
     if max_output is not None:
         return bytes(out[:max_output])
     return bytes(out)

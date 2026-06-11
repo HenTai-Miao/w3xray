@@ -72,6 +72,7 @@ class App(ctk.CTk):
         self._photo_cache = {}     # icon path -> PhotoImage
         self._row_imgs = []        # 保持引用防止被回收
         self._blank = None
+        self._debounce = {}        # 搜索去抖：fn 名 -> after id（合并连续按键，大图不卡）
         self._build_topbar()
         self._build_tabs()
         self._build_statusbar()
@@ -132,7 +133,7 @@ class App(ctk.CTk):
         ctrl = ctk.CTkFrame(parent, fg_color=BG)
         ctrl.pack(fill="x", padx=4, pady=(6, 6))
         self.search_var = tk.StringVar()
-        self.search_var.trace_add("write", lambda *_: self._refresh_list())
+        self.search_var.trace_add("write", lambda *_: self._schedule(self._refresh_list))
         se = ctk.CTkEntry(ctrl, textvariable=self.search_var, height=32, font=(FONT, 12),
                           justify="center",
                           placeholder_text='🔍  搜索名称/ID/描述　%词%=包含　="…"=精准　&&=且　||=或　例：%蓝宝石% && ="等级:E"')
@@ -167,9 +168,12 @@ class App(ctk.CTk):
         mlw = tk.Frame(leftp, bg=CARD)
         mlw.pack(fill="both", expand=True, padx=6, pady=6)
         self.map_list = ttk.Treeview(mlw, show="tree", selectmode="browse")
+        self.map_list.column("#0", stretch=False)        # 配合横向滚动看全长地图名
         mvsb = ttk.Scrollbar(mlw, orient="vertical", command=self.map_list.yview)
-        self.map_list.configure(yscrollcommand=mvsb.set)
+        mhsb = ttk.Scrollbar(mlw, orient="horizontal", command=self.map_list.xview)
+        self.map_list.configure(yscrollcommand=mvsb.set, xscrollcommand=mhsb.set)
         mvsb.pack(side="right", fill="y")
+        mhsb.pack(side="bottom", fill="x")
         self.map_list.pack(side="left", fill="both", expand=True)
         self.map_list.bind("<Double-1>", self._on_map_pick)   # 双击才加载/切换
         self.map_list.bind("<<TreeviewOpen>>", self._on_tree_open)
@@ -188,10 +192,12 @@ class App(ctk.CTk):
             w = tk.Frame(col, bg=CARD)
             w.pack(fill="both", expand=True, padx=5, pady=(0, 6))
             tv = ttk.Treeview(w, show="tree", selectmode="browse")
-            tv.column("#0", width=80, minwidth=50, stretch=True, anchor="w")
+            tv.column("#0", width=80, minwidth=50, stretch=False, anchor="w")
             vsb = ttk.Scrollbar(w, orient="vertical", command=tv.yview)
-            tv.configure(yscrollcommand=vsb.set)
+            hsb = ttk.Scrollbar(w, orient="horizontal", command=tv.xview)
+            tv.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
             vsb.pack(side="right", fill="y")
+            hsb.pack(side="bottom", fill="x")
             tv.pack(side="left", fill="both", expand=True)
             tv.bind("<<TreeviewSelect>>", lambda e, c=cat: self._on_col_select(c))  # 单击看详情
             self._attach_tree_copy(tv)                                            # 右键复制名字
@@ -218,7 +224,7 @@ class App(ctk.CTk):
         top = ctk.CTkFrame(parent, fg_color=BG)
         top.pack(fill="x", padx=4, pady=(8, 6))
         self.cmd_search = tk.StringVar()
-        self.cmd_search.trace_add("write", lambda *_: self._refresh_cmds())
+        self.cmd_search.trace_add("write", lambda *_: self._schedule(self._refresh_cmds))
         cse = ctk.CTkEntry(top, textvariable=self.cmd_search, height=38, font=(FONT, 14),
                            justify="center",
                            placeholder_text='🔍  搜索指令/说明　%词%=包含　="…"=精准　&&=且　||=或')
@@ -236,10 +242,12 @@ class App(ctk.CTk):
         for c, t, w, a in (("cmd", "指令", 180, "w"), ("match", "匹配", 70, "center"),
                            ("hint", "说明(脚本提示)", 420, "w")):
             self.cmd_tree.heading(c, text=t)
-            self.cmd_tree.column(c, width=w, anchor=a)
+            self.cmd_tree.column(c, width=w, anchor=a, stretch=False)
         vsb = ttk.Scrollbar(inner, orient="vertical", command=self.cmd_tree.yview)
-        self.cmd_tree.configure(yscrollcommand=vsb.set)
+        hsb = ttk.Scrollbar(inner, orient="horizontal", command=self.cmd_tree.xview)
+        self.cmd_tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         vsb.pack(side="right", fill="y")
+        hsb.pack(side="bottom", fill="x")
         self.cmd_tree.pack(side="left", fill="both", expand=True)
         self._attach_tree_copy(self.cmd_tree)
 
@@ -247,7 +255,7 @@ class App(ctk.CTk):
         top = ctk.CTkFrame(parent, fg_color=BG)
         top.pack(fill="x", padx=4, pady=(8, 6))
         self.rec_search = tk.StringVar()
-        self.rec_search.trace_add("write", lambda *_: self._refresh_recipes())
+        self.rec_search.trace_add("write", lambda *_: self._schedule(self._refresh_recipes))
         rse = ctk.CTkEntry(top, textvariable=self.rec_search, height=38, font=(FONT, 14),
                            justify="center",
                            placeholder_text='🔍  搜索材料/成品名称　%词%=包含　="…"=精准　&&=且　||=或')
@@ -283,10 +291,34 @@ class App(ctk.CTk):
         return f"{bn}({code})" if bn else code
 
     def _measure_font(self):
-        """缓存一个与表格行同字体的测量用 Font，用来算材料列该多宽。"""
+        """缓存一个与表格行同字体的测量用 Font，用来算列该多宽。"""
         if not hasattr(self, "_rec_font"):
             self._rec_font = tkfont.Font(family=FONT, size=11)
         return self._rec_font
+
+    def _schedule(self, fn, delay=220):
+        """去抖调度：连续触发只执行最后一次（搜索框逐键输入时合并，避免大图每键重建卡顿）。"""
+        key = fn.__name__
+        prev = self._debounce.get(key)
+        if prev:
+            try:
+                self.after_cancel(prev)
+            except Exception:
+                pass
+        self._debounce[key] = self.after(delay, fn)
+
+    def _autosize_tree(self, tree, col="#0", minw=120, pad=46):
+        """按 col 列(默认树主列 #0)里最长文本自适应列宽，配合横向滚动条把长名字看全。
+
+        stretch=False 让列保持该宽度而非压回可视宽度——内容更宽时横向滚动条才有可滚区间。"""
+        f = self._measure_font()
+        widest = 0
+        stack = list(tree.get_children(""))
+        while stack:
+            iid = stack.pop()
+            widest = max(widest, f.measure(tree.item(iid, "text")))
+            stack.extend(tree.get_children(iid))
+        tree.column(col, width=max(minw, widest + pad), stretch=False)
 
     def _refresh_recipes(self):
         q = self.rec_search.get().strip()
@@ -471,6 +503,11 @@ class App(ctk.CTk):
                               layout=_LAYOUT_VERSION)
         except Exception:
             pass
+        if self.icons is not None and hasattr(self.icons, "close"):
+            try:
+                self.icons.close()           # 退出时释放当前图标解析器的句柄
+            except Exception:
+                pass
         self.destroy()
 
     def on_pick_dir(self):
@@ -547,6 +584,7 @@ class App(ctk.CTk):
             iid = f"m{i}"
             self.map_list.insert("", "end", iid=iid, text=f" {name}")
             self._node_map[iid] = ("path", p)
+        self._autosize_tree(self.map_list, minw=130)   # 长地图名也能横向滚动看全
 
     def _refresh_campaign_tree(self):
         """战役图：树形——战役为父节点，展开显示子地图(★共享+各关卡)。"""
@@ -567,6 +605,7 @@ class App(ctk.CTk):
                     self._node_map[cid] = ("md", md)
             else:
                 self.map_list.insert(pid, "end", iid=f"{pid}_load", text="  （展开加载…）")
+        self._autosize_tree(self.map_list, minw=130)   # 长战役/子图名也能横向滚动看全
 
     def _on_mode_change(self, mode):
         self.mode = "campaign" if mode == "战役图" else "battle"
@@ -588,8 +627,10 @@ class App(ctk.CTk):
         def work():
             try:
                 md = load_map(camp["path"])
-            except Exception:
+            except Exception as e:
                 traceback.print_exc()
+                self.after(0, lambda: (messagebox.showerror("解析失败", str(e)),
+                                       self.status.configure(text="战役解析失败")))
                 return
             views = [("★ 战役共享对象", md)] + [(s.name, s) for s in md.sub_maps]
             camp["loaded"] = True
@@ -691,6 +732,12 @@ class App(ctk.CTk):
 
     def _render_map(self, md, cmds, recipes, resolver):
         self.map_data = md
+        old = self.icons                      # 释放上一张图的图标解析器(地图档/战役档句柄)
+        if old is not None and old is not resolver and hasattr(old, "close"):
+            try:
+                old.close()
+            except Exception:
+                pass
         self.icons = resolver
         self._photo_cache = {}
         self.map_label.configure(text=f"📦 {md.name}")
@@ -734,12 +781,6 @@ class App(ctk.CTk):
             self.mode_seg.set("战役图")
         self._populate_left()
 
-    def _view_md(self, label):
-        for lbl, m in (self._campaign_views or []):
-            if lbl == label:
-                return m
-        return None
-
     def _switch_worker(self, md):
         cmds, recipes, resolver = self._prepare(md, self._campaign_path)
         self.after(0, lambda: self._render_map(md, cmds, recipes, resolver))
@@ -775,6 +816,7 @@ class App(ctk.CTk):
                           tags=("odd" if i % 2 else "even",))
             tv.tag_configure("odd", background=ROW_ALT)
             tv.tag_configure("even", background=CARD)
+            self._autosize_tree(tv)           # 列宽随最长名字自适应，配合横向滚动看全
             self.col_headers[cat].configure(text=f"{cat}  ({len(res)})")
             summary.append(f"{cat}{len(res)}")
         self.status.configure(text="  ".join(summary))
@@ -789,37 +831,6 @@ class App(ctk.CTk):
         if idx >= len(res):
             return
         self._show_detail(res[idx])
-
-    def _col_select_all(self, cat):
-        tv = self.col_trees[cat]
-        items = tv.get_children()
-        tv.selection_set(items)
-
-    def on_export_selected(self):
-        if not self._need_map():
-            return
-        picked = []
-        for cat in PARALLEL_CATS:
-            tv = self.col_trees[cat]
-            res = self.col_results.get(cat, [])
-            for iid in tv.selection():
-                i = int(iid)
-                if i < len(res):
-                    picked.append((cat, res[i]))
-        if not picked:
-            messagebox.showinfo("提示", "请先在列表里选中条目（Ctrl/Shift 多选，或点列头「全选」）")
-            return
-        out = filedialog.asksaveasfilename(title="导出选中的对象", defaultextension=".txt",
-                                           initialfile="选中对象.txt",
-                                           filetypes=[("文本", "*.txt")])
-        if not out:
-            return
-        with open(out, "w", encoding="utf-8") as f:
-            for cat, o in picked:
-                desc = next((v for l, v in o.fields if l in ("说明", "描述", "Ubertip", "提示")), "")
-                f.write(f"[{cat}] 10进制：{o.decimal}\nID：{o.obj_id}\n名字：{o.name}\n{desc}\n\n")
-        self.status.configure(text=f"已导出选中的 {len(picked)} 个对象到 {out}")
-        messagebox.showinfo("完成", f"已导出选中的 {len(picked)} 个对象到\n{out}")
 
     def _get_photo(self, icon_path):
         if not icon_path or self.icons is None:
@@ -867,9 +878,15 @@ class App(ctk.CTk):
             n += 1
         self.cmd_tree.tag_configure("odd", background=ROW_ALT)
         self.cmd_tree.tag_configure("even", background=CARD)
+        # 说明列按最长内容自适应宽度，配合横向滚动条看全长提示
+        f = self._measure_font()
+        widest = max((f.measure(c.hint) for c in self.commands), default=0)
+        self.cmd_tree.column("hint", width=max(420, widest + 28))
         if self.commands:
             self.cmd_hint.configure(text=f"共 {len(self.commands)} 条聊天指令"
                                     f"（前缀=输入以该串开头即触发，常带参数；精确=完全匹配）")
+        else:
+            self.cmd_hint.configure(text="未发现聊天指令（此图可能无聊天触发，或用了非标准写法）")
 
     # ---------- 导出 ----------
     def _need_map(self):
@@ -907,27 +924,43 @@ class App(ctk.CTk):
         if not self._need_map():
             return
         out = tmp_extract_dir(self.map_data.name, "脚本")
-        n = 0
-        for fn, text in self.map_data.scripts.items():
-            with open(os.path.join(out, os.path.basename(fn)), "w", encoding="utf-8") as f:
-                f.write(text)
-            n += 1
-        self._open_dir(out, n, "脚本")
+        scripts = dict(self.map_data.scripts)          # 快照后到后台线程写盘，避免卡 UI
+        self.status.configure(text="正在导出脚本 …")
+
+        def work():
+            try:
+                n = 0
+                for fn, text in scripts.items():
+                    with open(os.path.join(out, os.path.basename(fn)), "w", encoding="utf-8") as f:
+                        f.write(text)
+                    n += 1
+                self.after(0, lambda: self._open_dir(out, n, "脚本"))
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror("导出失败", str(e)))
+        threading.Thread(target=work, daemon=True).start()
 
     def on_export_ids(self):
         if not self._need_map():
             return
         out = tmp_extract_dir(self.map_data.name, "ID列表")
-        n = 0
-        for cat, objs in self.map_data.objects.items():
-            blocks = []
-            for o in objs:
-                desc = next((v for l, v in o.fields if l in ("说明", "描述", "Ubertip", "提示")), "")
-                blocks.append(f"10进制：{o.decimal}\nID：{o.obj_id}\n名字：{o.name}\n{desc}\n")
-            with open(os.path.join(out, f"{cat}ID.txt"), "w", encoding="utf-8") as f:
-                f.write("\n".join(blocks))
-            n += 1
-        self._open_dir(out, n, "分类的ID列表")
+        objects = {c: list(v) for c, v in self.map_data.objects.items()}
+        self.status.configure(text="正在导出ID列表 …")
+
+        def work():
+            try:
+                n = 0
+                for cat, objs in objects.items():
+                    blocks = []
+                    for o in objs:
+                        desc = next((v for l, v in o.fields if l in ("说明", "描述", "Ubertip", "提示")), "")
+                        blocks.append(f"10进制：{o.decimal}\nID：{o.obj_id}\n名字：{o.name}\n{desc}\n")
+                    with open(os.path.join(out, f"{cat}ID.txt"), "w", encoding="utf-8") as f:
+                        f.write("\n".join(blocks))
+                    n += 1
+                self.after(0, lambda: self._open_dir(out, n, "分类的ID列表"))
+            except Exception as e:
+                self.after(0, lambda: messagebox.showerror("导出失败", str(e)))
+        threading.Thread(target=work, daemon=True).start()
 
 
 def main():

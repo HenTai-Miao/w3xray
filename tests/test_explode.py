@@ -3,7 +3,20 @@
 import random
 import unittest
 
-from w3xtool.explode import _copy_match
+from w3xtool.explode import _copy_match, explode
+
+
+class TestExplodeTruncated(unittest.TestCase):
+    """损坏/截断的 PKWARE 数据应抛清晰的 ValueError，而非 IndexError 外泄。"""
+
+    def test_truncated_input_raises_valueerror(self):
+        # lit=0, dict_bits=4，之后没有更多数据 → 解码会读越界
+        with self.assertRaises(ValueError):
+            explode(b"\x00\x04")
+
+    def test_empty_input_raises_valueerror(self):
+        with self.assertRaises(ValueError):
+            explode(b"")
 
 
 def _naive(prefix: bytes, start: int, length: int) -> bytes:

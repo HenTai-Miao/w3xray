@@ -150,11 +150,3 @@ def scan_object_refs(script: str) -> dict:
     # 单位码常以小写字母开头或 u/o/h/e/n 起头；物品码多以 I/r/... 起头。
     # 不强行过滤，交给调用上下文；但剔除明显的技能码(以大写A起头且第二位小写?)较难，保持原样。
     return {"物品": items, "单位": units}
-
-
-def find_all_command_like_strings(script: str) -> list:
-    """兜底：脚本里所有像指令的字符串字面量（以 - 开头）。"""
-    out = set()
-    for m in re.finditer(r'"(-[^"\\\s]{1,20})"', script):
-        out.add(m.group(1))
-    return sorted(out)

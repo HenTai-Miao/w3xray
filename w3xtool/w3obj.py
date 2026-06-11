@@ -76,7 +76,9 @@ class _Reader:
         return b.decode("latin-1")
 
     def cstr(self) -> str:
-        end = self.d.index(b"\x00", self.p)
+        end = self.d.find(b"\x00", self.p)
+        if end < 0:                       # 缺终止符(尾部截断)：读到结尾兜底，不抛异常
+            end = len(self.d)
         s = _decode_str(self.d[self.p:end])
         self.p = end + 1
         return s
@@ -85,45 +87,72 @@ class _Reader:
         return self.p >= len(self.d)
 
 
+def _parse_one_object(r: _Reader, is_custom: bool, version: int, has_level: bool) -> W3Object:
+    """解析单个对象。出错(截断/错位/未知类型)时抛 struct.error/IndexError/ValueError，
+    由 parse_object_data 统一兜住——保留之前已成功的对象。"""
+    old_id = r.tag()
+    new_id = r.tag()
+    obj = W3Object(old_id=old_id, new_id=new_id, is_custom=is_custom)
+    # 格式 3（重制版）：oldId/newId 后是 sets 数量，再按 set 循环
+    #   每个 set = setsFlag(u32 位掩码，HD/SD 皮肤分组) + 该 set 的修改数 + 修改项
+    # 格式 1/2：没有 sets 概念，等价于单个 set（无 setsFlag）。
+    num_sets = r.u32() if version >= 3 else 1
+    for _ in range(num_sets):
+        if version >= 3:
+            r.u32()                  # setsFlag 位掩码，只读提取无需用到
+        num_mods = r.i32()
+        for _ in range(num_mods):
+            field_id = r.tag()
+            var_type = r.i32()
+            level = 0
+            if has_level:
+                level = r.i32()
+                r.i32()              # data pointer（列），忽略
+            if var_type == 0:
+                value = r.i32()
+            elif var_type in (1, 2):
+                value = r.f32()
+            elif var_type == 3:
+                value = r.cstr()
+            else:
+                raise ValueError("未知字段类型 %d @ %d" % (var_type, r.p))
+            r.u32()                  # 末尾校验（=oldId/newId），跳过
+            obj.mods.append(Modification(field_id, var_type, level, value))
+    return obj
+
+
 def parse_object_data(data: bytes, ext: str) -> list:
-    """解析一个对象数据文件，返回 W3Object 列表。"""
+    """解析一个对象数据文件，返回 W3Object 列表。
+
+    单个对象解析失败(截断/字节错位/未知字段类型/注水 count)不再拖垮整个文件：
+    保留出错之前已成功解析的对象（出错后游标已不可信，停止该文件）。
+    """
+    import sys
     has_level = ext.lower() in _LEVEL_EXTS
     r = _Reader(data)
-    version = r.i32()  # 1=RoC 2=TFT 3=1.32+/重制版（对象头改成 sets 分组）
-    objects = []
+    objects: list = []
+    try:
+        version = r.i32()  # 1=RoC 2=TFT 3=1.32+/重制版（对象头改成 sets 分组）
+    except (struct.error, IndexError):
+        return objects
     for table_idx in range(2):           # 0=原始表 1=自定义表
         is_custom = table_idx == 1
-        count = r.i32()
+        try:
+            count = r.i32()
+        except (struct.error, IndexError):
+            break
+        # 每个对象至少 ~8 字节：count 远超剩余字节即为损坏/注水，立即停止（防超大循环）。
+        if count < 0 or count > len(r.d) - r.p:
+            print("[w3obj] %s 对象数 %d 不合理（剩余 %d 字节），判为损坏"
+                  % (ext, count, len(r.d) - r.p), file=sys.stderr)
+            break
         for _ in range(count):
-            old_id = r.tag()
-            new_id = r.tag()
-            obj = W3Object(old_id=old_id, new_id=new_id, is_custom=is_custom)
-            # 格式 3（重制版）：oldId/newId 后是 sets 数量，再按 set 循环
-            #   每个 set = setsFlag(u32 位掩码，HD/SD 皮肤分组) + 该 set 的修改数 + 修改项
-            # 格式 1/2：没有 sets 概念，等价于单个 set（无 setsFlag）。
-            num_sets = r.u32() if version >= 3 else 1
-            for _ in range(num_sets):
-                if version >= 3:
-                    r.u32()              # setsFlag 位掩码，只读提取无需用到
-                num_mods = r.i32()
-                for _ in range(num_mods):
-                    field_id = r.tag()
-                    var_type = r.i32()
-                    level = 0
-                    if has_level:
-                        level = r.i32()
-                        r.i32()          # data pointer（列），忽略
-                    if var_type == 0:
-                        value = r.i32()
-                    elif var_type in (1, 2):
-                        value = r.f32()
-                    elif var_type == 3:
-                        value = r.cstr()
-                    else:
-                        raise ValueError("未知字段类型 %d @ %d" % (var_type, r.p))
-                    r.u32()              # 末尾校验（=oldId/newId），跳过
-                    obj.mods.append(Modification(field_id, var_type, level, value))
+            start_p = r.p
+            try:
+                obj = _parse_one_object(r, is_custom, version, has_level)
+            except (struct.error, IndexError, ValueError):
+                print("[w3obj] %s 解析在偏移 %d 处中断，保留前 %d 个对象"
+                      % (ext, start_p, len(objects)), file=sys.stderr)
+                return objects
             objects.append(obj)
-    # 注：部分工具保存的文件末尾有几字节尾巴，对象已按声明数量读全，
-    # 故不再因剩余字节抛错（只要每个对象都成功解析即视为有效）。
     return objects

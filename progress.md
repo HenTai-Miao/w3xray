@@ -194,3 +194,29 @@
   - 跳过：GUI 去抖（改 UX 且 compile 已解决根因）、配方字体测量缓存（增益小）。
 - **单实例**：`single_instance.py`，再次启动先终止上个实例再接管（临时目录锁文件记 pid+OS 映像，对 pid 复用校验防误杀；`os.kill`+`ctypes` 查询/终止，全程 best-effort 不阻塞启动）。`main.py` GUI 分支调用。`_decide` 纯逻辑单测 + 真实子进程接管冒烟验证通过。
 - 全套 **136 通过, 1 skipped**；onedir 重新打包。
+
+### 会话 9：superpowers 全项目审计 + 修复 P0~P4（~30 项）+ GUI 横向滚动
+用 superpowers 派 5 个并行 agent 按模块域审计全项目，交叉核对去重后分级，**逐项 TDD（先写复现测试→看它失败→再修→跑全套）**修复。全程未改动可正常提取的真实战役回归基线（`206774.w3n` 821/313/700/61/16/79/54 始终不变）。
+
+- **P0 安全**
+  - **BLP 解压炸弹**（`blp.py`）：`width*height` 加 `_MAX_DIM=4096` 硬上限。修前一个 100 多字节的恶意 BLP 能让 `bytearray(n*4)` 真分配 ~17GB（本机实测 17s 才返回 65535² 图）；并对短数据加 `struct.unpack_from` 前的长度校验，越界返回 None。测试 `test_blp.py::TestBlpMaliciousInput`。
+  - **MPQ 越界**（`mpq.py`/`explode.py`）：新增 `_parse_sector_offsets` 校验扇区偏移单调+在数据内（修前逆序/越界偏移切片成空段→静默产出错误数据）；`_read_block` 校验 block 起点在文件内；`_validate_header` 加 `sector_size_shift<=20`；explode 输入耗尽的 `IndexError` 统一转清晰 `ValueError`；IMPLODE 路径补 `max_output` 封顶。测试 `test_mpq_robust.py`、`test_explode.py::TestExplodeTruncated`。
+- **P1 正确性**
+  - **搜索深嵌套丢查询**（`search.py`）：深嵌套括号超旧 `_MAX_DEPTH=100` 时静默吞 `(` 不配对 `)`，导致组后的 `&& 条件` 被整段丢弃（过滤失效）。把递归下降 `_Parser` 整体重写为**迭代调度场算法 `_parse`**（显式操作数/运算符栈 + 同类节点扁平化），任意深嵌套不爆栈、不丢内容，`_eval` 长链不深递归；删 `_like_score` 已证不可达的死分支。测试加深嵌套首/尾条件保留 2 例，全 43 例过。
+  - **wts 行首 `}` 截断**（`wts.py`）：正文里 `} else {` 这类 JASS 片段会被当闭合括号提前截断 → `_CLOSE` 改为要求**独占一行的 `}`**（`^\}[ \t]*$`）。
+  - **w3obj 逐对象容错**（`w3obj.py`）：抽 `_parse_one_object`，单对象失败（截断/错位/未知类型）只停该文件并保留已成功对象（修前整文件丢弃，尾部一坏整类对象消失）；`cstr` 缺终止符回退 EOF；count 超剩余字节即判损坏（防注水大循环）。
+  - **slk F 记录**（`slk.py`）：F 定位记录原来被读了又丢，依赖 F 定位的合法 SLK 会错位 → F 也更新光标、K 只对 C 生效。新增 `test_slk.py`。
+  - **GUI `_refresh_cmds`** 补 else，无指令时更新提示（不再残留上张图统计）。
+- **P2 资源/内存泄漏**
+  - `MPQArchive` 加 `close()`/上下文管理器（关句柄/mmap、删大图独占临时副本）；`api.py` 的 `load_map`/`export_all_files`/`scan_commands`/`scan_recipes` 全部 try-finally/with 收口。
+  - **战役临时子图文件**：修前用固定名写 `%TEMP%` 且**从不删除**（清掉了 38 个历史残留）→ 改 `tempfile.mkstemp` 唯一名、读入内存后 finally 删除；防同名碰撞。
+  - **战役 `.w3n` 不再进进程级游戏 MPQ 缓存**（`icons.py`）：`extra_paths` 改独立 `MPQArchive` 随 `IconResolver` 生命周期，新增 `IconResolver.close()`（修前每开一个战役就永久缓存一个档→内存泄漏）。
+- **P3 性能（GUI）**
+  - 三个搜索框逐键触发改**去抖 `_schedule`**（大图不再每键重建卡死）。
+  - 导出脚本/ID 移**后台线程 + 异常处理**（修前主线程写盘且无 try）。
+  - 切图/退出时 `close()` 旧 `IconResolver`；战役加载失败给弹窗+状态复位。
+- **P4 清理**
+  - `textobj` 导入 `except Exception`→`except ImportError`（语法错不再被静默吞）；`icons._load` 不再吞 `MemoryError`；删死代码 `_view_md`/`_col_select_all`/`on_export_selected`/`find_all_command_like_strings`；清掉删 AI 层后残留的 `w3xtool/aicli/` 空壳与 `tests/__pycache__/*aicli*`。
+- **新需求：每个框加横向滚动**（用户反馈地图列表名字看不全）：地图列表、物品/单位/技能/科技四列、隐藏指令表都加横向滚动条 + 列宽随最长内容自适应（`_autosize_tree`，stretch=False 才有可滚区间）。合成配方表本就有。实测物品列 80→289px。测试 `test_gui_scroll.py`。
+- **暂缓**（见记忆 `w3xray-audit-deferred`）：① huffman 0x101 疑似重复加权——需真实 Huffman 样本往返验证，盲改有风险；② single_instance 改完整路径比较 + kill 前 TOCTOU 复核（低概率本地攻击，不在本次范围）。
+- 测试 **136→165 通过, 1 skipped**（+29 例）；onedir 重新打包。

@@ -28,6 +28,30 @@ def _build_blp2_palette(width, height, palette_bgra, indices, alpha=None):
     return bytes(buf)
 
 
+class TestBlpMaliciousInput(unittest.TestCase):
+    """BLP 来自不可信地图：畸形头不应 OOM 或抛异常，应安全返回 None。"""
+
+    def test_huge_dimensions_do_not_oom(self):
+        # width*height ≈ 42 亿，旧码 bytearray(n*4) 会尝试分配 ~17GB
+        data = _build_blp2_palette(1, 1, [(0, 0, 0, 255)], [0])
+        data = bytearray(data)
+        struct.pack_into("<II", data, 12, 0xFFFF, 0xFFFF)  # 篡改成巨大尺寸
+        self.assertIsNone(decode_blp(bytes(data)))
+
+    def test_truncated_blp1_header_returns_none(self):
+        # 以 BLP1 开头但头部不完整：旧码 struct.unpack_from 会抛 struct.error
+        self.assertIsNone(decode_blp(b"BLP1"))
+        self.assertIsNone(decode_blp(b"BLP1" + b"\x00" * 20))
+
+    def test_truncated_blp2_header_returns_none(self):
+        self.assertIsNone(decode_blp(b"BLP2"))
+        self.assertIsNone(decode_blp(b"BLP2" + b"\x00" * 20))
+
+    def test_short_data_returns_none(self):
+        self.assertIsNone(decode_blp(b""))
+        self.assertIsNone(decode_blp(b"BL"))
+
+
 class TestBlp2Palette(unittest.TestCase):
     def test_palette_indices_map_to_rgba(self):
         pal = [(10, 20, 30, 255), (40, 50, 60, 255), (70, 80, 90, 255), (100, 110, 120, 255)]

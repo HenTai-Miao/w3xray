@@ -141,6 +141,30 @@ def _sparse_decompress(data: bytes, max_output: int | None = None) -> bytes:
     return bytes(out)
 
 
+def _parse_sector_offsets(raw: bytes, count: int, key) -> list:
+    """从扇区数据头部解析并校验 count 个 uint32 扇区偏移。
+
+    raw 为该 block 读入内存的(压缩)数据，偏移表在最前面 count*4 字节。
+    key 不为 None 时先按该密钥解密偏移表。
+
+    偏移必须单调不减、且全部落在 raw 之内——否则该文件已损坏/被篡改：
+    旧实现直接对越界/逆序偏移做切片会得到空段并被静默接受，产出错误数据。
+    这里改为抛出清晰 ValueError，杜绝静默错误结果。
+    """
+    need = count * 4
+    off_raw = raw[:need]
+    if len(off_raw) < need:
+        raise ValueError("扇区偏移表损坏：偏移表被截断")
+    if key is not None:
+        off_raw = _decrypt(off_raw, key)
+    offsets = list(struct.unpack("<%dI" % count, off_raw))
+    raw_len = len(raw)
+    for i in range(count - 1):
+        if offsets[i] > offsets[i + 1] or offsets[i + 1] > raw_len:
+            raise ValueError("扇区偏移表损坏：偏移非单调或越界")
+    return offsets
+
+
 @dataclass
 class _Block:
     file_pos: int
@@ -175,6 +199,41 @@ class MPQArchive:
         self._parse_header()
         self._read_tables()
         self._names = None
+
+    # ---- 资源释放：关闭文件句柄/mmap、删除大图独占时的临时副本 ----
+    def close(self):
+        """释放底层文件句柄与 mmap，并删除复制出来的临时副本。可重复调用。
+
+        大图用 mmap 会一直持有文件句柄(Windows 上锁住源文件)；独占大图还会留下
+        临时副本 self._tmp。不显式关闭就只能等 GC，期间句柄/磁盘不释放。
+        """
+        import mmap as _mmap
+        data = getattr(self, "_data", None)
+        if isinstance(data, _mmap.mmap):
+            try:
+                data.close()
+            except (BufferError, OSError, ValueError):
+                pass
+        self._data = b""
+        if self._file is not None:
+            try:
+                self._file.close()
+            except OSError:
+                pass
+            self._file = None
+        if self._tmp:
+            try:
+                import os
+                os.remove(self._tmp)
+            except OSError:
+                pass
+            self._tmp = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
 
     def _open(self, path: str):
         import os
@@ -229,6 +288,10 @@ class MPQArchive:
         block 表起点在文件内，越界的尾部交给 _read_tables 自然截断（avail = 实际字节//16）。
         """
         n = len(self._data)
+        # 扇区位移上限：真实地图恒为 3(4KB 扇区)左右。位移过大会让 512<<shift 溢出成
+        # 天文数字、行为怪异；过大值也是诱饵头特征，一并拒绝。
+        if self.sector_size_shift > 20:
+            raise ValueError("MPQ 扇区大小非法：shift=%d" % self.sector_size_shift)
         if self.hash_count <= 0 or (self.hash_count & (self.hash_count - 1)) != 0:
             raise ValueError("MPQ hash 表大小非法（应为 2 的幂）：%d" % self.hash_count)
         if self.block_count < 0:
@@ -308,6 +371,10 @@ class MPQArchive:
     def _read_block(self, block: _Block, name: str) -> bytes:
         data = self._data
         start = self.archive_offset + block.file_pos
+        if start < 0 or start > len(data):
+            # block 指向文件外（损坏/被剥离的保护图）——视为文件不存在，
+            # 而非静默返回空字节。
+            raise KeyError(name)
         raw = data[start:start + block.comp_size]
         flags = block.flags
 
@@ -349,10 +416,8 @@ class MPQArchive:
         count = num_sectors + 1
         if flags & FLAG_SECTOR_CRC:
             count += 1
-        off_raw = raw[:count * 4]
-        if key is not None:
-            off_raw = _decrypt(off_raw, (key - 1) & 0xFFFFFFFF)
-        offsets = list(struct.unpack("<%dI" % count, off_raw))
+        off_key = (key - 1) & 0xFFFFFFFF if key is not None else None
+        offsets = _parse_sector_offsets(raw, count, off_key)
 
         out = bytearray()
         for i in range(num_sectors):
@@ -365,7 +430,7 @@ class MPQArchive:
             this_size = min(sector_size, block.file_size - i * sector_size)
             if compressed and len(sdata) < this_size:
                 if flags & FLAG_IMPLODE and not (flags & FLAG_COMPRESS):
-                    sdata = explode(sdata)
+                    sdata = explode(sdata, max_output=this_size)
                 else:
                     sdata = _decompress_sector(sdata, this_size)
             out.extend(sdata)
@@ -373,7 +438,7 @@ class MPQArchive:
 
     def _decomp(self, buf: bytes, out_size: int, flags: int) -> bytes:
         if flags & FLAG_IMPLODE and not (flags & FLAG_COMPRESS):
-            return explode(buf)
+            return explode(buf, max_output=out_size)
         return _decompress_sector(buf, out_size)
 
     # ---- 按块直接解压（无需文件名，跳过加密块）----
@@ -406,12 +471,12 @@ class MPQArchive:
             count = num_sectors + 1
             if flags & FLAG_SECTOR_CRC:
                 count += 1
-            offsets = list(struct.unpack_from("<%dI" % count, raw, 0))
+            offsets = _parse_sector_offsets(raw, count, None)
             sdata = raw[offsets[0]:offsets[1]]
             this_size = min(ss, block.file_size)
             if compressed and len(sdata) < this_size:
                 if flags & FLAG_IMPLODE and not (flags & FLAG_COMPRESS):
-                    sdata = explode(sdata)
+                    sdata = explode(sdata, max_output=this_size)
                 else:
                     sdata = _decompress_sector(sdata, this_size)
             return sdata[:n]

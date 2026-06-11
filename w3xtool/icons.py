@@ -47,16 +47,39 @@ class IconResolver:
             self.map = MPQArchive(map_path)
         except Exception:
             self.map = None
-        # 额外档（如战役 .w3n 顶层，子图图标常放那里）；用进程级缓存避免反复打开
+        # 额外档（如战役 .w3n 顶层，子图图标常放那里）。**不**进进程级游戏缓存：
+        # 那是给固定几个 war3*.mpq 大档用的；战役档各不相同，进了缓存就永不释放(内存泄漏)。
+        # 这些随本 resolver 生命周期，close() 时一并关闭。
         self.extra = []
         for p in (extra_paths or []):
             try:
-                self.extra.append(_open_game_mpq(p))
+                self.extra.append(MPQArchive(p))
             except Exception:
                 pass
         self.game_dir = find_game_dir(map_path)
         self._game = None
         self._cache = {}     # path.lower() -> PIL.Image | None
+
+    def close(self):
+        """释放本 resolver 独占的档(地图档 + 战役额外档)。可重复调用。
+
+        游戏大档(self._game)是进程级共享缓存，不在此关闭。
+        """
+        for arch in [self.map] + self.extra:
+            if arch is not None:
+                try:
+                    arch.close()
+                except Exception:
+                    pass
+        self.map = None
+        self.extra = []
+        self._cache = {}
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
 
     def _games(self):
         if self._game is None:
@@ -100,6 +123,8 @@ class IconResolver:
                         img = decode_blp(data)
                         if img is not None:
                             return img
+                except MemoryError:
+                    raise                 # 内存耗尽不可吞：暴露出来而非伪装成"无图标"
                 except Exception:
                     continue
         return None

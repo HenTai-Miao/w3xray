@@ -11,7 +11,9 @@ from __future__ import annotations
 import re
 
 _HEADER = re.compile(rb"STRING\s+(\d+)", re.IGNORECASE)
-_CLOSE = re.compile(rb"(?m)^\}")          # 闭合括号锚定行首（避免误伤 GBK 尾字节 0x7D）
+# 闭合括号必须**独占一行**(行首 } + 仅尾随空白)：既避免误伤 GBK 尾字节 0x7D，
+# 也避免把正文里以 } 开头但有后续内容的行(如 JASS "} else {")当成闭合而提前截断。
+_CLOSE = re.compile(rb"(?m)^\}[ \t]*$")
 
 
 def _decode_str(b: bytes) -> str:

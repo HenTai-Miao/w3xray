@@ -313,6 +313,14 @@ def _add_binary_objects(md: "MapData", archive: MPQArchive, wts: dict,
 def load_map(path: str, _depth: int = 0, shared_index: dict | None = None) -> MapData:
     path = os.fspath(path)
     archive = MPQArchive(path)
+    try:
+        return _load_map_impl(archive, path, _depth, shared_index)
+    finally:
+        archive.close()                      # 释放句柄/mmap/临时副本，别等 GC
+
+
+def _load_map_impl(archive: MPQArchive, path: str, _depth: int,
+                   shared_index: dict | None) -> MapData:
     wts = {}
     if archive.has_file("war3map.wts"):
         try:
@@ -366,17 +374,26 @@ def load_map(path: str, _depth: int = 0, shared_index: dict | None = None) -> Ma
     # 战役 .w3n：递归解析内含的 .w3x（防止无限递归）
     if _depth == 0 and path.lower().endswith(".w3n"):
         for inner in _campaign_inner_maps(archive):
+            tmp = None
             try:
                 data = archive.read_file(inner)
-                tmp = os.path.join(os.environ.get("TEMP", "."), "_w3n_" + os.path.basename(inner))
-                with open(tmp, "wb") as f:
+                # 唯一临时名(防同名子图互相覆盖)，统一放系统临时目录；用完即删。
+                fd, tmp = tempfile.mkstemp(suffix=".w3x", prefix="_w3n_")
+                with os.fdopen(fd, "wb") as f:
                     f.write(data)
                 # 把战役共享对象索引传给子地图，让它的脚本引用能取到真名
                 sub = load_map(tmp, _depth + 1, shared_index=md.obj_index)
                 sub.name = inner
+                sub.path = inner             # 临时文件即将删除，path 改用逻辑名(子图不可再 open)
                 md.sub_maps.append(sub)
             except Exception:
                 pass
+            finally:
+                if tmp:                      # 子图内容已读入内存，删掉临时副本
+                    try:
+                        os.remove(tmp)
+                    except OSError:
+                        pass
 
     return md
 
@@ -437,14 +454,16 @@ def recipes_from_map(md: "MapData") -> list:
 def scan_commands(path: str) -> list:
     """扫描地图脚本里的隐藏聊天指令（独立入口，会自行打开 MPQ）。"""
     from .script_scan import scan_chat_commands
-    txt = _read_script(MPQArchive(path))
+    with MPQArchive(path) as archive:
+        txt = _read_script(archive)
     return scan_chat_commands(txt) if txt else []
 
 
 def scan_recipes(path: str) -> list:
     """识别地图脚本里的物品合成配方（独立入口，会自行打开 MPQ）。"""
     from .script_scan import scan_recipes as _sr
-    txt = _read_script(MPQArchive(path))
+    with MPQArchive(path) as archive:
+        txt = _read_script(archive)
     return _sr(txt) if txt else []
 
 
@@ -484,6 +503,13 @@ def export_all_files(path: str, out_dir: str | None = None, _depth: int = 0) -> 
     返回实际导出的目录路径。
     """
     archive = MPQArchive(path)
+    try:
+        return _export_all_impl(archive, out_dir, _depth)
+    finally:
+        archive.close()
+
+
+def _export_all_impl(archive: MPQArchive, out_dir: str | None, _depth: int) -> str:
     if out_dir is None:
         out_dir = tmp_extract_dir(_map_name(archive))
     os.makedirs(out_dir, exist_ok=True)

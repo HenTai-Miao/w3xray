@@ -78,8 +78,6 @@ def _like_score(segs, anchored_start: bool, anchored_end: bool, text: str):
         if i == 0:
             first_idx = idx
         pos = idx + len(seg)
-    if anchored_end and pos != len(text):       # 单段同时首尾锚定（全等）兜底
-        return None
     return 1000 - first_idx
 
 
@@ -156,89 +154,84 @@ def _lex(query: str):
     return toks
 
 
-# ---- 递归下降：or := and ('||' and)* ; and := atom ('&&'? atom)* ; atom := '(' or ')' | leaf ----
-# AND/OR 节点用**扁平 n 元**列表 ('and', [kids]) / ('or', [kids])，而非左偏二叉树，
-# 这样 _eval 对超长 `a && a && …` 链只迭代不递归（递归深度仅随括号嵌套增长）。
-# 括号嵌套设上限 _MAX_DEPTH：超限即忽略多余括号，保证递归深度有界（防 RecursionError）。
-class _Parser:
-    _MAX_DEPTH = 100
+# ---- 解析：调度场(shunting-yard)算法，纯迭代、用显式栈，无递归 ----
+# 文法：or := and ('||' and)* ; and := atom ('&&'? atom)* ; atom := '(' or ')' | leaf
+# 运算符优先级 && > ||；相邻操作数缺运算符按隐式 &&。
+#
+# 为何不用递归下降：括号每嵌一层就多一层 Python 调用栈，深嵌套(如 20000 层)会
+# RecursionError。旧实现靠 _MAX_DEPTH 截断递归，但截断时把多出的 '(' 静默吞掉、
+# 不配对 ')'，导致后续 token 错位、把深嵌套组之后的查询条件整段丢弃（过滤失效）。
+# 改用调度场：解析完全迭代，任意深嵌套都不爆栈，也绝不丢内容。
+#
+# AND/OR 节点用**扁平 n 元**列表 ('and', [kids]) / ('or', [kids])：合并(apply_op)时
+# 把同种运算符的子节点摊平，使 `a&&a&&…`、`((…))` 等结合性链路只产生一个扁平节点，
+# _eval 对其只迭代不深递归。
+_PREC = {"and": 2, "or": 1}
 
-    def __init__(self, toks):
-        self.toks = toks
-        self.i = 0
-        self.depth = 0
 
-    def _peek(self):
-        return self.toks[self.i] if self.i < len(self.toks) else None
+def _parse(toks):
+    out = []          # 操作数(AST 节点)栈
+    ops = []          # 运算符栈：'and' / 'or' / 'lp'
+    group_base = []   # 每遇 '(' 记录当时 out 的长度，用于判断该组是否产出了操作数
+    prev_value = False  # 上一个 token 是否产出了一个值(操作数或非空分组)
 
-    def _next(self):
-        t = self.toks[self.i]
-        self.i += 1
-        return t
+    def apply_op():
+        op = ops.pop()
+        if len(out) < 2:                # 游离运算符(操作数不足)→ 丢弃，保留已有操作数
+            return
+        r = out.pop()
+        l = out.pop()
+        kids = list(l[1]) if isinstance(l, tuple) and l[0] == op else [l]
+        kids += list(r[1]) if isinstance(r, tuple) and r[0] == op else [r]
+        out.append((op, kids))
 
-    @staticmethod
-    def _wrap(tag, kids):
-        if not kids:
-            return None
-        if len(kids) == 1:
-            return kids[0]
-        return (tag, kids)
+    def push_op(op):                    # 左结合：弹出栈顶同/更高优先级运算符
+        while ops and ops[-1] != "lp" and _PREC[ops[-1]] >= _PREC[op]:
+            apply_op()
+        ops.append(op)
 
-    def parse_or(self):
-        kids = []
-        first = self.parse_and()
-        if first is not None:
-            kids.append(first)
-        while True:
-            t = self._peek()
-            if t is None or t[0] != "or":
-                break
-            self._next()
-            nxt = self.parse_and()
-            if nxt is not None:
-                kids.append(nxt)
-        return self._wrap("or", kids)
+    for t in toks:
+        k = t[0]
+        if k in ("like", "eq"):
+            if prev_value:              # 相邻操作数 → 隐式 &&
+                push_op("and")
+            out.append(t)
+            prev_value = True
+        elif k in ("and", "or"):
+            if not prev_value:          # 缺左操作数的游离运算符 → 跳过
+                continue
+            push_op(k)
+            prev_value = False
+        elif k == "lp":
+            if prev_value:              # 分组前的相邻操作数 → 隐式 &&
+                push_op("and")
+            ops.append("lp")
+            group_base.append(len(out))
+            prev_value = False
+        elif k == "rp":
+            if not group_base:          # 多余的 ')' → 忽略
+                continue
+            while ops and ops[-1] != "lp":
+                apply_op()
+            if ops and ops[-1] == "lp":
+                ops.pop()
+            base = group_base.pop()
+            prev_value = len(out) > base   # 分组产出了操作数才算一个值
 
-    def parse_and(self):
-        kids = []
-        first = self.parse_atom()
-        if first is not None:
-            kids.append(first)
-        while True:
-            t = self._peek()
-            if t is None or t[0] in ("or", "rp"):
-                break
-            if t[0] == "and":               # 显式 &&；否则相邻词缺运算符 → 隐式 &&
-                self._next()
-            before = self.i
-            nxt = self.parse_atom()
-            if nxt is not None:
-                kids.append(nxt)
-            elif self.i == before:          # 无进展（已到 rp/末尾）→ 收尾，防死循环/越界
-                break
-        return self._wrap("and", kids)
+    while ops:                          # 收尾：弹出剩余运算符，丢弃未配对的 '('
+        if ops[-1] == "lp":
+            ops.pop()
+            if group_base:
+                group_base.pop()
+        else:
+            apply_op()
 
-    def parse_atom(self):
-        # 迭代跳过游离运算符（不递归），避免长运算符链撑爆栈
-        while True:
-            t = self._peek()
-            if t is None or t[0] == "rp":
-                return None
-            if t[0] == "lp":
-                self._next()
-                if self.depth >= self._MAX_DEPTH:
-                    continue                # 嵌套超限：忽略此括号，继续在当前层扫描
-                self.depth += 1
-                node = self.parse_or()
-                self.depth -= 1
-                nxt = self._peek()
-                if nxt and nxt[0] == "rp":
-                    self._next()
-                return node
-            if t[0] in ("like", "eq"):
-                self._next()
-                return t
-            self._next()                    # 游离的 && / ||：跳过，循环继续
+    if not out:
+        return None
+    node = out[0]
+    for extra in out[1:]:               # 防御：多余残留操作数用 && 兜合(正常不会发生)
+        node = ("and", [node, extra])
+    return node
 
 
 def _eval(node, text: str, text_lower: str):
@@ -294,7 +287,7 @@ def compile_query(query: str) -> CompiledQuery:
     toks = _lex(query)
     if not toks:
         return CompiledQuery(None, True)
-    node = _Parser(toks).parse_or()
+    node = _parse(toks)
     if node is None:
         return CompiledQuery(None, True)
     return CompiledQuery(node, False)

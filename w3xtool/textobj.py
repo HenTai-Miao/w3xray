@@ -20,7 +20,7 @@ _SECTION_HEAD = re.compile(rb"^\[[A-Za-z0-9]{3,4}\]")
 _WESTRING = re.compile(r"WESTRING_[A-Za-z0-9_]+")
 try:
     from .westrings import WESTRINGS
-except Exception:
+except ImportError:        # 仅当数据文件缺失时兜底；语法/导入错误等真实 bug 不再被静默吞掉
     WESTRINGS = {}
 
 

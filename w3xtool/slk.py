@@ -17,8 +17,11 @@ def parse_slk(text: str) -> dict:
         if not line or line[0] not in "CF":
             continue
         rec = line.split(";")
-        if rec[0] != "C":
+        kind = rec[0]
+        if kind not in ("C", "F"):
             continue
+        # C 与 F 记录都可携带 X/Y 来移动光标；F 仅移动光标(不带值)，
+        # 随后省略 X/Y 的 C 记录沿用该位置。只有 C 记录的 K 才是单元格的值。
         val = None
         for f in rec[1:]:
             if not f:
@@ -34,9 +37,9 @@ def parse_slk(text: str) -> dict:
                     cur_y = int(rest)
                 except ValueError:
                     pass
-            elif t == "K":
+            elif t == "K" and kind == "C":
                 val = rest
-        if val is None:
+        if kind != "C" or val is None:
             continue
         if val.startswith('"') and val.endswith('"'):
             val = val[1:-1]

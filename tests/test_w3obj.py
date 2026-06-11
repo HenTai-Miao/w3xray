@@ -77,10 +77,25 @@ class TestParseObjectData(unittest.TestCase):
         self.assertEqual(m.level, 2)
         self.assertAlmostEqual(m.value, 5.0, places=4)
 
-    def test_unknown_var_type_raises(self):
+    def test_unknown_var_type_stops_gracefully(self):
+        # 未知字段类型(此后游标已错位)→ 该对象中断，保留之前成功的对象，
+        # 不再抛异常拖垮整个文件。此处只有这个坏对象 → 返回空。
         bad = [_obj("hpea", "hpea", [_mod("unam", 99, 0)])]
-        with self.assertRaises(ValueError):
-            parse_object_data(_build(bad, []), "w3u")
+        self.assertEqual(parse_object_data(_build(bad, []), "w3u"), [])
+
+    def test_partial_recovery_keeps_objects_before_corruption(self):
+        # 一个好对象 + 一个坏对象(未知类型)。坏对象之前的应保留，而非整文件丢弃。
+        good = _obj("hpea", "hpea", [_mod("unam", 3, "Peasant")])
+        bad = _obj("hfoo", "hfoo", [_mod("unam", 99, 0)])
+        objs = parse_object_data(_build([good, bad], []), "w3u")   # count=2
+        self.assertEqual(len(objs), 1)
+        self.assertEqual(objs[0].old_id, "hpea")
+        self.assertEqual(objs[0].mods[0].value, "Peasant")
+
+    def test_absurd_count_does_not_hang(self):
+        # 注水的超大 count(远超剩余字节)应立即判损坏，而非进入数十亿次循环
+        data = struct.pack("<iii", 2, 0x7FFFFFFF, 0)   # version, 原始表 count=21亿, 自定义表空
+        self.assertEqual(parse_object_data(data, "w3u"), [])
 
     def test_gbk_string_value_decoded(self):
         # 老地图(1.20~1.27)的字符串可能是 GBK 编码；UTF-8 解会乱码 → 应回退 GBK

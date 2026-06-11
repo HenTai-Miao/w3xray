@@ -39,6 +39,15 @@ class TestParseWts(unittest.TestCase):
         table = parse_wts(data)
         self.assertEqual(table[9], "前" + gbk_char + "后")   # 完整，未被 0x7D 截断
 
+    def test_body_line_starting_with_brace_not_truncated(self):
+        # 正文里有以 } 开头但非独占一行的行(如 JASS 片段 "} else {")，
+        # 不应被当成闭合括号提前截断；真正的闭合是独占一行的 }。
+        body = "if x then\n} else {\nreturn\n}}end"
+        data = ("STRING 5\n{\n" + body + "\n}\nSTRING 6\n{\nnext\n}\n").encode("utf-8")
+        table = parse_wts(data)
+        self.assertEqual(table[5], body)
+        self.assertEqual(table[6], "next")
+
     def test_resolve_uses_table(self):
         table = {111: "圣水"}
         self.assertEqual(resolve("TRIGSTR_111", table), "圣水")

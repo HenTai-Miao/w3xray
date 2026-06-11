@@ -132,6 +132,17 @@ class TestParens(unittest.TestCase):
         self.assertIsNotNone(fuzzy_score(q, "装备 奥术法杖"))
         self.assertIsNone(fuzzy_score(q, "装备 普通法杖"))      # 法杖但非奥术,也无剑
 
+    def test_deep_nested_group_keeps_trailing_condition(self):
+        # 深嵌套括号(超过旧 _MAX_DEPTH=100)后的 && 条件不该被静默丢弃
+        q = "(" * 200 + "%a%" + ")" * 200 + " && %c%"
+        self.assertIsNone(fuzzy_score(q, "a"))        # 缺 c → && %c% 生效则 miss
+        self.assertIsNotNone(fuzzy_score(q, "a c"))   # a 与 c 都在 → 命中
+
+    def test_deep_nested_group_keeps_leading_condition(self):
+        q = "%c% && " + "(" * 200 + "%a%" + ")" * 200
+        self.assertIsNone(fuzzy_score(q, "a"))
+        self.assertIsNotNone(fuzzy_score(q, "a c"))
+
 
 class TestEscape(unittest.TestCase):
     def test_escaped_percent_is_literal(self):
