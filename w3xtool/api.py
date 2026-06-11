@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import tempfile
 from dataclasses import dataclass, field
 
@@ -489,10 +490,17 @@ def _safe_export_path(out_dir: str, name: str):
     return dest
 
 
-def tmp_extract_dir(name: str, *sub: str) -> str:
-    """提取产物的临时目录：%TEMP%/w3xtool提取/<安全名>/...（提取的都是临时文件）。"""
+def tmp_extract_dir(name: str, *sub: str, clean: bool = False) -> str:
+    """提取产物的临时目录：%TEMP%/w3xtool提取/<安全名>/...（提取的都是临时文件）。
+
+    clean=True 先清空该目录再重建：不同地图经文件名清洗后可能撞同一个 safe_name
+    （如都叫"(unknown)"或重名），不清就会把上一张图的残留文件混进这次导出，
+    导致打开的文件夹里有别的图的东西、且"已导出 N 个"计数把残留也算进去。
+    """
     safe_name = "".join(c if c not in '\\/:*?"<>|' else "_" for c in (name or "map")).strip() or "map"
     root = os.path.join(tempfile.gettempdir(), "w3xtool提取", safe_name, *sub)
+    if clean and os.path.isdir(root):
+        shutil.rmtree(root, ignore_errors=True)
     os.makedirs(root, exist_ok=True)
     return root
 
@@ -511,7 +519,7 @@ def export_all_files(path: str, out_dir: str | None = None, _depth: int = 0) -> 
 
 def _export_all_impl(archive: MPQArchive, out_dir: str | None, _depth: int) -> str:
     if out_dir is None:
-        out_dir = tmp_extract_dir(_map_name(archive))
+        out_dir = tmp_extract_dir(_map_name(archive), clean=True)   # 顶层导出先清空，避免混入同名图残留
     os.makedirs(out_dir, exist_ok=True)
     names = set(archive.list_files())
     # 补充已知关键文件（listfile 常不全）

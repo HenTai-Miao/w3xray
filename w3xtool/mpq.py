@@ -101,21 +101,29 @@ def _decompress_sector(data: bytes, out_size: int) -> bytes:
     limit = max(0, out_size)
     mask = data[0]
     payload = data[1:]
-    # 可能是多种压缩叠加，按约定顺序处理（实际魔兽地图基本单一压缩）
-    if mask & COMP_BZIP2:
-        payload = bz2.BZ2Decompressor().decompress(payload, max_length=limit)
-    elif mask & COMP_PKWARE:
-        payload = explode(payload, max_output=limit)
-    elif mask & COMP_ZLIB:
-        payload = zlib.decompressobj().decompress(payload, limit)
-    elif mask & COMP_SPARSE:
-        payload = _sparse_decompress(payload, max_output=limit)
-    elif mask & COMP_HUFFMAN:
-        payload = huff_decompress(payload, limit)
-    elif mask == 0:
-        pass
-    else:
-        raise ValueError("不支持的压缩掩码 0x%02X" % mask)
+    # 可能是多种压缩叠加，按约定顺序处理（实际魔兽地图基本单一压缩）。
+    # 损坏/被篡改的压缩流会让底层编解码器抛 zlib.error / OSError(bz2) 等五花八门
+    # 的异常；统一收敛成 ValueError，使 read_file 的失败契约单一可预期（与 explode、
+    # 不支持掩码两个分支一致），调用方只需 catch 一种。
+    try:
+        if mask & COMP_BZIP2:
+            payload = bz2.BZ2Decompressor().decompress(payload, max_length=limit)
+        elif mask & COMP_PKWARE:
+            payload = explode(payload, max_output=limit)
+        elif mask & COMP_ZLIB:
+            payload = zlib.decompressobj().decompress(payload, limit)
+        elif mask & COMP_SPARSE:
+            payload = _sparse_decompress(payload, max_output=limit)
+        elif mask & COMP_HUFFMAN:
+            payload = huff_decompress(payload, limit)
+        elif mask == 0:
+            pass
+        else:
+            raise ValueError("不支持的压缩掩码 0x%02X" % mask)
+    except ValueError:
+        raise
+    except Exception as e:               # zlib.error / OSError(bz2) / 编解码器内部异常
+        raise ValueError("扇区解压失败(掩码 0x%02X): %s" % (mask, e)) from e
     return payload
 
 

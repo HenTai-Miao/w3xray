@@ -235,29 +235,44 @@ def _parse(toks):
 
 
 def _eval(node, text: str, text_lower: str):
+    # 纯迭代：后序遍历 + id->分值缓存。AST 已扁平为 n 元 and/or，深度只来自
+    # &&/|| 交替嵌套；这里同样不用递归，与 _parse 一致，任意深嵌套都不爆栈
+    # （_eval 曾是递归，约 1000 层交替括号即 RecursionError，违背本模块设计承诺）。
     if node is None:
         return 0
-    tag = node[0]
-    if tag == "like":
-        return _like_score(node[1], node[2], node[3], text_lower)
-    if tag == "eq":
-        return _eq_score(node[1], text)                # 区分大小写：用原文
-    if tag == "and":
-        total = 0
-        for child in node[1]:
-            s = _eval(child, text, text_lower)
-            if s is None:
-                return None
-            total += s
-        return total
-    if tag == "or":
-        best = None
-        for child in node[1]:
-            s = _eval(child, text, text_lower)
-            if s is not None and (best is None or s > best):
-                best = s
-        return best
-    return None
+    order = []                       # 前序：父在前、子在后
+    stack = [node]
+    while stack:
+        n = stack.pop()
+        order.append(n)
+        if n[0] in ("and", "or"):
+            stack.extend(n[1])       # 子节点稍后出栈 → 排在父之后
+    val = {}                         # id(节点) -> 分值（None 表示未命中）
+    for n in reversed(order):        # 逆序 = 后序：先算子、再算父
+        tag = n[0]
+        if tag == "like":
+            val[id(n)] = _like_score(n[1], n[2], n[3], text_lower)
+        elif tag == "eq":
+            val[id(n)] = _eq_score(n[1], text)         # 区分大小写：用原文
+        elif tag == "and":
+            total, miss = 0, False
+            for c in n[1]:
+                s = val[id(c)]
+                if s is None:
+                    miss = True
+                    break
+                total += s
+            val[id(n)] = None if miss else total
+        elif tag == "or":
+            best = None
+            for c in n[1]:
+                s = val[id(c)]
+                if s is not None and (best is None or s > best):
+                    best = s
+            val[id(n)] = best
+        else:
+            val[id(n)] = None
+    return val[id(node)]
 
 
 class CompiledQuery:

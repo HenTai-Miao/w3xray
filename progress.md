@@ -234,3 +234,13 @@
 - **改动**（`gui.py`）：四个框（物体主搜 `search_var`→`_refresh_list`、地图列表 `map_search`→`_populate_left`、隐藏指令 `cmd_search`→`_refresh_cmds`、合成配方 `rec_search`→`_refresh_recipes`）一律去掉 `trace_add("write")` 逐键触发，改为 `entry.bind("<Return>")` **回车才搜**；逐键输入不再重建列表，清空后回车即恢复全部。
 - 删掉不再使用的去抖 `_schedule` 方法与 `self._debounce`（CTkEntry.bind 已确认转发到内部 Entry）。占位符加"回车搜索"提示。
 - README 同步：搜索小节加"回车触发"说明、列表交互项"去抖"改"回车才搜"。`gui.py` 导入自检通过；onedir 重新打包。
+
+### 会话 12：全项目复审（superpowers 多代理并行审查）
+四个审查子代理分别深审：①二进制解析(mpq/huffman/explode/blp) ②对象/文本解析(w3obj/slk/wts/fields/textobj/script_scan) ③应用层/GUI(api/gui/icons/single_instance) ④搜索+数据表(search/build_base_names/数据表)。结论：经会话 9-11 加固后无 Critical/内存安全缺陷；查得若干 Minor/Important，已修真问题：
+
+- **【已修·重要】search.py `_eval` 仍是递归——重新引入了迭代化本要消灭的 RecursionError。** 本模块注释明言"任意深嵌套都不爆栈"，`_parse` 已是调度场迭代，但 `_eval` 还在递归；交替 `&&/||` 的括号无法被扁平化合并，AST 深度==括号层数，约 1000 层即 `RecursionError`。而 GUI 在打分前已 `tree.delete`、`cq.score()` 无 try → 一抛异常列表清空不再回填，搜索面板变空白。改 `_eval` 为纯迭代（后序遍历 + id→分值缓存），语义不变。实测 3000 层交替嵌套正常求值。新增 `test_search.py::TestDeepNestingNoStackBlow`（+2）。
+- **【已修·次要】导出临时目录复用残留 + 计数虚高（api.py/gui.py）。** 不同地图经文件名清洗后可能撞同一 `safe_name`（如都叫"(unknown)"或重名），`tmp_extract_dir` 只 `makedirs(exist_ok=True)` 从不清理 → B 图导出目录里混着 A 图残留文件，且"已导出 N 个"用 `os.walk` 把残留也算进去。给 `tmp_extract_dir` 加 `clean=True`：导出前 `shutil.rmtree` 重建；导出全部文件/脚本/ID 三处均传 `clean=True`。对真实输入无副作用。
+- **【已修·次要】SLK `;;` 转义未处理（slk.py）。** `line.split(";")` 不认 SLK 字段内 `;;` 字面分号转义，`K"a;;b"` 会被拆断成 `"a`、丢掉 `b"`。改为先 `;;`→哨兵 `\x00`、拆完还原。魔兽 Data.slk 多为数值/4cc 几乎不含分号，对真实输入是无操作；属规范正确性补全。新增 `test_slk.py::test_escaped_semicolon_in_value`。
+- **【已修·次要】MPQ 扇区解压异常类型不统一（mpq.py）。** 损坏压缩流让 zlib/bz2 抛 `zlib.error`/`OSError` 漏出 `read_file`（其契约是只抛 `KeyError`）。虽所有调用方都 `except Exception` 兜住未成 live bug，但契约不诚实。把编解码分支包进 try，统一收敛成 `ValueError`（与 explode、不支持掩码两分支一致）；实测损坏 zlib/bz2 现抛 ValueError。
+- **暂记录不改（需判断/规格/属行为变更）**：① blp.py BLP1 paletted alpha 用 `flags==8` 等值判断而非位测试——需对 BLP1 规格确认，且真实魔兽 BLP1 几乎都是 JPEG 压缩，少走该分支；② textobj.py 同段重复键取**首**而非取尾（WC3 INI 常为后者覆盖），但实际罕见、语义无权威依据，不贸然改；③ search `=""` 命中全部（空精准词语义，极端边角）；④ 切换/加载新图不清空搜索框，旧筛选静默套用到新图（此为既有行为，非会话 11 引入，属可用性建议）；⑤ 连点加载无 in-flight 令牌，竞态下后到结果可能覆盖，但有 close() 安全网不致泄漏。
+- 测试 **170→173 通过, 1 skipped**（+3 例）；onedir 重新打包。

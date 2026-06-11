@@ -16,7 +16,9 @@ def parse_slk(text: str) -> dict:
     for line in text.replace("\r\n", "\n").split("\n"):
         if not line or line[0] not in "CF":
             continue
-        rec = line.split(";")
+        # SLK 用 ;; 转义字段内的字面分号；先换成哨兵再按 ; 拆，拆完还原。
+        # （魔兽 Data.slk 多为数值/4cc，几乎不含分号，对真实输入是无操作。）
+        rec = [f.replace("\x00", ";") for f in line.replace(";;", "\x00").split(";")]
         kind = rec[0]
         if kind not in ("C", "F"):
             continue

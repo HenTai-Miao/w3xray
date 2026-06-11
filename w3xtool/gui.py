@@ -911,7 +911,7 @@ class App(ctk.CTk):
     def on_export_scripts(self):
         if not self._need_map():
             return
-        out = tmp_extract_dir(self.map_data.name, "脚本")
+        out = tmp_extract_dir(self.map_data.name, "脚本", clean=True)   # 清空旧导出，避免同名图残留
         scripts = dict(self.map_data.scripts)          # 快照后到后台线程写盘，避免卡 UI
         self.status.configure(text="正在导出脚本 …")
 
@@ -930,7 +930,7 @@ class App(ctk.CTk):
     def on_export_ids(self):
         if not self._need_map():
             return
-        out = tmp_extract_dir(self.map_data.name, "ID列表")
+        out = tmp_extract_dir(self.map_data.name, "ID列表", clean=True)   # 清空旧导出，避免同名图残留
         objects = {c: list(v) for c, v in self.map_data.objects.items()}
         self.status.configure(text="正在导出ID列表 …")
 

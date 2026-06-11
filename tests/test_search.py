@@ -275,5 +275,34 @@ class TestLikeOracle(unittest.TestCase):
                              text.endswith(needle), ("suffix", needle, text))
 
 
+class TestDeepNestingNoStackBlow(unittest.TestCase):
+    """深嵌套不爆栈：_parse 与 _eval 均为纯迭代。
+
+    交替 &&/|| 的括号无法被扁平化合并，AST 深度 == 括号层数。_eval 曾是递归，
+    约 1000 层即 RecursionError；这里用 3000 层确保迭代实现不再栈溢出，且语义正确。"""
+
+    def _nest(self, op_pattern, depth):
+        expr = "%a%"
+        for i in range(depth):
+            op = op_pattern[i % len(op_pattern)]
+            expr = "(%s %s %%a%%)" % (expr, op)
+        return expr
+
+    def test_alternating_3000_levels_evaluates(self):
+        cq = compile_query(self._nest(("&&", "||"), 3000))
+        self.assertIsNotNone(cq.score("aaaa"))   # 命中：不抛 RecursionError
+        self.assertIsNone(cq.score("zzz"))       # 未命中：最外层为 && 链，缺 a 即 None
+
+    def test_deep_nesting_preserves_and_or_semantics(self):
+        # ((%a% && %b%) || %z%) 反复嵌套，外层交替 || / &&
+        expr = "%a% && %b%"
+        for _ in range(1500):
+            expr = "(%s || %%z%%)" % expr
+            expr = "(%s && %%a%%)" % expr
+        cq = compile_query(expr)
+        self.assertIsNotNone(cq.score("abz a"))  # a、b、z 齐全
+        self.assertIsNotNone(cq.score("zzz a"))  # 靠 || 的 z 分支兜住，且外层 a 存在
+
+
 if __name__ == "__main__":
     unittest.main()

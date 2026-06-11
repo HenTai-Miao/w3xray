@@ -27,6 +27,17 @@ class TestParseSlk(unittest.TestCase):
         rows = parse_slk(slk)
         self.assertEqual(rows["u01"]["name"], "勇士")
 
+    def test_escaped_semicolon_in_value(self):
+        # SLK 用 ;; 转义字段内字面分号：K"a;;b" 的值应是 a;b，而非被拆断成 "a
+        slk = ('ID\n'
+               'C;Y1;X1;K"k"\n'
+               'C;Y1;X2;K"name"\n'
+               'C;Y2;X1;K"u01"\n'
+               'C;Y2;X2;K"a;;b"\n'
+               'E\n')
+        rows = parse_slk(slk)
+        self.assertEqual(rows["u01"]["name"], "a;b")
+
 
 if __name__ == "__main__":
     unittest.main()
