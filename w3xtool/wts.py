@@ -11,8 +11,10 @@ from __future__ import annotations
 import re
 
 _HEADER = re.compile(rb"STRING\s+(\d+)", re.IGNORECASE)
-# 闭合括号必须**独占一行**(行首 } + 仅尾随空白)：既避免误伤 GBK 尾字节 0x7D，
-# 也避免把正文里以 } 开头但有后续内容的行(如 JASS "} else {")当成闭合而提前截断。
+# 开/闭括号都要求**独占一行**(行首 {/} + 仅尾随空白)：
+# - 闭合独占行：避免误伤 GBK 尾字节 0x7D，也避免正文里 "} else {" 这类被当成闭合提前截断。
+# - 开括号独占行：避免 STRING 头与正文之间的注释行(如 "// 备注 {x}")里的 { 被当成正文起点。
+_OPEN = re.compile(rb"(?m)^\{[ \t]*$")
 _CLOSE = re.compile(rb"(?m)^\}[ \t]*$")
 
 
@@ -41,7 +43,11 @@ def parse_wts(data: bytes) -> dict:
         if not m:
             break
         sid = int(m.group(1))
-        brace = data.find(b"{", m.end())
+        m_open = _OPEN.search(data, m.end())     # 独占一行的 '{'，跳过注释行里的 {
+        if m_open:
+            brace = m_open.start()
+        else:                                     # 兜底：找不到独占行 { 时退回首个 {（不回归旧行为）
+            brace = data.find(b"{", m.end())
         if brace < 0:
             break
         m2 = _CLOSE.search(data, brace + 1)      # 行首的 '}'，而非字节流里第一个 '}'

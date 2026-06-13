@@ -77,10 +77,24 @@ _FOURCC = re.compile(r"'([A-Za-z0-9]{4})'")
 _HEXCC = re.compile(r"\$([0-9A-Fa-f]{8})")
 # Lua 写法：FourCC("xxxx") / FourCC('xxxx')（双引号码不被 _FOURCC 捕获）
 _FOURCC_FN = re.compile(r"""FourCC\s*\(\s*["']([A-Za-z0-9]{4})["']\s*\)""")
+# 整数形式的码：JASS 里 'hpea' 常写成 1752196449 或 0x68706561（借鉴 w3x2lni searchjass）
+_HEXINT = re.compile(r"0[xX]([0-9A-Fa-f]{8})\b")
+_DECINT = re.compile(r"(?<![\w.])(\d{10})(?![\w.])")
+_CODE_MIN = 0x41303030          # 'A000'：阈值以下当普通数字（伤害/金钱），不当码
+
+
+def _int_to_code(v: int):
+    """整数 → 4 字符码：须 ≥'A000' 且 4 字节全可打印 ASCII，否则不是码。"""
+    if v < _CODE_MIN or v > 0xFFFFFFFF:
+        return None
+    b = v.to_bytes(4, "big")
+    if all(0x20 <= c < 0x7F for c in b):
+        return b.decode("latin-1")
+    return None
 
 
 def _codes_in(s: str):
-    """从一段代码里取所有对象码：'xxxx' 文本码 + $XXXXXXXX 十六进制码 + FourCC("xxxx")。"""
+    """取所有对象码：'xxxx' 文本码 + $XX/0xXX 十六进制 + FourCC("xxxx") + 十进制整数码。"""
     out = list(_FOURCC.findall(s))
     out += _FOURCC_FN.findall(s)
     for h in _HEXCC.findall(s):
@@ -89,6 +103,15 @@ def _codes_in(s: str):
         except Exception:
             continue
         if all(32 <= ord(c) < 127 for c in cc):
+            out.append(cc)
+    # 整数字面量形式的码（0x.. 与 10 位十进制），按阈值+可打印过滤普通数字
+    for h in _HEXINT.findall(s):
+        cc = _int_to_code(int(h, 16))
+        if cc:
+            out.append(cc)
+    for d in _DECINT.findall(s):
+        cc = _int_to_code(int(d))
+        if cc:
             out.append(cc)
     return out
 _REMOVE = re.compile(r"RemoveItem|GetItemOfType|UnitRemoveItem|YDWEGetItemOfType")

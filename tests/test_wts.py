@@ -48,6 +48,11 @@ class TestParseWts(unittest.TestCase):
         self.assertEqual(table[5], body)
         self.assertEqual(table[6], "next")
 
+    def test_comment_line_brace_not_taken_as_body_start(self):
+        # STRING 头与正文 { 之间的注释行里含 {，不应被当成正文起点（应取独占一行的 {）
+        data = "STRING 1\n// 注释 {假正文}\n{\n真正文\n}\n".encode("utf-8")
+        self.assertEqual(parse_wts(data)[1], "真正文")
+
     def test_resolve_uses_table(self):
         table = {111: "圣水"}
         self.assertEqual(resolve("TRIGSTR_111", table), "圣水")

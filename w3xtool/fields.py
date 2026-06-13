@@ -57,6 +57,20 @@ FIELD_LABELS = {
 }
 
 
+# 多值（逗号/竖线分隔的码或词列表）字段类型——展示时拆开逐项还原（借鉴 w3x2lni concat_types）
+CONCAT_TYPES = {
+    "abilityList", "unitList", "buffList", "techList", "itemList",
+    "targetList", "effectList", "stringList", "unitClass", "modelList",
+    "lightningList", "intList", "unrealList", "upgradeList",
+    "pathingListPrevent", "pathingListRequire", "tilesetList",
+    "abilCodeList", "abilSkinList",
+}
+
+
+def is_concat_type(field_id: str) -> bool:
+    return field_type(field_id) in CONCAT_TYPES
+
+
 def label_for(field_id: str) -> str:
     """精选标签优先 → 全量生成标签兜底 → 都没有则原样返回 4 字符码。"""
     return (FIELD_LABELS.get(field_id)

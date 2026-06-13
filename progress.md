@@ -266,3 +266,11 @@
 - **不建议做**（见清单）：完整 wtg ECA 树/TriggerData（强依赖+成本高）、CASC（纯 Python 成本极高且不影响读 .w3x）、w3e 地形（KKWE 也没解析器）、完整 JASS AST parser（过重）。
 - 文档：README 结构表 +w3i/wct/field_meta，功能列表 +地图信息/自定义脚本/全量字段标签/三层枚举；gui docstring 改 5 标签页；findings.md 记录 w3i/wct/字段标签/三层枚举四项格式 + 指向清单。
 - 测试 **191→218 通过, 8 skipped**（+27 例）。
+
+### 会话 14（续）：落地清单里的可选增强 #11/#8/#6-lite/#14
+- **#11 war3campaign.w3f 战役头**（`w3i.py` parse_w3f + W3fInfo，`api._add_w3f` 存 `MapData.w3f`，GUI 信息页置顶显示战役名/作者/难度/描述）：3×i32 + 4×z（移植 frontend_w3f.lua）。无 .w3n 样本，合成测试验证。测试 `test_w3i.py`（+3）。
+- **#8 多值字段列表化**（`fields.CONCAT_TYPES`/`is_concat_type` + `api._expand_codes`）：abilityList/unitList/buffList 等把逗号分隔的码还原「原版名(码)」；实测「技能列表: 蝗虫(Aloc), 无敌的(Avul)」。测试 `test_fields.py`（+3）。
+- **#6-lite 整数对象码识别**（`script_scan._codes_in` + `_int_to_code`）：补认十进制(10 位)/0x 十六进制整数形式的码（'hpea'=1752196449/0x68706561），阈值 0x41303030+4 字节可打印过滤普通数字；原仅认 'xxxx'/$XX/FourCC。scan_object_refs 现能抓整数写法的单位/物品码。测试 `test_codes.py`（+6），既有 script_scan 测试不回归。
+- **#14 WTS 注释行 { 加固**（`wts._OPEN` 独占行锚定 + 兜底退回）：STRING 头与正文间注释行里的 { 不再被误当正文起点。**62 张真图新旧解析逐字节一致（零回归）**。测试 `test_wts.py`（+1）。**编码 mbcs 回退评估后不做**（简中无收益、非简中反致 GBK 老图乱码）。
+- **未做**（清单剩余，价值低/有风险）：#6 完整 JASS tokenizer 替换（按 native 分类的兜底场景不适合）、#10 提取完整性自检、#12 BJ 隐式引用映射表、#13 装饰物 v8 4 字节变体（无实据，盲改风险）。
+- 测试 **218→231 通过, 8 skipped**（+13 例）。

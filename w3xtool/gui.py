@@ -298,11 +298,26 @@ class App(ctk.CTk):
         self.info_box.configure(state="normal")
         self.info_box.delete("1.0", "end")
         info = getattr(self.map_data, "w3i", None) if self.map_data else None
-        if not info:
+        w3f = getattr(self.map_data, "w3f", None) if self.map_data else None
+        if not info and not w3f:
             self.info_box.insert("end", "此图无 war3map.w3i 地图信息（或解析失败）。")
             self.info_box.configure(state="disabled")
             return
         L = []
+        if w3f:                                  # 战役级信息（.w3n）
+            L.append("【战役信息】")
+            L.append(f"战役名　：{w3f.name or '(未命名)'}")
+            if w3f.author:
+                L.append(f"作者　　：{w3f.author}")
+            if w3f.difficulty:
+                L.append(f"难度　　：{w3f.difficulty}")
+            if w3f.description:
+                L.append(f"描述　　：{w3f.description}")
+            L.append("")
+        if not info:
+            self.info_box.insert("end", "\n".join(L))
+            self.info_box.configure(state="disabled")
+            return
         L.append(f"地图名　：{info.map_name or '(未命名)'}")
         L.append(f"作者　　：{info.author or '(未知)'}")
         if info.recommended_players:

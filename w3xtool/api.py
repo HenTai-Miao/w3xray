@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from .mpq import MPQArchive, FLAG_EXISTS
 from .w3obj import parse_object_data, EXT_CATEGORY
 from .wts import parse_wts, resolve
-from .fields import NAME_FIELD, label_for
+from .fields import NAME_FIELD, label_for, is_concat_type
 from .textobj import _sub_westring
 try:
     from .base_names import BASE_NAMES
@@ -31,6 +31,21 @@ KNOWN_EXPORT_FILES = [
     "war3mapUnits.doo", "war3map.doo", "war3map.shd", "war3map.mmp",
     "war3mapMap.blp", "war3map.wpm", "(listfile)",
 ]
+
+
+def _expand_codes(value: str, names: dict) -> str:
+    """把逗号分隔的码列表逐项还原成「名字(码)」；非列表或未知码原样保留。
+
+    用于 abilityList/unitList 等多值字段——展示时比一串 4cc 可读。
+    """
+    if not isinstance(value, str) or "," not in value:
+        return value
+    parts = []
+    for tok in value.split(","):
+        t = tok.strip()
+        nm = names.get(t)
+        parts.append(f"{nm}({t})" if nm else t)
+    return ", ".join(parts)
 
 
 def _fmt_value(v) -> str:
@@ -72,6 +87,7 @@ class MapData:
     doodads: list = field(default_factory=list)    # 预放置装饰物/可破坏物 (doo.Doodad)
     units: list = field(default_factory=list)       # 预放置单位 (doo.Unit)
     w3i: object = None                              # 地图信息 (w3i.W3iInfo)，无则 None
+    w3f: object = None                              # 战役信息 (w3i.W3fInfo)，仅 .w3n 有
 
     def category_counts(self):
         return {c: len(v) for c, v in self.objects.items()}
@@ -139,6 +155,9 @@ def _build_objects(archive: MPQArchive, ext: str, wts: dict, prefix: str = "war3
                 icon = val
             if m.level:
                 label = f"{label} (等级{m.level})"
+            # 多值字段（技能/单位列表等）：把逗号分隔的码逐项还原成「原版名(码)」更易读
+            if isinstance(val, str) and is_concat_type(m.field_id):
+                val = _expand_codes(val, BASE_NAMES)
             fields_list.append((label, _fmt_value(val)))
         # 原样保留大小写：模糊搜索不分大小写、引号精准搜索区分大小写（在 fuzzy_score 内处理）
         search_text = " ".join([obj_id, o.old_id, name] +
@@ -375,6 +394,8 @@ def _load_map_impl(archive: MPQArchive, path: str, _depth: int,
 
     # 地图信息（名/作者/玩家/脚本语言…）；地图名优先取 w3i（比 HM3W 头权威）
     _add_w3i(md, archive, wts)
+    # 战役信息（仅 .w3n 顶层有 war3campaign.w3f）
+    _add_w3f(md, archive, wts)
     # 预放置实例（单位/装饰物"摆在哪、归谁"）—— 对象定义之外的另一维信息
     _add_preplaced(md, archive)
     # war3map.wct 自定义脚本解码成可读文本并入脚本（原始 wct 是二进制）
@@ -496,6 +517,22 @@ def _add_w3i(md: "MapData", archive: MPQArchive, wts: dict):
     nm = (info.map_name or "").strip()
     if nm and not nm.startswith("TRIGSTR_"):
         md.name = nm
+
+
+def _add_w3f(md: "MapData", archive: MPQArchive, wts: dict):
+    """解析战役信息 war3campaign.w3f（仅 .w3n 顶层有）并存入 md.w3f。"""
+    if not archive.has_file("war3campaign.w3f"):
+        return
+    try:
+        from .w3i import parse_w3f
+        info = parse_w3f(archive.read_file("war3campaign.w3f"), wts)
+    except Exception:
+        return
+    if info is not None:
+        md.w3f = info
+        nm = (info.name or "").strip()
+        if nm and not nm.startswith("TRIGSTR_") and (not md.name or md.name == os.path.basename(md.path)):
+            md.name = nm
 
 
 def _add_wct(md: "MapData", archive: MPQArchive):

@@ -94,6 +94,31 @@ class TestParseW3i(unittest.TestCase):
         self.assertGreaterEqual(len(info.players), 1)
 
 
+def _build_w3f(name="战役名", difficulty="普通", author="作者C", desc="战役描述"):
+    b = struct.pack("<i", 1)                     # version
+    b += struct.pack("<ii", 1, 6060)             # campaign_version, editor_version
+    b += _z(name) + _z(difficulty) + _z(author) + _z(desc)
+    return b
+
+
+class TestParseW3f(unittest.TestCase):
+    def test_basic(self):
+        from w3xtool.w3i import parse_w3f
+        info = parse_w3f(_build_w3f(name="远古战役", author="老李"))
+        self.assertEqual(info.name, "远古战役")
+        self.assertEqual(info.author, "老李")
+        self.assertEqual(info.difficulty, "普通")
+
+    def test_trigstr_resolved(self):
+        from w3xtool.w3i import parse_w3f
+        info = parse_w3f(_build_w3f(name="TRIGSTR_003"), wts={3: "真战役名"})
+        self.assertEqual(info.name, "真战役名")
+
+    def test_garbage_returns_none(self):
+        from w3xtool.w3i import parse_w3f
+        self.assertIsNone(parse_w3f(b""))
+
+
 class _FakeArchive:
     def __init__(self, files):
         self._files = files

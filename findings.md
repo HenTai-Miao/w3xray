@@ -64,7 +64,12 @@
 - **war3map.wct（自定义脚本）**：L 版本(>1 则==0x80000004 重制，再读 L 真版本==1)；全局块 z 注释+i32 size(≠0 则 z 代码)；触发器块经典 i32 count 循环 / 重制无 count 读到 EOF，每块 u32 size(0=空，否则 size-1 字节代码+1 字节 NUL)。**62/62 真图解析通过**，全是经典 v1。原始 wct 是二进制，解码后并入 md.scripts 供导出。
 - **字段全量标签**：fields.py 原仅 ~80 手挑字段。用 KKWE 8 个 MetaData.slk(字段码→displayName(WESTRING_*)+type) + 本项目 westrings.py 链式还原，离线生成 field_meta.py 的 1444 个中文标签 + 1521 个类型。label_for 改两层(精选优先→全量兜底→原码)。generator=build_field_labels.py。
 - **三层并集枚举**：mpq.list_files 原仅读 (listfile)。加内置 STATIC_MAP_FILES(war3map.* 全集 + 战役级 + MPQ 内部表)，只收 has_file 验证存在的；再并 war3map.imp 导入名(相对名补 war3mapImported\ 前缀)。删了 listfile 的保护图也能枚举固定名文件。本批 demo 图 listfile 本就全，仅补出 (listfile) 自身。
-- **多代理分析全清单**：见 docs/KKWE借鉴清单.md（14 项增强 + 不建议做项；本会话落地 #1/#3/#4/#5/#9）。
+- **多代理分析全清单**：见 docs/KKWE借鉴清单.md（14 项增强 + 不建议做项；落地 #1/#3/#4/#5/#9 + 可选 #6-lite/#8/#11/#14）。
+- **可选增强批次（同会话后续）**：
+  - **#11 war3campaign.w3f 战役头**（w3i.py parse_w3f）：i32 version+i32 campaign_version+i32 editor_version+z 名/难度/作者/描述（移植 frontend_w3f.lua，KKWE 自身也只解到头）。无 .w3n 样本，合成测试验证。
+  - **#8 多值字段列表化**（fields.CONCAT_TYPES + api._expand_codes）：abilityList/unitList 等 concat 类型字段把逗号分隔的码逐项还原「原版名(码)」；实测「技能列表: 蝗虫(Aloc), 无敌的(Avul)」。
+  - **#6-lite 整数码识别**（script_scan._codes_in + _int_to_code）：JASS 里 'hpea' 常写成 1752196449 或 0x68706561，按阈值 0x41303030('A000')+4 字节全可打印过滤普通数字后并入对象码（原仅认 'xxxx'/$XX/FourCC）。
+  - **#14 WTS 注释行 { 加固**（wts._OPEN 独占行锚定）：STRING 头与正文间注释行（如 `// 备注 {x}`）里的 { 不再被当成正文起点；找不到独占行 { 时退回首个 { 不回归。62 张真图新旧解析**完全一致**（零回归）。**编码改动（mbcs）评估后不做**：简中系统 mbcs≡gbk 无收益，非简中系统会把 GBK 老图错解成乱码（净风险）。
 
 ## 保护图：block 表注水越界（幻想未来v1.366）
 - 加固手法：MPQ 头 `header_size` 填 `0xFFFFFFFF`(垃圾哨兵)、`block_count` 注水(2049，比 hash_count 多 1)，使 block 表声明长度超出文件尾约 16KB(实际只 ~1006 条在档内)；hash 表本身完整。
