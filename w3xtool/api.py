@@ -69,6 +69,9 @@ class MapData:
     all_files: list = field(default_factory=list)
     sub_maps: list = field(default_factory=list)   # 战役内含的子地图 MapData
     obj_index: dict = field(default_factory=dict)  # type_id -> GameObject
+    doodads: list = field(default_factory=list)    # 预放置装饰物/可破坏物 (doo.Doodad)
+    units: list = field(default_factory=list)       # 预放置单位 (doo.Unit)
+    w3i: object = None                              # 地图信息 (w3i.W3iInfo)，无则 None
 
     def category_counts(self):
         return {c: len(v) for c, v in self.objects.items()}
@@ -370,6 +373,13 @@ def _load_map_impl(archive: MPQArchive, path: str, _depth: int,
     if own > 0:
         _add_base_objects(md)
 
+    # 地图信息（名/作者/玩家/脚本语言…）；地图名优先取 w3i（比 HM3W 头权威）
+    _add_w3i(md, archive, wts)
+    # 预放置实例（单位/装饰物"摆在哪、归谁"）—— 对象定义之外的另一维信息
+    _add_preplaced(md, archive)
+    # war3map.wct 自定义脚本解码成可读文本并入脚本（原始 wct 是二进制）
+    _add_wct(md, archive)
+
     md.all_files = archive.list_files()
 
     # 战役 .w3n：递归解析内含的 .w3x（防止无限递归）
@@ -468,6 +478,89 @@ def scan_recipes(path: str) -> list:
     return _sr(txt) if txt else []
 
 
+def _add_w3i(md: "MapData", archive: MPQArchive, wts: dict):
+    """解析 war3map.w3i 地图信息并存入 md.w3i；地图名优先取 w3i（比 HM3W 头权威）。
+
+    HM3W 头里的名常是占位/旧名甚至 TRIGSTR；编辑器里设的真实名在 w3i（经 wts 还原）。
+    """
+    if not archive.has_file("war3map.w3i"):
+        return
+    try:
+        from .w3i import parse_w3i
+        info = parse_w3i(archive.read_file("war3map.w3i"), wts)
+    except Exception:
+        return
+    if info is None:
+        return
+    md.w3i = info
+    nm = (info.map_name or "").strip()
+    if nm and not nm.startswith("TRIGSTR_"):
+        md.name = nm
+
+
+def _add_wct(md: "MapData", archive: MPQArchive):
+    """解析 war3map.wct 自定义脚本，把解码后的可读 JASS/Lua 文本并入 md.scripts。
+
+    wct 是二进制（原样导出是乱码）；解出全局块 + 各触发器自定义代码块拼成一份带分节
+    注释的文本，文件名带 .txt 便于「导出脚本」直接看。解析失败/无 wct 时静默跳过。
+    """
+    if not archive.has_file("war3map.wct"):
+        return
+    try:
+        from .wct import parse_wct
+        w = parse_wct(archive.read_file("war3map.wct"))
+    except Exception:
+        return
+    parts = []
+    if w.custom_code.strip():
+        parts.append("// ===== 全局自定义脚本 =====\n" + w.custom_code)
+    for i, t in enumerate(w.triggers):
+        if t.strip():
+            parts.append(f"// ===== 触发器自定义脚本 #{i + 1} =====\n" + t)
+    if parts:
+        md.scripts["war3map.wct(自定义代码).txt"] = "\n\n".join(parts)
+
+
+def _add_preplaced(md: "MapData", archive: MPQArchive):
+    """解析预放置实例：war3map.doo（装饰物/可破坏物）+ war3mapUnits.doo（单位）并并入 md。
+
+    对象定义（w3u/w3t…）只说"有哪些"，.doo 才说"摆在哪、归谁、初始多少血/金"。
+    单条记录损坏不拖垮整图（doo.parse_* 内部已逐条容错）。
+    """
+    from .doo import parse_doodads, parse_units
+    if archive.has_file("war3map.doo"):
+        try:
+            md.doodads = parse_doodads(archive.read_file("war3map.doo"))
+        except Exception:
+            md.doodads = []
+    if archive.has_file("war3mapUnits.doo"):
+        try:
+            md.units = parse_units(archive.read_file("war3mapUnits.doo"))
+        except Exception:
+            md.units = []
+
+
+def _imported_names(archive: MPQArchive) -> list:
+    """从 war3map.imp 解析导入文件名，供导出时补全 (listfile) 缺失的自定义文件。
+
+    优化/保护图常删掉 (listfile)，但 war3map.imp 仍记着每个导入文件的路径。
+    imp 里多为相对名（不带 war3mapImported\\ 前缀），直查不到时补前缀再试（与 w3x2lni 一致）。
+    """
+    if not archive.has_file("war3map.imp"):
+        return []
+    try:
+        from .imp import parse_imp
+        raw = archive.read_file("war3map.imp")
+    except Exception:
+        return []
+    names = []
+    for name in parse_imp(raw):
+        names.append(name)
+        if not archive.has_file(name):
+            names.append("war3mapImported\\" + name)
+    return names
+
+
 def _safe_export_path(out_dir: str, name: str):
     """把地图内部文件名安全地映射到 out_dir 下的路径。
 
@@ -524,6 +617,8 @@ def _export_all_impl(archive: MPQArchive, out_dir: str | None, _depth: int) -> s
     names = set(archive.list_files())
     # 补充已知关键文件（listfile 常不全）
     names.update(KNOWN_EXPORT_FILES)
+    # 再补 war3map.imp 里登记的导入文件（listfile 被删时这是唯一的自定义文件名来源）
+    names.update(_imported_names(archive))
     sub_maps = []
     for n in sorted(names):
         if not archive.has_file(n):

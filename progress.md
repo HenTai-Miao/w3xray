@@ -244,3 +244,25 @@
 - **【已修·次要】MPQ 扇区解压异常类型不统一（mpq.py）。** 损坏压缩流让 zlib/bz2 抛 `zlib.error`/`OSError` 漏出 `read_file`（其契约是只抛 `KeyError`）。虽所有调用方都 `except Exception` 兜住未成 live bug，但契约不诚实。把编解码分支包进 try，统一收敛成 `ValueError`（与 explode、不支持掩码两分支一致）；实测损坏 zlib/bz2 现抛 ValueError。
 - **暂记录不改（需判断/规格/属行为变更）**：① blp.py BLP1 paletted alpha 用 `flags==8` 等值判断而非位测试——需对 BLP1 规格确认，且真实魔兽 BLP1 几乎都是 JPEG 压缩，少走该分支；② textobj.py 同段重复键取**首**而非取尾（WC3 INI 常为后者覆盖），但实际罕见、语义无权威依据，不贸然改；③ search `=""` 命中全部（空精准词语义，极端边角）；④ 切换/加载新图不清空搜索框，旧筛选静默套用到新图（此为既有行为，非会话 11 引入，属可用性建议）；⑤ 连点加载无 in-flight 令牌，竞态下后到结果可能覆盖，但有 close() 安全网不致泄漏。
 - 测试 **170→173 通过, 1 skipped**（+3 例）；onedir 重新打包。
+
+### 会话 13：借鉴 KKWE 编辑器，新增预放置 .doo 解析 + war3map.imp 导入清单
+用户提供桌面 `KKWE插件`（KK 版 YDWE 编辑器本体）问"是否对提取有帮助"。审查结论：其 native MPQ 栈（StormLib/virtual_mpq/MopaqPack）即本项目已纯 Python 复刻的那套，无新东西；KK 数据级加密是 `debugger.dll`/`MapHelper.dll` 运行时内存层做的，静态无解（与 findings.md 既有结论一致）。**真正能借鉴的是它自带的 w3x2lni 开源源码**暴露的两个本项目缺口，已实装：
+- **P0 war3map.imp 导入清单**（新 `imp.py` + `api._imported_names` 接入 `_export_all_impl`）：listfile 被删时补全可导出的自定义文件名（imp 相对名直查不到时补 `war3mapImported\` 前缀）。注水 count/截断优雅返回。测试 `test_imp.py`（+8）。**本批 62 张 demo 图实测额外导出 0 个**（仅 3 张有 imp，且名字档内无数据或 listfile 本就全）——功能正确，增益面向真·剥 listfile 的保护图。
+- **P1 预放置 .doo 解析**（新 `doo.py`：`parse_doodads` + `parse_units`，`api._add_preplaced` 接入 `_load_map_impl`，填 `MapData.units`/`MapData.doodads`，CLI 显示数量）：填补 README 头号已知限制"不解析 .doo"。装饰物布局移植 w3x2lni `frontend_doo.lua`；单位布局（TFT v8）靠 62 张真图「解析完恰好到 EOF」反推证伪——**61/62 张逐字节对齐**（Fireball 图 189 单位 20995/20995 字节；唯一例外是 1 张 RoC v7 老 .w3m，变长尾部老格式，优雅降级保前置字段）。单条记录损坏不拖垮整图（逐条容错，同 w3obj）。测试 `test_doo.py`（+13，含真实夹具 `matrix.units.doo`）。
+- 端到端真实验证：Fireball 图 `load_map` 得 189 单位 + 300 装饰物，坐标/玩家合理；全部对象/脚本/指令解析不受影响。
+- 文档同步：README 结构表加 `doo.py`/`imp.py`、"放置信息"限制改为已解析；findings.md 记录 doo/units/imp 三种格式与 RoC 差异。
+- **未做（可后续）**：GUI 里展示预放置单位/装饰物列表（数据已在 `MapData`，仅 CLI 显示数量）；RoC v7 单位 doo 的精确老布局（样本不足，暂优雅降级）；imp 在真·保护图上的实测（手上样本未踩到）。
+- 测试 **166→187 通过, 8 skipped**（+21 例）。
+
+### 会话 14：GUI 接入预放置 + superpowers 多代理重析 KKWE 并落地 5 项增强
+**Part A — 预放置接进 GUI**：新增「预放置」标签页（单位表：类型/ID/玩家/坐标/生命/魔法/等级；装饰物表：类型/坐标/缩放/生命/掉落；共用回车搜索，类型码经对象表/原版名还原中文），接进 `_render_map`。`gui_base` 同步复位新表。测试 `test_gui_preplaced.py`（+4）。
+
+**Part B — 多代理工作流完整重析 KKWE**：用 Workflow 起 6 个分析代理（二进制格式/MPQ-CASC/字段元数据/脚本分析/字符串编码/保护图）并行深读 KKWE 工具链，对照 w3xray 现有能力，汇总成 14 项增强清单（存 `docs/KKWE借鉴清单.md`）。本会话落地高价值低成本的 5 项（全部 TDD + 62 张真图验证）：
+- **#1 字段全量标签**（`field_meta.py` 1444 标签 + 1521 类型，generator `build_field_labels.py`）：fields.py 从 ~80 手挑扩到全量；`label_for` 两层（精选优先→全量兜底→原码），新增 `field_type()`。界面几乎不再出现裸 4cc。测试 `test_fields.py`（+4）。
+- **#3 war3map.wct 自定义脚本解析**（`wct.py`）：把二进制 wct 解出全局/各触发器手写 JASS/Lua 代码，`_add_wct` 并入 `md.scripts["war3map.wct(自定义代码).txt"]` 供导出。62/62 真图解析。测试 `test_wct.py`（+8）。
+- **#4 war3map.w3i 地图信息解析**（`w3i.py`，版本 18/25/28/31）：名/作者/描述/推荐人数/尺寸/flag/脚本语言/玩家(类型·种族·开局·名)/队伍(同盟·共享)。`_add_w3i` 存 `MapData.w3i`，新增 GUI「地图信息」标签页 + CLI 摘要。62/62 真图解析。测试 `test_w3i.py`（+8）、`test_gui_info.py`（+2）。
+- **#5 三层并集文件枚举**（`mpq.py` `STATIC_MAP_FILES` + `list_files` 重写）：(listfile)+内置固定名单+imp 导入名，删了 listfile 的保护图也能枚举固定名文件。测试 `test_mpq_enumerate.py`（+5）。
+- **#9 地图名优先取 w3i**：`_add_w3i` 里若 w3i.map_name 非空非 TRIGSTR 残留则覆盖 HM3W 头名（更权威、自动还原 TRIGSTR）。
+- **不建议做**（见清单）：完整 wtg ECA 树/TriggerData（强依赖+成本高）、CASC（纯 Python 成本极高且不影响读 .w3x）、w3e 地形（KKWE 也没解析器）、完整 JASS AST parser（过重）。
+- 文档：README 结构表 +w3i/wct/field_meta，功能列表 +地图信息/自定义脚本/全量字段标签/三层枚举；gui docstring 改 5 标签页；findings.md 记录 w3i/wct/字段标签/三层枚举四项格式 + 指向清单。
+- 测试 **191→218 通过, 8 skipped**（+27 例）。

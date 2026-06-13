@@ -52,7 +52,13 @@ class GuiTestCase(unittest.TestCase):
         app._dir_campaigns = []
         app._node_map = {}
         # 清空所有 Treeview，避免上个用例的行/iid 残留
-        for tv in (app.map_list, app.cmd_tree, app.rec_tree, *app.col_trees.values()):
+        for tv in (app.map_list, app.cmd_tree, app.rec_tree,
+                   app.unit_tree, app.doodad_tree, *app.col_trees.values()):
             tv.delete(*tv.get_children())
+        app.pre_search.set("")
+        # 地图信息框复位（只读 textbox 需临时切到可写态清空）
+        app.info_box.configure(state="normal")
+        app.info_box.delete("1.0", "end")
+        app.info_box.configure(state="disabled")
         # 材料列宽会被 test_ingredient_column_grows 读作基线，还原到初始 620
         app.rec_tree.column("ingredients", width=620)

@@ -1,7 +1,9 @@
 """魔兽地图提取器 GUI（CustomTkinter，深色卡片风）。
 
-三个标签页：
+五个标签页：
 - 对象浏览：模糊搜索 单位/物品/技能/科技 等，看详情、导出
+- 地图信息：war3map.w3i（名/作者/玩家/队伍/脚本语言/尺寸）
+- 预放置：地图上预放置的单位/装饰物（摆在哪、归谁、初始属性）
 - 隐藏指令：扫描脚本里的聊天指令
 - 合成配方：识别物品合成配方
 """
@@ -121,9 +123,13 @@ class App(ctk.CTk):
         self.tabs = ctk.CTkTabview(self, fg_color=BG, segmented_button_selected_color=ACCENT)
         self.tabs.pack(fill="both", expand=True, padx=10, pady=(2, 6))
         self.tab_obj = self.tabs.add("对象浏览")
+        self.tab_info = self.tabs.add("地图信息")
+        self.tab_pre = self.tabs.add("预放置")
         self.tab_cmd = self.tabs.add("隐藏指令")
         self.tab_rec = self.tabs.add("合成配方")
         self._build_obj_tab(self.tab_obj)
+        self._build_info_tab(self.tab_info)
+        self._build_preplaced_tab(self.tab_pre)
         self._build_cmd_tab(self.tab_cmd)
         self._build_rec_tab(self.tab_rec)
 
@@ -280,6 +286,178 @@ class App(ctk.CTk):
         hsb.pack(side="bottom", fill="x")
         self.rec_tree.pack(side="left", fill="both", expand=True)
         self._attach_tree_copy(self.rec_tree)
+
+    def _build_info_tab(self, parent):
+        """地图信息：war3map.w3i 解析出的名/作者/描述/玩家/队伍/脚本语言等，只读文本。"""
+        self.info_box = ctk.CTkTextbox(parent, font=(FONT, 13), fg_color=PANEL, wrap="word")
+        self.info_box.pack(fill="both", expand=True, padx=10, pady=10)
+        self.info_box.configure(state="disabled")
+        self._attach_ctx_menu(self.info_box, copy_all=True)
+
+    def _refresh_info(self):
+        self.info_box.configure(state="normal")
+        self.info_box.delete("1.0", "end")
+        info = getattr(self.map_data, "w3i", None) if self.map_data else None
+        if not info:
+            self.info_box.insert("end", "此图无 war3map.w3i 地图信息（或解析失败）。")
+            self.info_box.configure(state="disabled")
+            return
+        L = []
+        L.append(f"地图名　：{info.map_name or '(未命名)'}")
+        L.append(f"作者　　：{info.author or '(未知)'}")
+        if info.recommended_players:
+            L.append(f"推荐人数：{info.recommended_players}")
+        L.append(f"尺寸　　：{info.width} × {info.height}")
+        ver = {18: "RoC(1.07-)", 25: "TFT(1.13-)", 28: "重制 1.31", 31: "重制 1.32+"}
+        L.append(f"格式版本：{info.version}  {ver.get(info.version, '')}")
+        if info.script_type:
+            L.append(f"脚本语言：{info.script_type}")
+        tags = []
+        if info.melee:
+            tags.append("对战图")
+        if info.custom_forces:
+            tags.append("自定义队伍")
+        if info.custom_techtree:
+            tags.append("自定义科技树")
+        if info.custom_ability:
+            tags.append("自定义技能")
+        if tags:
+            L.append("标志　　：" + "、".join(tags))
+        if info.description:
+            L.append(f"\n描述：\n{info.description}")
+        if info.players:
+            L.append(f"\n玩家（{len(info.players)}）：")
+            for p in info.players:
+                L.append(f"  P{p.id + 1}  {p.name or '(无名)'}  ·  {p.type_name}  ·  {p.race_name}")
+        if info.forces:
+            L.append(f"\n队伍（{len(info.forces)}）：")
+            for f in info.forces:
+                share = []
+                if f.allied:
+                    share.append("同盟")
+                if f.share_vision:
+                    share.append("共享视野")
+                if f.share_control:
+                    share.append("共享控制")
+                plist = "、".join(f"P{i}" for i in f.players) if f.players else "无"
+                L.append(f"  {f.name or '(无名队伍)'}  ·  玩家 {plist}"
+                         + (f"  ·  {'/'.join(share)}" if share else ""))
+        self.info_box.insert("end", "\n".join(L))
+        self.info_box.configure(state="disabled")
+
+    def _build_preplaced_tab(self, parent):
+        """预放置实例：上=单位(war3mapUnits.doo)，下=装饰物/可破坏物(war3map.doo)，共用搜索框。"""
+        top = ctk.CTkFrame(parent, fg_color=BG)
+        top.pack(fill="x", padx=4, pady=(8, 6))
+        self.pre_search = tk.StringVar()
+        pse = ctk.CTkEntry(top, textvariable=self.pre_search, height=38, font=(FONT, 14),
+                           justify="center",
+                           placeholder_text='🔍  回车搜索　类型名/ID　%词%=包含　="…"=精准　&&=且　||=或')
+        pse.pack(fill="x")
+        pse.bind("<Return>", lambda *_: self._refresh_preplaced())
+        self._attach_ctx_menu(pse, paste=True)
+        self.pre_hint = ctk.CTkLabel(parent, text="打开地图后这里列出地图上预放置的单位与装饰物（摆在哪、归谁、初始属性）",
+                                     font=(FONT, 12), text_color=SUBTLE, anchor="w")
+        self.pre_hint.pack(fill="x", padx=6, pady=(0, 6))
+
+        # 上：预放置单位
+        self.unit_title = ctk.CTkLabel(parent, text="预放置单位", font=(FONT, 12, "bold"), anchor="w")
+        self.unit_title.pack(fill="x", padx=8)
+        uw = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=10)
+        uw.pack(fill="both", expand=True, padx=4, pady=(0, 6))
+        ui = tk.Frame(uw, bg=CARD)
+        ui.pack(fill="both", expand=True, padx=8, pady=8)
+        self.unit_tree = ttk.Treeview(
+            ui, columns=("name", "id", "player", "pos", "hp", "mana", "lv"),
+            show="headings", selectmode="browse")
+        for c, t, w, a in (("name", "类型", 220, "w"), ("id", "ID", 60, "center"),
+                           ("player", "玩家", 50, "center"), ("pos", "坐标(x, y)", 150, "center"),
+                           ("hp", "生命", 70, "center"), ("mana", "魔法", 70, "center"),
+                           ("lv", "等级", 50, "center")):
+            self.unit_tree.heading(c, text=t)
+            self.unit_tree.column(c, width=w, anchor=a, stretch=False)
+        uvsb = ttk.Scrollbar(ui, orient="vertical", command=self.unit_tree.yview)
+        uhsb = ttk.Scrollbar(ui, orient="horizontal", command=self.unit_tree.xview)
+        self.unit_tree.configure(yscrollcommand=uvsb.set, xscrollcommand=uhsb.set)
+        uvsb.pack(side="right", fill="y")
+        uhsb.pack(side="bottom", fill="x")
+        self.unit_tree.pack(side="left", fill="both", expand=True)
+        self._attach_tree_copy(self.unit_tree)
+
+        # 下：装饰物/可破坏物
+        self.doodad_title = ctk.CTkLabel(parent, text="装饰物 / 可破坏物", font=(FONT, 12, "bold"), anchor="w")
+        self.doodad_title.pack(fill="x", padx=8)
+        dw = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=10)
+        dw.pack(fill="both", expand=True, padx=4, pady=(0, 6))
+        di = tk.Frame(dw, bg=CARD)
+        di.pack(fill="both", expand=True, padx=8, pady=8)
+        self.doodad_tree = ttk.Treeview(
+            di, columns=("name", "id", "pos", "scale", "life", "drops"),
+            show="headings", selectmode="browse")
+        for c, t, w, a in (("name", "类型", 220, "w"), ("id", "ID", 60, "center"),
+                           ("pos", "坐标(x, y)", 150, "center"), ("scale", "缩放", 70, "center"),
+                           ("life", "生命%", 60, "center"), ("drops", "掉落", 200, "w")):
+            self.doodad_tree.heading(c, text=t)
+            self.doodad_tree.column(c, width=w, anchor=a, stretch=False)
+        dvsb = ttk.Scrollbar(di, orient="vertical", command=self.doodad_tree.yview)
+        dhsb = ttk.Scrollbar(di, orient="horizontal", command=self.doodad_tree.xview)
+        self.doodad_tree.configure(yscrollcommand=dvsb.set, xscrollcommand=dhsb.set)
+        dvsb.pack(side="right", fill="y")
+        dhsb.pack(side="bottom", fill="x")
+        self.doodad_tree.pack(side="left", fill="both", expand=True)
+        self._attach_tree_copy(self.doodad_tree)
+
+    def _refresh_preplaced(self):
+        if not self.map_data:
+            return
+        q = self.pre_search.get().strip()
+        cq = compile_query(q)
+        units = getattr(self.map_data, "units", []) or []
+        doodads = getattr(self.map_data, "doodads", []) or []
+
+        self.unit_tree.delete(*self.unit_tree.get_children())
+        nu = 0
+        for u in units:
+            name = self._item_name(u.type_id)
+            blob = name + " " + u.type_id
+            if q and cq.score(blob) is None:
+                continue
+            hp = "默认" if u.hp < 0 else str(u.hp)
+            mana = "默认" if u.mana < 0 else str(u.mana)
+            self.unit_tree.insert(
+                "", "end",
+                values=(name, u.type_id, u.player, f"{u.x:.0f}, {u.y:.0f}",
+                        hp, mana, u.hero_level),
+                tags=("odd" if nu % 2 else "even",))
+            nu += 1
+        self.unit_tree.tag_configure("odd", background=ROW_ALT)
+        self.unit_tree.tag_configure("even", background=CARD)
+
+        self.doodad_tree.delete(*self.doodad_tree.get_children())
+        nd = 0
+        for d in doodads:
+            name = self._item_name(d.type_id)
+            blob = name + " " + d.type_id
+            if q and cq.score(blob) is None:
+                continue
+            drops = "  ".join(f"{self._item_name(i)}×{c}%" for i, c in d.drops)
+            scale = f"{d.scale[0]:.2g}" if d.scale else "1"
+            self.doodad_tree.insert(
+                "", "end",
+                values=(name, d.type_id, f"{d.x:.0f}, {d.y:.0f}", scale, d.life, drops),
+                tags=("odd" if nd % 2 else "even",))
+            nd += 1
+        self.doodad_tree.tag_configure("odd", background=ROW_ALT)
+        self.doodad_tree.tag_configure("even", background=CARD)
+
+        self.unit_title.configure(text=f"预放置单位  ({nu})")
+        self.doodad_title.configure(text=f"装饰物 / 可破坏物  ({nd})")
+        if units or doodads:
+            self.pre_hint.configure(
+                text=f"预放置：{len(units)} 单位 · {len(doodads)} 装饰物/可破坏物"
+                     "（坐标为地图世界坐标；生命=默认表示用对象定义里的满血）")
+        else:
+            self.pre_hint.configure(text="此图无预放置数据（war3mapUnits.doo / war3map.doo 缺失或为空）")
 
     def _item_name(self, code):
         if self.map_data:
@@ -743,6 +921,10 @@ class App(ctk.CTk):
         # 合成配方
         self.recipes = recipes or []
         self._refresh_recipes()
+        # 预放置单位/装饰物
+        self._refresh_preplaced()
+        # 地图信息
+        self._refresh_info()
 
         counts = md.category_counts()
         total = sum(counts.values())

@@ -1,9 +1,16 @@
-"""对象字段 4 字符码 → 中文标签（精选常用字段）。
+"""对象字段 4 字符码 → 中文标签。
 
-魔兽完整字段定义在游戏自带 MetaData.slk 里，这里收录最常用、对"看信息"
-最有用的一批；未收录的码在界面里直接显示原始 4 字符。
+两层：下面手工精选的常用字段（标签更口语、优先用）；其余回退到
+`field_meta.py` 的全量生成表（1400+ 字段，由 build_field_labels.py 从
+MetaData.slk + westrings 离线生成）。两层都没有才显示原始 4 字符。
 """
 from __future__ import annotations
+
+try:
+    from .field_meta import GENERATED_FIELD_LABELS, FIELD_TYPES
+except Exception:                       # 生成数据缺失时退化为仅精选表
+    GENERATED_FIELD_LABELS = {}
+    FIELD_TYPES = {}
 
 # 每类对象的"名称"字段码
 NAME_FIELD = {
@@ -51,4 +58,12 @@ FIELD_LABELS = {
 
 
 def label_for(field_id: str) -> str:
-    return FIELD_LABELS.get(field_id, field_id)
+    """精选标签优先 → 全量生成标签兜底 → 都没有则原样返回 4 字符码。"""
+    return (FIELD_LABELS.get(field_id)
+            or GENERATED_FIELD_LABELS.get(field_id)
+            or field_id)
+
+
+def field_type(field_id: str) -> str:
+    """字段类型（int/real/string/abilityList…），来自 MetaData.slk；未知返回空串。"""
+    return FIELD_TYPES.get(field_id, "")
