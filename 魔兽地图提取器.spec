@@ -3,7 +3,16 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = []
 binaries = []
-hiddenimports = []
+# w3xtool 多个子模块在 api.py/fields.py 里是“函数内懒加载”(如 _add_preplaced 里 from .doo import)，
+# 显式列入 hiddenimports 确保 PyInstaller 一定收进去(含大数据模块 field_meta/base_*/westrings)。
+hiddenimports = [
+    'w3xtool.doo', 'w3xtool.imp', 'w3xtool.w3i', 'w3xtool.wct',
+    'w3xtool.field_meta', 'w3xtool.fields', 'w3xtool.slk', 'w3xtool.textobj',
+    'w3xtool.script_scan', 'w3xtool.wts', 'w3xtool.w3obj', 'w3xtool.blp',
+    'w3xtool.icons', 'w3xtool.huffman', 'w3xtool.explode', 'w3xtool.mpq',
+    'w3xtool.base_names', 'w3xtool.base_objects', 'w3xtool.westrings',
+    'w3xtool.single_instance',
+]
 tmp_ret = collect_all('customtkinter')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
@@ -21,6 +30,7 @@ a = Analysis(
         # 运行时用不到的标准库，裁掉以缩小体积（保留 tkinter/PIL/customtkinter）
         'unittest', 'test', 'pydoc', 'doctest', 'pdb',
         'lib2to3', 'distutils', 'setuptools', 'pip', 'xmlrpc',
+        'build_field_labels',     # 离线生成脚本，运行时用不到
     ],
     noarchive=False,
     optimize=0,

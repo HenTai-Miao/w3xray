@@ -181,7 +181,7 @@ def parse_w3i(data: bytes, wts: dict | None = None) -> "W3iInfo | None":
     # 玩家段
     try:
         pcount = r.i32()
-        if 0 <= pcount <= len(r.d):
+        if 0 <= pcount <= len(r.d) - r.p:        # 每条至少 1 字节，按剩余字节卡上限
             for _ in range(pcount):
                 pid = r.i32()
                 ptype = r.i32()
@@ -200,7 +200,7 @@ def parse_w3i(data: bytes, wts: dict | None = None) -> "W3iInfo | None":
     # 队伍段
     try:
         fcount = r.i32()
-        if 0 <= fcount <= len(r.d):
+        if 0 <= fcount <= len(r.d) - r.p:        # 每条至少 1 字节，按剩余字节卡上限
             for _ in range(fcount):
                 fflag = r.u32()
                 mask = r.u32()
