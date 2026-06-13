@@ -274,3 +274,13 @@
 - **#14 WTS 注释行 { 加固**（`wts._OPEN` 独占行锚定 + 兜底退回）：STRING 头与正文间注释行里的 { 不再被误当正文起点。**62 张真图新旧解析逐字节一致（零回归）**。测试 `test_wts.py`（+1）。**编码 mbcs 回退评估后不做**（简中无收益、非简中反致 GBK 老图乱码）。
 - **未做**（清单剩余，价值低/有风险）：#6 完整 JASS tokenizer 替换（按 native 分类的兜底场景不适合）、#10 提取完整性自检、#12 BJ 隐式引用映射表、#13 装饰物 v8 4 字节变体（无实据，盲改风险）。
 - 测试 **218→231 通过, 8 skipped**（+13 例）。
+
+### 会话 15：重制版（Reforged）地图提取支持 —— .doo 皮肤字段自适应
+用户装了重制版（`C:\Program Files (x86)\Warcraft III`，CASC 存储 2.0.4.23745）问能否提取。
+- **结论**：安装目录本体是 CASC（w3xray 只读 MPQ，不支持本体）；但用户下载的地图（Documents\Warcraft III\Maps）是 MPQ，w3xray 能提（实测 Darkborne RPG v23 70MB 保护图，对象/脚本/地图信息全出）。
+- **修的真问题**：重制版 war3map.doo / war3mapUnits.doo 每条在 scale 后多 4 字节皮肤码，但 version/sub 仍 8/11 无法靠版本区分 → 经典图按经典布局解析、重制图错位（单位 0、装饰物中途断）。
+  - `doo.py` 重构 parse_doodads/parse_units：抽 `_read_doodad/_read_unit(r, skin)` + `_attempt_*(data,count,skin)`，**两种布局都试取完整读完 count 的那个**；各 count 加 `_CAP=256` 上限令错位快速触发换试。经典图先命中 skin=False 无回归。
+  - 实测：27 张 Season1 重制版对战图 → 27 有装饰物、25 有单位（修前全 0）；Darkborne 33944 装饰物按 skin 布局 1833000/1833000 到 EOF。这是之前因"无实据"暂缓的清单 #13，现有实据并落地。
+  - 测试 `test_doo.py` +2（重制版 skin 自适应 + 带掉落）。
+- CASC 本体读取仍不做（纯 Python 成本极高，且不影响读 .w3x 地图），findings.md 记录判据。
+- 测试 **231→233 通过, 8 skipped**（+2 例）。

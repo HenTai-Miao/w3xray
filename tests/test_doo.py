@@ -21,10 +21,12 @@ def _i(v):
     return struct.pack("<i", v)
 
 
-def _doodad(tid, var, pos, angle_rad, scale, vis, life, drops, serial):
+def _doodad(tid, var, pos, angle_rad, scale, vis, life, drops, serial, skin=None):
     b = tid.encode("latin-1") + _i(var)
     b += _f(pos[0]) + _f(pos[1]) + _f(pos[2]) + _f(angle_rad)
     b += _f(scale[0]) + _f(scale[1]) + _f(scale[2])
+    if skin is not None:                 # 重制版：scale 后多 4 字节皮肤码
+        b += skin.encode("latin-1")
     b += bytes([vis]) + bytes([life])
     b += _i(-1)                          # 掉落列表指针
     b += _i(len(drops))
@@ -121,6 +123,24 @@ class TestParseDoodads(unittest.TestCase):
         objs = parse_doodads(data)
         self.assertEqual(len(objs), 1)
         self.assertEqual(objs[0].serial, 1)
+
+    def test_reforged_skin_field_auto_detected(self):
+        # 重制版每条 scale 后多 4 字节皮肤码（版本仍 8/11）→ 自动识别带 skin 的布局
+        ds = [_doodad("LTlt", i, (float(i), 0.0, 0.0), 0.0, (1, 1, 1),
+                      2, 100, [], i, skin="LTlt") for i in range(4)]
+        data = b"W3do" + _i(8) + _i(11) + _i(len(ds)) + b"".join(ds) + _i(0) + _i(0)
+        objs = parse_doodads(data)
+        self.assertEqual(len(objs), 4)
+        self.assertEqual([o.serial for o in objs], [0, 1, 2, 3])
+        self.assertEqual(objs[0].type_id, "LTlt")
+
+    def test_reforged_skin_with_drops(self):
+        d = _doodad("YOl0", 0, (0.0, 0.0, 0.0), 0.0, (1, 1, 1),
+                    2, 100, [("ratf", 100)], 7, skin=" B00")
+        data = b"W3do" + _i(8) + _i(11) + _i(1) + d + _i(0) + _i(0)
+        objs = parse_doodads(data)
+        self.assertEqual(len(objs), 1)
+        self.assertEqual(objs[0].drops, [("ratf", 100)])
 
 
 class TestParseUnits(unittest.TestCase):
