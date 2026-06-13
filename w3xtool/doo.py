@@ -98,12 +98,19 @@ def _read_doodad(r: _Reader, skin: bool) -> Doodad:
     vis = r.u8()
     life = r.u8()
     r.i32()                                        # 掉落列表指针
-    ndrops = r.i32()
-    if ndrops < 0 or ndrops > 256:                 # 不合理 → 布局错位（如把 skin 当成了别的字段）
-        raise ValueError("掉落数 %d 不合理" % ndrops)
+    # 掉落表是嵌套的：先 集合数，每个集合内再列若干 (物品码, 概率)。
+    # 旧实现把它当成扁平的物品列表，遇到任何带掉落的装饰物就会错位 4 字节并连锁解崩
+    # （真实地图里多数装饰物无掉落，故 bug 常被掩盖，直到某条带掉落才暴露）。
+    nsets = r.i32()
+    if nsets < 0 or nsets > 256:                   # 不合理 → 布局错位（如把 skin 当成了别的字段）
+        raise ValueError("掉落集合数 %d 不合理" % nsets)
     drops = []
-    for _ in range(ndrops):
-        drops.append((r.tag(), r.i32()))
+    for _ in range(nsets):
+        nitems = r.i32()
+        if nitems < 0 or nitems > 256:
+            raise ValueError("掉落物品数 %d 不合理" % nitems)
+        for _ in range(nitems):
+            drops.append((r.tag(), r.i32()))       # 物品码 + 概率(%)
     serial = r.i32()
     return Doodad(type_id=tid, variation=var, x=x, y=y, z=z, angle=angle,
                   scale=scale, flags=vis, life=life, drops=drops, serial=serial)
@@ -153,9 +160,11 @@ def parse_doodads(data: bytes) -> list:
 _CAP = 256          # 各 count 字段的合理上限：超过即判布局错位（换布局重试的信号）
 
 
-def _read_unit(r: _Reader, skin: bool) -> Unit:
-    """读一条单位记录（TFT 版本 8）。skin=True 时 scale 后多读 4 字节皮肤码（重制版）。
+def _read_unit(r: _Reader, skin: bool, v7: bool = False) -> Unit:
+    """读一条单位记录。skin=True 时 scale 后多读 4 字节皮肤码（重制版）。
 
+    v7=True 为经典 RoC（war3mapUnits.doo 版本 7）布局：相比 TFT(版本 8) 少了
+    英雄 力量/敏捷/智力 三个字段，以及尾部的 自定义颜色 / 传送门 两个字段（皆 TFT 新增）。
     各 count 超 _CAP 判为布局错位 → 抛 ValueError，供上层换布局重试。
     """
     import math
@@ -184,7 +193,8 @@ def _read_unit(r: _Reader, skin: bool) -> Unit:
     gold = r.i32()
     r.f32()                                         # 目标获取范围
     hlev = r.i32()
-    r.i32(); r.i32(); r.i32()                       # 英雄 力量/敏捷/智力
+    if not v7:
+        r.i32(); r.i32(); r.i32()                  # 英雄 力量/敏捷/智力（仅 TFT 版本 8）
     nitems = r.i32()
     if nitems < 0 or nitems > _CAP:
         raise ValueError("背包物品数不合理")
@@ -214,22 +224,23 @@ def _read_unit(r: _Reader, skin: bool) -> Unit:
             r.tag(); r.i32()
     else:
         raise ValueError("未知 randomFlag %d" % rflag)
-    r.i32()                                         # 自定义颜色
-    r.i32()                                         # 传送门
+    if not v7:
+        r.i32()                                     # 自定义颜色（仅 TFT 版本 8）
+        r.i32()                                     # 传送门（仅 TFT 版本 8）
     serial = r.i32()
     return Unit(type_id=tid, variation=var, x=x, y=y, z=z, angle=angle,
                 player=player, hp=hp, mana=mana, gold=gold, hero_level=hlev,
                 items=items, abilities=abilities, serial=serial)
 
 
-def _attempt_units(data: bytes, count: int, skin: bool):
-    """按给定皮肤布局解析 count 个单位，返回 (列表, 是否完整读完所有 count)。"""
+def _attempt_units(data: bytes, count: int, skin: bool, v7: bool = False):
+    """按给定皮肤/版本布局解析 count 个单位，返回 (列表, 是否完整读完所有 count)。"""
     r = _Reader(data)
     r.p = 16                                        # 跳过 magic+version+sub+count
     result = []
     for _ in range(count):
         try:
-            result.append(_read_unit(r, skin))
+            result.append(_read_unit(r, skin, v7))
         except (struct.error, IndexError, ValueError):
             return result, False
     return result, True
@@ -250,9 +261,13 @@ def parse_units(data: bytes) -> list:
         return []
     if count < 0 or count > len(data):              # 注水 count
         return []
+    # 版本 7 = 经典 RoC（缺英雄三围 + 自定义颜色/传送门）；版本 8 = TFT。按版本号选布局，
+    # 皮肤(重制版)仍两种都试取能读完的那个。版本 7 与版本 8 都覆盖到再扩展。
+    version = struct.unpack_from("<i", data, 4)[0]
+    v7 = version <= 7
     best = []
     for skin in (False, True):                      # 先经典后重制
-        result, full = _attempt_units(data, count, skin)
+        result, full = _attempt_units(data, count, skin, v7)
         if full:
             return result
         if len(result) > len(best):

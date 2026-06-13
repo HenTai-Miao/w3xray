@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import tempfile
 from dataclasses import dataclass, field
 
-from .mpq import MPQArchive, FLAG_EXISTS
+from .mpq import (MPQArchive, FLAG_EXISTS, guess_extension,
+                  _hash, HASH_NAME_A, HASH_NAME_B)
 from .w3obj import parse_object_data, EXT_CATEGORY
 from .wts import parse_wts, resolve
 from .fields import NAME_FIELD, label_for, is_concat_type
@@ -31,6 +33,11 @@ KNOWN_EXPORT_FILES = [
     "war3mapUnits.doo", "war3map.doo", "war3map.shd", "war3map.mmp",
     "war3mapMap.blp", "war3map.wpm", "(listfile)",
 ]
+_RESOURCE_NAME_RE = re.compile(
+    rb"(?i)([A-Za-z0-9_ .()\\/\-]{1,240}\."
+    rb"(?:blp|mdx|mdl|wav|mp3|ogg|tga|dds|txt|slk|ttf|j|lua|doo|"
+    rb"w3u|w3t|w3a|w3q|w3b|w3d|w3h))"
+)
 
 
 def _expand_codes(value: str, names: dict) -> str:
@@ -620,6 +627,122 @@ def _safe_export_path(out_dir: str, name: str):
     return dest
 
 
+def _resource_name_variants(name: str) -> set[str]:
+    name = name.replace("\x00", "").strip().strip("\"'")
+    if not name or len(name) > 260:
+        return set()
+    name = name.replace("/", "\\").lstrip("\\")
+    parts = [p for p in name.split("\\") if p and p != "."]
+    if not parts or any(p == ".." for p in parts):
+        return set()
+    name = "\\".join(parts)
+    names = {name}
+    if not name.lower().startswith("war3mapimported\\"):
+        names.add("war3mapImported\\" + name)
+    return names
+
+
+def _resource_name_candidates(data: bytes) -> set[str]:
+    names = set()
+    for m in _RESOURCE_NAME_RE.finditer(data):
+        try:
+            raw = m.group(1).decode("latin-1", "ignore")
+        except Exception:
+            continue
+        names.update(_resource_name_variants(raw))
+    return names
+
+
+def _export_recovered_named_files(archive: MPQArchive, out_dir: str,
+                                  exported_blocks: set) -> int:
+    """Recover original names for anonymous blocks from paths embedded in resources.
+
+    Optimized/protected maps often erase (listfile), but MDX/MDL/script data still
+    contains texture/model paths. Matching those paths against MPQ hash entries
+    lets us export many anonymous blocks under their real names.
+    """
+    candidates = set()
+    for n in archive.list_files():
+        candidates.update(_resource_name_variants(n))
+    for _idx, block in archive.iter_blocks():
+        data = archive.read_block_anon(block)
+        if data:
+            candidates.update(_resource_name_candidates(data))
+
+    by_hash = {}
+    for n in candidates:
+        by_hash.setdefault((_hash(n, HASH_NAME_A), _hash(n, HASH_NAME_B)), []).append(n)
+
+    manifest = []
+    count = 0
+    for name_a, name_b, _locale, _platform, bi in getattr(archive, "hash_table", []):
+        if bi in (0xFFFFFFFF, 0xFFFFFFFE) or bi >= len(archive.block_table):
+            continue
+        if bi in exported_blocks:
+            continue
+        hits = by_hash.get((name_a, name_b))
+        if not hits:
+            continue
+        hits = sorted(set(hits),
+                      key=lambda x: (x.lower().startswith("war3mapimported\\"), len(x), x.lower()))
+        data = None
+        chosen = None
+        for n in hits:
+            try:
+                data = archive.read_file(n)
+                chosen = n
+                break
+            except Exception:
+                continue
+        if data is None:
+            manifest.append(f"FAIL\tblock={bi}\tname={hits[0]}\thits={len(hits)}")
+            continue
+        dest = _safe_export_path(out_dir, chosen)
+        if dest is None:
+            manifest.append(f"UNSAFE\tblock={bi}\tname={chosen}")
+            continue
+        os.makedirs(os.path.dirname(dest) or out_dir, exist_ok=True)
+        with open(dest, "wb") as f:
+            f.write(data)
+        exported_blocks.add(bi)
+        count += 1
+        manifest.append(
+            f"OK\tblock={bi}\tname={chosen}\tsize={len(data)}\t"
+            f"type={guess_extension(data)}\thits={len(hits)}"
+        )
+
+    if manifest:
+        rec_dir = os.path.join(out_dir, "RecoveredNames")
+        os.makedirs(rec_dir, exist_ok=True)
+        with open(os.path.join(rec_dir, "manifest.tsv"), "w", encoding="utf-8") as f:
+            f.write("\n".join(manifest) + "\n")
+    return count
+
+
+def _block_raw_payload(archive: MPQArchive, block) -> bytes:
+    """Return the exact stored MPQ block payload for forensic fallback export."""
+    start = archive.archive_offset + block.file_pos
+    if start < 0 or start > len(archive._data):
+        return b""
+    end = min(start + block.comp_size, len(archive._data))
+    return bytes(archive._data[start:end])
+
+
+def _export_raw_block(archive: MPQArchive, out_dir: str, idx: int, block,
+                      manifest: list, reason: str) -> None:
+    raw_dir = os.path.join(out_dir, "UnknownRaw")
+    os.makedirs(raw_dir, exist_ok=True)
+    filename = "File%06d.mpqraw" % idx
+    raw = _block_raw_payload(archive, block)
+    with open(os.path.join(raw_dir, filename), "wb") as f:
+        f.write(raw)
+    manifest.append(
+        f"{filename}\tblock={idx}\tcomp_size={block.comp_size}\t"
+        f"file_size={block.file_size}\tflags=0x{block.flags:08X}\t"
+        f"raw_size={len(raw)}\treason={reason}"
+    )
+
+
 def tmp_extract_dir(name: str, *sub: str, clean: bool = False) -> str:
     """提取产物的临时目录：%TEMP%/w3xtool提取/<安全名>/...（提取的都是临时文件）。
 
@@ -657,6 +780,8 @@ def _export_all_impl(archive: MPQArchive, out_dir: str | None, _depth: int) -> s
     # 再补 war3map.imp 里登记的导入文件（listfile 被删时这是唯一的自定义文件名来源）
     names.update(_imported_names(archive))
     sub_maps = []
+    exported_blocks = set()              # 已具名导出的块索引（无名导出据此去重，不重复导出）
+    raw_manifest = []
     for n in sorted(names):
         if not archive.has_file(n):
             continue
@@ -670,8 +795,38 @@ def _export_all_impl(archive: MPQArchive, out_dir: str | None, _depth: int) -> s
         os.makedirs(os.path.dirname(dest) or out_dir, exist_ok=True)
         with open(dest, "wb") as f:
             f.write(data)
+        bi = archive.block_index_of(n)
+        if bi is not None:
+            exported_blocks.add(bi)
         if n.lower().endswith((".w3x", ".w3m")):
             sub_maps.append(n)
+
+    _export_recovered_named_files(archive, out_dir, exported_blocks)
+
+    # 无名导入资源：保护图把 (listfile) 与 war3map.imp 删光后，模型/贴图/音效只剩在块表里、
+    # 没有文件名。逐块由内容反推密钥(read_block_anon)解出，按文件头猜扩展名，落到 Unknown\。
+    # 若仍无法解出，也把原始块负载落到 UnknownRaw\，保证块表中存在的数据不被静默丢弃。
+    # 这样「保护图」的导入也能完整提取出来查看，而不是只剩十几个固定名文件。
+    unknown_dir = os.path.join(out_dir, "Unknown")
+    for idx, block in archive.iter_blocks():
+        if idx in exported_blocks:
+            continue
+        data = archive.read_block_anon(block)
+        if data is None:                     # 单块/反推失败/无依据——至少保留原始负载
+            _export_raw_block(archive, out_dir, idx, block, raw_manifest,
+                              "anonymous-block-unrecoverable")
+            continue
+        ext = guess_extension(data)
+        os.makedirs(unknown_dir, exist_ok=True)
+        with open(os.path.join(unknown_dir, "File%06d.%s" % (idx, ext)), "wb") as f:
+            f.write(data)
+        if ext in ("w3m", "w3x"):            # 保护战役里无名的子地图也递归
+            sub_maps.append(os.path.join("Unknown", "File%06d.%s" % (idx, ext)))
+
+    if raw_manifest:
+        raw_dir = os.path.join(out_dir, "UnknownRaw")
+        with open(os.path.join(raw_dir, "manifest.tsv"), "w", encoding="utf-8") as f:
+            f.write("\n".join(raw_manifest) + "\n")
 
     # 战役：把每张子图内部文件也递归解出到 out_dir/<子图名>/（仅顶层递归一层）
     if _depth == 0:

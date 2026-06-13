@@ -80,6 +80,8 @@ def _make_crypt_table():
 
 _CRYPT = _make_crypt_table()
 
+_DERIVE_KEY = -1                  # _read_block 的哨兵：区分"按名派生密钥"与"key=None(不加密)"
+
 # hash 类型
 HASH_TABLE_OFFSET = 0
 HASH_NAME_A = 1
@@ -173,6 +175,72 @@ def _sparse_decompress(data: bytes, max_output: int | None = None) -> bytes:
     if max_output is not None:
         return bytes(out[:max_output])
     return bytes(out)
+
+
+def _detect_offtable_key(e0: int, e1: int, off0: int, max_off1: int):
+    """由内容反推扇区偏移表的解密密钥（无需文件名）。
+
+    加密文件的密钥本由「文件名」派生；保护图删名后无法这样取。但扇区偏移表头两个
+    uint32 是已知明文：第 0 个 = 偏移表自身字节数(off0)，第 1 个 = 第 0 扇区数据的结束
+    偏移(在 (off0, off0+扇区大小] 内)。据此在 256 个候选里解出能让密文解成已知明文的密钥。
+    这正是 MPQ Editor「查找未知文件」用的办法（StormLib DetectFileKeyBySectorSize）。
+
+    返回的是「解密偏移表用的密钥」（= 文件密钥 - 1）；命中不到返回 None。
+    """
+    temp = ((e0 ^ off0) - 0xEEEEEEEE) & 0xFFFFFFFF
+    for i in range(0x100):
+        key1 = (temp - _CRYPT[0x400 + i]) & 0xFFFFFFFF
+        key2 = (0xEEEEEEEE + _CRYPT[0x400 + (key1 & 0xFF)]) & 0xFFFFFFFF
+        if (e0 ^ ((key1 + key2) & 0xFFFFFFFF)) == off0:
+            k1 = (((~key1 & 0xFFFFFFFF) << 0x15) + 0x11111111 | (key1 >> 0x0B)) & 0xFFFFFFFF
+            k2 = (off0 + key2 + (key2 << 5) + 3) & 0xFFFFFFFF
+            k2 = (k2 + _CRYPT[0x400 + (k1 & 0xFF)]) & 0xFFFFFFFF
+            if off0 < (e1 ^ ((k1 + k2) & 0xFFFFFFFF)) <= max_off1:
+                return key1
+    return None
+
+
+def guess_extension(data: bytes) -> str:
+    """按文件头(magic)猜扩展名，用于给无名导入资源起个可识别的名字。"""
+    if len(data) < 4:
+        return "bin"
+    h = data[:4]
+    if h in (b"BLP1", b"BLP2"):
+        return "blp"
+    if h == b"MDLX":
+        return "mdx"
+    if h == b"DDS ":
+        return "dds"
+    if h == b"RIFF":
+        return "wav"
+    if h[:3] == b"ID3" or h[:2] == b"\xff\xfb":
+        return "mp3"
+    if h == b"OggS":
+        return "ogg"
+    if h in (b"\x00\x01\x00\x00", b"OTTO", b"true"):
+        return "ttf"
+    if h[:3] == b"ID;":
+        return "slk"
+    if h == b"HM3W":
+        return "w3m"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "png"
+    if h[:2] == b"\xff\xd8":
+        return "jpg"
+    if h[:2] == b"BM":
+        return "bmp"
+    sample = data[:512]
+    try:
+        sample.decode("ascii")
+        s = sample.lstrip().lower()
+        if s[:7] == b"version" or s[:2] == b"//" or s[:8] == b"function" or s[:6] == b"global":
+            return "mdl"               # 文本模型/脚本
+        return "txt"
+    except UnicodeDecodeError:
+        pass
+    if len(data) > 18 and data[2] in (1, 2, 3, 9, 10, 11):
+        return "tga"                   # TGA 无 magic，靠 image-type 字节判断
+    return "bin"
 
 
 def _parse_sector_offsets(raw: bytes, count: int, key) -> list:
@@ -402,7 +470,7 @@ class MPQArchive:
         block = self.block_table[bi]
         return self._read_block(block, real)
 
-    def _read_block(self, block: _Block, name: str) -> bytes:
+    def _read_block(self, block: _Block, name: str, key=_DERIVE_KEY) -> bytes:
         data = self._data
         start = self.archive_offset + block.file_pos
         if start < 0 or start > len(data):
@@ -412,13 +480,14 @@ class MPQArchive:
         raw = data[start:start + block.comp_size]
         flags = block.flags
 
-        key = None
-        if flags & FLAG_ENCRYPTED:
-            base = name.split("\\")[-1].split("/")[-1]
-            key = _hash(base, HASH_FILE_KEY)
-            if flags & FLAG_FIX_KEY:
-                key = (key + block.file_pos) ^ block.file_size
-                key &= 0xFFFFFFFF
+        if key == _DERIVE_KEY:           # 默认：由文件名派生密钥（无名块则由调用方显式传入）
+            key = None                   # None=不加密
+            if flags & FLAG_ENCRYPTED:
+                base = name.split("\\")[-1].split("/")[-1]
+                key = _hash(base, HASH_FILE_KEY)
+                if flags & FLAG_FIX_KEY:
+                    key = (key + block.file_pos) ^ block.file_size
+                    key &= 0xFFFFFFFF
 
         compressed = bool(flags & (FLAG_COMPRESS | FLAG_IMPLODE))
 
@@ -483,6 +552,70 @@ class MPQArchive:
             return self._read_block(block, "")
         except Exception:
             return None
+
+    def recover_block_key(self, block: "_Block"):
+        """无文件名时由内容反推加密块的解密密钥（仅扇区式压缩文件）。
+
+        保护图把导入资源的名字从 (listfile) 删光，密钥又是文件名派生的——但扇区偏移表
+        头两个 uint32 是已知明文，据此可反解出密钥（见 _detect_offtable_key）。
+        返回文件密钥；单块(SINGLE_UNIT，无偏移表)或反推失败返回 None。
+        """
+        flags = block.flags
+        if not (flags & FLAG_ENCRYPTED):
+            return None
+        if flags & FLAG_SINGLE_UNIT:
+            return None                    # 无扇区偏移表，无已知明文可依
+        if not (flags & (FLAG_COMPRESS | FLAG_IMPLODE)):
+            return None                    # 未压缩多扇区：偏移表不存在，同样无依据
+        start = self.archive_offset + block.file_pos
+        raw = self._data[start:start + block.comp_size]
+        if len(raw) < 8:
+            return None
+        e0, e1 = struct.unpack_from("<II", raw, 0)
+        nsec = (block.file_size + self.sector_size - 1) // self.sector_size
+        for crc in (0, 1):                 # 偏移表可能多一个 CRC 扇区项
+            count = nsec + 1 + crc
+            off0 = count * 4
+            k = _detect_offtable_key(e0, e1, off0, len(raw))
+            if k is None:
+                continue
+            try:
+                _parse_sector_offsets(raw, count, k)
+            except ValueError:
+                continue
+            return (k + 1) & 0xFFFFFFFF   # 偏移表用 key-1 解，故文件密钥 = k+1
+        return None
+
+    def read_block_anon(self, block: "_Block"):
+        """读取一个块而不依赖文件名：加密块先由内容反推密钥。失败返回 None。
+
+        用于"完整提取"——保护图里删了名、只存在于块表里的导入资源(模型/贴图/音效)。
+        恢复出的密钥会被扇区偏移表单调性校验 + 解压成功 二次把关，错误密钥基本会被挡下。
+        """
+        flags = block.flags
+        try:
+            if flags & FLAG_ENCRYPTED:
+                key = self.recover_block_key(block)
+                if key is None:
+                    return None
+                return self._read_block(block, "", key=key)
+            return self._read_block(block, "")
+        except Exception:
+            return None
+
+    def iter_blocks(self):
+        """枚举块表里实际存在的 (索引, _Block)。"""
+        for idx, block in enumerate(self.block_table):
+            if block.flags & FLAG_EXISTS:
+                yield idx, block
+
+    def block_index_of(self, name: str):
+        """文件名 → 块索引（用于把"已具名导出"的块从无名导出里排除）。"""
+        entry, _ = self._resolve_entry(name)
+        if entry is None:
+            return None
+        bi = entry[4]
+        return bi if bi < len(self.block_table) else None
 
     def peek_block(self, block: "_Block", n: int = 64):
         """只解压头部少量字节，用于快速判断文件类型（避免整块解压大文件）。"""

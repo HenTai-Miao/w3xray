@@ -8,7 +8,15 @@ import struct
 import tempfile
 import unittest
 
-from w3xtool.mpq import MPQArchive, _Block, _parse_sector_offsets, FLAG_EXISTS
+from w3xtool.mpq import (
+    FLAG_COMPRESS,
+    FLAG_ENCRYPTED,
+    MPQArchive,
+    _Block,
+    _decrypt,
+    _parse_sector_offsets,
+    FLAG_EXISTS,
+)
 
 
 def _write_min_mpq():
@@ -57,6 +65,29 @@ class TestBlockBounds(unittest.TestCase):
         blk = _Block(file_pos=10_000, comp_size=10, file_size=10, flags=FLAG_EXISTS)
         with self.assertRaises((KeyError, ValueError)):
             a._read_block(blk, "x")
+
+
+class TestAnonymousKeyRecovery(unittest.TestCase):
+    def test_recovered_sector_offset_must_fit_inside_block(self):
+        a = object.__new__(MPQArchive)
+        a.archive_offset = 0
+        a.sector_size = 4 * 1024 * 1024
+        # Real protected-map block header that has two possible first-offset keys.
+        # The wrong key decrypts the second offset past comp_size; the right key
+        # decrypts it to a valid in-block sector end.
+        a._data = bytes.fromhex("9c 51 ec c8 a4 3c cd d3") + b"\x00" * (4897 - 8)
+        blk = _Block(
+            file_pos=0,
+            comp_size=4897,
+            file_size=5140,
+            flags=FLAG_EXISTS | FLAG_ENCRYPTED | FLAG_COMPRESS,
+        )
+
+        key = a.recover_block_key(blk)
+
+        self.assertEqual(key, 0x0F8EE069)
+        off_raw = _decrypt(a._data[:8], (key - 1) & 0xFFFFFFFF)
+        self.assertEqual(struct.unpack("<2I", off_raw), (8, 4897))
 
 
 class TestArchiveLifecycle(unittest.TestCase):

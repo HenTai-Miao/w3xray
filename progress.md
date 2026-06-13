@@ -284,3 +284,15 @@
   - 测试 `test_doo.py` +2（重制版 skin 自适应 + 带掉落）。
 - CASC 本体读取仍不做（纯 Python 成本极高，且不影响读 .w3x 地图），findings.md 记录判据。
 - 测试 **231→233 通过, 8 skipped**（+2 例）。
+
+### 会话 16：superpowers 全项目复查 + 匿名资源完整导出增强
+用户要求对整套软件再做一次 superpowers 流程检查，并确认两张保护/优化地图尽量完整导出。本轮聚焦实际漏提路径：删 `(listfile)` 后只靠固定名/imp 仍拿不到大量匿名导入资源。
+
+- **MPQ 匿名加密 block 恢复**（`mpq.py`）：新增按扇区偏移表反推加密 key 的读取路径。无文件名的加密资源不再直接跳过；反推结果经过偏移表单调/越界校验和实际解压校验，避免误 key 产出垃圾。回归测试覆盖 AV2 真实失败样本里的“错误 key 会把第二偏移解到 comp_size 外”的情况。
+- **导出完整性增强**（`api.py`）：`export_all_files` 现在按“具名文件 → 内容反推原始路径 → Unknown 匿名文件 → UnknownRaw 原始 payload”四层落盘。MDX/脚本中出现的 `*.blp/*.mdx/*.wav/...` 路径会反查 MPQ hash 并恢复到原目录，同时写 `RecoveredNames/manifest.tsv`；完全无法解码的 block 写 `UnknownRaw/FileXXXXXX.mpqraw` 和 `UnknownRaw/manifest.tsv`，不再静默丢弃。
+- **.doo 正确性补洞**（`doo.py`）：装饰物掉落表改为嵌套 drop-set 解析；`war3mapUnits.doo` 增加 RoC v7 老布局支持。真实 `TheRiseOfEyes_v3_15e_ENG` v7 fixture 加入测试，避免再按 TFT v8 错位。
+- **文档同步**：README 写清匿名导出、原路径恢复、raw 保底目录，以及 RoC v7/TFT v8/Reforged v8 三种单位 doo 布局。
+- **真实地图验证**：
+  - `TheRiseOfEyes_v3_15e_ENG.w3x`：MPQ blocks 2627，list files 22，导出文件 2628，RecoveredNames OK 1061 / fail 0，UnknownRaw 0。
+  - `AV2_TCoM MMORG v17.8m_CN.w3x`：MPQ blocks 5839，list files 26，导出文件 5842，RecoveredNames OK 3675 / fail 2，UnknownRaw 2。两项 fail 对应原图内无法解码的 BLP payload，已保留 raw；此前已用公开近版本 `v17.8n` 手工补回同名 BLP 到用户临时提取目录。
+- 测试/打包：`uv run pytest` 为 **238 passed, 8 skipped**；`uv run python -m PyInstaller --noconfirm "魔兽地图提取器.spec"` 成功生成 onedir 产物 `dist/魔兽地图提取器/`。（`uv run pyinstaller` 在当前中文/空格路径下触发 uv trampoline 路径规范化错误，已改用等价的 `python -m PyInstaller` 入口。）

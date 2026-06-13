@@ -29,9 +29,14 @@ def _doodad(tid, var, pos, angle_rad, scale, vis, life, drops, serial, skin=None
         b += skin.encode("latin-1")
     b += bytes([vis]) + bytes([life])
     b += _i(-1)                          # 掉落列表指针
-    b += _i(len(drops))
-    for did, chance in drops:
-        b += did.encode("latin-1") + _i(chance)
+    # 掉落表是嵌套的（集合→物品），与单位 doo 一致；这里把传入的扁平 drops 编成一个集合
+    if drops:
+        b += _i(1)                       # 集合数 = 1
+        b += _i(len(drops))              # 该集合内物品数
+        for did, chance in drops:
+            b += did.encode("latin-1") + _i(chance)
+    else:
+        b += _i(0)                       # 无掉落集合
     b += _i(serial)
     return b
 
@@ -46,7 +51,7 @@ def _build_doo(doodads, version=8):
 
 def _unit(tid, var, pos, rot, scale, flags, player, hp, mana,
           gold, ta, hlev, items, abils, serial, dropsets=None,
-          rng=(0, (0,)), color=-1, waygate=-1):
+          rng=(0, (0,)), color=-1, waygate=-1, v7=False):
     b = tid.encode("latin-1") + _i(var)
     b += _f(pos[0]) + _f(pos[1]) + _f(pos[2]) + _f(rot)
     b += _f(scale[0]) + _f(scale[1]) + _f(scale[2])
@@ -60,7 +65,8 @@ def _unit(tid, var, pos, rot, scale, flags, player, hp, mana,
         for did, chance in s:
             b += did.encode("latin-1") + _i(chance)
     b += _i(gold) + _f(ta) + _i(hlev)
-    b += _i(0) + _i(0) + _i(0)           # hero str/agi/int
+    if not v7:
+        b += _i(0) + _i(0) + _i(0)       # hero str/agi/int（仅 TFT 版本 8）
     b += _i(len(items))
     for slot, iid in items:
         b += _i(slot) + iid.encode("latin-1")
@@ -77,7 +83,9 @@ def _unit(tid, var, pos, rot, scale, flags, player, hp, mana,
         b += _i(len(rdata))
         for rid, rchance in rdata:
             b += rid.encode("latin-1") + _i(rchance)
-    b += _i(color) + _i(waygate) + _i(serial)
+    if not v7:
+        b += _i(color) + _i(waygate)     # 自定义颜色/传送门（仅 TFT 版本 8）
+    b += _i(serial)
     return b
 
 
@@ -184,6 +192,27 @@ class TestParseUnits(unittest.TestCase):
     def test_real_map_fixture(self):
         # 真实地图的 war3mapUnits.doo（1 个出生点单位 'sloc'）
         data = open(os.path.join(FIX, "matrix.units.doo"), "rb").read()
+        units = parse_units(data)
+        self.assertEqual(len(units), 1)
+        self.assertEqual(units[0].type_id, "sloc")
+
+    def test_version7_classic_layout(self):
+        # 经典 RoC（版本 7）单位记录：无英雄三围、无自定义颜色/传送门
+        u = _unit("Hpal", 0, (100.0, 200.0, 0.0), 0.0, (1, 1, 1), 2, 1,
+                  500, 200, 0, -1.0, 3, [(0, "ratf")], [("AHbz", 1, 2)], 9,
+                  v7=True)
+        units = parse_units(_build_units([u], version=7, sub=9))
+        self.assertEqual(len(units), 1)
+        self.assertEqual(units[0].type_id, "Hpal")
+        self.assertEqual(units[0].items, [(0, "ratf")])
+        self.assertEqual(units[0].abilities, [("AHbz", 1, 2)])
+        self.assertEqual(units[0].serial, 9)
+
+    def test_real_map_version7_fixture(self):
+        # 真实地图 TheRiseOfEyes 的 war3mapUnits.doo —— 版本 7（RoC 布局），1 个 'sloc'。
+        # 旧解析器按 TFT(版本 8) 读会错位 → 0/1；版本感知后应完整读出。
+        data = open(os.path.join(FIX, "riseofeyes.units.v7.doo"), "rb").read()
+        self.assertEqual(struct.unpack_from("<i", data, 4)[0], 7)   # 确认确为版本 7
         units = parse_units(data)
         self.assertEqual(len(units), 1)
         self.assertEqual(units[0].type_id, "sloc")
