@@ -7,14 +7,27 @@ import sys
 
 def main():
     if len(sys.argv) >= 3 and sys.argv[1] == "cli":
-        # Windows 控制台多为 GBK(cp936)，个别字符(如 emoji)不可编码会让 print 崩溃；
-        # 保留控制台原编码(中文正常显示)，仅把不可编码字符降级为占位，不再硬崩。
+        # 控制台输出编码处理：
+        #  - 交互控制台(isatty)：保留原编码(中文 Windows 多为 cp936，中文照常显示)，
+        #    仅把不可编码字符(如 emoji)降级为占位，避免 print 硬崩。
+        #  - 重定向/管道(非 tty)：统一用 UTF-8，便于现代工具/文件读取(否则打包 exe 重定向
+        #    时会写出 cp936 字节，UTF-8 读者看到乱码)。
         try:
-            sys.stdout.reconfigure(errors="replace")
+            out = sys.stdout
+            if out is not None:
+                if out.isatty():
+                    out.reconfigure(errors="replace")
+                else:
+                    out.reconfigure(encoding="utf-8", errors="replace")
         except Exception:
             pass
         from w3xtool.api import load_map
-        md = load_map(sys.argv[2])
+        try:
+            md = load_map(sys.argv[2])
+        except Exception as e:
+            # 非法/损坏/空文件等：给一句友好提示，而非抛裸 traceback(GUI 已优雅处理，CLI 也对齐)
+            print(f"无法解析地图：{type(e).__name__}: {e}")
+            return
         print("地图:", md.name)
         if md.w3i:
             w = md.w3i
