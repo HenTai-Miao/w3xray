@@ -54,6 +54,11 @@ REF_COLUMNS = {
 }
 
 
+# 4 字符但绝非对象码的"词/枚举/标志"值（targs 等字段里常见），防御性剔除。
+# 仅收明确不会与真实对象码(如 hpea/ngol/A001)冲突的词；宁缺勿滥，避免误删真码。
+_NOT_A_CODE = {"self", "none", "true", "null", "dead", "tree", "both", "item"}
+
+
 def _split_codes(value) -> list:
     """把字段值拆成 4cc 码列表。单值(单 4cc)与逗号列表都走这里；过滤空/占位/非码。"""
     if not isinstance(value, str):
@@ -64,7 +69,7 @@ def _split_codes(value) -> list:
         # 对象码恒为 4 字符；剔除 _ / - / 0 这类"空"占位与纯数字(多为计数而非码)
         if len(t) != 4 or t in ("____", "----", "0000"):
             continue
-        if t.isdigit():
+        if t.isdigit() or t in _NOT_A_CODE:
             continue
         out.append(t)
     return out
@@ -77,13 +82,20 @@ def extract_refs_by_type(mods, field_type) -> list:
     field_type: 形如 fields.field_type 的函数，field_id → 类型字符串。
     返回 [(field_id, [code…])]，去掉无码的。
     """
-    refs = []
+    # 按 field_id 聚合并去重：w3a/w3q 的引用字段会逐等级各出现一次(同 field_id 多条)，
+    # 若不聚合，同一引用会重复成边(反向"被谁引用"里出现多条相同项)。这里按 field_id 合并去重。
+    agg: dict = {}
+    order = []
     for m in mods:
         if field_type(m.field_id) in REF_TYPES:
-            codes = _split_codes(m.value)
-            if codes:
-                refs.append((m.field_id, codes))
-    return refs
+            for c in _split_codes(m.value):
+                lst = agg.get(m.field_id)
+                if lst is None:
+                    lst = agg[m.field_id] = []
+                    order.append(m.field_id)
+                if c not in lst:
+                    lst.append(c)
+    return [(fid, agg[fid]) for fid in order]
 
 
 def extract_refs_by_column(fields: dict, category: str) -> list:
@@ -119,9 +131,17 @@ def build_reference_graph(md) -> None:
     GameObject.ref_fields = [(字段标签, [code…])]；这里建图、还原名字、算孤立。
     """
     from .fields import label_for
+    from .slk_objects import slk_col_label
+
+    def _label(field_key):
+        # 二进制对象字段是 4cc → label_for 直接译；SLK/文本对象字段是列名，
+        # label_for 查不到会原样返回，此时再用 slk_col_label(含等级后缀中文化)。
+        lab = label_for(field_key)
+        return lab if lab != field_key else slk_col_label(field_key)
 
     references: dict = {}
     referenced_by: dict = {}
+    seen_edges: set = set()                     # (被引码, 引用者id, 标签) 去重，防重复边
     obj_index = md.obj_index
 
     all_objects = [o for objs in md.objects.values() for o in objs]
@@ -131,13 +151,23 @@ def build_reference_graph(md) -> None:
             continue
         entries = []
         for field_key, codes in ref_fields:
-            label = label_for(field_key)        # 4cc→中文标签；文本列名查不到则原样
+            label = _label(field_key)
             resolved = []
+            seen_codes = set()
             for code in codes:
+                if code in seen_codes:
+                    continue
+                seen_codes.add(code)
                 target = obj_index.get(code)
                 resolved.append((code, target.name if target is not None else None))
-                referenced_by.setdefault(code, []).append((o.obj_id, o.name, label))
-            entries.append((label, resolved))
+                if code == o.obj_id:            # 跳过自引用：否则对象会被自己挡在"孤立"之外
+                    continue
+                key = (code, o.obj_id, label)
+                if key not in seen_edges:
+                    seen_edges.add(key)
+                    referenced_by.setdefault(code, []).append((o.obj_id, o.name, label))
+            if resolved:
+                entries.append((label, resolved))
         if entries:
             references[o.obj_id] = entries
 

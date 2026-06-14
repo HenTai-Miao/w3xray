@@ -3,10 +3,13 @@
 只抽取派生事实（native 参数的对象类别、BJ 函数体里的对象码、bj_*_CODE 常量），
 不复制 .j 本身——与 build_base_names.py 从游戏数据离线生成同一立场，运行时零依赖。
 
-用法（默认指向工具包随包的 .j；可用 --src 覆盖）：
-    python build_jass_natives.py
-    python build_jass_natives.py --src "D:/path/to/system"   # 含 ht/rb 或直接含 *.j
-重跑可刷新。
+注意：.j 文件**不随仓库**（Blizzard 版权 + 体积），仓库里提交的是烤好的产物
+`w3xtool/jass_natives.py`，那才是运行时唯一依赖。仅在需要**重新生成**该表时才用本脚本，
+此时需自备 common.j / blizzard.j（如外部魔兽工具包/游戏目录）并用 --src 指向其目录。
+
+用法：
+    python build_jass_natives.py --src "D:/path/to/system"   # 目录含 ht/rb 或直接含 *.j
+    python build_jass_natives.py                             # 用 DEFAULT_SRC（仅本机生成时方便）
 """
 import os
 import re
@@ -30,6 +33,11 @@ PARAM_CAT = {
     "objectid": "可破坏物", "objectId": "可破坏物",
     "buffId": "增益",
 }
+
+# 参数名虽命中 PARAM_CAT，但函数本身是**泛型**（对任意对象 id 通用），按参数名归类会错。
+# 如 GetObjectName(integer objectId) 是取任意对象本地化名，与 CreateDestructable 共用 objectId
+# 参数名，会把技能/科技码误判成可破坏物。这类显式排除，不进 NATIVE_OBJ_FUNCS。
+EXCLUDE_NATIVES = {"GetObjectName"}
 
 # curated BJ：函数名 → 中文特征标签。生成器从 blizzard.j 各函数体抽 rawcode 当隐式引用码。
 # 名单只取"能说明地图机制/用了哪些基础对象"的函数（缺失的自动跳过）。
@@ -76,7 +84,7 @@ def parse_native_obj_funcs(common_texts):
     for text in common_texts:
         for m in _NATIVE.finditer(text):
             name, params = m.group(1), m.group(2).strip()
-            if params == "nothing":
+            if params == "nothing" or name in EXCLUDE_NATIVES:
                 continue
             cats = set()
             for part in params.split(","):
@@ -152,8 +160,7 @@ def main():
 
     native_funcs = parse_native_obj_funcs(commons)
     bj_codes = parse_bj_func_codes(blizzards)
-    bj_features = {k: CURATED_BJ[k] for k in bj_codes} | {
-        k: CURATED_BJ[k] for k in CURATED_BJ}     # 特征标签全保留（即便无码也算特征命中）
+    bj_features = dict(CURATED_BJ)               # 特征标签全保留（即便某 BJ 体内无 rawcode 也算特征命中）
     bj_const = parse_bj_code_constants(blizzards)
 
     out_path = os.path.join("w3xtool", "jass_natives.py")

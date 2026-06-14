@@ -41,6 +41,10 @@ class SplitCodesTest(unittest.TestCase):
         self.assertEqual(_split_codes(5), [])
         self.assertEqual(_split_codes(None), [])
 
+    def test_denylist_words(self):
+        # 4 字符英文词/枚举值(targs 等)不是对象码，剔除
+        self.assertEqual(_split_codes("self,tree,none,A001,true"), ["A001"])
+
 
 class ExtractByTypeTest(unittest.TestCase):
     def test_keeps_only_reference_types(self):
@@ -61,6 +65,19 @@ class ExtractByTypeTest(unittest.TestCase):
     def test_ref_types_cover_expected(self):
         for t in ("abilCode", "unitList", "itemList", "buffList", "techList"):
             self.assertIn(t, REF_TYPES)
+
+    def test_dedup_across_levels(self):
+        # w3a 技能引用字段逐等级各一条(同 field_id 多次)：应按 field_id 合并去重
+        ft = _FakeType({"uabi": "abilityList"})
+        mods = [Modification("uabi", 3, 1, "A001"),
+                Modification("uabi", 3, 2, "A001"),
+                Modification("uabi", 3, 3, "A001")]
+        self.assertEqual(extract_refs_by_type(mods, ft), [("uabi", ["A001"])])
+
+    def test_aggregate_distinct_codes_across_levels(self):
+        ft = _FakeType({"uabi": "abilityList"})
+        mods = [Modification("uabi", 3, 1, "A001"), Modification("uabi", 3, 2, "A002")]
+        self.assertEqual(extract_refs_by_type(mods, ft), [("uabi", ["A001", "A002"])])
 
 
 class ExtractByColumnTest(unittest.TestCase):
@@ -125,6 +142,39 @@ class BuildGraphTest(unittest.TestCase):
         md.obj_index["hfoo"] = base
         build_reference_graph(md)
         self.assertNotIn("hfoo", {o.obj_id for o in md.orphans})  # 原版不计孤立
+
+    def test_self_reference_still_orphan(self):
+        # 对象只引用自己 → 自引用不计入"被引用"，对象仍应判为孤立
+        unit = _obj("单位", "H001", "英雄", ref_fields=[("uabi", ["H001"])])
+        md = MapData(path="x", name="x")
+        md.objects = {"单位": [unit]}
+        md.obj_index = {"H001": unit}
+        build_reference_graph(md)
+        self.assertIn("H001", {o.obj_id for o in md.orphans})
+        self.assertNotIn("H001", md.referenced_by)   # 自引用不进反向
+
+    def test_no_duplicate_reverse_edges(self):
+        # 同对象同标签重复引用同码 → 反向只一条
+        unit = _obj("单位", "H001", "英雄",
+                    ref_fields=[("uabi", ["A001"]), ("uabi", ["A001"])])
+        abil = _obj("技能", "A001", "火球")
+        md = MapData(path="x", name="x")
+        md.objects = {"单位": [unit], "技能": [abil]}
+        md.obj_index = {"H001": unit, "A001": abil}
+        build_reference_graph(md)
+        self.assertEqual(len(md.referenced_by["A001"]), 1)
+
+    def test_slk_column_label_translated(self):
+        # SLK/文本对象的引用字段是列名(UnitID1)，标签应经 slk_col_label 中文化
+        abil = _obj("技能", "A001", "火球", ref_fields=[("UnitID1", ["U001"])])
+        summon = _obj("单位", "U001", "水元素")
+        md = MapData(path="x", name="x")
+        md.objects = {"技能": [abil], "单位": [summon]}
+        md.obj_index = {"A001": abil, "U001": summon}
+        build_reference_graph(md)
+        label, resolved = md.references["A001"][0]
+        self.assertEqual(label, "召唤/创建单位 (等级1)")
+        self.assertEqual(resolved, [("U001", "水元素")])
 
     def test_low_coverage_flag(self):
         # 50+ 自定义对象、却几乎没有引用字段 → 判低覆盖（模拟 SLK 优化图）

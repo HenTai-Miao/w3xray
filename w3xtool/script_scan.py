@@ -193,13 +193,15 @@ def scan_object_refs(script: str) -> dict:
         if not hits:
             continue
         cats = {c for c in (_native_cat(n) for n in hits) if c}
-        if not cats:
+        # 仅当该行的 native 一致指向单一分类时才归类；多类(一行调了不同类 native)
+        # 无法可靠区分哪个码属哪类，不归类——这些码仍会经 scan_all_referenced_codes
+        # 的 'xxxx' 字面量并入孤立根集合，只是不在此处错配到某个分类。
+        if len(cats) != 1:
             continue
         codes = _codes_in(line)
         if not codes:
             continue
-        for c in cats:
-            out[c].update(codes)
+        out[next(iter(cats))].update(codes)
     return out
 
 

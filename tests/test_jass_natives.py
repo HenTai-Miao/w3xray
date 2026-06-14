@@ -55,6 +55,22 @@ class ScanObjectRefsTest(unittest.TestCase):
         refs = scan_object_refs("set damage = 1234\ncall BJDebugMsg(\"hi\")\n")
         self.assertEqual(sum(len(s) for s in refs.values()), 0)
 
+    def test_multi_native_line_not_miscategorized(self):
+        # 一行同时调单位与物品 native：歧义行不归类，避免把码错配到分类
+        script = "set x = CreateUnit(p,'hfoo',0,0,0)\ncall UnitAddItemById(u,'Iitm')\n"
+        # 分行时各自单类 → 正常归类
+        refs = scan_object_refs(script)
+        self.assertIn("hfoo", refs["单位"])
+        self.assertIn("Iitm", refs["物品"])
+        # 同一行嵌套调用两类 native → 整行不归类(码不会错配到对方分类)
+        one = scan_object_refs("set it = UnitAddItemById(CreateUnit(p,'hfoo',0,0,0), 'Iitm')\n")
+        self.assertNotIn("Iitm", one["单位"])
+        self.assertNotIn("hfoo", one["物品"])
+
+    def test_get_object_name_excluded(self):
+        # GetObjectName 是泛型(取任意对象名)，按 objectId 参数名会误判为可破坏物，应被排除
+        self.assertNotIn("GetObjectName", script_scan.NATIVE_OBJ_FUNCS)
+
 
 class ScriptFeaturesTest(unittest.TestCase):
     def test_melee_feature_and_implicit_codes(self):
