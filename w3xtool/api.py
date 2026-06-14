@@ -290,8 +290,13 @@ def _add_slk_objects(md: "MapData", archive: MPQArchive, wts: dict):
                         added = True
                 if added and ("数据来源", "war3map *Data.slk") not in existing.fields:
                     existing.fields.append(("数据来源", "war3map *Data.slk"))
-                if ref_fields and not existing.ref_fields:
-                    existing.ref_fields = ref_fields
+                if ref_fields:
+                    # 并入 SLK 引用并去重（不再"已有就整体丢弃"），保留已有引用
+                    have_refs = {(k, tuple(cs)) for k, cs in existing.ref_fields}
+                    for k, cs in ref_fields:
+                        if (k, tuple(cs)) not in have_refs:
+                            existing.ref_fields.append((k, cs))
+                            have_refs.add((k, tuple(cs)))
                 continue
             # 新建：SLK 独有的对象
             name = ""

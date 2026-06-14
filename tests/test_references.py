@@ -164,6 +164,19 @@ class BuildGraphTest(unittest.TestCase):
         build_reference_graph(md)
         self.assertEqual(len(md.referenced_by["A001"]), 1)
 
+    def test_reverse_collapses_level_columns(self):
+        # SLK 的 BuffID1/BuffID2 等逐级列引用同一码 → 反向"被谁引用"应折叠为一条(去等级)
+        abil = _obj("技能", "A001", "火球",
+                    ref_fields=[("BuffID1", ["B001"]), ("BuffID2", ["B001"])])
+        buff = _obj("增益", "B001", "灼烧")
+        md = MapData(path="x", name="x")
+        md.objects = {"技能": [abil], "增益": [buff]}
+        md.obj_index = {"A001": abil, "B001": buff}
+        build_reference_graph(md)
+        self.assertEqual(len(md.referenced_by["B001"]), 1)
+        _rid, _rn, label = md.referenced_by["B001"][0]
+        self.assertEqual(label, "buff效果")        # 已去掉"(等级N)"
+
     def test_slk_column_label_translated(self):
         # SLK/文本对象的引用字段是列名(UnitID1)，标签应经 slk_col_label 中文化
         abil = _obj("技能", "A001", "火球", ref_fields=[("UnitID1", ["U001"])])

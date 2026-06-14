@@ -211,7 +211,8 @@ def scan_all_referenced_codes(script: str) -> set:
     = 所有 'xxxx' 文本码 + 各 native 行提到的码 + BJ 隐式码。order/数值已被 _codes_in 之外
     的 'xxxx' 字面量本身天然多为对象码；少量误收(命令串)对"根集合并集"无害(只会少判孤立)。
     """
-    codes = set(_FOURCC.findall(script))
+    # _codes_in 覆盖 'xxxx' + FourCC("xxxx") + $hex + 十进制码（比单认 'xxxx' 更全）
+    codes = set(_codes_in(script))
     for s in scan_object_refs(script).values():
         codes.update(s)
     _feats, implicit = scan_script_features(script)

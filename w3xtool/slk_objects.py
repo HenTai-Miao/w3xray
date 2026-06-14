@@ -9,6 +9,8 @@
 """
 from __future__ import annotations
 
+import re
+
 from .slk import parse_slk
 
 # 分类 → 该类的 SLK 文件（单位跨多文件，按对象码合并列）。
@@ -59,14 +61,16 @@ _ALWAYS_EMPTY = {
 SLK_NOISE_COLS = {cat: set(s.split(",")) | {"code"} for cat, s in _ALWAYS_EMPTY.items()}
 
 
+_LEVEL_SUFFIX = re.compile(r"^(.*?)(\d+)$")    # 去掉整段末尾数字(支持多位等级，如 DataA10)
+
+
 def slk_col_label(col: str) -> str:
-    """SLK 列名 → 中文标签：精确表 → 等级后缀(去数字查基名+等级N) → 原样列名。"""
+    """SLK 列名 → 中文标签：精确表 → 等级后缀(去整段数字查基名+等级N) → 原样列名。"""
     if col in SLK_COL_LABELS:
         return SLK_COL_LABELS[col]
-    if col and col[-1].isdigit():
-        base, lvl = col[:-1], col[-1]
-        if base in SLK_BASE_LABELS:
-            return f"{SLK_BASE_LABELS[base]} (等级{lvl})"
+    m = _LEVEL_SUFFIX.match(col or "")
+    if m and m.group(1) in SLK_BASE_LABELS:
+        return f"{SLK_BASE_LABELS[m.group(1)]} (等级{m.group(2)})"
     return col
 
 
@@ -75,18 +79,26 @@ def is_noise_col(col: str, category: str) -> bool:
     return col in SLK_NOISE_COLS.get(category, {"code"})
 
 
-def _read_text(archive, name: str):
-    """按几种前缀/大小写在 MPQ 里找并读出该 SLK 文本；找不到返回 None。"""
+def _find_name(archive, name: str):
+    """按几种前缀/大小写在 MPQ 里找该 SLK 的实际内部名；只查存在性，不读内容。"""
     bases = {name, name.lower(), name.upper()}
     for pre in _PREFIXES:
         for b in bases:
             fn = pre + b
             if archive.has_file(fn):
-                try:
-                    return archive.read_file(fn).decode("latin-1")
-                except Exception:
-                    return None
+                return fn
     return None
+
+
+def _read_text(archive, name: str):
+    """在 MPQ 里找并读出该 SLK 文本；找不到/解码失败返回 None。"""
+    fn = _find_name(archive, name)
+    if fn is None:
+        return None
+    try:
+        return archive.read_file(fn).decode("latin-1")
+    except Exception:
+        return None
 
 
 def _looks_like_code(key: str) -> bool:
@@ -119,9 +131,9 @@ def parse_category_objects(archive, category: str) -> dict:
 
 
 def has_any_slk_objects(archive) -> bool:
-    """快速判断这张图是否带内嵌 SLK 对象数据（任一分类文件存在）。"""
+    """快速判断这张图是否带内嵌 SLK 对象数据（任一分类文件存在）。只查存在性，不读内容。"""
     for files in SLK_CATEGORY_FILES.values():
         for fn in files:
-            if _read_text(archive, fn) is not None:
+            if _find_name(archive, fn) is not None:
                 return True
     return False

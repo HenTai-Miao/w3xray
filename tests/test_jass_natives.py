@@ -97,6 +97,11 @@ class AllReferencedCodesTest(unittest.TestCase):
         self.assertIn("Ax01", codes)           # 裸 'xxxx' 字面量也算根
         self.assertTrue(any(c.islower() for c in codes))  # 兽族隐式基础单位码
 
+    def test_collects_fourcc_double_quoted(self):
+        # Lua 写法 FourCC("Axyz") 不带单引号、所在行无 native，也应进根集合
+        codes = scan_all_referenced_codes('local id = FourCC("Axyz")\n')
+        self.assertIn("Axyz", codes)
+
 
 if __name__ == "__main__":
     unittest.main()

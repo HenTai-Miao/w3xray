@@ -83,6 +83,9 @@ class ParseCategoryTest(unittest.TestCase):
         self.assertEqual(slk_col_label("Cast2"), "施法间隔 (等级2)")
         self.assertEqual(slk_col_label("BuffID1"), "buff效果 (等级1)")
         self.assertEqual(slk_col_label("DataA3"), "数据A (等级3)")
+        # 多位等级后缀也认（去整段末尾数字）
+        self.assertEqual(slk_col_label("DataA10"), "数据A (等级10)")
+        self.assertEqual(slk_col_label("Cost12"), "魔法消耗 (等级12)")
         # 基名不认识的带数字列不乱改
         self.assertEqual(slk_col_label("Zz9"), "Zz9")
 

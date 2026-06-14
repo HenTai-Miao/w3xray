@@ -15,8 +15,14 @@
 """
 from __future__ import annotations
 
+import re
+
+_LEVEL_LABEL_RE = re.compile(r" \(等级\d+\)$")   # 反向去重时剥掉标签里的"(等级N)"
+
 # 引用类型(FIELD_TYPES 的值) → 目标分类。仅列"值是对象 4cc 码/码列表"的类型；
 # intList/unrealList/stringList/modelList/targetList/unitClass 等是数值/字符串/枚举，非引用。
+# 注意：value(目标分类)仅作**说明性**——代码只用 `in REF_TYPES`(成员判定)，实际归类靠
+# 引用码在 obj_index 里查到的真实对象，故个别 value 不精确(如 effectList)不影响正确性。
 REF_TYPES = {
     "abilCode": "技能", "abilityList": "技能", "heroAbilityList": "技能",
     "unitCode": "单位", "unitList": "单位",
@@ -162,10 +168,13 @@ def build_reference_graph(md) -> None:
                 resolved.append((code, target.name if target is not None else None))
                 if code == o.obj_id:            # 跳过自引用：否则对象会被自己挡在"孤立"之外
                     continue
-                key = (code, o.obj_id, label)
+                # 反向"被谁引用"按去等级的基础标签去重：SLK 的 BuffID1..4 等逐级列
+                # 否则会让同一引用者重复 4 条；正向 references 仍保留逐级明细。
+                base_label = _LEVEL_LABEL_RE.sub("", label)
+                key = (code, o.obj_id, base_label)
                 if key not in seen_edges:
                     seen_edges.add(key)
-                    referenced_by.setdefault(code, []).append((o.obj_id, o.name, label))
+                    referenced_by.setdefault(code, []).append((o.obj_id, o.name, base_label))
             if resolved:
                 entries.append((label, resolved))
         if entries:
