@@ -7,6 +7,12 @@ import sys
 
 def main():
     if len(sys.argv) >= 3 and sys.argv[1] == "cli":
+        # Windows 控制台多为 GBK(cp936)，个别字符(如 emoji)不可编码会让 print 崩溃；
+        # 保留控制台原编码(中文正常显示)，仅把不可编码字符降级为占位，不再硬崩。
+        try:
+            sys.stdout.reconfigure(errors="replace")
+        except Exception:
+            pass
         from w3xtool.api import load_map
         md = load_map(sys.argv[2])
         print("地图:", md.name)
@@ -28,7 +34,7 @@ def main():
                         for _label, codes in entries)
             print(f"  引用关系: {len(refs)} 个对象有引用 · {edges} 条引用边")
             if getattr(md, "ref_low_coverage", False):
-                print(f"  孤立自定义对象: {len(orphans)}（⚠ 引用覆盖低，疑为 SLK 优化图，"
+                print(f"  孤立自定义对象: {len(orphans)}（注意：引用覆盖低，疑为 SLK 优化图，"
                       "多为误报，仅供参考）")
             else:
                 print(f"  孤立自定义对象: {len(orphans)}"
