@@ -107,6 +107,8 @@ def parse_strings(text: str, out: dict, fill_only=False):
     text = text.lstrip("﻿")
     section = None
     cur_name = None
+    cur_buff = None        # 魔法效果(buff)用 Bufftip 当游戏内名(如"狂战士")
+    cur_editor = None      # 部分 buff 只有 EditorName(如 BOsh="震荡波(施法者)")
     cur_suffix = None
 
     def flush(sec):
@@ -114,7 +116,9 @@ def parse_strings(text: str, out: dict, fill_only=False):
             return
         if fill_only and sec in out:
             return                               # 只补缺，不覆盖已有(中文)名
-        v = cur_name or (cur_suffix.strip(" ()（）") if cur_suffix else None)
+        # 优先级：普通名(Name) > buff 名(Bufftip) > 编辑器名(EditorName) > 后缀
+        v = (cur_name or cur_buff or cur_editor
+             or (cur_suffix.strip(" ()（）") if cur_suffix else None))
         if v:
             out[sec] = v
 
@@ -123,7 +127,7 @@ def parse_strings(text: str, out: dict, fill_only=False):
         if line.startswith("[") and line.endswith("]"):
             flush(section)
             section = line[1:-1].strip()
-            cur_name = cur_suffix = None
+            cur_name = cur_buff = cur_editor = cur_suffix = None
             continue
         if not line or line.startswith("//") or "=" not in line:
             continue
@@ -131,6 +135,10 @@ def parse_strings(text: str, out: dict, fill_only=False):
         k = key.strip().lower()
         if k == "name" and cur_name is None:
             cur_name = clean(val)
+        elif k == "bufftip" and cur_buff is None:
+            cur_buff = clean(val)
+        elif k == "editorname" and cur_editor is None:
+            cur_editor = clean(val)
         elif k == "editorsuffix" and cur_suffix is None:
             cur_suffix = clean(val)
     flush(section)
@@ -170,7 +178,51 @@ def build_sources(args):
     return sources
 
 
+def _write_base_names(names: dict, out_dir: str):
+    lines = ["# 自动生成：游戏原版对象 码→中文名。由 build_base_names.py 提取。",
+             "# 重跑该脚本可刷新。请勿手改。", "", "BASE_NAMES = {"]
+    for code in sorted(names):
+        nm = names[code].replace("\\", "\\\\").replace('"', '\\"')
+        lines.append(f'    {code!r}: "{nm}",')
+    lines.append("}")
+    with open(os.path.join(out_dir, "base_names.py"), "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+
+
+def merge_names_from_dir(src_dir: str, out_dir: str):
+    """只补缺地把散文件夹里的名字并入现有 BASE_NAMES，只重写 base_names.py。
+
+    用于补充原始全量生成漏掉的名字(如 buff 的 Bufftip/EditorName)，而**不**碰
+    westrings.py / base_objects.py(那些需要 WorldEditStrings / MetaData，散包未必带)。
+    现有名一律保留(fill_only)，只新增缺失码。
+    """
+    try:
+        from w3xtool.base_names import BASE_NAMES
+    except Exception:
+        BASE_NAMES = {}
+    names = dict(BASE_NAMES)
+    before = len(names)
+    src = DirSource(src_dir)
+    # 先 Strings 后 Func，全程 fill_only：绝不覆盖已有名，只补缺
+    for kind in ("Strings", "Func"):
+        for fn in [f for f in FILES if kind in f]:
+            if src.has_file(fn):
+                try:
+                    parse_strings(src.read_file(fn).decode("utf-8", "replace"),
+                                  names, fill_only=True)
+                except Exception as e:
+                    print("  读取失败", fn, e)
+    _write_base_names(names, out_dir)
+    added = sorted(set(names) - set(BASE_NAMES))
+    print(f"合并完成：{before} -> {len(names)}（新增 {len(added)} 个）")
+    sample = [c for c in added if c[:1] in ("B", "X")][:12]
+    print("  新增 buff 样例:", {c: names[c] for c in sample})
+
+
 def main(args):
+    if getattr(args, "merge_from_dir", None):
+        merge_names_from_dir(args.merge_from_dir, getattr(args, "out_dir", None) or "w3xtool")
+        return
     out_dir = getattr(args, "out_dir", None) or "w3xtool"
     names = {}
     total_files = 0
@@ -313,6 +365,9 @@ if __name__ == "__main__":
     p.add_argument("--from-dir", dest="from_dir",
                    help="从已提取的散文件夹读（CASC/重制版：先用 CascView 或 "
                         "casc-extract 导出，再指向该文件夹）")
+    p.add_argument("--merge-from-dir", dest="merge_from_dir",
+                   help="只补缺地把散文件夹里的名字并入现有 BASE_NAMES（只重写 base_names.py，"
+                        "不碰 westrings/base_objects）；用于补 buff 等漏掉的名字")
     p.add_argument("--game", help="经典 MPQ 安装目录（默认硬编码 GAME 路径）")
     p.add_argument("--out-dir", dest="out_dir", default="w3xtool",
                    help="生成的 .py 写到哪个目录（默认 w3xtool）")

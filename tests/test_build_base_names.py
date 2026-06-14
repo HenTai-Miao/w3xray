@@ -15,6 +15,21 @@ def test_module_imports():
     assert hasattr(bbn, "main")
 
 
+def test_parse_strings_name_priority():
+    # 普通对象用 Name；buff 用 Bufftip；个别 buff 只有 EditorName。优先级 Name>Bufftip>EditorName
+    out = {}
+    bbn.parse_strings(
+        "[hfoo]\nName=步兵\n"
+        "[Bbsk]\nBufftip=狂战士\nBuffubertip=略\n"
+        "[BOsh]\nEditorName=震荡波(施法者)\n"
+        "[Amix]\nName=技能名\nBufftip=不该用这个\n",
+        out)
+    assert out["hfoo"] == "步兵"
+    assert out["Bbsk"] == "狂战士"          # Bufftip 作 buff 名
+    assert out["BOsh"] == "震荡波(施法者)"   # 只有 EditorName 时用它
+    assert out["Amix"] == "技能名"          # 有 Name 时 Name 优先，不被 Bufftip 覆盖
+
+
 def test_dirsource_case_and_sep_insensitive(tmp_path):
     d = tmp_path / "Units"
     d.mkdir()

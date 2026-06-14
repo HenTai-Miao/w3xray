@@ -177,6 +177,21 @@ class BuildGraphTest(unittest.TestCase):
         _rid, _rn, label = md.referenced_by["B001"][0]
         self.assertEqual(label, "buff效果")        # 已去掉"(等级N)"
 
+    def test_unloaded_ref_falls_back_to_base_names(self):
+        # 引用到一个未作为对象加载的标准 buff，名字应回退取 BASE_NAMES(而非裸码/None)
+        from w3xtool import base_names
+        code = next((k for k in base_names.BASE_NAMES if k[:1] == "B"), None)
+        self.assertIsNotNone(code)               # 表里应有 buff 名(本次补充后)
+        abil = _obj("技能", "A001", "火球", ref_fields=[("BuffID1", [code])])
+        md = MapData(path="x", name="x")
+        md.objects = {"技能": [abil]}             # 只加载技能；buff 不作为对象
+        md.obj_index = {"A001": abil}
+        build_reference_graph(md)
+        _lab, resolved = md.references["A001"][0]
+        rcode, rname = resolved[0]
+        self.assertEqual(rcode, code)
+        self.assertEqual(rname, base_names.BASE_NAMES[code])   # 回退到原版名
+
     def test_slk_column_label_translated(self):
         # SLK/文本对象的引用字段是列名(UnitID1)，标签应经 slk_col_label 中文化
         abil = _obj("技能", "A001", "火球", ref_fields=[("UnitID1", ["U001"])])

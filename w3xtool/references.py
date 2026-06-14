@@ -138,6 +138,10 @@ def build_reference_graph(md) -> None:
     """
     from .fields import label_for
     from .slk_objects import slk_col_label
+    try:
+        from .base_names import BASE_NAMES      # 引用到的原版对象(如标准 buff)未作为对象加载时，回退取原版名
+    except Exception:
+        BASE_NAMES = {}
 
     def _label(field_key):
         # 二进制对象字段是 4cc → label_for 直接译；SLK/文本对象字段是列名，
@@ -165,7 +169,9 @@ def build_reference_graph(md) -> None:
                     continue
                 seen_codes.add(code)
                 target = obj_index.get(code)
-                resolved.append((code, target.name if target is not None else None))
+                # 名字：已加载对象优先；否则回退原版名(标准 buff/单位等未当对象加载时也有名)
+                name = target.name if target is not None else BASE_NAMES.get(code)
+                resolved.append((code, name))
                 if code == o.obj_id:            # 跳过自引用：否则对象会被自己挡在"孤立"之外
                     continue
                 # 反向"被谁引用"按去等级的基础标签去重：SLK 的 BuffID1..4 等逐级列
