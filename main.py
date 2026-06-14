@@ -18,6 +18,25 @@ def main():
             print(f"  {cat}: {len(objs)}")
         if md.units or md.doodads:
             print(f"  预放置单位: {len(md.units)}  装饰物/可破坏物: {len(md.doodads)}")
+        if getattr(md, "script_features", None):
+            print(f"  脚本特征: {'、'.join(md.script_features)}")
+        # 引用分析：引用边数 + 孤立自定义对象
+        refs = getattr(md, "references", {}) or {}
+        orphans = getattr(md, "orphans", []) or []
+        if refs or orphans:
+            edges = sum(len(codes) for entries in refs.values()
+                        for _label, codes in entries)
+            print(f"  引用关系: {len(refs)} 个对象有引用 · {edges} 条引用边")
+            if getattr(md, "ref_low_coverage", False):
+                print(f"  孤立自定义对象: {len(orphans)}（⚠ 引用覆盖低，疑为 SLK 优化图，"
+                      "多为误报，仅供参考）")
+            else:
+                print(f"  孤立自定义对象: {len(orphans)}"
+                      + ("（无人引用，可能是废弃对象）" if orphans else ""))
+            for o in orphans[:10]:
+                print(f"    - [{o.category}] {o.name}({o.obj_id})")
+            if len(orphans) > 10:
+                print(f"    …… 另有 {len(orphans) - 10} 个")
         return
     from w3xtool.single_instance import ensure_single_instance
     ensure_single_instance()          # 单实例：先关掉上一个实例再启动，不允许多开

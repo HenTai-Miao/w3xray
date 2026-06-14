@@ -149,27 +149,91 @@ def scan_recipes(script: str) -> list:
     return recipes
 
 
-_ITEM_NATIVES = re.compile(
-    r"UnitAddItemById|UnitAddItemByIdSwapped|CreateItem|CreateItemLoc|"
-    r"AddItemToStockBJ|AddItemToAllStock|UnitDropItemPoint|SetItemTypeId")
-_UNIT_NATIVES = re.compile(
-    r"CreateUnit|CreateNUnitsAtLoc|BlzCreateUnit|CreateUnitAtLoc|GroupEnumUnitsOfType"
-    r"|AddUnitToStockBJ|AddUnitToAllStock|ReplaceUnitBJ|SetUnitTypeId")
+# native 名 → 对象分类，由 common.j 离线生成（build_jass_natives.py）。
+# 知道每个 native 的对象码参数属于哪类，脚本提码就能覆盖全分类(技能/科技/可破坏物…)，
+# 而不只是早期手列的 物品/单位 两类。生成数据缺失时退化为空表（scan 退回只认下方少量回退名）。
+try:
+    from .jass_natives import (NATIVE_OBJ_FUNCS, BJ_FUNC_CODES, BJ_FEATURES,
+                               BJ_CODE_CONSTANTS)
+except Exception:                       # 生成数据缺失：表置空，scan_* 仍可跑(覆盖变窄)
+    NATIVE_OBJ_FUNCS, BJ_FUNC_CODES, BJ_FEATURES, BJ_CODE_CONSTANTS = {}, {}, {}, {}
+
+_CATS = ("单位", "物品", "技能", "科技", "可破坏物", "增益")
+
+# 把所有"带对象码参数"的 native 名编成一个词边界正则，一次扫一行。
+_NATIVE_NAMES = sorted(NATIVE_OBJ_FUNCS, key=len, reverse=True)
+_NATIVE_RE = re.compile(r"\b(" + "|".join(re.escape(n) for n in _NATIVE_NAMES) + r")\b") \
+    if _NATIVE_NAMES else None
+# 生成表缺失时的最小回退（保持老行为：物品/单位仍能提到一些）
+_FALLBACK_CAT = {
+    "CreateUnit": "单位", "CreateUnitAtLoc": "单位", "BlzCreateUnit": "单位",
+    "ReplaceUnitBJ": "单位", "SetUnitTypeId": "单位",
+    "CreateItem": "物品", "CreateItemLoc": "物品", "UnitAddItemById": "物品",
+    "UnitAddAbility": "技能",
+}
+
+
+def _native_cat(name: str):
+    return NATIVE_OBJ_FUNCS.get(name, _FALLBACK_CAT.get(name))
 
 
 def scan_object_refs(script: str) -> dict:
-    """从脚本按调用类型提取被引用的 物品/单位 代码（用于无 w3t/w3u 的图兜底）。
+    """从脚本按调用的 native 类型提取被引用的对象码，按分类归并。
 
-    返回 {"物品": set(codes), "单位": set(codes)}。
+    返回 {"单位"/"物品"/"技能"/"科技"/"可破坏物"/"增益": set(codes)}。
+    依据 common.j 里每个 native 的对象码参数类别（如 UnitAddAbility 的参数是技能码、
+    CreateDestructable 是可破坏物码）。一行里若出现多类 native，则该行的码归入各命中类。
     """
-    items, units = set(), set()
+    out = {c: set() for c in _CATS}
+    names_re = _NATIVE_RE
+    if names_re is None:                # 无生成表：用最小回退名集
+        names_re = re.compile(r"\b(" + "|".join(_FALLBACK_CAT) + r")\b")
     for line in script.split("\n"):
-        if _ITEM_NATIVES.search(line):
-            for cc in _codes_in(line):
-                items.add(cc)
-        if _UNIT_NATIVES.search(line):
-            for cc in _codes_in(line):
-                units.add(cc)
-    # 单位码常以小写字母开头或 u/o/h/e/n 起头；物品码多以 I/r/... 起头。
-    # 不强行过滤，交给调用上下文；但剔除明显的技能码(以大写A起头且第二位小写?)较难，保持原样。
-    return {"物品": items, "单位": units}
+        hits = names_re.findall(line)
+        if not hits:
+            continue
+        cats = {c for c in (_native_cat(n) for n in hits) if c}
+        if not cats:
+            continue
+        codes = _codes_in(line)
+        if not codes:
+            continue
+        for c in cats:
+            out[c].update(codes)
+    return out
+
+
+def scan_all_referenced_codes(script: str) -> set:
+    """脚本里"可能是对象引用"的全部 4cc 码（用于孤立判定的根集合，宁滥勿缺）。
+
+    = 所有 'xxxx' 文本码 + 各 native 行提到的码 + BJ 隐式码。order/数值已被 _codes_in 之外
+    的 'xxxx' 字面量本身天然多为对象码；少量误收(命令串)对"根集合并集"无害(只会少判孤立)。
+    """
+    codes = set(_FOURCC.findall(script))
+    for s in scan_object_refs(script).values():
+        codes.update(s)
+    _feats, implicit = scan_script_features(script)
+    codes.update(implicit)
+    return codes
+
+
+def scan_script_features(script: str):
+    """检测脚本用到的暴雪 BJ 机制，返回 (特征中文标签列表, 隐式引用码集合)。
+
+    如 MeleeStartingUnitsHuman→"人族对战开局" 且隐式用到 htow/hpea/…；ChooseRandomItemBJ→"随机物品"。
+    用于「地图信息」展示这张图用了哪些引擎机制，以及把隐式基础对象并入引用根集合。
+    """
+    features = []
+    implicit = set()
+    seen = set()
+    for fname, label in BJ_FEATURES.items():
+        if re.search(r"\b" + re.escape(fname) + r"\b", script):
+            if label not in seen:
+                seen.add(label)
+                features.append(label)
+            implicit.update(BJ_FUNC_CODES.get(fname, []))
+    # bj_*_CODE 命名常量（电梯等）：脚本直接用常量名时也算隐式引用
+    for cname, code in BJ_CODE_CONSTANTS.items():
+        if re.search(r"\b" + re.escape(cname) + r"\b", script):
+            implicit.add(code)
+    return features, implicit

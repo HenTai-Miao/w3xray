@@ -11,7 +11,8 @@ from .mpq import (MPQArchive, FLAG_EXISTS, guess_extension,
                   _hash, HASH_NAME_A, HASH_NAME_B)
 from .w3obj import parse_object_data, EXT_CATEGORY
 from .wts import parse_wts, resolve
-from .fields import NAME_FIELD, label_for, is_concat_type
+from .fields import NAME_FIELD, label_for, is_concat_type, field_type
+from .references import extract_refs_by_type, extract_refs_by_column, build_reference_graph
 from .textobj import _sub_westring
 try:
     from .base_names import BASE_NAMES
@@ -74,6 +75,7 @@ class GameObject:
     fields: list = field(default_factory=list)   # [(label, value_str)]
     search_text: str = ""
     icon: str = ""                                # 图标路径(BLP)
+    ref_fields: list = field(default_factory=list)  # 引用字段 [(field_id/列名, [被引用码…])]
 
     @property
     def decimal(self):
@@ -95,6 +97,11 @@ class MapData:
     units: list = field(default_factory=list)       # 预放置单位 (doo.Unit)
     w3i: object = None                              # 地图信息 (w3i.W3iInfo)，无则 None
     w3f: object = None                              # 战役信息 (w3i.W3fInfo)，仅 .w3n 有
+    references: dict = field(default_factory=dict)  # 正向引用 obj_id -> [(字段标签, [(码, 名字|None)])]
+    referenced_by: dict = field(default_factory=dict)  # 反向 码 -> [(引用者ID, 引用者名, 字段标签)]
+    orphans: list = field(default_factory=list)     # 孤立的自定义对象 [GameObject]
+    ref_low_coverage: bool = False                  # 引用覆盖低(如 SLK 优化图)，孤立判定不可全信
+    script_features: list = field(default_factory=list)  # 脚本用到的暴雪BJ机制(对战开局/随机刷怪…)
 
     def category_counts(self):
         return {c: len(v) for c, v in self.objects.items()}
@@ -169,10 +176,12 @@ def _build_objects(archive: MPQArchive, ext: str, wts: dict, prefix: str = "war3
         # 原样保留大小写：模糊搜索不分大小写、引号精准搜索区分大小写（在 fuzzy_score 内处理）
         search_text = " ".join([obj_id, o.old_id, name] +
                                [str(v) for _, v in fields_list])
+        # 引用字段（类型驱动）：趁此处还有原始 field_id/value，抽出指向别的对象的码
+        ref_fields = extract_refs_by_type(o.mods, field_type)
         result.append(GameObject(
             category=category, ext=ext, obj_id=obj_id, base_id=o.old_id,
             name=str(name), is_custom=o.is_custom, fields=fields_list,
-            search_text=search_text, icon=icon))
+            search_text=search_text, icon=icon, ref_fields=ref_fields))
     return result
 
 
@@ -230,9 +239,11 @@ def _add_text_objects(md: "MapData", archive: MPQArchive):
                       clean_text(fields.get("Ubertip", "")) + " " +
                       clean_text(fields.get("Tip", "")))
             icon = (fields.get("Art") or fields.get("art") or "").split(",")[0].strip()
+            # 引用字段（列名驱动）：文本对象键是 SLK 列名，按分类的引用列表抽码
+            ref_fields = extract_refs_by_column(fields, cat)
             obj = GameObject(category=cat, ext="txt", obj_id=code, base_id=code,
                              name=name, is_custom=True, fields=disp,
-                             search_text=search, icon=icon)
+                             search_text=search, icon=icon, ref_fields=ref_fields)
             bucket.append(obj)
             md.obj_index[code] = obj
             added_total += 1
@@ -240,6 +251,64 @@ def _add_text_objects(md: "MapData", archive: MPQArchive):
         if cat_added >= 8:
             covered.add(cat)
     return covered
+
+
+_BINARY_EXTS = {"w3u", "w3t", "w3a", "w3q", "w3b", "w3d", "w3h"}
+
+
+def _add_slk_objects(md: "MapData", archive: MPQArchive, wts: dict):
+    """解析地图内嵌的 *Data.slk 对象数据（SLK 优化图），并入/增补对象表。
+
+    SLK 优化图把对象数据转成 SLK；二进制/文本路径都读不到，故技能等只剩名字、丢了字段与
+    引用（如 AHwe 召唤的单位）。这里按分类解出 SLK，逐对象：码已存在(且非二进制权威)则增补
+    字段/引用，否则新建。引用复用 references.extract_refs_by_column（按 SLK 列名抽）。
+    """
+    from .slk_objects import (parse_category_objects, slk_col_label,
+                              has_any_slk_objects, is_noise_col)
+    if not has_any_slk_objects(archive):
+        return
+    for category in ("单位", "物品", "技能", "科技", "可破坏物", "增益", "装饰物"):
+        objs = parse_category_objects(archive, category)
+        if not objs:
+            continue
+        bucket = md.objects.setdefault(category, [])
+        for code, row in objs.items():
+            ref_fields = extract_refs_by_column(row, category)
+            existing = md.obj_index.get(code)
+            if existing is not None:
+                if existing.ext in _BINARY_EXTS:
+                    continue                     # 二进制对象权威，不动
+                # 增补：把 SLK 字段里现有标签没有的并进来（跳过编辑器噪声列），引用按需补
+                have = {lab for lab, _ in existing.fields}
+                added = False
+                for col, val in row.items():
+                    if is_noise_col(col, category):
+                        continue
+                    lab = slk_col_label(col)
+                    if lab not in have and str(val) != "":
+                        existing.fields.append((lab, str(val)))
+                        added = True
+                if added and ("数据来源", "war3map *Data.slk") not in existing.fields:
+                    existing.fields.append(("数据来源", "war3map *Data.slk"))
+                if ref_fields and not existing.ref_fields:
+                    existing.ref_fields = ref_fields
+                continue
+            # 新建：SLK 独有的对象
+            name = ""
+            raw_name = row.get("Name") or row.get("Name1") or ""
+            if raw_name:
+                name = _sub_westring(str(resolve(raw_name, wts)))
+            if not name:
+                name = BASE_NAMES.get(code) or code
+            icon = (row.get("Art") or row.get("art") or row.get("ico") or "").split(",")[0].strip()
+            fields_list = [(slk_col_label(c), str(v)) for c, v in row.items()
+                           if str(v) != "" and not is_noise_col(c, category)]
+            search = code + " " + str(name) + " " + " ".join(str(v) for _, v in fields_list)
+            obj = GameObject(category=category, ext="slk", obj_id=code, base_id=code,
+                             name=str(name), is_custom=True, fields=fields_list,
+                             search_text=search, icon=icon, ref_fields=ref_fields)
+            bucket.append(obj)
+            md.obj_index[code] = obj
 
 
 def _add_base_objects(md: "MapData"):
@@ -381,6 +450,12 @@ def _load_map_impl(archive: MPQArchive, path: str, _depth: int,
                 cwts = {}
         _add_binary_objects(md, archive, cwts, text_cats, "war3campaign")
 
+    # 内嵌 SLK 对象数据（SLK 优化图）：补字段与引用；失败优雅降级。
+    try:
+        _add_slk_objects(md, archive, wts)
+    except Exception:
+        pass
+
     for fn in SCRIPT_FILES:
         if archive.has_file(fn):
             try:
@@ -407,6 +482,21 @@ def _load_map_impl(archive: MPQArchive, path: str, _depth: int,
     _add_preplaced(md, archive)
     # war3map.wct 自定义脚本解码成可读文本并入脚本（原始 wct 是二进制）
     _add_wct(md, archive)
+
+    # 脚本特征：检测脚本用到的暴雪 BJ 机制（对战开局/随机刷怪/中立建筑…），供地图信息展示。
+    script_text = _best_script_text(md.scripts)
+    if script_text:
+        try:
+            from .script_scan import scan_script_features
+            md.script_features, _ = scan_script_features(script_text)
+        except Exception:
+            md.script_features = []
+
+    # 对象引用分析（只读）：正向/反向引用 + 孤立自定义对象。失败优雅降级，不拖垮加载。
+    try:
+        build_reference_graph(md)
+    except Exception:
+        pass
 
     md.all_files = archive.list_files()
 

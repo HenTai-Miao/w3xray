@@ -1,0 +1,86 @@
+"""脚本侧引用补全测试：native 参数分类提码 + BJ 特征/隐式码。
+
+数据(jass_natives.py)由 build_jass_natives.py 从 common.j/blizzard.j 离线生成。
+"""
+import unittest
+
+from w3xtool import script_scan
+from w3xtool.script_scan import (
+    scan_object_refs, scan_script_features, scan_all_referenced_codes,
+)
+
+
+class BakedTableTest(unittest.TestCase):
+    def test_native_table_nonempty_and_sane(self):
+        N = script_scan.NATIVE_OBJ_FUNCS
+        self.assertGreater(len(N), 20)
+        # 关键 native 的分类正确
+        self.assertEqual(N.get("CreateUnit"), "单位")
+        self.assertEqual(N.get("UnitAddAbility"), "技能")
+        self.assertEqual(N.get("CreateItem"), "物品")
+        self.assertEqual(N.get("CreateDestructable"), "可破坏物")
+
+    def test_bj_tables_nonempty(self):
+        self.assertIn("MeleeStartingUnitsHuman", script_scan.BJ_FEATURES)
+        self.assertTrue(script_scan.BJ_FUNC_CODES.get("MeleeStartingUnitsHuman"))
+        self.assertEqual(script_scan.BJ_CODE_CONSTANTS.get("bj_ELEVATOR_CODE01"), "DTrf")
+
+
+class ScanObjectRefsTest(unittest.TestCase):
+    def test_ability_code_categorized(self):
+        # 早期版本只认 物品/单位；现在技能码也能归类
+        script = "call UnitAddAbility(u, 'AHbz')\n"
+        refs = scan_object_refs(script)
+        self.assertIn("AHbz", refs["技能"])
+
+    def test_unit_and_item(self):
+        script = ("set u = CreateUnit(p, 'hfoo', 0, 0, 0)\n"
+                  "call UnitAddItemById(u, 'Iitm')\n")
+        refs = scan_object_refs(script)
+        self.assertIn("hfoo", refs["单位"])
+        self.assertIn("Iitm", refs["物品"])
+
+    def test_destructable(self):
+        script = "call CreateDestructable('Dtre', 0, 0, 0, 1, 0)\n"
+        refs = scan_object_refs(script)
+        self.assertIn("Dtre", refs["可破坏物"])
+
+    def test_all_categories_keys_present(self):
+        refs = scan_object_refs("")
+        for c in ("单位", "物品", "技能", "科技", "可破坏物", "增益"):
+            self.assertIn(c, refs)
+
+    def test_non_object_line_ignored(self):
+        # 不含对象码 native 的行不收码（避免误收伤害/金钱等整数）
+        refs = scan_object_refs("set damage = 1234\ncall BJDebugMsg(\"hi\")\n")
+        self.assertEqual(sum(len(s) for s in refs.values()), 0)
+
+
+class ScriptFeaturesTest(unittest.TestCase):
+    def test_melee_feature_and_implicit_codes(self):
+        script = "call MeleeStartingUnitsHuman(p, loc, true, true, true)\n"
+        feats, implicit = scan_script_features(script)
+        self.assertIn("人族对战开局", feats)
+        self.assertIn("htow", implicit)        # 人族主基地是隐式引用
+
+    def test_no_feature(self):
+        feats, implicit = scan_script_features("call DoNothing()\n")
+        self.assertEqual(feats, [])
+        self.assertEqual(implicit, set())
+
+    def test_elevator_constant(self):
+        feats, implicit = scan_script_features("set id = bj_ELEVATOR_CODE01\n")
+        self.assertIn("DTrf", implicit)
+
+
+class AllReferencedCodesTest(unittest.TestCase):
+    def test_collects_literals_and_implicit(self):
+        script = ("call SomethingWith('Ax01')\n"
+                  "call MeleeStartingUnitsOrc(p, loc, true, true, true)\n")
+        codes = scan_all_referenced_codes(script)
+        self.assertIn("Ax01", codes)           # 裸 'xxxx' 字面量也算根
+        self.assertTrue(any(c.islower() for c in codes))  # 兽族隐式基础单位码
+
+
+if __name__ == "__main__":
+    unittest.main()

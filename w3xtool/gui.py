@@ -127,11 +127,13 @@ class App(ctk.CTk):
         self.tab_pre = self.tabs.add("预放置")
         self.tab_cmd = self.tabs.add("隐藏指令")
         self.tab_rec = self.tabs.add("合成配方")
+        self.tab_orphan = self.tabs.add("孤立对象")
         self._build_obj_tab(self.tab_obj)
         self._build_info_tab(self.tab_info)
         self._build_preplaced_tab(self.tab_pre)
         self._build_cmd_tab(self.tab_cmd)
         self._build_rec_tab(self.tab_rec)
+        self._build_orphan_tab(self.tab_orphan)
 
     def _build_obj_tab(self, parent):
         # 顶部搜索（过滤所有列）
@@ -287,6 +289,70 @@ class App(ctk.CTk):
         self.rec_tree.pack(side="left", fill="both", expand=True)
         self._attach_tree_copy(self.rec_tree)
 
+    def _build_orphan_tab(self, parent):
+        """孤立对象：定义了、但没被任何对象/脚本/预放置引用的自定义对象（只读报告）。"""
+        top = ctk.CTkFrame(parent, fg_color=BG)
+        top.pack(fill="x", padx=4, pady=(8, 6))
+        self.orphan_search = tk.StringVar()
+        ose = ctk.CTkEntry(top, textvariable=self.orphan_search, height=38, font=(FONT, 14),
+                           justify="center",
+                           placeholder_text='🔍  回车搜索　名称/ID/分类　%词%=包含　="…"=精准　&&=且　||=或')
+        ose.pack(fill="x")
+        ose.bind("<Return>", lambda *_: self._refresh_orphans())
+        self._attach_ctx_menu(ose, paste=True)
+        self.orphan_hint = ctk.CTkLabel(
+            parent, text="打开地图后这里列出「孤立」自定义对象——定义了但没被任何对象/脚本/预放置引用的废弃对象",
+            font=(FONT, 12), text_color=SUBTLE, anchor="w")
+        self.orphan_hint.pack(fill="x", padx=6, pady=(0, 6))
+        wrap = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=12)
+        wrap.pack(fill="both", expand=True)
+        inner = tk.Frame(wrap, bg=CARD)
+        inner.pack(fill="both", expand=True, padx=8, pady=8)
+        self.orphan_tree = ttk.Treeview(inner, columns=("cat", "id", "name"),
+                                        show="headings", selectmode="browse")
+        for c, t, w, a in (("cat", "分类", 90, "center"), ("id", "ID", 80, "center"),
+                           ("name", "名称", 480, "w")):
+            self.orphan_tree.heading(c, text=t)
+            self.orphan_tree.column(c, width=w, anchor=a, stretch=False)
+        vsb = ttk.Scrollbar(inner, orient="vertical", command=self.orphan_tree.yview)
+        hsb = ttk.Scrollbar(inner, orient="horizontal", command=self.orphan_tree.xview)
+        self.orphan_tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        vsb.pack(side="right", fill="y")
+        hsb.pack(side="bottom", fill="x")
+        self.orphan_tree.pack(side="left", fill="both", expand=True)
+        self._attach_tree_copy(self.orphan_tree)
+
+    def _refresh_orphans(self):
+        if not hasattr(self, "orphan_tree"):
+            return
+        self.orphan_tree.delete(*self.orphan_tree.get_children())
+        orphans = getattr(self.map_data, "orphans", []) if self.map_data else []
+        q = self.orphan_search.get().strip()
+        cq = compile_query(q)
+        n = 0
+        for o in orphans:
+            blob = f"{o.category} {o.obj_id} {o.name}"
+            if q and cq.score(blob) is None:
+                continue
+            self.orphan_tree.insert("", "end", values=(o.category, o.obj_id, o.name),
+                                    tags=("odd" if n % 2 else "even",))
+            n += 1
+        self.orphan_tree.tag_configure("odd", background=ROW_ALT)
+        self.orphan_tree.tag_configure("even", background=CARD)
+        total = len(orphans)
+        low = bool(getattr(self.map_data, "ref_low_coverage", False))
+        if total and low:
+            self.orphan_hint.configure(
+                text=f"孤立自定义对象：{n}/{total} —— ⚠ 此图引用覆盖低（疑为 SLK 优化图，"
+                     "单位→技能等引用在未解析的 .slk 里），下列多为误报，仅供参考")
+        elif total:
+            self.orphan_hint.configure(
+                text=f"孤立自定义对象：{n}/{total} —— 定义了但没被任何对象/脚本/预放置引用"
+                     "（只读报告，不会改图；可能是作者留下的废弃对象）")
+        else:
+            self.orphan_hint.configure(
+                text="未发现孤立自定义对象（每个自定义对象都被引用，或此图无自定义对象数据）")
+
     def _build_info_tab(self, parent):
         """地图信息：war3map.w3i 解析出的名/作者/描述/玩家/队伍/脚本语言等，只读文本。"""
         self.info_box = ctk.CTkTextbox(parent, font=(FONT, 13), fg_color=PANEL, wrap="word")
@@ -338,6 +404,9 @@ class App(ctk.CTk):
             tags.append("自定义技能")
         if tags:
             L.append("标志　　：" + "、".join(tags))
+        feats = getattr(self.map_data, "script_features", None) if self.map_data else None
+        if feats:
+            L.append("脚本特征：" + "、".join(feats) + "  （脚本用到的暴雪内置机制）")
         if info.description:
             L.append(f"\n描述：\n{info.description}")
         if info.players:
@@ -938,6 +1007,8 @@ class App(ctk.CTk):
         self._refresh_recipes()
         # 预放置单位/装饰物
         self._refresh_preplaced()
+        # 孤立对象（引用分析）
+        self._refresh_orphans()
         # 地图信息
         self._refresh_info()
 
@@ -1044,7 +1115,36 @@ class App(ctk.CTk):
             self.detail.insert("end", "（无修改字段）")
         for lab, val in o.fields:
             self.detail.insert("end", f"{lab}: {val}\n")
+        self._insert_references(o)
         self.detail.configure(state="disabled")
+
+    def _insert_references(self, o):
+        """详情区追加「引用 →」「被引用 ←」两节（只读引用分析）。"""
+        md = self.map_data
+        if md is None:
+            return
+
+        def fmt(code, name):
+            return f"{name}({code})" if name else code
+
+        refs = (md.references or {}).get(o.obj_id) or []
+        if refs:
+            self.detail.insert("end", "\n── 引用（→ 此对象用到的对象）──\n")
+            for label, resolved in refs:
+                items = "，".join(fmt(c, n) for c, n in resolved)
+                self.detail.insert("end", f"{label}: {items}\n")
+
+        back = (md.referenced_by or {}).get(o.obj_id) or []
+        if back:
+            self.detail.insert("end", "\n── 被引用（← 谁用到此对象）──\n")
+            # 同一引用者可能多字段引用，去重展示
+            seen = set()
+            for rid, rname, label in back:
+                key = (rid, label)
+                if key in seen:
+                    continue
+                seen.add(key)
+                self.detail.insert("end", f"{fmt(rid, rname)}  ·  {label}\n")
 
     # ---------- 指令 ----------
     def _refresh_cmds(self):
