@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import ntpath
 import os
 import sys
 import tempfile
@@ -27,7 +28,7 @@ def _same_image(a, b) -> bool:
     或攻击者放的同名进程）不算「本程序的上一个实例」，避免误杀。"""
     if not a or not b:
         return False
-    return os.path.normcase(os.path.normpath(a)) == os.path.normcase(os.path.normpath(b))
+    return ntpath.normcase(ntpath.normpath(a)) == ntpath.normcase(ntpath.normpath(b))
 
 
 def _decide(my_pid, my_image, lock_data, *, alive, image_of):

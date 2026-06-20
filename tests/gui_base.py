@@ -60,5 +60,11 @@ class GuiTestCase(unittest.TestCase):
         app.info_box.configure(state="normal")
         app.info_box.delete("1.0", "end")
         app.info_box.configure(state="disabled")
+        for box_name in ("overview_box", "analysis_box"):
+            if hasattr(app, box_name):
+                box = getattr(app, box_name)
+                box.configure(state="normal")
+                box.delete("1.0", "end")
+                box.configure(state="disabled")
         # 材料列宽会被 test_ingredient_column_grows 读作基线，还原到初始 620
         app.rec_tree.column("ingredients", width=620)

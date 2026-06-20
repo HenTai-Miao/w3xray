@@ -1,11 +1,10 @@
 """魔兽地图提取器 GUI（CustomTkinter，深色卡片风）。
 
-五个标签页：
-- 对象浏览：模糊搜索 单位/物品/技能/科技 等，看详情、导出
-- 地图信息：war3map.w3i（名/作者/玩家/队伍/脚本语言/尺寸）
-- 预放置：地图上预放置的单位/装饰物（摆在哪、归谁、初始属性）
-- 隐藏指令：扫描脚本里的聊天指令
-- 合成配方：识别物品合成配方
+编辑器式工作台：
+- 总览：地图库存、脚本/触发、场景与风险快照
+- 对象编辑器：模糊搜索 单位/物品/技能/科技 等，看详情、导出
+- 地图信息 / 场景放置 / 触发指令 / 合成配方 / 孤立对象
+- 分析报告：汇总审计、兼容、资源、命令、崩溃、秘籍等只读报告
 """
 from __future__ import annotations
 
@@ -24,6 +23,7 @@ from .api import (load_map, commands_from_map, recipes_from_map,
                   export_all_files, tmp_extract_dir, quick_map_name, MapData)
 from .search import compile_query
 from .icons import IconResolver
+from .gui_report_tabs import ReportTabsMixin
 from PIL import Image, ImageTk
 try:
     from .base_names import BASE_NAMES
@@ -51,7 +51,7 @@ PANEL = "#2b2b2b"          # 文本框/画布底
 PARALLEL_CATS = ["物品", "单位", "技能", "科技"]
 
 
-class App(ctk.CTk):
+class App(ReportTabsMixin, ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("魔兽地图提取器")
@@ -122,18 +122,25 @@ class App(ctk.CTk):
 
         self.tabs = ctk.CTkTabview(self, fg_color=BG, segmented_button_selected_color=ACCENT)
         self.tabs.pack(fill="both", expand=True, padx=10, pady=(2, 6))
-        self.tab_obj = self.tabs.add("对象浏览")
+        self.editor_tab_labels = (
+            "总览", "对象编辑器", "地图信息", "场景放置", "触发指令", "合成配方", "孤立对象", "分析报告")
+        self.tab_overview = self.tabs.add("总览")
+        self.tab_obj = self.tabs.add("对象编辑器")
         self.tab_info = self.tabs.add("地图信息")
-        self.tab_pre = self.tabs.add("预放置")
-        self.tab_cmd = self.tabs.add("隐藏指令")
+        self.tab_pre = self.tabs.add("场景放置")
+        self.tab_cmd = self.tabs.add("触发指令")
         self.tab_rec = self.tabs.add("合成配方")
         self.tab_orphan = self.tabs.add("孤立对象")
+        self.tab_analysis = self.tabs.add("分析报告")
+        self._build_overview_tab(self.tab_overview)
         self._build_obj_tab(self.tab_obj)
         self._build_info_tab(self.tab_info)
         self._build_preplaced_tab(self.tab_pre)
         self._build_cmd_tab(self.tab_cmd)
         self._build_rec_tab(self.tab_rec)
         self._build_orphan_tab(self.tab_orphan)
+        self._build_analysis_tab(self.tab_analysis)
+        self._refresh_editor_reports()
 
     def _build_obj_tab(self, parent):
         # 顶部搜索（过滤所有列）
@@ -1011,6 +1018,8 @@ class App(ctk.CTk):
         self._refresh_orphans()
         # 地图信息
         self._refresh_info()
+        # 编辑器式总览 / 分析报告
+        self._refresh_editor_reports()
 
         counts = md.category_counts()
         total = sum(counts.values())

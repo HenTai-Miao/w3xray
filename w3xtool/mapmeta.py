@@ -1,0 +1,144 @@
+"""地图内部结构文件的只读摘要。"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+import struct
+from typing import Final
+
+STRUCTURE_FILES: Final = (
+    "war3map.w3r",
+    "war3map.w3c",
+    "war3map.w3s",
+    "war3map.wpm",
+)
+_MAX_COUNT: Final = 1_000_000
+_MAX_STRINGS: Final = 50
+_MIN_STRING_LEN: Final = 2
+
+
+@dataclass(frozen=True, slots=True)
+class PathingSummary:
+    width: int
+    height: int
+    cells: int
+
+
+@dataclass(frozen=True, slots=True)
+class MapStructureReport:
+    regions: int | None = None
+    cameras: int | None = None
+    sounds: int | None = None
+    pathing: PathingSummary | None = None
+    region_strings: tuple[str, ...] = ()
+    camera_strings: tuple[str, ...] = ()
+    sound_strings: tuple[str, ...] = ()
+
+    @property
+    def has_data(self) -> bool:
+        return any(value is not None for value in (
+            self.regions,
+            self.cameras,
+            self.sounds,
+            self.pathing,
+            self.region_strings,
+            self.camera_strings,
+            self.sound_strings,
+        ))
+
+
+def parse_counted_structure(data: bytes, magic: bytes) -> int | None:
+    """解析 W3R/W3C/W3S 这类 magic/version/count 头。"""
+    if len(data) < 12 or data[:4] != magic:
+        return None
+    count = struct.unpack_from("<i", data, 8)[0]
+    if count < 0 or count > _MAX_COUNT:
+        return None
+    return count
+
+
+def parse_structure_strings(data: bytes, magic: bytes) -> tuple[str, ...]:
+    """从 W3R/W3C/W3S 结构文件中提取可读的零结尾字符串。"""
+    if parse_counted_structure(data, magic) is None:
+        return ()
+    out: list[str] = []
+    seen: set[str] = set()
+    for chunk in data[12:].split(b"\x00"):
+        text = _decode_readable_chunk(chunk)
+        if text is None or text in seen:
+            continue
+        seen.add(text)
+        out.append(text)
+        if len(out) >= _MAX_STRINGS:
+            break
+    return tuple(out)
+
+
+def parse_wpm_summary(data: bytes) -> PathingSummary | None:
+    """解析 war3map.wpm 路径图头部尺寸。"""
+    if len(data) < 16 or data[:4] != b"MP3W":
+        return None
+    width, height = struct.unpack_from("<ii", data, 8)
+    if width <= 0 or height <= 0 or width > _MAX_COUNT or height > _MAX_COUNT:
+        return None
+    return PathingSummary(width=width, height=height, cells=width * height)
+
+
+def build_map_structure_report(files: dict[str, bytes]) -> MapStructureReport:
+    """从内部文件 payload 构建地图结构摘要。"""
+    lowered = {name.lower(): data for name, data in files.items()}
+    region_data = lowered.get("war3map.w3r", b"")
+    camera_data = lowered.get("war3map.w3c", b"")
+    sound_data = lowered.get("war3map.w3s", b"")
+    return MapStructureReport(
+        regions=parse_counted_structure(region_data, b"W3R!"),
+        cameras=parse_counted_structure(camera_data, b"W3C!"),
+        sounds=parse_counted_structure(sound_data, b"W3S!"),
+        pathing=parse_wpm_summary(lowered.get("war3map.wpm", b"")),
+        region_strings=parse_structure_strings(region_data, b"W3R!"),
+        camera_strings=parse_structure_strings(camera_data, b"W3C!"),
+        sound_strings=parse_structure_strings(sound_data, b"W3S!"),
+    )
+
+
+def _decode_readable_chunk(raw: bytes) -> str | None:
+    chunk = raw.strip()
+    if len(chunk) < _MIN_STRING_LEN:
+        return None
+    for start in range(min(len(chunk), 8)):
+        for encoding in ("utf-8", "gb18030", "latin-1"):
+            try:
+                text = chunk[start:].decode(encoding).strip()
+            except UnicodeDecodeError:
+                continue
+            if _is_readable_text(text) and not _looks_binary_prefixed(text):
+                return text
+    return None
+
+
+def _is_readable_text(text: str) -> bool:
+    if len(text) < _MIN_STRING_LEN:
+        return False
+    printable = sum(1 for char in text if char.isprintable())
+    return printable == len(text)
+
+
+def _looks_binary_prefixed(text: str) -> bool:
+    return len(text) >= 2 and text[0].isascii() and not text[1].isascii()
+
+
+def map_structure_report_from_map_path(path: str) -> MapStructureReport:
+    """从地图 MPQ 中读取结构文件；读取失败时返回空报告。"""
+    from .mpq import MPQArchive
+
+    if not Path(path).is_file():
+        return MapStructureReport()
+    files: dict[str, bytes] = {}
+    try:
+        with MPQArchive(path) as archive:
+            for name in STRUCTURE_FILES:
+                if archive.has_file(name):
+                    files[name] = archive.read_file(name)
+    except (OSError, ValueError, KeyError, struct.error):
+        return MapStructureReport()
+    return build_map_structure_report(files)
