@@ -1,9 +1,9 @@
-"""Anime-styled object card gallery for the main object browser."""
+"""Compact object list for the main object browser."""
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Final
 
 import customtkinter as ctk
@@ -26,10 +26,7 @@ from .theme import (
     TEXT_STRONG,
 )
 
-INITIAL_VISIBLE_CARDS: Final = 96
-VISIBLE_CARD_STEP: Final = 96
-MAX_VISIBLE_CARDS: Final = 480
-GALLERY_COLUMNS: Final = 4
+GALLERY_COLUMNS: Final = 1
 
 
 @dataclass(slots=True)
@@ -40,8 +37,6 @@ class ObjectGallery:
     hint: ctk.CTkLabel
     buttons: dict[str, ctk.CTkButton]
     cards: ctk.CTkScrollableFrame
-    visible_limits: dict[str, int] = field(default_factory=dict)
-    result_counts: dict[str, int] = field(default_factory=dict)
 
 
 def build_object_gallery(
@@ -61,7 +56,7 @@ def build_object_gallery(
         text_color=TEXT_STRONG, anchor="w",
     ).pack(fill="x")
     ctk.CTkLabel(
-        title_box, text="物品 · 单位 · 技能 · 科技",
+        title_box, text="单位 · 物品 · 技能 · 科技 · 可破坏物等",
         font=(FONT, 10), text_color=SUBTLE, anchor="w",
     ).pack(fill="x", pady=(1, 0))
     hint = ctk.CTkLabel(header, text="等待加载地图", font=(FONT, 11), text_color=SUBTLE)
@@ -73,14 +68,15 @@ def build_object_gallery(
         border_width=1, border_color=BORDER,
     )
     cat_bar.pack(fill="x", padx=14, pady=(0, 7))
-    for cat in PARALLEL_CATS:
+    for index, cat in enumerate(PARALLEL_CATS):
         btn = ctk.CTkButton(
-            cat_bar, text=cat, height=28, width=86,
+            cat_bar, text=cat, height=26, width=76,
             font=(FONT, 12, "bold"), fg_color="transparent", hover_color=CARD_RAISED,
             text_color=CATEGORY_COLORS.get(cat, TEXT),
-            corner_radius=14, command=lambda category=cat: on_category(category),
+            corner_radius=13, command=lambda category=cat: on_category(category),
         )
-        btn.pack(side="left", padx=3, pady=3)
+        btn.grid(row=index // 4, column=index % 4, sticky="ew", padx=3, pady=3)
+        cat_bar.grid_columnconfigure(index % 4, weight=1, uniform="object_category")
         buttons[cat] = btn
 
     cards = ctk.CTkScrollableFrame(
@@ -88,8 +84,7 @@ def build_object_gallery(
         scrollbar_button_hover_color=SECONDARY_HOVER,
     )
     cards.pack(fill="both", expand=True, padx=10, pady=(0, 8))
-    for column in range(GALLERY_COLUMNS):
-        cards.grid_columnconfigure(column, weight=1, uniform="object_cards")
+    cards.grid_columnconfigure(0, weight=1)
     return ObjectGallery(container=container, hint=hint, buttons=buttons, cards=cards)
 
 
@@ -110,8 +105,7 @@ def render_object_gallery(
         _render_empty_state(gallery, category)
         return
 
-    visible_limit = _visible_limit(gallery, category, len(results))
-    for index, obj in enumerate(results[:visible_limit]):
+    for index, obj in enumerate(results):
         render_object_card(
             gallery=gallery,
             obj=obj,
@@ -119,28 +113,6 @@ def render_object_gallery(
             columns=GALLERY_COLUMNS,
             show_detail=show_detail,
         )
-    if len(results) > visible_limit:
-        _render_load_more(
-            gallery,
-            category,
-            len(results),
-            visible_limit,
-            results_by_category,
-            show_detail,
-        )
-
-
-def _visible_limit(gallery: ObjectGallery, category: str, total: int) -> int:
-    previous_total = gallery.result_counts.get(category)
-    configured = (
-        gallery.visible_limits.get(category, INITIAL_VISIBLE_CARDS)
-        if previous_total == total
-        else INITIAL_VISIBLE_CARDS
-    )
-    gallery.result_counts[category] = total
-    limit = min(configured, total, MAX_VISIBLE_CARDS)
-    gallery.visible_limits[category] = limit
-    return limit
 
 
 def _refresh_category_buttons(
@@ -165,7 +137,7 @@ def _render_empty_state(gallery: ObjectGallery, category: str) -> None:
         gallery.cards, fg_color=PANEL, corner_radius=18,
         border_width=1, border_color=BORDER,
     )
-    empty.grid(row=0, column=0, columnspan=2, sticky="nsew", padx=8, pady=8)
+    empty.grid(row=0, column=0, sticky="ew", padx=8, pady=8)
     ctk.CTkLabel(
         empty, text=f"{category} 没有匹配对象",
         font=(FONT, 14, "bold"), text_color=TEXT_STRONG,
@@ -174,38 +146,3 @@ def _render_empty_state(gallery: ObjectGallery, category: str) -> None:
         empty, text="换一个分类，或清空搜索条件后回车刷新。",
         font=(FONT, 12), text_color=SUBTLE,
     ).pack(padx=16, pady=(0, 18))
-
-
-def _render_load_more(
-    gallery: ObjectGallery,
-    category: str,
-    total: int,
-    visible_limit: int,
-    results_by_category: Mapping[str, list[GameObject]],
-    show_detail: Callable[[GameObject], None],
-) -> None:
-    row = (visible_limit + GALLERY_COLUMNS - 1) // GALLERY_COLUMNS
-    next_limit = min(visible_limit + VISIBLE_CARD_STEP, total, MAX_VISIBLE_CARDS)
-    text = f"加载更多（{visible_limit}/{total}）" if visible_limit < MAX_VISIBLE_CARDS else (
-        f"已显示前 {MAX_VISIBLE_CARDS} 个，搜索可缩小范围"
-    )
-    button = ctk.CTkButton(
-        gallery.cards, text=text, height=30, font=(FONT, 11, "bold"),
-        fg_color=SECONDARY, hover_color=SECONDARY_HOVER,
-        text_color=TEXT, corner_radius=15,
-        command=lambda: _load_more(
-            gallery, category, next_limit, results_by_category, show_detail
-        ),
-    )
-    button.grid(row=row, column=0, columnspan=GALLERY_COLUMNS, sticky="ew", padx=8, pady=8)
-
-
-def _load_more(
-    gallery: ObjectGallery,
-    category: str,
-    next_limit: int,
-    results_by_category: Mapping[str, list[GameObject]],
-    show_detail: Callable[[GameObject], None],
-) -> None:
-    gallery.visible_limits[category] = next_limit
-    render_object_gallery(gallery, category, results_by_category, show_detail)

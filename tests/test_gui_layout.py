@@ -5,7 +5,7 @@ from PIL import Image
 
 from tests.gui_base import GuiTestCase
 from w3xtool.api import GameObject, MapData
-from w3xtool.load_options import default_load_options, object_only_load_options
+from w3xtool.script_scan import ChatCommand, Recipe
 
 
 def _visible_texts(widget):
@@ -32,7 +32,7 @@ class TestEditorStyleLayout(GuiTestCase):
         # Given: the GUI has been constructed.
         expected = (
             "总览", "对象编辑器", "地图信息", "场景放置", "触发指令",
-            "合成配方", "孤立对象", "分析报告", "加载设置",
+            "合成配方", "孤立对象", "分析报告",
         )
 
         # When/Then: the editor-style workspace exposes the expected sections.
@@ -94,8 +94,8 @@ class TestEditorStyleLayout(GuiTestCase):
         self.assertEqual(self.app.overview_box.winfo_ismapped(), 0)
         self.assertEqual(self.app.analysis_box.winfo_ismapped(), 0)
 
-    def test_object_gallery_uses_name_only_dense_cards(self):
-        # Given: enough items to fill more than one dense gallery row.
+    def test_object_gallery_uses_name_only_compact_list_rows(self):
+        # Given: enough items to fill more than one dense list row.
         md = MapData(path="x.w3x", name="对象密度测试图")
         md.objects = {
             "物品": [
@@ -118,18 +118,18 @@ class TestEditorStyleLayout(GuiTestCase):
         self.pump_events_until(lambda: len(self.app.object_cards.winfo_children()) >= 6)
         cards = self.app.object_cards.winfo_children()
 
-        # Then: cards are name-only rows; all metadata belongs in the right detail panel.
+        # Then: objects render as compact single-column rows; details stay on the right panel.
         self.assertGreaterEqual(len(cards), 6)
-        self.assertLessEqual(int(cards[0].cget("height")), 44)
+        self.assertLessEqual(int(cards[0].cget("height")), 34)
         self.assertEqual(_visible_texts(cards[0]), ["物品0"])
         self.assertFalse(
             any(child.__class__.__name__ == "CTkButton" for child in _descendants(cards[0]))
         )
-        self.assertEqual(cards[3].grid_info()["row"], 0)
-        self.assertEqual(cards[3].grid_info()["column"], 3)
-        self.assertEqual(cards[4].grid_info()["row"], 1)
+        self.assertEqual(cards[3].grid_info()["row"], 3)
+        self.assertEqual(cards[3].grid_info()["column"], 0)
+        self.assertEqual(cards[4].grid_info()["row"], 4)
 
-    def test_object_gallery_batches_large_categories_for_fast_switching(self):
+    def test_object_gallery_shows_every_object_in_current_category(self):
         # Given: a large category like real RPG maps on Windows.
         md = MapData(path="x.w3x", name="切换性能测试图")
         md.objects = {
@@ -152,11 +152,37 @@ class TestEditorStyleLayout(GuiTestCase):
         self.pump_events_until(lambda: len(self.app.col_results["物品"]) == 100)
         widgets = self.app.object_cards.winfo_children()
 
-        # Then: category switching does not synchronously create every card.
-        self.assertLess(len(widgets), 100)
+        # Then: every object row in the active category is visible without loading more.
+        self.assertEqual(len(widgets), 100)
         self.assertLessEqual(len(self.app.col_trees["物品"].get_children()), 32)
         buttons = [widget for widget in widgets if widget.__class__.__name__ == "CTkButton"]
-        self.assertTrue(any("加载更多" in button.cget("text") for button in buttons))
+        self.assertFalse(any("加载更多" in button.cget("text") for button in buttons))
+
+    def test_object_gallery_exposes_all_object_editor_categories(self):
+        # Given: a map has every object-editor category the parser supports.
+        md = MapData(
+            path="x.w3x",
+            name="全对象分类测试图",
+            objects={
+                "单位": [GameObject("单位", "w3u", "H001", "H001", "步兵", True)],
+                "物品": [GameObject("物品", "w3t", "I001", "I001", "药水", True)],
+                "技能": [GameObject("技能", "w3a", "A001", "A001", "火球", True)],
+                "科技": [GameObject("科技", "w3q", "R001", "R001", "升级", True)],
+                "可破坏物": [GameObject("可破坏物", "w3b", "D001", "D001", "树木", True)],
+                "装饰物": [GameObject("装饰物", "w3d", "B001", "B001", "雕像", True)],
+                "增益": [GameObject("增益", "w3h", "F001", "F001", "眩晕", True)],
+            },
+        )
+        self.app.active_object_category = "可破坏物"
+
+        # When: the object gallery is rendered.
+        self.app._render_map(md, [], [], None)
+        self.pump_events_until(lambda: len(self.app.col_results["可破坏物"]) == 1)
+
+        # Then: all supported object categories are selectable and render rows.
+        for label in ("单位", "物品", "技能", "科技", "可破坏物", "装饰物", "增益"):
+            self.assertIn(label, self.app.object_cat_buttons)
+        self.assertEqual(_visible_texts(self.app.object_cards.winfo_children()[0]), ["树木"])
 
     def test_object_icon_loads_only_when_detail_is_opened(self):
         # Given: an object has an icon and the gallery is rendered.
@@ -182,26 +208,25 @@ class TestEditorStyleLayout(GuiTestCase):
         self.assertEqual(resolver.calls, [obj.icon])
         self.assertIsNotNone(self.app.detail_icon_image)
 
-    def test_object_only_load_options_skip_other_views(self):
-        # Given: only the object browser is enabled.
-        self.app._apply_load_options(object_only_load_options(), persist=False, refresh=False)
+    def test_removed_load_settings_defaults_all_views_to_enabled(self):
+        # Given: the load settings tab has been removed from the visible workspace.
         md = MapData(
             path="x.w3x",
-            name="按需渲染测试图",
+            name="默认加载测试图",
             objects={"物品": [GameObject("物品", "w3t", "I000", "I000", "物品", True)]},
         )
 
         # When: a map renders with commands and recipes provided by the loader.
-        self.app._render_map(md, ["-debug"], ["recipe"], None)
+        command = ChatCommand("-debug", True, "gg_trg_Debug", "调试")
+        recipe = Recipe(["I000"], "I001")
+        self.app._render_map(md, [command], [recipe], None)
         self.pump_events_until(lambda: len(self.app.object_cards.winfo_children()) >= 1)
 
-        # Then: the object browser renders, while disabled views stay empty.
+        # Then: all major views render by default; there is no settings tab to hide them.
         self.assertGreaterEqual(len(self.app.object_cards.winfo_children()), 1)
-        self.assertEqual(self.app.commands, [])
-        self.assertEqual(self.app.recipes, [])
-        self.assertEqual(len(self.app.cmd_tree.get_children()), 0)
-        self.assertIn("加载设置", self.app.cmd_hint.cget("text"))
-        self.app._apply_load_options(default_load_options(), persist=False, refresh=False)
+        self.assertEqual(self.app.commands, [command])
+        self.assertEqual(self.app.recipes, [recipe])
+        self.assertNotIn("加载设置", self.app.editor_tab_labels)
 
 
 class _FakeIconResolver:

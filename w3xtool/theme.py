@@ -33,12 +33,15 @@ SECONDARY_HOVER = "#d2eaff"
 SEL_BG = "#bfe8ff"
 SEL_TEXT = "#102a43"
 
-PARALLEL_CATS = ["物品", "单位", "技能", "科技"]
+PARALLEL_CATS = ["单位", "物品", "技能", "科技", "可破坏物", "装饰物", "增益"]
 CATEGORY_COLORS = {
-    "物品": "#ff9f43",
     "单位": "#31b978",
+    "物品": "#ff9f43",
     "技能": "#2ebbd9",
     "科技": "#8d79ff",
+    "可破坏物": "#c47a32",
+    "装饰物": "#5e9ad6",
+    "增益": "#df5f8f",
 }
 
 

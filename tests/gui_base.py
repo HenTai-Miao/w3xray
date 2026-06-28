@@ -64,8 +64,6 @@ class GuiTestCase(unittest.TestCase):
             app.col_results[cat] = []
         for child in app.object_cards.winfo_children():
             child.destroy()
-        app.object_gallery.visible_limits.clear()
-        app.object_gallery.result_counts.clear()
         app.pre_search.set("")
         # 地图信息框复位（只读 textbox 需临时切到可写态清空）
         app.info_box.configure(state="normal")

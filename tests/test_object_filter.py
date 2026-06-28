@@ -42,8 +42,13 @@ class TestObjectFilter(unittest.TestCase):
         # Given: a map only has one populated category.
         md = MapData(
             path="x.w3x",
-            name="空查询测试图",
-            objects={"物品": [GameObject("物品", "w3t", "I001", "I001", "木头", True)]},
+            name="全分类测试图",
+            objects={
+                "物品": [GameObject("物品", "w3t", "I001", "I001", "木头", True)],
+                "可破坏物": [
+                    GameObject("可破坏物", "w3b", "D001", "D001", "树木", True),
+                ],
+            },
         )
 
         # When: the user has not entered a query.
@@ -51,7 +56,11 @@ class TestObjectFilter(unittest.TestCase):
 
         # Then: missing categories are represented as empty lists for the GUI.
         self.assertEqual([obj.name for obj in result.results_by_category["物品"]], ["木头"])
+        self.assertEqual([obj.name for obj in result.results_by_category["可破坏物"]], ["树木"])
         self.assertEqual(result.results_by_category["技能"], [])
+        self.assertEqual(result.results_by_category["装饰物"], [])
+        self.assertEqual(result.results_by_category["增益"], [])
+        self.assertIn("可破坏物1", result.summary)
         self.assertIn("技能0", result.summary)
 
 

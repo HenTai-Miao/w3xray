@@ -14,7 +14,7 @@ from .load_options import (
 from .object_gallery import render_object_gallery
 from .theme import PARALLEL_CATS
 
-DISABLED_TEXT = "已在加载设置关闭。"
+DISABLED_TEXT = "当前模块已关闭。"
 
 
 class ModuleRefreshMixin:

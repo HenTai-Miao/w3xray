@@ -24,6 +24,7 @@ from .gui_load_settings import LoadSettingsMixin
 from .gui_loader_runner import BackgroundLoaderMixin
 from .gui_module_refresh import ModuleRefreshMixin
 from .gui_object_filter_runner import ObjectFilterRunnerMixin
+from .gui_pane_state import OBJECT_EDITOR_PANE_KEY, PaneStateMixin
 from .gui_report_tabs import ReportTabsMixin
 from .map_directory import scan_battle_maps
 from .map_gallery import MapEntry, build_map_gallery, render_map_gallery
@@ -37,11 +38,9 @@ from .theme import (
     BORDER,
     CARD,
     CARD_RAISED,
-    CATEGORY_COLORS,
     FONT,
     HEADER,
     INFO,
-    LAYOUT_VERSION,
     MONO_FONT,
     MUTED,
     PANEL,
@@ -75,6 +74,7 @@ class App(
     LoadSettingsMixin,
     ModuleRefreshMixin,
     ObjectFilterRunnerMixin,
+    PaneStateMixin,
     BackgroundLoaderMixin,
     ReportTabsMixin,
     ctk.CTk,
@@ -104,6 +104,7 @@ class App(
         self._init_load_options()
         self._init_background_loader()
         self._init_object_filter_runner()
+        self._init_pane_state()
         self._build_topbar()
         self._build_tabs()
         self._build_statusbar()
@@ -118,7 +119,7 @@ class App(
                 pass
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(300, self._restore_last_dir)    # 启动后自动恢复上次的地图目录
-        self.after(500, self._restore_sashes)      # 恢复上次拖拽的分隔位置
+        self.after(500, self._restore_pane_sashes)      # 恢复上次拖拽的分隔位置
 
     # ---------- 顶栏 ----------
     def _build_topbar(self):
@@ -183,7 +184,7 @@ class App(
         self.tabs.pack(fill="both", expand=True, padx=0, pady=(0, 2))
         self.editor_tab_labels = (
             "总览", "对象编辑器", "地图信息", "场景放置", "触发指令",
-            "合成配方", "孤立对象", "分析报告", "加载设置")
+            "合成配方", "孤立对象", "分析报告")
         self.tab_overview = self.tabs.add("总览")
         self.tab_obj = self.tabs.add("对象编辑器")
         self.tab_info = self.tabs.add("地图信息")
@@ -192,7 +193,6 @@ class App(
         self.tab_rec = self.tabs.add("合成配方")
         self.tab_orphan = self.tabs.add("孤立对象")
         self.tab_analysis = self.tabs.add("分析报告")
-        self.tab_settings = self.tabs.add("加载设置")
         self._build_overview_tab(self.tab_overview)
         self._build_obj_tab(self.tab_obj)
         self._build_info_tab(self.tab_info)
@@ -201,7 +201,6 @@ class App(
         self._build_rec_tab(self.tab_rec)
         self._build_orphan_tab(self.tab_orphan)
         self._build_analysis_tab(self.tab_analysis)
-        self._build_load_settings_tab(self.tab_settings)
         self._refresh_editor_reports()
 
     def _build_obj_tab(self, parent):
@@ -209,7 +208,7 @@ class App(
         head.pack(fill="x", padx=2, pady=(2, 6))
         ctk.CTkLabel(head, text="对象解剖台", font=(TITLE_FONT, 18, "bold"),
                      text_color=TEXT_STRONG, anchor="w").pack(side="left")
-        ctk.CTkLabel(head, text="物品 · 单位 · 技能 · 科技", font=(FONT, 12),
+        ctk.CTkLabel(head, text="单位 · 物品 · 技能 · 科技 · 可破坏物 · 装饰物 · 增益", font=(FONT, 12),
                      text_color=SUBTLE).pack(side="left", padx=12)
 
         # 顶部搜索（过滤所有列）
@@ -230,6 +229,7 @@ class App(
         paned = ttk.PanedWindow(body, orient="horizontal")
         paned.pack(fill="both", expand=True)
         self.paned = paned
+        self._register_paned_window(OBJECT_EDITOR_PANE_KEY, paned)
 
         # 左：地图列表（对战图=文件夹地图；战役图=战役共享+各子图）
         leftp = ctk.CTkFrame(paned, width=150, **card_style())
@@ -767,40 +767,11 @@ class App(
             self._cur_dir["campaign"] = dc
             self._scan_dir(dc, "campaign")
 
-    def _restore_sashes(self):
-        cfg = self._load_config()
-        # 布局变更后旧的分隔条位置会错位，版本不符则忽略，用默认布局
-        if cfg.get("layout") != LAYOUT_VERSION:
-            return
-        sashes = cfg.get("sashes")
-        if not sashes:
-            return
-        try:
-            self.update_idletasks()
-            for i, pos in enumerate(sashes):
-                try:
-                    self.paned.sashpos(i, int(pos))
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
     def _on_close(self):
         # 保存窗口几何 + 分隔条位置，供下次启动恢复
         self._shutdown_background_loader()
         self._shutdown_object_filter_runner()
-        try:
-            sashes = []
-            n = len(self.paned.panes())
-            for i in range(n - 1):
-                try:
-                    sashes.append(self.paned.sashpos(i))
-                except Exception:
-                    break
-            self._save_config(geometry=self.geometry(), sashes=sashes,
-                              layout=LAYOUT_VERSION)
-        except Exception:
-            pass
+        self._save_layout_state(geometry=self.geometry())
         if self.icons is not None and hasattr(self.icons, "close"):
             try:
                 self.icons.close()           # 退出时释放当前图标解析器的句柄

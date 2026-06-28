@@ -1,4 +1,4 @@
-"""Single object name row rendering for the object gallery."""
+"""Single object name row rendering for the object list."""
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -16,7 +16,7 @@ from .theme import (
     TEXT_STRONG,
 )
 
-CARD_HEIGHT: Final = 38
+CARD_HEIGHT: Final = 30
 
 
 def render_object_card(
@@ -27,22 +27,23 @@ def render_object_card(
     columns: int,
     show_detail: Callable[[GameObject], None],
 ) -> None:
-    """Render one dense object row with only the name visible."""
+    """Render one compact object row with only the name visible."""
     color = CATEGORY_COLORS.get(obj.category, ACCENT_DARK)
     card = ctk.CTkFrame(
         gallery.cards,
         height=CARD_HEIGHT,
         fg_color=CARD if index % 2 == 0 else "#f7fbff",
-        corner_radius=12,
+        corner_radius=8,
         border_width=1,
         border_color=BORDER,
     )
-    card.grid(row=index // columns, column=index % columns, sticky="nsew", padx=4, pady=3)
+    card.grid(row=index // columns, column=index % columns, sticky="ew", padx=4, pady=2)
     card.grid_propagate(False)
+    card.pack_propagate(False)
     _bind_detail(card, obj, show_detail)
 
-    ctk.CTkFrame(card, width=4, fg_color=color, corner_radius=5).pack(
-        side="left", fill="y", padx=(7, 0), pady=7
+    ctk.CTkFrame(card, width=3, fg_color=color, corner_radius=4).pack(
+        side="left", fill="y", padx=(6, 0), pady=6
     )
     label = ctk.CTkLabel(
         card,
@@ -52,7 +53,7 @@ def render_object_card(
         anchor="w",
         justify="left",
     )
-    label.pack(side="left", fill="both", expand=True, padx=8)
+    label.pack(side="left", fill="x", expand=True, padx=8)
     _bind_detail(label, obj, show_detail)
 
 
