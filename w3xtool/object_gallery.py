@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from typing import Final
 
 import customtkinter as ctk
-from PIL import ImageTk
 
 from .api import GameObject
 from .object_gallery_cards import render_object_card
@@ -27,10 +26,10 @@ from .theme import (
     TEXT_STRONG,
 )
 
-INITIAL_VISIBLE_CARDS: Final = 48
-VISIBLE_CARD_STEP: Final = 48
-MAX_VISIBLE_CARDS: Final = 240
-GALLERY_COLUMNS: Final = 3
+INITIAL_VISIBLE_CARDS: Final = 96
+VISIBLE_CARD_STEP: Final = 96
+MAX_VISIBLE_CARDS: Final = 480
+GALLERY_COLUMNS: Final = 4
 
 
 @dataclass(slots=True)
@@ -43,7 +42,6 @@ class ObjectGallery:
     cards: ctk.CTkScrollableFrame
     visible_limits: dict[str, int] = field(default_factory=dict)
     result_counts: dict[str, int] = field(default_factory=dict)
-    card_images: list[ImageTk.PhotoImage] = field(default_factory=list)
 
 
 def build_object_gallery(
@@ -63,7 +61,7 @@ def build_object_gallery(
         text_color=TEXT_STRONG, anchor="w",
     ).pack(fill="x")
     ctk.CTkLabel(
-        title_box, text="按类型翻阅地图对象卡片",
+        title_box, text="物品 · 单位 · 技能 · 科技",
         font=(FONT, 10), text_color=SUBTLE, anchor="w",
     ).pack(fill="x", pady=(1, 0))
     hint = ctk.CTkLabel(header, text="等待加载地图", font=(FONT, 11), text_color=SUBTLE)
@@ -100,11 +98,9 @@ def render_object_gallery(
     active_category: str,
     results_by_category: Mapping[str, list[GameObject]],
     show_detail: Callable[[GameObject], None],
-    get_photo: Callable[[str], ImageTk.PhotoImage | None],
 ) -> None:
     for child in gallery.cards.winfo_children():
         child.destroy()
-    gallery.card_images.clear()
 
     category = active_category if active_category in PARALLEL_CATS else PARALLEL_CATS[0]
     results = results_by_category.get(category, [])
@@ -122,7 +118,6 @@ def render_object_gallery(
             index=index,
             columns=GALLERY_COLUMNS,
             show_detail=show_detail,
-            get_photo=get_photo,
         )
     if len(results) > visible_limit:
         _render_load_more(
@@ -132,7 +127,6 @@ def render_object_gallery(
             visible_limit,
             results_by_category,
             show_detail,
-            get_photo,
         )
 
 
@@ -189,7 +183,6 @@ def _render_load_more(
     visible_limit: int,
     results_by_category: Mapping[str, list[GameObject]],
     show_detail: Callable[[GameObject], None],
-    get_photo: Callable[[str], ImageTk.PhotoImage | None],
 ) -> None:
     row = (visible_limit + GALLERY_COLUMNS - 1) // GALLERY_COLUMNS
     next_limit = min(visible_limit + VISIBLE_CARD_STEP, total, MAX_VISIBLE_CARDS)
@@ -201,7 +194,7 @@ def _render_load_more(
         fg_color=SECONDARY, hover_color=SECONDARY_HOVER,
         text_color=TEXT, corner_radius=15,
         command=lambda: _load_more(
-            gallery, category, next_limit, results_by_category, show_detail, get_photo
+            gallery, category, next_limit, results_by_category, show_detail
         ),
     )
     button.grid(row=row, column=0, columnspan=GALLERY_COLUMNS, sticky="ew", padx=8, pady=8)
@@ -213,7 +206,6 @@ def _load_more(
     next_limit: int,
     results_by_category: Mapping[str, list[GameObject]],
     show_detail: Callable[[GameObject], None],
-    get_photo: Callable[[str], ImageTk.PhotoImage | None],
 ) -> None:
     gallery.visible_limits[category] = next_limit
-    render_object_gallery(gallery, category, results_by_category, show_detail, get_photo)
+    render_object_gallery(gallery, category, results_by_category, show_detail)

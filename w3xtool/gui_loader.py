@@ -1,0 +1,166 @@
+"""Pure map loading and preparation payloads for the Tk GUI."""
+
+from __future__ import annotations
+
+import traceback
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from typing import Final, Protocol
+
+from .api import MapData, commands_from_map, load_map, recipes_from_map
+from .icons import IconResolver
+from .load_options import (
+    COMMANDS_KEY,
+    OBJECT_BROWSER_KEY,
+    RECIPES_KEY,
+    default_load_options,
+    normalize_load_options,
+)
+
+PREP_WORKERS: Final = 3
+
+
+class LoadMapFunc(Protocol):
+    def __call__(self, path: str) -> MapData: ...
+
+
+class PrepareMapFunc(Protocol):
+    def __call__(
+        self,
+        active: MapData,
+        campaign_path: str | None,
+        views: list[tuple[str, MapData]] | None,
+        load_options: dict[str, bool] | None,
+    ) -> LoadedMap: ...
+
+
+@dataclass(frozen=True, slots=True)
+class LoadedMap:
+    active: MapData
+    commands: list
+    recipes: list
+    resolver: IconResolver | None
+    views: list[tuple[str, MapData]] | None
+    campaign_path: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class LoadedCampaign:
+    index: int
+    path: str
+    views: list[tuple[str, MapData]]
+    sub_map_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class LoaderError:
+    title: str
+    message: str
+    status: str
+
+
+type LoaderPayload = LoadedMap | LoadedCampaign | LoaderError
+
+
+def load_path_payload(
+    path: str,
+    *,
+    load: LoadMapFunc = load_map,
+    prepare: PrepareMapFunc | None = None,
+    load_options: dict[str, bool] | None = None,
+) -> LoadedMap:
+    """Load a map path and prepare the initial visible view."""
+    prepare_map = prepare or prepare_map_view
+    md = load(path)
+    if md.sub_maps:
+        views = [("★ 战役共享对象", md)] + [(sub.name, sub) for sub in md.sub_maps]
+        campaign_path = path
+    else:
+        views = None
+        campaign_path = None
+    active = views[0][1] if views else md
+    return prepare_map(active, campaign_path, views, load_options)
+
+
+def switch_map_payload(
+    md: MapData,
+    campaign_path: str | None,
+    *,
+    prepare: PrepareMapFunc | None = None,
+    load_options: dict[str, bool] | None = None,
+) -> LoadedMap:
+    """Prepare an already-loaded campaign sub-map."""
+    prepare_map = prepare or prepare_map_view
+    return prepare_map(md, campaign_path, None, load_options)
+
+
+def load_campaign_payload(
+    index: int,
+    path: str,
+    *,
+    load: LoadMapFunc = load_map,
+) -> LoadedCampaign:
+    """Load a campaign node enough to populate its child maps."""
+    md = load(path)
+    views = [("★ 战役共享对象", md)] + [(sub.name, sub) for sub in md.sub_maps]
+    return LoadedCampaign(index=index, path=path, views=views, sub_map_count=len(md.sub_maps))
+
+
+def prepare_map_view(
+    md: MapData,
+    campaign_path: str | None = None,
+    views: list[tuple[str, MapData]] | None = None,
+    *,
+    load_options: dict[str, bool] | None = None,
+    command_loader: Callable[[MapData], list] = commands_from_map,
+    recipe_loader: Callable[[MapData], list] = recipes_from_map,
+    resolver_loader: Callable[[MapData, str | None], IconResolver | None] | None = None,
+    max_workers: int = PREP_WORKERS,
+) -> LoadedMap:
+    """Prepare independent reports and icon resolver in parallel."""
+    options = normalize_load_options(load_options or default_load_options())
+    load_resolver = resolver_loader or build_icon_resolver
+    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="w3xray-prep") as pool:
+        command_future = (
+            pool.submit(_safe_list_loader, command_loader, md)
+            if options[COMMANDS_KEY] else None
+        )
+        recipe_future = (
+            pool.submit(_safe_list_loader, recipe_loader, md)
+            if options[RECIPES_KEY] else None
+        )
+        resolver_future = (
+            pool.submit(_safe_resolver_loader, load_resolver, md, campaign_path)
+            if options[OBJECT_BROWSER_KEY] else None
+        )
+        commands = command_future.result() if command_future is not None else []
+        recipes = recipe_future.result() if recipe_future is not None else []
+        resolver = resolver_future.result() if resolver_future is not None else None
+    return LoadedMap(md, commands, recipes, resolver, views, campaign_path)
+
+
+def build_icon_resolver(md: MapData, campaign_path: str | None) -> IconResolver | None:
+    """Create the resolver lazily; images decode on demand in the main view."""
+    extra = [campaign_path] if campaign_path and campaign_path != md.path else None
+    return IconResolver(md.path, extra_paths=extra)
+
+
+def _safe_list_loader(loader: Callable[[MapData], list], md: MapData) -> list:
+    try:
+        return loader(md)
+    except Exception:
+        traceback.print_exc()
+        return []
+
+
+def _safe_resolver_loader(
+    loader: Callable[[MapData, str | None], IconResolver | None],
+    md: MapData,
+    campaign_path: str | None,
+) -> IconResolver | None:
+    try:
+        return loader(md, campaign_path)
+    except Exception:
+        traceback.print_exc()
+        return None

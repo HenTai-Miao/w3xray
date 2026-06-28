@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import os
 import threading
-import traceback
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter import font as tkfont
@@ -19,10 +18,11 @@ import customtkinter as ctk
 
 from collections import Counter
 
-from .api import (load_map, commands_from_map, recipes_from_map,
-                  export_all_files, tmp_extract_dir, quick_map_name, MapData)
+from .api import export_all_files, tmp_extract_dir, quick_map_name, MapData
 from .search import compile_query
-from .icons import IconResolver
+from .gui_load_settings import LoadSettingsMixin
+from .gui_loader_runner import BackgroundLoaderMixin
+from .gui_module_refresh import ModuleRefreshMixin
 from .gui_report_tabs import ReportTabsMixin
 from .map_gallery import MapEntry, build_map_gallery, render_map_gallery
 from .map_info import format_map_info
@@ -59,7 +59,7 @@ from .theme import (
     primary_button_style,
     secondary_button_style,
 )
-from PIL import Image, ImageTk
+from PIL import Image
 try:
     from .base_names import BASE_NAMES
 except Exception:
@@ -69,7 +69,7 @@ ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("green")
 
 
-class App(ReportTabsMixin, ctk.CTk):
+class App(LoadSettingsMixin, ModuleRefreshMixin, BackgroundLoaderMixin, ReportTabsMixin, ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("W3XRAY 魔兽地图提取器")
@@ -92,6 +92,8 @@ class App(ReportTabsMixin, ctk.CTk):
         self._photo_cache = {}     # icon path -> PhotoImage
         self._row_imgs = []        # 保持引用防止被回收
         self._blank = None
+        self._init_load_options()
+        self._init_background_loader()
         self._build_topbar()
         self._build_tabs()
         self._build_statusbar()
@@ -170,7 +172,8 @@ class App(ReportTabsMixin, ctk.CTk):
         )
         self.tabs.pack(fill="both", expand=True, padx=0, pady=(0, 2))
         self.editor_tab_labels = (
-            "总览", "对象编辑器", "地图信息", "场景放置", "触发指令", "合成配方", "孤立对象", "分析报告")
+            "总览", "对象编辑器", "地图信息", "场景放置", "触发指令",
+            "合成配方", "孤立对象", "分析报告", "加载设置")
         self.tab_overview = self.tabs.add("总览")
         self.tab_obj = self.tabs.add("对象编辑器")
         self.tab_info = self.tabs.add("地图信息")
@@ -179,6 +182,7 @@ class App(ReportTabsMixin, ctk.CTk):
         self.tab_rec = self.tabs.add("合成配方")
         self.tab_orphan = self.tabs.add("孤立对象")
         self.tab_analysis = self.tabs.add("分析报告")
+        self.tab_settings = self.tabs.add("加载设置")
         self._build_overview_tab(self.tab_overview)
         self._build_obj_tab(self.tab_obj)
         self._build_info_tab(self.tab_info)
@@ -187,6 +191,7 @@ class App(ReportTabsMixin, ctk.CTk):
         self._build_rec_tab(self.tab_rec)
         self._build_orphan_tab(self.tab_orphan)
         self._build_analysis_tab(self.tab_analysis)
+        self._build_load_settings_tab(self.tab_settings)
         self._refresh_editor_reports()
 
     def _build_obj_tab(self, parent):
@@ -277,10 +282,25 @@ class App(ReportTabsMixin, ctk.CTk):
 
         # 右：描述
         rightp = ctk.CTkFrame(paned, width=340, **card_style())
-        self.detail_title = ctk.CTkLabel(rightp, text="选择条目查看详情", font=(FONT, 15, "bold"),
+        detail_head = ctk.CTkFrame(rightp, fg_color="transparent")
+        detail_head.pack(fill="x", padx=12, pady=(12, 2))
+        blank_icon = Image.new("RGBA", (36, 36), (0, 0, 0, 0))
+        self.detail_blank_icon = ctk.CTkImage(
+            light_image=blank_icon, dark_image=blank_icon, size=(36, 36)
+        )
+        self.detail_icon_image = self.detail_blank_icon
+        self.detail_icon = ctk.CTkLabel(
+            detail_head, text="", image=self.detail_icon_image, width=42, height=42,
+            fg_color=PANEL, corner_radius=10,
+        )
+        self.detail_icon.pack(side="left", padx=(0, 10))
+        detail_text = ctk.CTkFrame(detail_head, fg_color="transparent")
+        detail_text.pack(side="left", fill="x", expand=True)
+        self.detail_title = ctk.CTkLabel(detail_text, text="选择对象查看详情",
+                                         font=(FONT, 15, "bold"),
                                          text_color=TEXT_STRONG, anchor="w",
-                                         justify="left", wraplength=440)
-        self.detail_title.pack(fill="x", padx=14, pady=(12, 2))
+                                         justify="left", wraplength=390)
+        self.detail_title.pack(fill="x")
         self.detail_sub = ctk.CTkLabel(rightp, text="", font=(FONT, 11),
                                        text_color=SUBTLE, anchor="w", wraplength=420, justify="left")
         self.detail_sub.pack(fill="x", padx=12)
@@ -757,6 +777,7 @@ class App(ReportTabsMixin, ctk.CTk):
 
     def _on_close(self):
         # 保存窗口几何 + 分隔条位置，供下次启动恢复
+        self._shutdown_background_loader()
         try:
             sashes = []
             n = len(self.paned.panes())
@@ -905,24 +926,7 @@ class App(ReportTabsMixin, ctk.CTk):
                 self._load_campaign_node(idx)
 
     def _load_campaign_node(self, idx):
-        camp = self._dir_campaigns[idx]
-        self.status.configure(text=f"正在解析战役 {camp['name']} …")
-
-        def work():
-            try:
-                md = load_map(camp["path"])
-            except Exception as e:
-                traceback.print_exc()
-                self.after(0, lambda: (messagebox.showerror("解析失败", str(e)),
-                                       self.status.configure(text="战役解析失败")))
-                return
-            views = [("★ 战役共享对象", md)] + [(s.name, s) for s in md.sub_maps]
-            camp["loaded"] = True
-            camp["views"] = views
-            self.after(0, lambda: (self._refresh_campaign_tree(),
-                                   self.status.configure(
-                                       text=f"战役 {camp['name']}：{len(md.sub_maps)} 张子图")))
-        threading.Thread(target=work, daemon=True).start()
+        self._start_campaign_load(idx)
 
     def _open_node(self, node_id):
         info = self._node_map.get(node_id)
@@ -930,15 +934,12 @@ class App(ReportTabsMixin, ctk.CTk):
             return
         kind, payload = info
         if kind == "path":
-            self.status.configure(text=f"正在解析 {os.path.basename(payload)} …")
-            self.update_idletasks()
-            threading.Thread(target=self._load_worker, args=(payload,), daemon=True).start()
+            self._start_path_load(payload)
         elif kind == "md":          # 战役子图（已解析好），后台准备后切换
             self._campaign_path = next(
                 (c["path"] for c in self._dir_campaigns
                  if c["views"] and any(m is payload for _, m in c["views"])), None)
-            self.status.configure(text=f"正在切换 …")
-            threading.Thread(target=self._switch_worker, args=(payload,), daemon=True).start()
+            self._start_map_switch(payload, self._campaign_path)
         elif kind == "campaign":    # 点战役父节点 → 加载（若未加载）
             if not self._dir_campaigns[payload]["loaded"]:
                 self._load_campaign_node(payload)
@@ -956,54 +957,7 @@ class App(ReportTabsMixin, ctk.CTk):
             filetypes=[("魔兽地图/战役", "*.w3x *.w3m *.w3n"), ("所有文件", "*.*")])
         if not path:
             return
-        self.status.configure(text=f"正在解析 {os.path.basename(path)} …")
-        self.update_idletasks()
-        threading.Thread(target=self._load_worker, args=(path,), daemon=True).start()
-
-    def _load_worker(self, path):
-        try:
-            md = load_map(path)
-        except Exception as e:
-            self.after(0, lambda: messagebox.showerror("解析失败", str(e)))
-            self.after(0, lambda: self.status.configure(text="解析失败"))
-            return
-        # 战役：顶层共享对象 + 各子图，做成下拉条目；普通图无下拉
-        if md.sub_maps:
-            views = [("★ 战役共享对象", md)] + [(s.name, s) for s in md.sub_maps]
-            campaign_path = path
-        else:
-            views = None
-            campaign_path = None
-        active = views[0][1] if views else md
-        cmds, recipes, resolver = self._prepare(active, campaign_path)
-        self.after(0, lambda: self._on_loaded(active, cmds, recipes, resolver,
-                                              views, campaign_path))
-
-    def _prepare(self, md, campaign_path=None):
-        """worker 线程：为一张 md 算指令/配方 + 预解码图标（含战役顶层档兜底）。"""
-        try:
-            cmds = commands_from_map(md)
-        except Exception:
-            traceback.print_exc()        # 扫描出错时打日志，不静默伪装成"无指令"
-            cmds = []
-        try:
-            recipes = recipes_from_map(md)
-        except Exception:
-            traceback.print_exc()
-            recipes = []
-        resolver = None
-        try:
-            extra = [campaign_path] if (campaign_path and campaign_path != md.path) else None
-            resolver = IconResolver(md.path, extra_paths=extra)
-            seen = set()
-            for objs in md.objects.values():
-                for o in objs:
-                    if o.icon and o.icon not in seen:
-                        seen.add(o.icon)
-                        resolver.get_image(o.icon)
-        except Exception:
-            resolver = None
-        return cmds, recipes, resolver
+        self._start_path_load(path)
 
     def _on_loaded(self, md: MapData, cmds, recipes=None, resolver=None,
                    views=None, campaign_path=None):
@@ -1028,28 +982,8 @@ class App(ReportTabsMixin, ctk.CTk):
         self.icons = resolver
         self._photo_cache = {}
         self.map_label.configure(text=f"当前地图：{md.name}")
-        # 清空上一张图残留的详情，避免误以为是当前图的数据
-        self.detail_title.configure(text="选择左侧条目查看详情")
-        self.detail_sub.configure(text="")
-        self.detail.configure(state="normal")
-        self.detail.delete("1.0", "end")
-        self.detail.configure(state="disabled")
-        self._refresh_list()
-
-        # 指令
-        self.commands = cmds
-        self._refresh_cmds()
-        # 合成配方
-        self.recipes = recipes or []
-        self._refresh_recipes()
-        # 预放置单位/装饰物
-        self._refresh_preplaced()
-        # 孤立对象（引用分析）
-        self._refresh_orphans()
-        # 地图信息
-        self._refresh_info()
-        # 编辑器式总览 / 分析报告
-        self._refresh_editor_reports()
+        self._reset_detail_panel()
+        self._refresh_enabled_modules(cmds, recipes)
 
         counts = md.category_counts()
         total = sum(counts.values())
@@ -1076,10 +1010,6 @@ class App(ReportTabsMixin, ctk.CTk):
             self.mode_seg.set("战役图")
         self._populate_left()
 
-    def _switch_worker(self, md):
-        cmds, recipes, resolver = self._prepare(md, self._campaign_path)
-        self.after(0, lambda: self._render_map(md, cmds, recipes, resolver))
-
     # ---------- 对象浏览（多列）----------
     def _refresh_list(self):
         if not self.map_data:
@@ -1102,11 +1032,9 @@ class App(ReportTabsMixin, ctk.CTk):
             tv = self.col_trees[cat]
             tv.delete(*tv.get_children())
             for i, o in enumerate(res[:32]):
-                photo = self._get_photo(getattr(o, "icon", ""))
-                self._row_imgs.append(photo)
                 ext = getattr(o, "ext", "")
                 mark = " 〔脚本〕" if ext == "script" else (" 〔原版〕" if ext == "base" else "")
-                tv.insert("", "end", iid=str(i), image=photo or "",
+                tv.insert("", "end", iid=str(i), image="",
                           text=f" {o.name}{mark}",
                           tags=("odd" if i % 2 else "even",))
             tv.tag_configure("odd", background=ROW_ALT)
@@ -1129,7 +1057,6 @@ class App(ReportTabsMixin, ctk.CTk):
             active_category=self.active_object_category,
             results_by_category=self.col_results,
             show_detail=self._show_detail,
-            get_photo=self._get_photo,
         )
 
     def _on_col_select(self, cat):
@@ -1143,23 +1070,26 @@ class App(ReportTabsMixin, ctk.CTk):
             return
         self._show_detail(res[idx])
 
-    def _get_photo(self, icon_path):
+    def _get_photo(self, icon_path, size=36):
         if not icon_path or self.icons is None:
             return None
-        key = icon_path.lower()
+        key = (icon_path.lower(), size)
         if key in self._photo_cache:
             return self._photo_cache[key]
         photo = None
         try:
             pil = self.icons.get_image(icon_path)
             if pil is not None:
-                photo = ImageTk.PhotoImage(pil.resize((20, 20), Image.LANCZOS))
+                icon = pil.resize((size, size), Image.LANCZOS)
+                photo = ctk.CTkImage(light_image=icon, dark_image=icon, size=(size, size))
         except Exception:
             photo = None
         self._photo_cache[key] = photo
         return photo
 
     def _show_detail(self, o):
+        self.detail_icon_image = self._get_photo(getattr(o, "icon", "")) or self.detail_blank_icon
+        self.detail_icon.configure(image=self.detail_icon_image, text="")
         self.detail_title.configure(text=o.name)
         self.detail_sub.configure(text=f"{o.category}  ·  ID {o.obj_id}  ·  基础 {o.base_id}"
                                   + ("  ·  自定义" if o.is_custom else "  ·  原始"))

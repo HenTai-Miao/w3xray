@@ -12,6 +12,7 @@ import atexit
 import unittest
 
 from w3xtool.gui import App
+from w3xtool.load_options import default_load_options
 
 _APP = None
 
@@ -47,6 +48,7 @@ class GuiTestCase(unittest.TestCase):
         # 复位 __init__ 默认态（各 GUI 测试会自行覆盖所需字段）
         app.map_data = None
         app.recipes = []
+        app._apply_load_options(default_load_options(), persist=False, refresh=False)
         app.mode = "battle"
         app._dir_maps = []
         app._dir_campaigns = []
