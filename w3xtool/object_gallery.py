@@ -90,19 +90,13 @@ def build_object_gallery(
     list_shell.pack(fill="both", expand=True, padx=10, pady=(0, 8))
     cards = ttk.Treeview(
         list_shell,
-        columns=("decimal", "obj_id"),
-        show="tree headings",
+        show="tree",
         selectmode="browse",
     )
     yscroll = ttk.Scrollbar(list_shell, orient="vertical", command=cards.yview)
     xscroll = ttk.Scrollbar(list_shell, orient="horizontal", command=cards.xview)
     cards.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
-    cards.heading("#0", text="图标 / 名称", anchor="w")
-    cards.heading("decimal", text="十进制", anchor="center")
-    cards.heading("obj_id", text="物品ID", anchor="center")
-    cards.column("#0", width=270, minwidth=150, stretch=True, anchor="w")
-    cards.column("decimal", width=118, minwidth=90, stretch=False, anchor="center")
-    cards.column("obj_id", width=92, minwidth=70, stretch=False, anchor="center")
+    cards.column("#0", width=360, minwidth=180, stretch=True, anchor="w")
     yscroll.pack(side="right", fill="y")
     xscroll.pack(side="bottom", fill="x")
     cards.pack(side="left", fill="both", expand=True, padx=(8, 0), pady=8)
@@ -140,7 +134,6 @@ def render_object_gallery(
             "end",
             iid=str(index),
             text=obj.name or obj.obj_id,
-            values=(str(obj.decimal), obj.obj_id),
         )
     queue_icon_loading(gallery, gallery.active_objects, token, get_icon)
 

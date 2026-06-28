@@ -21,7 +21,7 @@ class IconCacheMixin:
         self._photo_cache[key] = photo
         return photo
 
-    def _get_tree_photo(self, icon_path, size=18):
+    def _get_tree_photo(self, icon_path, size=24):
         if not icon_path:
             return None
         key = (icon_path.lower(), size, "tree")

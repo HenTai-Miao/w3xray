@@ -76,7 +76,7 @@ class TestEditorStyleLayout(GuiTestCase):
         self.assertEqual(self.app.overview_box.winfo_ismapped(), 0)
         self.assertEqual(self.app.analysis_box.winfo_ismapped(), 0)
 
-    def test_object_gallery_shows_icon_name_decimal_and_object_id_in_one_fast_table(self):
+    def test_object_gallery_shows_icon_and_name_in_one_fast_list(self):
         # Given: enough items to fill more than one dense list row.
         resolver = _FakeIconResolver()
         first_icon = "ReplaceableTextures\\CommandButtons\\BTNItem.blp"
@@ -103,13 +103,13 @@ class TestEditorStyleLayout(GuiTestCase):
         self.pump_events_until(lambda: len(self.app.object_cards.get_children()) >= 6)
         rows = self.app.object_cards.get_children()
 
-        # Then: all objects live in one fast table with icon/name/decimal/id columns.
+        # Then: all objects live in one fast list with icon and name only.
         self.assertEqual(self.app.object_cards.__class__.__name__, "Treeview")
+        self.assertEqual(tuple(map(str, self.app.object_cards.cget("show"))), ("tree",))
         self.assertEqual(len(rows), 6)
         self.assertEqual(self.app.object_cards.item(rows[0], "text"), "物品0")
         self.assertEqual(self.app.object_cards.item(rows[3], "text"), "物品3")
-        self.assertEqual(self.app.object_cards.set(rows[0], "decimal"), str(md.objects["物品"][0].decimal))
-        self.assertEqual(self.app.object_cards.set(rows[0], "obj_id"), "I000")
+        self.assertEqual(self.app.object_cards.cget("columns"), ())
         self.pump_events_until(lambda: bool(self.app.object_cards.item(rows[0], "image")))
         self.assertEqual(len(self.app.object_cards.winfo_children()), 0)
 
@@ -206,6 +206,7 @@ class TestEditorStyleLayout(GuiTestCase):
             icon="ReplaceableTextures\\CommandButtons\\BTNItem.blp",
         )
         md = MapData(path="x.w3x", name="图标测试图", objects={"物品": [obj]})
+        self.app.active_object_category = "物品"
 
         # When: the map renders, then the user opens details for that object.
         self.app._render_map(md, [], [], resolver)
@@ -217,6 +218,8 @@ class TestEditorStyleLayout(GuiTestCase):
         # Then: the object list and detail panel both show the cached icon.
         self.assertEqual(calls_after_render, [obj.icon])
         self.assertEqual(resolver.calls, [obj.icon])
+        self.assertEqual(self.app.object_gallery.icon_images[0].width(), 24)
+        self.assertEqual(self.app.object_gallery.icon_images[0].height(), 24)
         self.assertIsNotNone(self.app.detail_icon_image)
 
     def test_removed_load_settings_defaults_all_views_to_enabled(self):

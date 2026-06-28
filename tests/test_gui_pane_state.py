@@ -2,10 +2,21 @@
 import unittest
 
 from tests.gui_base import GuiTestCase
+from w3xtool.gui_pane_state import _apply_sash_positions, _paned_sash_positions
 from w3xtool.theme import LAYOUT_VERSION
 
 
 class TestPaneState(GuiTestCase):
+    def test_object_editor_pane_defers_resize_while_dragging(self):
+        # Given: the object editor pane contains heavy list/detail widgets.
+        self.app.deiconify()
+        self.app.tabs.set("对象编辑器")
+        self.app.update_idletasks()
+
+        # When / Then: dragging the sash uses deferred resize instead of
+        # continuously relayouting all child panes.
+        self.assertEqual(str(self.app.paned.cget("opaqueresize")), "0")
+
     def test_object_editor_pane_positions_save_on_drag_release(self):
         # Given: the user has dragged the object editor split panes.
         saved = {}
@@ -16,8 +27,8 @@ class TestPaneState(GuiTestCase):
             self.app.deiconify()
             self.app.tabs.set("对象编辑器")
             self.app.update_idletasks()
-            self.app.paned.sashpos(0, 210)
-            self.app.paned.sashpos(1, 980)
+            _apply_sash_positions(self.app.paned, [210, 980])
+            self.app.update_idletasks()
 
             # When: the drag ends.
             self.app.paned.event_generate("<ButtonRelease-1>")
@@ -42,14 +53,14 @@ class TestPaneState(GuiTestCase):
             self.app.deiconify()
             self.app.tabs.set("对象编辑器")
             self.app.update_idletasks()
-            self.app.paned.sashpos(0, 260)
-            self.app.paned.sashpos(1, 1050)
+            _apply_sash_positions(self.app.paned, [260, 1050])
+            self.app.update_idletasks()
 
             # When: layout restoration runs.
             self.app._restore_pane_sashes()
 
             # Then: the object editor panes return to the saved positions.
-            self.assertEqual([self.app.paned.sashpos(0), self.app.paned.sashpos(1)], [190, 920])
+            self.assertEqual(_paned_sash_positions(self.app.paned), [190, 920])
         finally:
             self.app._load_config = original_load
             self.app.withdraw()

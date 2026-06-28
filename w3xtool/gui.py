@@ -20,6 +20,7 @@ from collections import Counter
 
 from .api import export_all_files, tmp_extract_dir, quick_map_name, MapData
 from .search import compile_query
+from .deferred_paned import add_deferred_pane, build_deferred_horizontal_paned
 from .gui_load_settings import LoadSettingsMixin
 from .gui_icon_cache import IconCacheMixin
 from .gui_loader_runner import BackgroundLoaderMixin
@@ -229,7 +230,7 @@ class App(
         body = ctk.CTkFrame(parent, fg_color=BG)
         body.pack(fill="both", expand=True)
         # 可拖拽分隔：地图列表 | 物品 | 单位 | 技能 | 科技 | 描述，拖动中间分隔条调宽
-        paned = ttk.PanedWindow(body, orient="horizontal")
+        paned = build_deferred_horizontal_paned(body)
         paned.pack(fill="both", expand=True)
         self.paned = paned
         self._register_paned_window(OBJECT_EDITOR_PANE_KEY, paned)
@@ -267,7 +268,7 @@ class App(
         self._map_gallery_entries = []
         self._render_map_gallery()
         self._dir_maps = []
-        paned.add(leftp, weight=2)
+        add_deferred_pane(paned, leftp, minsize=130, stretch="never")
 
         # 中：对象卡片网格。旧 Treeview 保留在隐藏兼容层，主视觉不再是四个竖向表格。
         self.col_trees = {}
@@ -278,7 +279,7 @@ class App(
         self.object_gallery_hint = self.object_gallery.hint
         self.object_cat_buttons = self.object_gallery.buttons
         self.object_cards = self.object_gallery.cards
-        paned.add(self.object_gallery.container, weight=8)
+        add_deferred_pane(paned, self.object_gallery.container, minsize=360, stretch="always")
 
         legacy = tk.Frame(self.object_gallery.container)
         for cat in PARALLEL_CATS:
@@ -323,7 +324,7 @@ class App(
         self.detail.pack(fill="both", expand=True, padx=10, pady=10)
         self.detail.configure(state="disabled")
         self._attach_ctx_menu(self.detail, copy_all=True)
-        paned.add(rightp, weight=4)
+        add_deferred_pane(paned, rightp, minsize=260, stretch="never")
         self._render_object_cards()
 
     def _build_cmd_tab(self, parent):

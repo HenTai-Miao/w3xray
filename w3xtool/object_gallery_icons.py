@@ -11,7 +11,7 @@ from .api import GameObject
 if TYPE_CHECKING:
     from .object_gallery import ObjectGallery
 
-ICON_SIZE = 18
+ICON_SIZE = 24
 ICON_BATCH_SIZE = 64
 
 

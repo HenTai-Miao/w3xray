@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import tkinter as tk
-from typing import Final
+from typing import Final, assert_never
 from tkinter import ttk
 
 from .theme import LAYOUT_VERSION
+
+type PaneWidget = tk.PanedWindow | ttk.PanedWindow
 
 OBJECT_EDITOR_PANE_KEY: Final = "object_editor"
 PANE_SASHES_KEY: Final = "pane_sashes"
@@ -17,9 +19,9 @@ class PaneStateMixin:
     """Persist every registered PanedWindow under a stable name."""
 
     def _init_pane_state(self) -> None:
-        self._paned_windows: dict[str, ttk.PanedWindow] = {}
+        self._paned_windows: dict[str, PaneWidget] = {}
 
-    def _register_paned_window(self, name: str, paned: ttk.PanedWindow) -> None:
+    def _register_paned_window(self, name: str, paned: PaneWidget) -> None:
         self._paned_windows[name] = paned
         paned.bind("<ButtonRelease-1>", lambda _event: self._save_layout_state(), add="+")
 
@@ -73,7 +75,17 @@ def _int_positions(raw) -> list[int]:
     return positions
 
 
-def _paned_sash_positions(paned: ttk.PanedWindow) -> list[int]:
+def _paned_sash_positions(paned: PaneWidget) -> list[int]:
+    match paned:
+        case ttk.PanedWindow():
+            return _ttk_sash_positions(paned)
+        case tk.PanedWindow():
+            return _tk_sash_positions(paned)
+        case unreachable:
+            assert_never(unreachable)
+
+
+def _ttk_sash_positions(paned: ttk.PanedWindow) -> list[int]:
     positions: list[int] = []
     for index in range(max(0, len(paned.panes()) - 1)):
         try:
@@ -83,9 +95,47 @@ def _paned_sash_positions(paned: ttk.PanedWindow) -> list[int]:
     return positions
 
 
-def _apply_sash_positions(paned: ttk.PanedWindow, positions: list[int]) -> None:
+def _tk_sash_positions(paned: tk.PanedWindow) -> list[int]:
+    axis = 0 if _is_horizontal(paned) else 1
+    positions: list[int] = []
+    for index in range(max(0, len(paned.panes()) - 1)):
+        try:
+            positions.append(int(paned.sash_coord(index)[axis]))
+        except tk.TclError:
+            break
+    return positions
+
+
+def _apply_sash_positions(paned: PaneWidget, positions: list[int]) -> None:
+    match paned:
+        case ttk.PanedWindow():
+            _apply_ttk_sash_positions(paned, positions)
+        case tk.PanedWindow():
+            _apply_tk_sash_positions(paned, positions)
+        case unreachable:
+            assert_never(unreachable)
+
+
+def _apply_ttk_sash_positions(paned: ttk.PanedWindow, positions: list[int]) -> None:
     for index, position in enumerate(positions):
         try:
             paned.sashpos(index, position)
         except tk.TclError:
             break
+
+
+def _apply_tk_sash_positions(paned: tk.PanedWindow, positions: list[int]) -> None:
+    horizontal = _is_horizontal(paned)
+    for index, position in enumerate(positions):
+        try:
+            x, y = paned.sash_coord(index)
+            if horizontal:
+                paned.sash_place(index, position, y)
+            else:
+                paned.sash_place(index, x, position)
+        except tk.TclError:
+            break
+
+
+def _is_horizontal(paned: tk.PanedWindow) -> bool:
+    return str(paned.cget("orient")) == "horizontal"
