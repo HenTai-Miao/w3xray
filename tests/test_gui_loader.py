@@ -20,7 +20,7 @@ class TestGuiLoader(unittest.TestCase):
             self.assertEqual(path, "campaign.w3n")
             return top
 
-        def prepare(active, campaign_path, views, _load_options):
+        def prepare(active, campaign_path, views, *, load_options):
             calls.append((active, campaign_path, views))
             return LoadedMap(active, [], [], None, views, campaign_path)
 
@@ -38,7 +38,7 @@ class TestGuiLoader(unittest.TestCase):
         sub = MapData(path="chapter.w3x", name="第一章")
         calls = []
 
-        def prepare(active, campaign_path, views, _load_options):
+        def prepare(active, campaign_path, views, *, load_options):
             calls.append((active, campaign_path, views))
             return LoadedMap(active, [], [], None, views, campaign_path)
 
@@ -50,6 +50,37 @@ class TestGuiLoader(unittest.TestCase):
         self.assertEqual(result.campaign_path, "campaign.w3n")
         self.assertIsNone(result.views)
         self.assertEqual(calls, [(sub, "campaign.w3n", None)])
+
+    def test_load_path_payload_default_prepare_accepts_load_options(self):
+        # Given: the GUI opens a normal map through the default preparation path.
+        md = MapData(path="x.w3x", name="普通地图")
+
+        # When: load options are supplied by the settings tab.
+        result = load_path_payload(
+            "x.w3x",
+            load=lambda _path: md,
+            load_options=object_only_load_options(),
+        )
+
+        # Then: opening reaches preparation instead of failing on call signature.
+        self.assertIs(result.active, md)
+        self.assertEqual(result.commands, [])
+        self.assertEqual(result.recipes, [])
+
+    def test_switch_map_payload_default_prepare_accepts_load_options(self):
+        # Given: the GUI switches to an already-loaded campaign child map.
+        md = MapData(path="chapter.w3x", name="第一章")
+
+        # When: load options are supplied by the settings tab.
+        result = switch_map_payload(
+            md,
+            "campaign.w3n",
+            load_options=object_only_load_options(),
+        )
+
+        # Then: switching reaches preparation instead of failing on call signature.
+        self.assertIs(result.active, md)
+        self.assertEqual(result.campaign_path, "campaign.w3n")
 
     def test_prepare_map_view_runs_independent_work_in_parallel(self):
         # Given: command, recipe, and icon preparation all block until three workers exist.

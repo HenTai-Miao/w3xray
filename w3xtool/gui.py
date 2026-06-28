@@ -23,7 +23,9 @@ from .search import compile_query
 from .gui_load_settings import LoadSettingsMixin
 from .gui_loader_runner import BackgroundLoaderMixin
 from .gui_module_refresh import ModuleRefreshMixin
+from .gui_object_filter_runner import ObjectFilterRunnerMixin
 from .gui_report_tabs import ReportTabsMixin
+from .map_directory import scan_battle_maps
 from .map_gallery import MapEntry, build_map_gallery, render_map_gallery
 from .map_info import format_map_info
 from .object_gallery import build_object_gallery, render_object_gallery
@@ -69,7 +71,14 @@ ctk.set_appearance_mode("light")
 ctk.set_default_color_theme("green")
 
 
-class App(LoadSettingsMixin, ModuleRefreshMixin, BackgroundLoaderMixin, ReportTabsMixin, ctk.CTk):
+class App(
+    LoadSettingsMixin,
+    ModuleRefreshMixin,
+    ObjectFilterRunnerMixin,
+    BackgroundLoaderMixin,
+    ReportTabsMixin,
+    ctk.CTk,
+):
     def __init__(self):
         super().__init__()
         self.title("W3XRAY 魔兽地图提取器")
@@ -94,6 +103,7 @@ class App(LoadSettingsMixin, ModuleRefreshMixin, BackgroundLoaderMixin, ReportTa
         self._blank = None
         self._init_load_options()
         self._init_background_loader()
+        self._init_object_filter_runner()
         self._build_topbar()
         self._build_tabs()
         self._build_statusbar()
@@ -778,6 +788,7 @@ class App(LoadSettingsMixin, ModuleRefreshMixin, BackgroundLoaderMixin, ReportTa
     def _on_close(self):
         # 保存窗口几何 + 分隔条位置，供下次启动恢复
         self._shutdown_background_loader()
+        self._shutdown_object_filter_runner()
         try:
             sashes = []
             n = len(self.paned.panes())
@@ -828,11 +839,7 @@ class App(LoadSettingsMixin, ModuleRefreshMixin, BackgroundLoaderMixin, ReportTa
                           "loaded": False, "views": None} for p in files]
                 self.after(0, lambda: self._fill_campaign(items))
             else:
-                files = []
-                for pat in ("*.w3x", "*.w3m", "*.W3X"):
-                    files.extend(glob.glob(os.path.join(d, "**", pat), recursive=True))
-                files = sorted(set(files), key=lambda p: os.path.getmtime(p), reverse=True)
-                items = [(p, quick_map_name(p)) for p in files]
+                items = scan_battle_maps(d)
                 self.after(0, lambda: self._fill_battle(items))
         threading.Thread(target=work, daemon=True).start()
 
@@ -1009,41 +1016,6 @@ class App(LoadSettingsMixin, ModuleRefreshMixin, BackgroundLoaderMixin, ReportTa
             self.mode = "campaign"
             self.mode_seg.set("战役图")
         self._populate_left()
-
-    # ---------- 对象浏览（多列）----------
-    def _refresh_list(self):
-        if not self.map_data:
-            return
-        query = self.search_var.get().strip()   # 原样大小写：%LIKE 不分大小写、="精准" 区分
-        cq = compile_query(query)                # 编译一次，下面成千上万对象复用同一 AST
-        self._row_imgs = []
-        summary = []
-        for cat in PARALLEL_CATS:
-            objs = self.map_data.objects.get(cat, [])
-            scored = []
-            for o in objs:
-                sc = cq.score(o.search_text)
-                if sc is not None:
-                    scored.append((sc, o))
-            if query:
-                scored.sort(key=lambda t: -t[0])
-            res = [o for _, o in scored]
-            self.col_results[cat] = res
-            tv = self.col_trees[cat]
-            tv.delete(*tv.get_children())
-            for i, o in enumerate(res[:32]):
-                ext = getattr(o, "ext", "")
-                mark = " 〔脚本〕" if ext == "script" else (" 〔原版〕" if ext == "base" else "")
-                tv.insert("", "end", iid=str(i), image="",
-                          text=f" {o.name}{mark}",
-                          tags=("odd" if i % 2 else "even",))
-            tv.tag_configure("odd", background=ROW_ALT)
-            tv.tag_configure("even", background=CARD)
-            self._autosize_tree(tv)           # 列宽随最长名字自适应，配合横向滚动看全
-            self.col_headers[cat].configure(text=f"{cat}  ({len(res)})")
-            summary.append(f"{cat}{len(res)}")
-        self.status.configure(text="  ".join(summary))
-        self._render_object_cards()
 
     def _on_object_category(self, cat):
         self.active_object_category = cat

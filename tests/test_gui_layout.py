@@ -115,6 +115,7 @@ class TestEditorStyleLayout(GuiTestCase):
 
         # When: the object gallery is rendered.
         self.app._render_map(md, [], [], None)
+        self.pump_events_until(lambda: len(self.app.object_cards.winfo_children()) >= 6)
         cards = self.app.object_cards.winfo_children()
 
         # Then: cards are name-only rows; all metadata belongs in the right detail panel.
@@ -148,6 +149,7 @@ class TestEditorStyleLayout(GuiTestCase):
 
         # When: the object gallery is rendered.
         self.app._render_map(md, [], [], None)
+        self.pump_events_until(lambda: len(self.app.col_results["物品"]) == 100)
         widgets = self.app.object_cards.winfo_children()
 
         # Then: category switching does not synchronously create every card.
@@ -191,6 +193,7 @@ class TestEditorStyleLayout(GuiTestCase):
 
         # When: a map renders with commands and recipes provided by the loader.
         self.app._render_map(md, ["-debug"], ["recipe"], None)
+        self.pump_events_until(lambda: len(self.app.object_cards.winfo_children()) >= 1)
 
         # Then: the object browser renders, while disabled views stay empty.
         self.assertGreaterEqual(len(self.app.object_cards.winfo_children()), 1)

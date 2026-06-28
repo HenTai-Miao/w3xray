@@ -35,6 +35,7 @@ class TestColumnAutosize(GuiTestCase):
                                     objects={"物品": [_obj(long_name)]})
         self.app.icons = None
         self.app._refresh_list()
+        self.pump_events_until(lambda: len(tv.get_children()) == 1)
         self.assertGreater(int(tv.column("#0", "width")), base,
                            "物品列宽未随长名字增长")
 

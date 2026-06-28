@@ -9,6 +9,7 @@
 导航状态），App 在进程退出时统一销毁。
 """
 import atexit
+import time
 import unittest
 
 from w3xtool.gui import App
@@ -46,6 +47,8 @@ class GuiTestCase(unittest.TestCase):
     def setUp(self):
         app = self.app
         # 复位 __init__ 默认态（各 GUI 测试会自行覆盖所需字段）
+        if hasattr(app, "_shutdown_object_filter_runner"):
+            app._shutdown_object_filter_runner()
         app.map_data = None
         app.recipes = []
         app._apply_load_options(default_load_options(), persist=False, refresh=False)
@@ -57,6 +60,12 @@ class GuiTestCase(unittest.TestCase):
         for tv in (app.map_list, app.cmd_tree, app.rec_tree,
                    app.unit_tree, app.doodad_tree, *app.col_trees.values()):
             tv.delete(*tv.get_children())
+        for cat in app.col_results:
+            app.col_results[cat] = []
+        for child in app.object_cards.winfo_children():
+            child.destroy()
+        app.object_gallery.visible_limits.clear()
+        app.object_gallery.result_counts.clear()
         app.pre_search.set("")
         # 地图信息框复位（只读 textbox 需临时切到可写态清空）
         app.info_box.configure(state="normal")
@@ -70,3 +79,14 @@ class GuiTestCase(unittest.TestCase):
                 box.configure(state="disabled")
         # 材料列宽会被 test_ingredient_column_grows 读作基线，还原到初始 620
         app.rec_tree.column("ingredients", width=620)
+
+    def pump_events_until(self, condition, *, timeout: float = 2.0) -> None:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            self.app.update()
+            if condition():
+                return
+        self.app.update()
+        if condition():
+            return
+        self.fail("GUI 后台任务未在超时时间内完成")

@@ -31,6 +31,7 @@ class PrepareMapFunc(Protocol):
         active: MapData,
         campaign_path: str | None,
         views: list[tuple[str, MapData]] | None,
+        *,
         load_options: dict[str, bool] | None,
     ) -> LoadedMap: ...
 
@@ -80,7 +81,7 @@ def load_path_payload(
         views = None
         campaign_path = None
     active = views[0][1] if views else md
-    return prepare_map(active, campaign_path, views, load_options)
+    return prepare_map(active, campaign_path, views, load_options=load_options)
 
 
 def switch_map_payload(
@@ -92,7 +93,7 @@ def switch_map_payload(
 ) -> LoadedMap:
     """Prepare an already-loaded campaign sub-map."""
     prepare_map = prepare or prepare_map_view
-    return prepare_map(md, campaign_path, None, load_options)
+    return prepare_map(md, campaign_path, None, load_options=load_options)
 
 
 def load_campaign_payload(
