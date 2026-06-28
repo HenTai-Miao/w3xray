@@ -12,6 +12,7 @@ dependencies = [
 
 [project.scripts]
 w3xray-dist = "w3xtool.dist_build:main"
+w3xray-test = "w3xtool.dev_test:main"
 
 [build-system]
 requires = ["hatchling>=1.28.0"]
