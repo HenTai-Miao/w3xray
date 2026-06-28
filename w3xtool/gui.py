@@ -1097,11 +1097,11 @@ class App(ReportTabsMixin, ctk.CTk):
                     scored.append((sc, o))
             if query:
                 scored.sort(key=lambda t: -t[0])
-            res = [o for _, o in scored]      # 全部展示，不限数量
+            res = [o for _, o in scored]
             self.col_results[cat] = res
             tv = self.col_trees[cat]
             tv.delete(*tv.get_children())
-            for i, o in enumerate(res):
+            for i, o in enumerate(res[:32]):
                 photo = self._get_photo(getattr(o, "icon", ""))
                 self._row_imgs.append(photo)
                 ext = getattr(o, "ext", "")

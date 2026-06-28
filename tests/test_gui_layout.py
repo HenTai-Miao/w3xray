@@ -43,6 +43,89 @@ class TestEditorStyleLayout(GuiTestCase):
         self.assertIn("崩溃风险", analysis)
         self.assertIn("闪电链", analysis)
 
+    def test_reports_render_as_readable_cards(self):
+        # Given: a loaded map with overview and warning content.
+        md = MapData(path="x.w3x", name="卡片测试图")
+        md.objects = {
+            "技能": [
+                GameObject(
+                    category="技能",
+                    ext="w3a",
+                    obj_id="A001",
+                    base_id="AOcl",
+                    name="闪电链",
+                    is_custom=True,
+                    fields=[("每个目标伤害减少", "-1.00")],
+                )
+            ]
+        }
+
+        # When: the reports are refreshed.
+        self.app._render_map(md, [], [], None)
+
+        # Then: visible card widgets replace the unreadable raw textbox surface.
+        self.assertGreaterEqual(len(self.app.overview_cards), 3)
+        self.assertGreaterEqual(len(self.app.analysis_cards), 1)
+        self.assertEqual(self.app.overview_box.winfo_ismapped(), 0)
+        self.assertEqual(self.app.analysis_box.winfo_ismapped(), 0)
+
+    def test_object_gallery_uses_compact_three_column_cards(self):
+        # Given: enough items to fill more than one dense gallery row.
+        md = MapData(path="x.w3x", name="对象密度测试图")
+        md.objects = {
+            "物品": [
+                GameObject(
+                    category="物品",
+                    ext="w3t",
+                    obj_id=f"I00{i}",
+                    base_id=f"I00{i}",
+                    name=f"物品{i}",
+                    is_custom=True,
+                    fields=[("名称", f"物品{i}")],
+                )
+                for i in range(6)
+            ]
+        }
+        self.app.active_object_category = "物品"
+
+        # When: the object gallery is rendered.
+        self.app._render_map(md, [], [], None)
+        cards = self.app.object_cards.winfo_children()
+
+        # Then: cards are dense enough for scanning instead of oversized tiles.
+        self.assertGreaterEqual(len(cards), 6)
+        self.assertLessEqual(int(cards[0].cget("height")), 78)
+        self.assertEqual(cards[2].grid_info()["row"], 0)
+        self.assertEqual(cards[2].grid_info()["column"], 2)
+
+    def test_object_gallery_batches_large_categories_for_fast_switching(self):
+        # Given: a large category like real RPG maps on Windows.
+        md = MapData(path="x.w3x", name="切换性能测试图")
+        md.objects = {
+            "物品": [
+                GameObject(
+                    category="物品",
+                    ext="w3t",
+                    obj_id=f"I{i:03d}",
+                    base_id=f"I{i:03d}",
+                    name=f"物品{i}",
+                    is_custom=True,
+                )
+                for i in range(100)
+            ]
+        }
+        self.app.active_object_category = "物品"
+
+        # When: the object gallery is rendered.
+        self.app._render_map(md, [], [], None)
+        widgets = self.app.object_cards.winfo_children()
+
+        # Then: category switching does not synchronously create every card.
+        self.assertLess(len(widgets), 100)
+        self.assertLessEqual(len(self.app.col_trees["物品"].get_children()), 32)
+        buttons = [widget for widget in widgets if widget.__class__.__name__ == "CTkButton"]
+        self.assertTrue(any("加载更多" in button.cget("text") for button in buttons))
+
 
 if __name__ == "__main__":
     unittest.main()
