@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+import tkinter as tk
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
-from typing import Final
+from dataclasses import dataclass, field
+from tkinter import ttk
 
 import customtkinter as ctk
 
 from .api import GameObject
-from .object_gallery_cards import render_object_card
+from .object_gallery_icons import cancel_icon_job, queue_icon_loading
 from .theme import (
     ACCENT_DARK,
     BORDER,
@@ -19,14 +20,10 @@ from .theme import (
     FONT,
     PANEL,
     PARALLEL_CATS,
-    SECONDARY,
-    SECONDARY_HOVER,
     SUBTLE,
     TEXT,
     TEXT_STRONG,
 )
-
-GALLERY_COLUMNS: Final = 1
 
 
 @dataclass(slots=True)
@@ -36,7 +33,11 @@ class ObjectGallery:
     container: ctk.CTkFrame
     hint: ctk.CTkLabel
     buttons: dict[str, ctk.CTkButton]
-    cards: ctk.CTkScrollableFrame
+    cards: ttk.Treeview
+    active_objects: list[GameObject] = field(default_factory=list)
+    icon_images: list[tk.PhotoImage] = field(default_factory=list)
+    icon_job: str | None = None
+    render_token: int = 0
 
 
 def build_object_gallery(
@@ -79,12 +80,32 @@ def build_object_gallery(
         cat_bar.grid_columnconfigure(index % 4, weight=1, uniform="object_category")
         buttons[cat] = btn
 
-    cards = ctk.CTkScrollableFrame(
-        container, fg_color="#fbfdff", scrollbar_button_color=SECONDARY,
-        scrollbar_button_hover_color=SECONDARY_HOVER,
+    list_shell = tk.Frame(
+        container,
+        bg="#fbfdff",
+        highlightthickness=1,
+        highlightbackground=BORDER,
+        highlightcolor=BORDER,
     )
-    cards.pack(fill="both", expand=True, padx=10, pady=(0, 8))
-    cards.grid_columnconfigure(0, weight=1)
+    list_shell.pack(fill="both", expand=True, padx=10, pady=(0, 8))
+    cards = ttk.Treeview(
+        list_shell,
+        columns=("decimal", "obj_id"),
+        show="tree headings",
+        selectmode="browse",
+    )
+    yscroll = ttk.Scrollbar(list_shell, orient="vertical", command=cards.yview)
+    xscroll = ttk.Scrollbar(list_shell, orient="horizontal", command=cards.xview)
+    cards.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
+    cards.heading("#0", text="图标 / 名称", anchor="w")
+    cards.heading("decimal", text="十进制", anchor="center")
+    cards.heading("obj_id", text="物品ID", anchor="center")
+    cards.column("#0", width=270, minwidth=150, stretch=True, anchor="w")
+    cards.column("decimal", width=118, minwidth=90, stretch=False, anchor="center")
+    cards.column("obj_id", width=92, minwidth=70, stretch=False, anchor="center")
+    yscroll.pack(side="right", fill="y")
+    xscroll.pack(side="bottom", fill="x")
+    cards.pack(side="left", fill="both", expand=True, padx=(8, 0), pady=8)
     return ObjectGallery(container=container, hint=hint, buttons=buttons, cards=cards)
 
 
@@ -93,26 +114,35 @@ def render_object_gallery(
     active_category: str,
     results_by_category: Mapping[str, list[GameObject]],
     show_detail: Callable[[GameObject], None],
+    get_icon: Callable[[str, int], tk.PhotoImage | None] | None = None,
 ) -> None:
-    for child in gallery.cards.winfo_children():
-        child.destroy()
-
+    cancel_icon_job(gallery)
     category = active_category if active_category in PARALLEL_CATS else PARALLEL_CATS[0]
     results = results_by_category.get(category, [])
+    gallery.active_objects = list(results)
+    gallery.icon_images = []
+    gallery.render_token += 1
+    token = gallery.render_token
     _refresh_category_buttons(gallery, category, results_by_category)
     gallery.hint.configure(text=f"{category} · {len(results)} 个对象")
+    gallery.cards.delete(*gallery.cards.get_children())
+    gallery.cards.bind(
+        "<<TreeviewSelect>>",
+        lambda _event: _show_selected_object(gallery, show_detail),
+    )
     if not results:
         _render_empty_state(gallery, category)
         return
 
     for index, obj in enumerate(results):
-        render_object_card(
-            gallery=gallery,
-            obj=obj,
-            index=index,
-            columns=GALLERY_COLUMNS,
-            show_detail=show_detail,
+        gallery.cards.insert(
+            "",
+            "end",
+            iid=str(index),
+            text=obj.name or obj.obj_id,
+            values=(str(obj.decimal), obj.obj_id),
         )
+    queue_icon_loading(gallery, gallery.active_objects, token, get_icon)
 
 
 def _refresh_category_buttons(
@@ -133,16 +163,20 @@ def _refresh_category_buttons(
 
 
 def _render_empty_state(gallery: ObjectGallery, category: str) -> None:
-    empty = ctk.CTkFrame(
-        gallery.cards, fg_color=PANEL, corner_radius=18,
-        border_width=1, border_color=BORDER,
-    )
-    empty.grid(row=0, column=0, sticky="ew", padx=8, pady=8)
-    ctk.CTkLabel(
-        empty, text=f"{category} 没有匹配对象",
-        font=(FONT, 14, "bold"), text_color=TEXT_STRONG,
-    ).pack(padx=16, pady=(18, 4))
-    ctk.CTkLabel(
-        empty, text="换一个分类，或清空搜索条件后回车刷新。",
-        font=(FONT, 12), text_color=SUBTLE,
-    ).pack(padx=16, pady=(0, 18))
+    gallery.cards.insert("", "end", iid="__empty__", text=f"{category} 没有匹配对象")
+
+
+def _show_selected_object(
+    gallery: ObjectGallery,
+    show_detail: Callable[[GameObject], None],
+) -> None:
+    selection = gallery.cards.selection()
+    if not selection:
+        return
+    item_id = str(selection[0])
+    if not item_id.isdigit():
+        return
+    index = int(item_id)
+    if index >= len(gallery.active_objects):
+        return
+    show_detail(gallery.active_objects[index])

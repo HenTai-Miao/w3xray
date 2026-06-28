@@ -62,8 +62,13 @@ class GuiTestCase(unittest.TestCase):
             tv.delete(*tv.get_children())
         for cat in app.col_results:
             app.col_results[cat] = []
-        for child in app.object_cards.winfo_children():
-            child.destroy()
+        if hasattr(app.object_cards, "get_children"):
+            app.object_cards.delete(*app.object_cards.get_children())
+        elif hasattr(app.object_cards, "delete"):
+            app.object_cards.delete(0, "end")
+        else:
+            for child in app.object_cards.winfo_children():
+                child.destroy()
         app.pre_search.set("")
         # 地图信息框复位（只读 textbox 需临时切到可写态清空）
         app.info_box.configure(state="normal")

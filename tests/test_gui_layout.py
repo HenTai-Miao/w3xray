@@ -5,26 +5,8 @@ from PIL import Image
 
 from tests.gui_base import GuiTestCase
 from w3xtool.api import GameObject, MapData
+from w3xtool.object_gallery import _show_selected_object
 from w3xtool.script_scan import ChatCommand, Recipe
-
-
-def _visible_texts(widget):
-    texts = []
-    for child in widget.winfo_children():
-        if child.__class__.__name__ in {"CTkLabel", "CTkButton"}:
-            text = child.cget("text")
-            if text:
-                texts.append(text)
-        texts.extend(_visible_texts(child))
-    return texts
-
-
-def _descendants(widget):
-    children = []
-    for child in widget.winfo_children():
-        children.append(child)
-        children.extend(_descendants(child))
-    return children
 
 
 class TestEditorStyleLayout(GuiTestCase):
@@ -94,8 +76,10 @@ class TestEditorStyleLayout(GuiTestCase):
         self.assertEqual(self.app.overview_box.winfo_ismapped(), 0)
         self.assertEqual(self.app.analysis_box.winfo_ismapped(), 0)
 
-    def test_object_gallery_uses_name_only_compact_list_rows(self):
+    def test_object_gallery_shows_icon_name_decimal_and_object_id_in_one_fast_table(self):
         # Given: enough items to fill more than one dense list row.
+        resolver = _FakeIconResolver()
+        first_icon = "ReplaceableTextures\\CommandButtons\\BTNItem.blp"
         md = MapData(path="x.w3x", name="对象密度测试图")
         md.objects = {
             "物品": [
@@ -107,6 +91,7 @@ class TestEditorStyleLayout(GuiTestCase):
                     name=f"物品{i}",
                     is_custom=True,
                     fields=[("名称", f"物品{i}")],
+                    icon=first_icon if i == 0 else "",
                 )
                 for i in range(6)
             ]
@@ -114,20 +99,19 @@ class TestEditorStyleLayout(GuiTestCase):
         self.app.active_object_category = "物品"
 
         # When: the object gallery is rendered.
-        self.app._render_map(md, [], [], None)
-        self.pump_events_until(lambda: len(self.app.object_cards.winfo_children()) >= 6)
-        cards = self.app.object_cards.winfo_children()
+        self.app._render_map(md, [], [], resolver)
+        self.pump_events_until(lambda: len(self.app.object_cards.get_children()) >= 6)
+        rows = self.app.object_cards.get_children()
 
-        # Then: objects render as compact single-column rows; details stay on the right panel.
-        self.assertGreaterEqual(len(cards), 6)
-        self.assertLessEqual(int(cards[0].cget("height")), 34)
-        self.assertEqual(_visible_texts(cards[0]), ["物品0"])
-        self.assertFalse(
-            any(child.__class__.__name__ == "CTkButton" for child in _descendants(cards[0]))
-        )
-        self.assertEqual(cards[3].grid_info()["row"], 3)
-        self.assertEqual(cards[3].grid_info()["column"], 0)
-        self.assertEqual(cards[4].grid_info()["row"], 4)
+        # Then: all objects live in one fast table with icon/name/decimal/id columns.
+        self.assertEqual(self.app.object_cards.__class__.__name__, "Treeview")
+        self.assertEqual(len(rows), 6)
+        self.assertEqual(self.app.object_cards.item(rows[0], "text"), "物品0")
+        self.assertEqual(self.app.object_cards.item(rows[3], "text"), "物品3")
+        self.assertEqual(self.app.object_cards.set(rows[0], "decimal"), str(md.objects["物品"][0].decimal))
+        self.assertEqual(self.app.object_cards.set(rows[0], "obj_id"), "I000")
+        self.pump_events_until(lambda: bool(self.app.object_cards.item(rows[0], "image")))
+        self.assertEqual(len(self.app.object_cards.winfo_children()), 0)
 
     def test_object_gallery_shows_every_object_in_current_category(self):
         # Given: a large category like real RPG maps on Windows.
@@ -149,14 +133,13 @@ class TestEditorStyleLayout(GuiTestCase):
 
         # When: the object gallery is rendered.
         self.app._render_map(md, [], [], None)
-        self.pump_events_until(lambda: len(self.app.col_results["物品"]) == 100)
-        widgets = self.app.object_cards.winfo_children()
+        self.pump_events_until(lambda: len(self.app.object_cards.get_children()) == 100)
+        rows = self.app.object_cards.get_children()
 
-        # Then: every object row in the active category is visible without loading more.
-        self.assertEqual(len(widgets), 100)
+        # Then: every object row in the active category is available without loading more.
+        self.assertEqual(len(rows), 100)
+        self.assertEqual(self.app.object_cards.item(rows[99], "text"), "物品99")
         self.assertLessEqual(len(self.app.col_trees["物品"].get_children()), 32)
-        buttons = [widget for widget in widgets if widget.__class__.__name__ == "CTkButton"]
-        self.assertFalse(any("加载更多" in button.cget("text") for button in buttons))
 
     def test_object_gallery_exposes_all_object_editor_categories(self):
         # Given: a map has every object-editor category the parser supports.
@@ -182,9 +165,35 @@ class TestEditorStyleLayout(GuiTestCase):
         # Then: all supported object categories are selectable and render rows.
         for label in ("单位", "物品", "技能", "科技", "可破坏物", "装饰物", "增益"):
             self.assertIn(label, self.app.object_cat_buttons)
-        self.assertEqual(_visible_texts(self.app.object_cards.winfo_children()[0]), ["树木"])
+        first = self.app.object_cards.get_children()[0]
+        self.assertEqual(self.app.object_cards.item(first, "text"), "树木")
 
-    def test_object_icon_loads_only_when_detail_is_opened(self):
+    def test_object_gallery_selection_opens_detail_panel(self):
+        # Given: a rendered object gallery with one selectable object.
+        obj = GameObject(
+            category="物品",
+            ext="w3t",
+            obj_id="I000",
+            base_id="I000",
+            name="详情物品",
+            is_custom=True,
+            fields=[("攻击", "+1")],
+        )
+        md = MapData(path="x.w3x", name="详情测试图", objects={"物品": [obj]})
+        self.app.active_object_category = "物品"
+
+        # When: the user selects the object in the fast list.
+        self.app._render_map(md, [], [], None)
+        self.pump_events_until(lambda: len(self.app.object_cards.get_children()) == 1)
+        self.app.object_cards.selection_set("0")
+        _show_selected_object(self.app.object_gallery, self.app._show_detail)
+
+        # Then: the right detail panel shows the selected object.
+        detail = self.app.detail.get("1.0", "end")
+        self.assertIn("详情物品", detail)
+        self.assertIn("攻击: +1", detail)
+
+    def test_object_icon_loads_in_list_and_detail(self):
         # Given: an object has an icon and the gallery is rendered.
         resolver = _FakeIconResolver()
         obj = GameObject(
@@ -200,11 +209,13 @@ class TestEditorStyleLayout(GuiTestCase):
 
         # When: the map renders, then the user opens details for that object.
         self.app._render_map(md, [], [], resolver)
+        self.pump_events_until(lambda: resolver.calls == [obj.icon])
+        self.pump_events_until(lambda: bool(self.app.object_cards.item("0", "image")))
         calls_after_render = list(resolver.calls)
         self.app._show_detail(obj)
 
-        # Then: the object list did not decode the icon; the detail panel did.
-        self.assertEqual(calls_after_render, [])
+        # Then: the object list and detail panel both show the cached icon.
+        self.assertEqual(calls_after_render, [obj.icon])
         self.assertEqual(resolver.calls, [obj.icon])
         self.assertIsNotNone(self.app.detail_icon_image)
 
@@ -220,10 +231,10 @@ class TestEditorStyleLayout(GuiTestCase):
         command = ChatCommand("-debug", True, "gg_trg_Debug", "调试")
         recipe = Recipe(["I000"], "I001")
         self.app._render_map(md, [command], [recipe], None)
-        self.pump_events_until(lambda: len(self.app.object_cards.winfo_children()) >= 1)
+        self.pump_events_until(lambda: len(self.app.object_cards.get_children()) >= 1)
 
         # Then: all major views render by default; there is no settings tab to hide them.
-        self.assertGreaterEqual(len(self.app.object_cards.winfo_children()), 1)
+        self.assertGreaterEqual(len(self.app.object_cards.get_children()), 1)
         self.assertEqual(self.app.commands, [command])
         self.assertEqual(self.app.recipes, [recipe])
         self.assertNotIn("加载设置", self.app.editor_tab_labels)

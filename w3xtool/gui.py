@@ -21,6 +21,7 @@ from collections import Counter
 from .api import export_all_files, tmp_extract_dir, quick_map_name, MapData
 from .search import compile_query
 from .gui_load_settings import LoadSettingsMixin
+from .gui_icon_cache import IconCacheMixin
 from .gui_loader_runner import BackgroundLoaderMixin
 from .gui_module_refresh import ModuleRefreshMixin
 from .gui_object_filter_runner import ObjectFilterRunnerMixin
@@ -72,6 +73,7 @@ ctk.set_default_color_theme("green")
 
 class App(
     LoadSettingsMixin,
+    IconCacheMixin,
     ModuleRefreshMixin,
     ObjectFilterRunnerMixin,
     PaneStateMixin,
@@ -98,7 +100,8 @@ class App(
         self._dir_campaigns = []        # 战役图左侧: [{path,name,loaded,views}]
         self._node_map = {}             # 树节点 iid -> (kind, payload)
         self._cur_dir = {"battle": None, "campaign": None}   # 各模式各记各的目录
-        self._photo_cache = {}     # icon path -> PhotoImage
+        self._pil_icon_cache = {}  # icon path -> PIL image
+        self._photo_cache = {}     # icon path/size/kind -> Tk image
         self._row_imgs = []        # 保持引用防止被回收
         self._blank = None
         self._init_load_options()
@@ -958,6 +961,7 @@ class App(
             except Exception:
                 pass
         self.icons = resolver
+        self._pil_icon_cache = {}
         self._photo_cache = {}
         self.map_label.configure(text=f"当前地图：{md.name}")
         self._reset_detail_panel()
@@ -1000,6 +1004,7 @@ class App(
             active_category=self.active_object_category,
             results_by_category=self.col_results,
             show_detail=self._show_detail,
+            get_icon=self._get_tree_photo,
         )
 
     def _on_col_select(self, cat):
@@ -1012,23 +1017,6 @@ class App(
         if idx >= len(res):
             return
         self._show_detail(res[idx])
-
-    def _get_photo(self, icon_path, size=36):
-        if not icon_path or self.icons is None:
-            return None
-        key = (icon_path.lower(), size)
-        if key in self._photo_cache:
-            return self._photo_cache[key]
-        photo = None
-        try:
-            pil = self.icons.get_image(icon_path)
-            if pil is not None:
-                icon = pil.resize((size, size), Image.LANCZOS)
-                photo = ctk.CTkImage(light_image=icon, dark_image=icon, size=(size, size))
-        except Exception:
-            photo = None
-        self._photo_cache[key] = photo
-        return photo
 
     def _show_detail(self, o):
         self.detail_icon_image = self._get_photo(getattr(o, "icon", "")) or self.detail_blank_icon
@@ -1129,8 +1117,9 @@ class App(
                 out = export_all_files(path)        # 默认 TMP，战役自动递归
                 n = sum(len(fs) for _, _, fs in os.walk(out))
                 self.after(0, lambda: self._open_dir(out, n, "文件"))
-            except Exception as e:
-                self.after(0, lambda: messagebox.showerror("导出失败", str(e)))
+            except Exception as exc:
+                error_text = str(exc)
+                self.after(0, lambda message=error_text: messagebox.showerror("导出失败", message))
         threading.Thread(target=work, daemon=True).start()
 
     def on_export_scripts(self):
@@ -1148,8 +1137,9 @@ class App(
                         f.write(text)
                     n += 1
                 self.after(0, lambda: self._open_dir(out, n, "脚本"))
-            except Exception as e:
-                self.after(0, lambda: messagebox.showerror("导出失败", str(e)))
+            except Exception as exc:
+                error_text = str(exc)
+                self.after(0, lambda message=error_text: messagebox.showerror("导出失败", message))
         threading.Thread(target=work, daemon=True).start()
 
     def on_export_ids(self):
@@ -1165,14 +1155,19 @@ class App(
                 for cat, objs in objects.items():
                     blocks = []
                     for o in objs:
-                        desc = next((v for l, v in o.fields if l in ("说明", "描述", "Ubertip", "提示")), "")
+                        desc = next(
+                            (value for label, value in o.fields
+                             if label in ("说明", "描述", "Ubertip", "提示")),
+                            "",
+                        )
                         blocks.append(f"10进制：{o.decimal}\nID：{o.obj_id}\n名字：{o.name}\n{desc}\n")
                     with open(os.path.join(out, f"{cat}ID.txt"), "w", encoding="utf-8") as f:
                         f.write("\n".join(blocks))
                     n += 1
                 self.after(0, lambda: self._open_dir(out, n, "分类的ID列表"))
-            except Exception as e:
-                self.after(0, lambda: messagebox.showerror("导出失败", str(e)))
+            except Exception as exc:
+                error_text = str(exc)
+                self.after(0, lambda message=error_text: messagebox.showerror("导出失败", message))
         threading.Thread(target=work, daemon=True).start()
 
 
