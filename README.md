@@ -25,9 +25,15 @@ uv run main.py cli <配置.wgc>   # 命令行查看 World Editor AI 测试配置
 CLI 输出会附带只读「审计 / 地形 / 地图结构 / SLK / 游戏常数 / 游戏配置 / 触发器树 / 小地图标记 / 导入资源 / 脚本诊断 / 崩溃风险 / 秘籍口令 / 命令 / 资源 / 兼容」摘要，提示缺失地图信息、war3map.w3e 地形纹理、网格、世界坐标范围、地形点高度/水位/坡道/荒芜/边界/边缘统计、预放置单位/装饰物越界、实际地表/悬崖纹理使用分布、地形中文名/贴图路径、区域/镜头/声音/路径图摘要与可读条目、路径图禁止行走/飞行/建造等 pathing flag 统计、war3map.shd 阴影图覆盖统计、内嵌 SLK 表行列摘要、war3mapMisc.txt 覆盖项、`.wgc` AI 测试/对局配置、`war3map.wtg` 触发器树结构、`war3map.mmp` 小地图标记、`war3map.imp` 标准/自定义导入路径与疑似缺失资源、脚本缺失、异步/本地状态风险调用、已知崩溃配置、官方秘籍/调试口令残留、引用覆盖偏低、孤立对象比例偏高、重复命令串、脚本数值 Order ID 解码、自定义游戏平衡常数、未引用素材、1.20E return bug 迁移风险、1.24E 兼容风险等；这些提示只用于人工排查，不会修改地图。
 
 ## 重新打包 exe
+在 Windows 上运行会生成 `dist/魔兽地图提取器/魔兽地图提取器.exe`：
 ```bash
-uv run pyinstaller --noconfirm "魔兽地图提取器.spec"
+uv run w3xray-dist
 ```
+只检查将要执行的 PyInstaller 命令，不真正打包：
+```bash
+uv run w3xray-dist --dry-run
+```
+说明：PyInstaller 不是跨平台编译器；在 macOS/Linux 上运行同一命令会生成当前平台的可执行文件，不会生成 Windows `.exe`。
 
 ## 刷新原版数据（base_names / base_objects / westrings）
 `w3xtool/base_names.py` 等三份内置数据由 `build_base_names.py` 从**游戏本体**一次性生成，运行时不读游戏。换语言/升级后想刷新：

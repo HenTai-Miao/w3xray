@@ -1,20 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 datas = []
 binaries = []
-# w3xtool 多个子模块在 api.py/fields.py 里是“函数内懒加载”(如 _add_preplaced 里 from .doo import)，
-# 显式列入 hiddenimports 确保 PyInstaller 一定收进去(含大数据模块 field_meta/base_*/westrings)。
-hiddenimports = [
-    'w3xtool.doo', 'w3xtool.imp', 'w3xtool.w3i', 'w3xtool.wct',
-    'w3xtool.field_meta', 'w3xtool.fields', 'w3xtool.slk', 'w3xtool.textobj',
-    'w3xtool.script_scan', 'w3xtool.wts', 'w3xtool.w3obj', 'w3xtool.blp',
-    'w3xtool.icons', 'w3xtool.huffman', 'w3xtool.explode', 'w3xtool.mpq',
-    'w3xtool.base_names', 'w3xtool.base_objects', 'w3xtool.westrings',
-    'w3xtool.single_instance',
-]
+# w3xtool 大量模块通过函数内懒加载连接 GUI/CLI 分析能力。自动收集整个包，
+# 防止 exe 在点击某个报告或打开特定地图格式时才暴露缺模块。
+hiddenimports = collect_submodules('w3xtool')
 tmp_ret = collect_all('customtkinter')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+datas += tmp_ret[0]; binaries += tmp_ret[1]
+hiddenimports = sorted(set(hiddenimports + tmp_ret[2]))
 
 
 a = Analysis(

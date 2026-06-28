@@ -210,7 +210,7 @@ wheels = [
 [[package]]
 name = "w3xray"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "customtkinter" },
     { name = "pillow" },
