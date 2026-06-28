@@ -1,0 +1,107 @@
+"""Optional map metadata loaders used by the high-level API."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .api import MapData
+    from .mpq import MPQArchive
+
+
+def add_world_metadata(md: "MapData", archive: "MPQArchive", wts: dict) -> None:
+    """Load regions, cameras and sounds from World Editor metadata files."""
+    from .w3world import parse_cameras, parse_regions, parse_sounds
+
+    if archive.has_file("war3map.w3r"):
+        try:
+            md.regions = parse_regions(archive.read_file("war3map.w3r"), wts)
+        except (KeyError, ValueError):
+            md.regions = []
+    if archive.has_file("war3map.w3c"):
+        try:
+            md.cameras = parse_cameras(archive.read_file("war3map.w3c"))
+        except (KeyError, ValueError):
+            md.cameras = []
+    if archive.has_file("war3map.w3s"):
+        try:
+            md.sounds = parse_sounds(archive.read_file("war3map.w3s"))
+        except (KeyError, ValueError):
+            md.sounds = []
+
+
+def add_game_configs(md: "MapData", archive: "MPQArchive") -> None:
+    """Load visible .wgc game configurations without failing map loading."""
+    from .gameconfig import (
+        NamedGameConfiguration,
+        find_internal_game_config_names,
+        parse_game_configuration,
+    )
+
+    names = list(archive.list_files())
+    names.extend(name for name in ("war3map.wgc", "testconfig.wgc") if archive.has_file(name))
+    configs = []
+    for name in find_internal_game_config_names(names):
+        try:
+            configs.append(NamedGameConfiguration(name, parse_game_configuration(archive.read_file(name))))
+        except (KeyError, ValueError):
+            continue
+    md.game_configs = configs
+
+
+def add_trigger_summary(md: "MapData", archive: "MPQArchive") -> None:
+    """Load a trigger tree summary from war3map.wtg when present."""
+    if not archive.has_file("war3map.wtg"):
+        return
+    try:
+        from .wtg import parse_wtg
+
+        md.trigger_summary = parse_wtg(archive.read_file("war3map.wtg"))
+    except (KeyError, ValueError):
+        md.trigger_summary = None
+
+
+def add_preview_icons(md: "MapData", archive: "MPQArchive") -> None:
+    """Load minimap preview icons from war3map.mmp when present."""
+    if not archive.has_file("war3map.mmp"):
+        return
+    try:
+        from .mmp import parse_preview_icons
+
+        md.preview_icons = parse_preview_icons(archive.read_file("war3map.mmp"))
+    except (KeyError, ValueError):
+        md.preview_icons = None
+
+
+def add_import_summary(md: "MapData", archive: "MPQArchive") -> None:
+    """Load war3map.imp with path type and missing-file diagnostics."""
+    if not archive.has_file("war3map.imp"):
+        return
+    try:
+        from .imp import ImportSummary, parse_import_table
+
+        table = parse_import_table(archive.read_file("war3map.imp"))
+    except (KeyError, ValueError):
+        md.import_summary = None
+        return
+    resolved = []
+    missing = []
+    for entry in table.entries:
+        actual = _resolve_import_path(archive, entry)
+        if actual is None:
+            missing.append(entry.candidate_paths[0] if entry.candidate_paths else entry.path)
+        else:
+            resolved.append(actual)
+    md.import_summary = ImportSummary(
+        version=table.version,
+        entries=table.entries,
+        resolved_paths=tuple(resolved),
+        missing_paths=tuple(missing),
+    )
+
+
+def _resolve_import_path(archive: "MPQArchive", entry) -> str | None:
+    for path in entry.candidate_paths:
+        if archive.has_file(path):
+            return path
+    return None

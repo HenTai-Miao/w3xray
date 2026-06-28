@@ -3,12 +3,16 @@ import unittest
 from unittest.mock import patch
 from types import SimpleNamespace
 
-from main import iter_cli_summary_lines
+from main import iter_cli_summary_lines, iter_game_config_summary_lines
 from w3xtool.api import GameObject, MapData
+from w3xtool.gameconfig import GameConfiguration, GameConfigPlayer, NamedGameConfiguration
 from w3xtool.gameplay import GameplayConstant
+from w3xtool.imp import ImportEntry, ImportSummary
 from w3xtool.mapmeta import MapStructureReport, PathingSummary
+from w3xtool.mmp import PreviewIcon, PreviewIconSummary
 from w3xtool.slkmeta import SlkFileSummary, SlkInventoryReport
 from w3xtool.terrain import TerrainInfo
+from w3xtool.wtg import TriggerCategory, TriggerHeader, TriggerTreeSummary, TriggerVariable
 
 
 def _obj(category, obj_id):
@@ -268,7 +272,16 @@ class CliAuditTest(unittest.TestCase):
             regions=2,
             cameras=3,
             sounds=4,
-            pathing=PathingSummary(width=8, height=9, cells=72),
+            pathing=PathingSummary(
+                width=8,
+                height=9,
+                cells=72,
+                no_walk=10,
+                no_fly=3,
+                no_build=5,
+                blight=2,
+                no_water=70,
+            ),
             region_strings=("BossRoom",),
             camera_strings=("IntroCam",),
             sound_strings=("war3mapImported\\boss.mp3",),
@@ -282,6 +295,7 @@ class CliAuditTest(unittest.TestCase):
         self.assertIn("  地图结构:", lines)
         self.assertTrue(any("区域: 2" in line and "镜头: 3" in line for line in lines))
         self.assertTrue(any("路径图: 8×9" in line for line in lines))
+        self.assertTrue(any("禁止行走: 10" in line and "禁止建造: 5" in line for line in lines))
         self.assertTrue(any("BossRoom" in line for line in lines))
         self.assertTrue(any("IntroCam" in line for line in lines))
         self.assertTrue(any("boss.mp3" in line for line in lines))
@@ -318,6 +332,128 @@ class CliAuditTest(unittest.TestCase):
         # Then: detailed constants are visible.
         self.assertIn("  游戏常数:", lines)
         self.assertTrue(any("HeroMaxLevel=20" in line for line in lines))
+
+    def test_cli_summary_includes_game_config_block(self):
+        # Given: a loaded map with an internal .wgc game configuration.
+        md = MapData(path="x.w3x", name="测试图")
+        md.game_configs = [
+            NamedGameConfiguration(
+                "testconfig.wgc",
+                GameConfiguration(
+                    format_version=1,
+                    flags=0x03,
+                    base_speed=4,
+                    map_path="Maps\\Anime\\Test.w3x",
+                    players=(
+                        GameConfigPlayer(0, 0, 0x01, 0, 100, 0x01, 1, ""),
+                        GameConfigPlayer(1, 0, 0x02, 1, 90, 0x04, 2, "AI Scripts\\rush.ai"),
+                    ),
+                ),
+            )
+        ]
+
+        # When: CLI summary lines are rendered.
+        lines = list(iter_cli_summary_lines(md))
+
+        # Then: game config details are visible in the map summary.
+        self.assertIn("  游戏配置: 1", lines)
+        self.assertIn("  游戏配置:", lines)
+        self.assertTrue(any("testconfig.wgc" in line and "400%" in line for line in lines))
+        self.assertTrue(any("禁用战争迷雾" in line and "禁用胜负条件" in line for line in lines))
+        self.assertTrue(any("AI Scripts\\rush.ai" in line for line in lines))
+
+    def test_standalone_game_config_summary_lists_players(self):
+        # Given: a standalone parsed .wgc configuration.
+        config = GameConfiguration(
+            format_version=1,
+            flags=0,
+            base_speed=2,
+            map_path="Maps\\Test.w3x",
+            players=(
+                GameConfigPlayer(0, 0, 0x01, 0, 100, 0x01, 1, ""),
+                GameConfigPlayer(1, 0, 0x02, 1, 80, 0x04, 2, "AI Scripts\\hard.ai"),
+            ),
+        )
+
+        # When: standalone config lines are rendered.
+        lines = list(iter_game_config_summary_lines("testconfig.wgc", config))
+
+        # Then: the summary is useful without opening a map archive.
+        self.assertIn("游戏配置: testconfig.wgc", lines)
+        self.assertTrue(any("速度: 200%" in line for line in lines))
+        self.assertTrue(any("P2" in line and "困难" in line for line in lines))
+
+    def test_cli_summary_includes_trigger_tree_summary(self):
+        # Given: a loaded map with parsed war3map.wtg metadata.
+        md = MapData(path="x.w3x", name="触发图")
+        md.trigger_summary = TriggerTreeSummary(
+            version=7,
+            is_reforged=False,
+            category_count=1,
+            variable_count=1,
+            trigger_count=2,
+            comment_count=0,
+            script_count=1,
+            categories=(TriggerCategory(42, "系统"),),
+            variables=(TriggerVariable("Count", "integer", 1, False, 1, True, "5"),),
+            triggers=(
+                TriggerHeader("初始化", "", False, True, False, False, True, 42, 0),
+                TriggerHeader("脚本块", "", False, False, True, True, False, 42, 1),
+            ),
+            has_unexpanded_functions=True,
+        )
+
+        # When: CLI summary lines are rendered.
+        lines = list(iter_cli_summary_lines(md))
+
+        # Then: trigger tree counts and representative entries are visible.
+        self.assertIn("  触发器: 2  变量: 1  分类: 1", lines)
+        self.assertIn("  触发器树:", lines)
+        self.assertTrue(any("初始化" in line and "开局运行" in line for line in lines))
+        self.assertTrue(any("脚本块" in line and "禁用" in line for line in lines))
+        self.assertTrue(any("TriggerData.txt" in line for line in lines))
+
+    def test_cli_summary_includes_preview_icons(self):
+        # Given: a map with parsed minimap preview icons.
+        md = MapData(path="x.w3x", name="标记图")
+        md.preview_icons = PreviewIconSummary(
+            version=0,
+            icons=(
+                PreviewIcon(2, 12, 34, (255, 0, 0), 255),
+                PreviewIcon(0, 80, 90, (255, 215, 0), 255),
+            ),
+        )
+
+        # When: CLI summary lines are rendered.
+        lines = list(iter_cli_summary_lines(md))
+
+        # Then: minimap marker counts and sample coordinates are visible.
+        self.assertIn("  小地图标记: 2", lines)
+        self.assertIn("  小地图标记:", lines)
+        self.assertTrue(any("玩家出生点" in line and "(12, 34)" in line for line in lines))
+        self.assertTrue(any("金矿" in line and "1" in line for line in lines))
+
+    def test_cli_summary_includes_import_summary(self):
+        # Given: a loaded map with parsed war3map.imp metadata.
+        md = MapData(path="x.w3x", name="导入图")
+        md.import_summary = ImportSummary(
+            version=1,
+            entries=(
+                ImportEntry("icon.blp", 8),
+                ImportEntry("ReplaceableTextures\\custom.blp", 13),
+            ),
+            resolved_paths=("war3mapImported\\icon.blp",),
+            missing_paths=("ReplaceableTextures\\custom.blp",),
+        )
+
+        # When: CLI summary lines are rendered.
+        lines = list(iter_cli_summary_lines(md))
+
+        # Then: import counts, type split and missing resources are visible.
+        self.assertIn("  导入资源: 2", lines)
+        self.assertIn("  导入资源:", lines)
+        self.assertTrue(any("标准路径: 1" in line and "自定义路径: 1" in line for line in lines))
+        self.assertTrue(any("ReplaceableTextures\\custom.blp" in line for line in lines))
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ import os
 import struct
 import unittest
 
-from w3xtool.imp import parse_imp
+from w3xtool.imp import ImportEntry, parse_imp, parse_import_table
 
 FIX = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -28,6 +28,24 @@ class TestParseImp(unittest.TestCase):
         self.assertEqual(parse_imp(data),
                          ["war3mapImported\\foo.mdx",
                           "ReplaceableTextures\\bar.blp"])
+
+    def test_structured_entries_keep_flags(self):
+        data = _build(1, [(8, "icon.blp"), (13, "ReplaceableTextures\\bar.blp")])
+        table = parse_import_table(data)
+
+        self.assertEqual(table.version, 1)
+        self.assertEqual(table.entry_count, 2)
+        self.assertEqual(table.entries[0].type_label, "标准路径")
+        self.assertEqual(table.entries[0].candidate_paths[0], "war3mapImported\\icon.blp")
+        self.assertEqual(table.entries[1].type_label, "自定义路径")
+        self.assertEqual(table.entries[1].candidate_paths, ("ReplaceableTextures\\bar.blp",))
+
+    def test_unknown_flag_keeps_legacy_fallback_candidate(self):
+        entry = ImportEntry(path="icon.blp", flag=5)
+
+        self.assertEqual(entry.type_label, "未知(5)")
+        self.assertEqual(entry.candidate_paths, ("icon.blp", "war3mapImported\\icon.blp"))
+        self.assertEqual(entry.extension, "blp")
 
     def test_empty_list(self):
         self.assertEqual(parse_imp(_build(1, [])), [])
@@ -82,9 +100,40 @@ class TestImportedNamesForExport(unittest.TestCase):
         self.assertIn("war3mapImported\\model.mdx", names)
         self.assertIn("war3mapImported\\icon.blp", names)
 
+    def test_import_flags_shape_export_candidates(self):
+        from w3xtool.api import _imported_names
+        imp = _build(1, [(8, "icon.blp"), (13, "ReplaceableTextures\\custom.blp")])
+        arch = _FakeArchive({"war3map.imp": imp})
+
+        names = _imported_names(arch)
+
+        self.assertIn("war3mapImported\\icon.blp", names)
+        self.assertIn("icon.blp", names)
+        self.assertIn("ReplaceableTextures\\custom.blp", names)
+        self.assertNotIn("war3mapImported\\ReplaceableTextures\\custom.blp", names)
+
     def test_no_imp_returns_empty(self):
         from w3xtool.api import _imported_names
         self.assertEqual(_imported_names(_FakeArchive({})), [])
+
+    def test_add_import_summary_reports_missing_resources(self):
+        from w3xtool.api import MapData
+        from w3xtool.map_extras import add_import_summary
+
+        imp = _build(1, [(8, "icon.blp"), (13, "ReplaceableTextures\\custom.blp")])
+        arch = _FakeArchive({
+            "war3map.imp": imp,
+            "war3mapImported\\icon.blp": b"BLP",
+        })
+        md = MapData(path="x.w3x", name="x")
+
+        add_import_summary(md, arch)
+
+        self.assertEqual(md.import_summary.entry_count, 2)
+        self.assertEqual(md.import_summary.standard_count, 1)
+        self.assertEqual(md.import_summary.custom_count, 1)
+        self.assertEqual(md.import_summary.resolved_paths, ("war3mapImported\\icon.blp",))
+        self.assertEqual(md.import_summary.missing_paths, ("ReplaceableTextures\\custom.blp",))
 
 
 if __name__ == "__main__":

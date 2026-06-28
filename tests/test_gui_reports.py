@@ -2,7 +2,10 @@
 import unittest
 
 from w3xtool.api import GameObject, MapData
+from w3xtool.gameconfig import GameConfiguration, GameConfigPlayer, NamedGameConfiguration
 from w3xtool.gui_reports import build_analysis_blocks, build_overview_blocks, format_blocks
+from w3xtool.mmp import PreviewIcon, PreviewIconSummary
+from w3xtool.wtg import TriggerCategory, TriggerHeader, TriggerTreeSummary, TriggerVariable
 
 
 class GuiReportTest(unittest.TestCase):
@@ -67,6 +70,79 @@ class GuiReportTest(unittest.TestCase):
         self.assertIn("秘籍/调试口令", text)
         self.assertIn("闪电链", text)
         self.assertIn("whosyourdaddy", text)
+
+    def test_reports_include_game_config_details(self):
+        # Given: a map with an internal World Editor AI test configuration.
+        md = MapData(path="x.w3x", name="配置图")
+        md.game_configs = [
+            NamedGameConfiguration(
+                "testconfig.wgc",
+                GameConfiguration(
+                    format_version=1,
+                    flags=0x01,
+                    base_speed=4,
+                    map_path="Maps\\Anime\\Test.w3x",
+                    players=(GameConfigPlayer(1, 0, 0x02, 1, 90, 0x04, 2, "AI Scripts\\rush.ai"),),
+                ),
+            )
+        ]
+
+        # When: overview and analysis blocks are formatted.
+        overview = format_blocks(build_overview_blocks(md))
+        analysis = format_blocks(build_analysis_blocks(md))
+
+        # Then: both surfaces make the configuration discoverable.
+        self.assertIn("游戏配置 1", overview)
+        self.assertIn("testconfig.wgc", analysis)
+        self.assertIn("400%", analysis)
+        self.assertIn("AI Scripts\\rush.ai", analysis)
+
+    def test_reports_include_trigger_tree_details(self):
+        # Given: parsed trigger metadata from war3map.wtg.
+        md = MapData(path="x.w3x", name="触发图")
+        md.trigger_summary = TriggerTreeSummary(
+            version=7,
+            is_reforged=True,
+            category_count=1,
+            variable_count=1,
+            trigger_count=1,
+            comment_count=1,
+            script_count=1,
+            categories=(TriggerCategory(1, "系统"),),
+            variables=(TriggerVariable("Count", "integer", 1, False, 1, True, "5"),),
+            triggers=(TriggerHeader("初始化", "", False, True, False, False, True, 1, 0),),
+        )
+
+        # When: overview and analysis blocks are formatted.
+        overview = format_blocks(build_overview_blocks(md))
+        analysis = format_blocks(build_analysis_blocks(md))
+
+        # Then: WTG metadata appears in the editor reports.
+        self.assertIn("触发器树 1", overview)
+        self.assertIn("触发器树", analysis)
+        self.assertIn("系统", analysis)
+        self.assertIn("Count", analysis)
+
+    def test_reports_include_preview_icons(self):
+        # Given: parsed minimap preview icons.
+        md = MapData(path="x.w3x", name="标记图")
+        md.preview_icons = PreviewIconSummary(
+            version=0,
+            icons=(
+                PreviewIcon(2, 12, 34, (255, 0, 0), 255),
+                PreviewIcon(0, 80, 90, (255, 215, 0), 255),
+            ),
+        )
+
+        # When: overview and analysis blocks are formatted.
+        overview = format_blocks(build_overview_blocks(md))
+        analysis = format_blocks(build_analysis_blocks(md))
+
+        # Then: preview icon counts are visible in GUI reports.
+        self.assertIn("小地图标记 2", overview)
+        self.assertIn("小地图标记", analysis)
+        self.assertIn("玩家出生点", analysis)
+        self.assertIn("金矿 1", analysis)
 
 
 if __name__ == "__main__":

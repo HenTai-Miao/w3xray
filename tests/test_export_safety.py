@@ -84,6 +84,44 @@ class TestExportUnrecoverableBlocks(unittest.TestCase):
             self.assertIn("file_size=99", manifest)
 
 
+class TestKnownWorldMetadataExport(unittest.TestCase):
+    def test_world_metadata_files_export_without_listfile(self):
+        class Archive:
+            def __init__(self):
+                self._files = {
+                    "war3map.w3r": b"regions",
+                    "war3map.w3c": b"cameras",
+                    "war3map.w3s": b"sounds",
+                }
+
+            def list_files(self):
+                return []
+
+            def has_file(self, name):
+                return name in self._files
+
+            def read_file(self, name):
+                return self._files[name]
+
+            def block_index_of(self, _name):
+                return None
+
+            def iter_blocks(self):
+                return iter(())
+
+            def read_block_anon(self, _block):
+                return None
+
+        with tempfile.TemporaryDirectory() as out:
+            _export_all_impl(Archive(), out, 1)
+            with open(os.path.join(out, "war3map.w3r"), "rb") as f:
+                self.assertEqual(f.read(), b"regions")
+            with open(os.path.join(out, "war3map.w3c"), "rb") as f:
+                self.assertEqual(f.read(), b"cameras")
+            with open(os.path.join(out, "war3map.w3s"), "rb") as f:
+                self.assertEqual(f.read(), b"sounds")
+
+
 class TestRecoveredNamedExport(unittest.TestCase):
     def test_exports_hash_matched_name_from_model_reference(self):
         model = _Block(file_pos=0, comp_size=1, file_size=1, flags=FLAG_EXISTS)

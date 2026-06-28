@@ -30,14 +30,16 @@ SCRIPT_FILES = ["war3map.j", "war3map.lua", "war3map.wts", "war3map.wtg", "war3m
 KNOWN_EXPORT_FILES = [
     "war3map.w3u", "war3map.w3t", "war3map.w3a", "war3map.w3q",
     "war3map.w3b", "war3map.w3d", "war3map.w3h", "war3map.j",
-    "war3map.lua", "war3map.wts", "war3map.w3i", "war3map.w3e",
+    "war3map.lua", "war3map.wts", "war3map.wtg", "war3map.wct",
+    "war3map.w3i", "war3map.w3e",
+    "war3map.w3r", "war3map.w3c", "war3map.w3s", "war3map.wgc",
     "war3mapUnits.doo", "war3map.doo", "war3map.shd", "war3map.mmp",
-    "war3mapMap.blp", "war3map.wpm", "(listfile)",
+    "war3mapMap.blp", "war3map.wpm", "testconfig.wgc", "(listfile)",
 ]
 _RESOURCE_NAME_RE = re.compile(
     rb"(?i)([A-Za-z0-9_ .()\\/\-]{1,240}\."
-    rb"(?:blp|mdx|mdl|wav|mp3|ogg|tga|dds|txt|slk|ttf|j|lua|doo|"
-    rb"w3u|w3t|w3a|w3q|w3b|w3d|w3h))"
+    rb"(?:blp|mdx|mdl|wav|mp3|ogg|tga|dds|txt|slk|ttf|j|lua|doo|wtg|wct|"
+    rb"w3u|w3t|w3a|w3q|w3b|w3d|w3h|w3r|w3c|w3s|wgc))"
 )
 
 
@@ -95,6 +97,13 @@ class MapData:
     obj_index: dict = field(default_factory=dict)  # type_id -> GameObject
     doodads: list = field(default_factory=list)    # 预放置装饰物/可破坏物 (doo.Doodad)
     units: list = field(default_factory=list)       # 预放置单位 (doo.Unit)
+    regions: list = field(default_factory=list)     # war3map.w3r 区域
+    cameras: list = field(default_factory=list)     # war3map.w3c 镜头
+    sounds: list = field(default_factory=list)      # war3map.w3s 声音
+    game_configs: list = field(default_factory=list)  # .wgc 游戏/AI 测试配置
+    trigger_summary: object = None                  # war3map.wtg 触发器树摘要
+    preview_icons: object = None                    # war3map.mmp 小地图标记摘要
+    import_summary: object = None                   # war3map.imp 导入资源摘要
     w3i: object = None                              # 地图信息 (w3i.W3iInfo)，无则 None
     w3f: object = None                              # 战役信息 (w3i.W3fInfo)，仅 .w3n 有
     references: dict = field(default_factory=dict)  # 正向引用 obj_id -> [(字段标签, [(码, 名字|None)])]
@@ -485,6 +494,18 @@ def _load_map_impl(archive: MPQArchive, path: str, _depth: int,
     _add_w3f(md, archive, wts)
     # 预放置实例（单位/装饰物"摆在哪、归谁"）—— 对象定义之外的另一维信息
     _add_preplaced(md, archive)
+    from .map_extras import (
+        add_game_configs,
+        add_import_summary,
+        add_preview_icons,
+        add_trigger_summary,
+        add_world_metadata,
+    )
+    add_world_metadata(md, archive, wts)
+    add_game_configs(md, archive)
+    add_trigger_summary(md, archive)
+    add_preview_icons(md, archive)
+    add_import_summary(md, archive)
     # war3map.wct 自定义脚本解码成可读文本并入脚本（原始 wct 是二进制）
     _add_wct(md, archive)
 
@@ -688,15 +709,13 @@ def _imported_names(archive: MPQArchive) -> list:
     if not archive.has_file("war3map.imp"):
         return []
     try:
-        from .imp import parse_imp
+        from .imp import parse_import_entries
         raw = archive.read_file("war3map.imp")
     except Exception:
         return []
     names = []
-    for name in parse_imp(raw):
-        names.append(name)
-        if not archive.has_file(name):
-            names.append("war3mapImported\\" + name)
+    for entry in parse_import_entries(raw):
+        names.extend(entry.candidate_paths)
     return names
 
 

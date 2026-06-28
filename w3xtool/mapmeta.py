@@ -11,6 +11,7 @@ STRUCTURE_FILES: Final = (
     "war3map.w3c",
     "war3map.w3s",
     "war3map.wpm",
+    "war3map.shd",
 )
 _MAX_COUNT: Final = 1_000_000
 _MAX_STRINGS: Final = 50
@@ -22,6 +23,22 @@ class PathingSummary:
     width: int
     height: int
     cells: int
+    no_walk: int = 0
+    no_fly: int = 0
+    no_build: int = 0
+    blight: int = 0
+    no_water: int = 0
+    unknown: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class ShadowSummary:
+    width: int | None
+    height: int | None
+    cells: int
+    shadowed: int
+    unshadowed: int
+    unknown: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +47,7 @@ class MapStructureReport:
     cameras: int | None = None
     sounds: int | None = None
     pathing: PathingSummary | None = None
+    shadow: ShadowSummary | None = None
     region_strings: tuple[str, ...] = ()
     camera_strings: tuple[str, ...] = ()
     sound_strings: tuple[str, ...] = ()
@@ -41,6 +59,7 @@ class MapStructureReport:
             self.cameras,
             self.sounds,
             self.pathing,
+            self.shadow,
             self.region_strings,
             self.camera_strings,
             self.sound_strings,
@@ -75,13 +94,50 @@ def parse_structure_strings(data: bytes, magic: bytes) -> tuple[str, ...]:
 
 
 def parse_wpm_summary(data: bytes) -> PathingSummary | None:
-    """解析 war3map.wpm 路径图头部尺寸。"""
+    """解析 war3map.wpm 路径图尺寸与 pathing flag 统计。"""
     if len(data) < 16 or data[:4] != b"MP3W":
         return None
     width, height = struct.unpack_from("<ii", data, 8)
     if width <= 0 or height <= 0 or width > _MAX_COUNT or height > _MAX_COUNT:
         return None
-    return PathingSummary(width=width, height=height, cells=width * height)
+    cells = width * height
+    end = 16 + cells
+    if len(data) < end:
+        return None
+    payload = data[16:end]
+    return PathingSummary(
+        width=width,
+        height=height,
+        cells=cells,
+        no_walk=_count_flag(payload, 0x02),
+        no_fly=_count_flag(payload, 0x04),
+        no_build=_count_flag(payload, 0x08),
+        blight=_count_flag(payload, 0x20),
+        no_water=_count_flag(payload, 0x40),
+        unknown=_count_flag(payload, 0x80),
+    )
+
+
+def _count_flag(data: bytes, flag: int) -> int:
+    return sum(1 for cell in data if cell & flag)
+
+
+def parse_shd_summary(data: bytes, pathing: PathingSummary | None = None) -> ShadowSummary | None:
+    """解析 war3map.shd 阴影图，必要时用路径图尺寸校验。"""
+    if not data:
+        return None
+    if pathing is not None and len(data) != pathing.cells:
+        return None
+    shadowed = data.count(0xFF)
+    unshadowed = data.count(0x00)
+    return ShadowSummary(
+        width=pathing.width if pathing is not None else None,
+        height=pathing.height if pathing is not None else None,
+        cells=len(data),
+        shadowed=shadowed,
+        unshadowed=unshadowed,
+        unknown=len(data) - shadowed - unshadowed,
+    )
 
 
 def build_map_structure_report(files: dict[str, bytes]) -> MapStructureReport:
@@ -90,11 +146,13 @@ def build_map_structure_report(files: dict[str, bytes]) -> MapStructureReport:
     region_data = lowered.get("war3map.w3r", b"")
     camera_data = lowered.get("war3map.w3c", b"")
     sound_data = lowered.get("war3map.w3s", b"")
+    pathing = parse_wpm_summary(lowered.get("war3map.wpm", b""))
     return MapStructureReport(
         regions=parse_counted_structure(region_data, b"W3R!"),
         cameras=parse_counted_structure(camera_data, b"W3C!"),
         sounds=parse_counted_structure(sound_data, b"W3S!"),
-        pathing=parse_wpm_summary(lowered.get("war3map.wpm", b"")),
+        pathing=pathing,
+        shadow=parse_shd_summary(lowered.get("war3map.shd", b""), pathing),
         region_strings=parse_structure_strings(region_data, b"W3R!"),
         camera_strings=parse_structure_strings(camera_data, b"W3C!"),
         sound_strings=parse_structure_strings(sound_data, b"W3S!"),

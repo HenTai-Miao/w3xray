@@ -48,10 +48,11 @@ STATIC_MAP_FILES = [
     "war3map.wtg", "war3map.wct",
     # 地图信息 / 地形 / 预览
     "war3map.w3i", "war3map.w3e", "war3map.w3r", "war3map.w3c",
-    "war3map.w3s", "war3map.shd", "war3map.wpm", "war3map.mmp",
+    "war3map.w3s", "war3map.wgc", "war3map.shd", "war3map.wpm", "war3map.mmp",
     "war3map.imp", "war3mapMap.blp", "war3mapMap.tga", "war3mapPath.tga",
     "war3mapPreview.tga", "war3mapPreview.blp",
     "war3mapUnits.doo", "war3map.doo",
+    "testconfig.wgc",
     # 文本档
     "war3mapExtra.txt", "war3mapMisc.txt", "war3mapSkin.txt", "war3map.txt.ini",
     # MPQ 内部表
@@ -687,12 +688,12 @@ class MPQArchive:
         # 3) war3map.imp 导入清单：相对名直查不到时补 war3mapImported\ 前缀
         if self.has_file("war3map.imp"):
             try:
-                from .imp import parse_imp
-                for n in parse_imp(self.read_file("war3map.imp")):
-                    if self.has_file(n):
-                        add(n, verify=False)
-                    else:
-                        add("war3mapImported\\" + n, verify=True)
+                from .imp import parse_import_entries
+                for entry in parse_import_entries(self.read_file("war3map.imp")):
+                    for n in entry.candidate_paths:
+                        if self.has_file(n):
+                            add(n, verify=False)
+                            break
             except Exception:
                 pass
 

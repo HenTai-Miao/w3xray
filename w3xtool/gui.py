@@ -24,38 +24,56 @@ from .api import (load_map, commands_from_map, recipes_from_map,
 from .search import compile_query
 from .icons import IconResolver
 from .gui_report_tabs import ReportTabsMixin
+from .map_gallery import MapEntry, build_map_gallery, render_map_gallery
+from .map_info import format_map_info
+from .object_gallery import build_object_gallery, render_object_gallery
+from .theme import (
+    ACCENT,
+    ACCENT_DARK,
+    ACCENT_HOVER,
+    BG,
+    BORDER,
+    CARD,
+    CARD_RAISED,
+    CATEGORY_COLORS,
+    FONT,
+    HEADER,
+    INFO,
+    LAYOUT_VERSION,
+    MONO_FONT,
+    MUTED,
+    PANEL,
+    PARALLEL_CATS,
+    ROW_ALT,
+    SECONDARY,
+    SECONDARY_HOVER,
+    SEL_BG,
+    SEL_TEXT,
+    SUBTLE,
+    TEXT,
+    TEXT_STRONG,
+    TITLE_FONT,
+    TOPBAR,
+    card_style,
+    entry_style,
+    primary_button_style,
+    secondary_button_style,
+)
 from PIL import Image, ImageTk
 try:
     from .base_names import BASE_NAMES
 except Exception:
     BASE_NAMES = {}
 
-ctk.set_appearance_mode("dark")
-ctk.set_default_color_theme("blue")
-
-FONT = "JetBrains Mono"
-# Darcula 风（JetBrains 深色）
-_LAYOUT_VERSION = 2        # 布局结构版本（变更后忽略旧的分隔条配置）
-ACCENT = "#3592c4"         # Darcula 蓝
-ACCENT_HOVER = "#4aa3d5"
-CARD = "#3c3f41"           # 面板
-BG = "#2b2b2b"             # 编辑器底
-TEXT = "#a9b7c6"
-SUBTLE = "#808080"
-BORDER = "#323232"
-ROW_ALT = "#323436"
-SEL_BG = "#2d5177"         # Darcula 选中蓝
-SECONDARY = "#4c5052"
-SECONDARY_HOVER = "#5c6164"
-PANEL = "#2b2b2b"          # 文本框/画布底
-PARALLEL_CATS = ["物品", "单位", "技能", "科技"]
+ctk.set_appearance_mode("light")
+ctk.set_default_color_theme("green")
 
 
 class App(ReportTabsMixin, ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("魔兽地图提取器")
-        self.geometry("1380x800")
+        self.title("W3XRAY 魔兽地图提取器")
+        self.geometry("1440x860")
         self.minsize(1040, 640)
         self.configure(fg_color=BG)
 
@@ -92,36 +110,65 @@ class App(ReportTabsMixin, ctk.CTk):
 
     # ---------- 顶栏 ----------
     def _build_topbar(self):
-        bar = ctk.CTkFrame(self, fg_color=CARD, corner_radius=0, height=64)
+        bar = ctk.CTkFrame(self, fg_color=TOPBAR, corner_radius=0, height=78,
+                           border_width=1, border_color=BORDER)
         bar.pack(fill="x", side="top")
         bar.pack_propagate(False)
-        ctk.CTkLabel(bar, text="  ⚔  魔兽地图提取器", font=(FONT, 16, "bold")).pack(side="left", padx=10)
+        brand = ctk.CTkFrame(bar, fg_color="transparent")
+        brand.pack(side="left", padx=(18, 14), pady=10)
+        ctk.CTkLabel(brand, text="W3XRAY", font=(TITLE_FONT, 22, "bold"),
+                     text_color=ACCENT).pack(anchor="w")
+        ctk.CTkLabel(brand, text="魔兽地图提取器", font=(FONT, 12),
+                     text_color=SUBTLE).pack(anchor="w", pady=(1, 0))
+
         ctk.CTkButton(bar, text="打开地图 / 战役", font=(FONT, 14, "bold"),
-                      width=140, height=38, command=self.on_open).pack(side="left", padx=8)
-        self.map_label = ctk.CTkLabel(bar, text="未打开", font=(FONT, 13), text_color=SUBTLE)
-        self.map_label.pack(side="left", padx=12)
-        ctk.CTkButton(bar, text="导出全部文件", font=(FONT, 13), width=110, height=34,
-                      fg_color=SECONDARY, hover_color=SECONDARY_HOVER, text_color=TEXT,
-                      command=self.on_export_all).pack(side="right", padx=6)
-        ctk.CTkButton(bar, text="导出脚本", font=(FONT, 13), width=90, height=34,
-                      fg_color=SECONDARY, hover_color=SECONDARY_HOVER, text_color=TEXT,
-                      command=self.on_export_scripts).pack(side="right", padx=6)
-        ctk.CTkButton(bar, text="导出ID列表", font=(FONT, 12), width=92, height=30,
-                      fg_color=SECONDARY, hover_color=SECONDARY_HOVER, text_color=TEXT,
-                      command=self.on_export_ids).pack(side="right", padx=5)
+                      width=150, height=42, command=self.on_open,
+                      **primary_button_style()).pack(side="left", padx=(0, 14))
+        self.map_label = ctk.CTkLabel(
+            bar, text="未打开", font=(FONT, 13), text_color=TEXT,
+            fg_color=PANEL, corner_radius=6, height=34)
+        self.map_label.pack(side="left", fill="x", expand=True, padx=(0, 16))
+
+        actions = ctk.CTkFrame(bar, fg_color="transparent")
+        actions.pack(side="right", padx=(0, 16))
+        ctk.CTkButton(actions, text="导出全部", font=(FONT, 13), width=96, height=34,
+                      command=self.on_export_all,
+                      **secondary_button_style()).pack(side="right", padx=4)
+        ctk.CTkButton(actions, text="导出脚本", font=(FONT, 13), width=88, height=34,
+                      command=self.on_export_scripts,
+                      **secondary_button_style()).pack(side="right", padx=4)
+        ctk.CTkButton(actions, text="导出ID", font=(FONT, 13), width=78, height=34,
+                      command=self.on_export_ids,
+                      **secondary_button_style()).pack(side="right", padx=4)
 
     def _build_tabs(self):
-        # 一级：对战图 | 战役图（左右切换）
-        self.mode_seg = ctk.CTkSegmentedButton(
-            self, values=["对战图", "战役图"], command=self._on_mode_change,
-            font=(FONT, 14, "bold"), height=34,
-            selected_color=ACCENT, selected_hover_color=ACCENT_HOVER,
-            unselected_color=CARD, fg_color=BG)
-        self.mode_seg.set("对战图")
-        self.mode_seg.pack(pady=(8, 2))
+        shell = ctk.CTkFrame(self, fg_color=BG)
+        shell.pack(fill="both", expand=True, padx=14, pady=(10, 8))
 
-        self.tabs = ctk.CTkTabview(self, fg_color=BG, segmented_button_selected_color=ACCENT)
-        self.tabs.pack(fill="both", expand=True, padx=10, pady=(2, 6))
+        source = ctk.CTkFrame(shell, fg_color=TOPBAR, corner_radius=22,
+                              border_width=1, border_color=BORDER, height=54)
+        source.pack(fill="x", pady=(0, 8))
+        source.pack_propagate(False)
+        ctk.CTkLabel(source, text="图源", font=(FONT, 11, "bold"),
+                     text_color=MUTED).pack(side="left", padx=(16, 8))
+        self.mode_seg = ctk.CTkSegmentedButton(
+            source, values=["对战图", "战役图"], command=self._on_mode_change,
+            font=(FONT, 12, "bold"), height=32,
+            selected_color=ACCENT_DARK, selected_hover_color=ACCENT_HOVER,
+            unselected_color=CARD, unselected_hover_color=CARD_RAISED,
+            fg_color=PANEL, text_color=TEXT)
+        self.mode_seg.set("对战图")
+        self.mode_seg.pack(side="left", pady=10)
+
+        self.tabs = ctk.CTkTabview(
+            shell, fg_color=BG,
+            segmented_button_selected_color=ACCENT_DARK,
+            segmented_button_selected_hover_color=ACCENT_HOVER,
+            segmented_button_unselected_color=CARD,
+            segmented_button_unselected_hover_color=CARD_RAISED,
+            text_color=TEXT,
+        )
+        self.tabs.pack(fill="both", expand=True, padx=0, pady=(0, 2))
         self.editor_tab_labels = (
             "总览", "对象编辑器", "地图信息", "场景放置", "触发指令", "合成配方", "孤立对象", "分析报告")
         self.tab_overview = self.tabs.add("总览")
@@ -143,13 +190,21 @@ class App(ReportTabsMixin, ctk.CTk):
         self._refresh_editor_reports()
 
     def _build_obj_tab(self, parent):
+        head = ctk.CTkFrame(parent, fg_color=BG)
+        head.pack(fill="x", padx=2, pady=(2, 6))
+        ctk.CTkLabel(head, text="对象解剖台", font=(TITLE_FONT, 18, "bold"),
+                     text_color=TEXT_STRONG, anchor="w").pack(side="left")
+        ctk.CTkLabel(head, text="物品 · 单位 · 技能 · 科技", font=(FONT, 12),
+                     text_color=SUBTLE).pack(side="left", padx=12)
+
         # 顶部搜索（过滤所有列）
         ctrl = ctk.CTkFrame(parent, fg_color=BG)
-        ctrl.pack(fill="x", padx=4, pady=(6, 6))
+        ctrl.pack(fill="x", padx=2, pady=(0, 8))
         self.search_var = tk.StringVar()
-        se = ctk.CTkEntry(ctrl, textvariable=self.search_var, height=32, font=(FONT, 12),
+        se = ctk.CTkEntry(ctrl, textvariable=self.search_var, height=40, font=(FONT, 13),
                           justify="center",
-                          placeholder_text='🔍  回车搜索　名称/ID/描述　%词%=包含　="…"=精准　&&=且　||=或　例：%蓝宝石% && ="等级:E"')
+                          placeholder_text='回车搜索：名称 / ID / 字段内容    %词%=包含    ="…"=精准    && / ||',
+                          **entry_style())
         se.pack(fill="x")
         se.bind("<Return>", lambda *_: self._refresh_list())   # 回车再搜：逐键不重建，大图不卡
         self._attach_ctx_menu(se, paste=True)
@@ -162,92 +217,97 @@ class App(ReportTabsMixin, ctk.CTk):
         self.paned = paned
 
         # 左：地图列表（对战图=文件夹地图；战役图=战役共享+各子图）
-        leftp = ctk.CTkFrame(paned, fg_color=CARD, corner_radius=8, width=130)
-        self.left_brow = ctk.CTkFrame(leftp, fg_color=CARD)
+        leftp = ctk.CTkFrame(paned, width=150, **card_style())
+        self.left_brow = ctk.CTkFrame(leftp, fg_color="transparent")
         self.left_brow.pack(fill="x", padx=8, pady=(8, 4))
-        ctk.CTkButton(self.left_brow, text="选择地图目录", height=30, font=(FONT, 12),
-                      command=self.on_pick_dir).pack(side="left", fill="x", expand=True)
+        ctk.CTkButton(self.left_brow, text="选择目录", height=32, font=(FONT, 12, "bold"),
+                      command=self.on_pick_dir,
+                      **secondary_button_style()).pack(side="left", fill="x", expand=True)
         ctk.CTkButton(self.left_brow, text="⟳", width=30, height=30, font=(FONT, 14),
                       fg_color=SECONDARY, hover_color=SECONDARY_HOVER, text_color=TEXT,
+                      corner_radius=6,
                       command=self.on_refresh_dir).pack(side="right", padx=(4, 0))
         self.left_title = ctk.CTkLabel(leftp, text="地图列表", font=(FONT, 12, "bold"),
-                                       anchor="w")
+                                       text_color=TEXT_STRONG, anchor="w")
         self.left_title.pack(fill="x", padx=10)
         self.map_search = tk.StringVar()
         mse = ctk.CTkEntry(leftp, textvariable=self.map_search, height=28, font=(FONT, 11),
-                           justify="center", placeholder_text="🔍 回车搜索…")
+                           justify="center", placeholder_text="回车搜索地图",
+                           **entry_style())
         mse.pack(fill="x", padx=8, pady=(0, 4))
         mse.bind("<Return>", lambda *_: self._populate_left())   # 回车再过滤地图列表
         self._attach_ctx_menu(mse, paste=True)
-        mlw = tk.Frame(leftp, bg=CARD)
-        mlw.pack(fill="both", expand=True, padx=6, pady=6)
-        self.map_list = ttk.Treeview(mlw, show="tree", selectmode="browse")
+        self.map_gallery = build_map_gallery(leftp)
+        legacy_maps = tk.Frame(leftp, bg=CARD)
+        self.map_list = ttk.Treeview(legacy_maps, show="tree", selectmode="browse")
         self.map_list.column("#0", stretch=False)        # 配合横向滚动看全长地图名
-        mvsb = ttk.Scrollbar(mlw, orient="vertical", command=self.map_list.yview)
-        mhsb = ttk.Scrollbar(mlw, orient="horizontal", command=self.map_list.xview)
+        mvsb = ttk.Scrollbar(legacy_maps, orient="vertical", command=self.map_list.yview)
+        mhsb = ttk.Scrollbar(legacy_maps, orient="horizontal", command=self.map_list.xview)
         self.map_list.configure(yscrollcommand=mvsb.set, xscrollcommand=mhsb.set)
-        mvsb.pack(side="right", fill="y")
-        mhsb.pack(side="bottom", fill="x")
-        self.map_list.pack(side="left", fill="both", expand=True)
         self.map_list.bind("<Double-1>", self._on_map_pick)   # 双击才加载/切换
         self.map_list.bind("<<TreeviewOpen>>", self._on_tree_open)
+        self._map_gallery_entries = []
+        self._render_map_gallery()
         self._dir_maps = []
         paned.add(leftp, weight=2)
 
-        # 中：物品/单位/技能/科技 四列（各为可拖拽面板）
+        # 中：对象卡片网格。旧 Treeview 保留在隐藏兼容层，主视觉不再是四个竖向表格。
         self.col_trees = {}
         self.col_results = {}
         self.col_headers = {}
-        for i, cat in enumerate(PARALLEL_CATS):
-            col = ctk.CTkFrame(paned, fg_color=CARD, corner_radius=8, width=200)
-            hdr = ctk.CTkLabel(col, text=cat, font=(FONT, 12, "bold"))
-            hdr.pack(fill="x", pady=(5, 2))
+        self.active_object_category = PARALLEL_CATS[0]
+        self.object_gallery = build_object_gallery(paned, self._on_object_category)
+        self.object_gallery_hint = self.object_gallery.hint
+        self.object_cat_buttons = self.object_gallery.buttons
+        self.object_cards = self.object_gallery.cards
+        paned.add(self.object_gallery.container, weight=8)
+
+        legacy = tk.Frame(self.object_gallery.container)
+        for cat in PARALLEL_CATS:
+            hdr = ctk.CTkLabel(self.object_gallery.container, text=cat)
             self.col_headers[cat] = hdr
-            w = tk.Frame(col, bg=CARD)
-            w.pack(fill="both", expand=True, padx=5, pady=(0, 6))
-            tv = ttk.Treeview(w, show="tree", selectmode="browse")
+            tv = ttk.Treeview(legacy, show="tree", selectmode="browse")
             tv.column("#0", width=80, minwidth=50, stretch=False, anchor="w")
-            vsb = ttk.Scrollbar(w, orient="vertical", command=tv.yview)
-            hsb = ttk.Scrollbar(w, orient="horizontal", command=tv.xview)
-            tv.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
-            vsb.pack(side="right", fill="y")
-            hsb.pack(side="bottom", fill="x")
-            tv.pack(side="left", fill="both", expand=True)
-            tv.bind("<<TreeviewSelect>>", lambda e, c=cat: self._on_col_select(c))  # 单击看详情
-            self._attach_tree_copy(tv)                                            # 右键复制名字
+            hsb = ttk.Scrollbar(legacy, orient="horizontal", command=tv.xview)
+            tv.configure(xscrollcommand=hsb.set)
+            tv.bind("<<TreeviewSelect>>", lambda e, c=cat: self._on_col_select(c))
+            self._attach_tree_copy(tv)
             self.col_trees[cat] = tv
             self.col_results[cat] = []
-            paned.add(col, weight=3)
 
         # 右：描述
-        rightp = ctk.CTkFrame(paned, fg_color=CARD, corner_radius=8, width=300)
+        rightp = ctk.CTkFrame(paned, width=340, **card_style())
         self.detail_title = ctk.CTkLabel(rightp, text="选择条目查看详情", font=(FONT, 15, "bold"),
-                                         anchor="w", justify="left", wraplength=420)
+                                         text_color=TEXT_STRONG, anchor="w",
+                                         justify="left", wraplength=440)
         self.detail_title.pack(fill="x", padx=14, pady=(12, 2))
         self.detail_sub = ctk.CTkLabel(rightp, text="", font=(FONT, 11),
                                        text_color=SUBTLE, anchor="w", wraplength=420, justify="left")
         self.detail_sub.pack(fill="x", padx=12)
-        self.detail = ctk.CTkTextbox(rightp, font=(FONT, 12),
-                                     fg_color=PANEL, wrap="word")
+        self.detail = ctk.CTkTextbox(rightp, font=(MONO_FONT, 12),
+                                     fg_color=PANEL, text_color=TEXT,
+                                     border_width=1, border_color=BORDER, wrap="word")
         self.detail.pack(fill="both", expand=True, padx=10, pady=10)
         self.detail.configure(state="disabled")
         self._attach_ctx_menu(self.detail, copy_all=True)
         paned.add(rightp, weight=4)
+        self._render_object_cards()
 
     def _build_cmd_tab(self, parent):
         top = ctk.CTkFrame(parent, fg_color=BG)
-        top.pack(fill="x", padx=4, pady=(8, 6))
+        top.pack(fill="x", padx=2, pady=(8, 6))
         self.cmd_search = tk.StringVar()
-        cse = ctk.CTkEntry(top, textvariable=self.cmd_search, height=38, font=(FONT, 14),
+        cse = ctk.CTkEntry(top, textvariable=self.cmd_search, height=40, font=(FONT, 13),
                            justify="center",
-                           placeholder_text='🔍  回车搜索　指令/说明　%词%=包含　="…"=精准　&&=且　||=或')
+                           placeholder_text='回车搜索：指令 / 说明    %词%=包含    ="…"=精准',
+                           **entry_style())
         cse.pack(fill="x")
         cse.bind("<Return>", lambda *_: self._refresh_cmds())   # 回车再搜
         self._attach_ctx_menu(cse, paste=True)
         self.cmd_hint = ctk.CTkLabel(parent, text="打开地图后这里列出脚本里的全部聊天指令（含隐藏指令）",
                                      font=(FONT, 12), text_color=SUBTLE, anchor="w")
         self.cmd_hint.pack(fill="x", padx=6, pady=(0, 6))
-        wrap = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=12)
+        wrap = ctk.CTkFrame(parent, **card_style())
         wrap.pack(fill="both", expand=True)
         inner = tk.Frame(wrap, bg=CARD)
         inner.pack(fill="both", expand=True, padx=8, pady=8)
@@ -267,18 +327,19 @@ class App(ReportTabsMixin, ctk.CTk):
 
     def _build_rec_tab(self, parent):
         top = ctk.CTkFrame(parent, fg_color=BG)
-        top.pack(fill="x", padx=4, pady=(8, 6))
+        top.pack(fill="x", padx=2, pady=(8, 6))
         self.rec_search = tk.StringVar()
-        rse = ctk.CTkEntry(top, textvariable=self.rec_search, height=38, font=(FONT, 14),
+        rse = ctk.CTkEntry(top, textvariable=self.rec_search, height=40, font=(FONT, 13),
                            justify="center",
-                           placeholder_text='🔍  回车搜索　材料/成品名称　%词%=包含　="…"=精准　&&=且　||=或')
+                           placeholder_text='回车搜索：材料 / 成品名称    %词%=包含    ="…"=精准',
+                           **entry_style())
         rse.pack(fill="x")
         rse.bind("<Return>", lambda *_: self._refresh_recipes())   # 回车再搜
         self._attach_ctx_menu(rse, paste=True)
         self.rec_hint = ctk.CTkLabel(parent, text="打开地图后这里列出脚本里识别到的物品合成配方",
                                      font=(FONT, 12), text_color=SUBTLE, anchor="w")
         self.rec_hint.pack(fill="x", padx=6, pady=(0, 6))
-        wrap = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=12)
+        wrap = ctk.CTkFrame(parent, **card_style())
         wrap.pack(fill="both", expand=True)
         inner = tk.Frame(wrap, bg=CARD)
         inner.pack(fill="both", expand=True, padx=8, pady=8)
@@ -299,11 +360,12 @@ class App(ReportTabsMixin, ctk.CTk):
     def _build_orphan_tab(self, parent):
         """孤立对象：定义了、但没被任何对象/脚本/预放置引用的自定义对象（只读报告）。"""
         top = ctk.CTkFrame(parent, fg_color=BG)
-        top.pack(fill="x", padx=4, pady=(8, 6))
+        top.pack(fill="x", padx=2, pady=(8, 6))
         self.orphan_search = tk.StringVar()
-        ose = ctk.CTkEntry(top, textvariable=self.orphan_search, height=38, font=(FONT, 14),
+        ose = ctk.CTkEntry(top, textvariable=self.orphan_search, height=40, font=(FONT, 13),
                            justify="center",
-                           placeholder_text='🔍  回车搜索　名称/ID/分类　%词%=包含　="…"=精准　&&=且　||=或')
+                           placeholder_text='回车搜索：名称 / ID / 分类    %词%=包含    ="…"=精准',
+                           **entry_style())
         ose.pack(fill="x")
         ose.bind("<Return>", lambda *_: self._refresh_orphans())
         self._attach_ctx_menu(ose, paste=True)
@@ -311,7 +373,7 @@ class App(ReportTabsMixin, ctk.CTk):
             parent, text="打开地图后这里列出「孤立」自定义对象——定义了但没被任何对象/脚本/预放置引用的废弃对象",
             font=(FONT, 12), text_color=SUBTLE, anchor="w")
         self.orphan_hint.pack(fill="x", padx=6, pady=(0, 6))
-        wrap = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=12)
+        wrap = ctk.CTkFrame(parent, **card_style())
         wrap.pack(fill="both", expand=True)
         inner = tk.Frame(wrap, bg=CARD)
         inner.pack(fill="both", expand=True, padx=8, pady=8)
@@ -362,88 +424,28 @@ class App(ReportTabsMixin, ctk.CTk):
 
     def _build_info_tab(self, parent):
         """地图信息：war3map.w3i 解析出的名/作者/描述/玩家/队伍/脚本语言等，只读文本。"""
-        self.info_box = ctk.CTkTextbox(parent, font=(FONT, 13), fg_color=PANEL, wrap="word")
-        self.info_box.pack(fill="both", expand=True, padx=10, pady=10)
+        self.info_box = ctk.CTkTextbox(parent, font=(MONO_FONT, 13),
+                                       fg_color=PANEL, text_color=TEXT,
+                                       border_width=1, border_color=BORDER, wrap="word")
+        self.info_box.pack(fill="both", expand=True, padx=4, pady=8)
         self.info_box.configure(state="disabled")
         self._attach_ctx_menu(self.info_box, copy_all=True)
 
     def _refresh_info(self):
         self.info_box.configure(state="normal")
         self.info_box.delete("1.0", "end")
-        info = getattr(self.map_data, "w3i", None) if self.map_data else None
-        w3f = getattr(self.map_data, "w3f", None) if self.map_data else None
-        if not info and not w3f:
-            self.info_box.insert("end", "此图无 war3map.w3i 地图信息（或解析失败）。")
-            self.info_box.configure(state="disabled")
-            return
-        L = []
-        if w3f:                                  # 战役级信息（.w3n）
-            L.append("【战役信息】")
-            L.append(f"战役名　：{w3f.name or '(未命名)'}")
-            if w3f.author:
-                L.append(f"作者　　：{w3f.author}")
-            if w3f.difficulty:
-                L.append(f"难度　　：{w3f.difficulty}")
-            if w3f.description:
-                L.append(f"描述　　：{w3f.description}")
-            L.append("")
-        if not info:
-            self.info_box.insert("end", "\n".join(L))
-            self.info_box.configure(state="disabled")
-            return
-        L.append(f"地图名　：{info.map_name or '(未命名)'}")
-        L.append(f"作者　　：{info.author or '(未知)'}")
-        if info.recommended_players:
-            L.append(f"推荐人数：{info.recommended_players}")
-        L.append(f"尺寸　　：{info.width} × {info.height}")
-        ver = {18: "RoC(1.07-)", 25: "TFT(1.13-)", 28: "重制 1.31", 31: "重制 1.32+"}
-        L.append(f"格式版本：{info.version}  {ver.get(info.version, '')}")
-        if info.script_type:
-            L.append(f"脚本语言：{info.script_type}")
-        tags = []
-        if info.melee:
-            tags.append("对战图")
-        if info.custom_forces:
-            tags.append("自定义队伍")
-        if info.custom_techtree:
-            tags.append("自定义科技树")
-        if info.custom_ability:
-            tags.append("自定义技能")
-        if tags:
-            L.append("标志　　：" + "、".join(tags))
-        feats = getattr(self.map_data, "script_features", None) if self.map_data else None
-        if feats:
-            L.append("脚本特征：" + "、".join(feats) + "  （脚本用到的暴雪内置机制）")
-        if info.description:
-            L.append(f"\n描述：\n{info.description}")
-        if info.players:
-            L.append(f"\n玩家（{len(info.players)}）：")
-            for p in info.players:
-                L.append(f"  P{p.id + 1}  {p.name or '(无名)'}  ·  {p.type_name}  ·  {p.race_name}")
-        if info.forces:
-            L.append(f"\n队伍（{len(info.forces)}）：")
-            for f in info.forces:
-                share = []
-                if f.allied:
-                    share.append("同盟")
-                if f.share_vision:
-                    share.append("共享视野")
-                if f.share_control:
-                    share.append("共享控制")
-                plist = "、".join(f"P{i}" for i in f.players) if f.players else "无"
-                L.append(f"  {f.name or '(无名队伍)'}  ·  玩家 {plist}"
-                         + (f"  ·  {'/'.join(share)}" if share else ""))
-        self.info_box.insert("end", "\n".join(L))
+        self.info_box.insert("end", format_map_info(self.map_data))
         self.info_box.configure(state="disabled")
 
     def _build_preplaced_tab(self, parent):
         """预放置实例：上=单位(war3mapUnits.doo)，下=装饰物/可破坏物(war3map.doo)，共用搜索框。"""
         top = ctk.CTkFrame(parent, fg_color=BG)
-        top.pack(fill="x", padx=4, pady=(8, 6))
+        top.pack(fill="x", padx=2, pady=(8, 6))
         self.pre_search = tk.StringVar()
-        pse = ctk.CTkEntry(top, textvariable=self.pre_search, height=38, font=(FONT, 14),
+        pse = ctk.CTkEntry(top, textvariable=self.pre_search, height=40, font=(FONT, 13),
                            justify="center",
-                           placeholder_text='🔍  回车搜索　类型名/ID　%词%=包含　="…"=精准　&&=且　||=或')
+                           placeholder_text='回车搜索：类型名 / ID    %词%=包含    ="…"=精准',
+                           **entry_style())
         pse.pack(fill="x")
         pse.bind("<Return>", lambda *_: self._refresh_preplaced())
         self._attach_ctx_menu(pse, paste=True)
@@ -452,9 +454,10 @@ class App(ReportTabsMixin, ctk.CTk):
         self.pre_hint.pack(fill="x", padx=6, pady=(0, 6))
 
         # 上：预放置单位
-        self.unit_title = ctk.CTkLabel(parent, text="预放置单位", font=(FONT, 12, "bold"), anchor="w")
+        self.unit_title = ctk.CTkLabel(parent, text="预放置单位", font=(FONT, 12, "bold"),
+                                       text_color=INFO, anchor="w")
         self.unit_title.pack(fill="x", padx=8)
-        uw = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=10)
+        uw = ctk.CTkFrame(parent, **card_style())
         uw.pack(fill="both", expand=True, padx=4, pady=(0, 6))
         ui = tk.Frame(uw, bg=CARD)
         ui.pack(fill="both", expand=True, padx=8, pady=8)
@@ -476,9 +479,10 @@ class App(ReportTabsMixin, ctk.CTk):
         self._attach_tree_copy(self.unit_tree)
 
         # 下：装饰物/可破坏物
-        self.doodad_title = ctk.CTkLabel(parent, text="装饰物 / 可破坏物", font=(FONT, 12, "bold"), anchor="w")
+        self.doodad_title = ctk.CTkLabel(parent, text="装饰物 / 可破坏物", font=(FONT, 12, "bold"),
+                                         text_color=ACCENT, anchor="w")
         self.doodad_title.pack(fill="x", padx=8)
-        dw = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=10)
+        dw = ctk.CTkFrame(parent, **card_style())
         dw.pack(fill="both", expand=True, padx=4, pady=(0, 6))
         di = tk.Frame(dw, bg=CARD)
         di.pack(fill="both", expand=True, padx=8, pady=8)
@@ -609,9 +613,13 @@ class App(ReportTabsMixin, ctk.CTk):
             self.rec_hint.configure(text="未识别到合成配方（此图可能无合成，或用了非标准写法）")
 
     def _build_statusbar(self):
-        self.status = ctk.CTkLabel(self, text="就绪 · 点击「打开地图」开始", anchor="w",
+        bar = ctk.CTkFrame(self, fg_color=TOPBAR, corner_radius=0, height=34,
+                           border_width=1, border_color=BORDER)
+        bar.pack(fill="x", side="bottom")
+        bar.pack_propagate(False)
+        self.status = ctk.CTkLabel(bar, text="就绪 · 点击「打开地图」开始", anchor="w",
                                    font=(FONT, 12), text_color=SUBTLE)
-        self.status.pack(fill="x", side="bottom", padx=16, pady=4)
+        self.status.pack(fill="both", expand=True, padx=16)
 
     def _setup_tree_style(self):
         style = ttk.Style()
@@ -620,17 +628,18 @@ class App(ReportTabsMixin, ctk.CTk):
         except tk.TclError:
             pass
         style.configure("Treeview", background=CARD, fieldbackground=CARD,
-                        foreground=TEXT, rowheight=32, borderwidth=0, font=(FONT, 11))
-        style.configure("Treeview.Heading", background="#313335", foreground=TEXT,
-                        font=(FONT, 12, "bold"), borderwidth=0, relief="flat")
+                        foreground=TEXT, rowheight=31, borderwidth=0,
+                        relief="flat", font=(FONT, 11))
+        style.configure("Treeview.Heading", background=HEADER, foreground=TEXT_STRONG,
+                        font=(FONT, 11, "bold"), borderwidth=0, relief="flat")
         style.map("Treeview", background=[("selected", SEL_BG)],
-                  foreground=[("selected", "#ffffff")])
-        style.map("Treeview.Heading", background=[("active", "#3a3d3f")])
+                  foreground=[("selected", SEL_TEXT)])
+        style.map("Treeview.Heading", background=[("active", CARD_RAISED)])
         # 细化滚动条，融入深色
-        style.configure("Vertical.TScrollbar", background=CARD, troughcolor=BG,
-                        borderwidth=0, arrowsize=12)
-        style.configure("Horizontal.TScrollbar", background=CARD, troughcolor=BG,
-                        borderwidth=0, arrowsize=12)
+        style.configure("Vertical.TScrollbar", background=SECONDARY,
+                        troughcolor=PANEL, borderwidth=0, arrowsize=11)
+        style.configure("Horizontal.TScrollbar", background=SECONDARY,
+                        troughcolor=PANEL, borderwidth=0, arrowsize=11)
 
     # ---------- 右键菜单 ----------
     def _attach_ctx_menu(self, ctk_widget, paste=False, copy_all=False):
@@ -731,7 +740,7 @@ class App(ReportTabsMixin, ctk.CTk):
     def _restore_sashes(self):
         cfg = self._load_config()
         # 布局变更后旧的分隔条位置会错位，版本不符则忽略，用默认布局
-        if cfg.get("layout") != _LAYOUT_VERSION:
+        if cfg.get("layout") != LAYOUT_VERSION:
             return
         sashes = cfg.get("sashes")
         if not sashes:
@@ -757,7 +766,7 @@ class App(ReportTabsMixin, ctk.CTk):
                 except Exception:
                     break
             self._save_config(geometry=self.geometry(), sashes=sashes,
-                              layout=_LAYOUT_VERSION)
+                              layout=LAYOUT_VERSION)
         except Exception:
             pass
         if self.icons is not None and hasattr(self.icons, "close"):
@@ -834,6 +843,7 @@ class App(ReportTabsMixin, ctk.CTk):
         """对战图：扁平地图列表。"""
         q = self.map_search.get().strip().lower() if hasattr(self, "map_search") else ""
         self._node_map = {}
+        entries = []
         self.map_list.delete(*self.map_list.get_children())
         for i, (p, name) in enumerate(self._dir_maps):
             if q and q not in name.lower():
@@ -841,12 +851,17 @@ class App(ReportTabsMixin, ctk.CTk):
             iid = f"m{i}"
             self.map_list.insert("", "end", iid=iid, text=f" {name}")
             self._node_map[iid] = ("path", p)
+            entries.append(MapEntry(iid=iid, title=name, subtitle=os.path.basename(p),
+                                    action="打开地图"))
         self._autosize_tree(self.map_list, minw=130)   # 长地图名也能横向滚动看全
+        self._map_gallery_entries = entries
+        self._render_map_gallery()
 
     def _refresh_campaign_tree(self):
         """战役图：树形——战役为父节点，展开显示子地图(★共享+各关卡)。"""
         q = self.map_search.get().strip().lower() if hasattr(self, "map_search") else ""
         self._node_map = {}
+        entries = []
         self.map_list.delete(*self.map_list.get_children())
         for i, camp in enumerate(self._dir_campaigns):
             if q and q not in camp["name"].lower():
@@ -855,14 +870,26 @@ class App(ReportTabsMixin, ctk.CTk):
             self.map_list.insert("", "end", iid=pid, text=f" {camp['name']}",
                                  open=bool(camp["loaded"]))
             self._node_map[pid] = ("campaign", i)
+            action = "查看子图" if camp["loaded"] else "加载战役"
+            entries.append(MapEntry(iid=pid, title=camp["name"],
+                                    subtitle="战役图 · 共享对象与关卡子图", action=action))
             if camp["loaded"] and camp["views"]:
                 for j, (label, md) in enumerate(camp["views"]):
                     cid = f"{pid}_s{j}"
                     self.map_list.insert(pid, "end", iid=cid, text=f" {label}")
                     self._node_map[cid] = ("md", md)
+                    entries.append(MapEntry(iid=cid, title=label, subtitle=md.name,
+                                            action="切换子图", depth=1))
             else:
                 self.map_list.insert(pid, "end", iid=f"{pid}_load", text="  （展开加载…）")
         self._autosize_tree(self.map_list, minw=130)   # 长战役/子图名也能横向滚动看全
+        self._map_gallery_entries = entries
+        self._render_map_gallery()
+
+    def _render_map_gallery(self):
+        if not hasattr(self, "map_gallery"):
+            return
+        render_map_gallery(self.map_gallery, self._map_gallery_entries, self._open_node)
 
     def _on_mode_change(self, mode):
         self.mode = "campaign" if mode == "战役图" else "battle"
@@ -897,11 +924,8 @@ class App(ReportTabsMixin, ctk.CTk):
                                        text=f"战役 {camp['name']}：{len(md.sub_maps)} 张子图")))
         threading.Thread(target=work, daemon=True).start()
 
-    def _on_map_pick(self, _evt):
-        sel = self.map_list.selection()
-        if not sel:
-            return
-        info = self._node_map.get(sel[0])
+    def _open_node(self, node_id):
+        info = self._node_map.get(node_id)
         if not info:
             return
         kind, payload = info
@@ -918,6 +942,12 @@ class App(ReportTabsMixin, ctk.CTk):
         elif kind == "campaign":    # 点战役父节点 → 加载（若未加载）
             if not self._dir_campaigns[payload]["loaded"]:
                 self._load_campaign_node(payload)
+
+    def _on_map_pick(self, _evt):
+        sel = self.map_list.selection()
+        if not sel:
+            return
+        self._open_node(sel[0])
 
     # ---------- 打开/加载 ----------
     def on_open(self):
@@ -997,7 +1027,7 @@ class App(ReportTabsMixin, ctk.CTk):
                 pass
         self.icons = resolver
         self._photo_cache = {}
-        self.map_label.configure(text=f"📦 {md.name}")
+        self.map_label.configure(text=f"当前地图：{md.name}")
         # 清空上一张图残留的详情，避免误以为是当前图的数据
         self.detail_title.configure(text="选择左侧条目查看详情")
         self.detail_sub.configure(text="")
@@ -1085,6 +1115,22 @@ class App(ReportTabsMixin, ctk.CTk):
             self.col_headers[cat].configure(text=f"{cat}  ({len(res)})")
             summary.append(f"{cat}{len(res)}")
         self.status.configure(text="  ".join(summary))
+        self._render_object_cards()
+
+    def _on_object_category(self, cat):
+        self.active_object_category = cat
+        self._render_object_cards()
+
+    def _render_object_cards(self):
+        if not hasattr(self, "object_gallery"):
+            return
+        render_object_gallery(
+            gallery=self.object_gallery,
+            active_category=self.active_object_category,
+            results_by_category=self.col_results,
+            show_detail=self._show_detail,
+            get_photo=self._get_photo,
+        )
 
     def _on_col_select(self, cat):
         tv = self.col_trees[cat]

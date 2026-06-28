@@ -3,7 +3,12 @@ import unittest
 
 from tests.gui_base import GuiTestCase
 from w3xtool.api import MapData
+from w3xtool.gameconfig import GameConfiguration, GameConfigPlayer, NamedGameConfiguration
+from w3xtool.imp import ImportEntry, ImportSummary
+from w3xtool.mmp import PreviewIcon, PreviewIconSummary
 from w3xtool.w3i import W3iInfo, Player, Force
+from w3xtool.w3world import Camera, Region, Sound
+from w3xtool.wtg import TriggerCategory, TriggerHeader, TriggerTreeSummary, TriggerVariable
 
 
 class TestInfoTab(GuiTestCase):
@@ -32,6 +37,97 @@ class TestInfoTab(GuiTestCase):
         self.app.map_data = md
         self.app._refresh_info()        # 不应抛
         self.assertIn("无", self._text())
+
+    def test_world_metadata_rendered(self):
+        md = MapData(path="x", name="世界数据图")
+        md.regions = [Region(0, 0, 128, 128, "出生区", 1, "", "", (255, 0, 0), 255)]
+        md.cameras = [Camera(0, 0, 0, 0, 304, 1650, 0, 70, 5000, 100, "开场镜头")]
+        md.sounds = [Sound("导入声", "war3mapImported\\voice.wav", "", 16, 0, 0, 127,
+                           1.0, 0, 100, 1000, 3000)]
+        self.app.map_data = md
+        self.app._refresh_info()
+        txt = self._text()
+        self.assertIn("世界编辑器数据", txt)
+        self.assertIn("出生区", txt)
+        self.assertIn("开场镜头", txt)
+        self.assertIn("导入声", txt)
+
+    def test_game_config_rendered(self):
+        md = MapData(path="x", name="配置图")
+        md.game_configs = [
+            NamedGameConfiguration(
+                "testconfig.wgc",
+                GameConfiguration(
+                    format_version=1,
+                    flags=0x02,
+                    base_speed=4,
+                    map_path="Maps\\Anime\\Test.w3x",
+                    players=(GameConfigPlayer(0, 0, 0x02, 1, 90, 0x04, 2, "AI Scripts\\rush.ai"),),
+                ),
+            )
+        ]
+        self.app.map_data = md
+        self.app._refresh_info()
+        txt = self._text()
+        self.assertIn("游戏配置", txt)
+        self.assertIn("testconfig.wgc", txt)
+        self.assertIn("禁用胜负条件", txt)
+        self.assertIn("AI Scripts\\rush.ai", txt)
+
+    def test_trigger_tree_rendered(self):
+        md = MapData(path="x", name="触发图")
+        md.trigger_summary = TriggerTreeSummary(
+            version=7,
+            is_reforged=False,
+            category_count=1,
+            variable_count=1,
+            trigger_count=1,
+            comment_count=0,
+            script_count=0,
+            categories=(TriggerCategory(42, "系统"),),
+            variables=(TriggerVariable("Count", "integer", 1, False, 1, True, "5"),),
+            triggers=(TriggerHeader("初始化", "", False, True, False, False, True, 42, 0),),
+        )
+        self.app.map_data = md
+        self.app._refresh_info()
+        txt = self._text()
+        self.assertIn("触发器树", txt)
+        self.assertIn("系统", txt)
+        self.assertIn("初始化", txt)
+
+    def test_preview_icons_rendered(self):
+        md = MapData(path="x", name="标记图")
+        md.preview_icons = PreviewIconSummary(
+            version=0,
+            icons=(
+                PreviewIcon(2, 12, 34, (255, 0, 0), 255),
+                PreviewIcon(1, 120, 150, (80, 160, 255), 255),
+            ),
+        )
+        self.app.map_data = md
+        self.app._refresh_info()
+        txt = self._text()
+        self.assertIn("小地图标记", txt)
+        self.assertIn("玩家出生点", txt)
+        self.assertIn("中立建筑", txt)
+
+    def test_import_summary_rendered(self):
+        md = MapData(path="x", name="导入图")
+        md.import_summary = ImportSummary(
+            version=1,
+            entries=(
+                ImportEntry("icon.blp", 8),
+                ImportEntry("ReplaceableTextures\\custom.blp", 13),
+            ),
+            resolved_paths=("war3mapImported\\icon.blp",),
+            missing_paths=("ReplaceableTextures\\custom.blp",),
+        )
+        self.app.map_data = md
+        self.app._refresh_info()
+        txt = self._text()
+        self.assertIn("导入资源", txt)
+        self.assertIn("自定义路径", txt)
+        self.assertIn("ReplaceableTextures\\custom.blp", txt)
 
 
 if __name__ == "__main__":

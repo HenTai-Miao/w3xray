@@ -24,9 +24,17 @@ def build_overview_blocks(
     counts = md.category_counts()
     object_lines = tuple(_format_counts(counts))
     script_lines = [f"脚本文件 {len(md.scripts)}", f"聊天指令 {command_count}", f"合成配方 {recipe_count}"]
+    trigger_summary = getattr(md, "trigger_summary", None)
+    if trigger_summary is not None:
+        script_lines.append(f"触发器树 {trigger_summary.trigger_count}")
     if md.script_features:
         script_lines.append("脚本特征 " + "、".join(md.script_features))
     scene_lines = [f"预放置单位 {len(md.units)}", f"装饰物/可破坏物 {len(md.doodads)}"]
+    if getattr(md, "game_configs", None):
+        scene_lines.append(f"游戏配置 {len(md.game_configs)}")
+    preview_icons = getattr(md, "preview_icons", None)
+    if preview_icons is not None:
+        scene_lines.append(f"小地图标记 {preview_icons.icon_count}")
     if md.w3i is not None:
         width = getattr(md.w3i, "width", "?")
         height = getattr(md.w3i, "height", "?")
@@ -54,6 +62,9 @@ def build_analysis_blocks(md: MapData) -> tuple[GuiReportBlock, ...]:
     blocks.append(_order_block(md))
     blocks.append(_resource_block(md))
     blocks.append(_compat_block(md))
+    blocks.append(_trigger_tree_block(md))
+    blocks.append(_preview_icon_block(md))
+    blocks.append(_game_config_block(md))
     blocks.extend(_archive_blocks(md))
     return tuple(block for block in blocks if block.lines)
 
@@ -140,6 +151,74 @@ def _resource_block(md: MapData) -> GuiReportBlock:
     return GuiReportBlock("资源", tuple(lines), len(report.unreferenced_assets))
 
 
+def _game_config_block(md: MapData) -> GuiReportBlock:
+    configs = getattr(md, "game_configs", None) or []
+    if not configs:
+        return GuiReportBlock("游戏配置", ())
+    lines: list[str] = []
+    for entry in configs[:6]:
+        cfg = entry.config
+        lines.append(
+            f"{entry.source}: {cfg.map_path or '(未指定地图)'} · "
+            f"速度 {cfg.speed_label} · 玩家槽 {len(cfg.players)}"
+        )
+        rule_tags = []
+        if cfg.fog_of_war_disabled:
+            rule_tags.append("禁用战争迷雾")
+        if cfg.victory_defeat_disabled:
+            rule_tags.append("禁用胜负条件")
+        if rule_tags:
+            lines.append("规则: " + "、".join(rule_tags))
+        custom_ai = [p for p in cfg.players if p.load_custom_ai and p.custom_ai_path]
+        for player in custom_ai[:3]:
+            lines.append(f"自定义AI: P{player.slot_id + 1} {player.custom_ai_path}")
+    if len(configs) > 6:
+        lines.append(f"另有 {len(configs) - 6} 个配置")
+    return GuiReportBlock("游戏配置", tuple(lines))
+
+
+def _trigger_tree_block(md: MapData) -> GuiReportBlock:
+    summary = getattr(md, "trigger_summary", None)
+    if summary is None:
+        return GuiReportBlock("触发器树", ())
+    kind = "重制版" if summary.is_reforged else "经典"
+    lines = [
+        f"格式 {kind} v{summary.version}",
+        f"触发器 {summary.trigger_count} · 变量 {summary.variable_count} · 分类 {summary.category_count}",
+    ]
+    if summary.comment_count or summary.script_count:
+        lines.append(f"注释 {summary.comment_count} · 自定义脚本块 {summary.script_count}")
+    if summary.categories:
+        lines.append("分类 " + _join_names(cat.name for cat in summary.categories))
+    if summary.variables:
+        lines.append("变量 " + _join_names(var.name for var in summary.variables))
+    for trigger in summary.triggers[:8]:
+        tags = _trigger_tags(trigger)
+        suffix = f" · {'/'.join(tags)}" if tags else ""
+        lines.append(f"{trigger.name or '(未命名触发器)'}{suffix}")
+    if summary.has_unexpanded_functions:
+        lines.append("ECA 函数体未展开：缺 TriggerData.txt 参数表，只显示触发器头。")
+    return GuiReportBlock("触发器树", tuple(lines))
+
+
+def _preview_icon_block(md: MapData) -> GuiReportBlock:
+    summary = getattr(md, "preview_icons", None)
+    if summary is None:
+        return GuiReportBlock("小地图标记", ())
+    lines = [
+        f"总数 {summary.icon_count}",
+        (
+            f"玩家出生点 {summary.player_start_count} · 金矿 {summary.gold_mine_count}"
+            f" · 中立建筑 {summary.neutral_building_count}"
+        ),
+    ]
+    for icon in summary.icons[:8]:
+        lines.append(f"{icon.type_label} ({icon.x}, {icon.y})")
+    if len(summary.icons) > 8:
+        lines.append(f"另有 {len(summary.icons) - 8} 个标记")
+    return GuiReportBlock("小地图标记", tuple(lines))
+
+
 def _compat_block(md: MapData) -> GuiReportBlock:
     from .compat import CompatSeverity, build_compat_report
 
@@ -203,3 +282,24 @@ def _gameplay_block(md: MapData) -> GuiReportBlock:
 
 def _severity_label(severity) -> str:
     return "警告" if severity.name == "WARNING" else "提示"
+
+
+def _join_names(names) -> str:
+    values = [name for name in names if name]
+    suffix = f" ……另 {len(values) - 8} 个" if len(values) > 8 else ""
+    return "、".join(values[:8]) + suffix
+
+
+def _trigger_tags(trigger) -> list[str]:
+    tags = []
+    if not trigger.is_enabled:
+        tags.append("禁用")
+    if trigger.is_custom_text:
+        tags.append("自定义脚本")
+    if trigger.is_initially_off:
+        tags.append("初始关闭")
+    if trigger.run_on_init:
+        tags.append("开局运行")
+    if trigger.is_comment:
+        tags.append("注释")
+    return tags
