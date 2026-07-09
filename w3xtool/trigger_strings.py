@@ -29,7 +29,7 @@ def build_display_strings(records: tuple[str, ...]) -> tuple[str | None, str | N
     """Return localized display name and positional template for one function."""
     if not records:
         return None, None
-    display_name = records[0] or None
+    display_name = "".join(_parse_csv_fields(records[0])) or None
     template = _build_template(records[1]) if len(records) > 1 else None
     return display_name, template
 
@@ -67,5 +67,8 @@ def _iter_lines(text: str) -> Iterator[tuple[str, str, str]]:
 def _parse_csv_fields(value: str) -> tuple[str, ...]:
     return tuple(
         field
-        for field in next(csv.reader(StringIO(value), skipinitialspace=False))
+        for field in next(
+            csv.reader(StringIO(value), skipinitialspace=False),
+            (),
+        )
     )

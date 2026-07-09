@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+import csv
 from dataclasses import dataclass
 import re
 from typing import Protocol, TYPE_CHECKING
@@ -53,12 +54,18 @@ def load_trigger_schema_from_source(source: TriggerDataSource | None) -> Trigger
         return None
     try:
         data = _read_first(source, _TRIGGER_DATA_NAMES)
-        strings = _read_first(source, _TRIGGER_STRING_NAMES)
     except (FileNotFoundError, OSError, ValueError, CascUnsupportedError):
         return None
     if data is None:
         return None
-    return parse_trigger_schema(_decode(data), _decode(strings or b""))
+    try:
+        strings = _read_first(source, _TRIGGER_STRING_NAMES)
+    except (FileNotFoundError, OSError, ValueError, CascUnsupportedError):
+        strings = None
+    try:
+        return parse_trigger_schema(_decode(data), _decode(strings or b""))
+    except (csv.Error, UnicodeError, ValueError):
+        return None
 
 
 def load_trigger_data_from_source(source: TriggerDataSource | None) -> TriggerDataTable | None:
@@ -216,10 +223,14 @@ def _lookup_schema(
     by_kind = schema.get(_kind_from_function_type(function.function_type), function.name)
     if by_kind is not None:
         return by_kind
-    for kind in TriggerFunctionKind:
-        fallback = schema.get(kind, function.name)
-        if fallback is not None:
-            return fallback
+    normalized_name = function.name.lower()
+    fallback = tuple(
+        candidate
+        for (_kind, name), candidate in schema.functions.items()
+        if name == normalized_name
+    )
+    if len(fallback) == 1:
+        return fallback[0]
     return None
 
 

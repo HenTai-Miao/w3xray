@@ -1,6 +1,6 @@
 This directory vendors direct copies of Warcraft III trigger metadata from
 Crainax/War3Lib commit `03cc4765f6b5e262c0e9d6ed9f36e1f3f12c77bf`
-([repo](https://github.com/Crainax/War3Lib), Apache-2.0).
+([repo](https://github.com/Crainax/War3Lib), [Apache-2.0](../licenses/War3Lib-Apache-2.0.txt)).
 
 Files:
 - `TriggerData.txt`

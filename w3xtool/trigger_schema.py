@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 import csv
 from io import StringIO
+from typing import assert_never
 
 from .trigger_strings import build_display_strings, parse_trigger_string_sections
 
@@ -103,13 +104,23 @@ def _parse_signature(
 ) -> tuple[str | None, tuple[str, ...]]:
     parts = tuple(
         field.strip()
-        for field in next(csv.reader(StringIO(value), skipinitialspace=False))
+        for field in next(
+            csv.reader(StringIO(value), skipinitialspace=False, strict=True),
+            (),
+        )
         if field.strip()
     )
-    if kind is TriggerFunctionKind.CALL:
-        if len(parts) < 3:
-            return None, ()
-        return parts[2], parts[3:]
-    if len(parts) < 2:
-        return None, ()
-    return None, parts[1:]
+    match kind:
+        case TriggerFunctionKind.CALL:
+            if len(parts) < 3:
+                raise csv.Error("invalid TriggerCalls signature")
+            return_type = parts[2]
+            parameter_types = parts[3:]
+        case TriggerFunctionKind.EVENT | TriggerFunctionKind.CONDITION | TriggerFunctionKind.ACTION:
+            if len(parts) < 2:
+                raise csv.Error(f"invalid {kind.value} signature")
+            return_type = None
+            parameter_types = parts[1:]
+        case unreachable:
+            assert_never(unreachable)
+    return return_type, tuple(item for item in parameter_types if item != "nothing")
