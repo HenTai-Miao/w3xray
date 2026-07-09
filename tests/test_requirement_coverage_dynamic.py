@@ -52,6 +52,30 @@ def test_requirement_coverage_no_argument_compatibility_keeps_request_rows() -> 
     assert "提取/整理 UI 文本\t已覆盖（静态）" in text
 
 
+def test_requirement_coverage_downgrades_fixed_rows_for_empty_map() -> None:
+    # Given: a parsed MapData shell with no files, objects, scripts, or world data.
+    md = MapData(path="missing.w3x", name="empty")
+
+    # When: map-specific coverage is formatted.
+    text = format_requirement_coverage(md)
+
+    # Then: static catalog claims reflect missing artifacts instead of staying globally covered.
+    assert "提取/整理 UI 文本\t未发现数据" in text
+    assert "分析脚本条件分支\t未发现数据" in text
+    assert "分析物品/技能/单位 ID\t未发现数据" in text
+
+
+def test_requirement_coverage_consumes_archive_diagnosis_kind() -> None:
+    # Given: a future archive-open diagnostic is supplied by the capability boundary.
+    capabilities = ExtractionCapabilities(archive_diagnosis_kind="table_damage")
+
+    # When: dynamic coverage is formatted.
+    text = format_requirement_coverage(MapData(path="broken.w3x", name="broken"), capabilities)
+
+    # Then: the diagnosis is visible rather than stored in an unused field.
+    assert "归档诊断\t结构损坏" in text
+
+
 def _summary_with_missing_schema() -> TriggerTreeSummary:
     return TriggerTreeSummary(
         version=7,
@@ -67,4 +91,3 @@ def _summary_with_missing_schema() -> TriggerTreeSummary:
         missing_schema_functions=(UnknownTriggerFunction("初始化", "MissingAction", 2, 0x20),),
         has_unexpanded_functions=True,
     )
-

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from w3xtool.api import MapData, load_map
+from w3xtool.api import MapData, _campaign_inner_maps, load_map
 from w3xtool.external_listfile import ExternalListfileReport
 from w3xtool.gui_loader import LoadedMap, load_path_payload
 from w3xtool.knowledge_pack import write_knowledge_pack
@@ -37,7 +37,13 @@ def test_load_map_confirms_external_names_before_listing(monkeypatch) -> None:
     # Given: one real hidden name, one missing name, one unsafe name, and a duplicate.
     archive = _Archive({"hidden/config.json"})
     context = MapLoadContext(
-        external_names=("hidden/config.json", "ghost.blp", "../escape", "HIDDEN/CONFIG.JSON"),
+        external_names=(
+            "hidden/config.json",
+            "ghost.blp",
+            "../escape",
+            r"\\server\share\escape",
+            "HIDDEN/CONFIG.JSON",
+        ),
     )
     monkeypatch.setattr("w3xtool.api.MPQArchive", lambda _path: archive)
 
@@ -48,7 +54,7 @@ def test_load_map_confirms_external_names_before_listing(monkeypatch) -> None:
     assert md.external_listfile == ExternalListfileReport(
         confirmed=("hidden/config.json",),
         missing=("ghost.blp",),
-        unsafe=("../escape",),
+        unsafe=("../escape", r"\\server\share\escape"),
         duplicates=("HIDDEN/CONFIG.JSON",),
     )
     assert "hidden/config.json" in md.all_files
@@ -103,3 +109,14 @@ def test_repeated_pack_exports_do_not_mutate_map_file_listing(tmp_path) -> None:
     # Then: export is a read-only operation over MapData.
     assert tuple(md.all_files) == before
 
+
+def test_campaign_discovery_merges_validated_and_archive_names() -> None:
+    # Given: validated names contain only static files while the archive knows an arbitrary chapter name.
+    archive = _Archive(set())
+    archive.list_files = lambda: ["Story/Finale.w3x"]
+
+    # When: campaign map candidates are discovered.
+    names = _campaign_inner_maps(archive, ("war3campaign.w3f",))
+
+    # Then: the archive's own nonstandard chapter name is not hidden by a non-empty validated list.
+    assert names == ["Story/Finale.w3x"]

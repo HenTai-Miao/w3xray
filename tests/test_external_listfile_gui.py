@@ -16,7 +16,7 @@ class ExternalListfileCoreTest(unittest.TestCase):
     def test_read_external_listfile_normalizes_lines_and_ignores_comments(self) -> None:
         # Given: a user-provided listfile copied from an MPQ tool.
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:
-            handle.write("# comment\n\nwar3mapImported\\Hero.mdx\r\nWar3Map.J\n")
+            handle.write("# comment\n// comment\n//comment\nwar3mapImported\\Hero.mdx\r\nWar3Map.J\n")
             path = handle.name
 
         try:

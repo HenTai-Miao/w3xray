@@ -53,23 +53,23 @@ class KnowledgePackManifestTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as out:
             write_knowledge_pack(md, out)
 
-            # Then: users can verify every requested static investigation surface.
+            # Then: generic capabilities remain listed but empty-map rows are downgraded.
             with open(os.path.join(out, "需求覆盖.tsv"), encoding="utf-8") as f:
                 coverage = f.read()
             self.assertIn("需求\t状态\t主要产物\t辅助产物\t说明", coverage)
-            self.assertIn("提取/整理 UI 文本\t已覆盖（静态）\tUI文本_TRIGSTR.tsv; UI文本引用.tsv", coverage)
-            self.assertIn("提取/整理图标和资源\t已覆盖（静态）\t资源/资源资产索引.tsv", coverage)
-            self.assertIn("整理配置文件格式\t已覆盖（静态）\t配置格式索引.txt", coverage)
-            self.assertIn("分析本地存档读写\t已覆盖（静态线索）\t存档读写线索.tsv", coverage)
+            self.assertIn("提取/整理 UI 文本\t未发现数据\tUI文本_TRIGSTR.tsv; UI文本引用.tsv", coverage)
+            self.assertIn("提取/整理图标和资源\t未发现数据\t资源/资源资产索引.tsv", coverage)
+            self.assertIn("整理配置文件格式\t未发现数据\t配置格式索引.txt", coverage)
+            self.assertIn("分析本地存档读写\t未发现数据\t存档读写线索.tsv", coverage)
             self.assertIn("分析地图 ID\t已覆盖（静态身份）\t地图与对象ID索引.tsv", coverage)
             self.assertIn(
-                "分析物品/技能/单位 ID\t已覆盖（静态引用）\t地图与对象ID索引.tsv; 对象ID使用摘要.tsv; 对象ID/",
+                "分析物品/技能/单位 ID\t未发现数据\t地图与对象ID索引.tsv; 对象ID使用摘要.tsv; 对象ID/",
                 coverage,
             )
-            self.assertIn("分析脚本循环\t已覆盖（静态）\t脚本循环索引.tsv", coverage)
-            self.assertIn("分析脚本返回值\t已覆盖（静态）\t脚本返回值索引.tsv", coverage)
-            self.assertIn("分析脚本局部变量\t已覆盖（静态）\t脚本局部变量索引.tsv", coverage)
-            self.assertIn("分析脚本调用参数\t已覆盖（静态）\t脚本调用参数索引.tsv", coverage)
+            self.assertIn("分析脚本循环\t未发现数据\t脚本循环索引.tsv", coverage)
+            self.assertIn("分析脚本返回值\t未发现数据\t脚本返回值索引.tsv", coverage)
+            self.assertIn("分析脚本局部变量\t未发现数据\t脚本局部变量索引.tsv", coverage)
+            self.assertIn("分析脚本调用参数\t未发现数据\t脚本调用参数索引.tsv", coverage)
 
 
 if __name__ == "__main__":

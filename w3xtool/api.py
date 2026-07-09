@@ -560,7 +560,13 @@ def _load_map_impl(archive: MPQArchive, path: str, _depth: int,
 def _campaign_inner_maps(archive: MPQArchive, known_names=()):
     """从战役里找出内含的地图文件名。优先 listfile，其次扫常见名。"""
     found = []
-    for n in known_names or archive.list_files():
+    candidates = tuple(known_names) + tuple(archive.list_files())
+    seen = set()
+    for n in candidates:
+        key = n.lower()
+        if key in seen:
+            continue
+        seen.add(key)
         if n.lower().endswith((".w3x", ".w3m")):
             found.append(n)
     if found:
