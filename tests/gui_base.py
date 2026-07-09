@@ -60,7 +60,7 @@ class GuiTestCase(unittest.TestCase):
         app._dir_campaigns = []
         app._node_map = {}
         # 清空所有 Treeview，避免上个用例的行/iid 残留
-        for tv in (app.map_list, app.cmd_tree, app.rec_tree,
+        for tv in (app.map_list, app.cmd_tree, app.rec_tree, app.trigger_eca_tree,
                    app.unit_tree, app.doodad_tree, *app.col_trees.values()):
             tv.delete(*tv.get_children())
         for cat in app.col_results:
@@ -73,6 +73,14 @@ class GuiTestCase(unittest.TestCase):
             for child in app.object_cards.winfo_children():
                 child.destroy()
         app.pre_search.set("")
+        app.trigger_eca_search.set("")
+        app._trigger_eca_nodes = {}
+        app._trigger_eca_groups = ()
+        app.trigger_eca_status.configure(
+            text="打开地图后这里列出 GUI 触发器事件、条件、动作与嵌套调用")
+        app.trigger_eca_detail.configure(state="normal")
+        app.trigger_eca_detail.delete("1.0", "end")
+        app.trigger_eca_detail.configure(state="disabled")
         # 地图信息框复位（只读 textbox 需临时切到可写态清空）
         app.info_box.configure(state="normal")
         app.info_box.delete("1.0", "end")

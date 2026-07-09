@@ -71,11 +71,12 @@ class ShellLayoutMixin:
         )
         self.tabs.pack(fill="both", expand=True)
         self.editor_tab_labels = (
-            "总览", "对象编辑器", "地图信息", "场景放置", "触发指令",
+            "总览", "对象编辑器", "地图信息", "GUI触发器", "场景放置", "触发指令",
             "合成配方", "孤立对象", "分析报告")
         self.tab_overview = self.tabs.add("总览")
         self.tab_obj = self.tabs.add("对象编辑器")
         self.tab_info = self.tabs.add("地图信息")
+        self.tab_trigger_eca = self.tabs.add("GUI触发器")
         self.tab_pre = self.tabs.add("场景放置")
         self.tab_cmd = self.tabs.add("触发指令")
         self.tab_rec = self.tabs.add("合成配方")
@@ -84,6 +85,7 @@ class ShellLayoutMixin:
         self._build_overview_tab(self.tab_overview)
         self._build_obj_tab(self.tab_obj)
         self._build_info_tab(self.tab_info)
+        self._build_trigger_eca_tab(self.tab_trigger_eca)
         self._build_preplaced_tab(self.tab_pre)
         self._build_cmd_tab(self.tab_cmd)
         self._build_rec_tab(self.tab_rec)

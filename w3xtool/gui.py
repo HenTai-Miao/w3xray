@@ -22,6 +22,7 @@ from .gui_pane_state import PaneStateMixin
 from .gui_report_tabs import ReportTabsMixin
 from .gui_shell import ShellLayoutMixin
 from .gui_source_browser import SourceBrowserMixin
+from .gui_trigger_eca import TriggerEcaViewMixin
 from .theme import BG
 
 ctk.set_appearance_mode("light")
@@ -37,6 +38,7 @@ class App(
     BackgroundLoaderMixin,
     ReportTabsMixin,
     ExportActionsMixin,
+    TriggerEcaViewMixin,
     ShellLayoutMixin,
     DataTabLayoutMixin,
     DataRefreshMixin,

@@ -133,6 +133,7 @@ class GuiLifecycleMixin:
         self.map_label.configure(text=f"当前地图：{md.name}")
         self._reset_detail_panel()
         self._refresh_enabled_modules(cmds, recipes)
+        self._refresh_trigger_eca()
         counts = md.category_counts()
         total = sum(counts.values())
         self.status.configure(text=f"已加载 {md.name} · {total} 对象 · "
