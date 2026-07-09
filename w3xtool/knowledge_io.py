@@ -3,18 +3,14 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-import os
+
+from .safe_output import SafeWriteStatus, write_text_safely
 
 
 def write_text(out_dir: str, name: str, text: str) -> int:
     """Write UTF-8 text under the pack directory and return one file count."""
-    path = os.path.join(out_dir, name)
-    parent = os.path.dirname(path)
-    if parent:
-        os.makedirs(parent, exist_ok=True)
-    with open(path, "w", encoding="utf-8", newline="\n") as handle:
-        handle.write(text)
-    return 1
+    result = write_text_safely(out_dir, name, text)
+    return int(result.status is SafeWriteStatus.WRITTEN)
 
 
 def safe_filename(name: str) -> str:

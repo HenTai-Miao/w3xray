@@ -2,19 +2,30 @@
 
 from __future__ import annotations
 
-import os
+from collections.abc import Iterable
 
 from .api import MapData
 from .knowledge_io import safe_filename, write_text
-from .script_text_export import build_readable_script_exports
+from .safe_output import safe_relative_path
+from .script_text_export import ReadableScriptExport, build_readable_script_exports
 
 
 def write_readable_scripts(md: MapData, out_dir: str) -> int:
     """Write scripts with TRIGSTR references restored where possible."""
-    os.makedirs(out_dir, exist_ok=True)
+    return write_script_exports(build_readable_script_exports(md), out_dir)
+
+
+def write_script_exports(
+    scripts: Iterable[ReadableScriptExport],
+    out_dir: str,
+) -> int:
+    """Write prebuilt script exports after validating their original names."""
     count = 0
-    for item in build_readable_script_exports(md):
-        count += write_text(out_dir, safe_filename(os.path.basename(item.name)), item.text)
+    for item in scripts:
+        relative = safe_relative_path(item.name)
+        if relative is None:
+            continue
+        count += write_text(out_dir, safe_filename(relative.name), item.text)
     return count
 
 

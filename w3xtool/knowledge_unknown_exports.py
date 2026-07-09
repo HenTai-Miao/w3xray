@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Protocol
 
 from .knowledge_io import write_text
 from .mpq import MPQArchive, guess_extension
+from .safe_output import SafeWriteStatus, write_bytes_safely
 
 if TYPE_CHECKING:
     from .api import MapData
@@ -70,15 +71,15 @@ def write_unknown_files_from_archive(
             continue
         data = archive.read_block_anon(block)
         if data is None:
-            relative_path, size = _write_raw_block(archive, out_dir, index, block)
+            relative_path, size, written = _write_raw_block(archive, out_dir, index, block)
             kind = "UnknownRaw"
-            status = "原始负载兜底"
+            status = "原始负载兜底" if written else "写入被拒绝"
         else:
-            relative_path, size = _write_unknown_block(out_dir, index, data)
+            relative_path, size, written = _write_unknown_block(out_dir, index, data)
             kind = "Unknown"
-            status = "已解包"
+            status = "已解包" if written else "写入被拒绝"
         rows.append(_manifest_row(index, kind, relative_path, size, block, status))
-        count += 1
+        count += int(written)
     return count + write_text(out_dir, "Unknown_manifest.tsv", "\n".join(rows) + "\n")
 
 
@@ -95,14 +96,12 @@ def _named_block_indexes(
     return indexes
 
 
-def _write_unknown_block(out_dir: str, index: int, data: bytes) -> tuple[str, int]:
+def _write_unknown_block(out_dir: str, index: int, data: bytes) -> tuple[str, int, bool]:
     ext = guess_extension(data)
     relative_path = f"Unknown/block_{index:06d}.{ext}"
-    path = os.path.join(out_dir, *relative_path.split("/"))
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "wb") as handle:
-        handle.write(data)
-    return relative_path, len(data)
+    result = write_bytes_safely(out_dir, relative_path, data)
+    written = result.status is SafeWriteStatus.WRITTEN
+    return relative_path, result.size, written
 
 
 def _write_raw_block(
@@ -110,14 +109,12 @@ def _write_raw_block(
     out_dir: str,
     index: int,
     block: UnknownBlock,
-) -> tuple[str, int]:
+) -> tuple[str, int, bool]:
     data = _block_raw_payload(archive, block)
     relative_path = f"UnknownRaw/block_{index:06d}.raw"
-    path = os.path.join(out_dir, *relative_path.split("/"))
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "wb") as handle:
-        handle.write(data)
-    return relative_path, len(data)
+    result = write_bytes_safely(out_dir, relative_path, data)
+    written = result.status is SafeWriteStatus.WRITTEN
+    return relative_path, result.size, written
 
 
 def _block_raw_payload(archive: UnknownArchive, block: UnknownBlock) -> bytes:

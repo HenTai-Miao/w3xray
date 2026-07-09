@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Final, Protocol
 
 from .mpq import MPQArchive
 from .resource_inventory import ResourceInventory, build_resource_inventory
+from .safe_output import SafeWriteStatus, safe_relative_path, write_bytes_safely
 
 if TYPE_CHECKING:
     from .api import MapData
@@ -62,12 +63,11 @@ def export_resource_bodies(
 ) -> AssetBodyExportReport:
     """Copy readable resource/config bodies into the knowledge pack."""
     resolved_inventory = inventory or build_resource_inventory(md)
-    body_dir = os.path.join(resource_dir, _BODY_DIR)
     source = _open_source(md.path)
     rows: list[AssetBodyExport] = []
     try:
         for item in resolved_inventory.items:
-            rows.append(_export_one(item.path, item.status, body_dir, source))
+            rows.append(_export_one(item.path, item.status, resource_dir, source))
     finally:
         if source is not None:
             source.close()
@@ -90,7 +90,7 @@ def format_asset_body_manifest(report: AssetBodyExportReport) -> str:
 def _export_one(
     path: str,
     status: str,
-    body_dir: str,
+    resource_dir: str,
     source: _ReadableSource | None,
 ) -> AssetBodyExport:
     if not status.startswith("存在/"):
@@ -106,10 +106,11 @@ def _export_one(
         return AssetBodyExport(path, "", 0, "源内缺失")
     except (OSError, ValueError, struct.error):
         return AssetBodyExport(path, "", 0, "读取失败")
-    dest = os.path.join(body_dir, *rel.split("/"))
-    os.makedirs(os.path.dirname(dest), exist_ok=True)
-    with open(dest, "wb") as handle:
-        handle.write(data)
+    result = write_bytes_safely(resource_dir, f"{_BODY_DIR}/{rel}", data)
+    if result.status is SafeWriteStatus.UNSAFE:
+        return AssetBodyExport(path, "", 0, "路径不安全")
+    if result.status is SafeWriteStatus.FAILED:
+        return AssetBodyExport(path, "", 0, "写入失败")
     return AssetBodyExport(path, f"{_BODY_DIR}/{rel}", len(data), "已导出")
 
 
@@ -137,15 +138,8 @@ def _index_directory(root: str) -> dict[str, str]:
 
 
 def _safe_body_relative(path: str) -> str | None:
-    normalized = path.replace("\\", "/").strip("/")
-    parts = [part for part in normalized.split("/") if part and part != "."]
-    if not parts:
-        return None
-    if any(part == ".." for part in parts):
-        return None
-    if ":" in parts[0]:
-        return None
-    return "/".join(parts)
+    relative = safe_relative_path(path)
+    return relative.as_posix() if relative is not None else None
 
 
 def _normalize_path(path: str) -> str:

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-import os
 import re
 from typing import Protocol
 
-from .archive_export_paths import _safe_export_path
 from .mpq import HASH_NAME_A, HASH_NAME_B, _hash, guess_extension
+from .safe_output import (
+    SafeWriteStatus,
+    safe_relative_path,
+    write_bytes_safely,
+    write_text_safely,
+)
 
 _RESOURCE_NAME_RE = re.compile(
     rb"(?i)([A-Za-z0-9_ .()\\/\-]{1,240}\."
@@ -56,10 +60,11 @@ def _export_recovered_named_files(
         if hits:
             count += _try_export_recovered_hit(archive, out_dir, exported_blocks, manifest, block_index, hits)
     if manifest:
-        rec_dir = os.path.join(out_dir, "RecoveredNames")
-        os.makedirs(rec_dir, exist_ok=True)
-        with open(os.path.join(rec_dir, "manifest.tsv"), "w", encoding="utf-8") as handle:
-            handle.write("\n".join(manifest) + "\n")
+        write_text_safely(
+            out_dir,
+            "RecoveredNames/manifest.tsv",
+            "\n".join(manifest) + "\n",
+        )
     return count
 
 
@@ -67,11 +72,10 @@ def _resource_name_variants(name: str) -> set[str]:
     name = name.replace("\x00", "").strip().strip("\"'")
     if not name or len(name) > 260:
         return set()
-    name = name.replace("/", "\\").lstrip("\\")
-    parts = [part for part in name.split("\\") if part and part != "."]
-    if not parts or any(part == ".." for part in parts):
+    relative = safe_relative_path(name)
+    if relative is None:
         return set()
-    normalized = "\\".join(parts)
+    normalized = "\\".join(relative.parts)
     names = {normalized}
     if not normalized.lower().startswith("war3mapimported\\"):
         names.add("war3mapImported\\" + normalized)
@@ -100,13 +104,13 @@ def _try_export_recovered_hit(
             data = archive.read_file(name)
         except (KeyError, OSError, ValueError):
             continue
-        dest = _safe_export_path(out_dir, name)
-        if dest is None:
+        result = write_bytes_safely(out_dir, name, data)
+        if result.status is SafeWriteStatus.UNSAFE:
             manifest.append(f"UNSAFE\tblock={block_index}\tname={name}")
             return 0
-        os.makedirs(os.path.dirname(dest) or out_dir, exist_ok=True)
-        with open(dest, "wb") as handle:
-            handle.write(data)
+        if result.status is SafeWriteStatus.FAILED:
+            manifest.append(f"FAIL\tblock={block_index}\tname={name}\thits={len(ordered)}")
+            return 0
         exported_blocks.add(block_index)
         manifest.append(
             f"OK\tblock={block_index}\tname={name}\tsize={len(data)}\t"

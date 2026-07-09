@@ -7,7 +7,9 @@ import threading
 from tkinter import messagebox
 
 from .api import export_all_files, tmp_extract_dir
+from .knowledge_io import safe_filename, write_text
 from .knowledge_pack import format_box_id_text, write_knowledge_pack
+from .knowledge_script_exports import write_script_exports
 from .script_text_export import build_readable_script_exports
 
 
@@ -20,11 +22,13 @@ class ExportActionsMixin:
 
     def _open_dir(self, out, n, kind):
         self.status.configure(text=f"已导出 {n} 个{kind}到临时目录 {out}")
+        message = f"已导出 {n} 个{kind}到临时目录：\n{out}\n（临时文件，可随时清理）"
         try:
             os.startfile(out)
         except (AttributeError, OSError):
-            pass
-        messagebox.showinfo("完成", f"已导出 {n} 个{kind}到临时目录：\n{out}\n（临时文件，可随时清理）")
+            messagebox.showinfo("完成", message)
+            return
+        messagebox.showinfo("完成", message)
 
     def on_export_all(self):
         if not self._need_map():
@@ -53,12 +57,7 @@ class ExportActionsMixin:
 
         def work():
             try:
-                n = 0
-                for item in scripts:
-                    path = os.path.join(out, os.path.basename(item.name))
-                    with open(path, "w", encoding="utf-8") as handle:
-                        handle.write(item.text)
-                    n += 1
+                n = write_script_exports(scripts, out)
                 self.after(0, lambda: self._open_dir(out, n, "脚本"))
             except Exception as exc:  # noqa: BROAD_EXCEPT_OK - GUI worker boundary reports export failures.
                 error_text = str(exc)
@@ -77,9 +76,8 @@ class ExportActionsMixin:
             try:
                 n = 0
                 for cat, objs in objects.items():
-                    with open(os.path.join(out, f"{cat}ID.txt"), "w", encoding="utf-8") as handle:
-                        handle.write(format_box_id_text(objs))
-                    n += 1
+                    name = f"{safe_filename(cat)}ID.txt"
+                    n += write_text(out, name, format_box_id_text(objs))
                 self.after(0, lambda: self._open_dir(out, n, "分类的ID列表"))
             except Exception as exc:  # noqa: BROAD_EXCEPT_OK - GUI worker boundary reports export failures.
                 error_text = str(exc)

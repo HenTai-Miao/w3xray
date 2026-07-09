@@ -12,6 +12,7 @@ from .archive_export_paths import _safe_export_path
 from .archive_export_recovery import _export_recovered_named_files
 from .external_listfile import read_external_listfile
 from .mpq import MPQArchive, guess_extension
+from .safe_output import SafeWriteStatus, write_bytes_safely, write_text_safely
 
 KNOWN_EXPORT_FILES = [
     "war3map.w3u", "war3map.w3t", "war3map.w3a", "war3map.w3q",
@@ -100,9 +101,11 @@ def _export_all_impl(
     _export_recovered_named_files(archive, out_dir, exported_blocks)
     _export_unknown_blocks(archive, out_dir, exported_blocks, raw_manifest, sub_maps)
     if raw_manifest:
-        raw_dir = os.path.join(out_dir, "UnknownRaw")
-        with open(os.path.join(raw_dir, "manifest.tsv"), "w", encoding="utf-8") as handle:
-            handle.write("\n".join(raw_manifest) + "\n")
+        write_text_safely(
+            out_dir,
+            "UnknownRaw/manifest.tsv",
+            "\n".join(raw_manifest) + "\n",
+        )
     if _depth == 0:
         _export_sub_maps(out_dir, sub_maps, external_names)
     return out_dir
@@ -125,16 +128,13 @@ def _export_named_file(
 ) -> None:
     if not archive.has_file(name):
         return
-    dest = _safe_export_path(out_dir, name)
-    if dest is None:
-        return
     try:
         data = archive.read_file(name)
     except (KeyError, OSError, ValueError):
         return
-    os.makedirs(os.path.dirname(dest) or out_dir, exist_ok=True)
-    with open(dest, "wb") as handle:
-        handle.write(data)
+    result = write_bytes_safely(out_dir, name, data)
+    if result.status is not SafeWriteStatus.WRITTEN:
+        return
     block_index = archive.block_index_of(name)
     if block_index is not None:
         exported_blocks.add(block_index)
@@ -149,7 +149,6 @@ def _export_unknown_blocks(
     raw_manifest: list[str],
     sub_maps: list[str],
 ) -> None:
-    unknown_dir = os.path.join(out_dir, "Unknown")
     for index, block in archive.iter_blocks():
         if index in exported_blocks:
             continue
@@ -158,11 +157,9 @@ def _export_unknown_blocks(
             _export_raw_block(archive, out_dir, index, block, raw_manifest)
             continue
         ext = guess_extension(data)
-        os.makedirs(unknown_dir, exist_ok=True)
         filename = "File%06d.%s" % (index, ext)
-        with open(os.path.join(unknown_dir, filename), "wb") as handle:
-            handle.write(data)
-        if ext in ("w3m", "w3x"):
+        result = write_bytes_safely(out_dir, f"Unknown/{filename}", data)
+        if result.status is SafeWriteStatus.WRITTEN and ext in ("w3m", "w3x"):
             sub_maps.append(os.path.join("Unknown", filename))
 
 
@@ -173,12 +170,11 @@ def _export_raw_block(
     block,
     manifest: list[str],
 ) -> None:
-    raw_dir = os.path.join(out_dir, "UnknownRaw")
-    os.makedirs(raw_dir, exist_ok=True)
     filename = "File%06d.mpqraw" % index
     raw = _block_raw_payload(archive, block)
-    with open(os.path.join(raw_dir, filename), "wb") as handle:
-        handle.write(raw)
+    result = write_bytes_safely(out_dir, f"UnknownRaw/{filename}", raw)
+    if result.status is not SafeWriteStatus.WRITTEN:
+        return
     manifest.append(
         f"{filename}\tblock={index}\tcomp_size={block.comp_size}\t"
         f"file_size={block.file_size}\tflags=0x{block.flags:08X}\t"
@@ -207,5 +203,5 @@ def _archive_name(archive: ExportArchive) -> str:
             end = data.index(b"\x00", 8)
             return data[8:end].decode("utf-8", "replace")
     except (AttributeError, ValueError, IndexError, UnicodeDecodeError):
-        pass
+        return os.path.basename(getattr(archive, "path", "map"))
     return os.path.basename(getattr(archive, "path", "map"))

@@ -7,12 +7,19 @@ _safe_export_path 必须把这类名字拒绝（返回 None），普通名字正
 import os
 import tempfile
 import unittest
+from pathlib import Path
 
 from w3xtool.api import (
+    GameObject,
+    MapData,
     _export_all_impl,
     _export_recovered_named_files,
     _safe_export_path,
 )
+from w3xtool.knowledge_assets import export_resource_bodies
+from w3xtool.knowledge_object_exports import write_object_ids
+from w3xtool.knowledge_script_exports import write_readable_scripts
+from w3xtool.knowledge_unknown_exports import write_unknown_files_from_archive
 from w3xtool.mpq import FLAG_ENCRYPTED, FLAG_EXISTS, HASH_NAME_A, HASH_NAME_B, _Block, _hash
 
 
@@ -160,6 +167,127 @@ class TestRecoveredNamedExport(unittest.TestCase):
             with open(os.path.join(out, "Textures", "foo.blp"), "rb") as f:
                 self.assertEqual(f.read(), b"BLP1texture")
             self.assertTrue(os.path.exists(os.path.join(out, "RecoveredNames", "manifest.tsv")))
+
+
+class TestUnifiedSinkSafety(unittest.TestCase):
+    def test_resource_body_does_not_follow_body_directory_symlink(self):
+        with tempfile.TemporaryDirectory() as source, tempfile.TemporaryDirectory() as root:
+            source_path = Path(source)
+            (source_path / "Assets").mkdir()
+            (source_path / "Assets" / "Panel.blp").write_bytes(b"BLP1panel")
+            output = Path(root) / "resources"
+            output.mkdir()
+            outside = Path(root) / "outside"
+            outside.mkdir()
+            self._symlink(output / "素材文件", outside, directory=True)
+            md = MapData(path=source, name="资源目录安全图")
+            md.all_files = [r"Assets\Panel.blp"]
+
+            report = export_resource_bodies(md, str(output))
+
+            self.assertEqual(report.exported_count, 0)
+            self.assertFalse((outside / "assets" / "panel.blp").exists())
+
+    def test_resource_body_does_not_follow_nested_directory_symlink(self):
+        with tempfile.TemporaryDirectory() as source, tempfile.TemporaryDirectory() as root:
+            source_path = Path(source)
+            (source_path / "Assets").mkdir()
+            (source_path / "Assets" / "Panel.blp").write_bytes(b"BLP1panel")
+            output = Path(root) / "resources"
+            body = output / "素材文件"
+            body.mkdir(parents=True)
+            outside = Path(root) / "outside"
+            outside.mkdir()
+            self._symlink(body / "assets", outside, directory=True)
+            md = MapData(path=source, name="资源安全图")
+            md.all_files = [r"Assets\Panel.blp"]
+
+            report = export_resource_bodies(md, str(output))
+
+            self.assertEqual(report.exported_count, 0)
+            self.assertFalse((outside / "panel.blp").exists())
+
+    def test_unknown_block_does_not_follow_output_directory_symlink(self):
+        class Block:
+            file_pos = 0
+            comp_size = 4
+            file_size = 4
+            flags = FLAG_EXISTS
+
+        class Archive:
+            path = "fake.w3x"
+            archive_offset = 0
+            _data = b"BLP1"
+
+            def list_files(self):
+                return []
+
+            def block_index_of(self, _name):
+                return None
+
+            def iter_blocks(self):
+                return ((0, Block()),)
+
+            def read_block_anon(self, _block):
+                return b"BLP1"
+
+        with tempfile.TemporaryDirectory() as root:
+            output = Path(root) / "unknown"
+            output.mkdir()
+            outside = Path(root) / "outside"
+            outside.mkdir()
+            self._symlink(output / "Unknown", outside, directory=True)
+
+            write_unknown_files_from_archive(Archive(), str(output))
+
+            self.assertFalse((outside / "block_000000.blp").exists())
+
+    def test_object_category_file_does_not_follow_destination_symlink(self):
+        md = MapData(path="x.w3x", name="对象安全图")
+        md.objects = {
+            "单位": [GameObject("单位", "w3u", "H001", "Hpal", "单位", True)],
+        }
+        with tempfile.TemporaryDirectory() as root:
+            output = Path(root) / "objects"
+            output.mkdir()
+            outside = Path(root) / "outside.tsv"
+            outside.write_text("before", encoding="utf-8")
+            self._symlink(output / "单位.tsv", outside)
+
+            write_object_ids(md, str(output))
+
+            self.assertEqual(outside.read_text(encoding="utf-8"), "before")
+
+    def test_script_file_does_not_follow_destination_symlink(self):
+        md = MapData(path="x.w3x", name="脚本安全图")
+        md.scripts = {"war3map.j": "function main takes nothing returns nothing\nendfunction\n"}
+        with tempfile.TemporaryDirectory() as root:
+            output = Path(root) / "scripts"
+            output.mkdir()
+            outside = Path(root) / "outside.j"
+            outside.write_text("before", encoding="utf-8")
+            self._symlink(output / "war3map.j", outside)
+
+            write_readable_scripts(md, str(output))
+
+            self.assertEqual(outside.read_text(encoding="utf-8"), "before")
+
+    def test_script_parent_traversal_is_rejected_before_flattening(self):
+        md = MapData(path="x.w3x", name="脚本路径安全图")
+        md.scripts = {"../escape.j": "function escape takes nothing returns nothing\nendfunction\n"}
+        with tempfile.TemporaryDirectory() as root:
+            output = Path(root) / "scripts"
+
+            count = write_readable_scripts(md, str(output))
+
+            self.assertEqual(count, 0)
+            self.assertFalse((output / "escape.j").exists())
+
+    def _symlink(self, link: Path, target: Path, *, directory: bool = False) -> None:
+        try:
+            link.symlink_to(target, target_is_directory=directory)
+        except OSError as exc:
+            self.skipTest(f"symlink unavailable: {exc}")
 
 
 if __name__ == "__main__":
