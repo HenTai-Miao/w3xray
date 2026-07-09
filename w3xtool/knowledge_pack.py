@@ -74,11 +74,13 @@ def write_knowledge_pack(
     _ = external_names
     trigger_data = _load_trigger_data(game_data_path)
     probe = probe_game_data_path(game_data_path)
+    completeness = build_extraction_completeness_report(md)
     capabilities = ExtractionCapabilities(
         game_data_kind=probe.kind if probe.is_readable else "missing",
         has_trigger_schema=trigger_data is not None,
         has_trigger_strings=bool(trigger_data and trigger_data.has_trigger_strings),
         external_listfile=md.external_listfile,
+        archive_diagnosis_kind=completeness.archive_diagnosis_kind,
     )
     count = 0
     count += write_text(out_dir, "资料包目录.tsv", format_knowledge_manifest())
@@ -94,7 +96,7 @@ def write_knowledge_pack(
     count += write_text(
         out_dir,
         "提取完整性.txt",
-        format_extraction_completeness_report(build_extraction_completeness_report(md)),
+        format_extraction_completeness_report(completeness),
     )
     count += write_object_ids(md, os.path.join(out_dir, "对象ID"))
     count += write_box_ids(md, os.path.join(out_dir, "盒子兼容ID"))

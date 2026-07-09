@@ -5,7 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from w3xtool.api import MapData, _campaign_inner_maps, load_map
-from w3xtool.external_listfile import ExternalListfileReport
+from w3xtool.external_listfile import (
+    ExternalListfileReport,
+    read_external_listfile,
+    validate_external_names,
+)
 from w3xtool.gui_loader import LoadedMap, load_path_payload
 from w3xtool.knowledge_pack import write_knowledge_pack
 from w3xtool.load_context import MapLoadContext
@@ -31,6 +35,18 @@ class _Archive:
 
     def close(self) -> None:
         return
+
+
+def test_read_external_listfile_preserves_unc_name_for_unsafe_report(tmp_path: Path) -> None:
+    # Given: a real listfile containing a forward-slash UNC path.
+    listfile = tmp_path / "listfile.txt"
+    listfile.write_text("//server/share/file.blp\n", encoding="utf-8")
+
+    # When: names cross the real file parser and archive validation boundary.
+    report = validate_external_names(_Archive(set()), read_external_listfile(str(listfile)))
+
+    # Then: the path is reported as unsafe instead of disappearing as a comment.
+    assert report.unsafe == ("//server/share/file.blp",)
 
 
 def test_load_map_confirms_external_names_before_listing(monkeypatch) -> None:

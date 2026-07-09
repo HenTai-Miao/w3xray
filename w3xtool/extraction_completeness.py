@@ -48,6 +48,7 @@ class ExtractionCompletenessReport:
     import_table_present: bool | None
     warnings: tuple[str, ...]
     notes: tuple[str, ...]
+    archive_diagnosis_kind: str = ""
 
     @property
     def named_coverage_percent(self) -> float | None:
@@ -63,11 +64,16 @@ def build_extraction_completeness_report(
 ) -> ExtractionCompletenessReport:
     """Build a completeness report from the original archive when available."""
     if not md.path or not os.path.exists(md.path):
-        return _fallback_report(md.path, md.all_files, "源文件不可读，无法计算 MPQ 块覆盖。")
+        return _fallback_report(
+            md.path,
+            md.all_files,
+            "源文件不可读，无法计算 MPQ 块覆盖。",
+            "missing",
+        )
     try:
         archive = MPQArchive(md.path)
     except (OSError, ValueError, struct.error) as err:
-        return _fallback_report(md.path, md.all_files, f"源文件不可读：{err}")
+        return _fallback_report(md.path, md.all_files, f"源文件不可读：{err}", "read_error")
     try:
         return build_extraction_completeness_from_archive(md, archive)
     finally:
@@ -153,6 +159,7 @@ def _fallback_report(
     source_path: str,
     names: Sequence[str],
     warning: str,
+    archive_diagnosis_kind: str,
 ) -> ExtractionCompletenessReport:
     return ExtractionCompletenessReport(
         source_path=source_path,
@@ -167,6 +174,7 @@ def _fallback_report(
         import_table_present=None,
         warnings=(warning,),
         notes=("只能根据已加载的内部文件清单展示结果；重新选择原始地图可得到块覆盖诊断。",),
+        archive_diagnosis_kind=archive_diagnosis_kind,
     )
 
 

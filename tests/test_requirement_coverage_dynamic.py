@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from w3xtool.api import MapData
 from w3xtool.external_listfile import ExternalListfileReport
+from w3xtool.knowledge_pack import write_knowledge_pack
 from w3xtool.knowledge_requirements import ExtractionCapabilities, format_requirement_coverage
 from w3xtool.wtg_diagnostics import UnknownTriggerFunction
 from w3xtool.wtg_models import TriggerHeader, TriggerTreeSummary
@@ -74,6 +77,21 @@ def test_requirement_coverage_consumes_archive_diagnosis_kind() -> None:
 
     # Then: the diagnosis is visible rather than stored in an unused field.
     assert "归档诊断\t结构损坏" in text
+
+
+def test_knowledge_pack_reports_missing_archive_diagnosis(tmp_path: Path) -> None:
+    # Given: map data whose original archive no longer exists.
+    md = MapData(path=str(tmp_path / "missing.w3x"), name="missing")
+    out_dir = tmp_path / "pack"
+
+    # When: the full knowledge pack is written.
+    write_knowledge_pack(md, str(out_dir))
+
+    # Then: the known source failure reaches coverage instead of reading as not run.
+    completeness = (out_dir / "提取完整性.txt").read_text(encoding="utf-8")
+    coverage = (out_dir / "需求覆盖.tsv").read_text(encoding="utf-8")
+    assert "源状态：源文件不可读" in completeness
+    assert "归档诊断\t文件缺失" in coverage
 
 
 def _summary_with_missing_schema() -> TriggerTreeSummary:

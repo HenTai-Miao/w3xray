@@ -36,7 +36,8 @@ def read_external_listfile(path: str | None) -> tuple[str, ...]:
     names: list[str] = []
     for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         name = line.strip()
-        if not name or name.startswith("#") or name.startswith("//"):
+        is_slash_comment = name.startswith("//") and "/" not in name[2:]
+        if not name or name.startswith("#") or is_slash_comment:
             continue
         names.append(name)
     return tuple(names)
