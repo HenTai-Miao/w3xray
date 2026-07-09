@@ -8,7 +8,14 @@ from w3xtool.imp import ImportEntry, ImportSummary
 from w3xtool.mmp import PreviewIcon, PreviewIconSummary
 from w3xtool.w3i import W3iInfo, Player, Force
 from w3xtool.w3world import Camera, Region, Sound
-from w3xtool.wtg import TriggerCategory, TriggerHeader, TriggerTreeSummary, TriggerVariable
+from w3xtool.wtg import (
+    TriggerCategory,
+    TriggerHeader,
+    TriggerParseFailure,
+    TriggerTreeSummary,
+    TriggerVariable,
+    UnknownTriggerFunction,
+)
 
 
 class TestInfoTab(GuiTestCase):
@@ -87,6 +94,9 @@ class TestInfoTab(GuiTestCase):
             categories=(TriggerCategory(42, "系统"),),
             variables=(TriggerVariable("Count", "integer", 1, False, 1, True, "5"),),
             triggers=(TriggerHeader("初始化", "", False, True, False, False, True, 42, 0),),
+            has_unexpanded_functions=True,
+            missing_schema_functions=(UnknownTriggerFunction("初始化", "MissingAction", 2, 0x44),),
+            parse_failures=(TriggerParseFailure("初始化", "BadAction", 0x88, "bad bytes"),),
         )
         self.app.map_data = md
         self.app._refresh_info()
@@ -94,6 +104,10 @@ class TestInfoTab(GuiTestCase):
         self.assertIn("触发器树", txt)
         self.assertIn("系统", txt)
         self.assertIn("初始化", txt)
+        self.assertIn("缺少 TriggerData/TriggerStrings", txt)
+        self.assertIn("MissingAction", txt)
+        self.assertIn("WTG 解析失败", txt)
+        self.assertIn("BadAction @ 0x88", txt)
 
     def test_preview_icons_rendered(self):
         md = MapData(path="x", name="标记图")

@@ -6,7 +6,14 @@ from w3xtool.gameconfig import GameConfiguration, GameConfigPlayer, NamedGameCon
 from w3xtool.gui_reports import build_analysis_blocks, build_overview_blocks, format_blocks
 from w3xtool.imp import ImportEntry, ImportSummary
 from w3xtool.mmp import PreviewIcon, PreviewIconSummary
-from w3xtool.wtg import TriggerCategory, TriggerHeader, TriggerTreeSummary, TriggerVariable
+from w3xtool.wtg import (
+    TriggerCategory,
+    TriggerHeader,
+    TriggerParseFailure,
+    TriggerTreeSummary,
+    TriggerVariable,
+    UnknownTriggerFunction,
+)
 
 
 class GuiReportTest(unittest.TestCase):
@@ -112,6 +119,9 @@ class GuiReportTest(unittest.TestCase):
             categories=(TriggerCategory(1, "系统"),),
             variables=(TriggerVariable("Count", "integer", 1, False, 1, True, "5"),),
             triggers=(TriggerHeader("初始化", "", False, True, False, False, True, 1, 0),),
+            has_unexpanded_functions=True,
+            missing_schema_functions=(UnknownTriggerFunction("初始化", "MissingAction", 2, 0x24),),
+            parse_failures=(TriggerParseFailure("初始化", "BadAction", 0x48, "bad bytes"),),
         )
 
         # When: overview and analysis blocks are formatted.
@@ -123,6 +133,10 @@ class GuiReportTest(unittest.TestCase):
         self.assertIn("触发器树", analysis)
         self.assertIn("系统", analysis)
         self.assertIn("Count", analysis)
+        self.assertIn("缺少 TriggerData/TriggerStrings", analysis)
+        self.assertIn("MissingAction", analysis)
+        self.assertIn("WTG 解析失败", analysis)
+        self.assertIn("BadAction @ 0x48", analysis)
 
     def test_reports_include_preview_icons(self):
         # Given: parsed minimap preview icons.

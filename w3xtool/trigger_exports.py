@@ -43,8 +43,7 @@ def format_trigger_tree_tsv(summary: TriggerTreeSummary | None) -> str:
             _yes_no(trigger.run_on_init),
             _tsv(_trigger_description(trigger.description, trigger.is_comment)),
         )))
-    if summary.has_unexpanded_functions:
-        rows.append("说明\t\t\tECA 函数体未展开\t\t\t\t\t\t缺 TriggerData.txt 参数表，只显示触发器头")
+    _append_diagnostics(rows, summary)
     return "\n".join(rows) + "\n"
 
 
@@ -59,8 +58,7 @@ def format_trigger_eca_tsv(
         return "\n".join(rows) + "\n"
     for function in summary.eca_functions:
         _append_eca_function(rows, function, trigger_data)
-    if summary.has_unexpanded_functions:
-        rows.append("说明\t\tECA 函数体未完整展开\t\t\t\t\t\tWTG 函数字节截断或格式不匹配\t")
+    _append_diagnostics(rows, summary)
     return "\n".join(rows) + "\n"
 
 
@@ -124,6 +122,24 @@ def _append_eca_function(
             _append_eca_function(rows, parameter.nested_function, trigger_data)
     for child in function.children:
         _append_eca_function(rows, child, trigger_data)
+
+
+def _append_diagnostics(rows: list[str], summary: TriggerTreeSummary) -> None:
+    missing_schema_functions = getattr(summary, "missing_schema_functions", ())
+    parse_failures = getattr(summary, "parse_failures", ())
+    for item in missing_schema_functions:
+        rows.append(
+            "说明\t\t\t缺少 TriggerData/TriggerStrings：只读取触发器头"
+            f"\t{_tsv(item.trigger_name)}\t{_tsv(item.function_name)}\t0x{item.offset:x}\t\t\t"
+        )
+    for failure in parse_failures:
+        rows.append(
+            "说明\t\t\t"
+            f"WTG 解析失败：{_tsv(failure.trigger_name)}/{_tsv(failure.function_name)} "
+            f"@ 0x{failure.offset:x}：{_tsv(failure.reason)}\t\t\t\t\t\t"
+        )
+    if summary.has_unexpanded_functions and not missing_schema_functions and not parse_failures:
+        rows.append("说明\t\t\tWTG ECA 未完整展开：缺少结构化诊断\t\t\t\t\t\t")
 
 
 def _trigger_description(description: str, is_comment: bool) -> str:

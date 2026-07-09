@@ -12,7 +12,14 @@ from w3xtool.mapmeta import MapStructureReport, PathingSummary
 from w3xtool.mmp import PreviewIcon, PreviewIconSummary
 from w3xtool.slkmeta import SlkFileSummary, SlkInventoryReport
 from w3xtool.terrain import TerrainInfo
-from w3xtool.wtg import TriggerCategory, TriggerHeader, TriggerTreeSummary, TriggerVariable
+from w3xtool.wtg import (
+    TriggerCategory,
+    TriggerHeader,
+    TriggerParseFailure,
+    TriggerTreeSummary,
+    TriggerVariable,
+    UnknownTriggerFunction,
+)
 
 
 def _obj(category, obj_id):
@@ -401,6 +408,8 @@ class CliAuditTest(unittest.TestCase):
                 TriggerHeader("脚本块", "", False, False, True, True, False, 42, 1),
             ),
             has_unexpanded_functions=True,
+            missing_schema_functions=(UnknownTriggerFunction("初始化", "MissingAction", 2, 0x40),),
+            parse_failures=(TriggerParseFailure("脚本块", "BadAction", 0x80, "invalid parameter type 999"),),
         )
 
         # When: CLI summary lines are rendered.
@@ -411,7 +420,8 @@ class CliAuditTest(unittest.TestCase):
         self.assertIn("  触发器树:", lines)
         self.assertTrue(any("初始化" in line and "开局运行" in line for line in lines))
         self.assertTrue(any("脚本块" in line and "禁用" in line for line in lines))
-        self.assertTrue(any("TriggerData.txt" in line for line in lines))
+        self.assertTrue(any("缺少 TriggerData/TriggerStrings" in line and "MissingAction" in line for line in lines))
+        self.assertTrue(any("WTG 解析失败" in line and "BadAction @ 0x80" in line for line in lines))
 
     def test_cli_summary_includes_preview_icons(self):
         # Given: a map with parsed minimap preview icons.

@@ -9,6 +9,7 @@ import unittest
 
 from w3xtool.api import MapData
 from w3xtool.knowledge_pack import write_knowledge_pack
+from w3xtool.trigger_schema import TriggerFunctionKind, TriggerFunctionSchema, TriggerSchema
 from w3xtool.trigger_exports import format_trigger_eca_tsv
 from w3xtool.wtg import parse_wtg
 
@@ -27,7 +28,7 @@ def _param(parameter_type: int, value: str, nested: bytes = b"") -> bytes:
         + _z(value)
         + _i(1 if nested else 0)
         + nested
-        + _i(1 if nested else 0)
+        + _i(0)
     )
 
 
@@ -42,11 +43,20 @@ def _eca(
         _i(function_type)
         + _z(name)
         + _i(enabled)
-        + _i(len(params))
         + b"".join(params)
         + _i(len(children))
         + b"".join(children)
     )
+
+
+def _child_eca(
+    function_type: int,
+    branch: int,
+    name: str,
+    enabled: int,
+    params: tuple[bytes, ...],
+) -> bytes:
+    return _i(function_type) + _i(branch) + _z(name) + _i(enabled) + b"".join(params) + _i(0)
 
 
 def _trigger_header(name: str, eca_count: int) -> bytes:
@@ -74,7 +84,7 @@ def _classic_wtg_with_eca() -> bytes:
             _param(0, "hfoo"),
             _param(2, "比较", nested_call),
         ),
-        (_eca(2, "DisplayTextToForce", 0, (_param(0, "TRIGSTR_001"),)),),
+        (_child_eca(2, 0, "DisplayTextToForce", 0, (_param(0, "TRIGSTR_001"),)),),
     )
     return (
         b"WTG!"
@@ -98,7 +108,7 @@ class WtgEcaExportTest(unittest.TestCase):
         data = _classic_wtg_with_eca()
 
         # When: the WTG file is parsed.
-        summary = parse_wtg(data)
+        summary = parse_wtg(data, _schema())
 
         # Then: raw ECA function bodies are available without relying on JASS.
         self.assertFalse(summary.has_unexpanded_functions)
@@ -115,7 +125,7 @@ class WtgEcaExportTest(unittest.TestCase):
 
     def test_trigger_eca_tsv_exports_functions_parameters_and_children(self) -> None:
         # Given: parsed WTG ECA functions.
-        summary = parse_wtg(_classic_wtg_with_eca())
+        summary = parse_wtg(_classic_wtg_with_eca(), _schema())
 
         # When: the ECA report is formatted.
         text = format_trigger_eca_tsv(summary)
@@ -130,7 +140,7 @@ class WtgEcaExportTest(unittest.TestCase):
     def test_knowledge_pack_writes_trigger_eca_table(self) -> None:
         # Given: a map with parsed WTG ECA metadata.
         md = MapData(path="x.w3x", name="ECA图")
-        md.trigger_summary = parse_wtg(_classic_wtg_with_eca())
+        md.trigger_summary = parse_wtg(_classic_wtg_with_eca(), _schema())
 
         # When: the knowledge pack is written.
         with tempfile.TemporaryDirectory() as out:
@@ -143,6 +153,25 @@ class WtgEcaExportTest(unittest.TestCase):
                 text = handle.read()
             self.assertIn("CreateNUnitsAtLoc", text)
             self.assertIn("OperatorCompareInteger", text)
+
+def _schema() -> TriggerSchema:
+    entries = (
+        (TriggerFunctionKind.ACTION, "CreateNUnitsAtLoc", ("integer", "unitcode", "integer")),
+        (TriggerFunctionKind.CALL, "OperatorCompareInteger", ("integer", "integer")),
+        (TriggerFunctionKind.ACTION, "DisplayTextToForce", ("StringExt",)),
+    )
+    return TriggerSchema({
+        (kind, name.lower()): TriggerFunctionSchema(
+            kind=kind,
+            name=name,
+            category="",
+            return_type=None,
+            parameter_types=params,
+            display_name=name,
+            template=None,
+        )
+        for kind, name, params in entries
+    })
 
 
 if __name__ == "__main__":

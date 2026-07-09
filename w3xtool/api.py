@@ -5,6 +5,7 @@ import os
 import tempfile
 from dataclasses import dataclass, field
 
+from .load_context import MapLoadContext
 from .archive_export import (
     _export_all_impl,
     _export_recovered_named_files,
@@ -414,17 +415,24 @@ def _add_binary_objects(md: "MapData", archive: MPQArchive, wts: dict,
             md.obj_index.setdefault(o.base_id, o)
 
 
-def load_map(path: str, _depth: int = 0, shared_index: dict | None = None) -> MapData:
+def load_map(
+    path: str,
+    _depth: int = 0,
+    shared_index: dict | None = None,
+    load_context: MapLoadContext | None = None,
+) -> MapData:
     path = os.fspath(path)
+    if load_context is None:
+        load_context = MapLoadContext()
     archive = MPQArchive(path)
     try:
-        return _load_map_impl(archive, path, _depth, shared_index)
+        return _load_map_impl(archive, path, _depth, shared_index, load_context)
     finally:
         archive.close()                      # 释放句柄/mmap/临时副本，别等 GC
 
 
 def _load_map_impl(archive: MPQArchive, path: str, _depth: int,
-                   shared_index: dict | None) -> MapData:
+                   shared_index: dict | None, load_context: MapLoadContext) -> MapData:
     wts = {}
     if archive.has_file("war3map.wts"):
         try:
@@ -494,7 +502,7 @@ def _load_map_impl(archive: MPQArchive, path: str, _depth: int,
     )
     add_world_metadata(md, archive, wts)
     add_game_configs(md, archive)
-    add_trigger_summary(md, archive)
+    add_trigger_summary(md, archive, load_context)
     add_preview_icons(md, archive)
     add_import_summary(md, archive)
     # war3map.wct 自定义脚本解码成可读文本并入脚本（原始 wct 是二进制）
@@ -528,7 +536,7 @@ def _load_map_impl(archive: MPQArchive, path: str, _depth: int,
                 with os.fdopen(fd, "wb") as f:
                     f.write(data)
                 # 把战役共享对象索引传给子地图，让它的脚本引用能取到真名
-                sub = load_map(tmp, _depth + 1, shared_index=md.obj_index)
+                sub = load_map(tmp, _depth + 1, shared_index=md.obj_index, load_context=load_context)
                 sub.name = inner
                 sub.path = inner             # 临时文件即将删除，path 改用逻辑名(子图不可再 open)
                 md.sub_maps.append(sub)

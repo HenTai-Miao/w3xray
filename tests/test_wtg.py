@@ -109,7 +109,7 @@ class WtgParseTest(unittest.TestCase):
         self.assertEqual(summary.trigger_count, 1)
         self.assertEqual(summary.comment_count, 1)
         self.assertEqual(summary.script_count, 1)
-        self.assertEqual(summary.categories[0].name, "Folder")
+        self.assertEqual([category.name for category in summary.categories], ["Map", "Folder"])
         self.assertEqual(summary.variables[0].name, "loc1")
         self.assertEqual([trigger.name for trigger in summary.triggers], ["Init", "Note", "ScriptA"])
 

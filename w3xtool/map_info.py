@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .api import MapData
+from .wtg_diagnostics import format_summary_diagnostics
 
 
 def format_map_info(md: MapData | None) -> str:
@@ -159,8 +160,8 @@ def _format_trigger_summary(md: MapData) -> list[str]:
         lines.append(f"  变量：{_names([var.name for var in summary.variables if var.name])}")
     if summary.triggers:
         lines.append(f"  触发器：{_names([trigger.name or '(未命名触发器)' for trigger in summary.triggers])}")
-    if summary.has_unexpanded_functions:
-        lines.append("  ECA 函数体未展开：缺 TriggerData.txt 参数表，只显示触发器头。")
+    for diagnostic in format_summary_diagnostics(summary):
+        lines.append(f"  {diagnostic}")
     return lines
 
 

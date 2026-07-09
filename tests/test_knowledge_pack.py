@@ -110,7 +110,7 @@ class KnowledgePackTest(unittest.TestCase):
             self.assertIn("分类\t42\t0\t系统", triggers)
             self.assertIn("触发器\t\t42\t初始化\t系统\t是\t否\t否\t是\t开局", triggers)
             self.assertIn("触发器\t\t42\t脚本块\t系统\t否\t是\t是\t否", triggers)
-            self.assertIn("ECA 函数体未展开", triggers)
+            self.assertIn("WTG ECA 未完整展开：缺少结构化诊断", triggers)
             with open(os.path.join(out, "触发变量.tsv"), encoding="utf-8") as f:
                 variables = f.read()
             self.assertIn("名称\t类型\t分类\t数组\t数组大小\t初始化\t初始值", variables)

@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .api import MapData
+from .wtg_diagnostics import format_summary_diagnostics
 
 
 @dataclass(frozen=True, slots=True)
@@ -226,8 +227,7 @@ def _trigger_tree_block(md: MapData) -> GuiReportBlock:
         tags = _trigger_tags(trigger)
         suffix = f" · {'/'.join(tags)}" if tags else ""
         lines.append(f"{trigger.name or '(未命名触发器)'}{suffix}")
-    if summary.has_unexpanded_functions:
-        lines.append("ECA 函数体未展开：缺 TriggerData.txt 参数表，只显示触发器头。")
+    lines.extend(format_summary_diagnostics(summary))
     return GuiReportBlock("触发器树", tuple(lines))
 
 

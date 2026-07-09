@@ -12,6 +12,8 @@ if TYPE_CHECKING:
     from w3xtool.api import MapData
     from w3xtool.gameconfig import GameConfiguration, GameConfigPlayer
 
+from w3xtool.wtg_diagnostics import format_summary_diagnostics
+
 
 def iter_cli_summary_lines(md: MapData) -> Iterator[str]:
     """把已解析地图渲染成 CLI 摘要行，便于测试与复用。"""
@@ -189,8 +191,8 @@ def _trigger_tree_summary_lines(md: MapData) -> Iterator[str]:
         yield f"    - {trigger.name or '(未命名触发器)'}{suffix}"
     if len(summary.triggers) > 6:
         yield f"    …… 另有 {len(summary.triggers) - 6} 个已解析触发器头"
-    if summary.has_unexpanded_functions:
-        yield "    ECA 函数体未展开：缺 TriggerData.txt 参数表，只显示触发器头。"
+    for diagnostic in format_summary_diagnostics(summary):
+        yield f"    {diagnostic}"
 
 
 def _preview_icon_summary_lines(md: MapData) -> Iterator[str]:

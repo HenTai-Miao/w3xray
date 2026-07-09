@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .api import MapData
+    from .load_context import MapLoadContext
     from .mpq import MPQArchive
 
 
@@ -49,14 +50,15 @@ def add_game_configs(md: "MapData", archive: "MPQArchive") -> None:
     md.game_configs = configs
 
 
-def add_trigger_summary(md: "MapData", archive: "MPQArchive") -> None:
+def add_trigger_summary(md: "MapData", archive: "MPQArchive", load_context: "MapLoadContext | None" = None) -> None:
     """Load a trigger tree summary from war3map.wtg when present."""
     if not archive.has_file("war3map.wtg"):
         return
     try:
         from .wtg import parse_wtg
 
-        md.trigger_summary = parse_wtg(archive.read_file("war3map.wtg"))
+        schema = load_context.trigger_schema if load_context is not None else None
+        md.trigger_summary = parse_wtg(archive.read_file("war3map.wtg"), schema)
     except (KeyError, ValueError):
         md.trigger_summary = None
 
