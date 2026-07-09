@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, TYPE_CHECKING
+
+from .external_listfile import ExternalListfileReport
+
+if TYPE_CHECKING:
+    from .api import MapData
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,6 +18,15 @@ class RequirementCoverage:
     primary: tuple[str, ...]
     secondary: tuple[str, ...]
     note: str
+
+
+@dataclass(frozen=True, slots=True)
+class ExtractionCapabilities:
+    game_data_kind: str = "missing"
+    has_trigger_schema: bool = False
+    has_trigger_strings: bool = False
+    external_listfile: ExternalListfileReport | None = None
+    archive_diagnosis_kind: str = ""
 
 
 _ROWS: Final[tuple[RequirementCoverage, ...]] = (
@@ -184,20 +198,69 @@ _ROWS: Final[tuple[RequirementCoverage, ...]] = (
 )
 
 
-def format_requirement_coverage() -> str:
+def format_requirement_coverage(
+    md: MapData | None = None,
+    capabilities: ExtractionCapabilities | None = None,
+) -> str:
     """Return a TSV matrix that maps user requirements to pack artifacts."""
+    resolved = capabilities or ExtractionCapabilities()
     rows = ["需求\t状态\t主要产物\t辅助产物\t说明"]
+    rows.extend(_format_row(row) for row in _dynamic_rows(md, resolved))
     rows.extend(
-        "\t".join((
-            _tsv(row.request),
-            _tsv(row.status),
-            _tsv("; ".join(row.primary)),
-            _tsv("; ".join(row.secondary)),
-            _tsv(row.note),
-        ))
+        _format_row(row)
         for row in _ROWS
     )
     return "\n".join(rows) + "\n"
+
+
+def _dynamic_rows(
+    md: MapData | None,
+    capabilities: ExtractionCapabilities,
+) -> tuple[RequirementCoverage, ...]:
+    summary = getattr(md, "trigger_summary", None) if md is not None else None
+    functions = tuple(getattr(summary, "eca_functions", ()) or ())
+    triggers = tuple(getattr(summary, "triggers", ()) or ())
+    partial = bool(
+        getattr(summary, "missing_schema_functions", ())
+        or getattr(summary, "parse_failures", ())
+        or getattr(summary, "has_unexpanded_functions", False)
+    )
+    eca_status = "部分提取" if partial else ("已提取" if functions else "未发现")
+    eca_note = f"触发器 {len(triggers)}，已展开 ECA {len(functions)}。"
+    if capabilities.has_trigger_strings:
+        eca_note += " TriggerStrings 本地化可用。"
+    elif capabilities.has_trigger_schema:
+        eca_note += " TriggerStrings 缺失，仅保留函数和参数。"
+    listfile = capabilities.external_listfile
+    listfile_status = "未提供"
+    listfile_note = "未选择外部 listfile。"
+    if listfile is not None:
+        listfile_status = "部分采用" if listfile.missing or listfile.unsafe else "已验证"
+        listfile_note = (
+            f"确认 {len(listfile.confirmed)}，缺失 {len(listfile.missing)}，"
+            f"不安全 {len(listfile.unsafe)}，重复 {len(listfile.duplicates)}。"
+        )
+    casc_status = (
+        "可用"
+        if capabilities.game_data_kind in {"casclib", "native_casc"}
+        else ("使用散文件" if capabilities.game_data_kind == "extracted_dir" else "源数据缺失")
+    )
+    return (
+        RequirementCoverage("WTG ECA", eca_status, ("触发器ECA.tsv",), ("触发器树.tsv",), eca_note),
+        RequirementCoverage("外部 listfile", listfile_status, ("内部文件清单.txt",), (), listfile_note),
+        RequirementCoverage("原生 CASC", casc_status, (), ("触发器ECA.tsv", "资源/"), "只读游戏基础数据源。"),
+        RequirementCoverage("运行时解密", "不支持", (), ("提取完整性.txt",), "仅做静态诊断与原始负载保留。"),
+    )
+
+
+def _format_row(row: RequirementCoverage) -> str:
+    return "\t".join((
+        _tsv(row.request),
+        _tsv(row.status),
+        _tsv("; ".join(row.primary)),
+        _tsv("; ".join(row.secondary)),
+        _tsv(row.note),
+    ))
 
 
 def _tsv(value: str) -> str:

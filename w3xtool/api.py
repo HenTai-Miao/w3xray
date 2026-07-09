@@ -6,6 +6,7 @@ import tempfile
 from dataclasses import dataclass, field
 
 from .load_context import MapLoadContext
+from .external_listfile import ExternalListfileReport, validate_external_names
 from .archive_export import (
     _export_all_impl,
     _export_recovered_named_files,
@@ -15,6 +16,7 @@ from .archive_export import (
     tmp_extract_dir,
 )
 from .mpq import MPQArchive, FLAG_EXISTS
+from .mpq_files import list_archive_files
 from .w3obj import parse_object_data, EXT_CATEGORY
 from .wts import parse_wts, resolve
 from .fields import NAME_FIELD, label_for, is_concat_type, field_type
@@ -85,6 +87,7 @@ class MapData:
     objects: dict = field(default_factory=dict)   # category -> [GameObject]
     scripts: dict = field(default_factory=dict)   # filename -> text
     all_files: list = field(default_factory=list)
+    external_listfile: ExternalListfileReport | None = None
     sub_maps: list = field(default_factory=list)   # 战役内含的子地图 MapData
     obj_index: dict = field(default_factory=dict)  # type_id -> GameObject
     doodads: list = field(default_factory=list)    # 预放置装饰物/可破坏物 (doo.Doodad)
@@ -441,6 +444,8 @@ def _load_map_impl(archive: MPQArchive, path: str, _depth: int,
             wts = {}
 
     md = MapData(path=path, name=_map_name(archive))
+    external_report = validate_external_names(archive, load_context.external_names)
+    md.external_listfile = external_report if load_context.external_names else None
 
     # 先解析文本格式对象档（带名、权威）。返回它覆盖的类别
     text_cats = set()
@@ -523,11 +528,11 @@ def _load_map_impl(archive: MPQArchive, path: str, _depth: int,
     except Exception:
         pass
 
-    md.all_files = archive.list_files()
+    md.all_files = list_archive_files(archive, external_names=external_report.confirmed)
 
     # 战役 .w3n：递归解析内含的 .w3x（防止无限递归）
     if _depth == 0 and path.lower().endswith(".w3n"):
-        for inner in _campaign_inner_maps(archive):
+        for inner in _campaign_inner_maps(archive, md.all_files):
             tmp = None
             try:
                 data = archive.read_file(inner)
@@ -552,10 +557,10 @@ def _load_map_impl(archive: MPQArchive, path: str, _depth: int,
     return md
 
 
-def _campaign_inner_maps(archive: MPQArchive):
+def _campaign_inner_maps(archive: MPQArchive, known_names=()):
     """从战役里找出内含的地图文件名。优先 listfile，其次扫常见名。"""
     found = []
-    for n in archive.list_files():
+    for n in known_names or archive.list_files():
         if n.lower().endswith((".w3x", ".w3m")):
             found.append(n)
     if found:

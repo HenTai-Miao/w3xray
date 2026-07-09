@@ -89,6 +89,42 @@ class ExternalListfileGuiTest(GuiTestCase):
         finally:
             os.remove(path)
 
+    def test_gui_selector_reloads_active_source_with_current_game_data(self) -> None:
+        # Given: an active map and game-data directory already selected.
+        self.app.map_data = MapData(path="map.w3x", name="重载图")
+        self.app.game_data_path = "/game-data"
+        calls: list[str] = []
+
+        # When: the external listfile changes.
+        with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:
+            handle.write("hidden/config.json\n")
+            path = handle.name
+        try:
+            with patch("w3xtool.gui_lifecycle.filedialog.askopenfilename", return_value=path):
+                with patch.object(self.app, "_start_path_load", side_effect=calls.append):
+                    self.app.on_pick_external_listfile()
+        finally:
+            os.remove(path)
+
+        # Then: the original map is reparsed and the game-data selection is retained.
+        self.assertEqual(calls, ["map.w3x"])
+        self.assertEqual(self.app.game_data_path, "/game-data")
+
+    def test_gui_clear_listfile_reloads_active_source(self) -> None:
+        # Given: an active map currently using an external listfile.
+        self.app.map_data = MapData(path="map.w3x", name="清除图")
+        self.app.external_listfile_path = "/tmp/names.txt"
+        self.app._refresh_external_source_labels()
+        calls: list[str] = []
+
+        # When: the listfile selection is cleared.
+        with patch.object(self.app, "_start_path_load", side_effect=calls.append):
+            self.app.external_listfile_clear.invoke()
+
+        # Then: the map is rebuilt without stale external names.
+        self.assertIsNone(self.app.external_listfile_path)
+        self.assertEqual(calls, ["map.w3x"])
+
     def test_export_all_passes_selected_external_listfile_to_worker(self) -> None:
         # Given: a loaded map and a selected external listfile.
         with tempfile.TemporaryDirectory() as out, tempfile.NamedTemporaryFile(

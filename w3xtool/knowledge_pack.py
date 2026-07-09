@@ -21,7 +21,7 @@ from .knowledge_object_exports import (
     write_object_ids,
 )
 from .knowledge_preplaced_exports import format_preplaced_doodads_tsv, format_preplaced_units_tsv
-from .knowledge_requirements import format_requirement_coverage
+from .knowledge_requirements import ExtractionCapabilities, format_requirement_coverage
 from .map_info import format_map_info
 from .knowledge_resource_exports import write_resources
 from .knowledge_terrain_exports import write_terrain_exports
@@ -53,8 +53,8 @@ from .script_trigger_registration_index import (
 )
 from .script_variable_usage_index import build_script_variable_usage_index, format_script_variable_usage_index_tsv
 from .trigger_exports import format_trigger_eca_tsv, format_trigger_tree_tsv, format_trigger_variables_tsv
-from .triggerdata import load_trigger_data_from_source
-from .game_data_source import open_game_data_source
+from .triggerdata import TriggerDataTable, load_trigger_data_from_source
+from .game_data_source import open_game_data_source, probe_game_data_path
 from .ui_texts import (
     build_ui_text_report,
     format_ui_text_references_tsv,
@@ -71,10 +71,18 @@ def write_knowledge_pack(
 ) -> int:
     """Write a map knowledge pack and return the number of files written."""
     os.makedirs(out_dir, exist_ok=True)
-    _merge_external_file_names(md, external_names)
+    _ = external_names
+    trigger_data = _load_trigger_data(game_data_path)
+    probe = probe_game_data_path(game_data_path)
+    capabilities = ExtractionCapabilities(
+        game_data_kind=probe.kind if probe.is_readable else "missing",
+        has_trigger_schema=trigger_data is not None,
+        has_trigger_strings=bool(trigger_data and trigger_data.has_trigger_strings),
+        external_listfile=md.external_listfile,
+    )
     count = 0
     count += write_text(out_dir, "资料包目录.tsv", format_knowledge_manifest())
-    count += write_text(out_dir, "需求覆盖.tsv", format_requirement_coverage())
+    count += write_text(out_dir, "需求覆盖.tsv", format_requirement_coverage(md, capabilities))
     count += write_text(
         out_dir,
         "地图信息.txt",
@@ -167,7 +175,6 @@ def write_knowledge_pack(
     count += write_text(out_dir, "地图与对象ID索引.tsv", format_map_object_id_index(md))
     count += write_text(out_dir, "对象ID使用摘要.tsv", format_object_id_usage_summary(md))
     count += write_text(out_dir, "脚本机制线索.txt", format_script_mechanism_report(all_script_text(md)))
-    trigger_data = load_trigger_data_from_source(open_game_data_source(game_data_path))
     count += write_text(out_dir, "触发器树.tsv", format_trigger_tree_tsv(md.trigger_summary))
     count += write_text(out_dir, "触发器ECA.tsv", format_trigger_eca_tsv(md.trigger_summary, trigger_data=trigger_data))
     count += write_text(out_dir, "触发变量.tsv", format_trigger_variables_tsv(md.trigger_summary))
@@ -180,13 +187,14 @@ def write_knowledge_pack(
     return count
 
 
-def _merge_external_file_names(md: MapData, external_names: Sequence[str]) -> None:
-    seen = {name.lower() for name in md.all_files}
-    for name in external_names:
-        if not name:
-            continue
-        key = name.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        md.all_files.append(name)
+def _load_trigger_data(game_data_path: str | None) -> TriggerDataTable | None:
+    source = open_game_data_source(game_data_path)
+    try:
+        return load_trigger_data_from_source(source)
+    finally:
+        close = getattr(source, "close", None)
+        if callable(close):
+            try:
+                close()
+            except OSError:
+                pass

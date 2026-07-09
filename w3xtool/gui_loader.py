@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import traceback
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Final, Protocol
 
 from .api import MapData, commands_from_map, load_map, recipes_from_map
 from .icons import IconResolver
+from .load_context import MapLoadContext, build_map_load_context
 from .load_options import (
     COMMANDS_KEY,
     OBJECT_BROWSER_KEY,
@@ -22,7 +23,12 @@ PREP_WORKERS: Final = 3
 
 
 class LoadMapFunc(Protocol):
-    def __call__(self, path: str) -> MapData: ...
+    def __call__(
+        self,
+        path: str,
+        *,
+        load_context: MapLoadContext | None = None,
+    ) -> MapData: ...
 
 
 class PrepareMapFunc(Protocol):
@@ -71,9 +77,14 @@ def load_path_payload(
     prepare: PrepareMapFunc | None = None,
     load_options: dict[str, bool] | None = None,
     game_data_path: str | None = None,
+    external_names: Sequence[str] = (),
 ) -> LoadedMap:
     """Load a map path and prepare the initial visible view."""
-    md = load(path)
+    context = build_map_load_context(
+        external_names=external_names,
+        game_data_path=game_data_path,
+    )
+    md = _load_with_context(load, path, context)
     if md.sub_maps:
         views = [("★ 战役共享对象", md)] + [(sub.name, sub) for sub in md.sub_maps]
         campaign_path = path
@@ -105,11 +116,27 @@ def load_campaign_payload(
     path: str,
     *,
     load: LoadMapFunc = load_map,
+    game_data_path: str | None = None,
+    external_names: Sequence[str] = (),
 ) -> LoadedCampaign:
     """Load a campaign node enough to populate its child maps."""
-    md = load(path)
+    context = build_map_load_context(
+        external_names=external_names,
+        game_data_path=game_data_path,
+    )
+    md = _load_with_context(load, path, context)
     views = [("★ 战役共享对象", md)] + [(sub.name, sub) for sub in md.sub_maps]
     return LoadedCampaign(index=index, path=path, views=views, sub_map_count=len(md.sub_maps))
+
+
+def _load_with_context(
+    load: LoadMapFunc,
+    path: str,
+    context: MapLoadContext,
+) -> MapData:
+    if not context.external_names and context.trigger_schema is None:
+        return load(path)
+    return load(path, load_context=context)
 
 
 def prepare_map_view(

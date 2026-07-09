@@ -7,7 +7,6 @@ import threading
 from tkinter import messagebox
 
 from .api import export_all_files, tmp_extract_dir
-from .external_listfile import read_external_listfile
 from .knowledge_pack import format_box_id_text, write_knowledge_pack
 from .script_text_export import build_readable_script_exports
 
@@ -100,7 +99,6 @@ class ExportActionsMixin:
                 n = write_knowledge_pack(
                     md,
                     out,
-                    external_names=read_external_listfile(self.external_listfile_path),
                     game_data_path=self.game_data_path,
                 )
                 self.after(0, lambda: self._open_dir(out, n, "资料包文件"))

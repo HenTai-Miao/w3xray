@@ -11,6 +11,7 @@ from typing import Final, assert_never
 from tkinter import messagebox
 
 from .api import MapData
+from .external_listfile import read_external_listfile
 from .gui_loader import (
     LoadedCampaign,
     LoadedMap,
@@ -47,9 +48,15 @@ class BackgroundLoaderMixin:
     def _start_path_load(self, path: str) -> None:
         options = dict(self.load_options)
         game_data_path = self.game_data_path
+        external_names = read_external_listfile(self.external_listfile_path)
         self._start_loader_job(
             status=f"正在解析 {os.path.basename(path)} …",
-            build_payload=lambda: load_path_payload(path, load_options=options, game_data_path=game_data_path),
+            build_payload=lambda: load_path_payload(
+                path,
+                load_options=options,
+                game_data_path=game_data_path,
+                external_names=external_names,
+            ),
             error_status="解析失败",
         )
 
@@ -67,9 +74,16 @@ class BackgroundLoaderMixin:
             return
         camp = self._dir_campaigns[index]
         path = camp["path"]
+        game_data_path = self.game_data_path
+        external_names = read_external_listfile(self.external_listfile_path)
         self._start_loader_job(
             status=f"正在解析战役 {camp['name']} …",
-            build_payload=lambda: load_campaign_payload(index, path),
+            build_payload=lambda: load_campaign_payload(
+                index,
+                path,
+                game_data_path=game_data_path,
+                external_names=external_names,
+            ),
             error_status="战役解析失败",
         )
 

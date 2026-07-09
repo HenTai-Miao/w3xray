@@ -67,6 +67,13 @@ class GuiLifecycleMixin:
         self.external_listfile_path = path
         self._save_config(external_listfile_path=path)
         self._refresh_external_source_labels()
+        self._reload_active_source()
+
+    def on_clear_external_listfile(self) -> None:
+        self.external_listfile_path = None
+        self._save_config(external_listfile_path=None)
+        self._refresh_external_source_labels()
+        self._reload_active_source()
 
     def on_pick_game_data_dir(self) -> None:
         path = filedialog.askdirectory(title="选择已导出的魔兽重制版数据目录")
@@ -75,12 +82,20 @@ class GuiLifecycleMixin:
         self.game_data_path = path
         self._save_config(game_data_path=path)
         self._refresh_external_source_labels()
-        if self.map_data is not None:
-            self._start_map_switch(self.map_data, self._campaign_path)
+        self._reload_active_source()
+
+    def _reload_active_source(self) -> None:
+        if self.map_data is None:
+            return
+        self._start_path_load(self._campaign_path or self.map_data.path)
 
     def _refresh_external_source_labels(self) -> None:
         if hasattr(self, "external_listfile_label"):
             self.external_listfile_label.configure(text=_source_label("listfile", self.external_listfile_path))
+        if hasattr(self, "external_listfile_clear"):
+            self.external_listfile_clear.configure(
+                state="normal" if self.external_listfile_path else "disabled",
+            )
         if hasattr(self, "game_data_label"):
             label = _source_label("游戏数据", self.game_data_path)
             if self.game_data_path:

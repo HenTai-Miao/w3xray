@@ -50,6 +50,17 @@ def build_topbar(app) -> None:
     source_tools.pack(side="right", padx=(0, 8))
     _add_source_selector(source_tools, "外部listfile", app.on_pick_external_listfile)
     app.external_listfile_label = _source_label(source_tools, "listfile: 未选")
+    app.external_listfile_clear = ctk.CTkButton(
+        source_tools,
+        text="×",
+        width=24,
+        height=26,
+        font=(FONT, 14),
+        command=app.on_clear_external_listfile,
+        state="disabled",
+        **secondary_button_style(),
+    )
+    app.external_listfile_clear.pack(side="left", padx=(0, 4))
     _add_source_selector(source_tools, "游戏数据", app.on_pick_game_data_dir)
     app.game_data_label = _source_label(source_tools, "游戏数据: 未选")
     actions = ctk.CTkFrame(bar, fg_color="transparent")
