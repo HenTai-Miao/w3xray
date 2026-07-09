@@ -12,7 +12,7 @@ from .deferred_paned import add_deferred_pane, build_deferred_horizontal_paned
 from .search import compile_query
 from .theme import BG, BORDER, CARD, FONT, MONO_FONT, PANEL, SUBTLE, TEXT, card_style, entry_style
 from .wtg_eca import function_type_label, parameter_type_label
-from .wtg_models import TriggerEcaFunction
+from .wtg_models import TriggerEcaFunction, TriggerEcaParameter
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,13 +79,19 @@ class TriggerEcaViewMixin:
         add_deferred_pane(paned, right, minsize=300, stretch="never")
         self._trigger_eca_groups: tuple[_TriggerGroup, ...] = ()
         self._trigger_eca_nodes: dict[str, _EcaNode] = {}
+        self._trigger_eca_map = None
 
     def _refresh_trigger_eca(self) -> None:
         summary = getattr(self.map_data, "trigger_summary", None) if self.map_data else None
         functions = tuple(getattr(summary, "eca_functions", ()) or ())
-        self.trigger_eca_search.set("")
+        same_map = self.map_data is self._trigger_eca_map
+        selected = self.trigger_eca_tree.selection()
+        selected_iid = selected[0] if same_map and selected else ""
+        query = self.trigger_eca_search.get().strip() if same_map else ""
+        self._trigger_eca_map = self.map_data
+        self.trigger_eca_search.set(query)
         self._trigger_eca_groups = _group_functions(functions)
-        self._rebuild_trigger_eca_tree("", "")
+        self._rebuild_trigger_eca_tree(query, selected_iid)
         self._set_trigger_eca_status(summary, functions)
 
     def _search_trigger_eca(self) -> None:
@@ -112,6 +118,7 @@ class TriggerEcaViewMixin:
         if selected_iid and tree.exists(selected_iid):
             tree.selection_set(selected_iid)
             tree.focus(selected_iid)
+            self._show_trigger_eca_detail()
         else:
             self._clear_trigger_eca_detail()
 
@@ -180,12 +187,19 @@ def _group_functions(functions: tuple[TriggerEcaFunction, ...]) -> tuple[_Trigge
 
 def _build_node(function: TriggerEcaFunction, iid: str) -> _EcaNode:
     nested = tuple(
-        _build_node(parameter.nested_function, f"{iid}:p{index}")
+        node
         for index, parameter in enumerate(function.parameters)
-        if parameter.nested_function is not None
+        for node in _build_parameter_nodes(parameter, f"{iid}:p{index}")
     )
     children = tuple(_build_node(child, f"{iid}:c{index}") for index, child in enumerate(function.children))
     return _EcaNode(iid, function, nested + children)
+
+
+def _build_parameter_nodes(parameter: TriggerEcaParameter, iid: str) -> tuple[_EcaNode, ...]:
+    nodes = () if parameter.nested_function is None else (_build_node(parameter.nested_function, f"{iid}:f"),)
+    if parameter.array_indexer is None:
+        return nodes
+    return nodes + _build_parameter_nodes(parameter.array_indexer, f"{iid}:a")
 
 
 def _node_matches(node: _EcaNode, compiled) -> bool:
@@ -196,8 +210,15 @@ def _node_matches(node: _EcaNode, compiled) -> bool:
 
 
 def _function_search_text(function: TriggerEcaFunction) -> str:
-    parameters = " ".join(f"{parameter.expected_type} {parameter.value}" for parameter in function.parameters)
+    parameters = " ".join(_parameter_search_text(parameter) for parameter in function.parameters)
     return f"{function.trigger_name} {function.name} {function_type_label(function.function_type)} {parameters}"
+
+
+def _parameter_search_text(parameter: TriggerEcaParameter) -> str:
+    own = f"{parameter.expected_type} {parameter.value}"
+    if parameter.array_indexer is None:
+        return own
+    return f"{own} {_parameter_search_text(parameter.array_indexer)}"
 
 
 def _format_function_detail(function: TriggerEcaFunction) -> str:
@@ -209,12 +230,18 @@ def _format_function_detail(function: TriggerEcaFunction) -> str:
     if not function.parameters:
         lines.append("(无)")
     for index, parameter in enumerate(function.parameters, 1):
-        expected = f" / {parameter.expected_type}" if parameter.expected_type else ""
-        lines.append(
-            f"{index}. {parameter_type_label(parameter.parameter_type)}{expected}: "
-            f"{parameter.value} @ 0x{parameter.source_offset:x}"
-        )
+        _append_parameter_detail(lines, str(index), parameter)
     return "\n".join(lines) + "\n"
+
+
+def _append_parameter_detail(lines: list[str], label: str, parameter: TriggerEcaParameter) -> None:
+    expected = f" / {parameter.expected_type}" if parameter.expected_type else ""
+    lines.append(
+        f"{label}. {parameter_type_label(parameter.parameter_type)}{expected}: "
+        f"{parameter.value} @ 0x{parameter.source_offset:x}"
+    )
+    if parameter.array_indexer is not None:
+        _append_parameter_detail(lines, f"{label}.索引", parameter.array_indexer)
 
 
 def _count_functions(functions: tuple[TriggerEcaFunction, ...]) -> int:
@@ -222,5 +249,16 @@ def _count_functions(functions: tuple[TriggerEcaFunction, ...]) -> int:
 
 
 def _count_function(function: TriggerEcaFunction) -> int:
-    nested = tuple(parameter.nested_function for parameter in function.parameters if parameter.nested_function is not None)
-    return 1 + sum(_count_function(child) for child in nested + function.children)
+    return 1 + sum(_count_function(child) for child in _function_children(function))
+
+
+def _function_children(function: TriggerEcaFunction) -> tuple[TriggerEcaFunction, ...]:
+    nested = tuple(child for parameter in function.parameters for child in _parameter_functions(parameter))
+    return nested + function.children
+
+
+def _parameter_functions(parameter: TriggerEcaParameter) -> tuple[TriggerEcaFunction, ...]:
+    functions = () if parameter.nested_function is None else (parameter.nested_function,)
+    if parameter.array_indexer is None:
+        return functions
+    return functions + _parameter_functions(parameter.array_indexer)

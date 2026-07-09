@@ -76,6 +76,7 @@ class GuiTestCase(unittest.TestCase):
         app.trigger_eca_search.set("")
         app._trigger_eca_nodes = {}
         app._trigger_eca_groups = ()
+        app._trigger_eca_map = None
         app.trigger_eca_status.configure(
             text="打开地图后这里列出 GUI 触发器事件、条件、动作与嵌套调用")
         app.trigger_eca_detail.configure(state="normal")

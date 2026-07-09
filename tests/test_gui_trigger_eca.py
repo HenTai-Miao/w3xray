@@ -109,6 +109,48 @@ class TestGuiTriggerEca(GuiTestCase):
         self.assertEqual(filtered_action, action)
         self.assertEqual(self.app.trigger_eca_tree.selection(), (action,))
 
+    def test_gui_trigger_refresh_preserves_selection_for_same_map(self) -> None:
+        # Given: an action remains selected in the currently rendered map.
+        md = _map_with_nested_eca()
+        self.app._render_map(md, [], [], None)
+        root = self.app.trigger_eca_tree.get_children()[0]
+        action = self.app.trigger_eca_tree.get_children(root)[0]
+        self.app.trigger_eca_tree.selection_set(action)
+        self.app._show_trigger_eca_detail()
+
+        # When: the same map view is refreshed.
+        self.app._refresh_trigger_eca()
+
+        # Then: the stable row and its detail remain selected.
+        self.assertEqual(self.app.trigger_eca_tree.selection(), (action,))
+        self.assertIn("创建单位", self.app.trigger_eca_detail.get("1.0", "end"))
+
+    def test_gui_trigger_array_indexer_value_is_searchable(self) -> None:
+        # Given: an array variable parameter has a recursive index parameter.
+        self.app._render_map(_map_with_array_indexer(), [], [], None)
+
+        # When: the user searches for the raw array-index value.
+        self.app.trigger_eca_search.set("索引值")
+        self.app._search_trigger_eca()
+
+        # Then: the containing action remains visible.
+        root = self.app.trigger_eca_tree.get_children()[0]
+        self.assertEqual(_child_texts(self.app.trigger_eca_tree, root), ["读取数组"])
+
+    def test_gui_trigger_array_indexer_nested_function_is_visible_in_tree_and_detail(self) -> None:
+        # Given: an array index is itself produced by a nested call.
+        self.app._render_map(_map_with_array_indexer(), [], [], None)
+        root = self.app.trigger_eca_tree.get_children()[0]
+        action = self.app.trigger_eca_tree.get_children(root)[0]
+
+        # When: the action hierarchy and details are inspected.
+        self.app.trigger_eca_tree.selection_set(action)
+        self.app._show_trigger_eca_detail()
+
+        # Then: both the nested index call and raw index value are represented.
+        self.assertIn("取数组下标", _child_texts(self.app.trigger_eca_tree, action))
+        self.assertIn("索引值", self.app.trigger_eca_detail.get("1.0", "end"))
+
     def test_gui_trigger_tab_distinguishes_missing_schema_from_parse_failure(self) -> None:
         # Given: both schema and malformed-byte diagnostics exist.
         md = _map_with_trigger_diagnostics()
@@ -192,6 +234,26 @@ def _map_with_trigger_diagnostics() -> MapData:
         missing=(UnknownTriggerFunction("初始化", "MissingAction", 2, 0x24),),
         failures=(TriggerParseFailure("初始化", "BadAction", 0x48, "bad bytes"),),
     )
+
+
+def _map_with_array_indexer() -> MapData:
+    index_call = TriggerEcaFunction(
+        "数组测试", 3, "取数组下标", True,
+        (TriggerEcaParameter(0, "2", expected_type="integer", source_offset=0x84),),
+        (), depth=1, source_offset=0x80,
+    )
+    index = TriggerEcaParameter(
+        2, "索引值", nested_function=index_call,
+        expected_type="integer", source_offset=0x78,
+    )
+    array = TriggerEcaParameter(
+        1, "Numbers", have_array_indexer=1, array_indexer=index,
+        expected_type="integer", source_offset=0x70,
+    )
+    action = TriggerEcaFunction(
+        "数组测试", 2, "读取数组", True, (array,), (), source_offset=0x68,
+    )
+    return _map_with_summary("数组图", (action,))
 
 
 def _empty_trigger_map() -> MapData:
