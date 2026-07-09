@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 from .trigger_schema import TriggerFunctionKind, TriggerSchema
 from .wtg_diagnostics import EcaParseError
 from .wtg_models import TriggerEcaFunction, TriggerEcaParameter
@@ -16,12 +18,18 @@ def parse_eca_functions(
     *,
     version: int,
     depth: int = 0,
-) -> tuple[TriggerEcaFunction, ...]:
+) -> Iterator[TriggerEcaFunction]:
     """Read ``count`` WTG ECA functions from the current reader position."""
-    return tuple(
-        read_eca(reader, trigger_name, schema, has_branch=False, version=version, depth=depth, ordinal=index + 1)
-        for index in range(count)
-    )
+    for index in range(count):
+        yield read_eca(
+            reader,
+            trigger_name,
+            schema,
+            has_branch=False,
+            version=version,
+            depth=depth,
+            ordinal=index + 1,
+        )
 
 
 def read_eca(
@@ -40,12 +48,12 @@ def read_eca(
     branch = reader.i32() if has_branch else 0
     name = reader.cstr()
     is_enabled = bool(reader.i32())
-    kind = _kind_from_function_type(function_type)
+    kind = _kind_from_function_type(function_type, trigger_name, name, source_offset)
     function_schema = schema.get(kind, name)
     if function_schema is None:
         raise EcaParseError(trigger_name, name, source_offset, "missing TriggerData schema")
     parameters = tuple(
-        _read_parameter(reader, trigger_name, name, schema, type_name, depth=depth + 1)
+        _read_parameter(reader, trigger_name, name, schema, type_name, version=version, depth=depth + 1)
         for type_name in function_schema.parameter_types
     )
     child_count = reader.bounded_count("child ECA") if version >= 7 else 0
@@ -84,6 +92,7 @@ def _read_parameter(
     schema: TriggerSchema,
     type_name: str,
     *,
+    version: int,
     depth: int,
 ) -> TriggerEcaParameter:
     source_offset = reader.offset
@@ -96,13 +105,21 @@ def _read_parameter(
     if have_function:
         if parameter_type != 2:
             raise EcaParseError(trigger_name, function_name, source_offset, "nested function on non-function parameter")
-        nested = read_eca(reader, trigger_name, schema, has_branch=False, version=7, depth=depth, ordinal=0)
+        nested = read_eca(reader, trigger_name, schema, has_branch=False, version=version, depth=depth, ordinal=0)
     have_array = reader.i32()
     array_indexer = None
     if have_array:
         if parameter_type != 1:
             raise EcaParseError(trigger_name, function_name, source_offset, "array indexer on non-variable parameter")
-        array_indexer = _read_parameter(reader, trigger_name, function_name, schema, "array-index", depth=depth + 1)
+        array_indexer = _read_parameter(
+            reader,
+            trigger_name,
+            function_name,
+            schema,
+            "array-index",
+            version=version,
+            depth=depth + 1,
+        )
     return TriggerEcaParameter(
         parameter_type=parameter_type,
         value=value,
@@ -116,7 +133,12 @@ def _read_parameter(
     )
 
 
-def _kind_from_function_type(value: int) -> TriggerFunctionKind:
+def _kind_from_function_type(
+    value: int,
+    trigger_name: str,
+    function_name: str,
+    source_offset: int,
+) -> TriggerFunctionKind:
     match value:
         case 0:
             return TriggerFunctionKind.EVENT
@@ -127,4 +149,4 @@ def _kind_from_function_type(value: int) -> TriggerFunctionKind:
         case 3:
             return TriggerFunctionKind.CALL
         case _:
-            raise EcaParseError("", "", 0, f"invalid function type {value}")
+            raise EcaParseError(trigger_name, function_name, source_offset, f"invalid function type {value}")

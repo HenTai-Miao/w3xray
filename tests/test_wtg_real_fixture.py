@@ -123,6 +123,58 @@ def test_invalid_parameter_type_records_parse_failure_with_trigger_function_and_
     assert failure.offset > 0
 
 
+def test_classic_v4_nested_function_uses_parent_wtg_version() -> None:
+    # Given: a v4 action parameter containing a nested call and no v7 child count.
+    schema = _schema_for_functions(
+        (TriggerFunctionKind.ACTION, "UseNested", ("integer",)),
+        (TriggerFunctionKind.CALL, "InnerValue", ()),
+    )
+    nested = _i(3) + _z("InnerValue") + _i(1)
+    parameter = _i(2) + _z("value") + _i(1) + nested + _i(0)
+    raw = _classic_wtg_with_functions(4, ((_i(2) + _z("UseNested") + _i(1) + parameter),))
+
+    # When: the v4 trigger body is parsed.
+    summary = parse_wtg(raw, schema)
+
+    # Then: the nested call does not consume a nonexistent v7 child-count field.
+    assert not summary.parse_failures
+    assert summary.eca_functions[0].parameters[0].nested_function is not None
+    assert summary.eca_functions[0].parameters[0].nested_function.name == "InnerValue"
+
+
+def test_later_invalid_function_preserves_earlier_confirmed_eca() -> None:
+    # Given: one valid top-level action followed by a malformed action.
+    schema = _schema_for_functions(
+        (TriggerFunctionKind.ACTION, "GoodAction", ()),
+        (TriggerFunctionKind.ACTION, "BadAction", ("integer",)),
+    )
+    good = _i(2) + _z("GoodAction") + _i(1) + _i(0)
+    bad = _i(2) + _z("BadAction") + _i(1) + _i(999)
+    raw = _classic_wtg_with_functions(7, (good, bad))
+
+    # When: parsing reaches the malformed second action.
+    summary = parse_wtg(raw, schema)
+
+    # Then: the first confirmed action remains available with the diagnostic.
+    assert [function.name for function in summary.eca_functions] == ["GoodAction"]
+    assert summary.parse_failures[0].function_name == "BadAction"
+
+
+def test_invalid_function_type_keeps_trigger_name_function_name_and_offset() -> None:
+    # Given: a top-level ECA with an unsupported function-kind integer.
+    raw = _classic_wtg_with_functions(7, ((_i(99) + _z("BadKind") + _i(1)),))
+
+    # When: the malformed ECA is parsed.
+    summary = parse_wtg(raw, TriggerSchema({}))
+
+    # Then: the failure points at the real function instead of an empty zero offset.
+    failure = summary.parse_failures[0]
+    assert failure.trigger_name == "Test"
+    assert failure.function_name == "BadKind"
+    assert failure.offset > 0
+    assert failure.reason == "invalid function type 99"
+
+
 def test_add_trigger_summary_uses_load_context_trigger_schema() -> None:
     # Given: a map load context carrying the selected TriggerData schema.
     md = MapData(path="x.w3x", name="x")
@@ -163,16 +215,23 @@ def _find(nodes: tuple[TriggerEcaFunction, ...], name: str) -> TriggerEcaFunctio
 
 
 def _schema_for_action(name: str, parameters: tuple[str, ...]) -> TriggerSchema:
+    return _schema_for_functions((TriggerFunctionKind.ACTION, name, parameters))
+
+
+def _schema_for_functions(
+    *functions: tuple[TriggerFunctionKind, str, tuple[str, ...]],
+) -> TriggerSchema:
     return TriggerSchema({
-        (TriggerFunctionKind.ACTION, name.lower()): TriggerFunctionSchema(
-            kind=TriggerFunctionKind.ACTION,
+        (kind, name.lower()): TriggerFunctionSchema(
+            kind=kind,
             name=name,
             category="",
             return_type=None,
             parameter_types=parameters,
             display_name=name,
             template=None,
-        ),
+        )
+        for kind, name, parameters in functions
     })
 
 
@@ -186,6 +245,22 @@ def _classic_wtg_with_action(name: str, parameter: bytes) -> bytes:
         + _z("Test") + _z("") + _i(0) + _i(1) + _i(0) + _i(0) + _i(0) + _i(42) + _i(1)
         + _i(2) + _z(name) + _i(1) + parameter
     )
+
+
+def _classic_wtg_with_functions(version: int, functions: tuple[bytes, ...]) -> bytes:
+    category = _i(42) + _z("System") + (_i(0) if version >= 7 else b"")
+    trigger = (
+        _z("Test")
+        + _z("")
+        + (_i(0) if version >= 7 else b"")
+        + _i(1)
+        + _i(0)
+        + _i(0)
+        + _i(0)
+        + _i(42)
+        + _i(len(functions))
+    )
+    return b"WTG!" + _i(version) + _i(1) + category + _i(0) + _i(0) + _i(1) + trigger + b"".join(functions)
 
 
 def _i(value: int) -> bytes:
