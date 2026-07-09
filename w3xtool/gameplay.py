@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+from .war3_encoding import decode_warcraft_string
+
 MISC_FILE: Final = "war3mapMisc.txt"
 
 
@@ -52,7 +54,4 @@ def gameplay_constants_from_map_path(path: str) -> tuple[GameplayConstant, ...]:
 
 
 def _decode_text(data: bytes) -> str:
-    try:
-        return data.decode("utf-8")
-    except UnicodeDecodeError:
-        return data.decode("gbk", "replace")
+    return decode_warcraft_string(data)

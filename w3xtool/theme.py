@@ -8,7 +8,7 @@ TITLE_FONT = "Bahnschrift"
 MONO_FONT = "JetBrains Mono"
 
 # Layout version: bump when saved sash positions no longer match the UI shell.
-LAYOUT_VERSION = 5
+LAYOUT_VERSION = 6
 
 # Palette: blue-white anime data terminal with warm pink action accents.
 BG = "#eaf6ff"

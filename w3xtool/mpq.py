@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 from .explode import explode
 from .huffman import huff_decompress
+from .mpq_files import STATIC_MAP_FILES as STATIC_MAP_FILES, list_archive_files
 
 # ---- 文件标志 ----
 FLAG_IMPLODE = 0x00000100      # 整文件 PKWARE 压缩（无掩码字节）
@@ -35,34 +36,6 @@ COMP_BZIP2 = 0x10
 COMP_SPARSE = 0x20
 COMP_ADPCM_MONO = 0x40
 COMP_ADPCM_STEREO = 0x80
-
-# ---- 魔兽地图/战役固定内部文件名（listfile 被删时据此枚举）----
-# 借鉴 w3x2lni core/info.lua 的 impignore 清单；只有 has_file 验证存在的才会被收。
-STATIC_MAP_FILES = [
-    # 脚本 / 字符串
-    "war3map.j", "war3map.lua", "war3map.wts",
-    # 对象数据
-    "war3map.w3u", "war3map.w3t", "war3map.w3a", "war3map.w3q",
-    "war3map.w3b", "war3map.w3d", "war3map.w3h",
-    # 触发器
-    "war3map.wtg", "war3map.wct",
-    # 地图信息 / 地形 / 预览
-    "war3map.w3i", "war3map.w3e", "war3map.w3r", "war3map.w3c",
-    "war3map.w3s", "war3map.wgc", "war3map.shd", "war3map.wpm", "war3map.mmp",
-    "war3map.imp", "war3mapMap.blp", "war3mapMap.tga", "war3mapPath.tga",
-    "war3mapPreview.tga", "war3mapPreview.blp",
-    "war3mapUnits.doo", "war3map.doo",
-    "testconfig.wgc",
-    # 文本档
-    "war3mapExtra.txt", "war3mapMisc.txt", "war3mapSkin.txt", "war3map.txt.ini",
-    # MPQ 内部表
-    "(listfile)", "(attributes)", "(signature)",
-    # 战役级
-    "war3campaign.w3f", "war3campaign.imp", "war3campaign.wts",
-    "war3campaign.w3u", "war3campaign.w3t", "war3campaign.w3a",
-    "war3campaign.w3q", "war3campaign.w3b", "war3campaign.w3d", "war3campaign.w3h",
-]
-
 
 def _make_crypt_table():
     table = [0] * 0x500
@@ -660,42 +633,5 @@ class MPQArchive:
         三层 searcher，见 core/map-builder/load.lua)。"""
         if self._names is not None:
             return self._names
-        names = []
-        seen = set()
-
-        def add(n, verify):
-            if not n:
-                return
-            ln = n.lower()
-            if ln in seen:
-                return
-            if verify and not self.has_file(n):
-                return
-            seen.add(ln)
-            names.append(n)
-
-        # 1) (listfile)：原样收（部分名可能并不真实存在，导出侧会再校验）
-        if self.has_file("(listfile)"):
-            try:
-                raw = self.read_file("(listfile)").decode("utf-8", "replace")
-                for line in raw.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
-                    add(line.strip(), verify=False)
-            except Exception:
-                pass
-        # 2) 内置固定名单：仅收实际存在的（补全被删 listfile 的图）
-        for n in STATIC_MAP_FILES:
-            add(n, verify=True)
-        # 3) war3map.imp 导入清单：相对名直查不到时补 war3mapImported\ 前缀
-        if self.has_file("war3map.imp"):
-            try:
-                from .imp import parse_import_entries
-                for entry in parse_import_entries(self.read_file("war3map.imp")):
-                    for n in entry.candidate_paths:
-                        if self.has_file(n):
-                            add(n, verify=False)
-                            break
-            except Exception:
-                pass
-
-        self._names = names
-        return names
+        self._names = list_archive_files(self)
+        return self._names

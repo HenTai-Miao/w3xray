@@ -8,15 +8,38 @@ from typing import TYPE_CHECKING, Final
 if TYPE_CHECKING:
     from .api import GameObject, MapData
 
-RESOURCE_EXTS: Final = {
-    "blp", "dds", "tga",
-    "mdx", "mdl",
-    "wav", "mp3", "ogg",
-    "ttf",
+_IMAGE_EXTS: Final = {
+    "blp", "dds", "tga", "png", "jpg", "jpeg", "bmp",
 }
+_MODEL_EXTS: Final = {
+    "mdx", "mdl",
+}
+_AUDIO_EXTS: Final = {
+    "wav", "mp3", "ogg",
+}
+_FONT_EXTS: Final = {
+    "ttf", "otf",
+}
+_UI_TEXT_EXTS: Final = {
+    "txt", "ini", "fdf", "toc",
+}
+_TABLE_EXTS: Final = {
+    "slk",
+}
+_CONFIG_EXTS: Final = {
+    "json", "plist", "skin",
+}
+_AI_EXTS: Final = {
+    "ai",
+}
+RESOURCE_EXTS: Final = (
+    _IMAGE_EXTS | _MODEL_EXTS | _AUDIO_EXTS | _FONT_EXTS | _UI_TEXT_EXTS
+    | _TABLE_EXTS | _CONFIG_EXTS | _AI_EXTS
+)
 _PATH_RE: Final = re.compile(
     r"(?i)([A-Za-z0-9_ .()\\/\-]{1,240}\."
-    r"(?:blp|dds|tga|mdx|mdl|wav|mp3|ogg|ttf))"
+    r"(?:blp|dds|tga|png|jpe?g|bmp|mdx|mdl|wav|mp3|ogg|ttf|otf|txt|ini|fdf|toc|"
+    r"slk|json|plist|skin|ai))"
 )
 
 
@@ -65,6 +88,24 @@ def build_resource_report(md: MapData) -> ResourceReport:
     return ResourceReport(nodes, archive_assets, unreferenced)
 
 
+def find_resource_paths(text: str) -> tuple[str, ...]:
+    """Return normalized resource-like paths found in a text body."""
+    paths: list[str] = []
+    seen: set[str] = set()
+    for match in _PATH_RE.finditer(text):
+        path = _normalize(match.group(1))
+        if path in seen or not _is_asset(path):
+            continue
+        seen.add(path)
+        paths.append(path)
+    return tuple(paths)
+
+
+def resource_kind(path: str) -> str:
+    """Return the resource kind label for a path."""
+    return _kind_for(_normalize(path))
+
+
 def _all_objects(md: MapData) -> list[GameObject]:
     return [obj for group in md.objects.values() for obj in group]
 
@@ -109,12 +150,20 @@ def _is_asset(path: str) -> bool:
 
 def _kind_for(path: str) -> str:
     ext = path.rsplit(".", 1)[-1] if "." in path else ""
-    if ext in {"blp", "dds", "tga"}:
+    if ext in _IMAGE_EXTS:
         return "图像"
-    if ext in {"mdx", "mdl"}:
+    if ext in _MODEL_EXTS:
         return "模型"
-    if ext in {"wav", "mp3", "ogg"}:
+    if ext in _AUDIO_EXTS:
         return "音频"
-    if ext == "ttf":
+    if ext in _FONT_EXTS:
         return "字体"
+    if ext in _UI_TEXT_EXTS:
+        return "UI/文本"
+    if ext in _TABLE_EXTS:
+        return "SLK表"
+    if ext in _CONFIG_EXTS:
+        return "配置"
+    if ext in _AI_EXTS:
+        return "AI脚本"
     return "资源"

@@ -7,19 +7,15 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass, field
 
+from .war3_encoding import decode_warcraft_string
+
 # 带 等级/变体 额外两个 int 的文件类型
 _LEVEL_EXTS = {"w3a", "w3q", "w3d"}
 
 
 def _decode_str(b: bytes) -> str:
-    """字符串解码：优先 UTF-8（新版/重制版），失败回退 GBK（1.20~1.27 老中文图）。"""
-    try:
-        return b.decode("utf-8")
-    except UnicodeDecodeError:
-        try:
-            return b.decode("gbk")
-        except UnicodeDecodeError:
-            return b.decode("utf-8", "replace")
+    """字符串解码：UTF-8 后按系统 ACP/GBK 兼容老图。"""
+    return decode_warcraft_string(b)
 
 # 文件扩展名 → 中文分类名
 EXT_CATEGORY = {
@@ -121,11 +117,44 @@ def _parse_one_object(r: _Reader, is_custom: bool, version: int, has_level: bool
     return obj
 
 
+def _min_object_size(version: int) -> int:
+    return 16 if version >= 3 else 12
+
+
+def _looks_like_tag(raw: bytes) -> bool:
+    return len(raw) == 4 and all(0x20 <= b < 0x7F for b in raw)
+
+
+def _recover_next_object(
+    r: _Reader,
+    is_custom: bool,
+    version: int,
+    has_level: bool,
+    start_p: int,
+) -> tuple[W3Object, int] | None:
+    """坏对象后尝试重新同步到下一个可完整解析的对象头。"""
+    limit = len(r.d) - _min_object_size(version) + 1
+    for pos in range(start_p + 1, max(start_p + 1, limit)):
+        if not (_looks_like_tag(r.d[pos:pos + 4]) and _looks_like_tag(r.d[pos + 4:pos + 8])):
+            continue
+        trial = _Reader(r.d)
+        trial.p = pos
+        try:
+            obj = _parse_one_object(trial, is_custom, version, has_level)
+        except (struct.error, IndexError, ValueError):
+            continue
+        if not obj.mods:
+            continue
+        r.p = trial.p
+        return obj, pos
+    return None
+
+
 def parse_object_data(data: bytes, ext: str) -> list:
     """解析一个对象数据文件，返回 W3Object 列表。
 
     单个对象解析失败(截断/字节错位/未知字段类型/注水 count)不再拖垮整个文件：
-    保留出错之前已成功解析的对象（出错后游标已不可信，停止该文件）。
+    保留出错之前已成功解析的对象，并尽量重同步到后续完整对象。
     """
     import sys
     has_level = ext.lower() in _LEVEL_EXTS
@@ -141,18 +170,29 @@ def parse_object_data(data: bytes, ext: str) -> list:
             count = r.i32()
         except (struct.error, IndexError):
             break
-        # 每个对象至少 ~8 字节：count 远超剩余字节即为损坏/注水，立即停止（防超大循环）。
-        if count < 0 or count > len(r.d) - r.p:
+        # 每个对象至少有对象头：count 远超剩余字节即为损坏/注水，立即停止（防超大循环）。
+        min_object_size = _min_object_size(version)
+        if count < 0 or count * min_object_size > len(r.d) - r.p:
             print("[w3obj] %s 对象数 %d 不合理（剩余 %d 字节），判为损坏"
                   % (ext, count, len(r.d) - r.p), file=sys.stderr)
             break
-        for _ in range(count):
+        parsed_in_table = 0
+        while parsed_in_table < count:
             start_p = r.p
             try:
                 obj = _parse_one_object(r, is_custom, version, has_level)
             except (struct.error, IndexError, ValueError):
+                recovered = _recover_next_object(r, is_custom, version, has_level, start_p)
+                if recovered is not None:
+                    obj, recovered_p = recovered
+                    print("[w3obj] %s 在偏移 %d 处跳过损坏对象，偏移 %d 恢复"
+                          % (ext, start_p, recovered_p), file=sys.stderr)
+                    objects.append(obj)
+                    parsed_in_table = min(count, parsed_in_table + 2)
+                    continue
                 print("[w3obj] %s 解析在偏移 %d 处中断，保留前 %d 个对象"
                       % (ext, start_p, len(objects)), file=sys.stderr)
                 return objects
             objects.append(obj)
+            parsed_in_table += 1
     return objects

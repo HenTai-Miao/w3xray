@@ -70,9 +70,9 @@ def load_path_payload(
     load: LoadMapFunc = load_map,
     prepare: PrepareMapFunc | None = None,
     load_options: dict[str, bool] | None = None,
+    game_data_path: str | None = None,
 ) -> LoadedMap:
     """Load a map path and prepare the initial visible view."""
-    prepare_map = prepare or prepare_map_view
     md = load(path)
     if md.sub_maps:
         views = [("★ 战役共享对象", md)] + [(sub.name, sub) for sub in md.sub_maps]
@@ -81,7 +81,9 @@ def load_path_payload(
         views = None
         campaign_path = None
     active = views[0][1] if views else md
-    return prepare_map(active, campaign_path, views, load_options=load_options)
+    if prepare is not None:
+        return prepare(active, campaign_path, views, load_options=load_options)
+    return prepare_map_view(active, campaign_path, views, load_options=load_options, game_data_path=game_data_path)
 
 
 def switch_map_payload(
@@ -90,10 +92,12 @@ def switch_map_payload(
     *,
     prepare: PrepareMapFunc | None = None,
     load_options: dict[str, bool] | None = None,
+    game_data_path: str | None = None,
 ) -> LoadedMap:
     """Prepare an already-loaded campaign sub-map."""
-    prepare_map = prepare or prepare_map_view
-    return prepare_map(md, campaign_path, None, load_options=load_options)
+    if prepare is not None:
+        return prepare(md, campaign_path, None, load_options=load_options)
+    return prepare_map_view(md, campaign_path, None, load_options=load_options, game_data_path=game_data_path)
 
 
 def load_campaign_payload(
@@ -118,10 +122,10 @@ def prepare_map_view(
     recipe_loader: Callable[[MapData], list] = recipes_from_map,
     resolver_loader: Callable[[MapData, str | None], IconResolver | None] | None = None,
     max_workers: int = PREP_WORKERS,
+    game_data_path: str | None = None,
 ) -> LoadedMap:
     """Prepare independent reports and icon resolver in parallel."""
     options = normalize_load_options(load_options or default_load_options())
-    load_resolver = resolver_loader or build_icon_resolver
     with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="w3xray-prep") as pool:
         command_future = (
             pool.submit(_safe_list_loader, command_loader, md)
@@ -131,20 +135,26 @@ def prepare_map_view(
             pool.submit(_safe_list_loader, recipe_loader, md)
             if options[RECIPES_KEY] else None
         )
-        resolver_future = (
-            pool.submit(_safe_resolver_loader, load_resolver, md, campaign_path)
-            if options[OBJECT_BROWSER_KEY] else None
-        )
+        if options[OBJECT_BROWSER_KEY] and resolver_loader is None:
+            resolver_future = pool.submit(_safe_default_resolver_loader, md, campaign_path, game_data_path)
+        elif options[OBJECT_BROWSER_KEY]:
+            resolver_future = pool.submit(_safe_resolver_loader, resolver_loader, md, campaign_path)
+        else:
+            resolver_future = None
         commands = command_future.result() if command_future is not None else []
         recipes = recipe_future.result() if recipe_future is not None else []
         resolver = resolver_future.result() if resolver_future is not None else None
     return LoadedMap(md, commands, recipes, resolver, views, campaign_path)
 
 
-def build_icon_resolver(md: MapData, campaign_path: str | None) -> IconResolver | None:
+def build_icon_resolver(
+    md: MapData,
+    campaign_path: str | None,
+    game_data_path: str | None = None,
+) -> IconResolver | None:
     """Create the resolver lazily; images decode on demand in the main view."""
     extra = [campaign_path] if campaign_path and campaign_path != md.path else None
-    return IconResolver(md.path, extra_paths=extra)
+    return IconResolver(md.path, extra_paths=extra, game_data_path=game_data_path)
 
 
 def _safe_list_loader(loader: Callable[[MapData], list], md: MapData) -> list:
@@ -162,6 +172,18 @@ def _safe_resolver_loader(
 ) -> IconResolver | None:
     try:
         return loader(md, campaign_path)
+    except Exception:
+        traceback.print_exc()
+        return None
+
+
+def _safe_default_resolver_loader(
+    md: MapData,
+    campaign_path: str | None,
+    game_data_path: str | None,
+) -> IconResolver | None:
+    try:
+        return build_icon_resolver(md, campaign_path, game_data_path)
     except Exception:
         traceback.print_exc()
         return None

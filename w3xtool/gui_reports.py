@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import os
 
 from .api import MapData
 
@@ -57,15 +56,30 @@ def build_analysis_blocks(md: MapData) -> tuple[GuiReportBlock, ...]:
     blocks: list[GuiReportBlock] = []
     blocks.append(_audit_block(md))
     blocks.append(_script_diagnostic_block(md))
+    from .gui_script_mechanics_reports import build_script_mechanics_block
+
+    blocks.append(build_script_mechanics_block(md))
+    from .gui_ui_text_reports import build_ui_text_block
+
+    blocks.append(build_ui_text_block(md))
     blocks.append(_crash_block(md))
     blocks.append(_cheat_block(md))
     blocks.append(_order_block(md))
     blocks.append(_resource_block(md))
+    from .gui_resource_reports import build_resource_inventory_block
+
+    blocks.append(build_resource_inventory_block(md))
+    from .gui_extraction_reports import build_extraction_completeness_block
+
+    blocks.append(build_extraction_completeness_block(md))
+    blocks.append(_save_id_block(md))
     blocks.append(_compat_block(md))
     blocks.append(_trigger_tree_block(md))
     blocks.append(_preview_icon_block(md))
     blocks.append(_game_config_block(md))
-    blocks.extend(_archive_blocks(md))
+    from .gui_archive_reports import build_archive_blocks
+
+    blocks.extend(build_archive_blocks(md))
     return tuple(block for block in blocks if block.lines)
 
 
@@ -151,6 +165,22 @@ def _resource_block(md: MapData) -> GuiReportBlock:
     return GuiReportBlock("资源", tuple(lines), len(report.unreferenced_assets))
 
 
+def _save_id_block(md: MapData) -> GuiReportBlock:
+    from .save_analysis import build_save_report
+
+    report = build_save_report(md)
+    if report.total == 0:
+        return GuiReportBlock("存档/ID线索", ())
+    counts = "、".join(f"{name} {count}" for name, count in sorted(report.mechanism_counts.items()))
+    lines = [f"线索 {report.total}", f"机制 {counts}"]
+    if report.object_codes:
+        lines.append("对象码 " + "、".join(report.object_codes[:12]))
+    lines.extend(row.summary for row in report.rows[:8])
+    if report.total > 8:
+        lines.append(f"另有 {report.total - 8} 条，导出资料包查看 TSV。")
+    return GuiReportBlock("存档/ID线索", tuple(lines))
+
+
 def _game_config_block(md: MapData) -> GuiReportBlock:
     configs = getattr(md, "game_configs", None) or []
     if not configs:
@@ -226,58 +256,6 @@ def _compat_block(md: MapData) -> GuiReportBlock:
     lines = tuple(f"[{_severity_label(item.severity)}] {item.title}: {item.detail}" for item in report.items)
     warnings = sum(1 for item in report.items if item.severity is CompatSeverity.WARNING)
     return GuiReportBlock("兼容", lines, warnings)
-
-
-def _archive_blocks(md: MapData) -> tuple[GuiReportBlock, ...]:
-    lines = [f"内部文件 {len(md.all_files)}", f"子地图 {len(md.sub_maps)}"]
-    blocks = [GuiReportBlock("内部结构", tuple(lines))]
-    if not os.path.exists(md.path):
-        return tuple(blocks)
-    terrain = _terrain_block(md)
-    slk = _slk_block(md)
-    gameplay = _gameplay_block(md)
-    return tuple(block for block in (*blocks, terrain, slk, gameplay) if block.lines)
-
-
-def _terrain_block(md: MapData) -> GuiReportBlock:
-    from .terrain import terrain_info_from_map_path
-    from .terrain_tiles import format_terrain_tile_list
-
-    info = terrain_info_from_map_path(md.path)
-    if info is None:
-        return GuiReportBlock("地形", ())
-    lines = [
-        f"网格 {info.width}×{info.height}",
-        f"基础地形 {info.base_tileset}",
-        f"自定义地形集 {'是' if info.custom_tilesets else '否'}",
-    ]
-    if info.ground_tiles:
-        lines.append("地表纹理 " + format_terrain_tile_list(info.ground_tiles))
-    if info.cliff_tiles:
-        lines.append("悬崖纹理 " + format_terrain_tile_list(info.cliff_tiles))
-    return GuiReportBlock("地形", tuple(lines))
-
-
-def _slk_block(md: MapData) -> GuiReportBlock:
-    from .slkmeta import slk_inventory_from_map_path
-
-    report = slk_inventory_from_map_path(md.path)
-    if not report.has_data:
-        return GuiReportBlock("SLK", ())
-    lines = [f"表文件 {len(report.files)}"]
-    lines.extend(f"{item.path}: {item.rows} 行 · {item.columns} 列" for item in report.files[:10])
-    return GuiReportBlock("SLK", tuple(lines))
-
-
-def _gameplay_block(md: MapData) -> GuiReportBlock:
-    from .gameplay import gameplay_constants_from_map_path
-
-    constants = gameplay_constants_from_map_path(md.path)
-    if not constants:
-        return GuiReportBlock("游戏常数", ())
-    lines = [f"覆盖项 {len(constants)}"]
-    lines.extend(f"{item.section + '.' if item.section else ''}{item.key}={item.value}" for item in constants[:10])
-    return GuiReportBlock("游戏常数", tuple(lines))
 
 
 def _severity_label(severity) -> str:

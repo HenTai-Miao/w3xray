@@ -8,6 +8,7 @@
 import os
 import struct
 import unittest
+from unittest.mock import patch
 
 from w3xtool.imp import ImportEntry, parse_imp, parse_import_table
 
@@ -18,6 +19,13 @@ def _build(version, names):
     out = struct.pack("<ii", version, len(names))
     for flag, name in names:
         out += bytes([flag]) + name.encode("utf-8") + b"\x00"
+    return out
+
+
+def _build_raw(version, rows):
+    out = struct.pack("<ii", version, len(rows))
+    for flag, raw_name in rows:
+        out += bytes([flag]) + raw_name + b"\x00"
     return out
 
 
@@ -39,6 +47,18 @@ class TestParseImp(unittest.TestCase):
         self.assertEqual(table.entries[0].candidate_paths[0], "war3mapImported\\icon.blp")
         self.assertEqual(table.entries[1].type_label, "自定义路径")
         self.assertEqual(table.entries[1].candidate_paths, ("ReplaceableTextures\\bar.blp",))
+
+    def test_windows_acp_import_path_precedes_gbk(self):
+        # Given: an import path saved using Traditional Chinese ACP.
+        raw_name = "素材\\測試.blp".encode("cp950")
+        data = _build_raw(1, [(13, raw_name)])
+
+        # When: Windows ACP is cp950.
+        with patch("w3xtool.war3_encoding.default_legacy_codecs", return_value=("cp950", "gbk")):
+            table = parse_import_table(data)
+
+        # Then: the path remains readable and usable in resource reports.
+        self.assertEqual(table.entries[0].path, "素材\\測試.blp")
 
     def test_unknown_flag_keeps_legacy_fallback_candidate(self):
         entry = ImportEntry(path="icon.blp", flag=5)
@@ -100,6 +120,15 @@ class TestImportedNamesForExport(unittest.TestCase):
         self.assertIn("war3mapImported\\model.mdx", names)
         self.assertIn("war3mapImported\\icon.blp", names)
 
+    def test_campaign_imp_names_feed_export_discovery(self):
+        from w3xtool.api import _imported_names
+        imp = _build(1, [(13, "UI\\CampaignIcon.blp")])
+        arch = _FakeArchive({"war3campaign.imp": imp})
+
+        names = _imported_names(arch)
+
+        self.assertIn("UI\\CampaignIcon.blp", names)
+
     def test_import_flags_shape_export_candidates(self):
         from w3xtool.api import _imported_names
         imp = _build(1, [(8, "icon.blp"), (13, "ReplaceableTextures\\custom.blp")])
@@ -134,6 +163,22 @@ class TestImportedNamesForExport(unittest.TestCase):
         self.assertEqual(md.import_summary.custom_count, 1)
         self.assertEqual(md.import_summary.resolved_paths, ("war3mapImported\\icon.blp",))
         self.assertEqual(md.import_summary.missing_paths, ("ReplaceableTextures\\custom.blp",))
+
+    def test_add_import_summary_reads_campaign_import_table(self):
+        from w3xtool.api import MapData
+        from w3xtool.map_extras import add_import_summary
+
+        imp = _build(1, [(13, "UI\\CampaignIcon.blp")])
+        arch = _FakeArchive({
+            "war3campaign.imp": imp,
+            "UI\\CampaignIcon.blp": b"BLP",
+        })
+        md = MapData(path="x.w3n", name="x")
+
+        add_import_summary(md, arch)
+
+        self.assertEqual(md.import_summary.entry_count, 1)
+        self.assertEqual(md.import_summary.resolved_paths, ("UI\\CampaignIcon.blp",))
 
 
 if __name__ == "__main__":

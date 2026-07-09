@@ -22,6 +22,28 @@ class TestEditorStyleLayout(GuiTestCase):
         for label in expected:
             self.app.tabs.tab(label)
 
+    def test_source_sidebar_stays_visible_outside_object_editor(self):
+        # Given: the user navigates away from the object editor.
+        self.app.deiconify()
+        self.app.tabs.set("地图信息")
+        self.app.update_idletasks()
+
+        try:
+            # Then: map source controls remain global, not buried in one tab.
+            self.assertEqual(self.app.source_panel.winfo_ismapped(), 1)
+            self.assertEqual(self.app.left_title.winfo_ismapped(), 1)
+            self.assertEqual(self.app.map_gallery.list_frame.winfo_ismapped(), 1)
+        finally:
+            self.app.withdraw()
+
+    def test_object_editor_has_only_list_and_detail_panes(self):
+        # Given: map source navigation moved to the global sidebar.
+        self.app.tabs.set("对象编辑器")
+        self.app.update_idletasks()
+
+        # Then: the heavy object editor paned window has only two panes left.
+        self.assertEqual(len(self.app.paned.panes()), 2)
+
     def test_render_map_refreshes_overview_and_analysis(self):
         # Given: a map that has inventory plus one crash risk.
         md = MapData(path="x.w3x", name="布局测试图")

@@ -5,6 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import struct
 
+from .war3_encoding import decode_warcraft_string
+from .wtg_eca import TriggerEcaFunction, parse_eca_functions
+
 _MAX_COUNT = 100_000
 _REFORGED_MARKER = 0x80000004
 
@@ -57,6 +60,7 @@ class TriggerTreeSummary:
     categories: tuple[TriggerCategory, ...]
     variables: tuple[TriggerVariable, ...]
     triggers: tuple[TriggerHeader, ...]
+    eca_functions: tuple[TriggerEcaFunction, ...] = ()
     has_unexpanded_functions: bool = False
 
 
@@ -112,13 +116,16 @@ def _parse_classic(reader: _Reader, version: int) -> TriggerTreeSummary:
     variables = tuple(_read_classic_variable(reader, version) for _ in range(_bounded(reader.i32())))
     trigger_count = _bounded(reader.i32())
     triggers: list[TriggerHeader] = []
+    eca_functions: list[TriggerEcaFunction] = []
     has_unexpanded = False
-    for index in range(trigger_count):
+    for _index in range(trigger_count):
         trigger = _read_classic_trigger(reader, version)
         triggers.append(trigger)
         if trigger.function_count > 0:
-            has_unexpanded = True
-            if index < trigger_count - 1:
+            try:
+                eca_functions.extend(parse_eca_functions(reader, trigger.name, trigger.function_count))
+            except (IndexError, ValueError):
+                has_unexpanded = True
                 break
     return TriggerTreeSummary(
         version=version,
@@ -131,6 +138,7 @@ def _parse_classic(reader: _Reader, version: int) -> TriggerTreeSummary:
         categories=categories,
         variables=variables,
         triggers=tuple(triggers),
+        eca_functions=tuple(eca_functions),
         has_unexpanded_functions=has_unexpanded,
     )
 
@@ -145,8 +153,9 @@ def _parse_reforged(reader: _Reader) -> TriggerTreeSummary:
     object_count = _bounded(reader.i32())
     categories: list[TriggerCategory] = []
     triggers: list[TriggerHeader] = []
+    eca_functions: list[TriggerEcaFunction] = []
     has_unexpanded = False
-    for index in range(object_count):
+    for _index in range(object_count):
         object_type = reader.i32()
         match object_type:
             case 1:
@@ -157,8 +166,10 @@ def _parse_reforged(reader: _Reader) -> TriggerTreeSummary:
                 trigger = _read_reforged_trigger(reader, object_type)
                 triggers.append(trigger)
                 if trigger.function_count > 0:
-                    has_unexpanded = True
-                    if index < object_count - 1:
+                    try:
+                        eca_functions.extend(parse_eca_functions(reader, trigger.name, trigger.function_count))
+                    except (IndexError, ValueError):
+                        has_unexpanded = True
                         break
             case 64:
                 _read_reforged_variable_tree_item(reader)
@@ -175,6 +186,7 @@ def _parse_reforged(reader: _Reader) -> TriggerTreeSummary:
         categories=tuple(categories),
         variables=variables,
         triggers=tuple(triggers),
+        eca_functions=tuple(eca_functions),
         has_unexpanded_functions=has_unexpanded,
     )
 
@@ -283,9 +295,4 @@ def _to_i32(value: int) -> int:
 
 
 def _decode_string(raw: bytes) -> str:
-    for encoding in ("utf-8", "gb18030", "latin-1"):
-        try:
-            return raw.decode(encoding)
-        except UnicodeDecodeError:
-            continue
-    return raw.decode("utf-8", "replace")
+    return decode_warcraft_string(raw, allow_latin1=True)

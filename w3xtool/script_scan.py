@@ -153,10 +153,17 @@ def scan_recipes(script: str) -> list:
 # 知道每个 native 的对象码参数属于哪类，脚本提码就能覆盖全分类(技能/科技/可破坏物…)，
 # 而不只是早期手列的 物品/单位 两类。生成数据缺失时退化为空表（scan 退回只认下方少量回退名）。
 try:
-    from .jass_natives import (NATIVE_OBJ_FUNCS, BJ_FUNC_CODES, BJ_FEATURES,
-                               BJ_CODE_CONSTANTS)
+    from .jass_natives import NATIVE_OBJ_FUNCS
 except Exception:                       # 生成数据缺失：表置空，scan_* 仍可跑(覆盖变窄)
-    NATIVE_OBJ_FUNCS, BJ_FUNC_CODES, BJ_FEATURES, BJ_CODE_CONSTANTS = {}, {}, {}, {}
+    NATIVE_OBJ_FUNCS = {}
+from .script_mechanics import (
+    BJ_CODE_CONSTANTS,
+    BJ_FEATURES,
+    BJ_FUNC_CODES,
+    merge_implicit_object_refs,
+    scan_script_features,
+)
+from .script_tokens import iter_native_call_chunks, script_code_text
 
 _CATS = ("单位", "物品", "技能", "科技", "可破坏物", "增益")
 
@@ -188,20 +195,22 @@ def scan_object_refs(script: str) -> dict:
     names_re = _NATIVE_RE
     if names_re is None:                # 无生成表：用最小回退名集
         names_re = re.compile(r"\b(" + "|".join(_FALLBACK_CAT) + r")\b")
-    for line in script.split("\n"):
-        hits = names_re.findall(line)
+    code_script = script_code_text(script)
+    for call in iter_native_call_chunks(code_script, names_re):
+        hits = names_re.findall(call.text)
         if not hits:
             continue
         cats = {c for c in (_native_cat(n) for n in hits) if c}
-        # 仅当该行的 native 一致指向单一分类时才归类；多类(一行调了不同类 native)
+        # 仅当该调用块的 native 一致指向单一分类时才归类；多类(嵌套不同类 native)
         # 无法可靠区分哪个码属哪类，不归类——这些码仍会经 scan_all_referenced_codes
         # 的 'xxxx' 字面量并入孤立根集合，只是不在此处错配到某个分类。
         if len(cats) != 1:
             continue
-        codes = _codes_in(line)
+        codes = _codes_in(call.text)
         if not codes:
             continue
         out[next(iter(cats))].update(codes)
+    merge_implicit_object_refs(out, script)
     return out
 
 
@@ -212,31 +221,9 @@ def scan_all_referenced_codes(script: str) -> set:
     的 'xxxx' 字面量本身天然多为对象码；少量误收(命令串)对"根集合并集"无害(只会少判孤立)。
     """
     # _codes_in 覆盖 'xxxx' + FourCC("xxxx") + $hex + 十进制码（比单认 'xxxx' 更全）
-    codes = set(_codes_in(script))
+    codes = set(_codes_in(script_code_text(script)))
     for s in scan_object_refs(script).values():
         codes.update(s)
     _feats, implicit = scan_script_features(script)
     codes.update(implicit)
     return codes
-
-
-def scan_script_features(script: str):
-    """检测脚本用到的暴雪 BJ 机制，返回 (特征中文标签列表, 隐式引用码集合)。
-
-    如 MeleeStartingUnitsHuman→"人族对战开局" 且隐式用到 htow/hpea/…；ChooseRandomItemBJ→"随机物品"。
-    用于「地图信息」展示这张图用了哪些引擎机制，以及把隐式基础对象并入引用根集合。
-    """
-    features = []
-    implicit = set()
-    seen = set()
-    for fname, label in BJ_FEATURES.items():
-        if re.search(r"\b" + re.escape(fname) + r"\b", script):
-            if label not in seen:
-                seen.add(label)
-                features.append(label)
-            implicit.update(BJ_FUNC_CODES.get(fname, []))
-    # bj_*_CODE 命名常量（电梯等）：脚本直接用常量名时也算隐式引用
-    for cname, code in BJ_CODE_CONSTANTS.items():
-        if re.search(r"\b" + re.escape(cname) + r"\b", script):
-            implicit.add(code)
-    return features, implicit

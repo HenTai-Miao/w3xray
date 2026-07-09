@@ -27,7 +27,7 @@ class TestPaneState(GuiTestCase):
             self.app.deiconify()
             self.app.tabs.set("对象编辑器")
             self.app.update_idletasks()
-            _apply_sash_positions(self.app.paned, [210, 980])
+            _apply_sash_positions(self.app.paned, [720])
             self.app.update_idletasks()
 
             # When: the drag ends.
@@ -36,7 +36,7 @@ class TestPaneState(GuiTestCase):
 
             # Then: the positions are saved immediately, not only on app close.
             self.assertEqual(saved["layout"], LAYOUT_VERSION)
-            self.assertEqual(saved["pane_sashes"]["object_editor"], [210, 980])
+            self.assertEqual(saved["pane_sashes"]["object_editor"], [720])
         finally:
             self.app._save_config = original_save
             self.app.withdraw()
@@ -46,21 +46,21 @@ class TestPaneState(GuiTestCase):
         original_load = self.app._load_config
         self.app._load_config = lambda: {
             "layout": LAYOUT_VERSION,
-            "pane_sashes": {"object_editor": [190, 920]},
+            "pane_sashes": {"object_editor": [680]},
         }
 
         try:
             self.app.deiconify()
             self.app.tabs.set("对象编辑器")
             self.app.update_idletasks()
-            _apply_sash_positions(self.app.paned, [260, 1050])
+            _apply_sash_positions(self.app.paned, [760])
             self.app.update_idletasks()
 
             # When: layout restoration runs.
             self.app._restore_pane_sashes()
 
             # Then: the object editor panes return to the saved positions.
-            self.assertEqual(_paned_sash_positions(self.app.paned), [190, 920])
+            self.assertEqual(_paned_sash_positions(self.app.paned), [680])
         finally:
             self.app._load_config = original_load
             self.app.withdraw()

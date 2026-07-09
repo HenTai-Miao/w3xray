@@ -1,6 +1,6 @@
-"""war3map.imp —— 地图导入文件清单解析。
+"""Map/campaign import table parsing.
 
-很多优化/保护图把 (listfile) 删了，但 war3map.imp 仍记着每个自定义导入文件
+很多优化/保护图把 (listfile) 删了，但 war3map.imp / war3campaign.imp 仍记着导入文件
 （模型/图标/音效…）的路径。解析它能补出 listfile 缺失时拿不到的文件名。
 
 格式（实测真实地图，与 w3x2lni 的 search_imp 一致）：
@@ -13,6 +13,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 import struct
 
+from .war3_encoding import decode_warcraft_string
+
 IMPORTED_DIR = "war3mapImported\\"
 STANDARD_IMPORT_TYPE = 8
 CUSTOM_IMPORT_TYPE = 13
@@ -20,7 +22,7 @@ CUSTOM_IMPORT_TYPE = 13
 
 @dataclass(frozen=True, slots=True)
 class ImportEntry:
-    """One war3map.imp entry."""
+    """One map/campaign import table entry."""
 
     path: str
     flag: int
@@ -96,7 +98,7 @@ class ImportSummary:
 
 
 def parse_import_table(data: bytes) -> ImportTable:
-    """解析 war3map.imp，保留版本、路径和导入类型标志。"""
+    """解析导入表，保留版本、路径和导入类型标志。"""
     if len(data) < 8:
         return ImportTable(0, ())
     try:
@@ -118,22 +120,19 @@ def parse_import_table(data: bytes) -> ImportTable:
             break
         raw_name = data[p:end]
         p = end + 1
-        try:
-            path = raw_name.decode("utf-8")
-        except UnicodeDecodeError:
-            path = raw_name.decode("gbk", "replace")
+        path = decode_warcraft_string(raw_name)
         if path:
             entries.append(ImportEntry(path=path, flag=flag))
     return ImportTable(version, tuple(entries))
 
 
 def parse_import_entries(data: bytes) -> tuple[ImportEntry, ...]:
-    """解析 war3map.imp，返回结构化导入条目。"""
+    """解析导入表，返回结构化导入条目。"""
     return parse_import_table(data).entries
 
 
 def parse_imp(data: bytes) -> list:
-    """解析 war3map.imp，返回导入文件路径列表（保持原顺序、去空）。"""
+    """解析导入表，返回导入文件路径列表（保持原顺序、去空）。"""
     return [entry.path for entry in parse_import_entries(data)]
 
 

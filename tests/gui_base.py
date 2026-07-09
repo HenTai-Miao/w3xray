@@ -50,6 +50,9 @@ class GuiTestCase(unittest.TestCase):
         if hasattr(app, "_shutdown_object_filter_runner"):
             app._shutdown_object_filter_runner()
         app.map_data = None
+        app.external_listfile_path = None
+        app.game_data_path = None
+        app._refresh_external_source_labels()
         app.recipes = []
         app._apply_load_options(default_load_options(), persist=False, refresh=False)
         app.mode = "battle"

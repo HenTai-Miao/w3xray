@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 import struct
 
+from .war3_encoding import decode_warcraft_string
+
 _MAX_PLAYERS = 32
 _RACE_NAMES = {
     0x01: "人族",
@@ -186,9 +188,4 @@ def _read_player(reader: _Reader) -> GameConfigPlayer:
 
 
 def _decode_string(raw: bytes) -> str:
-    for encoding in ("utf-8", "gb18030", "latin-1"):
-        try:
-            return raw.decode(encoding)
-        except UnicodeDecodeError:
-            continue
-    return raw.decode("utf-8", "replace")
+    return decode_warcraft_string(raw, allow_latin1=True)

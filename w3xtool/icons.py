@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import os
 
+from .game_data_source import GameDataSource, open_game_data_source
 from .mpq import MPQArchive
 from .blp import decode_blp
 
@@ -41,7 +42,7 @@ def find_game_dir(start_path: str):
 
 
 class IconResolver:
-    def __init__(self, map_path: str, extra_paths=None):
+    def __init__(self, map_path: str, extra_paths=None, game_data_path: str | None = None):
         self.map_path = map_path
         try:
             self.map = MPQArchive(map_path)
@@ -57,6 +58,7 @@ class IconResolver:
             except Exception:
                 pass
         self.game_dir = find_game_dir(map_path)
+        self.game_data_source = _open_game_data_source(game_data_path)
         self._game = None
         self._cache = {}     # path.lower() -> PIL.Image | None
 
@@ -73,6 +75,7 @@ class IconResolver:
                     pass
         self.map = None
         self.extra = []
+        self.game_data_source = None
         self._cache = {}
 
     def __enter__(self):
@@ -112,7 +115,10 @@ class IconResolver:
         candidates = [p, base + ".blp", base + ".tga", base + ".dds"]
         # 去重保序
         seen = set(); cands = [c for c in candidates if not (c in seen or seen.add(c))]
-        archives = ([self.map] if self.map else []) + self.extra + self._games()
+        archives = ([self.map] if self.map else []) + self.extra
+        if self.game_data_source is not None:
+            archives.append(self.game_data_source)
+        archives += self._games()
         for arch in archives:
             if not arch:
                 continue
@@ -128,3 +134,7 @@ class IconResolver:
                 except Exception:
                     continue
         return None
+
+
+def _open_game_data_source(path: str | None) -> GameDataSource | None:
+    return open_game_data_source(path)

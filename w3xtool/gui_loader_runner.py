@@ -46,17 +46,19 @@ class BackgroundLoaderMixin:
 
     def _start_path_load(self, path: str) -> None:
         options = dict(self.load_options)
+        game_data_path = self.game_data_path
         self._start_loader_job(
             status=f"正在解析 {os.path.basename(path)} …",
-            build_payload=lambda: load_path_payload(path, load_options=options),
+            build_payload=lambda: load_path_payload(path, load_options=options, game_data_path=game_data_path),
             error_status="解析失败",
         )
 
     def _start_map_switch(self, md: MapData, campaign_path: str | None) -> None:
         options = dict(self.load_options)
+        game_data_path = self.game_data_path
         self._start_loader_job(
             status="正在切换 …",
-            build_payload=lambda: switch_map_payload(md, campaign_path, load_options=options),
+            build_payload=lambda: switch_map_payload(md, campaign_path, load_options=options, game_data_path=game_data_path),
             error_status="切换失败",
         )
 

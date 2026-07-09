@@ -15,15 +15,11 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass, field
 
+from .war3_encoding import decode_warcraft_string
+
 
 def _decode(b: bytes) -> str:
-    try:
-        return b.decode("utf-8")
-    except UnicodeDecodeError:
-        try:
-            return b.decode("gbk")
-        except UnicodeDecodeError:
-            return b.decode("utf-8", "replace")
+    return decode_warcraft_string(b)
 
 
 @dataclass

@@ -74,27 +74,26 @@ def add_preview_icons(md: "MapData", archive: "MPQArchive") -> None:
 
 
 def add_import_summary(md: "MapData", archive: "MPQArchive") -> None:
-    """Load war3map.imp with path type and missing-file diagnostics."""
-    if not archive.has_file("war3map.imp"):
-        return
-    try:
-        from .imp import ImportSummary, parse_import_table
+    """Load map/campaign import tables with missing-file diagnostics."""
+    from .mpq_files import import_tables_from_archive
 
-        table = parse_import_table(archive.read_file("war3map.imp"))
-    except (KeyError, ValueError):
-        md.import_summary = None
+    tables = import_tables_from_archive(archive)
+    if not tables:
         return
+    from .imp import ImportSummary
+
+    entries = tuple(entry for table in tables for entry in table.entries)
     resolved = []
     missing = []
-    for entry in table.entries:
+    for entry in entries:
         actual = _resolve_import_path(archive, entry)
         if actual is None:
             missing.append(entry.candidate_paths[0] if entry.candidate_paths else entry.path)
         else:
             resolved.append(actual)
     md.import_summary = ImportSummary(
-        version=table.version,
-        entries=table.entries,
+        version=tables[0].version,
+        entries=entries,
         resolved_paths=tuple(resolved),
         missing_paths=tuple(missing),
     )

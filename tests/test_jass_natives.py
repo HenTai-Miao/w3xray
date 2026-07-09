@@ -40,6 +40,24 @@ class ScanObjectRefsTest(unittest.TestCase):
         self.assertIn("hfoo", refs["单位"])
         self.assertIn("Iitm", refs["物品"])
 
+    def test_multiline_native_call_is_categorized(self):
+        # Given: GUI-generated JASS may wrap native arguments across lines.
+        script = "\n".join((
+            "call CreateUnit(",
+            "    Player(0),",
+            "    'hfoo',",
+            "    0.,",
+            "    0.,",
+            "    270.",
+            ")",
+        ))
+
+        # When: object references are scanned.
+        refs = scan_object_refs(script)
+
+        # Then: the unit code is still categorized.
+        self.assertIn("hfoo", refs["单位"])
+
     def test_destructable(self):
         script = "call CreateDestructable('Dtre', 0, 0, 0, 1, 0)\n"
         refs = scan_object_refs(script)
@@ -71,6 +89,18 @@ class ScanObjectRefsTest(unittest.TestCase):
         # GetObjectName 是泛型(取任意对象名)，按 objectId 参数名会误判为可破坏物，应被排除
         self.assertNotIn("GetObjectName", script_scan.NATIVE_OBJ_FUNCS)
 
+    def test_bj_implicit_codes_are_categorized_as_object_refs(self):
+        script = ("call MeleeStartingUnitsHuman(p, loc, true, true, true)\n"
+                  "call MeleeGrantItemsToHero(hero)\n")
+        refs = scan_object_refs(script)
+        self.assertIn("hpea", refs["单位"])
+        self.assertIn("Amic", refs["技能"])
+        self.assertIn("stwp", refs["物品"])
+
+    def test_bj_code_constants_are_categorized(self):
+        refs = scan_object_refs("set blocker = bj_ELEVATOR_CODE01\n")
+        self.assertIn("DTrf", refs["可破坏物"])
+
 
 class ScriptFeaturesTest(unittest.TestCase):
     def test_melee_feature_and_implicit_codes(self):
@@ -101,6 +131,21 @@ class AllReferencedCodesTest(unittest.TestCase):
         # Lua 写法 FourCC("Axyz") 不带单引号、所在行无 native，也应进根集合
         codes = scan_all_referenced_codes('local id = FourCC("Axyz")\n')
         self.assertIn("Axyz", codes)
+
+    def test_ignores_comment_and_display_string_rawcodes(self):
+        # Given: comments and user-facing strings mention text that looks like rawcodes.
+        script = "\n".join((
+            "// removed old unit 'hfoo'",
+            "call BJDebugMsg(\"debug marker 'A001'\")",
+            "call DoNothing()",
+        ))
+
+        # When: root object references are collected for orphan analysis.
+        codes = scan_all_referenced_codes(script)
+
+        # Then: non-executable text does not suppress orphan detection.
+        self.assertNotIn("hfoo", codes)
+        self.assertNotIn("A001", codes)
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ import unittest
 from w3xtool.api import GameObject, MapData
 from w3xtool.gameconfig import GameConfiguration, GameConfigPlayer, NamedGameConfiguration
 from w3xtool.gui_reports import build_analysis_blocks, build_overview_blocks, format_blocks
+from w3xtool.imp import ImportEntry, ImportSummary
 from w3xtool.mmp import PreviewIcon, PreviewIconSummary
 from w3xtool.wtg import TriggerCategory, TriggerHeader, TriggerTreeSummary, TriggerVariable
 
@@ -143,6 +144,116 @@ class GuiReportTest(unittest.TestCase):
         self.assertIn("小地图标记", analysis)
         self.assertIn("玩家出生点", analysis)
         self.assertIn("金矿 1", analysis)
+
+    def test_reports_include_save_and_id_investigation_clues(self):
+        # Given: a script with local save-style APIs and object IDs.
+        md = MapData(path="x.w3x", name="存档图")
+        md.objects = {
+            "技能": [
+                GameObject("技能", "w3a", "A001", "AHhb", "治疗术", True),
+            ]
+        }
+        md.scripts = {
+            "war3map.j": "\n".join((
+                'set udg_cache = InitGameCache("AnimeSave.w3v")',
+                'call StoreInteger(udg_cache, "hero", "level", 1)',
+                'call PreloadGenEnd("save\\hero.txt")',
+                "call UnitAddAbility(u, 'A001')",
+            )),
+        }
+
+        # When: analysis blocks are formatted.
+        analysis = format_blocks(build_analysis_blocks(md))
+
+        # Then: the GUI exposes save/resource investigation clues in one card.
+        self.assertIn("存档/ID线索", analysis)
+        self.assertIn("AnimeSave.w3v", analysis)
+        self.assertIn("save\\hero.txt", analysis)
+        self.assertIn("A001", analysis)
+
+    def test_reports_include_resource_inventory_statuses(self):
+        # Given: a map with UI files, imported resources, and a missing import.
+        md = MapData(path="x.w3x", name="资源图")
+        md.objects = {
+            "单位": [
+                GameObject(
+                    category="单位",
+                    ext="w3u",
+                    obj_id="H001",
+                    base_id="Hpal",
+                    name="英雄",
+                    is_custom=True,
+                    fields=[("模型", "war3mapImported\\Hero.mdx")],
+                    icon="ReplaceableTextures\\CommandButtons\\BTNHero.blp",
+                )
+            ]
+        }
+        md.all_files = ["war3map.wts", "war3mapImported\\Hero.mdx"]
+        md.import_summary = ImportSummary(
+            version=1,
+            entries=(
+                ImportEntry(path="Hero.mdx", flag=8),
+                ImportEntry(path="ReplaceableTextures\\Missing.blp", flag=13),
+            ),
+            resolved_paths=("war3mapImported\\Hero.mdx",),
+            missing_paths=("ReplaceableTextures\\Missing.blp",),
+        )
+
+        # When: analysis blocks are formatted.
+        analysis = format_blocks(build_analysis_blocks(md))
+
+        # Then: the GUI exposes the same resource inventory statuses as the pack.
+        self.assertIn("资源资产", analysis)
+        self.assertIn("UI/文本 1", analysis)
+        self.assertIn("导入缺失", analysis)
+        self.assertIn("replaceabletextures\\missing.blp", analysis)
+
+    def test_reports_include_ui_text_summary(self):
+        # Given: a map with WTS UI strings and trigger references.
+        md = MapData(path="x.w3x", name="文本图")
+        md.scripts = {
+            "war3map.wts": "STRING 1\n{\n开始游戏\n}\n",
+            "war3map.j": (
+                'call BJDebugMsg("TRIGSTR_001")\n'
+                'call BJDebugMsg("TRIGSTR_999")\n'
+            ),
+        }
+
+        # When: analysis blocks are formatted.
+        analysis = format_blocks(build_analysis_blocks(md))
+
+        # Then: UI text extraction is visible without exporting the pack.
+        self.assertIn("UI文本", analysis)
+        self.assertIn("字符串 1", analysis)
+        self.assertIn("引用 2", analysis)
+        self.assertIn("未解析 1", analysis)
+        self.assertIn("TRIGSTR_001", analysis)
+
+    def test_reports_include_extraction_completeness_summary(self):
+        # Given: parsed map data with an internal file list but no readable source archive.
+        md = MapData(path="/missing/map.w3x", name="提取图")
+        md.all_files = ["war3map.j", "war3map.w3i"]
+
+        # When: analysis blocks are formatted.
+        analysis = format_blocks(build_analysis_blocks(md))
+
+        # Then: users can tell why only filename-level extraction data is available.
+        self.assertIn("提取完整性", analysis)
+        self.assertIn("命名文件 2", analysis)
+        self.assertIn("源文件不可读", analysis)
+
+    def test_reports_include_script_mechanism_need_marks(self):
+        # Given: script helpers that depend on Blizzard runtime object pools.
+        md = MapData(path="x.w3x", name="机制图")
+        md.scripts = {"war3map.j": "call ChooseRandomItemBJ(3)\ncall InitNeutralBuildings()\n"}
+
+        # When: analysis blocks are formatted.
+        analysis = format_blocks(build_analysis_blocks(md))
+
+        # Then: the GUI exposes these mechanisms without inventing fixed object IDs.
+        self.assertIn("脚本机制", analysis)
+        self.assertIn("随机物品池", analysis)
+        self.assertIn("中立建筑初始化", analysis)
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@
 """
 import struct
 import unittest
+from unittest.mock import patch
 
 from w3xtool.w3obj import parse_object_data
 
@@ -92,6 +93,22 @@ class TestParseObjectData(unittest.TestCase):
         self.assertEqual(objs[0].old_id, "hpea")
         self.assertEqual(objs[0].mods[0].value, "Peasant")
 
+    def test_recovers_later_object_after_corrupt_record(self):
+        # Given: 一个坏对象夹在表内，后面还有完整对象。
+        bad = (
+            _tag("hbad") + _tag("xbad") + struct.pack("<i", 1)
+            + _tag("unam") + struct.pack("<i", 99) + b"corrupt bytes"
+        )
+        good = _obj("hfoo", "hfoo", [_mod("unam", 3, "Footman")])
+
+        # When: 解析对象表。
+        objs = parse_object_data(_build([bad, good], []), "w3u")
+
+        # Then: 不因为前一条坏记录丢掉后续可识别对象。
+        self.assertEqual(len(objs), 1)
+        self.assertEqual(objs[0].old_id, "hfoo")
+        self.assertEqual(objs[0].mods[0].value, "Footman")
+
     def test_absurd_count_does_not_hang(self):
         # 注水的超大 count(远超剩余字节)应立即判损坏，而非进入数十亿次循环
         data = struct.pack("<iii", 2, 0x7FFFFFFF, 0)   # version, 原始表 count=21亿, 自定义表空
@@ -105,6 +122,19 @@ class TestParseObjectData(unittest.TestCase):
         obj = _tag("hpea") + _tag("hpea") + struct.pack("<i", 1) + mod
         objs = parse_object_data(_build([obj], []), "w3u")
         self.assertEqual(objs[0].mods[0].value, "测试")
+
+    def test_windows_acp_string_value_precedes_gbk(self):
+        # Given: a legacy object string saved under Traditional Chinese ACP.
+        raw = "測試".encode("cp950")
+        mod = _tag("unam") + struct.pack("<i", 3) + raw + b"\x00" + struct.pack("<I", 0)
+        obj = _tag("hpea") + _tag("hpea") + struct.pack("<i", 1) + mod
+
+        # When: the active Windows ACP is cp950.
+        with patch("w3xtool.war3_encoding.default_legacy_codecs", return_value=("cp950", "gbk")):
+            objs = parse_object_data(_build([obj], []), "w3u")
+
+        # Then: the string is not mis-decoded as GBK.
+        self.assertEqual(objs[0].mods[0].value, "測試")
 
     def test_version3_extra_header_fields(self):
         # 1.32+/新编辑器存的格式版本 3：每个对象头多两个 uint32

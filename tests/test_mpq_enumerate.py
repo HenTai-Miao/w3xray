@@ -5,11 +5,12 @@
 """
 import struct
 import unittest
+from unittest.mock import patch
 
 from w3xtool.mpq import MPQArchive
 
 
-def _make(present, listfile=None, imp=None):
+def _make(present, listfile=None, imp=None, campaign_imp=None):
     obj = MPQArchive.__new__(MPQArchive)
     obj._names = None
     files = dict(present)             # {name: bytes}
@@ -17,6 +18,8 @@ def _make(present, listfile=None, imp=None):
         files["(listfile)"] = listfile
     if imp is not None:
         files["war3map.imp"] = imp
+    if campaign_imp is not None:
+        files["war3campaign.imp"] = campaign_imp
     obj.has_file = lambda n: n in files
     obj.read_file = lambda n: files[n]
     return obj
@@ -58,12 +61,40 @@ class TestListFilesUnion(unittest.TestCase):
         names = arch.list_files()
         self.assertIn("war3mapImported\\model.mdx", names)
 
+    def test_campaign_imp_names_added_when_present(self):
+        # Given: a campaign archive has top-level imported UI assets.
+        arch = _make(
+            {"UI\\CampaignIcon.blp": b"BLP"},
+            campaign_imp=_imp_bytes(["UI\\CampaignIcon.blp"]),
+        )
+
+        # When: names are enumerated from archive metadata.
+        names = arch.list_files()
+
+        # Then: war3campaign.imp contributes import paths just like war3map.imp.
+        self.assertIn("UI\\CampaignIcon.blp", names)
+
     def test_dedup_case_insensitive(self):
         arch = _make({"war3map.j": b"//"},
                      listfile=b"War3Map.J\r\nwar3map.j\r\n")
         names = arch.list_files()
         lowered = [n.lower() for n in names]
         self.assertEqual(lowered.count("war3map.j"), 1)
+
+    def test_listfile_uses_legacy_warcraft_encoding(self):
+        # Given: a Traditional Chinese map saved its MPQ listfile with CP950 bytes.
+        listfile = "素材\\測試.blp\r\n".encode("cp950")
+        arch = _make({}, listfile=listfile)
+
+        # When: the archive enumerates names from (listfile).
+        with patch(
+            "w3xtool.war3_encoding.default_legacy_codecs",
+            return_value=("cp950", "gbk"),
+        ):
+            names = arch.list_files()
+
+        # Then: the real resource path is recoverable instead of mojibake.
+        self.assertIn("素材\\測試.blp", names)
 
 
 if __name__ == "__main__":

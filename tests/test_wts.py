@@ -1,5 +1,6 @@
 """war3map.wts 字符串表解析：UTF-8 为主，单条 GBK 片段独立回退（混合编码地图）。"""
 import unittest
+from unittest.mock import patch
 
 from w3xtool.wts import parse_wts, resolve
 
@@ -20,6 +21,13 @@ class TestParseWts(unittest.TestCase):
         table = parse_wts(good + gbk)
         self.assertEqual(table[1], "正常")        # UTF-8 条目不受影响
         self.assertEqual(table[2], "测试")        # GBK 条目正确还原，而非乱码
+
+    def test_windows_acp_is_tried_before_gbk(self):
+        # 繁中系统 ACP(cp950) 下的老图字符串应先按 ACP 解，而不是被 GBK 抢先误解。
+        body = "測試".encode("cp950")
+        data = b"STRING 8\n{\n" + body + b"\n}\n"
+        with patch("w3xtool.war3_encoding.default_legacy_codecs", return_value=("cp950", "gbk")):
+            self.assertEqual(parse_wts(data)[8], "測試")
 
     def test_gbk_body_with_brace_trail_byte_not_truncated(self):
         # GBK 双字节字符的尾字节可能正好是 0x7D('}')。按字节找 '}' 会在此处误截断。

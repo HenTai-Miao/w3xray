@@ -12,6 +12,7 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass, field
 
+from .war3_encoding import decode_warcraft_string
 from .wts import resolve
 
 # 玩家类型 / 种族（编辑器口径）
@@ -113,13 +114,7 @@ class _Reader:
             end = len(self.d)
         b = self.d[self.p:end]
         self.p = end + 1
-        try:
-            return b.decode("utf-8")
-        except UnicodeDecodeError:
-            try:
-                return b.decode("gbk")
-            except UnicodeDecodeError:
-                return b.decode("utf-8", "replace")
+        return decode_warcraft_string(b)
 
 
 def parse_w3i(data: bytes, wts: dict | None = None) -> "W3iInfo | None":

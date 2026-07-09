@@ -218,8 +218,83 @@
 - **P4 清理**
   - `textobj` 导入 `except Exception`→`except ImportError`（语法错不再被静默吞）；`icons._load` 不再吞 `MemoryError`；删死代码 `_view_md`/`_col_select_all`/`on_export_selected`/`find_all_command_like_strings`；清掉删 AI 层后残留的 `w3xtool/aicli/` 空壳与 `tests/__pycache__/*aicli*`。
 - **新需求：每个框加横向滚动**（用户反馈地图列表名字看不全）：地图列表、物品/单位/技能/科技四列、隐藏指令表都加横向滚动条 + 列宽随最长内容自适应（`_autosize_tree`，stretch=False 才有可滚区间）。合成配方表本就有。实测物品列 80→289px。测试 `test_gui_scroll.py`。
+
+### 会话 40：知识包脚本调用清单
+- 新增 `w3xtool/script_call_catalog.py`，按函数/native 名汇总脚本真实调用，输出次数、来源、行号、机制、对象码、字符串参数和示例。
+- 资料包新增 `脚本调用清单.tsv`，并加入 `资料包目录.tsv` 与 `需求覆盖.tsv`。
+- 扫描复用 `script_code_text()`、`extract_call_args()`、`save_api_catalog` 和 `_codes_in()`；注释或字符串里的伪调用不会升级成真实调用。
+
+### 会话 41：知识包脚本函数索引
+- 新增 `w3xtool/script_function_index.py`，按 JASS/Lua 函数范围汇总被调用次数、内部主调用数、机制、对象码和调用函数。
+- 资料包新增 `脚本函数索引.tsv`，并加入 `资料包目录.tsv` 与 `需求覆盖.tsv`。
+- 函数索引复用调用清单的去噪与 API/对象码分类，只统计每行主调用，避免把 `StringHash()`、`Player()` 等参数辅助调用当成函数体主流程。
+
+### 会话 42：知识包脚本字符串索引
+- 新增 `w3xtool/script_string_index.py`，逐行导出真实脚本字符串字面量，包含来源、行号、函数、调用、用途、原文和 TRIGSTR 解析文本。
+- 资料包新增 `脚本字符串索引.tsv`，并加入 `资料包目录.tsv` 与 `需求覆盖.tsv`。
+- 字符串用途覆盖 UI 文本、资源路径、聊天指令、同步前缀、存档/键、显示文本和普通字符串；跳过注释里的伪字符串和 JASS 单引号 4cc。
 - **暂缓**（见记忆 `w3xray-audit-deferred`）：① huffman 0x101 疑似重复加权——需真实 Huffman 样本往返验证，盲改有风险；② single_instance 改完整路径比较 + kill 前 TOCTOU 复核（低概率本地攻击，不在本次范围）。
 - 测试 **136→165 通过, 1 skipped**（+29 例）；onedir 重新打包。
+
+### 会话 43：知识包脚本全局变量索引
+- 新增 `w3xtool/script_global_index.py`，解析 JASS `globals/endglobals` 块，导出来源、行号、名称、类型、数组/常量标记、初值、字符串值、对象码和用途。
+- 资料包新增 `脚本全局变量索引.tsv`，并加入 `资料包目录.tsv` 与 `需求覆盖.tsv`。
+- 用途覆盖对象码、资源路径、存档/键、布尔开关、数组状态和普通全局变量；注释与函数内 local 不进入索引。
+- 验证：脚本/知识包聚焦测试 **13 passed**；全套 `uv run python -m pytest -q` 为 **489 passed, 15 skipped**。
+
+### 会话 44：知识包脚本赋值索引
+- 新增 `w3xtool/script_assignment_index.py`，解析 JASS `set` 和简单 Lua 赋值，导出来源、行号、函数、变量、数组索引、右值、字符串值、对象码和用途。
+- 资料包新增 `脚本赋值索引.tsv`，并加入 `资料包目录.tsv` 与 `需求覆盖.tsv`。
+- 用途覆盖对象码、资源路径、存档/键、数组状态、布尔开关和普通变量赋值；注释、显示字符串里的伪赋值和 globals 初始值不进入赋值索引。
+- 验证：脚本/知识包聚焦测试 **16 passed**；全套 `uv run python -m pytest -q` 为 **492 passed, 15 skipped**。
+
+### 会话 45：知识包脚本变量使用索引
+- 新增 `w3xtool/script_variable_usage_index.py`，解析 `udg_`、`gg_*`、`bj_` 全局变量引用，导出来源、行号、函数、变量、读/写、类别、当前行调用和对象码。
+- 资料包新增 `脚本变量使用索引.tsv`，并加入 `资料包目录.tsv` 与 `需求覆盖.tsv`。
+- 变量类别覆盖用户全局、触发器、预放置单位/物品/装饰物、区域、镜头、声音和 BJ 变量；注释和显示字符串里的伪变量不进入索引。
+- 验证：脚本/知识包聚焦测试 **19 passed**；全套 `uv run python -m pytest -q` 为 **495 passed, 15 skipped**。
+
+### 会话 46：知识包脚本对象码出现索引
+- 新增 `w3xtool/script_object_code_occurrence_index.py`，逐次导出脚本 rawcode 出现位置，包含来源、行号、函数、对象码、十进制值、分类、名称、对象来源、上下文、机制和摘要。
+- 资料包新增 `脚本对象码出现索引.tsv`，并加入 `资料包目录.tsv` 与 `需求覆盖.tsv`。
+- 上下文覆盖对象创建/技能/物品 API、Hashtable/GameCache 存档调用、`set`/Lua 赋值、globals 声明和普通字面量；注释和普通显示字符串里的伪对象码不进入索引。
+- 验证：脚本/知识包/目录聚焦测试 **5 passed**，相关回归 **13 passed**；全套 `uv run python -m pytest -q` 为 **498 passed, 15 skipped**。
+
+### 会话 47：知识包脚本触发注册索引
+- 新增 `w3xtool/script_trigger_registration_index.py`，导出脚本事件、动作、条件和计时器注册入口，包含来源、行号、函数、注册类型、句柄、API、目标和字符串参数。
+- 资料包新增 `脚本触发注册索引.tsv`，并加入 `资料包目录.tsv` 与 `需求覆盖.tsv`。
+- 覆盖 `TriggerRegister*`、`TriggerAddAction/Condition`、`TimerStart`，可直接追聊天事件、玩家/单位事件、动作函数、条件函数和定时器回调；注释和显示字符串里的伪注册不进入索引。
+- 验证：脚本/知识包/目录聚焦测试 **5 passed**，相关回归 **14 passed**；全套 `uv run python -m pytest -q` 为 **501 passed, 15 skipped**。
+
+### 会话 48：知识包脚本条件分支索引
+- 新增 `w3xtool/script_condition_branch_index.py`，导出 JASS `if/elseif` 条件，包含来源、行号、函数、条件表达式、调用、变量、字符串、对象码、用途和摘要。
+- 资料包新增 `脚本条件分支索引.tsv`，并加入 `资料包目录.tsv` 与 `需求覆盖.tsv`。
+- 用途覆盖存档条件、对象 ID 条件、资源条件、状态变量条件、调用条件和普通条件；注释和显示字符串里的伪条件不进入索引。
+- 验证：条件分支/知识包/目录聚焦测试 **5 passed**，相关回归 **13 passed**；全套 `uv run python -m pytest -q` 为 **504 passed, 15 skipped**。
+
+### 会话 49：知识包脚本循环索引
+- 新增 `w3xtool/script_loop_index.py`，导出 JASS `loop`/`exitwhen` 和 Lua `for`/`while`/`repeat`/`until`，包含来源、行号、函数、循环类型、表达式、调用、变量、字符串、对象码、用途和摘要。
+- 资料包新增 `脚本循环索引.tsv`，并加入 `资料包目录.tsv` 与 `需求覆盖.tsv`。
+- 用途覆盖普通循环、存档循环条件、对象 ID 循环条件、资源循环条件、状态变量循环条件和调用循环条件；注释和显示字符串里的伪循环不进入索引。
+- 验证：循环索引/知识包/目录聚焦测试 **5 passed**，相关脚本索引回归 **15 passed**；全套 `uv run python -m pytest -q` 为 **507 passed, 15 skipped**。
+
+### 会话 50：知识包脚本返回值索引
+- 新增 `w3xtool/script_return_index.py`，导出 JASS/Lua `return` 表达式，包含来源、行号、函数、返回表达式、调用、变量、字符串、对象码、用途和摘要。
+- 资料包新增 `脚本返回值索引.tsv`，并加入 `资料包目录.tsv` 与 `需求覆盖.tsv`。
+- 用途覆盖空返回、存档返回值、对象 ID 返回值、资源返回值、状态变量返回值、调用返回值和普通返回值；注释和显示字符串里的伪 return 不进入索引。
+- 验证：返回值索引/知识包/目录聚焦测试 **5 passed**，相关脚本索引回归 **17 passed**；全套 `uv run python -m pytest -q` 为 **510 passed, 15 skipped**。
+
+### 会话 51：知识包脚本局部变量索引
+- 新增 `w3xtool/script_local_index.py`，导出 JASS/Lua 函数内 `local` 声明，包含来源、行号、函数、名称、类型、初值、字符串、对象码、用途和摘要。
+- 资料包新增 `脚本局部变量索引.tsv`，并加入 `资料包目录.tsv` 与 `需求覆盖.tsv`。
+- 用途覆盖对象码、资源路径、存档/键、开关和普通局部变量；注释和显示字符串里的伪 local 不进入索引。
+- 验证：局部变量索引/知识包/目录聚焦测试 **5 passed**，相关脚本索引回归 **25 passed**；全套 `uv run python -m pytest -q` 为 **513 passed, 15 skipped**。
+
+### 会话 52：知识包脚本调用参数索引
+- 新增 `w3xtool/script_call_argument_index.py`，逐次导出脚本调用的每个参数，包含来源、行号、函数、调用、参数序号、参数文本、字符串、对象码、机制、用途和摘要。
+- 资料包新增 `脚本调用参数索引.tsv`，并加入 `资料包目录.tsv` 与 `需求覆盖.tsv`。
+- 用途覆盖对象码、资源路径、存档/键、字符串和普通参数；注释和显示字符串里的伪调用不会被当成真实调用。
+- 验证：调用参数索引/知识包/目录聚焦测试 **5 passed**，相关脚本索引回归 **30 passed**；全套 `uv run python -m pytest -q` 为 **516 passed, 15 skipped**。
 
 ### 会话 10：清掉会话 9 暂缓的两项（huffman 验证 + single_instance 加固）
 - **Huffman 新符号加权——证伪审计怀疑，无 bug**：会话 9 审计怀疑 `huffman.py` 新符号(0x101)路径重复加权(sparse)。用 systematic-debugging 实测裁决：从 `War3x.mpq` 捕获 **2000 条真实 StormLib 编码的 Huffman 扇区**（其中 1845 条触发新符号路径、共 2958 次插入），用当前解码逻辑解到自然终止——**2000/2000 恰好在编码器写入的 0x100 结束符处停下且输入读尽**。自适应树一旦重复加权必在第一个新符号后失步、不可能在上千条真实流上对齐。结论：移植与 StormLib 完全一致（StormLib 的 InsertNewBranchAndRebalance 内部也对新符号 IncWeights 一次、调用方再 IncWeights 一次，本就是"两次"，并非 bug）。**不改代码**，改为新增锁定测试 `test_huffman.py::TestHuffmanRealStormLibStreams`（有游戏 MPQ 时实跑真实流的位级同步校验）。
@@ -296,3 +371,201 @@
   - `TheRiseOfEyes_v3_15e_ENG.w3x`：MPQ blocks 2627，list files 22，导出文件 2628，RecoveredNames OK 1061 / fail 0，UnknownRaw 0。
   - `AV2_TCoM MMORG v17.8m_CN.w3x`：MPQ blocks 5839，list files 26，导出文件 5842，RecoveredNames OK 3675 / fail 2，UnknownRaw 2。两项 fail 对应原图内无法解码的 BLP payload，已保留 raw；此前已用公开近版本 `v17.8n` 手工补回同名 BLP 到用户临时提取目录。
 - 测试/打包：`uv run pytest` 为 **238 passed, 8 skipped**；`uv run python -m PyInstaller --noconfirm "魔兽地图提取器.spec"` 成功生成 onedir 产物 `dist/魔兽地图提取器/`。（`uv run pyinstaller` 在当前中文/空格路径下触发 uv trampoline 路径规范化错误，已改用等价的 `python -m PyInstaller` 入口。）
+
+### 会话 17：提取完整性诊断 + 知识包补齐
+用户要求把 UI 文本、图标、资源、配置格式、存档/ID 分析和提取差距排查都补上；本轮补齐“为什么有些图看起来提不全”的可解释诊断。
+
+- **提取完整性诊断**（`w3xtool/extraction_completeness.py`）：统计命名文件、有效 MPQ block、命名覆盖率、无名块、`Unknown/` 可解包估算和 `UnknownRaw/` 原始负载兜底；原始地图不可读时退回已加载 `md.all_files` 并明确提示无法计算块覆盖。
+- **GUI 分析块**（`w3xtool/gui_extraction_reports.py` + `gui_reports.py`）：新增“提取完整性”块，直接显示命名文件数、源状态、覆盖率、无名块、Unknown/UnknownRaw 数量和前 3 条警告。
+- **知识包导出**（`knowledge_pack.py`）：新增 `提取完整性.txt`，和 GUI 使用同一份 formatter，便于把提取覆盖问题发给别人排查。
+- **文档同步**：`docs/KKWE借鉴清单.md` 的 #10 标为 done，记录实际落地点。
+- **验证**：新增/更新 `tests/test_extraction_completeness.py`、`tests/test_gui_reports.py`、`tests/test_knowledge_pack.py`；集中测试 17 passed；全套 `uv run python -m pytest -q` 为 **444 passed, 15 skipped**。测试后已清理 `.pytest_cache` 和 `__pycache__`。
+
+### 会话 18：BJ 隐式对象引用进入脚本对象扫描
+继续补齐脚本侧 ID 覆盖。之前 `scan_script_features()` 已能识别 Melee/BJ 机制并产出隐式码，但 `api._add_script_refs()` 只读取 `scan_object_refs()`，导致这些隐式码不会出现在对象补全列表里。
+
+- **脚本引用补全**（`w3xtool/script_scan.py`）：`scan_object_refs()` 末尾合并 BJ 隐式对象码；按 `base_objects` 的原版分类归入单位/物品/技能等。`MeleeStartingUnitsHuman` 现在能补出 `hpea`/`htow`/`Amic` 等，`MeleeGrantItemsToHero` 能补出 `stwp`。
+- **BJ 常量分类**：`bj_ELEVATOR_CODE*` 常量按可破坏物归类，避免只出现在“全部引用根集合”里而不进入分类对象引用。
+- **文档同步**：`docs/KKWE借鉴清单.md` 的 #12 标为 partial，记录已落地的 extra_func/object-ref 部分和剩余 need_mark 扩展项。
+- **验证**：新增 `tests/test_jass_natives.py` 2 例；脚本扫描相关测试 **56 passed**；全套 `uv run python -m pytest -q` 为 **446 passed, 15 skipped**。
+
+### 会话 19：脚本 need_mark 机制线索 + 脚本扫描拆分
+继续补 `docs/KKWE借鉴清单.md` #12 剩余 need_mark。目标是让没有具体 4cc 的运行时默认池也能被看见，而不是错误补出不存在的固定 ID。
+
+- **脚本机制模块**（`w3xtool/script_mechanics.py`）：从 `script_scan.py` 拆出 BJ 特征、隐式对象码和 need_mark 扫描；`script_scan.py` 纯代码行从 206 降到 175。
+- **need_mark 覆盖**：识别 `ChooseRandomItem*`、`ChooseRandomCreep*`、`ChooseRandomNPBuilding`、`InitNeutralBuildings`，输出“随机物品池/随机野怪池/随机中立建筑池/中立建筑初始化”，并明确“不直接给出固定 4cc”。
+- **GUI/资料包**：GUI 分析新增“脚本机制”块；资料包新增 `脚本机制线索.txt`，包含脚本特征、隐式对象码和运行时默认池。
+- **文档同步**：`docs/KKWE借鉴清单.md` 的 #12 标为 done。
+- **验证**：新增 `tests/test_script_mechanics.py`，更新 GUI/知识包测试；集中测试 **68 passed**；全套 `uv run python -m pytest -q` 为 **448 passed, 15 skipped**。
+
+### 会话 20：资料包复制资源/配置本体
+继续补“UI 文本、图标、资源、配置格式整理”的资料包落地。之前资料包只有资源引用、内部素材清单和资产索引，不能直接拿到已读取的素材/配置文件。
+
+- **资源本体导出**（`w3xtool/knowledge_assets.py`）：新增安全复制层，把 `build_resource_inventory()` 中状态为 `存在/已引用`、`存在/未引用` 的图标/模型/音频/UI 文本/SLK/对象数据/地图配置复制到 `资源/素材文件/`。
+- **manifest**：新增 `资源/素材文件_manifest.tsv`，记录内部路径、导出相对路径、字节数和状态；源不可读、源内缺失、读取失败、不安全路径都写入 manifest，不中断资料包。
+- **安全路径**：落盘前拒绝空名、盘符和 `..` 穿越；目录源测试确认 `..\\escape.blp` 不会写出 `资源/`。
+- **文档同步**：`docs/KKWE借鉴清单.md` 新增 #15 done，记录资料包本体复制能力。
+- **验证**：新增 `test_pack_exports_resource_file_bodies_when_source_is_readable`；资料包/资源/导出安全集中测试 **13 passed**；全套 `uv run python -m pytest -q` 为 **449 passed, 15 skipped**。
+
+### 会话 21：脚本文本 TRIGSTR 可读化导出
+继续补 `docs/KKWE借鉴清单.md` #7。之前工具能在 `UI文本引用.tsv` 中列出 `TRIGSTR_N` 对照，但导出的脚本正文仍是占位符，阅读触发器代码时要手动来回查表。
+
+- **可读脚本导出**（`w3xtool/script_text_export.py`）：新增 `build_readable_script_exports()`，对非 WTS 脚本里的 `"TRIGSTR_N"` 字符串字面量做 WTS 表还原；缺失引用保持原样；文本内反斜杠、双引号、换行会转义，避免破坏脚本行结构。
+- **资料包接入**：`knowledge_pack.py` 新增 `脚本可读文本/`，每个非 WTS 脚本输出一份已还原文本，配合 `UI文本_TRIGSTR.tsv` 和 `UI文本引用.tsv` 使用。
+- **GUI 接入**：`导出脚本` 改用同一份可读化文本，因此 `war3map.wct(自定义代码).txt` 这类解出的触发器脚本也能直接看到 WTS 文案。
+- **文档同步**：`docs/KKWE借鉴清单.md` 的 #7 标为 done。
+- **验证**：新增 `tests/test_script_text_export.py`，更新知识包测试；脚本文本/资料包/UI 报告集中测试 **15 passed**；全套 `uv run python -m pytest -q` 为 **450 passed, 15 skipped**。
+
+### 会话 22：脚本对象码轻量词法扫描
+继续补 `docs/KKWE借鉴清单.md` #6。之前 `scan_object_refs()` 已有 native 分类表和整数 4cc 支持，但仍按行扫描；跨行 native 调用会漏，注释/显示字符串里的 `'A001'` 会进入孤立判定根集合。
+
+- **代码视图模块**（`w3xtool/script_tokens.py`）：新增轻量词法辅助，保留偏移地抹掉 `//` 注释和普通双引号字符串内容，保留 `FourCC("xxxx")`；不引入完整 JASS AST。
+- **跨行 native 调用**：`scan_object_refs()` 改为扫描平衡括号的 native 调用块，因此 `call CreateUnit(\n Player(0),\n 'hfoo', ...)` 能归入单位引用。
+- **孤立判定去噪**：`scan_all_referenced_codes()` 改用代码视图，注释和用户显示字符串里的 rawcode 样文本不再让对象“假装被引用”。
+- **文档同步**：`docs/KKWE借鉴清单.md` 的 #6 标为 done。
+- **验证**：新增 `test_multiline_native_call_is_categorized` 与 `test_ignores_comment_and_display_string_rawcodes`；脚本相关集中测试 **37 passed**；全套 `uv run python -m pytest -q` 为 **452 passed, 15 skipped**。
+
+### 会话 23：Warcraft 字符串 ACP 回退统一
+继续补 `docs/KKWE借鉴清单.md` #14 剩余编码回退。之前 WTS 注释行 `{` 已加固，但多个解析器仍各自硬编码 `UTF-8 → GBK`，繁中/日文 Windows ACP 老图会出现 UI 文本、对象字段或导入路径乱码。
+
+- **公共解码模块**（`w3xtool/war3_encoding.py`）：新增 `decode_warcraft_string()`，统一 `UTF-8 → 系统首选编码/mbcs → GBK/GB18030 → replace`，保留 WTG/WGC 原有 `latin-1` 可选兜底。
+- **接入范围**：`wts.py`、`w3obj.py`、`imp.py`、`w3i.py`、`wct.py`、`wtg.py`、`gameconfig.py`、`gameplay.py`、`w3world.py` 都改用公共解码策略，覆盖 UI 文本、对象字符串、导入资源路径、地图信息、触发器头、测试配置和区域/镜头/声音名。
+- **回归用例**：新增 CP950（繁中 ACP）测试，确认 ACP 顺序优先于 GBK，避免 `測試` 等文本被 GBK 抢先误解。
+- **文档同步**：`docs/KKWE借鉴清单.md` 的 #14 标为 done。
+- **验证**：编码/地图信息/触发器/配置相关集中测试 **73 passed**；全套 `uv run python -m pytest -q` 为 **455 passed, 15 skipped**。
+
+### 会话 24：MPQ listfile 旧编码路径枚举补洞
+继续补“能提取就尽量提取”的基础枚举链路。会话 23 已统一多数 Warcraft 文本解码，但 `MPQArchive.list_files()` 仍直接把 `(listfile)` 按 `utf-8, replace` 解码，繁中/日文 ACP 老图会把资源路径解成 `����`，导致后续图标、模型、UI 文本和配置本体复制都拿不到真实内部路径。
+
+- **枚举职责拆分**（`w3xtool/mpq_files.py`）：把 `(listfile)`、固定地图文件名、`war3map.imp` 三层并集枚举从 oversized `mpq.py` 抽成独立模块；`mpq.py` 纯代码行从 589 降到 542，保留 `STATIC_MAP_FILES` 兼容重导出。
+- **旧编码 listfile**：`(listfile)` 改用 `decode_warcraft_string()`，顺序继承 `UTF-8 → 系统 ACP/mbcs → GBK/GB18030 → replace`；新增 CP950 用例确认 `素材\測試.blp` 能被枚举出来。
+- **行为不变项**：`(listfile)` 中的名字仍不强制 `has_file`，固定名单仍只收真实存在项，`war3map.imp` 仍选第一个真实存在的候选路径，大小写去重逻辑保持不变。
+- **文档同步**：`docs/KKWE借鉴清单.md` 的 #5 标为 done，并记录 listfile 编码补洞。
+- **验证**：新增/更新 `tests/test_mpq_enumerate.py`；焦点测试 `tests/test_mpq_enumerate.py tests/test_imp.py tests/test_export_safety.py tests/test_extraction_completeness.py` 为 **30 passed**。
+
+### 会话 25：战役导入表参与枚举、导出和摘要
+继续补战役 `.w3n` 顶层资源提取。此前完整性诊断已经能检测 `war3campaign.imp`，固定名单也会把它列出来，但实际导入路径补全只解析 `war3map.imp`，导致战役顶层导入 UI/图标/音效资源可能漏提取，GUI/资料包的导入摘要也看不到。
+
+- **共享导入表入口**（`w3xtool/mpq_files.py`）：新增 `IMPORT_TABLE_FILES = ("war3map.imp", "war3campaign.imp")`，提供 `import_tables_from_archive()`、`import_path_candidate_groups()`、`import_candidate_names()`；地图和战役导入表走同一套候选路径逻辑。
+- **枚举/导出补全**：`MPQArchive.list_files()` 现在会从 `war3campaign.imp` 补出真实存在的导入路径；`api._imported_names()` 改为委托共享入口，顶层导出也会尝试这些战役导入资源。
+- **导入摘要**：`map_extras.add_import_summary()` 合并地图/战役导入表条目，`MapData.import_summary` 可显示战役顶层导入资源的 resolved/missing 状态。
+- **文档同步**：`docs/KKWE借鉴清单.md` 更新 #1/#2/#3/#4/#5/#8/#9/#11/#13 的当前完成状态；源码注释、完整性说明和配置格式索引改为地图/战役导入表。
+- **验证**：新增/更新 `tests/test_mpq_enumerate.py`、`tests/test_imp.py`，覆盖战役导入枚举、导出候选名和导入摘要。
+
+### 会话 26：资源类型覆盖 + 跨行存档/ID 调用扫描
+继续补“都加上”里实际会影响提取完整度的静态差距：地图脚本常把长调用换行写，UI/载入图/字体/SLK 资源也不止 BLP/MDX/MP3。
+
+- **跨行存档/ID 线索**（`w3xtool/save_analysis.py`）：扫描粒度从逐行改成整段脚本调用；`StoreInteger(...)`、`SaveInteger(...)`、`PreloadGenEnd(...)`、`UnitAddAbility(...)`、`CreateUnit(...)` 等跨行写法仍能保留行号、存档区段/键和对象 4cc。
+- **资源引用扩展**（`w3xtool/resources.py`）：资源引用识别新增 PNG/JPG/BMP、OTF、FDF/TOC/TXT/INI、SLK；对象字段和脚本字符串里的 UI 布局、载入图、字体、表格、文本配置都进入资源图。
+- **资源清单同步**（`w3xtool/resource_inventory.py`）：`.toc` 按 UI/文本归类；当内部文件清单和脚本引用同时出现时状态为 `存在/已引用`，资料包复制资源本体时也能按存在资源处理。
+- **验证**：新增 `tests/test_save_analysis.py`、`tests/test_resources.py`、`tests/test_resource_inventory.py` 用例；聚焦测试 `tests/test_resource_inventory.py tests/test_resources.py tests/test_save_analysis.py` 为 **9 passed**。
+
+### 会话 27：存档/ID 扫描去掉注释和字符串误报
+会话 26 为了补跨行调用把 `save_analysis` 改成整段脚本扫描，但整段扫描会把注释或玩家提示文本里的 `StoreInteger(`、`UnitAddAbility(` 也当成真实逻辑。
+
+- **真实代码视图**（`w3xtool/save_analysis.py`）：调用定位改为在 `script_code_text()` 生成的代码视图上扫描；该视图保留偏移，参数仍从原始脚本文本中读取，所以跨行行号、存档文件、区段/键和对象 4cc 不丢。
+- **Lua 注释支持**（`w3xtool/script_tokens.py`）：代码视图新增 `--` 行注释抹除，避免 Lua 地图脚本注释里的伪调用污染存档/ID 线索。
+- **验证**：新增 `test_ignores_save_and_object_calls_inside_comments_and_strings`；脚本相关集中测试 `tests/test_save_analysis.py tests/test_script_scan.py tests/test_jass_natives.py tests/test_script_mechanics.py tests/test_gui_reports.py` 为 **40 passed**。
+
+### 会话 28：DzAPI / KKAPI 平台存档静态线索
+补“分析它怎么读写本地存档/地图 ID”范围内的常见 RPG 平台保存调用。这里只做静态报告，不执行平台 API、不模拟运行时、不提供绕过平台能力。
+
+- **PlatformSave 机制**（`w3xtool/save_analysis.py`）：识别 `DzAPI_Map_SaveServerValue`、`DzAPI_Map_GetServerValue`、`DzAPI_Map_StoreInteger`、`DzAPI_Map_GetStoredInteger`、`DzAPI_Map_SavePublicArchive`、`DzAPI_Map_GetPublicArchive`、`KKAPI_SaveServerValue`、`KKAPI_GetServerValue`。
+- **键名抽取**（`w3xtool/save_call_context.py`）：服务器值/公共档案类函数提取键名；Store/GetStored 类函数提取区段和键名。输出仍进入 `存档读写线索.tsv` 和 GUI“存档/ID线索”块。
+- **文档同步**：`docs/KKWE借鉴清单.md` 把 DzAPI/KKAPI 明确为只保留弱静态线索，不实现完整 native 声明或运行时兼容层。
+- **验证**：新增 `test_detects_platform_save_api_keys_without_executing_them`；存档/GUI/资料包集中测试 **16 passed**。
+
+### 会话 29：资料包审计总览 + 扩展配置资源覆盖
+继续收口“都加上”的静态资料整理面，目标是导出后能一眼确认 UI 文本、资源、配置格式、存档/ID、地图/对象 ID、提取完整性是否都有产物。
+
+- **资料包审计**（`w3xtool/knowledge_audit.py`）：新增 `资料包审计.txt`，汇总 UI 文本字符串/引用/未解析数、资源资产数、配置格式数、存档/ID 线索数、对象/分类数和提取完整性状态。
+- **地图/对象 ID 索引增强**（`w3xtool/investigation_exports.py`）：`地图与对象ID索引.tsv` 保留原有地图/对象行，并增加内部文件数、脚本文件数、对象总数、各分类数量摘要。
+- **扩展文本配置资源**（`w3xtool/resources.py`、`w3xtool/resource_inventory.py`）：资源图和资产索引新增 `.json`、`.plist`、`.skin`、`.ai` 覆盖，分别归类为配置或 AI 脚本；配置格式索引同步识别这些文件。
+- **验证**：新增/更新 `tests/test_resources.py`、`tests/test_resource_inventory.py`、`tests/test_knowledge_pack.py`；焦点测试 `uv run python -m pytest tests/test_resources.py tests/test_resource_inventory.py tests/test_knowledge_pack.py -q` 为 **11 passed**。
+
+### 会话 30：地图文件身份指纹进入 ID 索引
+继续补“分析地图 ID”的静态面。对象 4cc 和脚本存档键已经可导出，但原始地图文件本身还缺稳定指纹，无法和平台/存档侧常见的地图哈希线索对照。
+
+- **地图身份模块**（`w3xtool/map_identity.py`）：对真实可读的地图文件流式计算文件字节数、CRC32、SHA1；目录源、缺失源或不可读源不猜测。
+- **ID 索引接入**（`w3xtool/investigation_exports.py`）：`地图与对象ID索引.tsv` 增加 `文件字节`、`CRC32`、`SHA1` 地图行，和对象 4cc/十进制 ID 放在同一个表里。
+- **资料包审计接入**（`w3xtool/knowledge_audit.py`）：`资料包审计.txt` 增加地图身份摘要；源不可读时明确显示“源文件不可读”。
+- **验证**：新增 `test_pack_exports_readable_map_file_identity_hashes`；焦点测试 `uv run python -m pytest tests/test_knowledge_pack.py -q` 为 **3 passed**。
+
+### 会话 31：Hashtable handle native 覆盖面补齐
+继续补“分析它怎么读写本地存档”的静态覆盖。之前只识别少数 hashtable native，`SavePlayerHandle`、`SaveTimerHandle`、`LoadTriggerHandle`、`HaveSavedHandle`、`RemoveSavedHandle` 这类标准句柄存取会漏。
+
+- **API 目录拆分**（`w3xtool/save_api_catalog.py`）：把存档 API 目录和对象 API 分类从 `save_analysis.py` 抽出，`save_analysis.py` 纯代码行从 212 降到 147。
+- **通配 hashtable native**：按规则识别 `Save*Handle`、`Load*Handle`、`HaveSaved*`、`RemoveSaved*`，并保留原始 API 名到 TSV/摘要，方便回看脚本定位。
+- **父键/子键提取复用**（`w3xtool/save_call_context.py`）：用同一 API 目录判断 hashtable key 参数，避免扫描与参数提取两边维护不同名单。
+- **验证**：新增 `test_detects_wide_hashtable_handle_native_family`；存档/GUI/资料包集中测试 `uv run python -m pytest tests/test_save_analysis.py tests/test_gui_reports.py tests/test_knowledge_pack.py -q` 为 **18 passed**。
+
+### 会话 32：对象 ID 索引增加使用来源和未知脚本码
+继续补“地图 ID、物品/技能/单位 ID 怎么读写/引用”的资料包输出。此前 `地图与对象ID索引.tsv` 只有地图摘要和对象表行，无法区分对象是否实际被脚本、存档/ID 报告、对象字段或预放置数据使用，也不会列出脚本里出现但对象表没解析出的未知 4cc。
+
+- **ID 使用来源**（`w3xtool/investigation_exports.py`）：对象行新增 `使用情况` 和 `详情`，合并脚本引用、`存档/ID线索`、对象字段反向引用和预放置来源；未命中的对象仍明确保留为 `对象表`。
+- **未知脚本 ID**：脚本中出现但不在对象表的 4cc 会输出 `脚本引用/未知` 行，带十进制 ID、来源脚本和“未在对象表中解析”说明。
+- **文档同步**：`docs/KKWE借鉴清单.md` 新增 #19 done。
+- **验证**：新增 `tests/test_investigation_exports.py`；聚焦测试 `uv run python -m pytest tests/test_investigation_exports.py tests/test_knowledge_pack.py tests/test_save_analysis.py tests/test_gui_reports.py -q` 为 **19 passed**。
+
+### 会话 33：对象 ID 使用来源精确到脚本行号
+继续增强 `地图与对象ID索引.tsv` 的可追溯性。会话 32 已能说明某个 ID 来自哪个脚本文件和分类，但还不能直接定位到具体行。
+
+- **扫描逻辑拆分**（`w3xtool/object_id_usage.py`）：新增对象 ID 使用来源 collector，按去噪后的脚本代码视图逐行提取 4cc，并结合 `scan_object_refs()` 的分类结果生成 `来源:行号:分类` 详情。
+- **导出层瘦身**（`w3xtool/investigation_exports.py`）：移除脚本使用来源扫描逻辑，只保留格式化；`地图与对象ID索引.tsv` 详情列现在能显示 `war3map.j:1:单位`、`save.j:1:技能` 这类定位信息。
+- **未知 ID 定位**：脚本中出现但对象表没有解析出的未知 4cc 也带行号，方便回到脚本核对来源。
+- **文档同步**：`docs/KKWE借鉴清单.md` 新增 #20 done。
+- **验证**：更新 `tests/test_investigation_exports.py` 行号期望；聚焦测试 `uv run python -m pytest tests/test_investigation_exports.py tests/test_knowledge_pack.py tests/test_save_analysis.py tests/test_gui_reports.py -q` 为 **19 passed**。
+
+### 会话 34：WTG 触发器目录和变量清单进入知识包
+继续补安全静态提取面。完整 GUI ECA 树依赖 TriggerData.txt 参数表，暂不做；本轮把已稳定解析的 WTG 分类、触发器头和变量清单导出成独立资料包表格。
+
+- **触发器导出模块**（`w3xtool/trigger_exports.py`）：新增 `format_trigger_tree_tsv()` 和 `format_trigger_variables_tsv()`，输出分类 ID/父 ID、触发器名称、分类、启用状态、自定义脚本、初始关闭、初始化运行、变量类型/数组/初始值等。
+- **知识包接入**（`w3xtool/knowledge_pack.py`）：新增 `触发器树.tsv` 与 `触发变量.tsv`，并在 ECA 未展开时明确写入“缺 TriggerData.txt 参数表，只显示触发器头”。
+- **文档同步**：`docs/KKWE借鉴清单.md` 新增 #21 done，并把 WTG 完整 ECA 的“不建议做”项更新为只排除完整 ECA。
+- **验证**：新增知识包测试覆盖触发器树/变量 TSV；聚焦测试 `uv run python -m pytest tests/test_knowledge_pack.py tests/test_wtg.py tests/test_gui_reports.py tests/test_cli_audit.py -q` 为 **36 passed**。
+
+### 会话 35：资料包目录清单
+继续改善“都加上”后的资料包可用性。资料包里已经有多份 TSV/TXT，但没有入口表说明每个文件覆盖哪个调查面。
+
+- **目录清单模块**（`w3xtool/knowledge_manifest.py`）：新增 `format_knowledge_manifest()`，输出 `主题 / 文件 / 用途` 三列，把 UI 文本、资源/图标、配置格式、存档/ID、地图/对象 ID、触发器、脚本和提取完整性映射到具体文件。
+- **知识包接入**（`w3xtool/knowledge_pack.py`）：导出根目录新增 `资料包目录.tsv`，作为资料包入口。
+- **测试拆分**：新增独立 `tests/test_knowledge_pack_manifest.py`，避免继续增大已进入警戒区的 `tests/test_knowledge_pack.py`。
+- **文档同步**：`docs/KKWE借鉴清单.md` 新增 #22 done。
+- **验证**：聚焦测试 `uv run python -m pytest tests/test_knowledge_pack_manifest.py tests/test_knowledge_pack.py tests/test_resource_inventory.py tests/test_ui_text_report.py tests/test_save_analysis.py tests/test_investigation_exports.py -q` 为 **17 passed**。
+
+### 会话 36：世界编辑器区域/镜头/声音表进入知识包
+继续补可静态整理的地图配置面。`war3map.w3r/.w3c/.w3s` 已经解析到 `MapData` 并显示摘要，但资料包没有明细表。
+
+- **世界编辑器导出模块**（`w3xtool/world_exports.py`）：新增 `format_regions_tsv()`、`format_cameras_tsv()`、`format_sounds_tsv()`，分别输出区域范围/天气/环境声音、镜头位置/角度/视野/裁剪距离、声音路径/变量名/循环/3D/音乐/导入标志。
+- **知识包接入**（`w3xtool/knowledge_pack.py`）：新增 `世界区域.tsv`、`世界镜头.tsv`、`世界声音.tsv`。
+- **目录清单同步**（`w3xtool/knowledge_manifest.py`）：`资料包目录.tsv` 增加世界编辑器三项说明。
+- **文档同步**：`docs/KKWE借鉴清单.md` 新增 #23 done。
+- **验证**：新增 `tests/test_knowledge_pack_world.py`；聚焦测试 `uv run python -m pytest tests/test_knowledge_pack_world.py tests/test_w3world.py tests/test_knowledge_pack_manifest.py tests/test_knowledge_pack.py tests/test_gui_info.py tests/test_cli_audit.py -q` 为 **41 passed**。
+
+### 会话 37：需求覆盖矩阵进入知识包
+继续把“都加上”的范围变成可验收产物。本轮不做运行时平台兼容或保护机制修改，只整理静态资料包中已经覆盖的需求面。
+
+- **需求覆盖模块**（`w3xtool/knowledge_requirements.py`）：新增 `format_requirement_coverage()`，输出 `需求覆盖.tsv`，把 UI 文本、图标/资源、配置格式、本地存档读写、地图 ID、物品/技能/单位 ID、触发器/变量、区域/镜头/声音和提取完整性映射到对应产物。
+- **知识包接入**（`w3xtool/knowledge_pack.py`）：根目录新增 `需求覆盖.tsv`。
+- **目录清单同步**（`w3xtool/knowledge_manifest.py`）：`资料包目录.tsv` 增加需求覆盖条目。
+- **文档同步**：`docs/KKWE借鉴清单.md` 新增 #24 done。
+- **验证**：先确认 `tests/test_knowledge_pack_manifest.py` 对缺失 `需求覆盖.tsv` 红灯，再实现转绿；聚焦测试当前为 **2 passed**。
+
+### 会话 38：预放置单位/装饰物表进入知识包
+继续补“地图上实际有什么”的静态资料面。本轮仍不做运行时平台兼容或保护机制修改，只导出已经解析到 `MapData` 的放置信息。
+
+- **知识包编排拆分**：`knowledge_pack.py` 先拆出 `knowledge_io.py`、`knowledge_object_exports.py`、`knowledge_resource_exports.py`、`knowledge_script_exports.py`，保留 `format_box_id_text` 重导出给 GUI 使用，避免新增产物继续推高主编排文件行数。
+- **预放置导出模块**（`w3xtool/knowledge_preplaced_exports.py`）：新增 `format_preplaced_units_tsv()` 和 `format_preplaced_doodads_tsv()`，输出 `预放置单位.tsv`、`预放置装饰物.tsv`，包含坐标、角度、玩家、生命/魔法/金矿、英雄等级、物品栏、技能、缩放和掉落。
+- **目录/需求同步**：`资料包目录.tsv` 增加预放置两项，`需求覆盖.tsv` 把预放置表列入物品/技能/单位 ID 的辅助产物，并新增“分析预放置单位/装饰物”需求行。
+- **文档同步**：`docs/KKWE借鉴清单.md` 新增 #25 done。
+- **验证**：拆分前知识包基线测试 **7 passed**；拆分后知识包/脚本/GUI 聚焦测试 **22 passed**；新增预放置红灯后实现转绿，`tests/test_knowledge_pack_preplaced.py tests/test_knowledge_pack_manifest.py` 为 **3 passed**。
+
+### 会话 39：对象 ID 使用摘要
+继续补“地图 ID、物品/技能/单位 ID 怎么读写/引用”的聚合视图。本轮只做静态来源计数，不执行脚本或平台 API。
+
+- **对象 ID 汇总模块**（`w3xtool/object_id_summary.py`）：新增 `format_object_id_usage_summary()`，输出 `对象ID使用摘要.tsv`，按 ID 汇总脚本引用、存档/ID 线索、对象字段引用、预放置引用次数和详情。
+- **预放置嵌套 ID 计数**：同一模块提供 `preplaced_code_counts()`，把单位类型、单位物品栏、单位技能、装饰物类型、装饰物掉落都计入预放置来源。
+- **ID 索引同步**（`w3xtool/investigation_exports.py`）：`地图与对象ID索引.tsv` 复用新的预放置计数，物品栏/技能/掉落里的 ID 也会标为“预放置”。
+- **知识包接入**（`w3xtool/knowledge_pack.py`）：根目录新增 `对象ID使用摘要.tsv`；`资料包目录.tsv` 和 `需求覆盖.tsv` 同步加入口。
+- **文档同步**：`docs/KKWE借鉴清单.md` 新增 #26 done。
+- **验证**：先用缺失模块/缺失产物确认红灯，再实现转绿；`tests/test_object_id_summary.py tests/test_knowledge_pack_object_id_summary.py tests/test_knowledge_pack_manifest.py tests/test_investigation_exports.py -q` 当前为 **6 passed**。

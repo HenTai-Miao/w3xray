@@ -5,6 +5,7 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass
 
+from .war3_encoding import decode_warcraft_string
 from .wts import resolve
 
 
@@ -110,13 +111,7 @@ class _Reader:
             raise IndexError("cstr 缺少终止符")
         raw = self.d[self.p:end]
         self.p = end + 1
-        try:
-            return raw.decode("utf-8")
-        except UnicodeDecodeError:
-            try:
-                return raw.decode("gbk")
-            except UnicodeDecodeError:
-                return raw.decode("utf-8", "replace")
+        return decode_warcraft_string(raw)
 
 
 def parse_regions(data: bytes, wts: dict | None = None) -> list[Region]:

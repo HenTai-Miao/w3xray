@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import re
 
+from .war3_encoding import decode_warcraft_string
+
 _HEADER = re.compile(rb"STRING\s+(\d+)", re.IGNORECASE)
 # 开/闭括号都要求**独占一行**(行首 {/} + 仅尾随空白)：
 # - 闭合独占行：避免误伤 GBK 尾字节 0x7D，也避免正文里 "} else {" 这类被当成闭合提前截断。
@@ -19,14 +21,8 @@ _CLOSE = re.compile(rb"(?m)^\}[ \t]*$")
 
 
 def _decode_str(b: bytes) -> str:
-    """单条字符串解码：优先 UTF-8，失败回退 GBK（兼容混合编码的老中文图）。"""
-    try:
-        return b.decode("utf-8")
-    except UnicodeDecodeError:
-        try:
-            return b.decode("gbk")
-        except UnicodeDecodeError:
-            return b.decode("utf-8", "replace")
+    """单条字符串解码：UTF-8 后按系统 ACP/GBK 兼容老中文图。"""
+    return decode_warcraft_string(b)
 
 
 def parse_wts(data: bytes) -> dict:
