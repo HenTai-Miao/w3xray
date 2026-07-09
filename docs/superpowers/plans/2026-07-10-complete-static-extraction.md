@@ -701,7 +701,14 @@ class CascLibApi(Protocol):
     def close_file(self, handle: int) -> None: ...
 ```
 
-Bind `CascOpenStorage`, `CascCloseStorage`, `CascOpenFile`, `CascGetFileSize`, `CascReadFile`, and `CascCloseFile` with explicit `argtypes/restype`. Reject files above the same configured size ceiling used for archive resources.
+Build with `CASC_UNICODE=ON`: bind `CascOpenStorage` with a wide local path,
+while `CascOpenFile(..., CASC_OPEN_BY_NAME, ...)` still receives a NUL-terminated
+narrow internal filename. Bind `CascOpenStorage`, `CascCloseStorage`,
+`CascOpenFile`, `CascGetFileSize64`, `CascReadFile`, `CascCloseFile`, and
+`GetCascError` with explicit `argtypes/restype`; CascLib's success return type is
+C++ `bool` (`ctypes.c_bool`), not Win32 `BOOL`. Always pass a real `DWORD*` to
+`CascReadFile`, distinguish `ERROR_FILE_NOT_FOUND` at open time from native read
+failure, and reject files above the archive resource size ceiling.
 
 - [ ] **Step 4: Add pinned MIT build and provenance**
 
@@ -714,7 +721,9 @@ builds x64 Release with CMake/Visual Studio, copies `CascLib.dll` into
 `third_party/CascLib/bin/win-x64/`, and writes the produced DLL SHA256 beside it
 as `CascLib.dll.sha256`. `SOURCE_PROVENANCE.json` records the immutable upstream
 URL, tag, commit, source hash, and license. The DLL and generated hash are local
-Windows build artifacts and are not committed. Do not download during startup.
+Windows build artifacts and are not committed. The CMake configuration includes
+`-DCASC_UNICODE=ON -DCASC_BUILD_SHARED_LIB=ON -DCASC_BUILD_STATIC_LIB=OFF
+-DCASC_BUILD_TESTS=OFF`. Do not download during startup.
 
 - [ ] **Step 5: Package the DLL conditionally**
 
