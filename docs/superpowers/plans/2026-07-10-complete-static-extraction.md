@@ -595,9 +595,9 @@ Expected: FAIL because typed diagnostics and return codes do not exist.
 class ArchiveDiagnosisKind(StrEnum):
     MISSING = "missing"
     PERMISSION = "permission"
+    READ_ERROR = "read_error"
     NO_HEADER = "no_header"
     TABLE_DAMAGE = "table_damage"
-    PROBABLE_PROTECTION = "probable_protection"
     UNSUPPORTED = "unsupported"
 
 
@@ -608,7 +608,20 @@ class ArchiveOpenDiagnosis:
     evidence: tuple[str, ...]
 ```
 
-Read only bounded header/table metadata. Do not scan arbitrary appended data or attempt unknown decoding when the archive cannot be opened.
+Do not construct `MPQArchive` inside this helper: that path can mmap/copy the
+whole file and mask the original permission error. Probe the original file with
+bounded reads, scan 512-byte-aligned header candidates within at most 16 MiB,
+and preserve the existing multiple-candidate behavior (an invalid candidate at
+512 must not hide a valid one at 1024). A truncated `MPQ\x1a` candidate is
+`TABLE_DAMAGE`; no candidate is `NO_HEADER`; a structurally valid nonzero MPQ
+format version is `UNSUPPORTED`. Keep the existing compatibility rule that a
+block-table start past EOF is damage, but a declared block-table *end* past EOF
+is tolerated. Do not scan/decode payloads or unknown appended data.
+
+`PROBABLE_PROTECTION` is not an archive-open outcome. It remains in
+`ExtractionCompletenessReport` only after an archive opened successfully and
+the existing thresholds are met (`encrypted_raw >= 8` and
+`raw_fallback / block_count >= 0.25`).
 
 - [ ] **Step 4: Implement compatible CLI options**
 
