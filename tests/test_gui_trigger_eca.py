@@ -125,6 +125,25 @@ class TestGuiTriggerEca(GuiTestCase):
         self.assertEqual(self.app.trigger_eca_tree.selection(), (action,))
         self.assertIn("创建单位", self.app.trigger_eca_detail.get("1.0", "end"))
 
+    def test_gui_trigger_refresh_reveals_selected_lazy_descendant(self) -> None:
+        # Given: a lazily inserted third-level call is selected.
+        md = _map_with_nested_eca()
+        self.app._render_map(md, [], [], None)
+        root = self.app.trigger_eca_tree.get_children()[0]
+        action = self.app.trigger_eca_tree.get_children(root)[0]
+        nested = self.app.trigger_eca_tree.get_children(action)[0]
+        self.app.trigger_eca_tree.focus(nested)
+        self.app._on_trigger_eca_open()
+        deep = self.app.trigger_eca_tree.get_children(nested)[0]
+        self.app.trigger_eca_tree.selection_set(deep)
+
+        # When: the same map view is refreshed.
+        self.app._refresh_trigger_eca()
+
+        # Then: the selected descendant is reinserted along its ancestor path.
+        self.assertEqual(self.app.trigger_eca_tree.selection(), (deep,))
+        self.assertEqual(self.app.trigger_eca_tree.item(deep, "text"), "取玩家编号")
+
     def test_gui_trigger_array_indexer_value_is_searchable(self) -> None:
         # Given: an array variable parameter has a recursive index parameter.
         self.app._render_map(_map_with_array_indexer(), [], [], None)

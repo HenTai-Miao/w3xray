@@ -114,7 +114,9 @@ class TriggerEcaViewMixin:
                 if query and not group_match:
                     self._insert_filtered_node(group.iid, node, compiled)
                 else:
-                    self._insert_trigger_node(group.iid, node, eager_children=True)
+                    self._insert_trigger_node(
+                        group.iid, node, eager_children=True, reveal_iid=selected_iid,
+                    )
         if selected_iid and tree.exists(selected_iid):
             tree.selection_set(selected_iid)
             tree.focus(selected_iid)
@@ -122,12 +124,25 @@ class TriggerEcaViewMixin:
         else:
             self._clear_trigger_eca_detail()
 
-    def _insert_trigger_node(self, parent: str, node: _EcaNode, *, eager_children: bool) -> None:
-        self.trigger_eca_tree.insert(parent, "end", iid=node.iid, text=node.function.name, open=eager_children)
+    def _insert_trigger_node(
+        self,
+        parent: str,
+        node: _EcaNode,
+        *,
+        eager_children: bool,
+        reveal_iid: str = "",
+    ) -> None:
+        reveal_children = bool(reveal_iid) and reveal_iid.startswith(f"{node.iid}:")
+        self.trigger_eca_tree.insert(
+            parent, "end", iid=node.iid, text=node.function.name,
+            open=eager_children or reveal_children,
+        )
         self._trigger_eca_nodes[node.iid] = node
-        if eager_children:
+        if eager_children or reveal_children:
             for child in node.children:
-                self._insert_trigger_node(node.iid, child, eager_children=False)
+                self._insert_trigger_node(
+                    node.iid, child, eager_children=False, reveal_iid=reveal_iid,
+                )
         elif node.children:
             self.trigger_eca_tree.insert(node.iid, "end", iid=f"{node.iid}:lazy", text="")
 
