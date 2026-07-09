@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final, TYPE_CHECKING
 
+from .extraction_completeness import build_extraction_completeness_report
 from .external_listfile import ExternalListfileReport
 from .knowledge_requirement_dynamic import build_dynamic_rows, evaluate_requirement_rows
 
@@ -204,12 +205,22 @@ def format_requirement_coverage(
     capabilities: ExtractionCapabilities | None = None,
 ) -> str:
     """Return a TSV matrix that maps user requirements to pack artifacts."""
-    resolved = capabilities or ExtractionCapabilities()
+    completeness = build_extraction_completeness_report(md) if md is not None else None
+    if capabilities is None:
+        resolved = ExtractionCapabilities(
+            archive_diagnosis_kind=(
+                completeness.archive_diagnosis_kind
+                if completeness is not None
+                else ""
+            ),
+        )
+    else:
+        resolved = capabilities
     rows = ["需求\t状态\t主要产物\t辅助产物\t说明"]
     rows.extend(_format_row(row) for row in build_dynamic_rows(md, resolved))
     rows.extend(
         _format_row(row)
-        for row in evaluate_requirement_rows(_ROWS, md)
+        for row in evaluate_requirement_rows(_ROWS, md, completeness)
     )
     return "\n".join(rows) + "\n"
 

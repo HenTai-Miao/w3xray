@@ -68,6 +68,19 @@ def test_requirement_coverage_downgrades_fixed_rows_for_empty_map() -> None:
     assert "分析物品/技能/单位 ID\t未发现数据" in text
 
 
+def test_requirement_coverage_derives_archive_diagnosis_from_map(tmp_path: Path) -> None:
+    # Given: a map whose original archive is missing and no capabilities override.
+    md = MapData(path=str(tmp_path / "missing.w3x"), name="missing")
+
+    # When: coverage is formatted directly from the map.
+    text = format_requirement_coverage(md)
+
+    # Then: archive diagnosis and completeness report the same source failure.
+    assert "归档诊断\t文件缺失" in text
+    assert "核对提取是否完整\t部分覆盖（源不可读）" in text
+    assert "归档诊断\t未运行" not in text
+
+
 def test_requirement_coverage_consumes_archive_diagnosis_kind() -> None:
     # Given: a future archive-open diagnostic is supplied by the capability boundary.
     capabilities = ExtractionCapabilities(archive_diagnosis_kind="table_damage")

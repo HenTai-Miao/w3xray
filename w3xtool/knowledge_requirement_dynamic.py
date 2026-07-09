@@ -5,7 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
-from .extraction_completeness import build_extraction_completeness_report
+from .extraction_completeness import (
+    ExtractionCompletenessReport,
+    build_extraction_completeness_report,
+)
 
 if TYPE_CHECKING:
     from .api import MapData
@@ -75,11 +78,12 @@ def build_dynamic_rows(
 def evaluate_requirement_rows(
     rows: tuple[RequirementCoverage, ...],
     md: MapData | None,
+    completeness: ExtractionCompletenessReport | None = None,
 ) -> tuple[RequirementCoverage, ...]:
     """Downgrade generic catalog claims when this map has no matching data."""
     if md is None:
         return rows
-    facts = _map_facts(md)
+    facts = _map_facts(md, completeness)
     suffix = (
         f" 当前地图：内部文件 {facts.files}，对象 {facts.objects}，"
         f"脚本 {facts.scripts}，ECA {facts.eca}。"
@@ -97,10 +101,17 @@ def evaluate_requirement_rows(
     return tuple(evaluated)
 
 
-def _map_facts(md: MapData) -> _MapFacts:
+def _map_facts(
+    md: MapData,
+    completeness: ExtractionCompletenessReport | None = None,
+) -> _MapFacts:
     summary = getattr(md, "trigger_summary", None)
     files = tuple(getattr(md, "all_files", ()) or ())
-    completeness = build_extraction_completeness_report(md)
+    resolved_completeness = (
+        completeness
+        if completeness is not None
+        else build_extraction_completeness_report(md)
+    )
     return _MapFacts(
         files=len(files),
         objects=sum(len(items) for items in (getattr(md, "objects", {}) or {}).values()),
@@ -111,8 +122,8 @@ def _map_facts(md: MapData) -> _MapFacts:
         variables=len(tuple(getattr(summary, "variables", ()) or ())),
         eca=len(tuple(getattr(summary, "eca_functions", ()) or ())),
         has_terrain=any(name.lower().endswith((".w3e", ".wpm", ".shd")) for name in files),
-        source_readable=completeness.source_readable,
-        completeness_warnings=len(completeness.warnings),
+        source_readable=resolved_completeness.source_readable,
+        completeness_warnings=len(resolved_completeness.warnings),
     )
 
 
