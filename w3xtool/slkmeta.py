@@ -4,8 +4,14 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+from .campaign_sources import open_map_source
+from .map_archive_reader import MapArchiveReader
 from .slk import parse_slk
+
+if TYPE_CHECKING:
+    from .map_data import MapData
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,14 +48,30 @@ def slk_inventory_from_map_path(path: str) -> SlkInventoryReport:
 
     if not Path(path).is_file():
         return SlkInventoryReport(())
-    files: dict[str, bytes] = {}
     try:
         with MPQArchive(path) as archive:
-            for name in archive.list_files():
-                if name.lower().endswith(".slk") and archive.has_file(name):
-                    files[name] = archive.read_file(name)
+            return slk_inventory_from_archive(archive)
     except (OSError, ValueError, KeyError, UnicodeDecodeError):
         return SlkInventoryReport(())
+
+
+def slk_inventory_from_map(md: MapData) -> SlkInventoryReport:
+    """Read embedded SLK metadata through a loaded map's archive source."""
+    if md.archive_source is None:
+        return slk_inventory_from_map_path(md.path)
+    try:
+        with open_map_source(md) as archive:
+            return slk_inventory_from_archive(archive)
+    except (OSError, ValueError, KeyError, UnicodeDecodeError):
+        return SlkInventoryReport(())
+
+
+def slk_inventory_from_archive(archive: MapArchiveReader) -> SlkInventoryReport:
+    """Build an SLK inventory from an already-open archive."""
+    files: dict[str, bytes] = {}
+    for name in archive.list_files():
+        if name.lower().endswith(".slk") and archive.has_file(name):
+            files[name] = archive.read_file(name)
     return build_slk_inventory(files)
 
 

@@ -30,7 +30,7 @@ def build_map_identity(source: str | MapData) -> MapIdentity:
     """Return stable file identity hashes for a path or retained map source."""
     if isinstance(source, str):
         return _build_path_identity(source)
-    if os.path.isfile(source.path):
+    if source.archive_source is None:
         return _build_path_identity(source.path)
     try:
         with open_map_source(source) as archive:

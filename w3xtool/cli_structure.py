@@ -13,7 +13,12 @@ if TYPE_CHECKING:
 
 def iter_map_structure_summary_lines(md: "MapData") -> Iterator[str]:
     """Render structure metadata discovered from internal map files."""
-    report = mapmeta.map_structure_report_from_map_path(md.path)
+    if md.archive_source is None:
+        report = mapmeta.map_structure_report_from_map_path(md.path)
+    else:
+        from .knowledge_terrain_exports import build_terrain_export_data
+
+        report = build_terrain_export_data(md).structure
     if not report.has_data:
         return
     yield "  地图结构:"

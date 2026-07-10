@@ -27,9 +27,9 @@ def iter_resource_summary_lines(md: MapData) -> Iterator[str]:
 
 
 def iter_slk_summary_lines(md: MapData) -> Iterator[str]:
-    from .slkmeta import slk_inventory_from_map_path
+    from .slkmeta import slk_inventory_from_map
 
-    report = slk_inventory_from_map_path(md.path)
+    report = slk_inventory_from_map(md)
     if not report.has_data:
         return
     yield "  SLK:"
@@ -41,9 +41,9 @@ def iter_slk_summary_lines(md: MapData) -> Iterator[str]:
 
 
 def iter_gameplay_constant_summary_lines(md: MapData) -> Iterator[str]:
-    from .gameplay import gameplay_constants_from_map_path
+    from .gameplay import gameplay_constants_from_map
 
-    constants = gameplay_constants_from_map_path(md.path)
+    constants = gameplay_constants_from_map(md)
     if not constants:
         return
     yield "  游戏常数:"

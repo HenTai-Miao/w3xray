@@ -15,7 +15,12 @@ if TYPE_CHECKING:
 
 def iter_terrain_summary_lines(md: "MapData") -> Iterator[str]:
     """Render terrain metadata discovered from war3map.w3e."""
-    info = terrain.terrain_info_from_map_path(md.path)
+    if md.archive_source is None:
+        info = terrain.terrain_info_from_map_path(md.path)
+    else:
+        from .knowledge_terrain_exports import build_terrain_export_data
+
+        info = build_terrain_export_data(md).terrain
     if info is None:
         return
     custom = "是" if info.custom_tilesets else "否"

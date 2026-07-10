@@ -3,9 +3,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
+from .campaign_sources import open_map_source
+from .map_archive_reader import MapArchiveReader
 from .war3_encoding import decode_warcraft_string
+
+if TYPE_CHECKING:
+    from .map_data import MapData
 
 MISC_FILE: Final = "war3mapMisc.txt"
 
@@ -46,11 +51,29 @@ def gameplay_constants_from_map_path(path: str) -> tuple[GameplayConstant, ...]:
         return ()
     try:
         with MPQArchive(path) as archive:
-            if not archive.has_file(MISC_FILE):
-                return ()
-            return parse_gameplay_constants(_decode_text(archive.read_file(MISC_FILE)))
+            return gameplay_constants_from_archive(archive)
     except (OSError, ValueError, KeyError, UnicodeError):
         return ()
+
+
+def gameplay_constants_from_map(md: MapData) -> tuple[GameplayConstant, ...]:
+    """Read gameplay constants through a loaded map's archive source."""
+    if md.archive_source is None:
+        return gameplay_constants_from_map_path(md.path)
+    try:
+        with open_map_source(md) as archive:
+            return gameplay_constants_from_archive(archive)
+    except (OSError, ValueError, KeyError, UnicodeError):
+        return ()
+
+
+def gameplay_constants_from_archive(
+    archive: MapArchiveReader,
+) -> tuple[GameplayConstant, ...]:
+    """Read gameplay constants from an already-open archive."""
+    if not archive.has_file(MISC_FILE):
+        return ()
+    return parse_gameplay_constants(_decode_text(archive.read_file(MISC_FILE)))
 
 
 def _decode_text(data: bytes) -> str:
