@@ -6,7 +6,7 @@
 import struct
 import unittest
 
-from w3xtool.wct import parse_wct
+from w3xtool.wct import WctDiagnostic, parse_wct
 
 
 def _block(code):
@@ -51,15 +51,60 @@ class TestParseWct(unittest.TestCase):
         data = struct.pack("<I", 1) + b"\x00" + struct.pack("<i", 0)  # ver, 空注释, 全局 size=0
         data += struct.pack("<i", 3) + _block("ok") + struct.pack("<I", 99)  # count=3, 1好 + 截断
         w = parse_wct(data)
-        self.assertEqual(w.triggers[:1], ["ok"])
+        self.assertEqual(w.triggers, ["ok"])
+        self.assertIs(w.diagnostic, WctDiagnostic.TRUNCATED)
+
+    def test_truncated_count_keeps_confirmed_global_code(self):
+        code = b"call Confirmed()"
+        data = struct.pack("<I", 1) + b"comment\x00"
+        data += struct.pack("<i", len(code) + 1) + code + b"\x00"
+
+        w = parse_wct(data)
+
+        self.assertEqual(w.custom_comment, "comment")
+        self.assertEqual(w.custom_code, "call Confirmed()")
+        self.assertIs(w.diagnostic, WctDiagnostic.TRUNCATED)
+
+    def test_global_code_uses_cstr_when_declared_size_is_nonzero(self):
+        data = struct.pack("<I", 1) + b"\x00" + struct.pack("<i", 999)
+        data += b"call Legacy()\x00" + struct.pack("<i", 0)
+
+        w = parse_wct(data)
+
+        self.assertEqual(w.custom_code, "call Legacy()")
+        self.assertIsNone(w.diagnostic)
 
     def test_bad_version_returns_empty(self):
         w = parse_wct(struct.pack("<I", 99) + b"\x00")
         self.assertEqual(w.custom_code, "")
         self.assertEqual(w.triggers, [])
+        self.assertIs(w.diagnostic, WctDiagnostic.UNSUPPORTED_VERSION)
 
     def test_garbage_returns_empty(self):
-        self.assertEqual(parse_wct(b"").triggers, [])
+        w = parse_wct(b"")
+        self.assertEqual(w.triggers, [])
+        self.assertIs(w.diagnostic, WctDiagnostic.TRUNCATED)
+
+    def test_reforged_reads_trigger_blocks_until_eof(self):
+        data = struct.pack("<II", 0x80000004, 1) + b"\x00" + struct.pack("<i", 0)
+        data += _block("call Reforged()") + _block("")
+
+        w = parse_wct(data)
+
+        self.assertEqual(w.triggers, ["call Reforged()", ""])
+        self.assertIsNone(w.diagnostic)
+
+    def test_result_preserves_legacy_mutable_fields(self):
+        # Given: the long-standing mutable WCT result returned by the parser.
+        w = parse_wct(_wct("comment", "call Original()", ["call First()"]))
+
+        # When: a compatibility caller updates the parsed fields.
+        w.custom_code = "call Replaced()"
+        w.triggers.append("call Added()")
+
+        # Then: field assignment and list mutation remain supported.
+        self.assertEqual(w.custom_code, "call Replaced()")
+        self.assertEqual(w.triggers, ["call First()", "call Added()"])
 
 
 class _FakeArchive:

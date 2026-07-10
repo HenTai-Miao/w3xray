@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from .api import MapData
 from .knowledge_io import safe_filename, write_text
 from .safe_output import safe_relative_path
+from .script_sources import analysis_script_texts
 from .script_text_export import ReadableScriptExport, build_readable_script_exports
 
 
@@ -39,5 +40,8 @@ def format_script_index(md: MapData) -> str:
 
 
 def all_script_text(md: MapData) -> str:
-    """Return all script text joined for static clue scanners."""
-    return "\n".join(md.scripts.values())
+    """Return labeled analysis texts joined for static clue scanners."""
+    return "\n\n".join(
+        f"// ===== {name} =====\n{text}"
+        for name, text in analysis_script_texts(md)
+    )

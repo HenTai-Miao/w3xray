@@ -1,107 +1,141 @@
-"""war3map.wct 自定义脚本文本解析（移植自 w3x2lni frontend_wct.lua）。
+"""Parse readable custom-script blocks from binary ``war3map.wct`` data."""
 
-wct 装着地图作者在触发器里手写的自定义 JASS/Lua 片段（一个全局块 + 每个"自定义脚本"
-触发器一块）。w3xray 原来只把 wct 原样导出（二进制），解析后能直接读到这些代码。
-
-格式：
-  L 版本；若 >1 则该值==0x80000004(重制标记)，再读 L 真版本，断言==1。
-  全局块：cstr 注释 + int32 size（==0 空，否则 cstr 代码）。
-  触发器块：经典格式 int32 count 后循环；重制格式无 count 读到 EOF。
-    每块 u32 size：==0 表示该触发器无代码；否则读 size-1 字节代码 + 跳 1 字节 NUL。
-不可信文件：版本不认/截断/size 越界即停，保留已解析部分，绝不抛。
-"""
 from __future__ import annotations
 
-import struct
 from dataclasses import dataclass, field
+from enum import StrEnum
+from typing import Final
 
 from .war3_encoding import decode_warcraft_string
 
+_CLASSIC_VERSION: Final = 1
+_REFORGED_MARKER: Final = 0x80000004
 
-def _decode(b: bytes) -> str:
-    return decode_warcraft_string(b)
+
+class WctDiagnostic(StrEnum):
+    """Recoverable reason a WCT result is incomplete or unsupported."""
+
+    TRUNCATED = "truncated"
+    UNSUPPORTED_VERSION = "unsupported_version"
 
 
-@dataclass
+@dataclass  # noqa: MUTABLE_OK  # noqa: SLOTS_OK - preserve the legacy mutable result contract.
 class WctScript:
+    """Mutable legacy WCT result with an optional partial-parse diagnostic."""
+
     custom_comment: str = ""
-    custom_code: str = ""          # 全局自定义脚本
-    triggers: list = field(default_factory=list)   # 每个触发器的自定义代码（空串=无）
+    custom_code: str = ""
+    triggers: list[str] = field(default_factory=list)
+    diagnostic: WctDiagnostic | None = None
 
 
+class _TruncatedWct(Exception):
+    """Internal control flow for a read beyond confirmed WCT bytes."""
+
+
+@dataclass(slots=True)  # noqa: MUTABLE_OK - this object is an explicit byte cursor.
 class _Reader:
-    def __init__(self, data: bytes):
-        self.d = data
-        self.p = 0
+    """Mutable cursor that rejects unterminated and out-of-bounds fields."""
+
+    data: bytes
+    offset: int = 0
+
+    @property
+    def at_end(self) -> bool:
+        return self.offset == len(self.data)
 
     def u32(self) -> int:
-        v = struct.unpack_from("<I", self.d, self.p)[0]
-        self.p += 4
-        return v
+        return int.from_bytes(self.raw(4), "little", signed=False)
 
     def i32(self) -> int:
-        v = struct.unpack_from("<i", self.d, self.p)[0]
-        self.p += 4
-        return v
+        return int.from_bytes(self.raw(4), "little", signed=True)
 
     def cstr(self) -> str:
-        end = self.d.find(b"\x00", self.p)
+        end = self.data.find(b"\x00", self.offset)
         if end < 0:
-            end = len(self.d)
-        s = _decode(self.d[self.p:end])
-        self.p = end + 1
-        return s
+            raise _TruncatedWct
+        value = decode_warcraft_string(self.data[self.offset:end])
+        self.offset = end + 1
+        return value
 
-    def raw(self, n: int) -> bytes:
-        if self.p + n > len(self.d):
-            raise IndexError("raw 越界")
-        b = self.d[self.p:self.p + n]
-        self.p += n
-        return b
+    def raw(self, size: int) -> bytes:
+        end = self.offset + size
+        if size < 0 or end > len(self.data):
+            raise _TruncatedWct
+        value = self.data[self.offset:end]
+        self.offset = end
+        return value
 
 
 def parse_wct(data: bytes) -> WctScript:
-    out = WctScript()
-    if len(data) < 4:
-        return out
-    r = _Reader(data)
+    """Return every confirmed WCT block and diagnose unsupported/truncated tails."""
+    reader = _Reader(data)
     try:
-        ver = r.u32()
-        reforged = False
-        if ver > 1:
-            if ver != 0x80000004:
-                return out
-            reforged = True
-            ver = r.u32()
-        if ver != 1:
-            return out
-        # 全局自定义脚本
-        out.custom_comment = r.cstr()
-        size = r.i32()
-        out.custom_code = r.cstr() if size != 0 else ""
-    except (struct.error, IndexError):
-        return out
+        version = reader.u32()
+    except _TruncatedWct:
+        return WctScript(diagnostic=WctDiagnostic.TRUNCATED)
 
-    # 触发器块：经典有 count，重制读到 EOF
-    try:
-        count = None if reforged else r.i32()
-    except (struct.error, IndexError):
-        return out
-    idx = 0
-    while True:
-        if count is not None and idx >= count:
-            break
-        if r.p >= len(data):
-            break
+    reforged = version == _REFORGED_MARKER
+    if reforged:
         try:
-            size = r.u32()
-            if size == 0:
-                out.triggers.append("")
-            else:
-                code = _decode(r.raw(size - 1))
-                r.raw(1)               # 跳过结尾 NUL
-                out.triggers.append(code)
-        except (struct.error, IndexError):
-            break
-        idx += 1
-    return out
+            version = reader.u32()
+        except _TruncatedWct:
+            return WctScript(diagnostic=WctDiagnostic.TRUNCATED)
+    if version != _CLASSIC_VERSION:
+        return WctScript(diagnostic=WctDiagnostic.UNSUPPORTED_VERSION)
+
+    try:
+        comment = reader.cstr()
+        custom_code = _read_global_code(reader)
+    except _TruncatedWct:
+        return WctScript(diagnostic=WctDiagnostic.TRUNCATED)
+
+    try:
+        count = None if reforged else reader.i32()
+        if count is not None and count < 0:
+            raise _TruncatedWct
+    except _TruncatedWct:
+        return WctScript(
+            custom_comment=comment,
+            custom_code=custom_code,
+            diagnostic=WctDiagnostic.TRUNCATED,
+        )
+
+    triggers: list[str] = []
+    try:
+        if count is None:
+            while not reader.at_end:
+                triggers.append(_read_trigger(reader))
+        else:
+            for _index in range(count):
+                triggers.append(_read_trigger(reader))
+    except _TruncatedWct:
+        return WctScript(
+            custom_comment=comment,
+            custom_code=custom_code,
+            triggers=triggers,
+            diagnostic=WctDiagnostic.TRUNCATED,
+        )
+    return WctScript(comment, custom_code, triggers)
+
+
+def _read_global_code(reader: _Reader) -> str:
+    size = reader.i32()
+    if size == 0:
+        return ""
+    if size < 0:
+        raise _TruncatedWct
+    return reader.cstr()
+
+
+def _read_trigger(reader: _Reader) -> str:
+    size = reader.u32()
+    if size == 0:
+        return ""
+    return _decode_sized_cstr(reader.raw(size))
+
+
+def _decode_sized_cstr(raw: bytes) -> str:
+    if not raw or raw[-1] != 0:
+        raise _TruncatedWct
+    return decode_warcraft_string(raw[:-1])

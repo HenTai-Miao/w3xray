@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .wtg import TriggerCategory, TriggerTreeSummary
-    from .wtg_eca import TriggerEcaFunction
+    from .wtg_eca import TriggerEcaFunction, TriggerEcaParameter
 
 from .triggerdata import TriggerDataTable, render_eca_semantic
 from .wtg_eca import function_type_label, parameter_type_label
@@ -51,13 +52,22 @@ def format_trigger_eca_tsv(
     summary: TriggerTreeSummary | None,
     *,
     trigger_data: TriggerDataTable | None = None,
+    wts: Mapping[int, str] | None = None,
+    object_names: Mapping[str, str] | None = None,
 ) -> str:
     """Return raw WTG ECA functions and parameters as a TSV table."""
     rows = ["触发器\t深度\t行类型\t函数类型\t函数名\t启用\t参数序号\t参数类型\t参数值\t语义文本"]
     if summary is None:
         return "\n".join(rows) + "\n"
     for function in summary.eca_functions:
-        _append_eca_function(rows, function, trigger_data)
+        _append_eca_function(
+            rows,
+            function,
+            trigger_data,
+            wts,
+            object_names,
+            depth=function.depth,
+        )
     _append_diagnostics(rows, summary)
     return "\n".join(rows) + "\n"
 
@@ -91,11 +101,15 @@ def _append_eca_function(
     rows: list[str],
     function: TriggerEcaFunction,
     trigger_data: TriggerDataTable | None,
+    wts: Mapping[int, str] | None,
+    object_names: Mapping[str, str] | None,
+    *,
+    depth: int,
 ) -> None:
     function_type = function_type_label(function.function_type)
     rows.append("\t".join((
         _tsv(function.trigger_name),
-        str(function.depth),
+        str(depth),
         "函数",
         _tsv(function_type),
         _tsv(function.name),
@@ -103,25 +117,84 @@ def _append_eca_function(
         "",
         "",
         "",
-        _tsv(render_eca_semantic(function, trigger_data)) if trigger_data is not None else "",
+        _tsv(
+            render_eca_semantic(
+                function,
+                trigger_data,
+                wts=wts,
+                object_names=object_names,
+            )
+        ),
     )))
     for index, parameter in enumerate(function.parameters):
-        rows.append("\t".join((
-            _tsv(function.trigger_name),
-            str(function.depth),
-            "参数",
-            _tsv(function_type),
-            _tsv(function.name),
-            _yes_no(function.is_enabled),
-            str(index),
-            _tsv(parameter_type_label(parameter.parameter_type)),
-            _tsv(parameter.value),
-            "",
-        )))
-        if parameter.nested_function is not None:
-            _append_eca_function(rows, parameter.nested_function, trigger_data)
+        _append_eca_parameter(
+            rows,
+            function,
+            index,
+            parameter,
+            trigger_data,
+            wts,
+            object_names,
+            row_type="参数",
+            depth=depth,
+        )
     for child in function.children:
-        _append_eca_function(rows, child, trigger_data)
+        _append_eca_function(
+            rows,
+            child,
+            trigger_data,
+            wts,
+            object_names,
+            depth=depth + 1,
+        )
+
+
+def _append_eca_parameter(
+    rows: list[str],
+    function: TriggerEcaFunction,
+    index: int,
+    parameter: TriggerEcaParameter,
+    trigger_data: TriggerDataTable | None,
+    wts: Mapping[int, str] | None,
+    object_names: Mapping[str, str] | None,
+    *,
+    row_type: str,
+    depth: int,
+) -> None:
+    function_type = function_type_label(function.function_type)
+    rows.append("\t".join((
+        _tsv(function.trigger_name),
+        str(depth),
+        row_type,
+        _tsv(function_type),
+        _tsv(function.name),
+        _yes_no(function.is_enabled),
+        str(index),
+        _tsv(parameter_type_label(parameter.parameter_type)),
+        _tsv(parameter.value),
+        "",
+    )))
+    if parameter.nested_function is not None:
+        _append_eca_function(
+            rows,
+            parameter.nested_function,
+            trigger_data,
+            wts,
+            object_names,
+            depth=depth + 1,
+        )
+    if parameter.array_indexer is not None:
+        _append_eca_parameter(
+            rows,
+            function,
+            index,
+            parameter.array_indexer,
+            trigger_data,
+            wts,
+            object_names,
+            row_type="数组索引",
+            depth=depth + 1,
+        )
 
 
 def _append_diagnostics(rows: list[str], summary: TriggerTreeSummary) -> None:

@@ -29,6 +29,11 @@ from .map_loader import _campaign_inner_maps, _load_map_impl, load_map
 from .object_candidates import collect_binary_object_candidates
 from .object_pipeline import add_base_objects as _pipeline_add_base_objects
 from .object_pipeline import merge_object_candidates
+from .script_sources import (
+    ScriptCollection,
+    analysis_script_texts,
+    collect_readable_scripts,
+)
 from .wts import parse_wts, resolve
 
 MPQArchive = map_loader.MPQArchive
@@ -37,7 +42,7 @@ MPQArchive = map_loader.MPQArchive
 class _ApiModule(ModuleType):
     """Keep the historical MPQArchive monkeypatch seam routed to the loader."""
 
-    def __setattr__(self, name: str, value: object) -> None:
+    def __setattr__(self, name: str, value: object) -> None:  # noqa: OBJECT_OK - ModuleType values are dynamic.
         super().__setattr__(name, value)
         if name == "MPQArchive":
             map_loader.MPQArchive = value
@@ -59,15 +64,9 @@ def _expand_codes(value: str, names: dict) -> str:
 
 
 def _standard_script_text(archive: MapArchiveReader) -> str | None:
-    for fn in ("war3map.j", "war3map.lua"):
-        if archive.has_file(fn):
-            try:
-                text = archive.read_file(fn).decode("utf-8", "replace")
-            except Exception:
-                continue
-            if text.strip("\x00\r\n\t "):
-                return text
-    return None
+    collection = collect_readable_scripts(archive)
+    md = MapData(path=archive.path, name=archive.path, scripts=dict(collection.texts))
+    return _joined_analysis_script_text(md)
 
 
 def _build_objects(
@@ -96,23 +95,23 @@ def quick_map_name(path: str) -> str:
             name = head[8:end].decode("utf-8", "replace").strip()
             if name and not name.startswith("TRIGSTR"):
                 return name
-    except Exception:
-        pass
+    except (OSError, ValueError):
+        return os.path.basename(path)
     return os.path.basename(path)
 
 
-def _read_script(archive: MapArchiveReader):
+def _read_script(archive: MapArchiveReader) -> str | None:
     return _standard_script_text(archive)
 
 
-def _map_wts(md: MapData) -> dict:
+def _map_wts(md: MapData) -> dict[int, str]:
     """从 md.scripts 里的 war3map.wts 文本解析字符串表（commands 提示还原用）。"""
     raw = md.scripts.get("war3map.wts")
     if not raw:
         return {}
     try:
         return parse_wts(raw.encode("utf-8", "replace"))
-    except Exception:
+    except (UnicodeError, ValueError):
         return {}
 
 
@@ -120,7 +119,7 @@ def commands_from_map(md: MapData) -> list:
     """从已解析的 MapData 扫描隐藏聊天指令（复用 md.scripts，不重开 MPQ）。"""
     from .script_scan import scan_chat_commands
 
-    text = _best_script_text(md.scripts)
+    text = _joined_analysis_script_text(md)
     if not text:
         return []
     commands = scan_chat_commands(text)
@@ -136,7 +135,7 @@ def recipes_from_map(md: MapData) -> list:
     """从已解析的 MapData 识别物品合成配方（复用 md.scripts，不重开 MPQ）。"""
     from .script_scan import scan_recipes as scan_recipes_from_text
 
-    text = _best_script_text(md.scripts)
+    text = _joined_analysis_script_text(md)
     return scan_recipes_from_text(text) if text else []
 
 
@@ -156,3 +155,10 @@ def scan_recipes(path: str) -> list:
     with MPQArchive(path) as archive:
         text = _read_script(archive)
     return scan_recipes_from_text(text) if text else []
+
+
+def _joined_analysis_script_text(md: MapData) -> str | None:
+    texts = analysis_script_texts(md)
+    if not texts:
+        return None
+    return "\n\n".join(f"// ===== {name} =====\n{text}" for name, text in texts)

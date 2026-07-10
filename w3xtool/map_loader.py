@@ -3,9 +3,15 @@ from __future__ import annotations
 
 import os
 import tempfile
+from contextlib import suppress
 from dataclasses import replace
 
 from .archive_source import BytesArchiveSource, PathArchiveSource
+from .extraction_diagnostics import (
+    DiagnosticSeverity,
+    ExtractionDiagnostic,
+    record_diagnostic,
+)
 from .external_listfile import validate_external_names
 from .load_context import MapLoadContext
 from .map_archive_reader import MapArchiveReader
@@ -14,8 +20,6 @@ from .map_components import (
     _add_script_refs,
     _add_w3f,
     _add_w3i,
-    _add_wct,
-    _best_script_text,
     _map_name,
 )
 from .map_data import MapData
@@ -24,9 +28,8 @@ from .mpq_files import list_archive_files
 from .object_candidates import OBJECT_EXTS, collect_object_candidates
 from .object_pipeline import populate_object_pipeline
 from .references import build_reference_graph
+from .script_sources import analysis_script_texts, collect_readable_scripts
 from .wts import parse_wts
-
-SCRIPT_FILES = ["war3map.j", "war3map.lua", "war3map.wts", "war3map.wtg", "war3map.wct"]
 
 
 def load_map(
@@ -69,14 +72,28 @@ def _load_map_impl(
     shared_index: dict | None,
     load_context: MapLoadContext,
 ) -> MapData:
+    script_collection = collect_readable_scripts(archive)
     wts = {}
     if archive.has_file("war3map.wts"):
         try:
             wts = parse_wts(archive.read_file("war3map.wts"))
-        except Exception:
+        except (KeyError, OSError, UnicodeError, ValueError):
             wts = {}
 
     md = MapData(path=path, name=_map_name(archive), archive_source=PathArchiveSource(path))
+    md.ui_strings = dict(wts)
+    if script_collection.wct_diagnostic is not None:
+        record_diagnostic(
+            md,
+            ExtractionDiagnostic(
+                component="wct",
+                source="war3map.wct",
+                stage="parse",
+                severity=DiagnosticSeverity.WARNING,
+                message=f"WCT parse diagnostic: {script_collection.wct_diagnostic.value}",
+                recoverable=True,
+            ),
+        )
     md.author_bundle_files = getattr(archive, "author_bundle_files", ())
     external_report = validate_external_names(archive, load_context.external_names)
     md.external_listfile = external_report if load_context.external_names else None
@@ -89,19 +106,16 @@ def _load_map_impl(
         if archive.has_file("war3campaign.wts"):
             try:
                 cwts = parse_wts(archive.read_file("war3campaign.wts"))
-            except Exception:
+            except (KeyError, OSError, UnicodeError, ValueError):
                 cwts = {}
         candidates.extend(collect_object_candidates(archive, cwts, prefix="war3campaign"))
     populate_object_pipeline(md, candidates)
 
-    for fn in SCRIPT_FILES:
-        if archive.has_file(fn):
-            try:
-                md.scripts[fn] = archive.read_file(fn).decode("utf-8", "replace")
-            except Exception:
-                pass
-
-    script_text = _best_script_text(md.scripts)
+    md.scripts.update(script_collection.texts)
+    script_text = "\n\n".join(
+        f"// ===== {name} =====\n{text}"
+        for name, text in analysis_script_texts(md)
+    )
     if script_text:
         _add_script_refs(md, script_text, shared_index)
 
@@ -121,21 +135,16 @@ def _load_map_impl(
     add_trigger_summary(md, archive, load_context)
     add_preview_icons(md, archive)
     add_import_summary(md, archive)
-    _add_wct(md, archive)
 
-    script_text = _best_script_text(md.scripts)
     if script_text:
-        try:
-            from .script_scan import scan_script_features
+        from .script_scan import scan_script_features
 
-            md.script_features, _ = scan_script_features(script_text)
-        except Exception:
-            md.script_features = []
+        md.script_features, _ = scan_script_features(script_text)
 
     try:
         build_reference_graph(md)
-    except Exception:
-        pass
+    except Exception:  # noqa: BROAD_EXCEPT_OK - optional reference analysis cannot abort extraction.
+        md.ref_low_coverage = True
 
     md.all_files = list_archive_files(archive, external_names=external_report.confirmed)
 
@@ -153,14 +162,12 @@ def _load_map_impl(
                 sub.name = inner
                 sub.path = inner
                 md.sub_maps.append(sub)
-            except Exception:
-                pass
+            except Exception:  # noqa: BROAD_EXCEPT_OK - one corrupt campaign child must not hide siblings.
+                continue
             finally:
                 if tmp:
-                    try:
+                    with suppress(OSError):
                         os.remove(tmp)
-                    except OSError:
-                        pass
 
     return md
 

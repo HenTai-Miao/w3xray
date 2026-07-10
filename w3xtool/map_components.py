@@ -2,17 +2,20 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 
 from .map_archive_reader import MapArchiveReader
 from .map_data import GameObject, MapData
+from .script_sources import WCT_TEXT_NAME, collect_readable_scripts
 
 try:
     from .base_names import BASE_NAMES
-except Exception:
+except ImportError:
     BASE_NAMES = {}
 
 
-def _best_script_text(scripts: dict):
+def _best_script_text(scripts: Mapping[str, str]) -> str | None:
+    """Return the first non-empty primary script for legacy callers."""
     for name in ("war3map.j", "war3map.lua"):
         text = scripts.get(name)
         if text and text.strip("\x00\r\n\t "):
@@ -60,8 +63,8 @@ def _map_name(archive: MapArchiveReader) -> str:
         if data[:4] == b"HM3W":
             end = data.index(b"\x00", 8)
             return data[8:end].decode("utf-8", "replace")
-    except Exception:
-        pass
+    except (AttributeError, TypeError, ValueError):
+        return os.path.basename(archive.path)
     return os.path.basename(archive.path)
 
 
@@ -76,7 +79,7 @@ def _add_w3i(md: MapData, archive: MapArchiveReader, wts: dict):
         from .w3i import parse_w3i
 
         info = parse_w3i(archive.read_file("war3map.w3i"), wts)
-    except Exception:
+    except (KeyError, OSError, ValueError):
         return
     if info is None:
         return
@@ -94,7 +97,7 @@ def _add_w3f(md: MapData, archive: MapArchiveReader, wts: dict):
         from .w3i import parse_w3f
 
         info = parse_w3f(archive.read_file("war3campaign.w3f"), wts)
-    except Exception:
+    except (KeyError, OSError, ValueError):
         return
     if info is not None:
         md.w3f = info
@@ -104,27 +107,10 @@ def _add_w3f(md: MapData, archive: MapArchiveReader, wts: dict):
 
 
 def _add_wct(md: MapData, archive: MapArchiveReader):
-    """解析 war3map.wct 自定义脚本，把解码后的可读 JASS/Lua 文本并入 md.scripts。
-
-    wct 是二进制（原样导出是乱码）；解出全局块 + 各触发器自定义代码块拼成一份带分节
-    注释的文本，文件名带 .txt 便于「导出脚本」直接看。解析失败/无 wct 时静默跳过。
-    """
-    if not archive.has_file("war3map.wct"):
-        return
-    try:
-        from .wct import parse_wct
-
-        w = parse_wct(archive.read_file("war3map.wct"))
-    except Exception:
-        return
-    parts = []
-    if w.custom_code.strip():
-        parts.append("// ===== 全局自定义脚本 =====\n" + w.custom_code)
-    for i, t in enumerate(w.triggers):
-        if t.strip():
-            parts.append(f"// ===== 触发器自定义脚本 #{i + 1} =====\n" + t)
-    if parts:
-        md.scripts["war3map.wct(自定义代码).txt"] = "\n\n".join(parts)
+    """Compatibility wrapper that publishes only collector-decoded WCT text."""
+    readable = collect_readable_scripts(archive).texts.get(WCT_TEXT_NAME)
+    if readable is not None:
+        md.scripts[WCT_TEXT_NAME] = readable
 
 
 def _add_preplaced(md: MapData, archive: MapArchiveReader):
@@ -138,10 +124,10 @@ def _add_preplaced(md: MapData, archive: MapArchiveReader):
     if archive.has_file("war3map.doo"):
         try:
             md.doodads = parse_doodads(archive.read_file("war3map.doo"))
-        except Exception:
+        except (KeyError, OSError, ValueError):
             md.doodads = []
     if archive.has_file("war3mapUnits.doo"):
         try:
             md.units = parse_units(archive.read_file("war3mapUnits.doo"))
-        except Exception:
+        except (KeyError, OSError, ValueError):
             md.units = []

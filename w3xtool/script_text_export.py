@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import re
 from typing import TYPE_CHECKING, Final
 
+from .script_sources import analysis_script_texts
 from .wts import parse_wts
 
 if TYPE_CHECKING:
@@ -25,8 +26,7 @@ def build_readable_script_exports(md: MapData) -> tuple[ReadableScriptExport, ..
     table = _string_table(md)
     return tuple(
         ReadableScriptExport(source, resolve_trigstr_literals(text, table))
-        for source, text in sorted(md.scripts.items())
-        if not source.lower().endswith(".wts")
+        for source, text in analysis_script_texts(md)
     )
 
 

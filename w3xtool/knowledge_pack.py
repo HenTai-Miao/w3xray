@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+import logging
 import os
 
 from .api import MapData
@@ -102,6 +103,8 @@ def write_knowledge_pack(
     count += write_box_ids(md, os.path.join(out_dir, "盒子兼容ID"))
     count += write_text(out_dir, "对象文本与图标.tsv", format_object_text_icons(md))
     ui_report = build_ui_text_report(md)
+    eca_wts = {int(item.trigstr[8:]): item.text for item in ui_report.strings}
+    eca_object_names = {code: obj.name for code, obj in md.obj_index.items() if obj.name}
     count += write_text(out_dir, "UI文本_TRIGSTR.tsv", format_ui_text_strings_tsv(ui_report))
     count += write_text(out_dir, "UI文本引用.tsv", format_ui_text_references_tsv(ui_report))
     count += write_resources(md, os.path.join(out_dir, "资源"))
@@ -178,7 +181,16 @@ def write_knowledge_pack(
     count += write_text(out_dir, "对象ID使用摘要.tsv", format_object_id_usage_summary(md))
     count += write_text(out_dir, "脚本机制线索.txt", format_script_mechanism_report(all_script_text(md)))
     count += write_text(out_dir, "触发器树.tsv", format_trigger_tree_tsv(md.trigger_summary))
-    count += write_text(out_dir, "触发器ECA.tsv", format_trigger_eca_tsv(md.trigger_summary, trigger_data=trigger_data))
+    count += write_text(
+        out_dir,
+        "触发器ECA.tsv",
+        format_trigger_eca_tsv(
+            md.trigger_summary,
+            trigger_data=trigger_data,
+            wts=eca_wts,
+            object_names=eca_object_names,
+        ),
+    )
     count += write_text(out_dir, "触发变量.tsv", format_trigger_variables_tsv(md.trigger_summary))
     count += write_text(out_dir, "世界区域.tsv", format_regions_tsv(md.regions))
     count += write_text(out_dir, "世界镜头.tsv", format_cameras_tsv(md.cameras))
@@ -199,4 +211,7 @@ def _load_trigger_data(game_data_path: str | None) -> TriggerDataTable | None:
             try:
                 close()
             except OSError:
-                pass
+                logging.getLogger(__name__).debug(
+                    "failed to close game-data source",
+                    exc_info=True,
+                )

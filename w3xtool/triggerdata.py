@@ -181,11 +181,26 @@ def _parameter_text(
     object_names: Mapping[str, str] | None,
 ) -> str:
     if parameter.nested_function is not None:
-        return render_eca_semantic(parameter.nested_function, schema, wts=wts, object_names=object_names)
-    value = str(resolve_wts(parameter.value, wts or {}))
-    if object_names is None:
+        value = render_eca_semantic(
+            parameter.nested_function,
+            schema,
+            wts=wts,
+            object_names=object_names,
+        )
+    else:
+        value = str(resolve_wts(parameter.value, wts or {}))
+        object_name = object_names.get(value) if object_names is not None else None
+        if object_name and object_name != value:
+            value = f"{object_name}({value})"
+    if parameter.array_indexer is None:
         return value
-    return object_names.get(value, value)
+    index = _parameter_text(
+        parameter.array_indexer,
+        schema,
+        wts=wts,
+        object_names=object_names,
+    )
+    return f"{value}[{index}]"
 
 
 def _fill_template(template: str, values: tuple[str, ...]) -> str:
@@ -205,7 +220,7 @@ def _fallback(function_name: str, values: tuple[str, ...]) -> str:
 
 
 def _kind_from_function_type(value: int) -> TriggerFunctionKind:
-    match value:
+    match value:  # noqa: MATCH_OK - unknown legacy values retain the call fallback.
         case 0:
             return TriggerFunctionKind.EVENT
         case 1:

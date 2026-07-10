@@ -74,6 +74,37 @@ def _duplicate_name_schema() -> TriggerSchema:
 
 
 class TriggerDataSemanticTest(unittest.TestCase):
+    def test_semantic_fallback_resolves_wts_and_preserves_named_object_id(self) -> None:
+        # Given: a schema-free action referring to map text and a named object code.
+        action = _function(
+            "ShowMessage",
+            (TriggerEcaParameter(0, "TRIGSTR_001"), TriggerEcaParameter(0, "H001")),
+        )
+
+        # When: map-local display context is used by the semantic renderer.
+        text = render_eca_semantic(
+            action, None, wts={1: "开始游戏"}, object_names={"H001": "圣骑士"},
+        )
+
+        # Then: readable values remain traceable to their raw object ID.
+        self.assertEqual(text, "ShowMessage(开始游戏, 圣骑士(H001))")
+
+    def test_semantic_fallback_recurses_through_array_indexers(self) -> None:
+        # Given: one array parameter whose index is another recursively indexed array.
+        final_index = TriggerEcaParameter(0, "3")
+        nested_index = TriggerEcaParameter(
+            1, "Indexes", have_array_indexer=1, array_indexer=final_index,
+        )
+        array = TriggerEcaParameter(
+            1, "Numbers", have_array_indexer=1, array_indexer=nested_index,
+        )
+
+        # When: the schema-free semantic fallback renders the action.
+        text = render_eca_semantic(_function("UseValue", (array,)), None)
+
+        # Then: no recursive array-index value is dropped.
+        self.assertEqual(text, "UseValue(Numbers[Indexes[3]])")
+
     def test_render_eca_semantic_uses_real_trigger_strings_and_nested_calls(self) -> None:
         # Given: complete real TriggerData/TriggerStrings fixtures and a WTG action
         # containing a nested condition call.

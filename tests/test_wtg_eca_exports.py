@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import os
 import struct
 import tempfile
 import unittest
 
-from w3xtool.api import MapData
+from w3xtool.api import GameObject, MapData
 from w3xtool.knowledge_pack import write_knowledge_pack
 from w3xtool.trigger_schema import TriggerFunctionKind, TriggerFunctionSchema, TriggerSchema
 from w3xtool.trigger_exports import format_trigger_eca_tsv
 from w3xtool.wtg import parse_wtg
+from w3xtool.wtg_eca import TriggerEcaParameter
 
 
 def _i(value: int) -> bytes:
@@ -81,7 +83,7 @@ def _classic_wtg_with_eca() -> bytes:
         1,
         (
             _param(0, "1"),
-            _param(0, "hfoo"),
+            _param(0, "H001"),
             _param(2, "比较", nested_call),
         ),
         (_child_eca(2, 0, "DisplayTextToForce", 0, (_param(0, "TRIGSTR_001"),)),),
@@ -118,7 +120,7 @@ class WtgEcaExportTest(unittest.TestCase):
         self.assertEqual(action.name, "CreateNUnitsAtLoc")
         self.assertEqual(action.function_type, 2)
         self.assertTrue(action.is_enabled)
-        self.assertEqual([param.value for param in action.parameters], ["1", "hfoo", "比较"])
+        self.assertEqual([param.value for param in action.parameters], ["1", "H001", "比较"])
         self.assertEqual(action.parameters[2].nested_function.name, "OperatorCompareInteger")
         self.assertEqual(action.children[0].name, "DisplayTextToForce")
         self.assertFalse(action.children[0].is_enabled)
@@ -137,10 +139,46 @@ class WtgEcaExportTest(unittest.TestCase):
         self.assertIn("初始化\t1\t函数\t调用\tOperatorCompareInteger\t是", text)
         self.assertIn("初始化\t1\t函数\t动作\tDisplayTextToForce\t否", text)
 
+    def test_trigger_eca_tsv_exports_recursive_array_indexes_and_semantics(self) -> None:
+        # Given: an ECA tree with ordinary parameters, nested/child functions,
+        # and two recursively nested array-index parameters.
+        summary = parse_wtg(_classic_wtg_with_eca(), _schema())
+        final_index = TriggerEcaParameter(0, "3")
+        nested_index = TriggerEcaParameter(
+            1, "Indexes", have_array_indexer=1, array_indexer=final_index,
+        )
+        array = TriggerEcaParameter(
+            1, "Numbers", have_array_indexer=1, array_indexer=nested_index,
+        )
+        action = replace(summary.eca_functions[0], parameters=summary.eca_functions[0].parameters + (array,))
+        summary = replace(summary, eca_functions=(action,))
+
+        # When: semantic context is supplied to the compatible TSV API.
+        text = format_trigger_eca_tsv(
+            summary,
+            trigger_data=_schema(),
+            wts={1: "开始游戏"},
+            object_names={"H001": "圣骑士"},
+        )
+        rows = [line.split("\t") for line in text.splitlines()[1:]]
+
+        # Then: every structural kind is present and array depth increases recursively.
+        self.assertIn("圣骑士(H001)", text)
+        self.assertIn("开始游戏", text)
+        self.assertTrue(any(row[2] == "参数" and row[8] == "Numbers" for row in rows))
+        self.assertTrue(any(row[2] == "函数" and row[4] == "OperatorCompareInteger" for row in rows))
+        self.assertTrue(any(row[2] == "函数" and row[4] == "DisplayTextToForce" for row in rows))
+        self.assertEqual(
+            [(row[1], row[8]) for row in rows if row[2] == "数组索引"],
+            [("1", "Indexes"), ("2", "3")],
+        )
+
     def test_knowledge_pack_writes_trigger_eca_table(self) -> None:
         # Given: a map with parsed WTG ECA metadata.
         md = MapData(path="x.w3x", name="ECA图")
         md.trigger_summary = parse_wtg(_classic_wtg_with_eca(), _schema())
+        md.ui_strings = {1: "开始游戏"}
+        md.obj_index["H001"] = GameObject("单位", "w3u", "H001", "Hpal", "圣骑士", True)
 
         # When: the knowledge pack is written.
         with tempfile.TemporaryDirectory() as out:
@@ -153,6 +191,8 @@ class WtgEcaExportTest(unittest.TestCase):
                 text = handle.read()
             self.assertIn("CreateNUnitsAtLoc", text)
             self.assertIn("OperatorCompareInteger", text)
+            self.assertIn("开始游戏", text)
+            self.assertIn("圣骑士(H001)", text)
 
 def _schema() -> TriggerSchema:
     entries = (
