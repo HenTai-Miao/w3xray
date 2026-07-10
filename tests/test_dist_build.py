@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -74,7 +75,8 @@ def test_dist_build_module_dry_run_prints_pyinstaller_command() -> None:
         command,
         check=True,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
+        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
     )
 
     # Then: it prints the PyInstaller invocation without creating a build.

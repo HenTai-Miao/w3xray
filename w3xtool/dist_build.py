@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Final
 
 from .casclib_dist import CascLibDistError, validate_casclib_dist_assets
+from .cli_output import configure_cli_output
 
 APP_NAME: Final = "魔兽地图提取器"
 SPEC_FILE: Final = f"{APP_NAME}.spec"
@@ -188,6 +189,7 @@ def help_text() -> str:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entrypoint for `uv run w3xray-dist`."""
+    configure_cli_output()
     try:
         options = parse_cli_options(tuple(sys.argv[1:] if argv is None else argv))
         config = replace(default_dist_config(), clean=options.clean)

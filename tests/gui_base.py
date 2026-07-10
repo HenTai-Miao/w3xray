@@ -106,3 +106,10 @@ class GuiTestCase(unittest.TestCase):
         if condition():
             return
         self.fail("GUI 后台任务未在超时时间内完成")
+
+    def show_app(self) -> None:
+        """Map the shared window and wait for a usable cross-platform geometry."""
+        self.app.deiconify()
+        self.pump_events_until(
+            lambda: bool(self.app.winfo_ismapped()) and self.app.winfo_width() >= 900,
+        )

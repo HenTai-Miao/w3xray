@@ -348,9 +348,25 @@ def test_chunk_writer_fallback_rejects_replaced_staged_file(
     # When: the completed stage is about to replace an existing target.
     result = safe_output.write_chunks_safely(str(tmp_path), output.name, (b"trusted",))
 
-    # Then: inode ownership fails closed and the existing target survives.
-    assert result.status is SafeWriteStatus.UNSAFE
+    # Then: replacement is detected on POSIX or blocked by Windows while open.
+    expected = SafeWriteStatus.FAILED if os.name == "nt" else SafeWriteStatus.UNSAFE
+    assert result.status is expected
     assert output.read_bytes() == b"before"
+
+
+def test_staged_path_identity_detects_replacement_after_close(tmp_path: Path) -> None:
+    # Given: a closed stage is replaced while retaining the same path.
+    staged = tmp_path / ".w3xray-stage-test.tmp"
+    staged.write_bytes(b"trusted")
+    details = staged.stat()
+    identity = details.st_dev, details.st_ino
+    staged.unlink()
+    staged.write_bytes(b"replacement")
+
+    # When/Then: the platform-neutral identity check rejects the new file.
+    assert safe_output._staged_path_error(str(staged), identity) == (
+        "staged output changed before publication"
+    )
 
 
 @pytest.mark.skipif(os.name != "posix", reason="requires POSIX mode bits")

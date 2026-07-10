@@ -9,9 +9,11 @@ from w3xtool.theme import LAYOUT_VERSION
 class TestPaneState(GuiTestCase):
     def test_object_editor_pane_defers_resize_while_dragging(self):
         # Given: the object editor pane contains heavy list/detail widgets.
-        self.app.deiconify()
+        self.show_app()
         self.app.tabs.set("对象编辑器")
-        self.app.update_idletasks()
+        self.pump_events_until(
+            lambda: bool(self.app.paned.winfo_ismapped()) and self.app.paned.winfo_width() >= 900,
+        )
 
         # When / Then: dragging the sash uses deferred resize instead of
         # continuously relayouting all child panes.
@@ -24,11 +26,13 @@ class TestPaneState(GuiTestCase):
         self.app._save_config = lambda **kw: saved.update(kw)
 
         try:
-            self.app.deiconify()
+            self.show_app()
             self.app.tabs.set("对象编辑器")
-            self.app.update_idletasks()
+            self.pump_events_until(
+                lambda: bool(self.app.paned.winfo_ismapped()) and self.app.paned.winfo_width() >= 900,
+            )
             _apply_sash_positions(self.app.paned, [720])
-            self.app.update_idletasks()
+            self.app.update()
 
             # When: the drag ends.
             self.app.paned.event_generate("<ButtonRelease-1>")
@@ -50,14 +54,17 @@ class TestPaneState(GuiTestCase):
         }
 
         try:
-            self.app.deiconify()
+            self.show_app()
             self.app.tabs.set("对象编辑器")
-            self.app.update_idletasks()
+            self.pump_events_until(
+                lambda: bool(self.app.paned.winfo_ismapped()) and self.app.paned.winfo_width() >= 900,
+            )
             _apply_sash_positions(self.app.paned, [760])
-            self.app.update_idletasks()
+            self.app.update()
 
             # When: layout restoration runs.
             self.app._restore_pane_sashes()
+            self.app.update()
 
             # Then: the object editor panes return to the saved positions.
             self.assertEqual(_paned_sash_positions(self.app.paned), [680])

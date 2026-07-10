@@ -10,6 +10,7 @@ from typing import assert_never
 from .api import load_map
 from .archive_diagnostics import diagnose_archive_open
 from .cli_summary import iter_cli_summary_lines
+from .cli_output import configure_cli_output
 from .external_listfile import read_external_listfile
 from .game_config_summary import iter_game_config_summary_lines
 from .gameconfig import read_game_configuration_file
@@ -111,20 +112,6 @@ def run_cli(options: CliOptions) -> int:
         return 2
     print(f"资料包: {count} 个文件 -> {options.pack_dir}")
     return 0
-
-
-def configure_cli_output() -> None:
-    """Keep redirected output UTF-8 while tolerating console-only characters."""
-    output = sys.stdout
-    if output is None:
-        return
-    try:
-        if output.isatty():
-            output.reconfigure(errors="replace")
-        else:
-            output.reconfigure(encoding="utf-8", errors="replace")
-    except (AttributeError, OSError, ValueError):
-        return
 
 
 def _run_game_config(path: str) -> int:

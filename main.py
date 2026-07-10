@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 
 from w3xtool.cli_options import CliOptionError, parse_cli_options, run_cli
+from w3xtool.cli_output import configure_cli_output
 from w3xtool.cli_summary import iter_cli_summary_lines
 from w3xtool.game_config_summary import iter_game_config_summary_lines
 
@@ -13,6 +14,7 @@ __all__ = ("iter_cli_summary_lines", "iter_game_config_summary_lines", "main")
 
 def main() -> None:
     """Dispatch legacy game-config, map CLI, or GUI startup modes."""
+    configure_cli_output()
     if len(sys.argv) >= 2 and sys.argv[1] == "acceptance":
         from w3xtool.acceptance_cli import run_acceptance_cli
 

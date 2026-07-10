@@ -38,6 +38,12 @@ def diagnose_archive_open(
     error: BaseException | None = None,
 ) -> ArchiveOpenDiagnosis:
     """Probe aligned MPQ headers without mmap, full-file reads, or payload scans."""
+    if os.path.isdir(path):
+        return ArchiveOpenDiagnosis(
+            ArchiveDiagnosisKind.READ_ERROR,
+            "原始地图路径不是可读取的普通文件，无法完成有界 MPQ 诊断。",
+            (f"path={path}", "path_type=directory") + _error_evidence(error),
+        )
     try:
         with open(path, "rb") as handle:
             file_size = os.fstat(handle.fileno()).st_size

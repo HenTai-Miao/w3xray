@@ -172,7 +172,8 @@ def test_directory_read_failure_is_conservative(tmp_path: Path) -> None:
     path.mkdir()
 
     # When: it is diagnosed.
-    diagnosis = diagnose_archive_open(str(path))
+    with patch.object(builtins, "open", side_effect=PermissionError(13, "directory")):
+        diagnosis = diagnose_archive_open(str(path))
 
     # Then: the helper reports an OS read failure without claiming damage.
     assert diagnosis.kind is ArchiveDiagnosisKind.READ_ERROR

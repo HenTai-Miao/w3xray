@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -168,7 +169,8 @@ def test_main_cli_process_returns_two_for_invalid_options() -> None:
         cwd=project_root,
         check=False,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
+        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
     )
 
     # Then: argument errors use stderr and process exit code 2.

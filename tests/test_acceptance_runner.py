@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -65,7 +66,13 @@ def test_main_acceptance_mode_writes_machine_readable_report(tmp_path: Path) -> 
     ]
 
     # When: the process runs exactly as a packaged EXE subcommand will run.
-    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        encoding="utf-8",
+        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
+        check=False,
+    )
 
     # Then: exit status and JSON both expose the acceptance result.
     assert result.returncode == 0, result.stderr
@@ -97,7 +104,13 @@ def test_main_acceptance_mode_loads_and_visits_all_gui_tabs(tmp_path: Path) -> N
     ]
 
     # When: GUI acceptance loads the map and cycles the primary tab set.
-    result = subprocess.run(command, capture_output=True, text=True, check=False)
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        encoding="utf-8",
+        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
+        check=False,
+    )
 
     # Then: the lane reports all nine tabs through the public entrypoint.
     assert result.returncode == 0, result.stdout + result.stderr

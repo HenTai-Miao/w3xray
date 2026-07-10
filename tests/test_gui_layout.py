@@ -24,9 +24,9 @@ class TestEditorStyleLayout(GuiTestCase):
 
     def test_source_sidebar_stays_visible_outside_object_editor(self):
         # Given: the user navigates away from the object editor.
-        self.app.deiconify()
+        self.show_app()
         self.app.tabs.set("地图信息")
-        self.app.update_idletasks()
+        self.app.update()
 
         try:
             # Then: map source controls remain global, not buried in one tab.
@@ -131,7 +131,7 @@ class TestEditorStyleLayout(GuiTestCase):
         self.assertEqual(len(rows), 6)
         self.assertEqual(self.app.object_cards.item(rows[0], "text"), "物品0")
         self.assertEqual(self.app.object_cards.item(rows[3], "text"), "物品3")
-        self.assertEqual(self.app.object_cards.cget("columns"), ())
+        self.assertEqual(tuple(self.app.object_cards.cget("columns")), ())
         self.pump_events_until(lambda: bool(self.app.object_cards.item(rows[0], "image")))
         self.assertEqual(len(self.app.object_cards.winfo_children()), 0)
 

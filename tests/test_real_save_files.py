@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -116,7 +117,8 @@ def test_main_save_command_writes_read_only_report(tmp_path: Path) -> None:
             str(output),
         ),
         capture_output=True,
-        text=True,
+        encoding="utf-8",
+        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
         check=False,
         timeout=10,
     )

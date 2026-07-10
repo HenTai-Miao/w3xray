@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Generator
 from dataclasses import dataclass
 import importlib
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -119,7 +120,8 @@ def test_main_casc_help_exposes_inventory_and_selected_extract_commands() -> Non
     result = subprocess.run(
         [sys.executable, str(root / "main.py"), "casc", "--help"],
         capture_output=True,
-        text=True,
+        encoding="utf-8",
+        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
         check=False,
         timeout=5,
     )
