@@ -13,6 +13,7 @@ from .save_api_catalog import object_api_category, save_api_info
 from .save_call_context import extract_call_args, unescape_arg
 from .script_function_index import ScriptFunction, build_script_function_index
 from .script_scan import _codes_in
+from .script_sources import analysis_script_texts
 from .script_tokens import script_code_text
 
 _CALL_RE: Final = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
@@ -44,9 +45,7 @@ def build_script_call_argument_index(md: MapData) -> ScriptCallArgumentIndex:
     """Return each script call argument with save, resource and object-code clues."""
     functions = build_script_function_index(md).functions
     rows: list[ScriptCallArgument] = []
-    for source, text in sorted(md.scripts.items()):
-        if source.lower().endswith(".wts"):
-            continue
+    for source, text in analysis_script_texts(md):
         rows.extend(_arguments_for_script(source, text, functions))
     return ScriptCallArgumentIndex(tuple(rows))
 

@@ -11,8 +11,8 @@ import unittest
 from w3xtool.api import GameObject, MapData
 from w3xtool.knowledge_pack import write_knowledge_pack
 from w3xtool.trigger_schema import TriggerFunctionKind, TriggerFunctionSchema, TriggerSchema
-from w3xtool.trigger_exports import format_trigger_eca_tsv
-from w3xtool.wtg import parse_wtg
+from w3xtool.trigger_exports import format_trigger_eca_tsv, format_trigger_tree_tsv
+from w3xtool.wtg import TriggerParseFailure, UnknownTriggerFunction, parse_wtg
 from w3xtool.wtg_eca import TriggerEcaParameter
 
 
@@ -86,7 +86,7 @@ def _classic_wtg_with_eca() -> bytes:
             _param(0, "H001"),
             _param(2, "比较", nested_call),
         ),
-        (_child_eca(2, 0, "DisplayTextToForce", 0, (_param(0, "TRIGSTR_001"),)),),
+        (_child_eca(2, 2, "DisplayTextToForce", 0, (_param(0, "TRIGSTR_001"),)),),
     )
     return (
         b"WTG!"
@@ -134,10 +134,10 @@ class WtgEcaExportTest(unittest.TestCase):
 
         # Then: the report shows function rows, parameter rows and hierarchy depth.
         self.assertIn("触发器\t深度\t行类型\t函数类型\t函数名\t启用\t参数序号\t参数类型\t参数值", text)
-        self.assertIn("初始化\t0\t函数\t动作\tCreateNUnitsAtLoc\t是", text)
+        self.assertIn("初始化\t0\t顶层函数\t动作\tCreateNUnitsAtLoc\t是", text)
         self.assertIn("初始化\t0\t参数\t动作\tCreateNUnitsAtLoc\t是\t2\t函数\t比较", text)
-        self.assertIn("初始化\t1\t函数\t调用\tOperatorCompareInteger\t是", text)
-        self.assertIn("初始化\t1\t函数\t动作\tDisplayTextToForce\t否", text)
+        self.assertIn("初始化\t1\t嵌套函数\t调用\tOperatorCompareInteger\t是", text)
+        self.assertIn("初始化\t1\t子ECA\t动作\tDisplayTextToForce\t否", text)
 
     def test_trigger_eca_tsv_exports_recursive_array_indexes_and_semantics(self) -> None:
         # Given: an ECA tree with ordinary parameters, nested/child functions,
@@ -166,12 +166,37 @@ class WtgEcaExportTest(unittest.TestCase):
         self.assertIn("圣骑士(H001)", text)
         self.assertIn("开始游戏", text)
         self.assertTrue(any(row[2] == "参数" and row[8] == "Numbers" for row in rows))
-        self.assertTrue(any(row[2] == "函数" and row[4] == "OperatorCompareInteger" for row in rows))
-        self.assertTrue(any(row[2] == "函数" and row[4] == "DisplayTextToForce" for row in rows))
+        nested_row = next(row for row in rows if row[2] == "嵌套函数")
+        child_row = next(row for row in rows if row[2] == "子ECA")
+        self.assertEqual(nested_row[4], "OperatorCompareInteger")
+        self.assertEqual(nested_row[12], "2")
+        self.assertEqual(child_row[4], "DisplayTextToForce")
+        self.assertEqual(child_row[10:13], ["1", "2", ""])
         self.assertEqual(
             [(row[1], row[8]) for row in rows if row[2] == "数组索引"],
             [("1", "Indexes"), ("2", "3")],
         )
+
+    def test_trigger_diagnostics_match_each_report_column_count(self) -> None:
+        # Given: one trigger summary has both supported diagnostic row kinds.
+        summary = replace(
+            parse_wtg(_classic_wtg_with_eca(), _schema()),
+            has_unexpanded_functions=True,
+            missing_schema_functions=(
+                UnknownTriggerFunction("初始化", "MissingAction", 2, 0x24),
+            ),
+            parse_failures=(
+                TriggerParseFailure("初始化", "BadAction", 0x48, "bad bytes"),
+            ),
+        )
+
+        # When: both trigger reports append their shared diagnostics.
+        eca_rows = format_trigger_eca_tsv(summary).splitlines()
+        tree_rows = format_trigger_tree_tsv(summary).splitlines()
+
+        # Then: diagnostics have the width of their own report, not a legacy width.
+        self.assertTrue(all(len(row.split("\t")) == 13 for row in eca_rows))
+        self.assertTrue(all(len(row.split("\t")) == 10 for row in tree_rows))
 
     def test_knowledge_pack_writes_trigger_eca_table(self) -> None:
         # Given: a map with parsed WTG ECA metadata.

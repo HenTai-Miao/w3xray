@@ -10,6 +10,7 @@ from typing import Final
 from .api import MapData
 from .save_call_context import extract_call_args, unescape_arg
 from .script_function_index import ScriptFunction, build_script_function_index
+from .script_sources import analysis_script_texts
 from .script_tokens import script_code_text
 
 _CALL_RE: Final = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
@@ -39,9 +40,7 @@ def build_script_trigger_registration_index(md: MapData) -> ScriptTriggerRegistr
     """Return trigger, action, condition and timer registrations from script code."""
     functions = build_script_function_index(md).functions
     rows: list[ScriptTriggerRegistration] = []
-    for source, text in sorted(md.scripts.items()):
-        if source.lower().endswith(".wts"):
-            continue
+    for source, text in analysis_script_texts(md):
         rows.extend(_registrations_for_script(source, text, functions))
     return ScriptTriggerRegistrationIndex(tuple(rows))
 

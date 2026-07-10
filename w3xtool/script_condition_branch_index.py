@@ -13,6 +13,7 @@ from .save_api_catalog import save_api_info
 from .save_call_context import unescape_arg
 from .script_function_index import ScriptFunction, build_script_function_index
 from .script_scan import _codes_in
+from .script_sources import analysis_script_texts
 from .script_tokens import script_code_text
 
 _BRANCH_RE: Final = re.compile(
@@ -50,9 +51,7 @@ def build_script_condition_branch_index(md: MapData) -> ScriptConditionBranchInd
     """Return if/elseif conditions with save, variable and object-ID clues."""
     functions = build_script_function_index(md).functions
     rows: list[ScriptConditionBranch] = []
-    for source, text in sorted(md.scripts.items()):
-        if source.lower().endswith(".wts"):
-            continue
+    for source, text in analysis_script_texts(md):
         rows.extend(_branches_for_script(source, text, functions))
     return ScriptConditionBranchIndex(tuple(rows))
 

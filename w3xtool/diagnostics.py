@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Final
 
+from .script_sources import analysis_script_texts
+
 if TYPE_CHECKING:
     from .api import MapData
 
@@ -87,21 +89,22 @@ _SYNC_MUTATION_RE: Final = re.compile(
 def build_script_diagnostics(md: MapData) -> ScriptDiagnosticReport:
     """扫描已解析脚本文本，输出只读诊断提示。"""
     items: list[ScriptDiagnostic] = []
+    analysis_scripts = dict(analysis_script_texts(md))
     for rule in _RULES:
-        scripts = tuple(
-            name for name, text in sorted(md.scripts.items())
+        matched_scripts = tuple(
+            name for name, text in sorted(analysis_scripts.items())
             if text and rule.pattern.search(text)
         )
-        if not scripts:
+        if not matched_scripts:
             continue
         items.append(ScriptDiagnostic(
             DiagnosticSeverity.WARNING,
             rule.code,
             rule.title,
             rule.detail,
-            scripts,
+            matched_scripts,
         ))
-    mutation_scripts = _scripts_with_local_sync_mutations(md.scripts)
+    mutation_scripts = _scripts_with_local_sync_mutations(analysis_scripts)
     if mutation_scripts:
         items.append(ScriptDiagnostic(
             DiagnosticSeverity.WARNING,

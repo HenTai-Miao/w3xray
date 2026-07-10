@@ -65,6 +65,17 @@ class TestParseWct(unittest.TestCase):
         self.assertEqual(w.custom_code, "call Confirmed()")
         self.assertIs(w.diagnostic, WctDiagnostic.TRUNCATED)
 
+    def test_truncated_global_size_keeps_confirmed_comment(self):
+        # Given: the comment terminates before an incomplete global-size field.
+        data = struct.pack("<I", 1) + b"confirmed comment\x00" + b"\x01\x00"
+
+        # When: the partial WCT is parsed.
+        w = parse_wct(data)
+
+        # Then: already-confirmed metadata remains available.
+        self.assertEqual(w.custom_comment, "confirmed comment")
+        self.assertIs(w.diagnostic, WctDiagnostic.TRUNCATED)
+
     def test_global_code_uses_cstr_when_declared_size_is_nonzero(self):
         data = struct.pack("<I", 1) + b"\x00" + struct.pack("<i", 999)
         data += b"call Legacy()\x00" + struct.pack("<i", 0)

@@ -10,6 +10,7 @@ from typing import Final
 from .api import MapData
 from .script_function_index import ScriptFunction, build_script_function_index
 from .script_scan import _codes_in
+from .script_sources import analysis_script_texts
 from .script_tokens import script_code_text
 
 _VAR_RE: Final = re.compile(
@@ -46,9 +47,7 @@ def build_script_variable_usage_index(md: MapData) -> ScriptVariableUsageIndex:
     """Return udg_/gg_/bj_ variable reads and writes with script context."""
     functions = build_script_function_index(md).functions
     rows: list[ScriptVariableUsage] = []
-    for source, text in sorted(md.scripts.items()):
-        if source.lower().endswith(".wts"):
-            continue
+    for source, text in analysis_script_texts(md):
         rows.extend(_usages_for_script(source, text, functions))
     return ScriptVariableUsageIndex(tuple(rows))
 

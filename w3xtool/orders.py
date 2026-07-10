@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
 from .order_ids import order_name_from_id
+from .script_sources import analysis_script_texts
 
 if TYPE_CHECKING:
     from .api import GameObject, MapData
@@ -54,7 +55,7 @@ def build_order_report(md: MapData) -> OrderReport:
     uses: list[OrderUse] = []
     for obj in _all_objects(md):
         uses.extend(_object_order_uses(obj))
-    for script_name, text in sorted(md.scripts.items()):
+    for script_name, text in analysis_script_texts(md):
         uses.extend(_script_order_uses(script_name, text))
     ordered_uses = tuple(sorted(uses, key=lambda use: (use.order, use.source, use.detail)))
     return OrderReport(ordered_uses, _collisions(ordered_uses))

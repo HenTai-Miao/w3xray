@@ -44,7 +44,7 @@ def format_trigger_tree_tsv(summary: TriggerTreeSummary | None) -> str:
             _yes_no(trigger.run_on_init),
             _tsv(_trigger_description(trigger.description, trigger.is_comment)),
         )))
-    _append_diagnostics(rows, summary)
+    _append_diagnostics(rows, summary, 10)
     return "\n".join(rows) + "\n"
 
 
@@ -56,7 +56,10 @@ def format_trigger_eca_tsv(
     object_names: Mapping[str, str] | None = None,
 ) -> str:
     """Return raw WTG ECA functions and parameters as a TSV table."""
-    rows = ["触发器\t深度\t行类型\t函数类型\t函数名\t启用\t参数序号\t参数类型\t参数值\t语义文本"]
+    rows = [
+        "触发器\t深度\t行类型\t函数类型\t函数名\t启用\t参数序号\t参数类型\t参数值\t语义文本"
+        "\t序号\t分支\t父参数序号"
+    ]
     if summary is None:
         return "\n".join(rows) + "\n"
     for function in summary.eca_functions:
@@ -67,8 +70,10 @@ def format_trigger_eca_tsv(
             wts,
             object_names,
             depth=function.depth,
+            row_type="顶层函数",
+            parent_parameter=None,
         )
-    _append_diagnostics(rows, summary)
+    _append_diagnostics(rows, summary, 13)
     return "\n".join(rows) + "\n"
 
 
@@ -105,12 +110,14 @@ def _append_eca_function(
     object_names: Mapping[str, str] | None,
     *,
     depth: int,
+    row_type: str,
+    parent_parameter: int | None,
 ) -> None:
     function_type = function_type_label(function.function_type)
     rows.append("\t".join((
         _tsv(function.trigger_name),
         str(depth),
-        "函数",
+        row_type,
         _tsv(function_type),
         _tsv(function.name),
         _yes_no(function.is_enabled),
@@ -125,6 +132,9 @@ def _append_eca_function(
                 object_names=object_names,
             )
         ),
+        str(function.ordinal),
+        str(function.branch),
+        "" if parent_parameter is None else str(parent_parameter),
     )))
     for index, parameter in enumerate(function.parameters):
         _append_eca_parameter(
@@ -137,6 +147,7 @@ def _append_eca_function(
             object_names,
             row_type="参数",
             depth=depth,
+            parent_parameter=None,
         )
     for child in function.children:
         _append_eca_function(
@@ -146,6 +157,8 @@ def _append_eca_function(
             wts,
             object_names,
             depth=depth + 1,
+            row_type="子ECA",
+            parent_parameter=None,
         )
 
 
@@ -160,6 +173,7 @@ def _append_eca_parameter(
     *,
     row_type: str,
     depth: int,
+    parent_parameter: int | None,
 ) -> None:
     function_type = function_type_label(function.function_type)
     rows.append("\t".join((
@@ -173,6 +187,9 @@ def _append_eca_parameter(
         _tsv(parameter_type_label(parameter.parameter_type)),
         _tsv(parameter.value),
         "",
+        str(function.ordinal),
+        str(function.branch),
+        "" if parent_parameter is None else str(parent_parameter),
     )))
     if parameter.nested_function is not None:
         _append_eca_function(
@@ -182,6 +199,8 @@ def _append_eca_parameter(
             wts,
             object_names,
             depth=depth + 1,
+            row_type="嵌套函数",
+            parent_parameter=index,
         )
     if parameter.array_indexer is not None:
         _append_eca_parameter(
@@ -194,25 +213,39 @@ def _append_eca_parameter(
             object_names,
             row_type="数组索引",
             depth=depth + 1,
+            parent_parameter=index,
         )
 
 
-def _append_diagnostics(rows: list[str], summary: TriggerTreeSummary) -> None:
+def _append_diagnostics(
+    rows: list[str],
+    summary: TriggerTreeSummary,
+    column_count: int,
+) -> None:
     missing_schema_functions = getattr(summary, "missing_schema_functions", ())
     parse_failures = getattr(summary, "parse_failures", ())
     for item in missing_schema_functions:
-        rows.append(
+        rows.append(_pad_tsv_row(
             "说明\t\t\t缺少 TriggerData/TriggerStrings：只读取触发器头"
-            f"\t{_tsv(item.trigger_name)}\t{_tsv(item.function_name)}\t0x{item.offset:x}\t\t\t"
-        )
+            f"\t{_tsv(item.trigger_name)}\t{_tsv(item.function_name)}\t0x{item.offset:x}\t\t\t",
+            column_count,
+        ))
     for failure in parse_failures:
-        rows.append(
+        rows.append(_pad_tsv_row(
             "说明\t\t\t"
             f"WTG 解析失败：{_tsv(failure.trigger_name)}/{_tsv(failure.function_name)} "
-            f"@ 0x{failure.offset:x}：{_tsv(failure.reason)}\t\t\t\t\t\t"
-        )
+            f"@ 0x{failure.offset:x}：{_tsv(failure.reason)}\t\t\t\t\t\t",
+            column_count,
+        ))
     if summary.has_unexpanded_functions and not missing_schema_functions and not parse_failures:
-        rows.append("说明\t\t\tWTG ECA 未完整展开：缺少结构化诊断\t\t\t\t\t\t")
+        rows.append(_pad_tsv_row(
+            "说明\t\t\tWTG ECA 未完整展开：缺少结构化诊断\t\t\t\t\t\t",
+            column_count,
+        ))
+
+
+def _pad_tsv_row(row: str, column_count: int) -> str:
+    return row + "\t" * max(0, column_count - row.count("\t") - 1)
 
 
 def _trigger_description(description: str, is_comment: bool) -> str:

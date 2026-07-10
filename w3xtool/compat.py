@@ -6,6 +6,8 @@ from enum import StrEnum
 import re
 from typing import TYPE_CHECKING
 
+from .script_sources import analysis_script_texts
+
 if TYPE_CHECKING:
     from .api import MapData
 
@@ -142,13 +144,16 @@ def _w3i_items(w3i, target_patch: str) -> tuple[CompatItem, ...]:
 
 def _uses_lua(md: MapData, w3i) -> bool:
     script_type = str(getattr(w3i, "script_type", "") if w3i is not None else "")
-    return script_type.lower() == "lua" or bool(md.scripts.get("war3map.lua"))
+    return script_type.lower() == "lua" or any(
+        name.casefold() == "war3map.lua"
+        for name, _text in analysis_script_texts(md)
+    )
 
 
 def _return_bug_items(md: MapData, target_patch: str) -> tuple[CompatItem, ...]:
     names = tuple(sorted({
         name
-        for script in md.scripts.values()
+        for _name, script in analysis_script_texts(md)
         for name in _return_bug_functions(script)
     }))
     if not names:

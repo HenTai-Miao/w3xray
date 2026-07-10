@@ -9,6 +9,7 @@ from typing import Final
 from .api import MapData
 from .resources import RESOURCE_EXTS
 from .script_scan import _codes_in
+from .script_sources import analysis_script_texts
 
 _GLOBAL_DECL_RE: Final = re.compile(
     r"^\s*(?:(?:private|public)\s+)?"
@@ -44,9 +45,7 @@ class ScriptGlobalIndex:
 def build_script_global_index(md: MapData) -> ScriptGlobalIndex:
     """Return globals declared in JASS scripts with static value clues."""
     rows: list[ScriptGlobal] = []
-    for source, text in sorted(md.scripts.items()):
-        if source.lower().endswith(".wts"):
-            continue
+    for source, text in analysis_script_texts(md):
         rows.extend(_globals_for_script(source, text))
     return ScriptGlobalIndex(tuple(rows))
 

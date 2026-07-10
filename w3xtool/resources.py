@@ -5,6 +5,8 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
+from .script_sources import analysis_script_texts
+
 if TYPE_CHECKING:
     from .api import GameObject, MapData
 
@@ -72,7 +74,7 @@ def build_resource_report(md: MapData) -> ResourceReport:
     refs: dict[str, list[ResourceRef]] = {}
     for obj in _all_objects(md):
         _collect_object_refs(refs, obj)
-    for script_name, text in sorted(md.scripts.items()):
+    for script_name, text in analysis_script_texts(md):
         _collect_text_refs(refs, f"脚本 {script_name}", "字符串字面量", text)
 
     archive_assets = tuple(sorted(

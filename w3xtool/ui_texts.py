@@ -7,6 +7,7 @@ import re
 from typing import Final
 
 from .api import MapData
+from .script_sources import analysis_script_texts
 from .wts import parse_wts
 
 _TRIGSTR_RE: Final = re.compile(r"\bTRIGSTR_(\d+)\b", re.IGNORECASE)
@@ -88,9 +89,7 @@ def _string_table(md: MapData) -> dict[int, str]:
 
 
 def _iter_references(md: MapData, table: dict[int, str]):
-    for source, text in sorted(md.scripts.items()):
-        if source.lower().endswith(".wts"):
-            continue
+    for source, text in analysis_script_texts(md):
         for line_no, line in enumerate(text.splitlines(), start=1):
             seen: set[str] = set()
             for match in _TRIGSTR_RE.finditer(line):

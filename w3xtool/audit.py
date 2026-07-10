@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, Final
 
+from .script_sources import analysis_script_texts
+
 if TYPE_CHECKING:
     from .api import GameObject, MapData
 
@@ -105,9 +107,8 @@ def _inventory_item(objects: list[GameObject]) -> AuditItem:
 
 
 def _script_item(md: MapData) -> AuditItem | None:
-    for name in ("war3map.j", "war3map.lua"):
-        text = md.scripts.get(name)
-        if text and text.strip("\x00\r\n\t "):
+    for name, text in analysis_script_texts(md):
+        if name in {"war3map.j", "war3map.lua"} and text.strip("\x00\r\n\t "):
             return AuditItem(
                 AuditSeverity.INFO,
                 "script.primary",

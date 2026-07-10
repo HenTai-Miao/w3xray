@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import re
 
+from .script_sources import analysis_script_texts
+
 _LEVEL_LABEL_RE = re.compile(r" \(等级\d+\)$")   # 反向去重时剥掉标签里的"(等级N)"
 
 # 引用类型(FIELD_TYPES 的值) → 目标分类。仅列"值是对象 4cc 码/码列表"的类型；
@@ -122,14 +124,6 @@ def extract_refs_by_column(fields: dict, category: str) -> list:
     return refs
 
 
-def _best_script(md) -> str:
-    for name in ("war3map.j", "war3map.lua"):
-        text = md.scripts.get(name)
-        if text and text.strip("\x00\r\n\t "):
-            return text
-    return ""
-
-
 def build_reference_graph(md) -> None:
     """计算引用图并填到 md：references(正向) / referenced_by(反向) / orphans(孤立自定义对象)。
 
@@ -140,7 +134,7 @@ def build_reference_graph(md) -> None:
     from .slk_objects import slk_col_label
     try:
         from .base_names import BASE_NAMES      # 引用到的原版对象(如标准 buff)未作为对象加载时，回退取原版名
-    except Exception:
+    except ImportError:
         BASE_NAMES = {}
 
     def _label(field_key):
@@ -188,14 +182,10 @@ def build_reference_graph(md) -> None:
 
     # 根集合：被脚本引用 / 预放置在地图上的类型 —— 这些即便没被别的对象引用也不算"孤立"。
     roots = set(referenced_by.keys())
-    try:
-        from .script_scan import scan_all_referenced_codes
-        script_text = _best_script(md)
-        if script_text:
-            # 全类 native 提码 + 所有 'xxxx' 字面量 + BJ 隐式码，孤立判定宁滥勿缺
-            roots.update(scan_all_referenced_codes(script_text))
-    except Exception:
-        pass
+    from .script_scan import scan_all_referenced_codes
+    for _source, script_text in analysis_script_texts(md):
+        # 全类 native 提码 + 所有 'xxxx' 字面量 + BJ 隐式码，孤立判定宁滥勿缺
+        roots.update(scan_all_referenced_codes(script_text))
     for u in getattr(md, "units", []) or []:
         roots.add(getattr(u, "type_id", ""))
     for d in getattr(md, "doodads", []) or []:

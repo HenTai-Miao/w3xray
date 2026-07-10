@@ -13,6 +13,7 @@ from .api import MapData
 from .save_api_catalog import object_api_category, save_api_info
 from .save_call_context import extract_call_args, unescape_arg
 from .script_scan import _codes_in
+from .script_sources import analysis_script_texts
 from .script_tokens import script_code_text
 
 _CALL_RE: Final = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
@@ -51,7 +52,7 @@ class ScriptCallCatalog:
 def build_script_call_catalog(md: MapData) -> ScriptCallCatalog:
     """Return script calls grouped by function/native name."""
     calls: list[ScriptCall] = []
-    for source, text in sorted(md.scripts.items()):
+    for source, text in analysis_script_texts(md):
         calls.extend(_scan_script_calls(source, text))
     return ScriptCallCatalog(calls=tuple(calls), rows=_group_calls(calls))
 

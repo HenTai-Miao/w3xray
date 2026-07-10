@@ -9,6 +9,7 @@ from typing import Final
 
 from .api import MapData
 from .script_call_catalog import ScriptCall, build_script_call_catalog
+from .script_sources import analysis_script_texts
 from .script_tokens import script_code_text
 
 _JASS_FUNCTION_RE: Final = re.compile(r"^\s*function\s+([A-Za-z_][A-Za-z0-9_]*)\b")
@@ -56,7 +57,7 @@ def build_script_function_index(md: MapData) -> ScriptFunctionIndex:
     calls = build_script_call_catalog(md).calls
     ranges = tuple(
         item
-        for source, text in sorted(md.scripts.items())
+        for source, text in analysis_script_texts(md)
         for item in _function_ranges(source, text)
     )
     functions = tuple(_function_row(item, calls) for item in ranges)

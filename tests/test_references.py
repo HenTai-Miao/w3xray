@@ -227,6 +227,20 @@ class BuildGraphTest(unittest.TestCase):
         build_reference_graph(md)
         self.assertNotIn("I001", {o.obj_id for o in md.orphans})  # 预放置 → 不孤立
 
+    def test_lua_only_script_root_is_kept_when_jass_exists(self):
+        # Given: JASS is present, while a custom object is referenced only from Lua.
+        md, _unit, _ability, item = self._mk()
+        md.scripts = {
+            "war3map.j": "call DoNothing()",
+            "war3map.lua": 'CreateItem(FourCC("I001"), 0, 0)',
+        }
+
+        # When: orphan roots are collected from scripts.
+        build_reference_graph(md)
+
+        # Then: the Lua-only object reference prevents orphan classification.
+        self.assertNotIn(item.obj_id, {obj.obj_id for obj in md.orphans})
+
 
 if __name__ == "__main__":
     unittest.main()

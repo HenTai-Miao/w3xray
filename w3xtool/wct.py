@@ -86,9 +86,15 @@ def parse_wct(data: bytes) -> WctScript:
 
     try:
         comment = reader.cstr()
-        custom_code = _read_global_code(reader)
     except _TruncatedWct:
         return WctScript(diagnostic=WctDiagnostic.TRUNCATED)
+    try:
+        custom_code = _read_global_code(reader)
+    except _TruncatedWct:
+        return WctScript(
+            custom_comment=comment,
+            diagnostic=WctDiagnostic.TRUNCATED,
+        )
 
     try:
         count = None if reforged else reader.i32()

@@ -5,6 +5,8 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
+from .script_sources import analysis_script_texts
+
 if TYPE_CHECKING:
     from .api import MapData
 
@@ -61,7 +63,7 @@ def build_cheat_report(md: MapData) -> CheatReport:
 
     items: list[CheatResidue] = []
     seen: set[tuple[str, str]] = set()
-    for script_name, text in sorted(md.scripts.items()):
+    for script_name, text in analysis_script_texts(md):
         for command in scan_chat_commands(text):
             phrase = _normalize_phrase(command.command)
             if phrase in _CHEAT_PHRASES:

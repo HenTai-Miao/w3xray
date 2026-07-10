@@ -5,6 +5,8 @@ from dataclasses import dataclass
 import re
 from typing import TYPE_CHECKING
 
+from .script_sources import analysis_script_texts
+
 if TYPE_CHECKING:
     from .api import GameObject, MapData
 
@@ -93,7 +95,7 @@ _GAME_CACHE_RE = re.compile(
 
 def _game_cache_script_risks(md: MapData) -> tuple[CrashRisk, ...]:
     out: list[CrashRisk] = []
-    for script_name, text in sorted(md.scripts.items()):
+    for script_name, text in analysis_script_texts(md):
         if not _GAME_CACHE_RE.search(text):
             continue
         out.append(CrashRisk(

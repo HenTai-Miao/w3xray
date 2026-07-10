@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from .script_scan import _codes_in, scan_all_referenced_codes, scan_object_refs
+from .script_sources import analysis_script_texts
 from .script_tokens import script_code_text
 
 if TYPE_CHECKING:
@@ -45,7 +46,7 @@ class ObjectIdUsageReport:
 def build_object_id_usage(md: MapData) -> ObjectIdUsageReport:
     """Return script-side object ID usage details keyed by rawcode."""
     entries: list[ObjectIdUsage] = []
-    for source, text in sorted(md.scripts.items()):
+    for source, text in analysis_script_texts(md):
         category_map = _category_map(text)
         line_entries = tuple(_line_entries(source, text, category_map))
         entries.extend(line_entries)

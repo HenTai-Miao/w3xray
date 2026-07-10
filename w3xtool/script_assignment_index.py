@@ -10,6 +10,7 @@ from .api import MapData
 from .resources import RESOURCE_EXTS
 from .script_function_index import ScriptFunction, build_script_function_index
 from .script_scan import _codes_in
+from .script_sources import analysis_script_texts
 from .script_tokens import script_code_text
 
 _JASS_SET_RE: Final = re.compile(
@@ -44,9 +45,7 @@ def build_script_assignment_index(md: MapData) -> ScriptAssignmentIndex:
     """Return script variable assignments with value and purpose clues."""
     functions = build_script_function_index(md).functions
     rows: list[ScriptAssignment] = []
-    for source, text in sorted(md.scripts.items()):
-        if source.lower().endswith(".wts"):
-            continue
+    for source, text in analysis_script_texts(md):
         rows.extend(_assignments_for_script(source, text, functions))
     return ScriptAssignmentIndex(tuple(rows))
 

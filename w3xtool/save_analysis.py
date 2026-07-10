@@ -12,6 +12,7 @@ from .api import MapData
 from .save_api_catalog import object_api_category, save_api_info
 from .save_call_context import extract_call_args, structured_context, unescape_arg
 from .script_scan import _codes_in
+from .script_sources import analysis_script_texts
 from .script_tokens import script_code_text
 
 _STRING_RE: Final = re.compile(r'"((?:[^"\\]|\\.)*)"')
@@ -73,7 +74,7 @@ class SaveReport:
 
 def build_save_report(md: MapData) -> SaveReport:
     rows: list[SaveClue] = []
-    for source, text in sorted(md.scripts.items()):
+    for source, text in analysis_script_texts(md):
         rows.extend(_scan_script(source, text))
     return SaveReport(tuple(rows))
 

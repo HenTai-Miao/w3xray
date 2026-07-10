@@ -13,6 +13,7 @@ from .object_id_usage import code_decimal
 from .script_call_catalog import ScriptCall, build_script_call_catalog
 from .script_function_index import ScriptFunction, build_script_function_index
 from .script_scan import _codes_in, scan_object_refs
+from .script_sources import analysis_script_texts
 from .script_tokens import script_code_text
 
 _JASS_SET_RE: Final = re.compile(
@@ -55,9 +56,7 @@ def build_script_object_code_occurrence_index(md: MapData) -> ScriptObjectCodeOc
     calls = build_script_call_catalog(md).calls
     objects = _object_lookup(md)
     rows: list[ScriptObjectCodeOccurrence] = []
-    for source, text in sorted(md.scripts.items()):
-        if source.lower().endswith(".wts"):
-            continue
+    for source, text in analysis_script_texts(md):
         rows.extend(_occurrences_for_script(source, text, functions, calls, objects))
     return ScriptObjectCodeOccurrenceIndex(tuple(rows))
 

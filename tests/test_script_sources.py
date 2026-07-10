@@ -221,6 +221,7 @@ def test_map_loading_parses_wts_from_original_mixed_encoding_bytes() -> None:
 
     # Then: the byte-oriented parser receives the untouched mixed stream.
     assert parsed_inputs == [raw_wts]
+    assert archive.read_counts["war3map.wts"] == 1
 
 
 def test_map_loading_preserves_byte_parsed_mixed_encoding_wts() -> None:

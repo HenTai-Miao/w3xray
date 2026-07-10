@@ -74,10 +74,10 @@ def _load_map_impl(
 ) -> MapData:
     script_collection = collect_readable_scripts(archive)
     wts = {}
-    if archive.has_file("war3map.wts"):
+    if script_collection.wts_raw is not None:
         try:
-            wts = parse_wts(archive.read_file("war3map.wts"))
-        except (KeyError, OSError, UnicodeError, ValueError):
+            wts = parse_wts(script_collection.wts_raw)
+        except (UnicodeError, ValueError):
             wts = {}
 
     md = MapData(path=path, name=_map_name(archive), archive_source=PathArchiveSource(path))

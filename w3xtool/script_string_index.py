@@ -10,6 +10,7 @@ from .api import MapData
 from .resources import RESOURCE_EXTS
 from .save_api_catalog import save_api_info
 from .script_function_index import ScriptFunction, build_script_function_index
+from .script_sources import analysis_script_texts
 from .wts import parse_wts
 
 _CALL_RE: Final = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
@@ -56,9 +57,7 @@ def build_script_string_index(md: MapData) -> ScriptStringIndex:
     trigstr_table = _trigstr_table(md)
     functions = build_script_function_index(md).functions
     entries: list[ScriptStringEntry] = []
-    for source, text in sorted(md.scripts.items()):
-        if source.lower().endswith(".wts"):
-            continue
+    for source, text in analysis_script_texts(md):
         entries.extend(_entries_for_script(source, text, trigstr_table, functions))
     return ScriptStringIndex(tuple(entries))
 

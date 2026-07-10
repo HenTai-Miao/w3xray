@@ -26,11 +26,13 @@ class ScriptCollection:
     texts: Mapping[str, str]
     binary_members: tuple[str, ...]
     wct_diagnostic: WctDiagnostic | None
+    wts_raw: bytes | None = None
 
 
 def collect_readable_scripts(archive: MapArchiveReader) -> ScriptCollection:
     """Decode text members and publish WCT only through its readable virtual text."""
     texts: dict[str, str] = {}
+    wts_raw: bytes | None = None
     for name in _TEXT_MEMBERS:
         if not archive.has_file(name):
             continue
@@ -39,6 +41,8 @@ def collect_readable_scripts(archive: MapArchiveReader) -> ScriptCollection:
         except (KeyError, OSError, ValueError):
             continue
         texts[name] = decode_warcraft_string(raw)
+        if name == "war3map.wts":
+            wts_raw = raw
 
     binary_members = tuple(name for name in _BINARY_MEMBERS if archive.has_file(name))
     diagnostic: WctDiagnostic | None = None
@@ -53,7 +57,7 @@ def collect_readable_scripts(archive: MapArchiveReader) -> ScriptCollection:
             readable = _format_wct_text(parsed)
             if readable is not None:
                 texts[WCT_TEXT_NAME] = readable
-    return ScriptCollection(MappingProxyType(texts), binary_members, diagnostic)
+    return ScriptCollection(MappingProxyType(texts), binary_members, diagnostic, wts_raw)
 
 
 def analysis_script_texts(md: MapData) -> tuple[tuple[str, str], ...]:

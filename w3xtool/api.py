@@ -105,7 +105,9 @@ def _read_script(archive: MapArchiveReader) -> str | None:
 
 
 def _map_wts(md: MapData) -> dict[int, str]:
-    """从 md.scripts 里的 war3map.wts 文本解析字符串表（commands 提示还原用）。"""
+    """Return the retained WTS table, with published text as a legacy fallback."""
+    if md.ui_strings is not None:
+        return dict(md.ui_strings)
     raw = md.scripts.get("war3map.wts")
     if not raw:
         return {}
@@ -119,10 +121,20 @@ def commands_from_map(md: MapData) -> list:
     """从已解析的 MapData 扫描隐藏聊天指令（复用 md.scripts，不重开 MPQ）。"""
     from .script_scan import scan_chat_commands
 
-    text = _joined_analysis_script_text(md)
-    if not text:
-        return []
-    commands = scan_chat_commands(text)
+    commands = []
+    seen = set()
+    for _source, text in analysis_script_texts(md):
+        for command in scan_chat_commands(text):
+            key = (command.command, command.exact)
+            if key in seen:
+                continue
+            seen.add(key)
+            commands.append(command)
+    commands.sort(key=lambda command: (
+        len(command.command) == 0,
+        not command.command.startswith("-"),
+        command.command,
+    ))
     wts = _map_wts(md)
     if wts:
         for command in commands:
@@ -135,26 +147,32 @@ def recipes_from_map(md: MapData) -> list:
     """从已解析的 MapData 识别物品合成配方（复用 md.scripts，不重开 MPQ）。"""
     from .script_scan import scan_recipes as scan_recipes_from_text
 
-    text = _joined_analysis_script_text(md)
-    return scan_recipes_from_text(text) if text else []
+    recipes = []
+    seen = set()
+    for _source, text in analysis_script_texts(md):
+        for recipe in scan_recipes_from_text(text):
+            key = (tuple(sorted(recipe.ingredients)), recipe.result)
+            if key in seen:
+                continue
+            seen.add(key)
+            recipes.append(recipe)
+    return recipes
 
 
 def scan_commands(path: str) -> list:
     """扫描地图脚本里的隐藏聊天指令（独立入口，会自行打开 MPQ）。"""
-    from .script_scan import scan_chat_commands
-
     with MPQArchive(path) as archive:
-        text = _read_script(archive)
-    return scan_chat_commands(text) if text else []
+        collection = collect_readable_scripts(archive)
+    md = MapData(path=path, name=path, scripts=dict(collection.texts))
+    return commands_from_map(md)
 
 
 def scan_recipes(path: str) -> list:
     """识别地图脚本里的物品合成配方（独立入口，会自行打开 MPQ）。"""
-    from .script_scan import scan_recipes as scan_recipes_from_text
-
     with MPQArchive(path) as archive:
-        text = _read_script(archive)
-    return scan_recipes_from_text(text) if text else []
+        collection = collect_readable_scripts(archive)
+    md = MapData(path=path, name=path, scripts=dict(collection.texts))
+    return recipes_from_map(md)
 
 
 def _joined_analysis_script_text(md: MapData) -> str | None:
