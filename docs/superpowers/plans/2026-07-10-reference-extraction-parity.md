@@ -590,7 +590,11 @@ def decompress_mpq_sector(data: bytes, output_size: int) -> bytes:
 
 Define `_STORMLIB_REVERSE_ORDER` exactly as bzip2, PKWARE, zlib, Huffman,
 ADPCM stereo, ADPCM mono, and sparse. Reject a mask containing both ADPCM modes.
-Parse the five-byte LZMA properties into an `lzma.FILTER_LZMA1` raw filter and cap output at the declared sector size. Preserve exact valid shorter final sectors.
+For LZMA, require StormLib's 14-byte payload header: one zero filter byte, five encoded
+properties, and an eight-byte little-endian original length, followed by the raw LZMA stream.
+Reject nonzero filters and declared lengths larger than the sector contract. Parse the five
+properties into an `lzma.FILTER_LZMA1` raw filter and cap output at the smaller matching declared
+size; preserve exact valid shorter final sectors.
 
 - [ ] **Step 4: Port bounded mono/stereo ADPCM decompression**
 
