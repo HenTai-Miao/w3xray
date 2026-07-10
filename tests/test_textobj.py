@@ -4,7 +4,23 @@
 """
 import unittest
 
-from w3xtool.textobj import classify
+from w3xtool.textobj import classify, parse_text_objects
+
+
+def test_parse_text_objects_and_classify_preserve_current_behavior() -> None:
+    # Given: an INI object table with CRLF lines and a duplicate field.
+    text = "[hfoo]\r\nName=Footman\r\nName=Ignored\r\nTrains=hbar\r\n"
+
+    # When: the table is parsed and classified from its parsed fields.
+    objects = parse_text_objects(text)
+    category = classify(
+        [code for code, _fields in objects],
+        {field for _code, fields in objects for field in fields},
+    )
+
+    # Then: parsing keeps the first field value and classification stays unit-based.
+    assert objects == [("hfoo", {"Name": "Footman", "Trains": "hbar"})]
+    assert category == "单位"
 
 
 class TestClassify(unittest.TestCase):
