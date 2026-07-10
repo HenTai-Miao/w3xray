@@ -29,6 +29,10 @@ class TextObjectRecord:
     source_name: str
     source_kind: TextObjectSourceKind
 
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "fields", _immutable_mapping(self.fields))
+        object.__setattr__(self, "field_sources", _immutable_mapping(self.field_sources))
+
 
 _TRUSTED_NAME: Final[re.Pattern[str]] = re.compile(
     r"(?:^|[\\/])(?:[a-z]+)?(?:unit|item|ability|upgrade)(func|strings)\.txt$",

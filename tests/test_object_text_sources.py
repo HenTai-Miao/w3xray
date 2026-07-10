@@ -8,6 +8,7 @@ from types import MappingProxyType
 import pytest
 
 from w3xtool.object_text_sources import (
+    TextObjectRecord,
     TextObjectSourceKind,
     collect_text_object_records,
     merge_text_object_records,
@@ -162,6 +163,32 @@ def test_collected_records_are_frozen_with_immutable_mappings() -> None:
         setattr(record, "obj_id", "H002")
     assert isinstance(record.fields, MappingProxyType)
     assert isinstance(record.field_sources, MappingProxyType)
+
+
+def test_direct_records_copy_caller_mappings_and_reject_mapping_assignment() -> None:
+    # Given: mutable mappings supplied to the public record constructor.
+    fields = {"Name": "Footman"}
+    field_sources = {"Name": "Units\\HumanUnitStrings.txt"}
+    record = TextObjectRecord(
+        category="unit",
+        obj_id="H001",
+        fields=fields,
+        field_sources=field_sources,
+        source_name="Units\\HumanUnitStrings.txt",
+        source_kind=TextObjectSourceKind.STRINGS,
+    )
+
+    # When: the caller mutates its original mappings.
+    fields["Name"] = "Knight"
+    field_sources["Name"] = "changed"
+
+    # Then: the record keeps the original values and rejects mapping writes.
+    assert record.fields["Name"] == "Footman"
+    assert record.field_sources["Name"] == "Units\\HumanUnitStrings.txt"
+    with pytest.raises(TypeError):
+        record.fields["Name"] = "Knight"
+    with pytest.raises(TypeError):
+        record.field_sources["Name"] = "changed"
 
 
 def test_anonymous_blocks_require_at_least_eight_objects() -> None:
