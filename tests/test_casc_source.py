@@ -39,13 +39,13 @@ class CascSourceTest(unittest.TestCase):
             with open(os.path.join(data_dir, "0000000000000000.idx"), "wb") as handle:
                 handle.write(_idx_row(key, 0, offset, len(blte)))
             with open(os.path.join(root, "w3xray-casc-paths.tsv"), "w", encoding="utf-8") as handle:
-                handle.write("units\\HumanUnitStrings.txt\t00112233445566778899aabbccddeeff\n")
+                handle.write("war3.w3mod\\units\\HumanUnitStrings.txt\t00112233445566778899aabbccddeeff\n")
 
             # When: the game-data path is probed and opened.
             probe = probe_game_data_path(root)
             source = open_game_data_source(root)
 
-            # Then: the source reads the BLTE payload directly from data.000.
+            # Then: the source ignores the namespace prefix and reads data.000.
             self.assertEqual(probe.kind, "native_casc")
             self.assertTrue(probe.is_readable)
             self.assertIsInstance(source, CascDataSource)

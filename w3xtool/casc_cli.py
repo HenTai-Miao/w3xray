@@ -9,7 +9,12 @@ import sys
 from typing import override
 
 from .casc_inventory import write_casc_inventory
-from .casclib_source import CascLibDataSource
+from .game_data_inventory import (
+    GameDataInventorySource,
+    GameDataInventoryView,
+    supports_inventory,
+)
+from .game_data_source import GameDataSource, open_game_data_source
 from .safe_output import safe_relative_path, write_bytes_safely
 from .safe_output_models import SafeWriteStatus
 
@@ -52,7 +57,8 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _run_inventory(args: argparse.Namespace) -> int:
-    with CascLibDataSource(str(args.game_dir)) as source:
+    source = _open_inventory_source(args.game_dir)
+    try:
         summary = write_casc_inventory(
             source,
             args.output,
@@ -60,9 +66,12 @@ def _run_inventory(args: argparse.Namespace) -> int:
             listfile=args.listfile,
             limit=args.limit,
         )
+    finally:
+        source.close()
     completeness = "截断预览" if summary.was_limited else "完整"
+    view = "完整 Root" if source.inventory_view is GameDataInventoryView.FULL_ROOT else "已知路径"
     print(
-        f"CASC Root {completeness}：{summary.total} 条，"
+        f"CASC {view} {completeness}：{summary.total} 条，"
         f"真实路径 {summary.resolved_paths}，未知路径 {summary.unknown_paths}；"
         f"{summary.output_path}"
     )
@@ -74,13 +83,31 @@ def _run_extract(args: argparse.Namespace) -> int:
     if relative is None:
         raise CascCliError("unsafe CASC entry name")
     relative_name = str(relative) if len(relative.parts) > 1 else f"UnknownCASC/{relative}"
-    with CascLibDataSource(str(args.game_dir)) as source:
+    source = _open_source(args.game_dir)
+    try:
         payload = source.read_file(args.entry)
+    finally:
+        source.close()
     result = write_bytes_safely(str(args.output_dir), relative_name, payload)
     if result.status is not SafeWriteStatus.WRITTEN:
         raise OSError(result.error or result.status.value)
     print(f"已导出 {args.entry} -> {result.path} ({result.size} bytes)")
     return 0
+
+
+def _open_inventory_source(path: Path) -> GameDataInventorySource:
+    source = _open_source(path)
+    if supports_inventory(source):
+        return source
+    source.close()
+    raise CascCliError("selected game-data source does not support inventory")
+
+
+def _open_source(path: Path) -> GameDataSource:
+    source = open_game_data_source(str(path))
+    if source is None:
+        raise CascCliError("selected game-data source is not readable")
+    return source
 
 
 def _positive_int(value: str) -> int:

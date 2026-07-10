@@ -5,7 +5,9 @@ import os
 from dataclasses import replace
 
 from .archive_source import BytesArchiveSource, PathArchiveSource
+from .base_objects import BASE_OBJECTS
 from .campaign_sources import campaign_inner_maps
+from .client_object_data import merge_client_base_objects
 from .extraction_diagnostics import (
     DiagnosticSeverity,
     ExtractionDiagnostic,
@@ -108,7 +110,8 @@ def _load_map_impl(
             except (KeyError, OSError, UnicodeError, ValueError):
                 cwts = {}
         candidates.extend(collect_object_candidates(archive, cwts, prefix="war3campaign"))
-    populate_object_pipeline(md, candidates)
+    base_objects = merge_client_base_objects(BASE_OBJECTS, load_context.client_base_objects)
+    populate_object_pipeline(md, candidates, base_objects)
 
     md.scripts.update(script_collection.texts)
     script_sources = analysis_script_texts(md)

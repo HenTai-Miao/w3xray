@@ -5,9 +5,10 @@ from __future__ import annotations
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final, Protocol, override
+from typing import Final, override
 
 from .casclib_enumeration import CascEntry, CascNameType
+from .game_data_inventory import GameDataInventorySource
 from .safe_output import write_chunks_safely
 from .safe_output_models import SafeWriteStatus
 
@@ -16,16 +17,6 @@ _CHUNK_BYTES: Final = 64 * 1024
 _HEADER: Final = (
     "名称\t名称类型\tFileDataID\tCKey\tEKey\t大小\t本地可用\tLocaleFlags\tContentFlags\n"
 ).encode()
-
-
-class CascEntrySource(Protocol):
-    """Streaming enumeration capability used by inventory export."""
-
-    def iter_entries(
-        self,
-        mask: str = "*",
-        listfile: str | None = None,
-    ) -> Generator[CascEntry, None, None]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,7 +39,7 @@ class CascInventoryWriteError(OSError):
         return f"cannot write CASC inventory {self.path}: {self.reason}"
 
 
-@dataclass(slots=True)
+@dataclass(slots=True)  # noqa: MUTABLE_OK - streaming counters are updated per emitted row.
 class _InventoryState:
     """Mutable counters accumulated while chunks are streamed to disk."""
 
@@ -59,7 +50,7 @@ class _InventoryState:
 
 
 def write_casc_inventory(
-    source: CascEntrySource,
+    source: GameDataInventorySource,
     output_path: Path,
     *,
     mask: str = "*",
@@ -92,7 +83,7 @@ def write_casc_inventory(
 
 
 def _inventory_chunks(
-    source: CascEntrySource,
+    source: GameDataInventorySource,
     state: _InventoryState,
     mask: str,
     listfile: str | None,

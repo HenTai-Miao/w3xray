@@ -11,7 +11,8 @@ import customtkinter as ctk
 
 from .casc_browser import CascBrowserModel, CascInventoryPage
 from .casclib_enumeration import CascEntry, CascNameType
-from .casclib_source import CascLibDataSource
+from .game_data_inventory import GameDataInventorySource, GameDataInventoryView, supports_inventory
+from .game_data_source import open_game_data_source
 from .theme import FONT, SUBTLE, TEXT, primary_button_style, secondary_button_style
 
 
@@ -27,16 +28,21 @@ class CascBrowserMixin:
 
         def open_source() -> None:
             try:
-                source = CascLibDataSource(path)
+                source = open_game_data_source(path)
             except OSError as exc:
                 message = str(exc)
                 self.after(0, lambda: self.status.configure(text=f"CASC 打开失败：{message}"))
+                return
+            if not supports_inventory(source):
+                if source is not None:
+                    source.close()
+                self.after(0, lambda: self.status.configure(text="所选客户端数据不支持资源枚举"))
                 return
             self.after(0, lambda: self._show_casc_browser(source))
 
         threading.Thread(target=open_source, daemon=True).start()
 
-    def _show_casc_browser(self, source: CascLibDataSource) -> None:
+    def _show_casc_browser(self, source: GameDataInventorySource) -> None:
         current = self._casc_browser_dialog
         if current is not None and current.winfo_exists():
             current.close()
@@ -45,7 +51,11 @@ class CascBrowserMixin:
             source,
             listfile=self.external_listfile_path,
         )
-        self.status.configure(text="CASC Root 已打开；未知路径按 FileDataID/CKey/EKey 显示")
+        if source.inventory_view is GameDataInventoryView.FULL_ROOT:
+            text = "CASC 完整 Root 已打开；未知路径按 FileDataID/CKey/EKey 显示"
+        else:
+            text = "客户端已知路径已打开；仅显示当前数据源可枚举的逻辑路径"
+        self.status.configure(text=text)
 
 
 class CascBrowserDialog(ctk.CTkToplevel):
@@ -54,7 +64,7 @@ class CascBrowserDialog(ctk.CTkToplevel):
     def __init__(
         self,
         parent,
-        source: CascLibDataSource,
+        source: GameDataInventorySource,
         *,
         listfile: str | None,
     ) -> None:

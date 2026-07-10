@@ -16,7 +16,7 @@ from .knowledge_audit import format_knowledge_audit
 from .knowledge_io import format_lines, write_text
 from .knowledge_manifest import format_knowledge_manifest
 from .knowledge_object_exports import (
-    format_box_id_text,
+    format_box_id_text as format_box_id_text,
     format_object_text_icons,
     write_box_ids,
     write_object_ids,
@@ -107,7 +107,7 @@ def write_knowledge_pack(
     eca_object_names = {code: obj.name for code, obj in md.obj_index.items() if obj.name}
     count += write_text(out_dir, "UI文本_TRIGSTR.tsv", format_ui_text_strings_tsv(ui_report))
     count += write_text(out_dir, "UI文本引用.tsv", format_ui_text_references_tsv(ui_report))
-    count += write_resources(md, os.path.join(out_dir, "资源"))
+    count += write_resources(md, os.path.join(out_dir, "资源"), game_data_path)
     count += write_terrain_exports(md, out_dir)
     count += write_unknown_files(md, os.path.join(out_dir, "未知文件"))
     count += write_text(out_dir, "存档读写线索.tsv", format_save_report_tsv(build_save_report(md)))

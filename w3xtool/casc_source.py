@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Generator, Mapping
 from dataclasses import dataclass
 import os
+from typing import final, override
 import zlib
+
+from .game_data_inventory import (
+    GameDataEntry,
+    GameDataInventoryView,
+    inventory_name_matches,
+    known_path_entry,
+)
 
 _PATH_MAP_NAMES = ("w3xray-casc-paths.tsv", ".w3xray-casc-paths.tsv", "Data/w3xray-casc-paths.tsv")
 
@@ -20,17 +29,21 @@ class CascIndexEntry:
 class CascUnsupportedError(Exception):
     feature: str
 
+    @override
     def __str__(self) -> str:
         return f"unsupported CASC feature: {self.feature}"
 
 
+@final
 class CascDataSource:
     """Read files from a local CASC install when a path-to-encoding-key map exists."""
+
+    inventory_view = GameDataInventoryView.KNOWN_PATHS
 
     def __init__(self, root: str):
         self.root = root
         self.data_dir = os.path.join(root, "Data", "data")
-        self._path_to_key = _read_path_map(root)
+        self._path_to_key, self._display_names = _read_path_map(root)
         if not self._path_to_key:
             raise FileNotFoundError("missing w3xray-casc-paths.tsv")
         self._index = _read_indexes(self.data_dir)
@@ -38,17 +51,37 @@ class CascDataSource:
             raise FileNotFoundError("missing readable CASC .idx entries")
 
     def has_file(self, name: str) -> bool:
-        key = self._path_to_key.get(_norm(name))
+        key = _encoding_key_for(self._path_to_key, name)
         return key is not None and key[:9] in self._index
 
     def read_file(self, name: str) -> bytes:
-        key = self._path_to_key.get(_norm(name))
+        key = _encoding_key_for(self._path_to_key, name)
         if key is None:
             raise FileNotFoundError(name)
         entry = self._index.get(key[:9])
         if entry is None:
             raise FileNotFoundError(name)
         return _read_data_block(self.data_dir, entry)
+
+    def iter_entries(
+        self,
+        mask: str = "*",
+        listfile: str | None = None,
+    ) -> Generator[GameDataEntry, None, None]:
+        """Yield path-map names without inventing native Root identities."""
+        _ = listfile
+        for key, name in sorted(self._display_names.items(), key=lambda item: item[0]):
+            if not inventory_name_matches(name, mask):
+                continue
+            encoding_key = self._path_to_key[key]
+            yield known_path_entry(
+                name,
+                size=None,
+                is_local=encoding_key[:9] in self._index,
+            )
+
+    def close(self) -> None:
+        """Release no resources because CASC files are opened per read."""
 
 
 def has_casc_path_map(root: str) -> bool:
@@ -79,22 +112,38 @@ def decode_blte(data: bytes) -> bytes:
     return b"".join(chunks)
 
 
-def _read_path_map(root: str) -> dict[str, bytes]:
+def _read_path_map(root: str) -> tuple[dict[str, bytes], dict[str, str]]:
     for name in _PATH_MAP_NAMES:
         path = os.path.join(root, name)
         if not os.path.isfile(path):
             continue
         result: dict[str, bytes] = {}
+        display_names: dict[str, str] = {}
         with open(path, encoding="utf-8") as handle:
             for line in handle:
                 cleaned = line.strip()
                 if not cleaned or cleaned.startswith("#"):
                     continue
-                parts = cleaned.split()
-                if len(parts) >= 2:
-                    result[_norm(parts[0])] = bytes.fromhex(parts[1])
-        return result
-    return {}
+                parts = cleaned.rsplit(None, 1)
+                if len(parts) == 2:
+                    display = parts[0].replace("/", "\\").lstrip("\\")
+                    key = _norm(display)
+                    result[key] = bytes.fromhex(parts[1])
+                    _ = display_names.setdefault(key, display)
+        return result, display_names
+    return {}, {}
+
+
+def _encoding_key_for(paths: Mapping[str, bytes], name: str) -> bytes | None:
+    query = _norm(name)
+    direct = paths.get(query)
+    if direct is not None:
+        return direct
+    suffixes = tuple(path for path in paths if path.endswith("/" + query))
+    if not suffixes:
+        return None
+    selected = min(suffixes, key=lambda path: (len(path), path))
+    return paths[selected]
 
 
 def _read_indexes(data_dir: str) -> dict[bytes, CascIndexEntry]:
@@ -139,7 +188,7 @@ def _idx_rows_start(data: bytes) -> int:
 def _read_data_block(data_dir: str, entry: CascIndexEntry) -> bytes:
     path = os.path.join(data_dir, f"data.{entry.archive_index:03d}")
     with open(path, "rb") as handle:
-        handle.seek(entry.offset)
+        _ = handle.seek(entry.offset)
         raw = handle.read(entry.size + 30)
     if raw[:4] == b"BLTE":
         return decode_blte(raw)

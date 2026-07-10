@@ -15,6 +15,7 @@ from .casclib_api import (
     CtypesCascLibApi,
 )
 from .casclib_enumeration import CascEntry, CascLibEnumerationApi
+from .game_data_inventory import GameDataInventoryView
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,6 +44,8 @@ class CascEnumerationUnavailableError(OSError):
 
 class CascLibDataSource:
     """Read internal Warcraft III paths from one open CascLib storage."""
+
+    inventory_view = GameDataInventoryView.FULL_ROOT
 
     root: str
     _api: CascLibApi

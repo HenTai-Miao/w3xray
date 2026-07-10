@@ -5,23 +5,12 @@ from __future__ import annotations
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, override
+from typing import override
 
 from .casclib_enumeration import CascEntry, CascNameType
+from .game_data_inventory import GameDataInventorySource
 from .safe_output import safe_relative_path, write_bytes_safely
 from .safe_output_models import SafeWriteStatus
-
-
-class CascInventorySource(Protocol):
-    """Storage capabilities required by the inventory browser."""
-
-    def iter_entries(
-        self,
-        mask: str = "*",
-        listfile: str | None = None,
-    ) -> Generator[CascEntry, None, None]: ...
-
-    def read_file(self, name: str) -> bytes: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,10 +32,10 @@ class CascEntryExportError(OSError):
 class CascBrowserModel:
     """Own a bounded page cursor over a potentially huge CASC root."""
 
-    def __init__(self, source: CascInventorySource, *, page_size: int = 200) -> None:
+    def __init__(self, source: GameDataInventorySource, *, page_size: int = 200) -> None:
         if page_size < 1:
             raise CascEntryExportError(str(page_size), "page size must be positive")
-        self._source: CascInventorySource = source
+        self._source: GameDataInventorySource = source
         self._page_size: int = page_size
         self._mask: str = "*"
         self._listfile: str | None = None

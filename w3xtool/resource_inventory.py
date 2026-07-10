@@ -11,7 +11,7 @@ from .imp import ImportSummary
 from .resources import build_resource_report
 
 if TYPE_CHECKING:
-    from .api import MapData
+    from .map_data import MapData
 
 _IMAGE_EXTS: Final = {"blp", "dds", "tga", "png", "jpg", "jpeg", "bmp"}
 _MODEL_EXTS: Final = {"mdx", "mdl"}
@@ -51,8 +51,11 @@ class ResourceInventory:
 
 
 class ResourceContentRefLike(Protocol):
-    source_path: str
-    target_path: str
+    @property
+    def source_path(self) -> str: ...
+
+    @property
+    def target_path(self) -> str: ...
 
 
 def build_resource_inventory(
@@ -65,7 +68,7 @@ def build_resource_inventory(
     missing_paths: set[str] = set()
     referenced_paths: set[str] = set()
 
-    for path in getattr(md, "all_files", []) or []:
+    for path in md.all_files:
         normalized = _normalize_path(str(path))
         if not _is_investigation_path(normalized):
             continue

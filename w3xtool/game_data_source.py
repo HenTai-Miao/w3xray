@@ -4,11 +4,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
-from typing import Protocol
+from collections.abc import Generator
+from typing import Protocol, final
 
 from .casclib_api import CascLibLoadError, CascNativeError
 from .casclib_source import CascLibDataSource, probe_casclib
 from .casc_source import CascDataSource, has_casc_path_map
+from .game_data_inventory import (
+    GameDataEntry,
+    GameDataInventoryView,
+    inventory_name_matches,
+    known_path_entry,
+)
 
 
 class GameDataSource(Protocol):
@@ -17,6 +24,8 @@ class GameDataSource(Protocol):
     def has_file(self, name: str) -> bool: ...
 
     def read_file(self, name: str) -> bytes: ...
+
+    def close(self) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,8 +36,11 @@ class GameDataProbe:
     backend: str | None = None
 
 
+@final
 class DirectoryDataSource:
     """Read Reforged data exported to ordinary files."""
+
+    inventory_view = GameDataInventoryView.KNOWN_PATHS
 
     def __init__(self, root: str):
         if not os.path.isdir(root):
@@ -36,12 +48,17 @@ class DirectoryDataSource:
         self.root = root
         self._by_rel: dict[str, str] = {}
         self._by_base: dict[str, list[str]] = {}
-        for dirpath, _dirs, files in os.walk(root):
+        self._display_names: dict[str, str] = {}
+        for dirpath, dirs, files in os.walk(root):
+            dirs.sort(key=str.casefold)
+            files.sort(key=str.casefold)
             for filename in files:
                 full = os.path.join(dirpath, filename)
-                rel = os.path.relpath(full, root).replace("\\", "/").lower()
-                self._by_rel[rel] = full
-                self._by_base.setdefault(filename.lower(), []).append(rel)
+                display = os.path.relpath(full, root).replace("/", "\\")
+                rel = _norm(display)
+                _ = self._by_rel.setdefault(rel, full)
+                _ = self._display_names.setdefault(rel, display)
+                self._by_base.setdefault(filename.casefold(), []).append(rel)
         if not self._by_rel:
             raise FileNotFoundError(root)
 
@@ -54,6 +71,24 @@ class DirectoryDataSource:
             raise FileNotFoundError(name)
         with open(path, "rb") as handle:
             return handle.read()
+
+    def iter_entries(
+        self,
+        mask: str = "*",
+        listfile: str | None = None,
+    ) -> Generator[GameDataEntry, None, None]:
+        """Yield sorted paths known from the extracted directory tree."""
+        _ = listfile
+        for key, name in sorted(self._display_names.items(), key=lambda item: item[0]):
+            if inventory_name_matches(name, mask):
+                yield known_path_entry(
+                    name,
+                    size=os.path.getsize(self._by_rel[key]),
+                    is_local=True,
+                )
+
+    def close(self) -> None:
+        """Release no resources because directory reads are opened per call."""
 
     def _resolve(self, name: str) -> str | None:
         query = _norm(name)

@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from tkinter import filedialog
 
-from .game_data_source import probe_game_data_path
+from .game_data_inventory import supports_inventory
+from .game_data_source import open_game_data_source, probe_game_data_path
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class GuiLifecycleMixin:
@@ -21,13 +25,13 @@ class GuiLifecycleMixin:
             with open(self._config_path(), "r", encoding="utf-8") as file:
                 cfg = json.load(file)
         except (OSError, json.JSONDecodeError):
-            pass
+            cfg = {}
         cfg.update(values)
         try:
             with open(self._config_path(), "w", encoding="utf-8") as file:
                 json.dump(cfg, file, ensure_ascii=False)
         except OSError:
-            pass
+            _LOGGER.debug("failed to save GUI configuration", exc_info=True)
 
     def _load_config(self):
         try:
@@ -106,8 +110,14 @@ class GuiLifecycleMixin:
                 probe = probe_game_data_path(self.game_data_path)
                 if not probe.is_readable:
                     label = f"游戏数据: {os.path.basename(self.game_data_path)} 需导出"
-                elif probe.backend == "casclib":
-                    browser_state = "normal"
+                else:
+                    source = open_game_data_source(self.game_data_path)
+                    try:
+                        if supports_inventory(source):
+                            browser_state = "normal"
+                    finally:
+                        if source is not None:
+                            source.close()
             self.game_data_label.configure(text=label)
         if hasattr(self, "data_tools_menu"):
             self.data_tools_menu.entryconfigure("浏览 CASC Root", state=browser_state)
@@ -127,7 +137,7 @@ class GuiLifecycleMixin:
             try:
                 self.icons.close()
             except OSError:
-                pass
+                _LOGGER.debug("failed to close icon resolver during shutdown", exc_info=True)
         self.destroy()
 
     def on_open(self) -> None:
@@ -156,7 +166,7 @@ class GuiLifecycleMixin:
             try:
                 old.close()
             except OSError:
-                pass
+                _LOGGER.debug("failed to close replaced icon resolver", exc_info=True)
         self.icons = resolver
         self._pil_icon_cache = {}
         self._photo_cache = {}
