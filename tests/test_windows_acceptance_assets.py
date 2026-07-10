@@ -18,7 +18,9 @@ def test_windows_acceptance_script_builds_tests_packages_and_runs_exe() -> None:
         "build_casclib.ps1",
         "uv run w3xray-test",
         "uv run w3xray-dist",
-        "魔兽地图提取器.exe",
+        "Get-ChildItem",
+        '"*.exe"',
+        "$Executables.Count -ne 1",
         '"acceptance"',
         '"--require-windows"',
         '"--war3-dir"',
@@ -37,12 +39,31 @@ def test_hosted_windows_workflow_packages_and_executes_artifact() -> None:
         "tools/build_casclib.ps1",
         "uv run w3xray-test",
         "uv run w3xray-dist",
-        "魔兽地图提取器.exe",
+        "Get-ChildItem",
+        '"*.exe"',
+        "$Executables.Count -ne 1",
         "acceptance",
         "--require-windows",
         "actions/upload-artifact@",
     ):
         assert required in workflow
+
+
+def test_real_machine_powershell_51_script_has_no_utf8_source_tokens() -> None:
+    # Windows PowerShell 5.1 reads BOM-less scripts through the legacy code page.
+    script = (_ROOT / "tools" / "run_windows_acceptance.ps1").read_text(encoding="utf-8")
+
+    assert script.isascii()
+
+
+def test_hosted_powershell_51_acceptance_step_has_no_utf8_source_tokens() -> None:
+    workflow = (_ROOT / ".github" / "workflows" / "windows-package.yml").read_text(
+        encoding="utf-8",
+    )
+    acceptance_step = workflow.split("- name: Execute packaged GUI acceptance", maxsplit=1)[1]
+    acceptance_step = acceptance_step.split("- name: Upload executable and evidence", maxsplit=1)[0]
+
+    assert acceptance_step.isascii()
 
 
 def test_casclib_build_preserves_dotted_cmake_policy_version() -> None:

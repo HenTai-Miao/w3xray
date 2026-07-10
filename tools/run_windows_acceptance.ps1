@@ -45,10 +45,12 @@ if ($LASTEXITCODE -ne 0) { throw "uv run w3xray-test failed" }
 & uv run w3xray-dist
 if ($LASTEXITCODE -ne 0) { throw "uv run w3xray-dist failed" }
 
-$Exe = Join-Path $RepoRoot "dist/魔兽地图提取器/魔兽地图提取器.exe"
-if (-not (Test-Path -LiteralPath $Exe -PathType Leaf)) {
-    throw "Packaged executable not found: $Exe"
+$DistDir = Join-Path $RepoRoot "dist"
+$Executables = @(Get-ChildItem -LiteralPath $DistDir -Filter "*.exe" -File -Recurse)
+if ($Executables.Count -ne 1) {
+    throw "Expected exactly one packaged executable, found $($Executables.Count)"
 }
+$Exe = $Executables[0].FullName
 
 New-Item -ItemType Directory -Path $EvidenceDir -Force | Out-Null
 $Report = Join-Path $EvidenceDir "acceptance.json"

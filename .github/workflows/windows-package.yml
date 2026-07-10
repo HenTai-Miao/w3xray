@@ -27,7 +27,11 @@ jobs:
       - name: Execute packaged GUI acceptance
         shell: powershell
         run: |
-          $exe = ".\dist\魔兽地图提取器\魔兽地图提取器.exe"
+          $Executables = @(Get-ChildItem -LiteralPath ".\dist" -Filter "*.exe" -File -Recurse)
+          if ($Executables.Count -ne 1) {
+            throw "Expected exactly one packaged executable, found $($Executables.Count)"
+          }
+          $exe = $Executables[0].FullName
           & $exe acceptance `
             --map ".\tests\fixtures\maps\war3net-map-script-builder.w3x" `
             --campaign ".\tests\fixtures\reference\stormlib-campaign.w3n" `
