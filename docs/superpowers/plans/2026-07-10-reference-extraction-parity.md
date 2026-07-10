@@ -813,7 +813,7 @@ git commit -m "fix: keep campaign child archives readable"
 - Changes CLI/browser construction to `open_game_data_source` instead of direct `CascLibDataSource`.
 - Supplies selected game data to base-object construction and referenced-icon export.
 
-- [ ] **Step 1: Write directory/path-map inventory and enrichment tests**
+- [x] **Step 1: Write directory/path-map inventory and enrichment tests**
 
 ```python
 @pytest.mark.parametrize("source_factory", (directory_source, path_map_source))
@@ -833,13 +833,13 @@ def test_client_icon_used_by_object_is_exported_with_source_label() -> None:
     assert report.items[0].source == "客户端数据"
 ```
 
-- [ ] **Step 2: Run CASC tests and confirm hard-coded backend failures**
+- [x] **Step 2: Run CASC tests and confirm hard-coded backend failures**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_game_data_inventory.py tests/test_game_data_source.py tests/test_gui_casc_browser.py -q -p no:cacheprovider`
 
 Expected: FAIL because only CascLib exposes `iter_entries`, the GUI checks `backend == "casclib"`, and the CLI constructs CascLib directly.
 
-- [ ] **Step 3: Implement the inventory capability adapter**
+- [x] **Step 3: Implement the inventory capability adapter**
 
 ```python
 @runtime_checkable
@@ -854,17 +854,17 @@ def supports_inventory(source: GameDataSource | None) -> TypeGuard[GameDataInven
 
 Directory and path-map sources enumerate their indexed known paths in sorted order and use glob matching. They do not invent FileDataID/CKey/EKey values and report their view as `known_paths`; CascLib keeps `full_root`.
 
-- [ ] **Step 4: Route GUI/CLI and enrichment through the common source**
+- [x] **Step 4: Route GUI/CLI and enrichment through the common source**
 
 Enable the browser when `probe.is_readable` and the opened source supports inventory. CLI inventory/extract opens through `open_game_data_source` and reports whether the view is full Root or known paths. Pass the same source into `load_object_pipeline` for missing base data and into knowledge assets for referenced client icons; label all external bodies explicitly.
 
-- [ ] **Step 5: Run CASC, icon, object, and GUI tests**
+- [x] **Step 5: Run CASC, icon, object, and GUI tests**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_game_data_inventory.py tests/test_casc_source.py tests/test_game_data_source.py tests/test_casc_inventory.py tests/test_gui_casc_browser.py tests/test_icons_cache.py tests/test_object_pipeline.py -q -p no:cacheprovider`
 
 Expected: PASS; Windows-only native tests remain conditionally skipped on macOS.
 
-- [ ] **Step 6: Commit data-source consistency**
+- [x] **Step 6: Commit data-source consistency**
 
 ```bash
 git add w3xtool/game_data_inventory.py w3xtool/game_data_source.py w3xtool/casc_source.py w3xtool/casc_cli.py w3xtool/gui_lifecycle.py w3xtool/gui_casc_browser.py w3xtool/object_pipeline.py w3xtool/knowledge_assets.py w3xtool/knowledge_resource_exports.py tests/test_game_data_inventory.py tests/test_casc_source.py tests/test_game_data_source.py tests/test_gui_casc_browser.py
