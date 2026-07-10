@@ -1,14 +1,9 @@
 """CLI 摘要输出包含地图智能审计结果。"""
-# noqa: SIZE_OK - legacy broad summary coverage; Task 6 only verifies moved re-exports.
 import unittest
 from unittest.mock import patch
 from types import SimpleNamespace
 
 from main import iter_cli_summary_lines, iter_game_config_summary_lines
-from w3xtool.cli_summary import iter_cli_summary_lines as module_cli_summary
-from w3xtool.game_config_summary import (
-    iter_game_config_summary_lines as module_game_config_summary,
-)
 from w3xtool.api import GameObject, MapData
 from w3xtool.gameconfig import GameConfiguration, GameConfigPlayer, NamedGameConfiguration
 from w3xtool.gameplay import GameplayConstant
@@ -39,12 +34,6 @@ def _obj(category, obj_id):
 
 
 class CliAuditTest(unittest.TestCase):
-    def test_main_reexports_responsibility_split_summaries(self):
-        # Given: summary implementations moved out of the process entrypoint.
-        # When/Then: existing main imports remain source-compatible re-exports.
-        self.assertIs(iter_cli_summary_lines, module_cli_summary)
-        self.assertIs(iter_game_config_summary_lines, module_game_config_summary)
-
     def test_cli_summary_includes_audit_warning(self):
         # Given: a map missing war3map.w3i.
         md = MapData(path="x.w3x", name="测试图")

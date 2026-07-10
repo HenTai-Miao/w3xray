@@ -8,9 +8,22 @@ import sys
 
 import pytest
 
+from main import (
+    iter_cli_summary_lines as main_cli_summary,
+    iter_game_config_summary_lines as main_game_config_summary,
+)
 from w3xtool.api import MapData
+from w3xtool.cli_summary import iter_cli_summary_lines
 from w3xtool.cli_options import CliOptionError, CliOptions, parse_cli_options, run_cli
+from w3xtool.game_config_summary import iter_game_config_summary_lines
 from w3xtool.load_context import MapLoadContext
+
+
+def test_main_reexports_responsibility_split_summaries() -> None:
+    # Given: summary implementations live outside the process entrypoint.
+    # When/Then: existing main imports remain source-compatible re-exports.
+    assert main_cli_summary is iter_cli_summary_lines
+    assert main_game_config_summary is iter_game_config_summary_lines
 
 
 def test_parse_cli_options_accepts_all_supported_sources(tmp_path: Path) -> None:
