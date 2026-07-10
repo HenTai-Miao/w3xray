@@ -255,7 +255,7 @@ git commit -m "fix: recover Warcraft text object sources"
 - Produces: `load_object_pipeline(md, archive, wts, *, prefix="war3map", base_objects=BASE_OBJECTS) -> None`.
 - Consumes: Task 2 text records, `parse_object_data`, `parse_category_objects`, and reference extractors.
 
-- [ ] **Step 1: Write pure merge regression tests**
+- [x] **Step 1: Write pure merge regression tests**
 
 ```python
 def test_text_and_binary_candidates_coexist_without_category_suppression() -> None:
@@ -284,13 +284,13 @@ def test_custom_object_inherits_base_without_aliasing_base_id() -> None:
 
 Add separate tests for WTS resolution in text and SLK values, binary+SLK supplementation, duplicate candidates, reference union, and derived search/icon rebuilding.
 
-- [ ] **Step 2: Run merge tests and confirm old behavior loses data**
+- [x] **Step 2: Run merge tests and confirm old behavior loses data**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_object_pipeline.py tests/test_slk_objects.py -q -p no:cacheprovider`
 
 Expected: FAIL because the candidate modules do not exist and binary objects currently reject SLK supplementation.
 
-- [ ] **Step 3: Implement canonical candidates and field priority**
+- [x] **Step 3: Implement canonical candidates and field priority**
 
 ```python
 class ObjectSourceKind(IntEnum):
@@ -323,7 +323,7 @@ class ObjectCandidate:
 
 Canonicalize display aliases (`Name`/`unam`/`anam`/`gnam`, `Propernames`, Tip, Ubertip/description, icon) before merging. For non-display conflicts, binary beats Func; Strings beats other sources only for display fields. Resolve WTS and WESTRING before storing candidate values.
 
-- [ ] **Step 4: Implement merge, inheritance, deduplication, and derived fields**
+- [x] **Step 4: Implement merge, inheritance, deduplication, and derived fields**
 
 ```python
 def build_object_index(objects: Iterable[GameObject]) -> dict[str, GameObject]:
@@ -346,17 +346,17 @@ def merge_object_candidates(
 
 Materialization starts from matching base fields, applies candidate fields by the explicit priority rule, unions references by `(label, code)`, then derives `name`, `icon`, labels, `search_text`, `field_values`, and `field_sources` from the final state.
 
-- [ ] **Step 5: Replace category-level assembly in `api.py`**
+- [x] **Step 5: Replace category-level assembly in `api.py`**
 
 `load_map` must parse WTS before objects, collect all base/SLK/binary/text candidates, call one pipeline, populate each category bucket once, and set `obj_index` only from final `obj_id` values. Remove `_add_text_objects`, `_add_binary_objects`, and binary rejection in `_add_slk_objects`; preserve compatibility wrappers only when an existing test imports them.
 
-- [ ] **Step 6: Run object integration tests**
+- [x] **Step 6: Run object integration tests**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_object_pipeline.py tests/test_slk_objects.py tests/test_base_objects.py tests/test_w3obj.py tests/test_references.py tests/test_static_extraction_workflow.py -q -p no:cacheprovider`
 
 Expected: PASS with no duplicate object codes.
 
-- [ ] **Step 7: Commit the unified object pipeline**
+- [x] **Step 7: Commit the unified object pipeline**
 
 ```bash
 git add w3xtool/object_candidates.py w3xtool/object_pipeline.py w3xtool/api.py w3xtool/slk_objects.py w3xtool/references.py tests/test_object_pipeline.py tests/test_slk_objects.py tests/test_base_objects.py
