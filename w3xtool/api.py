@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import os
 import tempfile
-from dataclasses import dataclass, field, replace
+from dataclasses import replace
 
 from .load_context import MapLoadContext
-from .external_listfile import ExternalListfileReport, validate_external_names
+from .external_listfile import validate_external_names
 from .archive_export import (
     _export_all_impl as _export_all_impl,
     _export_recovered_named_files as _export_recovered_named_files,
@@ -16,6 +16,8 @@ from .archive_export import (
     tmp_extract_dir as tmp_extract_dir,
 )
 from .mpq import MPQArchive, FLAG_EXISTS
+from .archive_source import PathArchiveSource
+from .map_data import GameObject, MapData
 from .map_archive_reader import MapArchiveReader
 from .mpq_files import list_archive_files
 from .w3obj import parse_object_data, EXT_CATEGORY
@@ -59,58 +61,6 @@ def _fmt_value(v) -> str:
             return str(int(v))
         return f"{v:.4g}"
     return str(v)
-
-
-@dataclass
-class GameObject:
-    category: str
-    ext: str
-    obj_id: str
-    base_id: str
-    name: str
-    is_custom: bool
-    fields: list = field(default_factory=list)   # [(label, value_str)]
-    search_text: str = ""
-    icon: str = ""                                # 图标路径(BLP)
-    ref_fields: list = field(default_factory=list)  # 引用字段 [(field_id/列名, [被引用码…])]
-
-    @property
-    def decimal(self):
-        """4 字符码对应的十进制整数(big-endian)，用于和 box 一致显示。"""
-        b = self.obj_id.encode("latin-1", "ignore")[:4].ljust(4, b"\x00")
-        return int.from_bytes(b, "big")
-
-
-@dataclass
-class MapData:
-    path: str
-    name: str
-    objects: dict = field(default_factory=dict)   # category -> [GameObject]
-    scripts: dict = field(default_factory=dict)   # filename -> text
-    all_files: list = field(default_factory=list)
-    external_listfile: ExternalListfileReport | None = None
-    sub_maps: list = field(default_factory=list)   # 战役内含的子地图 MapData
-    obj_index: dict = field(default_factory=dict)  # type_id -> GameObject
-    doodads: list = field(default_factory=list)    # 预放置装饰物/可破坏物 (doo.Doodad)
-    units: list = field(default_factory=list)       # 预放置单位 (doo.Unit)
-    regions: list = field(default_factory=list)     # war3map.w3r 区域
-    cameras: list = field(default_factory=list)     # war3map.w3c 镜头
-    sounds: list = field(default_factory=list)      # war3map.w3s 声音
-    game_configs: list = field(default_factory=list)  # .wgc 游戏/AI 测试配置
-    trigger_summary: object = None                  # war3map.wtg 触发器树摘要
-    preview_icons: object = None                    # war3map.mmp 小地图标记摘要
-    import_summary: object = None                   # 地图/战役导入资源摘要
-    w3i: object = None                              # 地图信息 (w3i.W3iInfo)，无则 None
-    w3f: object = None                              # 战役信息 (w3i.W3fInfo)，仅 .w3n 有
-    references: dict = field(default_factory=dict)  # 正向引用 obj_id -> [(字段标签, [(码, 名字|None)])]
-    referenced_by: dict = field(default_factory=dict)  # 反向 码 -> [(引用者ID, 引用者名, 字段标签)]
-    orphans: list = field(default_factory=list)     # 孤立的自定义对象 [GameObject]
-    ref_low_coverage: bool = False                  # 引用覆盖低(如 SLK 优化图)，孤立判定不可全信
-    script_features: list = field(default_factory=list)  # 脚本用到的暴雪BJ机制(对战开局/随机刷怪…)
-    author_bundle_files: tuple[str, ...] = ()
-
-    def category_counts(self):
-        return {c: len(v) for c, v in self.objects.items()}
 
 
 def _standard_script_text(archive: MapArchiveReader) -> str | None:
@@ -462,7 +412,7 @@ def _load_map_impl(archive: MapArchiveReader, path: str, _depth: int,
         except Exception:
             wts = {}
 
-    md = MapData(path=path, name=_map_name(archive))
+    md = MapData(path=path, name=_map_name(archive), archive_source=PathArchiveSource(path))
     md.author_bundle_files = getattr(archive, "author_bundle_files", ())
     external_report = validate_external_names(archive, load_context.external_names)
     md.external_listfile = external_report if load_context.external_names else None
