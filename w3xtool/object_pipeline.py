@@ -48,6 +48,7 @@ _NON_DISPLAY_ALIASES: Final[Mapping[str, str]] = {
     "hitpoints": "field:unit:hit-points",
     "uhpm": "field:unit:hit-points",
 }
+_BASE_LABEL_ALIASES: Final[Mapping[str, str]] = {"生命": "field:unit:hit-points", "生命上限": "field:unit:hit-points"}
 _EXT_RANK: Final[Mapping[str, int]] = {
     "base": 0,
     "slk": 10,
@@ -178,6 +179,19 @@ def _materialize(
 
 def _select_field(selected: dict[str, ObjectFieldValue], value: ObjectFieldValue) -> None:
     identity = _field_identity(value)
+    if not identity.startswith("display:"):
+        label = value.label.casefold()
+        if value.source_kind is ObjectSourceKind.BASE:
+            if any(
+                existing.source_kind is not ObjectSourceKind.BASE
+                and existing.label.casefold() == label
+                for existing in selected.values()
+            ):
+                return
+        else:
+            for existing_identity, existing in tuple(selected.items()):
+                if existing.source_kind is ObjectSourceKind.BASE and existing.label.casefold() == label:
+                    del selected[existing_identity]
     previous = selected.get(identity)
     if previous is None or _field_rank(value, identity) > _field_rank(previous, identity):
         selected[identity] = value
@@ -189,7 +203,13 @@ def _field_identity(value: ObjectFieldValue) -> str:
     if alias is None and key.startswith("display:"):
         alias = key
     non_display_key = key.removeprefix("binary:")
-    return alias or _NON_DISPLAY_ALIASES.get(non_display_key) or f"field:{value.label.casefold()}"
+    if alias is not None:
+        return alias
+    if value.source_kind is ObjectSourceKind.BASE:
+        return _BASE_LABEL_ALIASES.get(value.label.casefold(), f"base:{value.label.casefold()}")
+    semantic_alias = _NON_DISPLAY_ALIASES.get(non_display_key)
+    raw_key = value.key[len("binary:"):] if key.startswith("binary:") else value.key
+    return semantic_alias or f"field:{raw_key}"
 
 
 def _public_field_key(identity: str, value: ObjectFieldValue) -> str:

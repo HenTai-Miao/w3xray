@@ -72,3 +72,39 @@ def test_strings_non_display_does_not_override_slk() -> None:
     # Then: Strings does not win outside display fields.
     assert merged.fields == [("生命", "1000")]
     assert merged.field_sources == {"HP": "UnitBalance.slk"}
+
+
+def test_distinct_raw_fields_with_the_same_label_are_preserved() -> None:
+    # Given: two real ability fields share one generated presentation label.
+    first = _candidate(
+        "Adm2", label_for("Adm2"), "11", "war3map.w3a", ObjectSourceKind.BINARY
+    )
+    second = _candidate(
+        "Ams1", label_for("Ams1"), "22", "war3map.w3a", ObjectSourceKind.BINARY
+    )
+
+    # When: both fields are materialized.
+    merged = merge_object_candidates((first, second), {})[0]
+
+    # Then: raw-field identity prevents either value from being discarded.
+    assert merged.field_values["Adm2"] == "11"
+    assert merged.field_values["Ams1"] == "22"
+    assert merged.fields.count(("召唤单位伤害", "11")) == 1
+    assert merged.fields.count(("召唤单位伤害", "22")) == 1
+
+
+def test_explicit_field_still_replaces_matching_inherited_base_label() -> None:
+    # Given: an explicit binary field and an inherited base field share a label.
+    binary = _candidate(
+        "uhpm", label_for("uhpm"), "2500", "war3map.w3u", ObjectSourceKind.BINARY
+    )
+
+    # When: the custom object inherits its base.
+    merged = merge_object_candidates(
+        (binary,),
+        {"hfoo": ("单位", [("生命上限", "420")])},
+    )[0]
+
+    # Then: the explicit value replaces, rather than duplicates, the base value.
+    assert merged.fields == [("生命上限", "2500")]
+    assert merged.field_values == {"uhpm": "2500"}

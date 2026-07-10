@@ -16,19 +16,20 @@ U9 失落的宿命图：自定义技能名字来自 `Units\*AbilityStrings.txt`(
   - 可破坏物=DestructableData.slk　科技=UpgradeData.slk　装饰物=Doodads.slk
   - 单位=UnitData.slk(+UnitBalance/UnitUI/UnitWeapons/UnitAbilities 同码合并)
   - 在 MPQ 里按 根 / `Units\` / `Doodads\` 不区分大小写查找。
-- **每行 → 对象**：键=对象码(行键)；字段={SLK列名→值}(常用列给中文标签，其余原样列名)；
-  名字优先取已解析 txt 对象名 → SLK `Name` 列(WESTRING/wts 还原) → base_names → 码。
+- **每行 → 候选**：键=对象码(行键)；字段={SLK列名→值}(常用列给中文标签，其余原样列名)；
+  WTS/WESTRING 在候选阶段解析，最终名字由统一对象管线从全部来源的获胜字段重建。
 - **引用**：复用 `references.extract_refs_by_column(fields, 分类)`(上轮为文本对象做的，按 SLK 列名抽
   BuffID/EfctID/UnitID1/Requires…)，天生匹配 SLK 列。
 
 ## 合并语义（不重复计数）
-- 码已在 `obj_index`(来自二进制 .w3a 或 txt) → **增补**：SLK 字段/引用并进现有对象，名字保留原有。
-- 码不存在 → 新建 `GameObject(ext='slk')`，并入对应分类与 obj_index。
+- SLK、Func/Strings、二进制和基础对象先转换为不可变候选，再按 `(分类, 对象码)` 一次合并。
+- SLK 补充二进制未修改的字段和引用；同一非显示字段由二进制获胜，显示字段由 Strings 获胜。
+- 最终统一重建 `GameObject`、分类 bucket 和仅含真实 `obj_id` 的索引。
 - 跳过明显的表头/非对象行(行键非 4 字符 / 等于列名占位)。
 
 ## 接入
-- `api.load_map`：`_add_text_objects`/`_add_binary_objects` 之后加 `_add_slk_objects(md, archive, wts)`；
-  随后 `build_reference_graph` 自动吃到新 ref_fields。
+- `map_loader.load_map` 先收集地图级与战役级全部候选，再调用一次统一对象管线；
+  随后 `build_reference_graph` 使用最终 `ref_fields`。
 
 ## 价值与诚实边界
 - 主价值：恢复 SLK 优化图的**字段数据 + 对象引用**；低覆盖自检多半 True→False。

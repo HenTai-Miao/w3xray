@@ -16,7 +16,7 @@
 - 科技：comments,sort,version,InBeta
 - 单位：sort,comment,comments,InBeta,version,sortBalance,sort2,sortUI,inEditor,hiddenInEditor,sortWeap,sortAbil
 - 全类再加冗余 `code`（对象自己的码）。
-`api._add_slk_objects` 构建/增补字段时跳过这些列。
+`object_candidates` 收集 SLK 候选字段时跳过这些列，再交给统一对象管线合并。
 
 ## ② 等级后缀列的中文标签
 `SLK_BASE_LABELS = {基名: 标签}`：Cast→施法间隔、Cool→冷却、Cost→魔法消耗、Dur→持续时间、
