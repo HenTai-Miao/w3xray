@@ -280,6 +280,79 @@ def test_path_checked_fallback_writes_output(
     assert (tmp_path / "assets" / "x.bin").read_bytes() == b"fallback"
 
 
+def test_chunk_writer_fallback_publishes_only_after_all_chunks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: an existing target and the Windows-style path-checked fallback.
+    monkeypatch.setattr(safe_output, "_ANCHORED_WRITES_AVAILABLE", False)
+    output = tmp_path / "inventory.tsv"
+    _ = output.write_bytes(b"before")
+
+    def chunks() -> Iterator[bytes]:
+        yield b"new-"
+        assert output.read_bytes() == b"before"
+        yield b"data"
+
+    # When: staged chunks are written and published.
+    result = safe_output.write_chunks_safely(str(tmp_path), output.name, chunks())
+
+    # Then: the complete payload atomically replaces the old target.
+    assert result.status is SafeWriteStatus.WRITTEN
+    assert result.size == len(b"new-data")
+    assert output.read_bytes() == b"new-data"
+    assert not tuple(tmp_path.glob(".w3xray-stage-*.tmp"))
+
+
+def test_chunk_writer_fallback_preserves_target_when_source_raises(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: a chunk source that fails after producing partial staged data.
+    monkeypatch.setattr(safe_output, "_ANCHORED_WRITES_AVAILABLE", False)
+    output = tmp_path / "inventory.tsv"
+    _ = output.write_bytes(b"before")
+
+    def chunks() -> Iterator[bytes]:
+        yield b"partial"
+        raise RuntimeError("enumeration failed")
+
+    # When: the source raises before publication.
+    with pytest.raises(RuntimeError, match="enumeration failed"):
+        _ = safe_output.write_chunks_safely(str(tmp_path), output.name, chunks())
+
+    # Then: the prior target and directory are unchanged.
+    assert output.read_bytes() == b"before"
+    assert tuple(tmp_path.iterdir()) == (output,)
+
+
+def test_chunk_writer_fallback_rejects_replaced_staged_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: another process replaces the private stage before publication.
+    monkeypatch.setattr(safe_output, "_ANCHORED_WRITES_AVAILABLE", False)
+    output = tmp_path / "inventory.tsv"
+    _ = output.write_bytes(b"before")
+    original_writer = safe_output.write_chunks_to_descriptor
+
+    def replacing_writer(descriptor: int, chunks: Iterator[bytes]) -> int:
+        size = original_writer(descriptor, chunks)
+        staged = next(tmp_path.glob(".w3xray-stage-*.tmp"))
+        staged.unlink()
+        _ = staged.write_bytes(b"attacker-data")
+        return size
+
+    monkeypatch.setattr(safe_output, "write_chunks_to_descriptor", replacing_writer)
+
+    # When: the completed stage is about to replace an existing target.
+    result = safe_output.write_chunks_safely(str(tmp_path), output.name, (b"trusted",))
+
+    # Then: inode ownership fails closed and the existing target survives.
+    assert result.status is SafeWriteStatus.UNSAFE
+    assert output.read_bytes() == b"before"
+
+
 @pytest.mark.skipif(os.name != "posix", reason="requires POSIX mode bits")
 def test_new_output_file_mode_is_0600(tmp_path: Path) -> None:
     result = write_bytes_safely(str(tmp_path), "x.bin", b"x")

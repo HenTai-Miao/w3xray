@@ -1,0 +1,46 @@
+name: Windows package acceptance
+
+on:
+  push:
+    branches: [local]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install Python dependencies
+        run: uv sync --dev
+      - name: Build pinned x64 CascLib
+        shell: powershell
+        run: powershell -ExecutionPolicy Bypass -File tools/build_casclib.ps1
+      - name: Run full test suite
+        run: uv run w3xray-test
+      - name: Build onedir executable
+        run: uv run w3xray-dist
+      - name: Execute packaged GUI acceptance
+        shell: powershell
+        run: |
+          $exe = ".\dist\魔兽地图提取器\魔兽地图提取器.exe"
+          & $exe acceptance `
+            --map ".\tests\fixtures\maps\war3net-map-script-builder.w3x" `
+            --campaign ".\tests\fixtures\reference\stormlib-campaign.w3n" `
+            --output ".\artifacts\windows-package" `
+            --report ".\artifacts\windows-package\acceptance.json" `
+            --repeat 5 `
+            --require-windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload executable and evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: w3xray-windows-onedir
+          path: |
+            dist/魔兽地图提取器/
+            artifacts/windows-package/acceptance.json
+          if-no-files-found: error

@@ -103,6 +103,7 @@ def test_gui_loader_builds_schema_and_external_context_from_selected_sources() -
         prepare=prepare,
         external_names=("hidden/config.json",),
         game_data_path=str(trigger_dir),
+        author_bundle_path="author-bundle",
     )
 
     # Then: WTG parsing receives both the names and loaded trigger schema.
@@ -110,6 +111,7 @@ def test_gui_loader_builds_schema_and_external_context_from_selected_sources() -
     assert captured[0].external_names == ("hidden/config.json",)
     assert captured[0].trigger_schema is not None
     assert captured[0].trigger_schema.has_trigger_strings
+    assert captured[0].author_bundle_path == "author-bundle"
 
 
 def test_repeated_pack_exports_do_not_mutate_map_file_listing(tmp_path) -> None:

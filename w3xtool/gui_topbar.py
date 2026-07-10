@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import tkinter as tk
+
 import customtkinter as ctk
 
 from .theme import (
@@ -63,6 +65,24 @@ def build_topbar(app) -> None:
     app.external_listfile_clear.pack(side="left", padx=(0, 4))
     _add_source_selector(source_tools, "游戏数据", app.on_pick_game_data_dir)
     app.game_data_label = _source_label(source_tools, "游戏数据: 未选")
+    app.data_tools_menu = tk.Menu(app, tearoff=False)
+    app.data_tools_menu.add_command(label="浏览 CASC Root", command=app.on_browse_game_data)
+    app.data_tools_menu.add_separator()
+    app.data_tools_menu.add_command(label="选择作者明文补充包", command=app.on_pick_author_bundle)
+    app.data_tools_menu.add_command(label="清除作者明文补充包", command=app.on_clear_author_bundle)
+    app.data_tools_menu.add_separator()
+    app.data_tools_menu.add_command(label="分析真实存档文件", command=app.on_analyze_real_save_file)
+    app.data_tools_menu.add_command(label="分析真实存档目录", command=app.on_analyze_real_save_directory)
+    app.data_tools_button = ctk.CTkButton(
+        source_tools,
+        text="数据工具",
+        width=68,
+        height=26,
+        font=(FONT, 11),
+        command=lambda: _popup_data_tools(app),
+        **secondary_button_style(),
+    )
+    app.data_tools_button.pack(side="left", padx=(0, 4))
     actions = ctk.CTkFrame(bar, fg_color="transparent")
     actions.pack(side="right", padx=(0, 12))
     for text, width, command in (
@@ -98,3 +118,8 @@ def _source_label(parent, text: str):
     label = ctk.CTkLabel(parent, text=text, font=(FONT, 10), text_color=SUBTLE, width=92, anchor="w")
     label.pack(side="left", padx=(0, 6))
     return label
+
+
+def _popup_data_tools(app) -> None:
+    button = app.data_tools_button
+    app.data_tools_menu.tk_popup(button.winfo_rootx(), button.winfo_rooty() + button.winfo_height())

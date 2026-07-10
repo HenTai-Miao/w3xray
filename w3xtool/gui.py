@@ -8,9 +8,11 @@ import customtkinter as ctk
 
 from .api import MapData
 from .gui_clipboard import ClipboardMixin
+from .gui_casc_browser import CascBrowserMixin
 from .gui_data_refresh import DataRefreshMixin
 from .gui_data_tabs import DataTabLayoutMixin
 from .gui_export_actions import ExportActionsMixin
+from .gui_external_data import ExternalDataToolsMixin
 from .gui_icon_cache import IconCacheMixin
 from .gui_lifecycle import GuiLifecycleMixin
 from .gui_load_settings import LoadSettingsMixin
@@ -30,6 +32,8 @@ ctk.set_default_color_theme("green")
 
 
 class App(
+    CascBrowserMixin,
+    ExternalDataToolsMixin,
     LoadSettingsMixin,
     IconCacheMixin,
     ModuleRefreshMixin,
@@ -65,6 +69,7 @@ class App(
         self.icons = None
         self.external_listfile_path = None
         self.game_data_path = None
+        self.author_bundle_path = None
         self.mode = "battle"
         self._campaign_views = None
         self._campaign_path = None
@@ -75,6 +80,7 @@ class App(
         self._photo_cache = {}
         self._row_imgs = []
         self._blank = None
+        self._casc_browser_dialog = None
 
         self._init_load_options()
         self._init_background_loader()

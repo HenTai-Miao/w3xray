@@ -4,7 +4,8 @@ SLK 优化图(本工具借鉴来源的工具包产物)把对象数据转成 *Dat
 slk_objects 能解出对象与字段，并配合 references.extract_refs_by_column 抽出引用。
 真图断言用随包的 U9 失落的宿命(若存在)。
 """
-import os
+import hashlib
+from pathlib import Path
 import unittest
 
 from w3xtool.slk_objects import (
@@ -12,8 +13,8 @@ from w3xtool.slk_objects import (
 )
 from w3xtool.references import extract_refs_by_column
 
-U9 = (r"C:/Users/zhongerbing/Downloads/魔兽ID拖入无反应解决方法/"
-      r"拖入无反应解决方法/new_U9_SYR_失落的宿命1.52.w3x")
+REFERENCE_MAP = Path(__file__).parent / "fixtures" / "reference" / "stormlib-slk-map.w3x"
+REFERENCE_MAP_SHA256 = "eee3f01c2dbe16a22913b4a621780452dc2febe0557a97c54479e8742ec73b9f"
 
 
 def _slk(cols, rows):
@@ -102,12 +103,14 @@ class ParseCategoryTest(unittest.TestCase):
             self.assertIn(cat, SLK_CATEGORY_FILES)
 
 
-@unittest.skipUnless(os.path.exists(U9), "需要 U9 失落的宿命样本图")
-class U9RealMapTest(unittest.TestCase):
+class ReferenceSlkMapTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         from w3xtool.api import load_map
-        cls.md = load_map(U9)
+        cls.md = load_map(str(REFERENCE_MAP))
+
+    def test_reference_fixture_hash_is_pinned(self):
+        self.assertEqual(hashlib.sha256(REFERENCE_MAP.read_bytes()).hexdigest(), REFERENCE_MAP_SHA256)
 
     def test_slk_objects_parsed(self):
         slk_objs = [o for objs in self.md.objects.values() for o in objs if o.ext == "slk"]
@@ -134,11 +137,6 @@ class U9RealMapTest(unittest.TestCase):
         for noise in ("code", "comments", "version", "sort", "InBeta"):
             self.assertNotIn(noise, labels)
         self.assertTrue(any("(等级" in lab for lab in labels))   # 如 施法间隔 (等级2)
-
-    def test_low_coverage_caveat_kept(self):
-        # U9 仍缺单位→技能入边，孤立仍不可全信 → 低覆盖提醒应保留
-        self.assertTrue(self.md.ref_low_coverage)
-
 
 if __name__ == "__main__":
     unittest.main()

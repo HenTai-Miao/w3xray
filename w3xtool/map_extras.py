@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .api import MapData
     from .load_context import MapLoadContext
-    from .mpq import MPQArchive
+    from .map_archive_reader import MapArchiveReader
 
 
-def add_world_metadata(md: "MapData", archive: "MPQArchive", wts: dict) -> None:
+def add_world_metadata(md: "MapData", archive: "MapArchiveReader", wts: dict) -> None:
     """Load regions, cameras and sounds from World Editor metadata files."""
     from .w3world import parse_cameras, parse_regions, parse_sounds
 
@@ -31,7 +31,7 @@ def add_world_metadata(md: "MapData", archive: "MPQArchive", wts: dict) -> None:
             md.sounds = []
 
 
-def add_game_configs(md: "MapData", archive: "MPQArchive") -> None:
+def add_game_configs(md: "MapData", archive: "MapArchiveReader") -> None:
     """Load visible .wgc game configurations without failing map loading."""
     from .gameconfig import (
         NamedGameConfiguration,
@@ -50,7 +50,7 @@ def add_game_configs(md: "MapData", archive: "MPQArchive") -> None:
     md.game_configs = configs
 
 
-def add_trigger_summary(md: "MapData", archive: "MPQArchive", load_context: "MapLoadContext | None" = None) -> None:
+def add_trigger_summary(md: "MapData", archive: "MapArchiveReader", load_context: "MapLoadContext | None" = None) -> None:
     """Load a trigger tree summary from war3map.wtg when present."""
     if not archive.has_file("war3map.wtg"):
         return
@@ -63,7 +63,7 @@ def add_trigger_summary(md: "MapData", archive: "MPQArchive", load_context: "Map
         md.trigger_summary = None
 
 
-def add_preview_icons(md: "MapData", archive: "MPQArchive") -> None:
+def add_preview_icons(md: "MapData", archive: "MapArchiveReader") -> None:
     """Load minimap preview icons from war3map.mmp when present."""
     if not archive.has_file("war3map.mmp"):
         return
@@ -75,7 +75,7 @@ def add_preview_icons(md: "MapData", archive: "MPQArchive") -> None:
         md.preview_icons = None
 
 
-def add_import_summary(md: "MapData", archive: "MPQArchive") -> None:
+def add_import_summary(md: "MapData", archive: "MapArchiveReader") -> None:
     """Load map/campaign import tables with missing-file diagnostics."""
     from .mpq_files import import_tables_from_archive
 
@@ -101,7 +101,7 @@ def add_import_summary(md: "MapData", archive: "MPQArchive") -> None:
     )
 
 
-def _resolve_import_path(archive: "MPQArchive", entry) -> str | None:
+def _resolve_import_path(archive: "MapArchiveReader", entry) -> str | None:
     for path in entry.candidate_paths:
         if archive.has_file(path):
             return path

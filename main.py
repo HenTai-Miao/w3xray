@@ -13,6 +13,18 @@ __all__ = ("iter_cli_summary_lines", "iter_game_config_summary_lines", "main")
 
 def main() -> None:
     """Dispatch legacy game-config, map CLI, or GUI startup modes."""
+    if len(sys.argv) >= 2 and sys.argv[1] == "acceptance":
+        from w3xtool.acceptance_cli import run_acceptance_cli
+
+        raise SystemExit(run_acceptance_cli(tuple(sys.argv[2:])))
+    if len(sys.argv) >= 2 and sys.argv[1] == "casc":
+        from w3xtool.casc_cli import run_casc_cli
+
+        raise SystemExit(run_casc_cli(tuple(sys.argv[2:])))
+    if len(sys.argv) >= 2 and sys.argv[1] == "save":
+        from w3xtool.real_save_cli import run_real_save_cli
+
+        raise SystemExit(run_real_save_cli(tuple(sys.argv[2:])))
     if len(sys.argv) >= 3 and sys.argv[1] in {"wgc", "gameconfig"}:
         from w3xtool.gameconfig import read_game_configuration_file
 

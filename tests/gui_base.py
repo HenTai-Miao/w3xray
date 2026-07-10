@@ -52,6 +52,7 @@ class GuiTestCase(unittest.TestCase):
         app.map_data = None
         app.external_listfile_path = None
         app.game_data_path = None
+        app.author_bundle_path = None
         app._refresh_external_source_labels()
         app.recipes = []
         app._apply_load_options(default_load_options(), persist=False, refresh=False)

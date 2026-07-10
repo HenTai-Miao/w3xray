@@ -1,7 +1,7 @@
 # 设计：补全真实 WTG、CASC 与静态提取工作流
 
 - 日期：2026-07-10
-- 状态：已批准设计，待实施
+- 状态：已实施；真实 Windows 魔兽安装仍需在指定 self-hosted 环境留存验收证据
 - 范围：`w3xray` 的只读地图分析、资料包、桌面 GUI、CLI 和 Windows 打包
 
 ## 背景
@@ -274,3 +274,25 @@ GUI/CLI 选择地图、listfile、游戏数据
 5. 统一安全写入和保护图诊断。
 6. 实现 CascLib 后端、打包和 Windows 集成测试。
 7. 补 CLI、文档和全套回归。
+
+## 环境闭环扩展
+
+用户随后要求把发布审计中列出的环境与样本缺口一并收口，实施遵守本设计原有的
+静态边界：
+
+- CascLib 增加 `CascFindFirstFile/Next/Close` 的 x64 ABI，枚举 Root 和未被 Root
+  命名的 encoding 条目；未知原路径使用 CascLib 原生 FileDataID/CKey/EKey 名称。
+- GUI 使用 200 条分页游标，不把完整客户端一次写入 Treeview；CLI 可输出完整 TSV
+  或按稳定标识导出单文件。
+- 增加源码/打包 EXE 共用的 acceptance 子命令，以及 hosted Windows 打包工作流和
+  真实安装专用 self-hosted 工作流。报告必须区分 PASS/FAIL/SKIP。
+- 增加绑定源地图 SHA256、逐文件 SHA256 和安全相对路径的作者明文补充包。它只读取
+  作者提供的明文，不执行 loader，不读进程内存。
+- 增加真实存档文件/目录的只读证据分析，覆盖文本、Preload、JSON、INI 和可打开的
+  MPQ；不透明二进制只记录大小、哈希和诊断。
+- 用 StormLib 写出的真实 MPQ v1 fixture 替换写死本机路径的战役、Huffman 和旧 SLK
+  测试。fixture 输入、源码 commit、许可证与 SHA256 均固定在仓库中。
+
+真实 Windows 魔兽安装是外部环境验收，不可由 macOS 单元测试伪造。只有
+`windows-real-war3.yml` 在带 `w3xray-war3` 标签的机器上产出通过报告后，文档才能把
+该项从“已实现、待真机证据”改成“真机已验证”。

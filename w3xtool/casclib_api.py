@@ -8,6 +8,14 @@ from pathlib import Path
 import sys
 from typing import Final, Protocol, override
 
+from .casclib_enumeration import (
+    ERROR_NO_MORE_FILES,
+    CascEntry,
+    CascFindData,
+    bind_enumeration_signatures,
+    entry_from_find_data,
+)
+
 ERROR_FILE_NOT_FOUND: Final = 2
 ERROR_PROC_NOT_FOUND: Final = 127
 MAX_CASC_FILE_SIZE: Final = 40 * 1024 * 1024
@@ -153,6 +161,7 @@ class CtypesCascLibApi:
         self._library.CascCloseFile.restype = ctypes.c_bool
         self._library.GetCascError.argtypes = []
         self._library.GetCascError.restype = ctypes.c_uint32
+        bind_enumeration_signatures(self._library)
 
     def open_storage(self, path: str) -> int:
         handle = ctypes.c_void_p()
@@ -166,7 +175,7 @@ class CtypesCascLibApi:
 
     def open_file(self, storage: int, name: str) -> int:
         handle = ctypes.c_void_p()
-        internal_name = name.replace("/", "\\").encode("ascii") + b"\0"
+        internal_name = name.replace("/", "\\").encode("utf-8") + b"\0"
         if not self._library.CascOpenFile(
             ctypes.c_void_p(storage),
             internal_name,
@@ -211,6 +220,40 @@ class CtypesCascLibApi:
     def close_file(self, handle: int) -> None:
         if not self._library.CascCloseFile(ctypes.c_void_p(handle)):
             raise self._error("CascCloseFile")
+
+    def find_first(
+        self,
+        storage: int,
+        mask: str,
+        listfile: str | None,
+    ) -> tuple[int, CascEntry] | None:
+        data = CascFindData()
+        search = self._library.CascFindFirstFile(
+            ctypes.c_void_p(storage),
+            mask.encode("utf-8") + b"\0",
+            ctypes.byref(data),
+            listfile,
+        )
+        value = ctypes.c_void_p(search).value
+        if value == ctypes.c_void_p(-1).value or value is None:
+            error_code = self._native_error()
+            if error_code in {0, ERROR_NO_MORE_FILES}:
+                return None
+            raise CascNativeError("CascFindFirstFile", error_code)
+        return value, entry_from_find_data(data)
+
+    def find_next(self, search: int) -> CascEntry | None:
+        data = CascFindData()
+        if self._library.CascFindNextFile(ctypes.c_void_p(search), ctypes.byref(data)):
+            return entry_from_find_data(data)
+        error_code = self._native_error()
+        if error_code in {0, ERROR_NO_MORE_FILES}:
+            return None
+        raise CascNativeError("CascFindNextFile", error_code)
+
+    def close_find(self, search: int) -> None:
+        if not self._library.CascFindClose(ctypes.c_void_p(search)):
+            raise self._error("CascFindClose")
 
     def _native_error(self) -> int:
         return self._get_casc_error()

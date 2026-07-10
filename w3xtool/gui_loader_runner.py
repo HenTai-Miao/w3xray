@@ -49,6 +49,7 @@ class BackgroundLoaderMixin:
     def _start_path_load(self, path: str) -> None:
         options = dict(self.load_options)
         game_data_path = self.game_data_path
+        author_bundle_path = self.author_bundle_path
         external_names = read_external_listfile(self.external_listfile_path)
         self._start_loader_job(
             status=f"正在解析 {os.path.basename(path)} …",
@@ -57,6 +58,7 @@ class BackgroundLoaderMixin:
                 load_options=options,
                 game_data_path=game_data_path,
                 external_names=external_names,
+                author_bundle_path=author_bundle_path,
             ),
             error_status="解析失败",
             source_path=path,
@@ -78,6 +80,7 @@ class BackgroundLoaderMixin:
         camp = self._dir_campaigns[index]
         path = camp["path"]
         game_data_path = self.game_data_path
+        author_bundle_path = self.author_bundle_path
         external_names = read_external_listfile(self.external_listfile_path)
         self._start_loader_job(
             status=f"正在解析战役 {camp['name']} …",
@@ -86,6 +89,7 @@ class BackgroundLoaderMixin:
                 path,
                 game_data_path=game_data_path,
                 external_names=external_names,
+                author_bundle_path=author_bundle_path,
             ),
             error_status="战役解析失败",
             source_path=path,

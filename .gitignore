@@ -10,6 +10,7 @@ wheels/
 .venv
 
 # 杂项 / 本地产物
+.DS_Store
 BsodInfo.bin
 *.png
 third_party/CascLib/bin/win-x64/CascLib.dll

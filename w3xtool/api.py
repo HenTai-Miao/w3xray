@@ -3,19 +3,20 @@ from __future__ import annotations
 
 import os
 import tempfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from .load_context import MapLoadContext
 from .external_listfile import ExternalListfileReport, validate_external_names
 from .archive_export import (
-    _export_all_impl,
-    _export_recovered_named_files,
-    _imported_names,
-    _safe_export_path,
-    export_all_files,
-    tmp_extract_dir,
+    _export_all_impl as _export_all_impl,
+    _export_recovered_named_files as _export_recovered_named_files,
+    _imported_names as _imported_names,
+    _safe_export_path as _safe_export_path,
+    export_all_files as export_all_files,
+    tmp_extract_dir as tmp_extract_dir,
 )
 from .mpq import MPQArchive, FLAG_EXISTS
+from .map_archive_reader import MapArchiveReader
 from .mpq_files import list_archive_files
 from .w3obj import parse_object_data, EXT_CATEGORY
 from .wts import parse_wts, resolve
@@ -106,12 +107,13 @@ class MapData:
     orphans: list = field(default_factory=list)     # 孤立的自定义对象 [GameObject]
     ref_low_coverage: bool = False                  # 引用覆盖低(如 SLK 优化图)，孤立判定不可全信
     script_features: list = field(default_factory=list)  # 脚本用到的暴雪BJ机制(对战开局/随机刷怪…)
+    author_bundle_files: tuple[str, ...] = ()
 
     def category_counts(self):
         return {c: len(v) for c, v in self.objects.items()}
 
 
-def _standard_script_text(archive: MPQArchive) -> str | None:
+def _standard_script_text(archive: MapArchiveReader) -> str | None:
     for fn in ("war3map.j", "war3map.lua"):
         if archive.has_file(fn):
             try:
@@ -131,7 +133,7 @@ def _best_script_text(scripts: dict):
     return None
 
 
-def _build_objects(archive: MPQArchive, ext: str, wts: dict, prefix: str = "war3map"):
+def _build_objects(archive: MapArchiveReader, ext: str, wts: dict, prefix: str = "war3map"):
     fn = prefix + "." + ext
     if not archive.has_file(fn):
         return []
@@ -189,7 +191,7 @@ def _build_objects(archive: MPQArchive, ext: str, wts: dict, prefix: str = "war3
     return result
 
 
-def _add_text_objects(md: "MapData", archive: MPQArchive):
+def _add_text_objects(md: "MapData", archive: MapArchiveReader):
     """扫描地图里的"文本格式对象档"(INI: [码] Name=.. Tip=.. Ubertip=..)，解析为带名对象。
 
     很多地图把 单位/物品/技能/科技 存成文本档(文件名不固定)，靠内容识别。
@@ -260,7 +262,7 @@ def _add_text_objects(md: "MapData", archive: MPQArchive):
 _BINARY_EXTS = {"w3u", "w3t", "w3a", "w3q", "w3b", "w3d", "w3h"}
 
 
-def _add_slk_objects(md: "MapData", archive: MPQArchive, wts: dict):
+def _add_slk_objects(md: "MapData", archive: MapArchiveReader, wts: dict):
     """解析地图内嵌的 *Data.slk 对象数据（SLK 优化图），并入/增补对象表。
 
     SLK 优化图把对象数据转成 SLK；二进制/文本路径都读不到，故技能等只剩名字、丢了字段与
@@ -374,7 +376,7 @@ def _add_script_refs(md: "MapData", script_text: str, shared_index: dict | None 
             md.obj_index[code] = obj
 
 
-def _map_name(archive: MPQArchive) -> str:
+def _map_name(archive: MapArchiveReader) -> str:
     # 从 HM3W 头读地图名
     try:
         data = archive._data
@@ -401,7 +403,7 @@ def quick_map_name(path: str) -> str:
     return os.path.basename(path)
 
 
-def _add_binary_objects(md: "MapData", archive: MPQArchive, wts: dict,
+def _add_binary_objects(md: "MapData", archive: MapArchiveReader, wts: dict,
                         text_cats: set, prefix: str):
     """解析 <prefix>.w3u/w3t/... 二进制对象档并并入 md；文本档已覆盖的类别跳过。"""
     for ext in OBJECT_EXTS:
@@ -427,14 +429,31 @@ def load_map(
     path = os.fspath(path)
     if load_context is None:
         load_context = MapLoadContext()
-    archive = MPQArchive(path)
+    from .author_plaintext_bundle import PlaintextOverlayArchive, load_author_plaintext_bundle
+
+    bundle = None
+    if _depth == 0 and load_context.author_bundle_path is not None:
+        bundle = load_author_plaintext_bundle(load_context.author_bundle_path, path)
+    try:
+        base_archive = MPQArchive(path)
+    except (OSError, ValueError):
+        if bundle is None:
+            raise
+        base_archive = None
+    archive: MapArchiveReader = (
+        PlaintextOverlayArchive(path, bundle, base_archive)
+        if bundle is not None
+        else base_archive
+    )
+    if archive is None:
+        raise FileNotFoundError(path)
     try:
         return _load_map_impl(archive, path, _depth, shared_index, load_context)
     finally:
         archive.close()                      # 释放句柄/mmap/临时副本，别等 GC
 
 
-def _load_map_impl(archive: MPQArchive, path: str, _depth: int,
+def _load_map_impl(archive: MapArchiveReader, path: str, _depth: int,
                    shared_index: dict | None, load_context: MapLoadContext) -> MapData:
     wts = {}
     if archive.has_file("war3map.wts"):
@@ -444,6 +463,7 @@ def _load_map_impl(archive: MPQArchive, path: str, _depth: int,
             wts = {}
 
     md = MapData(path=path, name=_map_name(archive))
+    md.author_bundle_files = getattr(archive, "author_bundle_files", ())
     external_report = validate_external_names(archive, load_context.external_names)
     md.external_listfile = external_report if load_context.external_names else None
 
@@ -541,7 +561,8 @@ def _load_map_impl(archive: MPQArchive, path: str, _depth: int,
                 with os.fdopen(fd, "wb") as f:
                     f.write(data)
                 # 把战役共享对象索引传给子地图，让它的脚本引用能取到真名
-                sub = load_map(tmp, _depth + 1, shared_index=md.obj_index, load_context=load_context)
+                child_context = replace(load_context, author_bundle_path=None)
+                sub = load_map(tmp, _depth + 1, shared_index=md.obj_index, load_context=child_context)
                 sub.name = inner
                 sub.path = inner             # 临时文件即将删除，path 改用逻辑名(子图不可再 open)
                 md.sub_maps.append(sub)
@@ -557,7 +578,7 @@ def _load_map_impl(archive: MPQArchive, path: str, _depth: int,
     return md
 
 
-def _campaign_inner_maps(archive: MPQArchive, known_names=()):
+def _campaign_inner_maps(archive: MapArchiveReader, known_names=()):
     """从战役里找出内含的地图文件名。优先 listfile，其次扫常见名。"""
     found = []
     candidates = tuple(known_names) + tuple(archive.list_files())
@@ -579,7 +600,7 @@ def _campaign_inner_maps(archive: MPQArchive, known_names=()):
     return found
 
 
-def _read_script(archive: MPQArchive):
+def _read_script(archive: MapArchiveReader):
     return _standard_script_text(archive)
 
 
@@ -632,7 +653,7 @@ def scan_recipes(path: str) -> list:
     return _sr(txt) if txt else []
 
 
-def _add_w3i(md: "MapData", archive: MPQArchive, wts: dict):
+def _add_w3i(md: "MapData", archive: MapArchiveReader, wts: dict):
     """解析 war3map.w3i 地图信息并存入 md.w3i；地图名优先取 w3i（比 HM3W 头权威）。
 
     HM3W 头里的名常是占位/旧名甚至 TRIGSTR；编辑器里设的真实名在 w3i（经 wts 还原）。
@@ -652,7 +673,7 @@ def _add_w3i(md: "MapData", archive: MPQArchive, wts: dict):
         md.name = nm
 
 
-def _add_w3f(md: "MapData", archive: MPQArchive, wts: dict):
+def _add_w3f(md: "MapData", archive: MapArchiveReader, wts: dict):
     """解析战役信息 war3campaign.w3f（仅 .w3n 顶层有）并存入 md.w3f。"""
     if not archive.has_file("war3campaign.w3f"):
         return
@@ -668,7 +689,7 @@ def _add_w3f(md: "MapData", archive: MPQArchive, wts: dict):
             md.name = nm
 
 
-def _add_wct(md: "MapData", archive: MPQArchive):
+def _add_wct(md: "MapData", archive: MapArchiveReader):
     """解析 war3map.wct 自定义脚本，把解码后的可读 JASS/Lua 文本并入 md.scripts。
 
     wct 是二进制（原样导出是乱码）；解出全局块 + 各触发器自定义代码块拼成一份带分节
@@ -691,7 +712,7 @@ def _add_wct(md: "MapData", archive: MPQArchive):
         md.scripts["war3map.wct(自定义代码).txt"] = "\n\n".join(parts)
 
 
-def _add_preplaced(md: "MapData", archive: MPQArchive):
+def _add_preplaced(md: "MapData", archive: MapArchiveReader):
     """解析预放置实例：war3map.doo（装饰物/可破坏物）+ war3mapUnits.doo（单位）并并入 md。
 
     对象定义（w3u/w3t…）只说"有哪些"，.doo 才说"摆在哪、归谁、初始多少血/金"。

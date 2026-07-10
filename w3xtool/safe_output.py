@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 import errno
 import os
 from pathlib import PurePosixPath, PureWindowsPath
+import tempfile
 from typing import Final
 
 from w3xtool.safe_output_anchored import (
     ANCHORED_WRITES_AVAILABLE as _ANCHORED_WRITES_AVAILABLE,
 )
 from w3xtool.safe_output_anchored import write_bytes_anchored
+from w3xtool.safe_output_anchored import write_chunks_anchored
+from w3xtool.safe_output_chunk_writer import write_chunks_to_descriptor
 from w3xtool.safe_output_models import SafeWriteResult, SafeWriteStatus
 
 _FILE_OPEN_FLAGS: Final = (
@@ -71,6 +75,20 @@ def write_bytes_safely(root: str, name: str, data: bytes) -> SafeWriteResult:
     return _write_bytes_by_path(root, name, data)
 
 
+def write_chunks_safely(
+    root: str,
+    name: str,
+    chunks: Iterable[bytes],
+) -> SafeWriteResult:
+    """Write bounded chunks to a stage and publish only the complete output."""
+    relative = safe_relative_path(name)
+    if relative is None:
+        return SafeWriteResult(SafeWriteStatus.UNSAFE, "", 0, "unsafe relative path")
+    if _ANCHORED_WRITES_AVAILABLE:
+        return write_chunks_anchored(root, relative, chunks)
+    return _write_chunks_by_path(root, name, chunks)
+
+
 def _write_bytes_by_path(root: str, name: str, data: bytes) -> SafeWriteResult:
     """Use path checks on platforms without anchored directory operations."""
     destination, status, error = _prepare_destination(root, name)
@@ -83,10 +101,85 @@ def _write_bytes_by_path(root: str, name: str, data: bytes) -> SafeWriteResult:
         return SafeWriteResult(failure, destination, 0, str(exc))
     try:
         with os.fdopen(descriptor, "wb") as handle:
-            handle.write(data)
+            _ = handle.write(data)
     except OSError as exc:
         return SafeWriteResult(SafeWriteStatus.FAILED, destination, 0, str(exc))
     return SafeWriteResult(SafeWriteStatus.WRITTEN, destination, len(data))
+
+
+def _write_chunks_by_path(
+    root: str,
+    name: str,
+    chunks: Iterable[bytes],
+) -> SafeWriteResult:
+    """Stage chunks beside the destination on platforms without dir-fd APIs."""
+    destination, status, error = _prepare_destination(root, name)
+    if status is not None:
+        return SafeWriteResult(status, destination, 0, error)
+    parent = os.path.dirname(destination)
+    try:
+        descriptor, staged_path = tempfile.mkstemp(
+            prefix=".w3xray-stage-",
+            suffix=".tmp",
+            dir=parent,
+        )
+    except OSError as exc:
+        return SafeWriteResult(_open_failure_status(exc), destination, 0, str(exc))
+    staged_identity = _descriptor_identity(descriptor)
+    try:
+        try:
+            size = write_chunks_to_descriptor(descriptor, chunks)
+        except OSError as exc:
+            return SafeWriteResult(SafeWriteStatus.FAILED, destination, 0, str(exc))
+        finally:
+            os.close(descriptor)
+        stage_error = _staged_path_error(staged_path, staged_identity)
+        if stage_error is not None:
+            return SafeWriteResult(SafeWriteStatus.UNSAFE, destination, 0, stage_error)
+        checked_destination, status, error = _prepare_destination(root, name)
+        if status is not None:
+            return SafeWriteResult(status, checked_destination, 0, error)
+        if checked_destination != destination:
+            return SafeWriteResult(
+                SafeWriteStatus.UNSAFE,
+                checked_destination,
+                0,
+                "output destination changed before publication",
+            )
+        stage_error = _staged_path_error(staged_path, staged_identity)
+        if stage_error is not None:
+            return SafeWriteResult(SafeWriteStatus.UNSAFE, destination, 0, stage_error)
+        try:
+            os.replace(staged_path, destination)
+        except OSError as exc:
+            return SafeWriteResult(_open_failure_status(exc), destination, 0, str(exc))
+        return SafeWriteResult(SafeWriteStatus.WRITTEN, destination, size)
+    finally:
+        _remove_owned_staged_path(staged_path, staged_identity)
+
+
+def _descriptor_identity(descriptor: int) -> tuple[int, int]:
+    details = os.fstat(descriptor)
+    return details.st_dev, details.st_ino
+
+
+def _staged_path_error(path: str, identity: tuple[int, int]) -> str | None:
+    try:
+        details = os.stat(path, follow_symlinks=False)
+    except FileNotFoundError:
+        return "staged output disappeared before publication"
+    if (details.st_dev, details.st_ino) != identity:
+        return "staged output changed before publication"
+    return None
+
+
+def _remove_owned_staged_path(path: str, identity: tuple[int, int]) -> None:
+    try:
+        details = os.stat(path, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    if (details.st_dev, details.st_ino) == identity:
+        os.unlink(path)
 
 
 def _open_failure_status(exc: OSError) -> SafeWriteStatus:

@@ -66,7 +66,7 @@
 - **三层并集枚举**：mpq.list_files 原仅读 (listfile)。加内置 STATIC_MAP_FILES(war3map.* 全集 + 战役级 + MPQ 内部表)，只收 has_file 验证存在的；再并 war3map.imp 导入名(相对名补 war3mapImported\ 前缀)。删了 listfile 的保护图也能枚举固定名文件。本批 demo 图 listfile 本就全，仅补出 (listfile) 自身。
 - **多代理分析全清单**：见 docs/KKWE借鉴清单.md（14 项增强 + 不建议做项；落地 #1/#3/#4/#5/#9 + 可选 #6-lite/#8/#11/#14）。
 - **可选增强批次（同会话后续）**：
-  - **#11 war3campaign.w3f 战役头**（w3i.py parse_w3f）：i32 version+i32 campaign_version+i32 editor_version+z 名/难度/作者/描述（移植 frontend_w3f.lua，KKWE 自身也只解到头）。无 .w3n 样本，合成测试验证。
+  - **#11 war3campaign.w3f 战役头**（w3i.py parse_w3f）：i32 version+i32 campaign_version+i32 editor_version+z 名/难度/作者/描述（移植 frontend_w3f.lua，KKWE 自身也只解到头）。当时无 `.w3n` 样本；现已由仓库内 StormLib 战役 fixture 覆盖。
   - **#8 多值字段列表化**（fields.CONCAT_TYPES + api._expand_codes）：abilityList/unitList 等 concat 类型字段把逗号分隔的码逐项还原「原版名(码)」；实测「技能列表: 蝗虫(Aloc), 无敌的(Avul)」。
   - **#6-lite 整数码识别**（script_scan._codes_in + _int_to_code）：JASS 里 'hpea' 常写成 1752196449 或 0x68706561，按阈值 0x41303030('A000')+4 字节全可打印过滤普通数字后并入对象码（原仅认 'xxxx'/$XX/FourCC）。
   - **#14 WTS 注释行 { 加固**（wts._OPEN 独占行锚定）：STRING 头与正文间注释行（如 `// 备注 {x}`）里的 { 不再被当成正文起点；找不到独占行 { 时退回首个 { 不回归。62 张真图新旧解析**完全一致**（零回归）。**编码改动（mbcs）评估后不做**：简中系统 mbcs≡gbk 无收益，非简中系统会把 GBK 老图错解成乱码（净风险）。
@@ -77,7 +77,7 @@
   - 证据：Darkborne 的 war3map.doo（33944 装饰物）按经典布局第 0 条 ndrops 即 -1（错位）；加 skin 后 1833000/1833000 字节恰好到 EOF。Amazonia 的 units.doo（98 单位）同理：skin 后 11670/11670 到 EOF。
   - 解法：parse_doodads/parse_units 改**两种布局都试、取能完整读完所有 count 的那个**（经典 skin=False 先试，完整即返回；否则试 skin=True）。各 count 字段加 _CAP=256 上限，错位布局快速触发换试。经典图永远先命中 skin=False，无回归。
   - 实测：27 张 Season1 重制版对战图 → 27 有装饰物、25 有单位（修前全 0）。这就是之前因"无实据"暂缓的清单 #13，现已有实据并实现。
-- **CASC 游戏本体数据（更新）**：已实现固定版本 CascLib 的 Windows 已知路径读取后端，其他平台或 DLL 不可用时使用散文件/path-map 回退；当前不做原生 CASC 全量未知路径枚举。本轮没有真实 Windows 魔兽安装证据，因此这里只记录实现状态，不宣称真机读取已验证。该能力只补游戏基础数据源，不改变单张 `.w3x` 的 MPQ 静态提取路径。
+- **CASC 游戏本体数据（当前）**：已实现固定版本 CascLib 的 Windows 已知路径读取和全 Root 流式枚举；未知原路径条目保留 CascLib 返回的 `FILE%08X.dat`/CKey/EKey 名称，可按原名重开。其他平台或 DLL 不可用时使用散文件/path-map 回退。真实 Windows 魔兽安装仍需 workflow 证据，不宣称真机已验证；该能力不改变单张 `.w3x` 的 MPQ 静态提取路径。
 
 ## 保护图：block 表注水越界（幻想未来v1.366）
 - 加固手法：MPQ 头 `header_size` 填 `0xFFFFFFFF`(垃圾哨兵)、`block_count` 注水(2049，比 hash_count 多 1)，使 block 表声明长度超出文件尾约 16KB(实际只 ~1006 条在档内)；hash 表本身完整。
@@ -87,6 +87,23 @@
 
 ## 完整静态提取总验收（会话 53）
 - WTG ECA 已形成明确的三层能力：无 schema 保留触发器头；有 `TriggerData.txt` 展开函数体；再有 `TriggerStrings.txt` 输出本地化语义文本。
-- Windows CascLib 已实现已知逻辑路径读取，散文件/path-map 为回退；macOS fake-native、源码构建和打包已验证，但没有本轮 Windows 魔兽真机证据。
+- Windows CascLib 已实现已知逻辑路径读取和完整 Root 枚举，散文件/path-map 为回退；macOS fake-native、源码构建和打包已验证，但没有本轮 Windows 魔兽真机证据。
 - 真实 fixture 端到端生成 72 个资料包文件，覆盖 UI 文本、资源本体、配置格式、存档/ID、对象 ID、ECA、外部 listfile 诊断和提取完整性；导出过程不修改 `MapData`。
 - 安全复审发现并修复两个边界：锚定输出采用临时文件、既有目标备份和越界恢复，不再在祖先校验前截断最终名或在发布窗口丢失原文件；外部 listfile 增加字节、行长和条目数上限并改为逐行迭代。全量验证为 **684 passed, 16 skipped, 1 subtest passed**。
+
+## Windows/CASC 闭环恢复点（会话 54）
+- 当前未提交实现已扩展到 CascLib 3.0 全 Root 枚举，未知逻辑路径条目保留 `FileDataID`、CKey、EKey，可按枚举身份再次读取和导出。
+- CASC 浏览器已有 GUI 分页、TSV 清单和 `main.py casc inventory/extract`；`write_casc_inventory()` 已改为约 64 KiB 分块写同目录 stage，不再滞留完整 TSV。
+- 作者明文补充包、真实存档只读分析、CLI/GUI 验收、Windows 打包与 self-hosted Warcraft workflow 均在工作区；本轮必须以新鲜测试和 workflow 结果区分“代码已实现”与“真实环境已验证”。
+- 仓库新增 StormLib `.w3n`、StormLib Huffman MPQ、wc3libs 旧 SLK 真实格式 fixture，用于替代本机不存在的私有 Windows 样本路径。
+- 恢复时定位的 CASC 清单内存缺口是：旧 `write_casc_inventory()` 虽消费生成器，却累积全部 TSV 行再发布。该实现已被有界分块 stage + 原子发布替换，并由枚举未结束时 stage 增长测试锁定。
+- 现有 `safe_output` 已有同目录唯一临时文件、锚定目录句柄、发布前复核和恢复逻辑，但公共 API 只接收完整 `bytes`/`str`。CASC 清单应复用这套 staging/publication 机制，新增受控的分块生产者入口，而不是另写一个弱化安全边界的 `NamedTemporaryFile + replace`。
+- 锚定实现的关键边界可直接复用：`open_staged_file()` 创建 no-follow/O_EXCL stage，`publish_staged_file()` 对既有目标建立私有硬链接备份并在越界时恢复，`remove_owned_staged_file()` 只按 inode 清理自己的 stage。新增分块入口只应替换“向 stage 写完整 bytes”这一段，发布协议保持不变。
+- 新增流式输出四个核心模块的 basedpyright 结果为 **0 errors, 0 warnings**。扩大到非 GUI 新核心模块为 **0 errors, 55 warnings**；剩余告警主要来自 ctypes 动态 `_fields_`、旧 `MapData` 未参数化容器以及兼容 MPQ 内部 `_data`，不是运行错误。对 GUI mixin 文件单独执行 strict 检查会暴露大量既有组合式继承属性告警，不能据此宣称新增 GUI 运行失败。
+- 仓库中 `typing.Generator` 的三个遗留导入（CASC 浏览器、CascLib source、对应测试）已全部改为 `collections.abc.Generator`；CASC 浏览器自身状态字段补了显式类型。
+- Windows 资产初检：hosted workflow 使用 `windows-latest` 完成依赖、固定 CascLib、全测、onedir 打包、打包 EXE acceptance 和 artifact 上传；真实客户端 workflow 明确绑定 `[self-hosted, Windows, X64, w3xray-war3]`，调用 `run_windows_acceptance.ps1` 并要求 `.build.info`。脚本中的默认地图与战役 fixture 路径都已指向仓库内文件。
+- `actionlint` 对自托管自定义标签会按预期报“未知 runner label”；忽略这一个仓库外部标签后，两个 workflow 语义检查为零问题。`war3_dir` 和 evidence 路径已改经 step `env` 传入 PowerShell，不再把 dispatch 输入直接插入 `run` 源码。
+- “无借口样本检查”直接指定仓库内真实格式 fixture：StormLib `.w3n`、StormLib Huffman MPQ、wc3libs 旧 SLK 共 **19 passed, 0 skipped**。因此这三类不再依赖私有 Windows 文件或测试跳过。
+- review-work 安全审查确认三项需修阻断边界：真实存档在 `stat` 后按路径重开存在换包竞态；作者明文 `files/` symlink 会被 `.resolve()` 当成可信根且验证后 `read_bytes()` 无界；MPQ 内成员在声明大小/聚合预算检查前已解压。self-hosted workflow 还需固定 `local` ref、最小权限、environment 审批和禁用 checkout 凭据持久化。
+- 对固定 CascLib commit `4971d...` 的源码核对证实：`CascLib.h` 明确写明 `CASC_FIND_DATA.szFileName` 的 Full/DataId/CKey/EKey 四种名字都可用 `CASC_OPEN_BY_NAME(0)` 直接交给 `CascOpenFile`。FileDataID 实际伪名格式是大写十六进制 `FILE%08X.dat`；测试已改用真实格式，Windows integration/acceptance 会重开一个未知条目并核对大小。
+- 旧“仅已知 CASC 路径/不做全 Root”句子已在 `findings.md`、`progress.md` 与 `docs/KKWE借鉴清单.md` 统一更新；当前结论是“全 Root 代码与跨平台代理测试已完成，真 Windows 证据待 workflow”。

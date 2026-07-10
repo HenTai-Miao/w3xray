@@ -1,0 +1,42 @@
+name: Real Warcraft III CASC acceptance
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      war3_dir:
+        description: Warcraft III installation directory on the self-hosted runner
+        required: true
+        default: 'C:\Program Files (x86)\Warcraft III'
+
+jobs:
+  real-install:
+    if: github.ref == 'refs/heads/local'
+    runs-on: [self-hosted, Windows, X64, w3xray-war3]
+    environment: w3xray-real-war3
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: local
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Build, test, package, and execute against real CASC
+        shell: powershell
+        env:
+          W3XRAY_ACCEPTANCE_WAR3_DIR: ${{ inputs.war3_dir }}
+          W3XRAY_ACCEPTANCE_EVIDENCE_DIR: ${{ github.workspace }}\artifacts\windows-real-war3
+        run: |
+          powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
+            -War3Dir $env:W3XRAY_ACCEPTANCE_WAR3_DIR `
+            -EvidenceDir $env:W3XRAY_ACCEPTANCE_EVIDENCE_DIR
+      - name: Upload real-install evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: w3xray-real-war3-evidence
+          path: artifacts/windows-real-war3/
+          if-no-files-found: error

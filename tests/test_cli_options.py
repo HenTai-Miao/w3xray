@@ -34,6 +34,8 @@ def test_parse_cli_options_accepts_all_supported_sources(tmp_path: Path) -> None
         str(tmp_path / "listfile.txt"),
         "--game-data",
         str(tmp_path / "game-data"),
+        "--author-bundle",
+        str(tmp_path / "author-bundle"),
         "--pack",
         str(tmp_path / "pack"),
     )
@@ -47,6 +49,7 @@ def test_parse_cli_options_accepts_all_supported_sources(tmp_path: Path) -> None
         listfile_path=str(tmp_path / "listfile.txt"),
         game_data_path=str(tmp_path / "game-data"),
         pack_dir=str(tmp_path / "pack"),
+        author_bundle_path=str(tmp_path / "author-bundle"),
     )
 
 
@@ -82,6 +85,7 @@ def test_run_cli_reuses_listfile_context_and_pack_writer(tmp_path: Path, monkeyp
         listfile_path="names.txt",
         game_data_path="game-data",
         pack_dir=str(tmp_path / "pack"),
+        author_bundle_path="author-bundle",
     )
     md = MapData(path="fixture.w3x", name="CLI fixture")
     context = MapLoadContext(external_names=("hidden.blp",))
@@ -93,8 +97,8 @@ def test_run_cli_reuses_listfile_context_and_pack_writer(tmp_path: Path, monkeyp
     )
     monkeypatch.setattr(
         "w3xtool.cli_options.build_map_load_context",
-        lambda *, external_names, game_data_path: (
-            calls.append(("context", (external_names, game_data_path))) or context
+        lambda *, external_names, game_data_path, author_bundle_path: (
+            calls.append(("context", (external_names, game_data_path, author_bundle_path))) or context
         ),
     )
     monkeypatch.setattr(
@@ -123,7 +127,7 @@ def test_run_cli_reuses_listfile_context_and_pack_writer(tmp_path: Path, monkeyp
     assert captured.err == ""
     assert calls == [
         ("listfile", "names.txt"),
-        ("context", (("hidden.blp",), "game-data")),
+        ("context", (("hidden.blp",), "game-data", "author-bundle")),
         ("load", ("fixture.w3x", context)),
         ("pack", (str(tmp_path / "pack"), ("hidden.blp",), "game-data")),
     ]

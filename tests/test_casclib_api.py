@@ -31,6 +31,7 @@ class FakeNativeLibrary:
         self.error = 0
         self.storage_path = ""
         self.file_name = b""
+        self.file_flags = -1
         self.read_calls = 0
         self.read_payload = b"data"
         self.open_storage_ok = True
@@ -44,6 +45,9 @@ class FakeNativeLibrary:
         self.CascGetFileSize64 = NativeFunction(self._file_size)
         self.CascReadFile = NativeFunction(self._read_file)
         self.CascCloseFile = NativeFunction(lambda _handle: self.close_ok)
+        self.CascFindFirstFile = NativeFunction(lambda _storage, _mask, _data, _listfile: -1)
+        self.CascFindNextFile = NativeFunction(lambda _search, _data: False)
+        self.CascFindClose = NativeFunction(lambda _search: self.close_ok)
         self.GetCascError = NativeFunction(lambda: self.error)
 
     def _open_storage(self, path, _locale, output) -> bool:
@@ -51,8 +55,9 @@ class FakeNativeLibrary:
         output._obj.value = 101 if self.open_storage_ok else None
         return self.open_storage_ok
 
-    def _open_file(self, _storage, name, _locale, _flags, output) -> bool:
+    def _open_file(self, _storage, name, _locale, flags, output) -> bool:
         self.file_name = name
+        self.file_flags = flags
         output._obj.value = 202 if self.open_file_ok else None
         return self.open_file_ok
 
@@ -114,7 +119,33 @@ def test_ctypes_api_binds_exact_unicode_and_narrow_abi() -> None:
     assert dll.GetCascError.restype is ctypes.c_uint32
     assert dll.storage_path == "C:/魔兽争霸 III"
     assert dll.file_name == b"UI\\TriggerData.txt\0"
+    assert dll.file_flags == 0
     assert file_handle == 202
+
+
+def test_fake_names_returned_by_find_use_casc_open_by_name_contract() -> None:
+    # Given: CascLib's documented synthetic FileDataID name from CASC_FIND_DATA.
+    dll = FakeNativeLibrary()
+    api = CtypesCascLibApi(library=dll)
+
+    # When: the synthetic name is reopened exactly as returned by enumeration.
+    _ = api.open_file(101, "FILE0000004D.dat")
+
+    # Then: CascOpenFile receives the ASCII name with CASC_OPEN_BY_NAME (zero).
+    assert dll.file_name == b"FILE0000004D.dat\0"
+    assert dll.file_flags == 0
+
+
+def test_open_file_encodes_non_ascii_logical_paths_as_utf8() -> None:
+    # Given: a logical CASC path containing characters outside ASCII.
+    dll = FakeNativeLibrary()
+    api = CtypesCascLibApi(library=dll)
+
+    # When: the path crosses CascLib's narrow-character API boundary.
+    _ = api.open_file(101, "UI\\测试.txt")
+
+    # Then: bytes use the same UTF-8 encoding accepted by enumeration.
+    assert dll.file_name == "UI\\测试.txt".encode("utf-8") + b"\0"
 
 
 def test_open_storage_failure_includes_native_error() -> None:

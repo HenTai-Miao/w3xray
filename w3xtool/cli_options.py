@@ -23,6 +23,7 @@ class CliOptions:
     listfile_path: str | None = None
     game_data_path: str | None = None
     pack_dir: str | None = None
+    author_bundle_path: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,11 +44,12 @@ def parse_cli_options(argv: Sequence[str]) -> CliOptions:
     listfile_path: str | None = None
     game_data_path: str | None = None
     pack_dir: str | None = None
+    author_bundle_path: str | None = None
     seen: set[str] = set()
     index = 1
     while index < len(argv):
         option = argv[index]
-        if option not in {"--listfile", "--game-data", "--pack"}:
+        if option not in {"--listfile", "--game-data", "--pack", "--author-bundle"}:
             raise CliOptionError(f"不支持的参数：{option}")
         if option in seen:
             raise CliOptionError(f"参数不能重复：{option}")
@@ -63,10 +65,12 @@ def parse_cli_options(argv: Sequence[str]) -> CliOptions:
                 game_data_path = value
             case "--pack":
                 pack_dir = value
+            case "--author-bundle":
+                author_bundle_path = value
             case unreachable:
                 assert_never(unreachable)
         index += 2
-    return CliOptions(map_path, listfile_path, game_data_path, pack_dir)
+    return CliOptions(map_path, listfile_path, game_data_path, pack_dir, author_bundle_path)
 
 
 def run_cli(options: CliOptions) -> int:
@@ -78,6 +82,7 @@ def run_cli(options: CliOptions) -> int:
     context = build_map_load_context(
         external_names=external_names,
         game_data_path=options.game_data_path,
+        author_bundle_path=options.author_bundle_path,
     )
     try:
         map_data = load_map(options.map_path, load_context=context)

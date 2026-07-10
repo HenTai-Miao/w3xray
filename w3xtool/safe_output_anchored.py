@@ -7,12 +7,14 @@ directory that is continuously renamed between checks.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from contextlib import ExitStack
 import errno
 import os
 from pathlib import PurePosixPath
 from typing import Final
 
+from w3xtool.safe_output_chunk_writer import write_chunks_to_descriptor
 from w3xtool.safe_output_models import SafeWriteResult, SafeWriteStatus
 from w3xtool.safe_output_publication import publish_staged_file
 from w3xtool.safe_output_staging import (
@@ -39,6 +41,7 @@ _DIRECTORY_OPEN_FLAGS: Final = (
     os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
 )
 _UNSAFE_OPEN_ERRNOS: Final = frozenset((errno.EISDIR, errno.ELOOP, errno.ENOTDIR))
+_StageWriter = Callable[[int], int]
 
 
 def write_bytes_anchored(
@@ -47,6 +50,31 @@ def write_bytes_anchored(
     data: bytes,
 ) -> SafeWriteResult:
     """Write below a held root fd and reject completed parent moves."""
+    return _write_anchored(
+        root,
+        relative,
+        lambda descriptor: _write_bytes_to_descriptor(descriptor, data),
+    )
+
+
+def write_chunks_anchored(
+    root: str,
+    relative: PurePosixPath,
+    chunks: Iterable[bytes],
+) -> SafeWriteResult:
+    """Stream chunks below a held root fd and atomically publish the stage."""
+    return _write_anchored(
+        root,
+        relative,
+        lambda descriptor: write_chunks_to_descriptor(descriptor, chunks),
+    )
+
+
+def _write_anchored(
+    root: str,
+    relative: PurePosixPath,
+    writer: _StageWriter,
+) -> SafeWriteResult:
     root_path = os.path.abspath(root)
     if os.path.islink(root_path):
         return SafeWriteResult(
@@ -90,7 +118,7 @@ def write_bytes_anchored(
             parent_descriptor,
             relative.name,
             destination,
-            data,
+            writer,
         )
 
 
@@ -99,7 +127,7 @@ def _write_from_parent(
     parent_descriptor: int,
     name: str,
     destination: str,
-    data: bytes,
+    writer: _StageWriter,
 ) -> SafeWriteResult:
     containment_error = _containment_error(root_descriptor, parent_descriptor)
     if containment_error is not None:
@@ -127,6 +155,7 @@ def _write_from_parent(
             str(exc),
         )
     staged_identity = _identity(file_descriptor)
+    size = 0
     try:
         try:
             containment_error = _containment_error(root_descriptor, parent_descriptor)
@@ -139,8 +168,7 @@ def _write_from_parent(
                     containment_error,
                 )
             try:
-                with os.fdopen(file_descriptor, "wb", closefd=False) as handle:
-                    _ = handle.write(data)
+                size = writer(file_descriptor)
             except OSError as exc:
                 return discard_file(
                     parent_descriptor,
@@ -170,13 +198,19 @@ def _write_from_parent(
         )
         if publication_error is not None:
             return publication_error
-        return SafeWriteResult(SafeWriteStatus.WRITTEN, destination, len(data))
+        return SafeWriteResult(SafeWriteStatus.WRITTEN, destination, size)
     finally:
         remove_owned_staged_file(
             parent_descriptor,
             temporary_name,
             staged_identity,
         )
+
+
+def _write_bytes_to_descriptor(descriptor: int, data: bytes) -> int:
+    with os.fdopen(descriptor, "wb", closefd=False) as handle:
+        _ = handle.write(data)
+    return len(data)
 
 
 def _containment_error(root_descriptor: int, parent_descriptor: int) -> str | None:

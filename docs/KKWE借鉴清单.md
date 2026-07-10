@@ -223,15 +223,19 @@
 ## #42 [done 2026-07-10] Windows CascLib 原生安装目录后端
 **why**: path-map 回退仍要求用户提前提供内部路径到 encoded key 的映射，不能直接从标准重制版安装目录读取 TriggerData、TriggerStrings 和基础图标。
 **how**: 固定 CascLib 3.0 tag/commit/source SHA256，新增 `ctypes.c_bool` ABI 绑定、Unicode `CascOpenStorage`、窄字符 `CascOpenFile`、`CascGetFileSize64`、有界读取和句柄关闭；Windows 打包前校验 DLL SHA256 与 x64 PE，应用启动时不联网下载。`game_data_source` 优先 CascLib，失败后回退 path-map；散文件目录保持不变。
-**result**: 已实现按已知游戏逻辑路径读取原生 CASC 的 Windows 后端；macOS fake-native、源码构建和打包验证通过。真实 Windows 魔兽安装测试仍是显式环境测试且本轮未执行，因此不声明真机读取已经验证。
+**result**: 已实现按已知游戏逻辑路径读取原生 CASC 的 Windows 后端；macOS fake-native、源码构建和打包验证通过。后续 #43 已补完整 Root 枚举。真实 Windows 魔兽安装测试仍是显式环境测试且本轮未执行，因此不声明真机读取已经验证。
+
+## #43 [done 2026-07-10] CascLib 完整 Root 枚举与未知身份导出
+**why**: 已知路径读取不能回答“客户端里还有哪些文件”，也无法浏览 Root 没保存原始路径的 encoding 条目。
+**how**: 按固定 CascLib 3.0 ABI 接入 `CascFindFirstFile/Next/Close`，保留 `CASC_FIND_DATA` 的 NameType、FileDataID、CKey、EKey、大小和本地状态；GUI 每页 200 条，CLI 清单按约 64 KiB 分块写 stage，未知条目按 CascLib 返回的 `FILE%08X.dat`/CKey/EKey 合成名重开和安全导出。
+**result**: fake-native ABI、分页、流式清单和未知身份重开契约已自动化；Windows acceptance 会从真实 Root 找一个本地未知条目重开并核对大小。真实安装是否通过只以 self-hosted 报告为准。
 
 ## 不建议做
-- 原生 CASC 的全量未知路径枚举：Windows CascLib 后端只实现已知逻辑路径读取，且本轮尚无真实 Windows 魔兽安装证据；当前应用不遍历整个 Root 生成客户端全文件清单。无 DLL 时仍只做显式 path-map 的 idx/data + 非加密 BLTE 回退；这不影响单张 `.w3x/.w3m/.w3n` 的 MPQ 静态提取。
 - 真正数据级加密/运行时解密地图：只做静态诊断，`提取完整性.txt` 会提示大量匿名加密块不可恢复；不做运行时内存 dump、调试器绕过或平台/保护绕过。
 - 再从 KKWE 借鉴 war3map.w3e 解析：KKWE 本身没有 w3e 解析器，只把地形当二进制保留；w3xray 后续已依据独立格式资料实现 W3E 头、tilepoint、纹理、坐标范围和场景边界统计，因此这里没有可继续复用的 KKWE 逻辑。
 - 完整 JASS PEG/AST parser（grammar.lua/parser.lua/checker.lua）：几千行文法+语义+检查，远超'静态抽对象码'目标；KKWE 自己抽码也不用它而用轻量 searchjass。rank6 的词法级 tokenizer 已足够。仅 Integer256/Char16 的四种整数边界定义可作 tokenizer 校准参考。
 - metadata.lua 的 parse_id/characters 后缀推导与 repeat 分级：仅用于 SLK/INI 文本格式的派生列名（DataA、_2 等）；w3xray 读二进制 .w3a/.w3u 时 field_id 就是 MetaData 的 ID 行键本身，可直接查 FIELD_LABELS，无需此推导。w3xray 也不导出 SLK。
 - JASS 混淆器特征/converter 字面量规范化/完整 KKAPI.DzAPI native 声明：均为运行时或单向不可逆，无静态可提取逻辑。已顺手把常见 `DzAPI_Map_SaveServerValue` / `DzAPI_Map_StoreInteger` / `DzAPI_Map_SavePublicArchive` 和 `KKAPI_SaveServerValue` 作为“PlatformSave”静态存档线索记入 `存档读写线索.tsv`；不做运行时调用、参数模拟或平台兼容层。
-- imp 名转义为磁盘安全文件名($XX 方案)：仅当地图导入名含 `:`/控制字符时需要；原生 CASC 后端只按已知逻辑路径读取游戏基础数据，不把 CASC 全量名称直接落盘。可在真实地图触发 Windows 非法字符报错时再按需补，暂不优先。
+- imp 名转义为磁盘安全文件名($XX 方案)：仅当地图导入名含 `:`/控制字符时需要；CASC 浏览器对完整逻辑路径使用统一安全相对路径校验，未知条目落到 `UnknownCASC/`，不直接信任原始名称。可在真实地图触发额外 Windows 非法字符时再按需扩展，暂不优先。
 - WTS 正文含 } 的告警：w3xray 是只读提取器，_CLOSE 已正确处理独占行 }，正文内 } 字符不影响读取（仅影响回写，而 w3xray 不回写）。纯数据质量提示，价值低。
 - .lng 本地化文件格式：是 KKWE 自身 UI 文案存储机制，非从地图提取的数据；w3xray 字段标签走 fields.py/westrings.py 离线生成另一套，无格式借鉴价值。

@@ -78,11 +78,13 @@ def load_path_payload(
     load_options: dict[str, bool] | None = None,
     game_data_path: str | None = None,
     external_names: Sequence[str] = (),
+    author_bundle_path: str | None = None,
 ) -> LoadedMap:
     """Load a map path and prepare the initial visible view."""
     context = build_map_load_context(
         external_names=external_names,
         game_data_path=game_data_path,
+        author_bundle_path=author_bundle_path,
     )
     md = _load_with_context(load, path, context)
     if md.sub_maps:
@@ -118,11 +120,13 @@ def load_campaign_payload(
     load: LoadMapFunc = load_map,
     game_data_path: str | None = None,
     external_names: Sequence[str] = (),
+    author_bundle_path: str | None = None,
 ) -> LoadedCampaign:
     """Load a campaign node enough to populate its child maps."""
     context = build_map_load_context(
         external_names=external_names,
         game_data_path=game_data_path,
+        author_bundle_path=author_bundle_path,
     )
     md = _load_with_context(load, path, context)
     views = [("★ 战役共享对象", md)] + [(sub.name, sub) for sub in md.sub_maps]
@@ -134,7 +138,11 @@ def _load_with_context(
     path: str,
     context: MapLoadContext,
 ) -> MapData:
-    if not context.external_names and context.trigger_schema is None:
+    if (
+        not context.external_names
+        and context.trigger_schema is None
+        and context.author_bundle_path is None
+    ):
         return load(path)
     return load(path, load_context=context)
 

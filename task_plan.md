@@ -94,3 +94,18 @@
 | 诸界竞拍之王物品列空(分类靠代码首字母,小写码afac判错) | classify只认I开头=物品，afac/amrc等小写码判成单位 | classify改"字段特征+默认物品"(单位看Propernames/Trains,技能看Order/TargetArt,科技R码)；全图0空列 |
 | 大量对象只显示代码无名(文本路径没回退基础名表) | _add_text_objects只取Name字段,没回退BASE_NAMES | 文本路径补BASE_NAMES回退+EditorSuffix+*Func.txt；无名从几百→各图0~8个 |
 | 可破坏物名显示WESTRING_DEST_..常量(超长名) | jass.slk加载游戏WorldEditStrings解析编辑器字符串 | 生成westrings.py(8065条)并在名称/字段解析WESTRING_；可破坏物→"石头之墙" |
+
+## 会话 54：Windows/CASC/真实样本闭环
+| 项目 | 状态 | 验收条件 |
+|------|------|----------|
+| 完整回归基线 | complete | `735 passed, 4 skipped, 1 subtest passed`；跳过均为真实 Windows/war3.mpq 环境依赖 |
+| CASC Root 清单内存边界 | complete | 64 KiB 分段写 stage 后原子发布；流式增长/延迟发布/异常保留旧目标测试通过 |
+| 核心 Python 类型检查 | complete | 流式核心 0 errors/0 warnings；非 GUI 新核心 0 errors；全部 `typing.Generator` 已清除 |
+| Windows 验收资产检查 | in_progress | YAML/actionlint/路径与命令测试通过；PowerShell AST 与 EXE 实跑待 Windows CI |
+| 完整审查 | complete | 目标、QA、代码、安全、上下文五路复审均 PASS；QA acceptance 4 PASS/3 预期 SKIP，聚焦测试 49 passed |
+| 发布与真实环境证据 | pending | 提交并推送；hosted Windows 打包/GUI 验收取得 CI 结果；真实 Warcraft CASC 仅在具备 `w3xray-war3` 自托管机器时判定 |
+
+### 本轮边界
+- 不执行地图 loader、运行时解密、内存 dump、调试器注入或保护绕过。
+- 不解密或修改不透明平台存档，不调用平台 API。
+- macOS 本机不能替代真实 Windows Warcraft 安装证据；该项必须以 self-hosted workflow 实际报告为准。

@@ -3,15 +3,16 @@
 若 腐朽之渊 地图存在，则读取其 war3map.j（用 Huffman 压缩）并断言解出真实 JASS。
 地图不存在时跳过，保证无地图的 CI 也能通过。
 """
-import os
+import hashlib
+from pathlib import Path
 import random
 import unittest
 
 from w3xtool.huffman import huff_decompress
 from w3xtool.mpq import MPQArchive
 
-# 可用环境变量指定 Huffman 测试地图；否则用默认本地路径（不存在则跳过该用例）
-MAP_PATH = os.environ.get("W3X_HUFFMAN_MAP", r"C:/Users/zhongerbing/Downloads/腐朽之渊 Rpg v1416d.w3x")
+MAP_PATH = Path(__file__).parent / "fixtures" / "reference" / "stormlib-huffman-map.w3x"
+MAP_SHA256 = "c6b04fce2ecdb7c7a5701c26bb3e91c3f1c5b911974654ae4514775e48c43a29"
 
 
 class TestHuffmanSafety(unittest.TestCase):
@@ -35,13 +36,6 @@ class TestHuffmanSafety(unittest.TestCase):
             out = huff_decompress(data, cap)           # 不得抛异常 / 不得卡死
             self.assertIsInstance(out, (bytes, bytearray))
             self.assertLessEqual(len(out), cap)        # 始终不超过硬上限
-
-
-_GAME_MPQS = [
-    r"C:\Program Files (x86)\Warcraft III\war3\War3x.mpq",
-    r"C:\Program Files (x86)\Warcraft III\war3\war3.mpq",
-    r"C:\Program Files (x86)\Warcraft III\war3\War3xLocal.mpq",
-]
 
 
 def _decode_to_end(data):
@@ -94,10 +88,6 @@ class TestHuffmanRealStormLibStreams(unittest.TestCase):
     def test_real_huffman_sectors_decode_in_sync(self):
         import w3xtool.mpq as M
         from w3xtool.mpq import MPQArchive
-        mpq_path = next((p for p in _GAME_MPQS if os.path.exists(p)), None)
-        if not mpq_path:
-            self.skipTest("无游戏 MPQ 可取真实 Huffman 流")
-
         captured = []
         orig = M.huff_decompress
 
@@ -108,20 +98,13 @@ class TestHuffmanRealStormLibStreams(unittest.TestCase):
 
         M.huff_decompress = cap
         try:
-            a = MPQArchive(mpq_path)
-            for n in a.list_files():
-                try:
-                    a.read_file(n)
-                except Exception:
-                    pass
-                if len(captured) >= 200:
-                    break
+            a = MPQArchive(str(MAP_PATH))
+            a.read_file("war3map.j")
             a.close()
         finally:
             M.huff_decompress = orig
 
-        if not captured:
-            self.skipTest("该 MPQ 未用到 Huffman 压缩")
+        self.assertGreater(len(captured), 1, "StormLib fixture 未产生多扇区 Huffman 流")
 
         perfect = 0
         new_sym_sectors = 0
@@ -138,12 +121,13 @@ class TestHuffmanRealStormLibStreams(unittest.TestCase):
 
 
 class TestHuffmanRealMap(unittest.TestCase):
+    def test_fixture_hash_is_pinned(self):
+        self.assertEqual(hashlib.sha256(MAP_PATH.read_bytes()).hexdigest(), MAP_SHA256)
+
     def test_war3map_j_huffman(self):
-        if not os.path.exists(MAP_PATH):
-            self.skipTest("Huffman 测试地图不存在（设 W3X_HUFFMAN_MAP 指定）：%s" % MAP_PATH)
-        a = MPQArchive(MAP_PATH)
+        a = MPQArchive(str(MAP_PATH))
         j = a.read_file("war3map.j")
-        self.assertGreater(len(j), 1_000_000)
+        self.assertGreater(len(j), 50_000)
         text = j.decode("utf-8", "replace")
         self.assertIn("function", text)
         self.assertIn("endfunction", text)

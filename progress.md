@@ -343,7 +343,7 @@
 - 测试 **191→218 通过, 8 skipped**（+27 例）。
 
 ### 会话 14（续）：落地清单里的可选增强 #11/#8/#6-lite/#14
-- **#11 war3campaign.w3f 战役头**（`w3i.py` parse_w3f + W3fInfo，`api._add_w3f` 存 `MapData.w3f`，GUI 信息页置顶显示战役名/作者/难度/描述）：3×i32 + 4×z（移植 frontend_w3f.lua）。无 .w3n 样本，合成测试验证。测试 `test_w3i.py`（+3）。
+- **#11 war3campaign.w3f 战役头**（`w3i.py` parse_w3f + W3fInfo，`api._add_w3f` 存 `MapData.w3f`，GUI 信息页置顶显示战役名/作者/难度/描述）：3×i32 + 4×z（移植 frontend_w3f.lua）。当时无 `.w3n` 样本；现已由仓库内 StormLib 战役 fixture 覆盖。测试 `test_w3i.py`（+3）。
 - **#8 多值字段列表化**（`fields.CONCAT_TYPES`/`is_concat_type` + `api._expand_codes`）：abilityList/unitList/buffList 等把逗号分隔的码还原「原版名(码)」；实测「技能列表: 蝗虫(Aloc), 无敌的(Avul)」。测试 `test_fields.py`（+3）。
 - **#6-lite 整数对象码识别**（`script_scan._codes_in` + `_int_to_code`）：补认十进制(10 位)/0x 十六进制整数形式的码（'hpea'=1752196449/0x68706561），阈值 0x41303030+4 字节可打印过滤普通数字；原仅认 'xxxx'/$XX/FourCC。scan_object_refs 现能抓整数写法的单位/物品码。测试 `test_codes.py`（+6），既有 script_scan 测试不回归。
 - **#14 WTS 注释行 { 加固**（`wts._OPEN` 独占行锚定 + 兜底退回）：STRING 头与正文间注释行里的 { 不再被误当正文起点。**62 张真图新旧解析逐字节一致（零回归）**。测试 `test_wts.py`（+1）。**编码 mbcs 回退评估后不做**（简中无收益、非简中反致 GBK 老图乱码）。
@@ -574,8 +574,25 @@
 一次性验收 WTG ECA、原生 CASC、外部 listfile、资源/配置/ID 资料包和静态提取边界，不再把历史计划或未验证环境写成已完成能力。
 
 - **WTG ECA**：Classic/Reforged 触发器头始终可读；匹配 `TriggerData.txt` 时展开事件/条件/动作/调用、参数和嵌套子动作，`TriggerStrings.txt` 可用时生成编辑器式本地化语义文本。
-- **游戏基础数据源**：Windows 已实现固定 CascLib 3.0 的已知逻辑路径读取；散文件与显式 path-map 继续作为跨平台回退。macOS fake-native、固定源码构建和打包路径已验证，真实 Windows 魔兽安装测试本轮仍跳过，不声明真机读取通过。
+- **游戏基础数据源**：Windows 已实现固定 CascLib 3.0 的已知逻辑路径读取和完整 Root 枚举；未知条目保留 FileDataID/CKey/EKey 合成名并按该名重开。散文件与显式 path-map 继续作为跨平台回退。macOS fake-native、固定源码构建和打包路径已验证，真实 Windows 魔兽安装测试本轮仍跳过，不声明真机读取通过。
 - **真实地图验收**：`war3net-map-script-builder.w3x` 通过 CLI + 外部 listfile + TriggerData/TriggerStrings 生成 72 个资料包文件；`触发器ECA.tsv` 出现 `Kill gg_unit_hpea_0006`，需求覆盖记录 listfile“确认 1，缺失 1”、CASC“使用散文件”、运行时解密“不支持”，命名覆盖为 `16/16 (100.0%)`。
 - **输出安全**：安全审查复现父目录移出后 `O_TRUNC` 会截断并删除外部同名文件，进一步复现最终发布窗口仍可能覆盖原文件；改为祖先预检、唯一临时文件、既有目标硬链接备份、阶段复核和越界原子恢复，非预期异常也按 inode 清理未发布临时文件。外部 listfile 增加 8 MiB、4096 字符/行、100000 有效条目的硬上限并逐行迭代，越界整体拒绝。
 - **静态边界**：真正数据级加密只做有界诊断和 `UnknownRaw` 原始负载保留；需要作者提供未保护文件、明文/listfile/key。本项目不执行内嵌 loader，不做运行时内存 dump、调试器或平台保护绕过。
 - **验证**：全量测试 **684 passed, 16 skipped, 1 subtest passed**；Task 8/安全聚焦 **15 passed**，GUI/CLI 聚焦 **34 passed**；真实 fixture CLI 退出码 0 并生成 72 个普通文件、0 个符号链接。
+
+### 会话 54：恢复未提交闭环工作
+- 从 `edf6cea`（`local` 与 `origin/local` 同步）继续；保留工作区全部既有改动，不处理 `.DS_Store` 和 `tests/.DS_Store`。
+- 恢复时已知最近全套结果为 `719 passed, 4 skipped, 1 failed`；唯一失败来自测试仍从 `casclib_source` 导入已移动的 `CascNameType`，工作区已修正，但必须重新执行完整套件确认。
+- 后续顺序固定为：完整回归 → CASC 清单有界写盘红绿测试 → 核心类型/Windows 资产校验 → no-excuse 检查 → 五路审查 → 提交推送 → hosted Windows workflow 证据。
+- **完整回归**：`uv run python -m pytest -q -rs` 为 **720 passed, 4 skipped, 1 subtest passed**（6.53s）。跳过项精确为 Windows Warcraft III CASC、真实 `war3.mpq` 图标缓存、Windows 单实例终止 API 两项。
+- **CASC 流式红灯**：新增 `test_inventory_writes_bounded_chunks_while_root_is_still_enumerating`，源在最后一条前检查同目录 stage；旧实现按预期失败于 `assert staged`，证明枚举结束前没有任何写盘。
+- **CASC 流式绿灯**：新增 `write_chunks_safely()`，POSIX 复用锚定 stage/备份/发布协议，Windows 路径回退使用同目录 0600 stage 并在完整写入后 `os.replace`；清单按约 64 KiB 批次编码。流式增长、延迟发布、异常保留旧目标三项测试 **3 passed**。
+- **类型检查**：流式输出相关核心文件 basedpyright 为 **0 errors, 0 warnings**；非 GUI 新核心集合为 **0 errors, 55 warnings**，并清除仓库全部 `typing.Generator` 遗留导入。两次组合 `apply_patch` 因上下文文件写错未应用，读取实际文件头后拆分补丁成功，未产生部分写入。
+- **Windows workflow 本地门禁**：两个 YAML 经 Ruby YAML parser 和 `actionlint v1.7.12`（仅忽略预期自托管标签 `w3xray-war3`）通过；验收资产测试 **4 passed**。dispatch 的 `war3_dir`/evidence 路径改经环境变量传入 PowerShell，新增测试先红后绿。
+- **no-excuse 真实样本**：`tests/test_campaign.py`、Huffman fixture 类、`tests/test_slk_objects.py` 合计 **19 passed, 0 skipped**；仓库内 `.w3n`、游戏 MPQ Huffman、旧 SLK 三类缺样本跳过已闭环。
+- **review-work 第一轮**：QA 在源码 acceptance 上得到 4 PASS/3 预期 SKIP，聚焦测试 12 passed；目标/上下文/安全审查判定整体 FAIL。有效阻断项为真实存档与作者明文路径换包、MPQ 解压总量、self-hosted runner 权限/固定 ref，以及旧 CASC 文档冲突。首批五代理无结果被关闭；第二批代码质量 lane 仍无结果，待修复后重跑窄复审。
+- **安全阻断修复**：新增单次打开/`lstat+fstat` 身份核对/`O_NOFOLLOW`/有界读取 helper；真实存档改用稳定快照，MPQ 成员按 block 声明大小在解压前拒绝并共享 8 MiB 文本预算；作者明文拒绝 `files/` 与子路径 symlink，验证后按 inode/size/hash 重验。Windows path fallback 发布前两次核对 stage inode。self-hosted workflow 固定 `local` ref、最小 `contents: read`、environment 和 `persist-credentials: false`。安全/CASC 聚焦测试 **56 passed**。
+- **聚合预算补漏**：新增二进制 MPQ 成员回归，复现“解压成功但无法解码为文本时不扣 8 MiB 总预算”的绕过（修复前 5 个成员全部解压，期望仅 2 个）；预算现对每个已解压成员扣减，不再取决于文本解码结果。
+- **CASC 路径编码补漏**：复审指出 `CascOpenFile` 边界强制 ASCII 会让非 ASCII 逻辑路径在进入 CascLib 前抛错；新增红绿测试并改为 UTF-8。固定 CascLib 源码同时再次证实 `CASC_OPEN_BY_NAME(0)` 会依次解析真实路径、`FILE%08X.dat`、CKey、EKey，无需按名称类型切换 flags。
+- **五路复审通过**：目标、QA、代码质量、安全、上下文五路最终均为 PASS。独立 QA 的 portable acceptance 为 4 PASS/3 个预期 SKIP，并另跑 49 项聚焦测试；安全复审确认前序 TOCTOU、symlink、解压预算、stage 发布与 self-hosted workflow 阻断项均已闭环。
+- **修复后完整回归**：`uv run python -m pytest -q -rs` 为 **735 passed, 4 skipped, 1 subtest passed**（7.24s）；改动 Python 文件 Ruff、`compileall`、YAML、`actionlint` 与 `git diff --check` 均通过。4 个跳过仍只涉及真实 Windows Warcraft III CASC、真实 `war3.mpq` 和两项 Windows 句柄 API，不再包含 `.w3n`、Huffman 或旧 SLK 样本缺口。

@@ -21,6 +21,9 @@ GUI触发器、场景放置、触发指令、合成配方、孤立对象、分�
 uv run main.py                 # 启动图形界面
 uv run main.py cli <地图路径>   # 命令行快速查看分类统计
 uv run main.py cli <配置.wgc>   # 命令行查看 World Editor AI 测试配置
+uv run main.py casc --help      # CASC Root 全量清单 / 单文件导出
+uv run main.py save --help      # 真实存档文件只读证据分析
+uv run main.py acceptance --help # 源码或打包 EXE 验收并生成 JSON
 uv run w3xray-test             # 运行测试（Windows 下避开 pytest.exe trampoline）
 ```
 CLI 输出会附带只读「审计 / 地形 / 地图结构 / SLK / 游戏常数 / 游戏配置 / 触发器树 / 小地图标记 / 导入资源 / 脚本诊断 / 崩溃风险 / 秘籍口令 / 命令 / 资源 / 兼容」摘要，提示缺失地图信息、war3map.w3e 地形纹理、网格、世界坐标范围、地形点高度/水位/坡道/荒芜/边界/边缘统计、预放置单位/装饰物越界、实际地表/悬崖纹理使用分布、地形中文名/贴图路径、区域/镜头/声音/路径图摘要与可读条目、路径图禁止行走/飞行/建造等 pathing flag 统计、war3map.shd 阴影图覆盖统计、内嵌 SLK 表行列摘要、war3mapMisc.txt 覆盖项、`.wgc` AI 测试/对局配置、`war3map.wtg` 触发器树结构、`war3map.mmp` 小地图标记、`war3map.imp` 标准/自定义导入路径与疑似缺失资源、脚本缺失、异步/本地状态风险调用、已知崩溃配置、官方秘籍/调试口令残留、引用覆盖偏低、孤立对象比例偏高、重复命令串、脚本数值 Order ID 解码、自定义游戏平衡常数、未引用素材、1.20E return bug 迁移风险、1.24E 兼容风险等；这些提示只用于人工排查，不会修改地图。
@@ -42,6 +45,16 @@ uv run w3xray-dist --dry-run
 ```
 说明：PyInstaller 不是跨平台编译器；在 macOS/Linux 上运行同一命令会生成当前平台的可执行文件，不会生成 Windows `.exe`。
 
+真实 Windows 魔兽安装的一键验收（构建 CascLib、全套测试、打包、再由打包 EXE
+执行地图/战役/GUI/CASC/导出/重复加载）运行：
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
+  -War3Dir "C:\Program Files (x86)\Warcraft III"
+```
+结果写入系统临时目录的 `acceptance.json`。仓库还包含
+`.github/workflows/windows-package.yml`（hosted Windows 打包验收）和
+`windows-real-war3.yml`（带 `w3xray-war3` 标签的 self-hosted 真安装验收）。
+
 ## 刷新原版数据（base_names / base_objects / westrings）
 `w3xtool/base_names.py` 等三份内置数据由 `build_base_names.py` 从**游戏本体**一次性生成，运行时不读游戏。换语言/升级后想刷新：
 
@@ -50,7 +63,7 @@ uv run w3xray-dist --dry-run
   uv run build_base_names.py                 # 默认硬编码安装目录
   uv run build_base_names.py --game "D:/Warcraft III/war3"
   ```
-- **重制版（1.30+，CASC）**：游戏数据改为 CASC。Windows 发行包已接入 CascLib 后端，目标是从官方安装目录按已知内部路径读取；无 CascLib 时可回退到带 `w3xray-casc-paths.tsv` 的 idx/data 非加密 BLTE 读取；所有平台也可读取 CascView/casc-extract 导出的散文件目录。本轮未在 Windows 魔兽真机上执行该后端，刷新内置数据仍建议用散文件目录：
+- **重制版（1.30+，CASC）**：游戏数据改为 CASC。Windows 发行包已接入 CascLib 后端，可按已知路径读取，也可流式枚举 Root 的全部条目；无原路径的条目以 FileDataID/CKey/EKey 保留。无 CascLib 时可回退到带 `w3xray-casc-paths.tsv` 的 idx/data 非加密 BLTE 读取；所有平台也可读取 CascView/casc-extract 导出的散文件目录。本次 macOS 环境不能代替真实 Windows 魔兽安装验收，刷新内置数据仍可用散文件目录：
   1. 用 [CascView](http://www.zezula.net/en/casc/main.html)（GUI）或 `wc3tools/casc-extract`（CLI，如 `casc-extract war3.w3mod:units/*` ）把游戏 `units/` 下的 `*Strings.txt`/`*Func.txt`/`*Data.slk` 与 `ui/WorldEdit*Strings.txt` 导到一个文件夹。
   2. `uv run build_base_names.py --from-dir <该文件夹>`，按打印的「找到/未找到」清单确认覆盖。
 
@@ -58,11 +71,15 @@ uv run w3xray-dist --dry-run
 - **WTG 头和目录**：不需要游戏数据即可读取分类、变量、触发器头和启用状态。
 - **WTG ECA 函数体**：需要与地图版本匹配的 `TriggerData.txt` 才能按函数签名安全展开；缺 schema 时保留头部并报告未展开入口，不猜参数字节。
 - **ECA 本地化语义**：在 `TriggerData.txt` 基础上还需要 `TriggerStrings.txt`；缺少它时仍保留函数名和参数原值。
-- **原生 CASC**：Windows 已实现固定版本 CascLib 的已知路径读取后端；散文件目录和显式 path-map 是跨平台回退。仓库包含需 `W3XRAY_WAR3_DIR` 的 Windows 真机测试，本次 macOS 发布验证只记录为跳过，因此这里只声明“已实现”，不声明“真机可用已验证”。
-- **保护/加密地图**：只做有界开档诊断、可恢复静态块提取和 `UnknownRaw` 原始负载保留；不执行内嵌 loader，不做运行时内存 dump、调试器或平台保护绕过。
+- **原生 CASC**：Windows 已实现固定版本 CascLib 的已知路径读取和完整 Root 枚举。Root 没保存原路径时，浏览器保留 CascLib 返回的 `FileDataID/CKey/EKey` 稳定标识，仍可读取/导出，不伪造路径。散文件目录和显式 path-map 是跨平台回退。仓库包含需 `W3XRAY_WAR3_DIR` 的 Windows 真机验收；本次 macOS 验证仍不冒充真实安装通过。
+- **保护/加密地图**：只做有界开档诊断、可恢复静态块提取和 `UnknownRaw` 原始负载保留；不执行内嵌 loader，不做运行时内存 dump、调试器或平台保护绕过。作者可提供带源地图 SHA256 和逐文件 SHA256 的明文补充包，让完全不可开的容器继续分析作者给出的 `war3map.j/lua/w3*` 文件。
+- **真实存档文件**：可对用户指定的文件/目录做只读清单、格式识别、SHA256、Preload/JASS/JSON/INI/MPQ 可读文本、存档键和对象 ID 交叉分析；不调用平台 API，不解密不透明平台数据，不修改源文件。
 
 ## 功能
 - **解包**：把地图(MPQ 压缩包)内部文件全部解出；文件名发现采用**三层并集**((listfile) + 内置固定名单 + war3map.imp 导入清单)，GUI 也可选择外部 listfile 补充被删掉的文件名；无文件名的匿名 block 会逐块尝试恢复加密 key、按内容猜扩展名导出到 `Unknown/`，若从 MDX/脚本等内容反推出真实资源路径则按原路径补导出并写 `RecoveredNames/manifest.tsv`，极端损坏或无法解码的原始 payload 会保留到 `UnknownRaw/manifest.tsv`；提取完整性报告会标出疑似数据级加密/运行时解密保护，不做运行时内存 dump 或绕过。
+- **CASC 客户端浏览**：选择可读的 Windows 原生游戏数据后，「数据工具」可分页浏览整个 Root（每页 200 条）、按 mask 重扫并导出所选；CLI `casc inventory` 输出含路径类型、FileDataID、CKey、EKey、大小和本地可用状态的 TSV，`casc extract` 按任一稳定标识导出单文件。
+- **作者明文补充包**：`cli <地图> --author-bundle <目录>` 或 GUI「数据工具」接入。补充包必须包含 `w3xray-author-bundle.tsv`，首行是 `W3XRAY-AUTHOR-BUNDLE<TAB>1`，第二行绑定源地图 SHA256，后续每行绑定内部路径和文件 SHA256；文件放在包内 `files/`，路径穿越、重复名、哈希不符和容量超限都会拒绝。
+- **真实存档只读分析**：GUI「数据工具」可选存档文件或目录；CLI 用 `main.py save --map <地图> --save <文件或目录> --output <报告.tsv>`。输出把真实文件证据与地图脚本声明的存档键、对象 ID/名称关联，不执行任何平台代码。
 - **对象信息**：解析对象编辑器数据，名称经 war3map.wts 还原为中文；字段标签全量化（1444 个字段码经 MetaData.slk + westrings 离线生成中文名，界面几乎不再出现裸 4 字符码）；多值字段（技能/单位/科技列表等）把逗号分隔的码逐项还原成「名字(码)」。对象数据三种载体都读：**二进制** `.w3u/.w3a/…`、**INI 文本档**（`*UnitFunc/Strings.txt`）、**内嵌 SLK**（`AbilityData.slk` 等，SLK 优化图的产物）；三者按对象码自动合并（如优化图里技能名来自 txt、字段与引用来自 SLK，合成一条完整记录）。SLK 字段做了可读化：等级后缀列（`Cast2`→「施法间隔(等级2)」、`BuffID1`→「buff效果(等级1)」），并按 `[AlwaysEmpty]` 隐藏 `comments/version/sort/code` 等编辑器噪声列
 - **地图信息**：独立标签页展示 war3map.w3i —— 真实地图名/作者/描述/推荐人数/尺寸/脚本语言(JASS/Lua)/各玩家(类型·种族·名字)/队伍(同盟·共享)；地图名优先取 w3i（比 HM3W 头权威，自动还原 TRIGSTR）。战役 `.w3n` 另解析 war3campaign.w3f 显示战役名/作者/难度/描述；同时解析 `war3map.w3r/.w3c/.w3s`，列出世界编辑器里的区域、镜头、声音数量与名称摘要；若包内或单独打开 `.wgc`，会显示 AI 测试/对局配置里的地图路径、游戏速度、关闭战争迷雾/胜负条件、玩家/电脑/观察者槽位和自定义 AI 脚本路径；若存在 `war3map.wtg`，会显示触发器树版本、分类、变量、触发器头和开局运行/禁用/自定义脚本等状态；若存在 `war3map.mmp`，会显示小地图上的玩家出生点、金矿、中立建筑标记数量和坐标摘要；若存在 `war3map.imp`，会显示导入资源数量、标准/自定义路径、扩展名分布和疑似缺失导入文件
 - **自定义脚本**：解析 war3map.wct，把作者手写的全局/各触发器自定义 JASS/Lua 代码解码成可读文本（原始 wct 是二进制），随「导出脚本」导出
@@ -152,7 +169,7 @@ uv run w3xray-dist --dry-run
 - 字符串按条 UTF-8 优先、失败回退 GBK（兼容老中文图与 UTF-8/GBK 混合编码的 wts）。
 - 已在 `魔兽争霸杂交版1.00d.w3x` 上验证：war3map.j(2.5MB) 全部正确解出，对象/指令均能提取。
 - 战役 `.w3n` 已用真实战役 `206774.w3n` 验证：7 张子图 + 顶层 2050 个共享对象，子地图下拉切换正常。
-- 本工具做静态文件提取：常见的头部/表保护（`_w3p` 诱饵头、block 表注水越界）已容忍；真正的数据级加密（KKWE/1337 等）与运行时内存 dump 不做。遇到大量无法恢复的匿名加密块时，`提取完整性.txt` 会明确提示需要作者提供的未保护文件、明文/listfile/key，而不是误报成普通解析失败。
+- 本工具做静态文件提取：常见的头部/表保护（`_w3p` 诱饵头、block 表注水越界）已容忍；真正的数据级加密（KKWE/1337 等）与运行时内存 dump 不做。遇到大量无法恢复的匿名加密块时，`提取完整性.txt` 会明确提示需要作者提供的未保护文件、明文/listfile/key；作者明文补充包提供一条可审计的静态继续分析路径，而不是绕过保护。
 
 ### 游戏版本覆盖（1.20 ~ 1.32+ 重制版）
 能不能提取**不取决于游戏 exe 版本，而取决于地图文件里的格式版本字段**。三条互相独立的版本轴，工具均已处理：

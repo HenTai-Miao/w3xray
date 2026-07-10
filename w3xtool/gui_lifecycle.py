@@ -51,10 +51,13 @@ class GuiLifecycleMixin:
         cfg = self._load_config()
         listfile = cfg.get("external_listfile_path")
         game_data = cfg.get("game_data_path")
+        author_bundle = cfg.get("author_bundle_path")
         if listfile and os.path.isfile(listfile):
             self.external_listfile_path = listfile
         if game_data and os.path.isdir(game_data):
             self.game_data_path = game_data
+        if author_bundle and os.path.isfile(os.path.join(author_bundle, "w3xray-author-bundle.tsv")):
+            self.author_bundle_path = author_bundle
         self._refresh_external_source_labels()
 
     def on_pick_external_listfile(self) -> None:
@@ -96,15 +99,27 @@ class GuiLifecycleMixin:
             self.external_listfile_clear.configure(
                 state="normal" if self.external_listfile_path else "disabled",
             )
+        browser_state = "disabled"
         if hasattr(self, "game_data_label"):
             label = _source_label("游戏数据", self.game_data_path)
             if self.game_data_path:
                 probe = probe_game_data_path(self.game_data_path)
                 if not probe.is_readable:
                     label = f"游戏数据: {os.path.basename(self.game_data_path)} 需导出"
+                elif probe.backend == "casclib":
+                    browser_state = "normal"
             self.game_data_label.configure(text=label)
+        if hasattr(self, "data_tools_menu"):
+            self.data_tools_menu.entryconfigure("浏览 CASC Root", state=browser_state)
+            clear_state = "normal" if self.author_bundle_path else "disabled"
+            self.data_tools_menu.entryconfigure("清除作者明文补充包", state=clear_state)
+        if hasattr(self, "data_tools_button"):
+            self.data_tools_button.configure(text="数据工具*" if self.author_bundle_path else "数据工具")
 
     def _on_close(self) -> None:
+        dialog = getattr(self, "_casc_browser_dialog", None)
+        if dialog is not None and dialog.winfo_exists():
+            dialog.close()
         self._shutdown_background_loader()
         self._shutdown_object_filter_runner()
         self._save_layout_state(geometry=self.geometry())

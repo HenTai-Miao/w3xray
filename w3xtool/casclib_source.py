@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from dataclasses import dataclass
 from types import TracebackType
 from typing import override
@@ -13,6 +14,7 @@ from .casclib_api import (
     CascNativeError,
     CtypesCascLibApi,
 )
+from .casclib_enumeration import CascEntry, CascLibEnumerationApi
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +30,15 @@ class CascSourceClosedError(OSError):
     @override
     def __str__(self) -> str:
         return f"CascLib data source is closed: {self.root}"
+
+
+@dataclass(frozen=True, slots=True)
+class CascEnumerationUnavailableError(OSError):
+    root: str
+
+    @override
+    def __str__(self) -> str:
+        return f"CascLib build cannot enumerate storage entries: {self.root}"
 
 
 class CascLibDataSource:
@@ -64,6 +75,24 @@ class CascLibDataSource:
             if file_handle is not None:
                 self._api.close_file(file_handle)
 
+    def iter_entries(
+        self,
+        mask: str = "*",
+        listfile: str | None = None,
+    ) -> Generator[CascEntry, None, None]:
+        """Yield all root and nameless encoding entries, closing search on exit."""
+        api = self._enumeration_api()
+        first = api.find_first(self._open_storage_handle(), mask, listfile)
+        if first is None:
+            return
+        search, entry = first
+        try:
+            yield entry
+            while (entry := api.find_next(search)) is not None:
+                yield entry
+        finally:
+            api.close_find(search)
+
     def close(self) -> None:
         storage = self._storage
         if storage is None:
@@ -86,6 +115,11 @@ class CascLibDataSource:
         if self._storage is None:
             raise CascSourceClosedError(root=self.root)
         return self._storage
+
+    def _enumeration_api(self) -> CascLibEnumerationApi:
+        if not isinstance(self._api, CascLibEnumerationApi):
+            raise CascEnumerationUnavailableError(root=self.root)
+        return self._api
 
 
 def casclib_available() -> bool:

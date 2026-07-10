@@ -6,6 +6,8 @@ import os
 import sys
 import unittest
 
+from w3xtool.casclib_api import MAX_CASC_FILE_SIZE
+from w3xtool.casclib_enumeration import CascNameType
 from w3xtool.casclib_source import CascLibDataSource
 
 
@@ -22,8 +24,27 @@ def test_real_install_reads_trigger_schema_and_icon() -> None:
         trigger_data = source.read_file("UI/TriggerData.txt")
         trigger_strings = source.read_file("UI/TriggerStrings.txt")
         icon = source.read_file("ReplaceableTextures/CommandButtons/BTNSelectHeroOn.blp")
+        entries = source.iter_entries()
+        unknown = None
+        try:
+            first_root_entry = next(entries)
+            for entry in entries:
+                if (
+                    entry.name_type is not CascNameType.FULL
+                    and entry.is_local
+                    and entry.size is not None
+                    and entry.size <= MAX_CASC_FILE_SIZE
+                ):
+                    unknown = entry
+                    break
+        finally:
+            entries.close()
+        assert unknown is not None
+        unknown_payload = source.read_file(unknown.read_name)
 
-    # Then: all three resource classes are non-empty.
+    # Then: resources and one synthetic Root identity are both genuinely readable.
     assert trigger_data
     assert trigger_strings
     assert icon
+    assert first_root_entry.read_name
+    assert len(unknown_payload) == unknown.size
