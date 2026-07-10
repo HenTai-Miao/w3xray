@@ -54,6 +54,19 @@ class ParseCategoryTest(unittest.TestCase):
         self.assertEqual(objs["hfoo"].get("race"), "human")
         self.assertEqual(objs["hfoo"].get("dmgplus1"), "5")
 
+    def test_malformed_sibling_slk_keeps_valid_category_data(self):
+        # Given: one corrupt unit table and one valid sibling table.
+        a = _FakeArchive({
+            "Units\\UnitData.slk": "not an slk",
+            "Units\\UnitWeapons.slk": _slk(["unitID", "dmgplus1"], [("hfoo", {"dmgplus1": "7"})]),
+        })
+
+        # When: the category is parsed.
+        objs = parse_category_objects(a, "单位")
+
+        # Then: the valid sibling source is not discarded.
+        self.assertEqual(objs["hfoo"]["dmgplus1"], "7")
+
     def test_filters_non_code_rows(self):
         a = _FakeArchive({"AbilityData.slk": _slk(
             ["code", "BuffID1"], [("AHwe", {"BuffID1": "BHwe"}), ("toolong", {"BuffID1": "Bx"})])})

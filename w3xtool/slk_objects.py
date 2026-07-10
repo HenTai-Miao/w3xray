@@ -12,6 +12,7 @@ from __future__ import annotations
 import re
 
 from .slk import parse_slk
+from .war3_encoding import decode_warcraft_string
 
 # 分类 → 该类的 SLK 文件（单位跨多文件，按对象码合并列）。
 SLK_CATEGORY_FILES = {
@@ -96,7 +97,7 @@ def _read_text(archive, name: str):
     if fn is None:
         return None
     try:
-        return archive.read_file(fn).decode("latin-1")
+        return decode_warcraft_string(archive.read_file(fn))
     except Exception:
         return None
 

@@ -22,6 +22,19 @@ class TestAddBaseObjects(unittest.TestCase):
         self.assertIn(named, md.obj_index)
         self.assertEqual(md.obj_index[named].name, BASE_NAMES[named])
 
+    def test_repeated_base_addition_does_not_duplicate_rawcodes(self):
+        # Given: base objects have already been added once.
+        md = MapData(path="x", name="x")
+        _add_base_objects(md)
+
+        # When: the compatibility wrapper is called again.
+        _add_base_objects(md)
+
+        # Then: buckets and index still contain one object per rawcode.
+        codes = [obj.obj_id for objects in md.objects.values() for obj in objects]
+        self.assertEqual(len(codes), len(set(codes)))
+        self.assertEqual(set(codes), set(md.obj_index))
+
 
 if __name__ == "__main__":
     unittest.main()
