@@ -75,6 +75,27 @@ def test_load_map_initializes_a_path_archive_source() -> None:
         md.close()
 
 
+def test_campaign_child_archive_source_reopens_after_load_returns() -> None:
+    # Given: a campaign whose child is extracted through a temporary path.
+    from w3xtool.api import load_map
+
+    fixture = Path("tests/fixtures/reference/stormlib-campaign.w3n")
+    campaign = load_map(str(fixture))
+
+    # When: the child source is reopened after campaign loading has returned.
+    try:
+        child = campaign.sub_maps[0]
+        assert child.archive_source is not None
+        with child.archive_source.open() as archive:
+            script = archive.read_file("war3map.j")
+
+        # Then: the logical child remains backed by readable archive bytes.
+        assert child.path == "Maps\\Chapter1.w3x"
+        assert script.startswith(b"//===========================================================================")
+    finally:
+        campaign.close()
+
+
 def test_archive_sources_open_real_mpq_bytes_repeatedly_then_reject_after_close() -> None:
     # Given: immutable bytes from a pinned valid MPQ fixture.
     from w3xtool.archive_source import ArchiveSourceClosedError, BytesArchiveSource, PathArchiveSource
@@ -126,6 +147,36 @@ def test_bytes_archive_source_removes_temp_file_when_mpq_open_fails(
             pass
 
     # Then: the normal MPQ error survives and the source cleans the file.
+    assert len(created_paths) == 1
+    assert not created_paths[0].exists()
+
+
+def test_bytes_archive_source_removes_temp_file_after_successful_context_exit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: valid MPQ bytes and a tracked temporary-file allocation.
+    import w3xtool.archive_source as archive_source
+    from w3xtool.archive_source import BytesArchiveSource
+
+    created_paths: list[Path] = []
+    original_mkstemp = archive_source.tempfile.mkstemp
+
+    def tracked_mkstemp(*args: object, **kwargs: object) -> tuple[int, str]:
+        kwargs["dir"] = str(tmp_path)
+        descriptor, path = original_mkstemp(*args, **kwargs)
+        created_paths.append(Path(path))
+        return descriptor, path
+
+    monkeypatch.setattr(archive_source.tempfile, "mkstemp", tracked_mkstemp)
+    fixture = Path("tests/fixtures/maps/war3net-map-script-builder.w3x")
+    source = BytesArchiveSource("valid.w3x", fixture.read_bytes())
+
+    # When: a successful archive context exits.
+    with source.open() as archive:
+        assert archive.read_file("war3map.j")
+
+    # Then: the source-owned temporary file is gone.
     assert len(created_paths) == 1
     assert not created_paths[0].exists()
 

@@ -16,7 +16,7 @@ from .archive_export import (
     tmp_extract_dir as tmp_extract_dir,
 )
 from .mpq import MPQArchive, FLAG_EXISTS
-from .archive_source import PathArchiveSource
+from .archive_source import BytesArchiveSource, PathArchiveSource
 from .map_data import GameObject, MapData
 from .map_archive_reader import MapArchiveReader
 from .mpq_files import list_archive_files
@@ -513,8 +513,9 @@ def _load_map_impl(archive: MapArchiveReader, path: str, _depth: int,
                 # 把战役共享对象索引传给子地图，让它的脚本引用能取到真名
                 child_context = replace(load_context, author_bundle_path=None)
                 sub = load_map(tmp, _depth + 1, shared_index=md.obj_index, load_context=child_context)
+                sub.archive_source = BytesArchiveSource(inner, data)
                 sub.name = inner
-                sub.path = inner             # 临时文件即将删除，path 改用逻辑名(子图不可再 open)
+                sub.path = inner             # 临时文件即将删除，保留战役成员的逻辑名
                 md.sub_maps.append(sub)
             except Exception:
                 pass
