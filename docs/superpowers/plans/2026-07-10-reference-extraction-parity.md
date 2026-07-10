@@ -39,7 +39,7 @@
 - Produces: `DiagnosticSeverity`, `ExtractionDiagnostic`, and `record_diagnostic(md, diagnostic) -> None`.
 - Adds compatibly: `MapData.archive_source`, `MapData.diagnostics`, `MapData.ui_strings`, and `MapData.close()`.
 
-- [ ] **Step 1: Write compatibility and lifecycle tests**
+- [x] **Step 1: Write compatibility and lifecycle tests**
 
 ```python
 def test_api_reexports_map_models() -> None:
@@ -60,13 +60,13 @@ def test_bytes_archive_source_reopens_and_closes() -> None:
     assert source.is_closed
 ```
 
-- [ ] **Step 2: Run the new tests and confirm the modules are missing**
+- [x] **Step 2: Run the new tests and confirm the modules are missing**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_map_data_compat.py tests/test_extraction_diagnostics.py -q -p no:cacheprovider`
 
 Expected: FAIL with `ModuleNotFoundError` for `w3xtool.map_data` or `w3xtool.archive_source`.
 
-- [ ] **Step 3: Move the public models and add typed extension fields**
+- [x] **Step 3: Move the public models and add typed extension fields**
 
 ```python
 @dataclass(slots=True)
@@ -99,7 +99,7 @@ class MapData:
 
 Move all existing `MapData` fields unchanged after these additions. Implement `decimal`, `category_counts`, and `close` with the current behavior plus archive-source cleanup. In `api.py`, import and re-export the classes instead of defining them.
 
-- [ ] **Step 4: Implement reusable archive sources and diagnostics**
+- [x] **Step 4: Implement reusable archive sources and diagnostics**
 
 ```python
 class DiagnosticSeverity(StrEnum):
@@ -125,13 +125,13 @@ def record_diagnostic(md: MapData, diagnostic: ExtractionDiagnostic) -> None:
 
 `PathArchiveSource.open()` returns `MPQArchive(path)`. `BytesArchiveSource` owns immutable bytes and opens them through a private system-temporary file; the context removes that file after the archive closes, while `close()` prevents future opens and releases the bytes.
 
-- [ ] **Step 5: Run compatibility and representative existing tests**
+- [x] **Step 5: Run compatibility and representative existing tests**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_map_data_compat.py tests/test_extraction_diagnostics.py tests/test_knowledge_pack.py tests/test_campaign.py -q -p no:cacheprovider`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the foundation**
+- [x] **Step 6: Commit the foundation**
 
 ```bash
 git add w3xtool/map_data.py w3xtool/archive_source.py w3xtool/extraction_diagnostics.py w3xtool/api.py tests/test_map_data_compat.py tests/test_extraction_diagnostics.py
@@ -390,7 +390,7 @@ def test_unit_box_report_is_sorted_unique_and_includes_propernames() -> None:
 
     assert text.index("ID：H001") < text.index("ID：H010")
     assert text.count("ID：H001") == 1
-    assert "称谓：称谓甲" in text
+    assert "描述：称谓：称谓甲\n\n说明甲" in text
 ```
 
 - [ ] **Step 2: Run the report tests and confirm current output fails**
@@ -409,7 +409,10 @@ def sorted_unique_objects(objects: Iterable[GameObject]) -> tuple[GameObject, ..
     return tuple(by_id[key] for key in sorted(by_id, key=lambda code: code.encode("latin-1", "replace")))
 ```
 
-Use this view in TSV and box writers. Unit blocks include `称谓：<value>` between name and description; other categories retain ID/name/description. Resolve the description from canonical `display:description`, then existing labeled fields, then `-`.
+Use this view in TSV and box writers. A unit block writes
+`描述：称谓：<Propernames>`, one blank line, then its Ubertip/Description; other categories retain
+ID/name/description. Preserve Warcraft rich-text markers in the box-compatible value. Resolve the
+description from canonical `display:description`, then existing labeled fields, then `-`.
 
 - [ ] **Step 4: Run report and pack tests**
 
@@ -459,10 +462,14 @@ def test_gbk_filename_hashes_bytes_not_unicode_codepoints() -> None:
 
 
 def test_locale_selection_prefers_requested_then_neutral() -> None:
-    entries = (_entry(locale=0, block=1), _entry(locale=0x0404, block=2))
+    entries = (
+        _entry(locale=0, platform=0, block=1),
+        _entry(locale=0, platform=0, block=3),
+        _entry(locale=0x0404, platform=0, block=2),
+    )
 
     assert select_hash_entry(entries, locale_id=0x0404).block_index == 2
-    assert select_hash_entry(entries, locale_id=0x0804).block_index == 1
+    assert select_hash_entry(entries, locale_id=0x0804).block_index == 3
 ```
 
 - [ ] **Step 2: Run layout tests and confirm failures**
@@ -501,7 +508,11 @@ class MPQLayout:
     block_count: int
 ```
 
-Recognize `MPQ\x1b`, validate its user-data size and `header_offset`, then validate the referenced `MPQ\x1a` header. Retain the existing 512-byte aligned recovery scan for HM3W/protected maps. Gather all matching hash entries in the probe cluster and choose requested locale/platform, neutral locale/platform, then first valid entry.
+Recognize `MPQ\x1b`, validate its user-data size and `header_offset`, then validate the referenced
+`MPQ\x1a` header. Retain the existing 512-byte aligned recovery scan for HM3W/protected maps.
+Gather all matching hash entries in probe order. For nonzero requested locale/platform, return the
+first exact pair; otherwise retain the last entry whose locale is requested-or-neutral and whose
+platform is requested-or-neutral, matching StormLib 9.25 `GetHashEntryLocale`.
 
 - [ ] **Step 5: Run all MPQ layout and lookup tests**
 

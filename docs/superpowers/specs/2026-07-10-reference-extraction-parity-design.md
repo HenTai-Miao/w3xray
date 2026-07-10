@@ -123,9 +123,11 @@ Windows 兼容性高，但会让 macOS/Linux、单元测试和纯 Python 分发�
 
 四类盒子兼容报告只包含最终合并结果，并按 rawcode 的字节序稳定排序：
 
-- 单位：`ID`、`名字`、`称谓`、`描述`。
+- 单位：`ID`、`名字`、`描述`；描述值以 `称谓：<Propernames>` 开头，空一行后接
+  `Ubertip/Description`，与参考报告一致。
 - 物品、技能、科技：`ID`、`名字`、`描述`。
-- `Propernames` 支持逗号分隔多个称谓，清理颜色码和换行。
+- `Propernames` 支持逗号分隔多个称谓。兼容报告保留源数据中的 `|c...|r`、`|n` 等
+  Warcraft 富文本标记，只规范化文件换行；结构化 TSV 继续提供清理后的可读值。
 - unresolved `TRIGSTR_*` 原样保留并同时写诊断，不伪造空文本。
 - 相同 rawcode 不重复输出。
 
