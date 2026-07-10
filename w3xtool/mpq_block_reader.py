@@ -149,7 +149,10 @@ def recover_mpq_block_key(storage: MPQBlockStorage, block: _Block) -> int | None
         return None
     if not flags & (FLAG_COMPRESS | FLAG_IMPLODE):
         return None
-    raw = _raw_block(storage, block, b"")
+    try:
+        raw = _raw_block(storage, block, b"")
+    except BLOCK_RECOVERY_ERRORS:
+        return None
     if len(raw) < 8:
         return None
     encrypted_first, encrypted_second = struct.unpack_from("<II", raw)

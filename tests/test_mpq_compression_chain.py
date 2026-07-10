@@ -7,7 +7,17 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.mpq import _decompress_sector, guess_extension
+import w3xtool.mpq as mpq_facade
+from w3xtool.explode import explode
+from w3xtool.mpq import (
+    FLAG_COMPRESS,
+    FLAG_ENCRYPTED,
+    FLAG_EXISTS,
+    MPQArchive,
+    _Block,
+    _decompress_sector,
+    guess_extension,
+)
 from w3xtool.mpq_block_reader import parse_sector_offsets, read_mpq_block
 from w3xtool.mpq_compression import MPQCompressionError, decompress_mpq_sector
 
@@ -132,6 +142,47 @@ def test_block_reader_interfaces_are_available() -> None:
 
     assert parse_sector_offsets(raw, 3, None) == [12, 16, 20]
     assert callable(read_mpq_block)
+
+
+def test_mpq_facade_preserves_explode_compatibility_name() -> None:
+    assert mpq_facade.explode is explode
+
+
+def test_named_out_of_range_block_preserves_string_key_error() -> None:
+    archive = object.__new__(MPQArchive)
+    archive._data = b""
+    archive.archive_offset = 0
+    archive.sector_size = 4096
+    block = _Block(file_pos=1, comp_size=1, file_size=1, flags=FLAG_EXISTS)
+
+    with pytest.raises(KeyError) as captured:
+        archive._read_block(block, "named.txt")
+
+    assert captured.value.args == ("named.txt",)
+
+
+@pytest.mark.parametrize(
+    ("file_pos", "comp_size"),
+    ((17, 8), (12, 8)),
+    ids=("out-of-range-file-pos", "truncated-comp-size"),
+)
+def test_recover_block_key_returns_none_for_malformed_block(
+    file_pos: int, comp_size: int
+) -> None:
+    archive = object.__new__(MPQArchive)
+    archive._data = b"\x00" * 16
+    archive.archive_offset = 0
+    archive.sector_size = 4096
+    block = _Block(
+        file_pos=file_pos,
+        comp_size=comp_size,
+        file_size=4096,
+        flags=FLAG_EXISTS | FLAG_ENCRYPTED | FLAG_COMPRESS,
+    )
+
+    recovered_key = archive.recover_block_key(block)
+
+    assert recovered_key is None
 
 
 def test_single_sector_offset_must_fit_inside_block() -> None:

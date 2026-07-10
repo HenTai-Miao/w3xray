@@ -84,6 +84,9 @@ def test_lzma_declared_size_must_fit_contract_and_match_output() -> None:
     with pytest.raises(MPQCompressionError, match="size"):
         decompress_mpq_sector(_lzma_sector(b"data", declared_size=3), 4)
 
+    with pytest.raises(MPQCompressionError, match="size"):
+        decompress_mpq_sector(_lzma_sector(b"data", declared_size=5), 5)
+
 
 def test_lzma_zero_output_corruption_and_trailing_data_are_rejected() -> None:
     sector = _lzma_sector(b"data")

@@ -4,6 +4,7 @@ from __future__ import annotations
 import struct
 from contextlib import suppress
 
+from .explode import explode as explode
 from .mpq_block_reader import (
     DERIVE_KEY as _DERIVE_KEY,
     decompress_mpq_block,
@@ -230,7 +231,10 @@ class MPQArchive:
         name_bytes: bytes | None = None,
     ) -> bytes:
         encoded = name.encode("utf-8") if name_bytes is None else name_bytes
-        return read_mpq_block(self, block, encoded, key)
+        try:
+            return read_mpq_block(self, block, encoded, key)
+        except KeyError:
+            raise KeyError(name) from None
 
     def _decomp(self, buf: bytes, out_size: int, flags: int) -> bytes:
         return decompress_mpq_block(buf, out_size, flags)
