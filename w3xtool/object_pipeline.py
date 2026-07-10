@@ -43,6 +43,11 @@ _DISPLAY_ALIASES: Final[Mapping[str, str]] = {
     "bgsc": "display:icon",
     "dfil": "display:icon",
 }
+_NON_DISPLAY_ALIASES: Final[Mapping[str, str]] = {
+    "hp": "field:unit:hit-points",
+    "hitpoints": "field:unit:hit-points",
+    "uhpm": "field:unit:hit-points",
+}
 _EXT_RANK: Final[Mapping[str, int]] = {
     "base": 0,
     "slk": 10,
@@ -183,18 +188,33 @@ def _field_identity(value: ObjectFieldValue) -> str:
     alias = _DISPLAY_ALIASES.get(key)
     if alias is None and key.startswith("display:"):
         alias = key
-    return alias or f"field:{value.label.casefold()}"
+    non_display_key = key.removeprefix("binary:")
+    return alias or _NON_DISPLAY_ALIASES.get(non_display_key) or f"field:{value.label.casefold()}"
 
 
 def _public_field_key(identity: str, value: ObjectFieldValue) -> str:
     return identity if identity.startswith("display:") else value.key
 
 
-def _field_rank(value: ObjectFieldValue, identity: str) -> tuple[int, str, str, str]:
+def _field_rank(
+    value: ObjectFieldValue,
+    identity: str,
+) -> tuple[int, str, str, str, str, str, str, str, str]:
     priority = int(value.source_kind)
     if value.source_kind is ObjectSourceKind.TEXT_STRINGS and not identity.startswith("display:"):
         priority = 25
-    return priority, value.source.replace("/", "\\").casefold(), value.key.casefold(), value.value
+    normalized_source = value.source.replace("/", "\\")
+    return (
+        priority,
+        normalized_source.casefold(),
+        normalized_source,
+        value.source,
+        value.key.casefold(),
+        value.key,
+        value.label.casefold(),
+        value.label,
+        value.value,
+    )
 
 
 def _candidate_identity_rank(candidate: ObjectCandidate) -> tuple[int, int, str, str, str]:
