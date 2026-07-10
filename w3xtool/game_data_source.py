@@ -6,6 +6,8 @@ from dataclasses import dataclass
 import os
 from typing import Protocol
 
+from .casclib_api import CascLibLoadError, CascNativeError
+from .casclib_source import CascLibDataSource, probe_casclib
 from .casc_source import CascDataSource, has_casc_path_map
 
 
@@ -22,6 +24,7 @@ class GameDataProbe:
     kind: str
     is_readable: bool
     message: str
+    backend: str | None = None
 
 
 class DirectoryDataSource:
@@ -73,11 +76,28 @@ def probe_game_data_path(path: str | None) -> GameDataProbe:
     if not os.path.isdir(path):
         return GameDataProbe("missing", False, "路径不存在")
     if _looks_like_native_casc(path):
+        native_probe = probe_casclib(path)
+        if native_probe.is_available:
+            return GameDataProbe(
+                "native_casc",
+                True,
+                "原生 CASC 目录：使用 CascLib 直读",
+                "casclib",
+            )
         if has_casc_path_map(path):
-            return GameDataProbe("native_casc", True, "原生 CASC 目录：使用路径映射直读 idx/data")
-        return GameDataProbe("native_casc", False, "原生 CASC 已识别；缺路径索引，可提供 w3xray-casc-paths.tsv 或先导出散文件")
+            return GameDataProbe(
+                "native_casc",
+                True,
+                f"CascLib 不可用：{native_probe.reason}；回退到路径映射直读 idx/data",
+                "path_map",
+            )
+        return GameDataProbe(
+            "native_casc",
+            False,
+            f"原生 CASC 已识别；{native_probe.reason}；可提供 w3xray-casc-paths.tsv 或先导出散文件",
+        )
     if _has_any_file(path):
-        return GameDataProbe("extracted_dir", True, "已导出的散文件目录")
+        return GameDataProbe("extracted_dir", True, "已导出的散文件目录", "directory")
     return GameDataProbe("empty", False, "目录为空")
 
 
@@ -87,6 +107,12 @@ def open_game_data_source(path: str | None) -> GameDataSource | None:
     if not probe.is_readable or path is None:
         return None
     if probe.kind == "native_casc":
+        if probe.backend == "casclib":
+            try:
+                return CascLibDataSource(path)
+            except (CascLibLoadError, CascNativeError):
+                if not has_casc_path_map(path):
+                    return None
         try:
             return CascDataSource(path)
         except (FileNotFoundError, OSError, ValueError):

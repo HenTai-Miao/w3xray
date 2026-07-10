@@ -10,6 +10,8 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Final
 
+from .casclib_dist import CascLibDistError, validate_casclib_dist_assets
+
 APP_NAME: Final = "魔兽地图提取器"
 SPEC_FILE: Final = f"{APP_NAME}.spec"
 
@@ -122,7 +124,7 @@ def expected_artifact_path(config: DistBuildConfig, *, system: str | None = None
     """Return the executable path users should launch after a successful build."""
     app_dir = config.dist_path / APP_NAME
     current_system = system or platform.system()
-    match current_system:
+    match current_system:  # noqa: MATCH_OK - platform names are an open string set.
         case "Windows":
             return app_dir / f"{APP_NAME}.exe"
         case "Darwin" | "Linux":
@@ -135,7 +137,7 @@ def parse_cli_options(argv: Sequence[str]) -> DistCliOptions:
     """Parse the tiny dist-builder CLI."""
     options = DistCliOptions()
     for argument in argv:
-        match argument:
+        match argument:  # noqa: MATCH_OK - unknown CLI strings become DistArgumentError.
             case "--dry-run":
                 options = replace(options, dry_run=True)
             case "--no-clean":
@@ -153,6 +155,7 @@ def run_dist_build(config: DistBuildConfig, *, dry_run: bool = False) -> int:
     """Run PyInstaller for the configured project."""
     if not config.spec_path.is_file():
         raise DistSpecMissingError(spec_path=config.spec_path)
+    validate_casclib_dist_assets(config.project_root)
     command = build_pyinstaller_command(config)
     print("构建命令:")
     print(f"  {shlex.join(command)}")
@@ -192,7 +195,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     except DistHelpRequested:
         print(help_text())
         return 0
-    except (DistArgumentError, DistSpecMissingError, ProjectRootNotFoundError) as exc:
+    except (
+        CascLibDistError,
+        DistArgumentError,
+        DistSpecMissingError,
+        ProjectRootNotFoundError,
+    ) as exc:
         print(f"错误: {exc}", file=sys.stderr)
         print(help_text(), file=sys.stderr)
         return 2

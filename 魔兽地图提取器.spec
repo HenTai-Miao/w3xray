@@ -1,5 +1,9 @@
 # -*- mode: python ; coding: utf-8 -*-
+import sys
+from pathlib import Path
+
 from PyInstaller.utils.hooks import collect_all, collect_submodules
+from w3xtool.casclib_dist import validate_casclib_dist_assets
 
 datas = []
 binaries = []
@@ -9,6 +13,12 @@ hiddenimports = collect_submodules('w3xtool')
 tmp_ret = collect_all('customtkinter')
 datas += tmp_ret[0]; binaries += tmp_ret[1]
 hiddenimports = sorted(set(hiddenimports + tmp_ret[2]))
+
+if sys.platform == 'win32':
+    spec_root = Path(SPECPATH)
+    validate_casclib_dist_assets(spec_root, system='Windows')
+    binaries.append((str(spec_root / 'third_party/CascLib/bin/win-x64/CascLib.dll'), '.'))
+    datas.append((str(spec_root / 'third_party/CascLib/LICENSE'), 'licenses/CascLib'))
 
 
 a = Analysis(
