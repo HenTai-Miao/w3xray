@@ -133,7 +133,7 @@ def _best_script(md) -> str:
 def build_reference_graph(md) -> None:
     """计算引用图并填到 md：references(正向) / referenced_by(反向) / orphans(孤立自定义对象)。
 
-    只读分析，不改对象。对象的原始引用字段已在 _build_objects/_add_text_objects 抓到
+    只读分析，不改对象。对象候选管线已填充
     GameObject.ref_fields = [(字段标签, [code…])]；这里建图、还原名字、算孤立。
     """
     from .fields import label_for

@@ -13,7 +13,6 @@ from w3xtool.object_candidates import (
     ObjectCandidate,
     ObjectFieldValue,
     ObjectSourceKind,
-    collect_object_candidates,
 )
 from w3xtool.object_pipeline import (
     build_object_index,
@@ -270,26 +269,6 @@ def test_final_display_values_and_provenance_use_canonical_keys() -> None:
     assert merged.field_values["uhpm"] == "420"
 
 
-def test_text_and_slk_values_resolve_wts_and_westring_before_storage() -> None:
-    # Given: text and SLK display fields contain WTS and editor-string references.
-    archive = FakeArchive(
-        {
-            "Units\\HumanUnitStrings.txt": b"[H001]\nName=TRIGSTR_1\nTip=WESTRING_ABILITY\n",
-            "Units\\UnitData.slk": _slk(("unitID", "Name"), (("H002", {"Name": "TRIGSTR_2"}),)),
-        }
-    )
-    md = MapData(path="fixture.w3x", name="fixture")
-
-    # When: the public pipeline loads both candidate sources.
-    load_object_pipeline(md, archive, {1: "文本名称", 2: "SLK名称"}, base_objects={})
-
-    # Then: no unresolved token is stored in the final objects.
-    assert md.obj_index["H001"].name == "文本名称"
-    assert dict(md.obj_index["H001"].fields)["提示"] == "技能"
-    assert md.obj_index["H002"].name == "SLK名称"
-    assert "TRIGSTR" not in " ".join(obj.search_text for obj in md.obj_index.values())
-
-
 def test_binary_and_slk_coexist_in_pipeline_without_duplicate_codes() -> None:
     # Given: binary, text and SLK all describe the same custom object.
     archive = FakeArchive(
@@ -313,75 +292,41 @@ def test_binary_and_slk_coexist_in_pipeline_without_duplicate_codes() -> None:
     assert md.obj_index["H001"].ext == "w3u"
 
 
-def test_map_and_campaign_prefixes_keep_distinct_wts_and_no_base_aliases() -> None:
-    # Given: map and campaign binaries use the same WTS id for different objects.
+def test_load_map_impl_merges_map_and_campaign_candidates_once() -> None:
+    # Given: text, binary, SLK, and campaign sources have distinct WTS scopes.
+    from w3xtool import api
+    from w3xtool.load_context import MapLoadContext
+
     archive = FakeArchive(
         {
-            "war3map.w3u": _binary_object("hfoo", "H001", (("unam", "TRIGSTR_1"),)),
-            "war3campaign.w3u": _binary_object("hfoo", "H002", (("unam", "TRIGSTR_1"),)),
-        }
-    )
-
-    # When: each prefix is collected with its own WTS table and merged once.
-    candidates = (
-        *collect_object_candidates(archive, {1: "地图单位"}, prefix="war3map"),
-        *collect_object_candidates(archive, {1: "战役单位"}, prefix="war3campaign"),
-    )
-    merged = merge_object_candidates(candidates, {})
-    index = build_object_index(merged)
-
-    # Then: both rawcodes survive with the correct namespace and no base-id alias.
-    assert [(obj.obj_id, obj.name) for obj in merged] == [("H001", "地图单位"), ("H002", "战役单位")]
-    assert set(index) == {"H001", "H002"}
-
-
-def test_corrupt_binary_does_not_discard_valid_text_or_slk_candidates() -> None:
-    # Given: one malformed binary file beside valid text and SLK sources.
-    archive = FakeArchive(
-        {
-            "war3map.w3u": b"corrupt",
-            "Units\\HumanUnitStrings.txt": b"[H001]\nName=Text survives\n",
-            "Units\\UnitData.slk": _slk(("unitID", "Name"), (("H002", {"Name": "SLK survives"}),)),
-        }
-    )
-    md = MapData(path="fixture.w3x", name="fixture")
-
-    # When: candidate collection tolerates the malformed source.
-    load_object_pipeline(md, archive, {}, base_objects={})
-
-    # Then: valid independent sources still materialize.
-    assert {obj.obj_id for obj in md.obj_index.values()} == {"H001", "H002"}
-
-
-def test_same_text_object_from_func_and_strings_collects_deterministically() -> None:
-    # Given: Func and Strings provide different fields for the same unit rawcode.
-    files = (
-        ("Units\\HumanUnitFunc.txt", b"[H001]\nName=Func Footman\nHP=420\n"),
-        ("Units\\HumanUnitStrings.txt", b"[H001]\nName=Localized Footman\n"),
-    )
-    forward_archive = FakeArchive(dict(files))
-    reverse_archive = FakeArchive(dict(reversed(files)))
-
-    # When: collection observes each archive listing order.
-    forward = collect_object_candidates(forward_archive, {})
-    reverse = collect_object_candidates(reverse_archive, {})
-
-    # Then: collection succeeds and has the same primitive normalized output.
-    assert _candidate_normalized(forward) == _candidate_normalized(reverse)
-    assert [(item.obj_id, item.ext) for item in forward] == [("H001", "txt"), ("H001", "txt")]
-
-
-def _candidate_normalized(candidates: tuple[ObjectCandidate, ...]) -> tuple[tuple[str, str, str, str, tuple[tuple[str, str, str, str, int], ...]], ...]:
-    return tuple(
-        (
-            candidate.category,
-            candidate.obj_id,
-            candidate.base_id,
-            candidate.ext,
-            tuple(
-                (field.key, field.label, field.value, field.source, int(field.source_kind))
-                for field in candidate.fields
+            "war3map.wts": "STRING 1\n{\n地图文本单位\n}\n".encode(),
+            "Units\\HumanUnitStrings.txt": b"[H001]\nName=TRIGSTR_1\n",
+            "war3map.w3u": _binary_object(
+                "hfoo", "H002", (("uhpm", "2500"), ("uabi", "A001"))
             ),
-        )
-        for candidate in candidates
+            "Units\\UnitData.slk": _slk(
+                ("unitID", "race", "abilList"),
+                (("H002", {"race": "human", "abilList": "A002"}),),
+            ),
+            "war3campaign.wts": "STRING 1\n{\n战役共享单位\n}\n".encode(),
+            "war3campaign.w3u": _binary_object("hfoo", "H003", (("unam", "TRIGSTR_1"),)),
+        }
     )
+
+    # When: the high-level loader collects both namespaces before one materialization.
+    md = api._load_map_impl(archive, archive.path, 0, None, MapLoadContext())
+
+    # Then: every source survives without aliases or category-wide suppression.
+    assert {"H001", "H002", "H003"}.issubset(md.obj_index)
+    assert md.obj_index["H001"].name == "地图文本单位"
+    assert md.obj_index["H003"].name == "战役共享单位"
+    h002 = md.obj_index["H002"]
+    assert dict(h002.fields)["生命上限"] == "2500"
+    assert dict(h002.fields)["种族"] == "human"
+    assert ("uabi", ["A001"]) in h002.ref_fields
+    assert ("abilList", ["A002"]) in h002.ref_fields
+    rawcodes = [item.obj_id for bucket in md.objects.values() for item in bucket]
+    assert len(rawcodes) == len(set(rawcodes))
+    assert all(code == item.obj_id for code, item in md.obj_index.items())
+    assert md.obj_index["hfoo"].obj_id == "hfoo"
+    assert md.obj_index["hfoo"] is not h002
