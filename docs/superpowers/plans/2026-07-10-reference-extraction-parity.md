@@ -648,7 +648,7 @@ git commit -m "feat: decode StormLib MPQ compression chains"
 - `ScriptCollection` includes `texts`, `wct_diagnostic`, and `binary_members` but publishes only readable text.
 - Changes compatibly: `format_trigger_eca_tsv(summary, *, trigger_data=None, wts=None, object_names=None) -> str`.
 
-- [ ] **Step 1: Write dual-language, binary-exclusion, WCT, and array-index tests**
+- [x] **Step 1: Write dual-language, binary-exclusion, WCT, and array-index tests**
 
 ```python
 def test_jass_and_lua_are_both_analyzed_but_wtg_and_raw_wct_are_not_text() -> None:
@@ -674,13 +674,13 @@ def test_eca_tsv_renders_wts_object_name_and_array_index() -> None:
     assert "数组索引" in text and "\t3\t" in text
 ```
 
-- [ ] **Step 2: Run focused tests and confirm publication gaps**
+- [x] **Step 2: Run focused tests and confirm publication gaps**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_script_sources.py tests/test_wct.py tests/test_wtg_eca_exports.py -q -p no:cacheprovider`
 
 Expected: FAIL because binary WTG/WCT are loaded into `md.scripts`, `_best_script_text` drops the second language, and array indexes are not exported.
 
-- [ ] **Step 3: Implement readable source collection and per-language analysis**
+- [x] **Step 3: Implement readable source collection and per-language analysis**
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -700,17 +700,17 @@ def analysis_script_texts(md: MapData) -> tuple[tuple[str, str], ...]:
 
 Decode JASS, Lua, and WTS with `decode_warcraft_string`. Parse WCT bytes once and publish only its virtual `.txt` output. Replace `_best_script_text` callers with iteration over both primary scripts or a labeled concatenation where the downstream scanner accepts one string.
 
-- [ ] **Step 4: Add partial WCT diagnostics and full ECA recursion**
+- [x] **Step 4: Add partial WCT diagnostics and full ECA recursion**
 
 Make `parse_wct` return confirmed blocks plus a typed truncation/version diagnostic. In ECA export, pass WTS/object maps to `render_eca_semantic`; recursively emit `nested_function`, `children`, and `array_indexer` using distinct row labels and depth.
 
-- [ ] **Step 5: Run script, trigger, UI, and pack tests**
+- [x] **Step 5: Run script, trigger, UI, and pack tests**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_script_sources.py tests/test_wct.py tests/test_script_scan.py tests/test_script_function_index.py tests/test_script_global_index.py tests/test_wtg_eca_exports.py tests/test_triggerdata_semantics.py tests/test_gui_trigger_eca.py tests/test_knowledge_pack.py -q -p no:cacheprovider`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit script/ECA publication fixes**
+- [x] **Step 6: Commit script/ECA publication fixes**
 
 ```bash
 git add w3xtool/script_sources.py w3xtool/api.py w3xtool/wct.py w3xtool/script_text_export.py w3xtool/trigger_exports.py w3xtool/gui_trigger_eca.py w3xtool/knowledge_pack.py tests/test_script_sources.py tests/test_wct.py tests/test_wtg_eca_exports.py tests/test_triggerdata_semantics.py
@@ -736,7 +736,7 @@ git commit -m "fix: publish every readable script and ECA value"
 - Consumes: Task 1 `BytesArchiveSource`.
 - Changes: all archive-backed reports call `md.archive_source.open()` through `open_map_source(md)`.
 
-- [ ] **Step 1: Write persistent child and declared-order tests**
+- [x] **Step 1: Write persistent child and declared-order tests**
 
 ```python
 def test_campaign_child_remains_reopenable_after_parent_load() -> None:
@@ -756,17 +756,17 @@ def test_w3f_declared_map_order_wins_over_listfile_order() -> None:
     assert tuple(entry.path for entry in info.maps) == ("Maps\\B.w3x", "Maps\\A.w3x")
 ```
 
-- [ ] **Step 2: Run campaign tests and confirm source disappearance**
+- [x] **Step 2: Run campaign tests and confirm source disappearance**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_campaign_sources.py tests/test_campaign.py tests/test_w3i.py -q -p no:cacheprovider`
 
 Expected: FAIL because child `path` is a non-existent logical name and W3F stops at the header.
 
-- [ ] **Step 3: Parse bounded W3F map entries**
+- [x] **Step 3: Parse bounded W3F map entries**
 
 Extend `W3fInfo` with `maps: list[CampaignMapEntry]`. Parse the version-specific campaign flags, background/minimap fields, ambient data, fog, UI race, and map-entry count using bounded readers; each entry retains path and display name. On truncation, preserve the header and confirmed entries while recording a diagnostic.
 
-- [ ] **Step 4: Load children from owned bytes and route all reopeners**
+- [x] **Step 4: Load children from owned bytes and route all reopeners**
 
 ```python
 def open_map_source(md: MapData) -> ContextManager[MapArchiveReader]:
@@ -777,13 +777,13 @@ def open_map_source(md: MapData) -> ContextManager[MapArchiveReader]:
 
 When reading a child member, create `BytesArchiveSource(inner, data)`, pass it into `load_map`, retain the logical path, and attach the source to the child. Replace direct `MPQArchive(md.path)` use in identity, terrain, assets, resource bodies, and selected-child export.
 
-- [ ] **Step 5: Run campaign, terrain, resource, and export tests**
+- [x] **Step 5: Run campaign, terrain, resource, and export tests**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_campaign_sources.py tests/test_campaign.py tests/test_w3i.py tests/test_batch_extraction_gaps.py tests/test_resource_inventory.py tests/test_gui_campaign.py -q -p no:cacheprovider`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit campaign source fixes**
+- [x] **Step 6: Commit campaign source fixes**
 
 ```bash
 git add w3xtool/campaign_sources.py w3xtool/api.py w3xtool/w3i.py w3xtool/knowledge_assets.py w3xtool/knowledge_terrain_exports.py w3xtool/map_identity.py w3xtool/gui_export_actions.py tests/test_campaign_sources.py tests/test_campaign.py tests/test_w3i.py
