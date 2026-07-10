@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import os
 import struct
+from contextlib import nullcontext
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final, Protocol
+from typing import TYPE_CHECKING, ContextManager, Final, Protocol
 
-from .mpq import MPQArchive
+from .campaign_sources import open_map_source
 from .resources import find_resource_paths, resource_kind
 from .war3_encoding import decode_warcraft_string
 
@@ -55,16 +56,17 @@ class _DirectorySource:
 
 def build_resource_content_references(md: "MapData") -> ResourceContentReferenceReport:
     """Scan readable config/UI bodies for paths to other assets."""
-    source = _open_source(md.path)
-    if source is None:
+    source_context = _open_source(md)
+    if source_context is None:
         return ResourceContentReferenceReport(())
     refs: list[ResourceContentReference] = []
     seen: set[tuple[str, str]] = set()
     try:
-        for path in _text_body_paths(tuple(getattr(md, "all_files", ()) or ())):
-            _scan_one_body(source, path, refs, seen)
-    finally:
-        source.close()
+        with source_context as source:
+            for path in _text_body_paths(tuple(getattr(md, "all_files", ()) or ())):
+                _scan_one_body(source, path, refs, seen)
+    except (OSError, ValueError, struct.error):
+        return ResourceContentReferenceReport(())
     return ResourceContentReferenceReport(tuple(refs))
 
 
@@ -111,13 +113,11 @@ def _text_body_paths(names: tuple[str, ...]) -> tuple[str, ...]:
     return tuple(sorted(paths))
 
 
-def _open_source(path: str) -> _ReadableSource | None:
-    if not path or not os.path.exists(path):
-        return None
-    if os.path.isdir(path):
-        return _DirectorySource(path)
+def _open_source(md: MapData) -> ContextManager[_ReadableSource] | None:
+    if md.path and os.path.isdir(md.path):
+        return nullcontext(_DirectorySource(md.path))
     try:
-        return MPQArchive(path)
+        return open_map_source(md)
     except (OSError, ValueError, struct.error):
         return None
 

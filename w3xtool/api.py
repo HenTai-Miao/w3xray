@@ -12,6 +12,7 @@ from .archive_export import (
     _imported_names as _imported_names,
     _safe_export_path as _safe_export_path,
     export_all_files as export_all_files,
+    export_loaded_map_files as export_loaded_map_files,
     tmp_extract_dir as tmp_extract_dir,
 )
 from .map_archive_reader import MapArchiveReader

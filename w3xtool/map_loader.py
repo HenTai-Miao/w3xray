@@ -2,11 +2,10 @@
 from __future__ import annotations
 
 import os
-import tempfile
-from contextlib import suppress
 from dataclasses import replace
 
 from .archive_source import BytesArchiveSource, PathArchiveSource
+from .campaign_sources import campaign_inner_maps
 from .extraction_diagnostics import (
     DiagnosticSeverity,
     ExtractionDiagnostic,
@@ -149,41 +148,36 @@ def _load_map_impl(
     md.all_files = list_archive_files(archive, external_names=external_report.confirmed)
 
     if _depth == 0 and path.lower().endswith(".w3n"):
-        for inner in _campaign_inner_maps(archive, md.all_files):
-            tmp = None
+        for inner in _campaign_inner_maps(archive, md.all_files, md.w3f):
+            source = None
             try:
                 data = archive.read_file(inner)
-                fd, tmp = tempfile.mkstemp(suffix=".w3x", prefix="_w3n_")
-                with os.fdopen(fd, "wb") as f:
-                    f.write(data)
+                source = BytesArchiveSource(inner, data)
                 child_context = replace(load_context, author_bundle_path=None)
-                sub = load_map(tmp, _depth + 1, shared_index=md.obj_index, load_context=child_context)
-                sub.archive_source = BytesArchiveSource(inner, data)
+                with source.open() as child_archive:
+                    sub = _load_map_impl(
+                        child_archive,
+                        inner,
+                        _depth + 1,
+                        md.obj_index,
+                        child_context,
+                    )
+                sub.archive_source = source
                 sub.name = inner
                 sub.path = inner
                 md.sub_maps.append(sub)
             except Exception:  # noqa: BROAD_EXCEPT_OK - one corrupt campaign child must not hide siblings.
+                if source is not None:
+                    source.close()
                 continue
-            finally:
-                if tmp:
-                    with suppress(OSError):
-                        os.remove(tmp)
 
     return md
 
 
-def _campaign_inner_maps(archive: MapArchiveReader, known_names=()):
+def _campaign_inner_maps(archive: MapArchiveReader, known_names=(), w3f=None):
     """从战役里找出内含的地图文件名。优先 listfile，其次扫常见名。"""
-    found = []
     candidates = tuple(known_names) + tuple(archive.list_files())
-    seen = set()
-    for name in candidates:
-        key = name.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        if name.lower().endswith((".w3x", ".w3m")):
-            found.append(name)
+    found = list(campaign_inner_maps(w3f, candidates))
     if found:
         return found
     for i in range(1, 30):

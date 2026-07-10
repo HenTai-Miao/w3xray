@@ -21,7 +21,7 @@ def format_knowledge_audit(md: MapData) -> str:
     inventory = build_resource_inventory(md)
     save_report = build_save_report(md)
     extraction = build_extraction_completeness_report(md)
-    identity = build_map_identity(md.path)
+    identity = build_map_identity(md)
     object_count = sum(len(objects) for objects in md.objects.values())
     category_count = sum(1 for objects in md.objects.values() if objects)
     lines = [

@@ -9,6 +9,7 @@ from unittest.mock import patch
 
 from tests.gui_base import GuiTestCase
 from w3xtool.api import MapData, _export_all_impl
+from w3xtool.archive_source import BytesArchiveSource
 from w3xtool.external_listfile import read_external_listfile
 
 
@@ -149,6 +150,7 @@ class ExternalListfileGuiTest(GuiTestCase):
                     self._target()
 
             self.app.map_data = MapData(path="map.w3x", name="导出图")
+            self.app._campaign_path = None
             self.app.external_listfile_path = listfile_path
 
             # When: the user clicks export all.
@@ -162,6 +164,71 @@ class ExternalListfileGuiTest(GuiTestCase):
             self.assertEqual(calls, [("map.w3x", listfile_path)])
 
         os.remove(listfile_path)
+
+    def test_export_all_uses_selected_campaign_child_source(self) -> None:
+        # Given: the active campaign view is a child backed by owned archive bytes.
+        child = MapData(
+            path="Maps\\Chapter1.w3x",
+            name="第一章",
+            archive_source=BytesArchiveSource("Maps\\Chapter1.w3x", b"child"),
+        )
+        self.app.map_data = child
+        self.app._campaign_path = "campaign.w3n"
+        self.addCleanup(setattr, self.app, "_campaign_path", None)
+        self.addCleanup(child.close)
+        self.app.external_listfile_path = "/tmp/child-listfile.txt"
+        source_calls: list[tuple[MapData, str | None]] = []
+        path_calls: list[str] = []
+        errors: list[str] = []
+        completions: list[tuple[str, int, str]] = []
+
+        class InlineThread:
+            def __init__(self, target, daemon: bool) -> None:
+                self._target = target
+
+            def start(self) -> None:
+                self._target()
+
+        # When: the selected view is exported.
+        with tempfile.TemporaryDirectory() as out:
+            def fake_source_export(
+                md: MapData,
+                *,
+                external_listfile_path: str | None = None,
+            ) -> str:
+                source_calls.append((md, external_listfile_path))
+                return out
+
+            with patch(
+                "w3xtool.gui_export_actions.export_loaded_map_files",
+                side_effect=fake_source_export,
+            ):
+                with patch(
+                    "w3xtool.gui_export_actions.export_all_files",
+                    side_effect=lambda path, **_kwargs: path_calls.append(path) or out,
+                ):
+                    with patch.object(
+                        self.app,
+                        "_open_dir",
+                        side_effect=lambda path, count, kind: completions.append(
+                            (path, count, kind)
+                        ),
+                    ):
+                        with patch(
+                            "w3xtool.gui_export_actions.messagebox.showerror",
+                            side_effect=lambda _title, message: errors.append(message),
+                        ):
+                            with patch("w3xtool.gui_export_actions.threading.Thread", InlineThread):
+                                self.app.on_export_all()
+                            self.pump_events_until(
+                                lambda: bool(completions) or bool(errors),
+                            )
+
+        # Then: the child source and listfile reach the worker; the parent path is unused.
+        self.assertEqual(source_calls, [(child, "/tmp/child-listfile.txt")])
+        self.assertEqual(path_calls, [])
+        self.assertEqual(errors, [])
+        self.assertEqual(completions, [(out, 0, "文件")])
 
     def test_gui_selector_persists_game_data_directory(self) -> None:
         # Given: a Reforged data directory selected through the GUI.

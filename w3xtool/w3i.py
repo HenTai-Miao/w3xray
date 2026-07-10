@@ -13,14 +13,17 @@ import struct
 from dataclasses import dataclass, field
 
 from .war3_encoding import decode_warcraft_string
+from .w3f import CampaignMapEntry, W3fDiagnostic, W3fInfo, parse_w3f
 from .wts import resolve
+
+__all__ = ["CampaignMapEntry", "W3fDiagnostic", "W3fInfo", "parse_w3f", "parse_w3i"]
 
 # 玩家类型 / 种族（编辑器口径）
 PLAYER_TYPES = {1: "用户", 2: "电脑", 3: "中立", 4: "可救援"}
 RACES = {0: "可选", 1: "人族", 2: "兽族", 3: "不死", 4: "暗夜", 5: "中立"}
 
 
-@dataclass
+@dataclass  # noqa: MUTABLE_OK  # noqa: SLOTS_OK - legacy mutable compatibility model.
 class Player:
     id: int
     type: int
@@ -39,7 +42,7 @@ class Player:
         return RACES.get(self.race, str(self.race))
 
 
-@dataclass
+@dataclass  # noqa: MUTABLE_OK  # noqa: SLOTS_OK - legacy mutable compatibility model.
 class Force:
     name: str
     allied: bool = False
@@ -49,7 +52,7 @@ class Force:
     players: list = field(default_factory=list)   # 玩家序号(1基) 列表
 
 
-@dataclass
+@dataclass  # noqa: MUTABLE_OK  # noqa: SLOTS_OK - mutable extraction builder compatibility model.
 class W3iInfo:
     version: int = 0
     map_name: str = ""
@@ -70,17 +73,6 @@ class W3iInfo:
     custom_upgrade: bool = False
     players: list = field(default_factory=list)
     forces: list = field(default_factory=list)
-
-
-@dataclass
-class W3fInfo:
-    version: int = 0
-    campaign_version: int = 0
-    editor_version: int = 0
-    name: str = ""
-    difficulty: str = ""
-    author: str = ""
-    description: str = ""
 
 
 class _Reader:
@@ -211,27 +203,4 @@ def parse_w3i(data: bytes, wts: dict | None = None) -> "W3iInfo | None":
     except (struct.error, IndexError):
         return info
 
-    return info
-
-
-def parse_w3f(data: bytes, wts: dict | None = None) -> "W3fInfo | None":
-    """解析 war3campaign.w3f 战役信息头（移植自 w3x2lni frontend_w3f.lua）。
-
-    格式：i32 version + i32 campaign_version + i32 editor_version + z 名/难度/作者/描述。
-    （KKWE 自身也只解到头，后续战役地图列表段暂不解析。）
-    """
-    wts = wts or {}
-    if len(data) < 12:
-        return None
-    r = _Reader(data)
-    try:
-        info = W3fInfo(version=r.i32())
-        info.campaign_version = r.i32()
-        info.editor_version = r.i32()
-        info.name = str(resolve(r.cstr(), wts))
-        info.difficulty = str(resolve(r.cstr(), wts))
-        info.author = str(resolve(r.cstr(), wts))
-        info.description = str(resolve(r.cstr(), wts))
-    except (struct.error, IndexError):
-        return None
     return info

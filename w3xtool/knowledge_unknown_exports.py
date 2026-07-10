@@ -7,8 +7,9 @@ import struct
 from collections.abc import Iterable, Sequence
 from typing import TYPE_CHECKING, Protocol
 
+from .campaign_sources import open_map_source
 from .knowledge_io import write_text
-from .mpq import MPQArchive, guess_extension
+from .mpq import guess_extension
 from .safe_output import SafeWriteStatus, write_bytes_safely
 
 if TYPE_CHECKING:
@@ -38,20 +39,15 @@ class UnknownArchive(Protocol):
 
 def write_unknown_files(md: "MapData", out_dir: str, known_names: Sequence[str] = ()) -> int:
     """Write anonymous blocks from a readable MPQ source into ``out_dir``."""
-    if not getattr(md, "path", "") or not os.path.isfile(md.path):
-        return 0
     try:
-        archive = MPQArchive(md.path)
+        with open_map_source(md) as archive:
+            return write_unknown_files_from_archive(
+                archive,
+                out_dir,
+                tuple(getattr(md, "all_files", ()) or ()) + tuple(known_names),
+            )
     except (OSError, ValueError, struct.error):
         return 0
-    try:
-        return write_unknown_files_from_archive(
-            archive,
-            out_dir,
-            tuple(getattr(md, "all_files", ()) or ()) + tuple(known_names),
-        )
-    finally:
-        archive.close()
 
 
 def write_unknown_files_from_archive(

@@ -6,7 +6,7 @@ import os
 import threading
 from tkinter import messagebox
 
-from .api import export_all_files, tmp_extract_dir
+from .api import export_all_files, export_loaded_map_files, tmp_extract_dir
 from .knowledge_io import safe_filename, write_text
 from .knowledge_pack import format_box_id_text, write_knowledge_pack
 from .knowledge_script_exports import write_script_exports
@@ -33,13 +33,25 @@ class ExportActionsMixin:
     def on_export_all(self):
         if not self._need_map():
             return
-        path = self._campaign_path or self.map_data.path
+        md = self.map_data
+        campaign_path = self._campaign_path
+        path = campaign_path or md.path
+        is_campaign_child = campaign_path is not None and md.path != campaign_path
         self.status.configure(text="正在解包全部文件到临时目录 …")
         self.update_idletasks()
 
         def work():
             try:
-                out = export_all_files(path, external_listfile_path=self.external_listfile_path)
+                if is_campaign_child:
+                    out = export_loaded_map_files(
+                        md,
+                        external_listfile_path=self.external_listfile_path,
+                    )
+                else:
+                    out = export_all_files(
+                        path,
+                        external_listfile_path=self.external_listfile_path,
+                    )
                 n = sum(len(fs) for _, _, fs in os.walk(out))
                 self.after(0, lambda: self._open_dir(out, n, "文件"))
             except Exception as exc:  # noqa: BROAD_EXCEPT_OK - GUI worker boundary reports export failures.

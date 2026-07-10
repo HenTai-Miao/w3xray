@@ -121,7 +121,7 @@ def _map_summary_rows(md: MapData) -> list[str]:
         _map_summary_row("脚本文件数", str(len(md.scripts)), "脚本"),
         _map_summary_row("对象总数", str(object_count), "对象表"),
     ]
-    identity = build_map_identity(md.path)
+    identity = build_map_identity(md)
     if identity.readable:
         rows.extend((
             _map_summary_row("文件字节", str(identity.size), "源文件"),

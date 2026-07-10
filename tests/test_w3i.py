@@ -101,6 +101,27 @@ def _build_w3f(name="战役名", difficulty="普通", author="作者C", desc="�
     return b
 
 
+def _build_w3f_tail(version=1, buttons=(), orders=(), truncate_after=None):
+    b = _build_w3f()
+    b += struct.pack("<ii", 0, 0)                 # campaign flags, background index
+    b += _z("Backgrounds\\Human") + _z("Minimap.blp")
+    b += struct.pack("<i", 0) + _z("")            # ambient index, custom ambient path
+    b += struct.pack("<i3f", 0, 0.0, 0.0, 0.0) + b"\x00\x00\x00\xff"
+    b += struct.pack("<i", 0)                      # race
+    if version >= 2:
+        b = struct.pack("<i", version) + b[4:]
+        b += struct.pack("<i", 0)                  # background version
+    b += struct.pack("<i", len(buttons))
+    for visible, chapter, title, path in buttons:
+        b += struct.pack("<i", visible) + _z(chapter) + _z(title) + _z(path)
+    b += struct.pack("<i", len(orders))
+    for reserved, path in orders:
+        b += _z(reserved) + _z(path)
+    if truncate_after is not None:
+        return b[:truncate_after]
+    return b
+
+
 class TestParseW3f(unittest.TestCase):
     def test_basic(self):
         from w3xtool.w3i import parse_w3f
@@ -117,6 +138,59 @@ class TestParseW3f(unittest.TestCase):
     def test_garbage_returns_none(self):
         from w3xtool.w3i import parse_w3f
         self.assertIsNone(parse_w3f(b""))
+
+    def test_v1_uses_map_order_and_resolves_title_metadata(self):
+        from w3xtool.w3i import parse_w3f
+
+        info = parse_w3f(_build_w3f_tail(
+            buttons=[(1, "TRIGSTR_001", "TRIGSTR_002", "Maps\\Chapter1.w3x")],
+            orders=[("", "maps/chapter1.w3x")],
+        ), wts={1: "第一章", 2: "序章"})
+
+        self.assertEqual([(entry.path, entry.display_name) for entry in info.maps], [
+            ("maps/chapter1.w3x", "序章"),
+        ])
+        self.assertEqual(info.maps[0].chapter_name, "第一章")
+        self.assertTrue(info.maps[0].initially_visible)
+
+    def test_v2_consumes_background_version_before_map_buttons(self):
+        from w3xtool.w3i import parse_w3f
+
+        info = parse_w3f(_build_w3f_tail(
+            version=2,
+            buttons=[(0, "", "第二章", "Maps\\Chapter2.w3x")],
+            orders=[("", "Maps\\Chapter2.w3x")],
+        ))
+
+        self.assertEqual([entry.path for entry in info.maps], ["Maps\\Chapter2.w3x"])
+        self.assertFalse(info.maps[0].initially_visible)
+
+    def test_truncation_keeps_only_complete_map_buttons(self):
+        from w3xtool.w3i import W3fDiagnostic, parse_w3f
+
+        header = _build_w3f_tail()[:-8]
+        data = header + struct.pack("<i", 2)
+        data += struct.pack("<i", 1) + _z("") + _z("第一章") + _z("Maps\\One.w3x")
+        data += struct.pack("<i", 1) + _z("") + _z("第二章")
+
+        info = parse_w3f(data)
+
+        self.assertEqual([entry.path for entry in info.maps], ["Maps\\One.w3x"])
+        self.assertEqual(info.diagnostic, W3fDiagnostic.TRUNCATED)
+
+    def test_malicious_map_count_is_bounded(self):
+        from w3xtool.w3i import W3fDiagnostic, parse_w3f
+
+        data = _build_w3f_tail()[:-4] + struct.pack("<i", 2_147_483_647)
+        info = parse_w3f(data)
+
+        self.assertEqual(info.maps, [])
+        self.assertEqual(info.diagnostic, W3fDiagnostic.TRUNCATED)
+
+    def test_truncated_header_returns_none(self):
+        from w3xtool.w3i import parse_w3f
+
+        self.assertIsNone(parse_w3f(_build_w3f()[:-1]))
 
 
 class _FakeArchive:

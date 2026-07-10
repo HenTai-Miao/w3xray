@@ -5,9 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 import os
 import struct
-from typing import TYPE_CHECKING, Final, Protocol
+from contextlib import nullcontext
+from typing import TYPE_CHECKING, ContextManager, Final, Protocol
 
-from .mpq import MPQArchive
+from .campaign_sources import open_map_source
 from .resource_inventory import ResourceInventory, build_resource_inventory
 from .safe_output import SafeWriteStatus, safe_relative_path, write_bytes_safely
 
@@ -63,14 +64,22 @@ def export_resource_bodies(
 ) -> AssetBodyExportReport:
     """Copy readable resource/config bodies into the knowledge pack."""
     resolved_inventory = inventory or build_resource_inventory(md)
-    source = _open_source(md.path)
     rows: list[AssetBodyExport] = []
+    source_context = _open_source(md)
+    if source_context is None:
+        return AssetBodyExportReport(tuple(
+            _export_one(item.path, item.status, resource_dir, None)
+            for item in resolved_inventory.items
+        ))
     try:
-        for item in resolved_inventory.items:
-            rows.append(_export_one(item.path, item.status, resource_dir, source))
-    finally:
-        if source is not None:
-            source.close()
+        with source_context as source:
+            for item in resolved_inventory.items:
+                rows.append(_export_one(item.path, item.status, resource_dir, source))
+    except (OSError, ValueError, struct.error):
+        return AssetBodyExportReport(tuple(
+            _export_one(item.path, item.status, resource_dir, None)
+            for item in resolved_inventory.items
+        ))
     return AssetBodyExportReport(tuple(rows))
 
 
@@ -114,13 +123,11 @@ def _export_one(
     return AssetBodyExport(path, f"{_BODY_DIR}/{rel}", len(data), "已导出")
 
 
-def _open_source(path: str) -> _ReadableSource | None:
-    if not path or not os.path.exists(path):
-        return None
-    if os.path.isdir(path):
-        return _DirectorySource(path)
+def _open_source(md: MapData) -> ContextManager[_ReadableSource] | None:
+    if md.path and os.path.isdir(md.path):
+        return nullcontext(_DirectorySource(md.path))
     try:
-        return MPQArchive(path)
+        return open_map_source(md)
     except (OSError, ValueError, struct.error):
         return None
 

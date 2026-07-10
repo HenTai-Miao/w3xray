@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import os
 import struct
+from contextlib import nullcontext
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, ContextManager, Protocol
 
+from .campaign_sources import open_map_source
 from .knowledge_io import tsv, write_text
 from .mapmeta import MapStructureReport, build_map_structure_report
-from .mpq import MPQArchive
 from .terrain import TerrainInfo, parse_w3e_header
 from .terrain_tiles import describe_terrain_tile
 
@@ -56,14 +57,15 @@ def write_terrain_exports(md: "MapData", out_dir: str) -> int:
 
 def build_terrain_export_data(md: "MapData") -> TerrainExportData:
     """Read W3E/WPM/SHD from a map source or source-like directory."""
-    source = _open_source(md.path)
-    if source is None:
+    source_context = _open_source(md)
+    if source_context is None:
         return TerrainExportData(None, MapStructureReport())
     try:
-        terrain = _read_terrain(source)
-        structure = _read_structure(source)
-    finally:
-        source.close()
+        with source_context as source:
+            terrain = _read_terrain(source)
+            structure = _read_structure(source)
+    except (OSError, ValueError, struct.error):
+        return TerrainExportData(None, MapStructureReport())
     return TerrainExportData(terrain, structure)
 
 
@@ -174,13 +176,11 @@ def _read_structure(source: _ReadableSource) -> MapStructureReport:
     return build_map_structure_report(files)
 
 
-def _open_source(path: str) -> _ReadableSource | None:
-    if not path or not os.path.exists(path):
-        return None
-    if os.path.isdir(path):
-        return _DirectorySource(path)
+def _open_source(md: MapData) -> ContextManager[_ReadableSource] | None:
+    if md.path and os.path.isdir(md.path):
+        return nullcontext(_DirectorySource(md.path))
     try:
-        return MPQArchive(path)
+        return open_map_source(md)
     except (OSError, ValueError, struct.error):
         return None
 

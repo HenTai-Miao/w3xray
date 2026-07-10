@@ -121,13 +121,13 @@ class ExtractionCompletenessTest(unittest.TestCase):
 
         # When: completeness diagnoses the unavailable source.
         with patch(
-            "w3xtool.extraction_completeness.MPQArchive",
-            side_effect=AssertionError("must not construct MPQArchive"),
-        ) as archive_type:
+            "w3xtool.extraction_completeness.open_map_source",
+            side_effect=AssertionError("must not open absent source"),
+        ) as source_opener:
             report = build_extraction_completeness_report(md)
 
-        # Then: the bounded helper classifies it before MPQArchive fallback can copy it.
-        archive_type.assert_not_called()
+        # Then: the bounded helper classifies it before source reopening can begin.
+        source_opener.assert_not_called()
         self.assertEqual(report.archive_diagnosis_kind, ArchiveDiagnosisKind.MISSING.value)
 
     def test_report_reuses_typed_archive_diagnosis_for_unopened_source(self) -> None:

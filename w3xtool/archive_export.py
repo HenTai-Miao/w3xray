@@ -10,7 +10,9 @@ from typing import Protocol
 
 from .archive_export_paths import _safe_export_path
 from .archive_export_recovery import _export_recovered_named_files
+from .campaign_sources import open_map_source
 from .external_listfile import read_external_listfile
+from .map_data import MapData
 from .mpq import MPQArchive, guess_extension
 from .safe_output import SafeWriteStatus, write_bytes_safely, write_text_safely
 
@@ -77,6 +79,20 @@ def export_all_files(
         return _export_all_impl(archive, out_dir, _depth, external_names=names)
     finally:
         archive.close()
+
+
+def export_loaded_map_files(
+    md: MapData,
+    out_dir: str | None = None,
+    _depth: int = 0,
+    *,
+    external_listfile_path: str | None = None,
+    external_names: Sequence[str] = (),
+) -> str:
+    """Extract a loaded map through its retained archive source."""
+    names = tuple(external_names) + read_external_listfile(external_listfile_path)
+    with open_map_source(md) as archive:
+        return _export_all_impl(archive, out_dir, _depth, external_names=names)
 
 
 def _export_all_impl(

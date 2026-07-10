@@ -6,15 +6,20 @@ import os
 import struct
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from .archive_diagnostics import diagnose_archive_open
-from .mpq import FLAG_ENCRYPTED, MPQArchive
+from .campaign_sources import open_map_source
+from .mpq import FLAG_ENCRYPTED
+
+if TYPE_CHECKING:
+    from .archive_source import ArchiveSource
 
 
 class MapExtractionInput(Protocol):
     path: str
     all_files: list[str]
+    archive_source: ArchiveSource | None
 
 
 class BlockProbe(Protocol):
@@ -64,7 +69,7 @@ def build_extraction_completeness_report(
     md: MapExtractionInput,
 ) -> ExtractionCompletenessReport:
     """Build a completeness report from the original archive when available."""
-    if not md.path or not os.path.exists(md.path):
+    if md.archive_source is None and (not md.path or not os.path.exists(md.path)):
         diagnosis = diagnose_archive_open(md.path)
         return _fallback_report(
             md.path,
@@ -73,7 +78,8 @@ def build_extraction_completeness_report(
             diagnosis.kind.value,
         )
     try:
-        archive = MPQArchive(md.path)
+        with open_map_source(md) as archive:
+            return build_extraction_completeness_from_archive(md, archive)
     except (OSError, ValueError, struct.error) as err:
         diagnosis = diagnose_archive_open(md.path, err)
         return _fallback_report(
@@ -82,12 +88,6 @@ def build_extraction_completeness_report(
             diagnosis.message,
             diagnosis.kind.value,
         )
-    try:
-        return build_extraction_completeness_from_archive(md, archive)
-    finally:
-        archive.close()
-
-
 def build_extraction_completeness_from_archive(
     md: MapExtractionInput,
     archive: ExtractionArchive,
