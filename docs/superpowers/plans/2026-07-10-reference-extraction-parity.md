@@ -151,7 +151,7 @@ git commit -m "refactor: split extraction models and sources"
 - Produces: `merge_text_object_records(records) -> tuple[TextObjectRecord, ...]` with deterministic Func/Strings precedence.
 - Consumes: `decode_warcraft_string`, `parse_text_objects`, `classify`, and optional anonymous block APIs.
 
-- [ ] **Step 1: Write GBK, WTS-independent discovery, merge, and threshold tests**
+- [x] **Step 1: Write GBK, WTS-independent discovery, merge, and threshold tests**
 
 ```python
 def test_named_gbk_strings_file_is_decoded_below_anonymous_threshold() -> None:
@@ -175,13 +175,13 @@ def test_func_and_strings_merge_by_field_role_not_archive_order() -> None:
     assert record.fields == {"Name": "Localized", "Ubertip": "Readable", "HP": "1000"}
 ```
 
-- [ ] **Step 2: Run the tests and confirm current discovery fails**
+- [x] **Step 2: Run the tests and confirm current discovery fails**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_object_text_sources.py -q -p no:cacheprovider`
 
 Expected: FAIL because trusted named files are not an independent source and GBK currently becomes replacement characters.
 
-- [ ] **Step 3: Implement immutable records and trusted-name matching**
+- [x] **Step 3: Implement immutable records and trusted-name matching**
 
 ```python
 class TextObjectSourceKind(StrEnum):
@@ -208,7 +208,7 @@ _TRUSTED_NAME = re.compile(
 
 Normalize and sort archive names case-insensitively, parse every trusted file with valid sections regardless of record count, and use anonymous block scanning only when the archive exposes block operations. Apply the existing `len(records) >= 8` requirement only to anonymous blocks.
 
-- [ ] **Step 4: Implement deterministic Func/Strings field merge**
+- [x] **Step 4: Implement deterministic Func/Strings field merge**
 
 ```python
 _DISPLAY_FIELDS = frozenset({
@@ -225,13 +225,13 @@ def _field_rank(kind: TextObjectSourceKind, field_name: str) -> int:
 
 Group by `(category, obj_id)`, choose the highest-ranked non-empty value per field, and use normalized source-name order as the final tie-breaker. Preserve the winning source name in `field_sources` on the merged record.
 
-- [ ] **Step 5: Run text source tests**
+- [x] **Step 5: Run text source tests**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_object_text_sources.py tests/test_textobj.py tests/test_war3_encoding.py -q -p no:cacheprovider`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit text-source discovery**
+- [x] **Step 6: Commit text-source discovery**
 
 ```bash
 git add w3xtool/object_text_sources.py w3xtool/textobj.py w3xtool/map_archive_reader.py tests/test_object_text_sources.py
