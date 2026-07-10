@@ -24,7 +24,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Failed to extract CascLib source archive" }
 
     & cmake -S $SourceDir -B $BuildDir -G "Visual Studio 17 2022" -A "x64" `
-        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 `
+        "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" `
         -DCASC_UNICODE=ON `
         -DCASC_BUILD_SHARED_LIB=ON `
         -DCASC_BUILD_STATIC_LIB=OFF `

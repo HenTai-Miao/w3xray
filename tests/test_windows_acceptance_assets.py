@@ -33,7 +33,7 @@ def test_hosted_windows_workflow_packages_and_executes_artifact() -> None:
 
     # When/Then: it builds the pinned DLL, runs tests, packages, runs GUI acceptance, and uploads evidence.
     for required in (
-        "windows-latest",
+        "windows-2022",
         "tools/build_casclib.ps1",
         "uv run w3xray-test",
         "uv run w3xray-dist",
@@ -43,6 +43,14 @@ def test_hosted_windows_workflow_packages_and_executes_artifact() -> None:
         "actions/upload-artifact@",
     ):
         assert required in workflow
+
+
+def test_casclib_build_preserves_dotted_cmake_policy_version() -> None:
+    # Given: Windows PowerShell forwards native CMake arguments itself.
+    script = (_ROOT / "tools" / "build_casclib.ps1").read_text(encoding="utf-8")
+
+    # When/Then: the dotted policy value is one quoted native argument.
+    assert '"-DCMAKE_POLICY_VERSION_MINIMUM=3.5"' in script
 
 
 def test_real_install_workflow_requires_dedicated_self_hosted_machine() -> None:
