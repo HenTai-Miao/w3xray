@@ -444,7 +444,7 @@ git commit -m "fix: match reference object ID reports"
 - Changes compatibly: `MPQArchive(path, *, locale_id=0, legacy_codecs=None)`.
 - Re-exports existing constants and `_hash` from `w3xtool.mpq` for compatibility.
 
-- [ ] **Step 1: Write user-data, non-ASCII hash, and locale fallback tests**
+- [x] **Step 1: Write user-data, non-ASCII hash, and locale fallback tests**
 
 ```python
 def test_mpq_user_data_header_points_to_real_archive() -> None:
@@ -472,13 +472,13 @@ def test_locale_selection_prefers_requested_then_neutral() -> None:
     assert select_hash_entry(entries, locale_id=0x0804).block_index == 3
 ```
 
-- [ ] **Step 2: Run layout tests and confirm failures**
+- [x] **Step 2: Run layout tests and confirm failures**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_mpq_user_data.py tests/test_mpq_names_locale.py tests/test_mpq_header.py -q -p no:cacheprovider`
 
 Expected: FAIL on user-data lookup, byte hashing, or locale preference.
 
-- [ ] **Step 3: Split constants/crypto and implement byte hashing**
+- [x] **Step 3: Split constants/crypto and implement byte hashing**
 
 ```python
 def hash_name_bytes(name: bytes, hash_type: int) -> int:
@@ -493,7 +493,7 @@ def hash_name_bytes(name: bytes, hash_type: int) -> int:
 
 `encoded_name_candidates` returns unique byte sequences in UTF-8 and configured Warcraft legacy codec order, with ASCII producing one candidate. File-key hashing uses only the basename bytes from the candidate that matched the hash entry.
 
-- [ ] **Step 4: Implement MPQ/UserData layout parsing and locale choice**
+- [x] **Step 4: Implement MPQ/UserData layout parsing and locale choice**
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -514,13 +514,13 @@ Gather all matching hash entries in probe order. For nonzero requested locale/pl
 first exact pair; otherwise retain the last entry whose locale is requested-or-neutral and whose
 platform is requested-or-neutral, matching StormLib 9.25 `GetHashEntryLocale`.
 
-- [ ] **Step 5: Run all MPQ layout and lookup tests**
+- [x] **Step 5: Run all MPQ layout and lookup tests**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_mpq_user_data.py tests/test_mpq_names_locale.py tests/test_mpq_header.py tests/test_mpq_enumerate.py tests/test_mpq_robust.py -q -p no:cacheprovider`
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit layout/name compatibility**
+- [x] **Step 6: Commit layout/name compatibility**
 
 ```bash
 git add w3xtool/mpq_constants.py w3xtool/mpq_crypto.py w3xtool/mpq_layout.py w3xtool/mpq_names.py w3xtool/mpq.py tests/test_mpq_user_data.py tests/test_mpq_names_locale.py tests/test_mpq_header.py
