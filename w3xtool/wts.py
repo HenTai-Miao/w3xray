@@ -9,8 +9,12 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING
 
 from .war3_encoding import decode_warcraft_string
+
+if TYPE_CHECKING:
+    from .map_data import MapData
 
 _HEADER = re.compile(rb"STRING\s+(\d+)", re.IGNORECASE)
 # 开/闭括号都要求**独占一行**(行首 {/} + 仅尾随空白)：
@@ -25,7 +29,7 @@ def _decode_str(b: bytes) -> str:
     return decode_warcraft_string(b)
 
 
-def parse_wts(data: bytes) -> dict:
+def parse_wts(data: bytes) -> dict[int, str]:
     # 在字节层解析，按 STRING 块逐条解码：整文件统一解码会让个别 GBK 片段污染成乱码，
     # 且无法再按条恢复；逐条 UTF-8→GBK 回退可兼容 UTF-8 为主、个别 GBK 的混合编码图。
     if data.startswith(b"\xef\xbb\xbf"):          # 去 UTF-8 BOM
@@ -53,6 +57,16 @@ def parse_wts(data: bytes) -> dict:
         table[sid] = _decode_str(body)
         i = m2.end()
     return table
+
+
+def map_wts_table(md: MapData) -> dict[int, str]:
+    """Return retained byte-parsed WTS values with text as legacy fallback."""
+    if md.ui_strings is not None:
+        return dict(md.ui_strings)
+    raw = md.scripts.get("war3map.wts") or md.scripts.get("war3campaign.wts")
+    if not raw:
+        return {}
+    return parse_wts(raw.encode("utf-8", "replace"))
 
 
 def resolve(value, wts: dict):

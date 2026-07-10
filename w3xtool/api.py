@@ -35,7 +35,7 @@ from .script_sources import (
     analysis_script_texts,
     collect_readable_scripts,
 )
-from .wts import parse_wts, resolve
+from .wts import map_wts_table, parse_wts, resolve
 
 MPQArchive = map_loader.MPQArchive
 
@@ -107,15 +107,7 @@ def _read_script(archive: MapArchiveReader) -> str | None:
 
 def _map_wts(md: MapData) -> dict[int, str]:
     """Return the retained WTS table, with published text as a legacy fallback."""
-    if md.ui_strings is not None:
-        return dict(md.ui_strings)
-    raw = md.scripts.get("war3map.wts")
-    if not raw:
-        return {}
-    try:
-        return parse_wts(raw.encode("utf-8", "replace"))
-    except (UnicodeError, ValueError):
-        return {}
+    return map_wts_table(md)
 
 
 def commands_from_map(md: MapData) -> list:
@@ -164,7 +156,18 @@ def scan_commands(path: str) -> list:
     """扫描地图脚本里的隐藏聊天指令（独立入口，会自行打开 MPQ）。"""
     with MPQArchive(path) as archive:
         collection = collect_readable_scripts(archive)
-    md = MapData(path=path, name=path, scripts=dict(collection.texts))
+    ui_strings = None
+    if collection.wts_raw is not None:
+        try:
+            ui_strings = parse_wts(collection.wts_raw)
+        except (UnicodeError, ValueError):
+            ui_strings = {}
+    md = MapData(
+        path=path,
+        name=path,
+        scripts=dict(collection.texts),
+        ui_strings=ui_strings,
+    )
     return commands_from_map(md)
 
 

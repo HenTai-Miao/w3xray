@@ -111,12 +111,9 @@ def _load_map_impl(
     populate_object_pipeline(md, candidates)
 
     md.scripts.update(script_collection.texts)
-    script_text = "\n\n".join(
-        f"// ===== {name} =====\n{text}"
-        for name, text in analysis_script_texts(md)
-    )
-    if script_text:
-        _add_script_refs(md, script_text, shared_index)
+    script_sources = analysis_script_texts(md)
+    for _source, text in script_sources:
+        _add_script_refs(md, text, shared_index)
 
     _add_w3i(md, archive, wts)
     _add_w3f(md, archive, wts)
@@ -135,10 +132,16 @@ def _load_map_impl(
     add_preview_icons(md, archive)
     add_import_summary(md, archive)
 
-    if script_text:
+    if script_sources:
         from .script_scan import scan_script_features
 
-        md.script_features, _ = scan_script_features(script_text)
+        features: list[str] = []
+        for _source, text in script_sources:
+            source_features, _ = scan_script_features(text)
+            for feature in source_features:
+                if feature not in features:
+                    features.append(feature)
+        md.script_features = features
 
     try:
         build_reference_graph(md)

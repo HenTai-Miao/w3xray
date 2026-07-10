@@ -8,7 +8,7 @@ from typing import Final
 
 from .api import MapData
 from .script_sources import analysis_script_texts
-from .wts import parse_wts
+from .wts import map_wts_table
 
 _TRIGSTR_RE: Final = re.compile(r"\bTRIGSTR_(\d+)\b", re.IGNORECASE)
 
@@ -79,13 +79,7 @@ def format_ui_text_references_tsv(report: UiTextReport) -> str:
 
 
 def _string_table(md: MapData) -> dict[int, str]:
-    existing = getattr(md, "ui_strings", None)
-    if isinstance(existing, dict):
-        return {int(key): str(value) for key, value in existing.items()}
-    wts_text = md.scripts.get("war3map.wts") or md.scripts.get("war3campaign.wts")
-    if not wts_text:
-        return {}
-    return parse_wts(wts_text.encode("utf-8", "replace"))
+    return map_wts_table(md)
 
 
 def _iter_references(md: MapData, table: dict[int, str]):

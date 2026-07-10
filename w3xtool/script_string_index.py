@@ -11,7 +11,7 @@ from .resources import RESOURCE_EXTS
 from .save_api_catalog import save_api_info
 from .script_function_index import ScriptFunction, build_script_function_index
 from .script_sources import analysis_script_texts
-from .wts import parse_wts
+from .wts import map_wts_table
 
 _CALL_RE: Final = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 _TRIGSTR_RE: Final = re.compile(r"^TRIGSTR_(\d+)$", re.IGNORECASE)
@@ -198,10 +198,7 @@ def _resolve_string(value: str, trigstr_table: dict[str, str]) -> str:
 
 
 def _trigstr_table(md: MapData) -> dict[str, str]:
-    raw = md.scripts.get("war3map.wts") or md.scripts.get("war3campaign.wts")
-    if not raw:
-        return {}
-    table = parse_wts(raw.encode("utf-8", "replace"))
+    table = map_wts_table(md)
     return {f"TRIGSTR_{sid:03d}": text for sid, text in table.items()}
 
 
