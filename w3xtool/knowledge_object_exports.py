@@ -15,7 +15,7 @@ def write_object_ids(md: MapData, out_dir: str) -> int:
     count = 0
     for category, objects in sorted(md.objects.items()):
         rows = ["分类\tID\t10进制\t基础ID\t名称\t自定义\t说明"]
-        for obj in objects:
+        for obj in sorted_unique_objects(objects):
             rows.append("\t".join((
                 tsv(category),
                 tsv(obj.obj_id),
@@ -37,18 +37,42 @@ def write_box_ids(md: MapData, out_dir: str) -> int:
         count += write_text(
             out_dir,
             f"{safe_filename(category)}ID.txt",
-            format_box_id_text(objects),
+            format_box_id_text(objects, category=category),
         )
     return count
 
 
-def format_box_id_text(objects: Iterable[GameObject]) -> str:
-    """Return the plain ID/name/description format used by legacy map tools."""
-    blocks = []
+def sorted_unique_objects(objects: Iterable[GameObject]) -> tuple[GameObject, ...]:
+    """Return first-seen objects once, ordered by rawcode latin-1 bytes."""
+    by_id: dict[str, GameObject] = {}
     for obj in objects:
-        desc = _object_description(obj) or "-"
-        blocks.append(f"ID：{obj.obj_id}\n名字：{obj.name}\n描述：{desc}\n")
-    return "\n".join(blocks)
+        by_id.setdefault(obj.obj_id, obj)
+    return tuple(
+        by_id[key]
+        for key in sorted(by_id, key=lambda code: code.encode("latin-1", "replace"))
+    )
+
+
+def format_box_id_text(
+    objects: Iterable[GameObject],
+    *,
+    category: str | None = None,
+) -> str:
+    """Return the plain ID/name/description format used by legacy map tools."""
+    blocks: list[str] = []
+    for obj in sorted_unique_objects(objects):
+        description = _normalize_box_value(_object_description(obj) or "-")
+        prefix = (
+            f"描述：称谓：{_normalize_box_value(_propernames(obj) or '-')}\n\n"
+            if category == "单位"
+            else "描述："
+        )
+        blocks.append(
+            f"ID：{_normalize_box_value(obj.obj_id)}\n"
+            f"名字：{_normalize_box_value(obj.name)}\n"
+            f"{prefix}{description}"
+        )
+    return "\n\n".join(blocks) + ("\n" if blocks else "")
 
 
 def format_object_text_icons(md: MapData) -> str:
@@ -92,6 +116,9 @@ def _text_fields(obj: GameObject) -> list[tuple[str, str]]:
 
 
 def _object_description(obj: GameObject) -> str:
+    canonical = obj.field_values.get("display:description")
+    if canonical is not None:
+        return canonical
     text_fields = _text_fields(obj)
     for label, value in text_fields:
         if _is_long_description_label(label):
@@ -100,6 +127,20 @@ def _object_description(obj: GameObject) -> str:
         if _is_short_description_label(label):
             return value
     return ""
+
+
+def _propernames(obj: GameObject) -> str:
+    canonical = obj.field_values.get("display:propernames")
+    if canonical is not None:
+        return canonical
+    for label, value in obj.fields:
+        if label in {"Propernames", "称谓"} and value:
+            return value
+    return ""
+
+
+def _normalize_box_value(value: str) -> str:
+    return value.replace("\r\n", "\n").replace("\r", "\n")
 
 
 def _is_long_description_label(label: str) -> bool:

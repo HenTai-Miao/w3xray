@@ -77,7 +77,7 @@ class ExportActionsMixin:
                 n = 0
                 for cat, objs in objects.items():
                     name = f"{safe_filename(cat)}ID.txt"
-                    n += write_text(out, name, format_box_id_text(objs))
+                    n += write_text(out, name, format_box_id_text(objs, category=cat))
                 self.after(0, lambda: self._open_dir(out, n, "分类的ID列表"))
             except Exception as exc:  # noqa: BROAD_EXCEPT_OK - GUI worker boundary reports export failures.
                 error_text = str(exc)
