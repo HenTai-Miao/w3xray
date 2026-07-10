@@ -8,6 +8,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
+from .archive_diagnostics import diagnose_archive_open
 from .mpq import FLAG_ENCRYPTED, MPQArchive
 
 
@@ -64,16 +65,23 @@ def build_extraction_completeness_report(
 ) -> ExtractionCompletenessReport:
     """Build a completeness report from the original archive when available."""
     if not md.path or not os.path.exists(md.path):
+        diagnosis = diagnose_archive_open(md.path)
         return _fallback_report(
             md.path,
             md.all_files,
-            "源文件不可读，无法计算 MPQ 块覆盖。",
-            "missing",
+            diagnosis.message,
+            diagnosis.kind.value,
         )
     try:
         archive = MPQArchive(md.path)
     except (OSError, ValueError, struct.error) as err:
-        return _fallback_report(md.path, md.all_files, f"源文件不可读：{err}", "read_error")
+        diagnosis = diagnose_archive_open(md.path, err)
+        return _fallback_report(
+            md.path,
+            md.all_files,
+            diagnosis.message,
+            diagnosis.kind.value,
+        )
     try:
         return build_extraction_completeness_from_archive(md, archive)
     finally:

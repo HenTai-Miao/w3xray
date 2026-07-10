@@ -11,6 +11,7 @@ from typing import Final, assert_never
 from tkinter import messagebox
 
 from .api import MapData
+from .archive_diagnostics import diagnose_archive_open
 from .external_listfile import read_external_listfile
 from .gui_loader import (
     LoadedCampaign,
@@ -41,8 +42,8 @@ class BackgroundLoaderMixin:
         if poll_id:
             try:
                 self.after_cancel(poll_id)
-            except Exception:
-                pass
+            except Exception:  # noqa: BROAD_EXCEPT_OK - Tk may raise TclError during shutdown.
+                self._load_poll_id = None
         self._load_poll_id = None
 
     def _start_path_load(self, path: str) -> None:
@@ -58,6 +59,7 @@ class BackgroundLoaderMixin:
                 external_names=external_names,
             ),
             error_status="解析失败",
+            source_path=path,
         )
 
     def _start_map_switch(self, md: MapData, campaign_path: str | None) -> None:
@@ -67,6 +69,7 @@ class BackgroundLoaderMixin:
             status="正在切换 …",
             build_payload=lambda: switch_map_payload(md, campaign_path, load_options=options, game_data_path=game_data_path),
             error_status="切换失败",
+            source_path=None,
         )
 
     def _start_campaign_load(self, index: int) -> None:
@@ -85,6 +88,7 @@ class BackgroundLoaderMixin:
                 external_names=external_names,
             ),
             error_status="战役解析失败",
+            source_path=path,
         )
 
     def _start_loader_job(
@@ -93,6 +97,7 @@ class BackgroundLoaderMixin:
         status: str,
         build_payload: Callable[[], LoaderPayload],
         error_status: str,
+        source_path: str | None,
     ) -> None:
         self._load_token += 1
         token = self._load_token
@@ -100,7 +105,7 @@ class BackgroundLoaderMixin:
         self.status.configure(text=status)
         worker = threading.Thread(
             target=self._run_loader_job,
-            args=(token, build_payload, error_status),
+            args=(token, build_payload, error_status, source_path),
             daemon=True,
             name=f"w3xray-loader-{token}",
         )
@@ -112,12 +117,18 @@ class BackgroundLoaderMixin:
         token: int,
         build_payload: Callable[[], LoaderPayload],
         error_status: str,
+        source_path: str | None,
     ) -> None:
         try:
             payload = build_payload()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BROAD_EXCEPT_OK - worker boundary returns typed GUI payloads.
             traceback.print_exc()
-            payload = LoaderError("解析失败", str(exc), error_status)
+            message = (
+                diagnose_archive_open(source_path, exc).message
+                if source_path is not None
+                else str(exc)
+            )
+            payload = LoaderError("解析失败", message, error_status)
         self._load_results.put((token, payload))
 
     def _schedule_load_poll(self) -> None:
@@ -179,8 +190,8 @@ def _discard_loader_payload(payload: LoaderPayload) -> None:
             if resolver is not None and hasattr(resolver, "close"):
                 try:
                     resolver.close()
-                except Exception:
-                    pass
+                except Exception:  # noqa: BROAD_EXCEPT_OK - third-party resolver close is best effort.
+                    return
         case LoadedCampaign() | LoaderError():
             return
         case unreachable:

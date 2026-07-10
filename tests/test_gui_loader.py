@@ -2,13 +2,57 @@
 
 import threading
 import unittest
+from pathlib import Path
+import queue
+from tempfile import TemporaryDirectory
 
 from w3xtool.api import MapData
-from w3xtool.gui_loader import LoadedMap, load_path_payload, prepare_map_view, switch_map_payload
+from w3xtool.gui_loader import LoaderError, LoadedMap, load_path_payload, prepare_map_view, switch_map_payload
+from w3xtool.gui_loader_runner import BackgroundLoaderMixin
 from w3xtool.load_options import object_only_load_options
 
 
 class TestGuiLoader(unittest.TestCase):
+    def test_source_open_failure_uses_archive_diagnosis(self):
+        # Given: a real selected source with no MPQ header and a failing loader.
+        runner = object.__new__(BackgroundLoaderMixin)
+        runner._load_results = queue.Queue()
+        with TemporaryDirectory() as tmp:
+            path = Path(tmp) / "broken.w3x"
+            path.write_bytes(b"plain data")
+
+            # When: the source-path loader boundary catches the failure.
+            runner._run_loader_job(
+                1,
+                lambda: (_ for _ in ()).throw(ValueError("raw parser error")),
+                "解析失败",
+                str(path),
+            )
+            _token, payload = runner._load_results.get_nowait()
+
+        # Then: GUI text is the unified archive diagnosis, not a raw parser error.
+        self.assertIsInstance(payload, LoaderError)
+        self.assertIn("MPQ 头", payload.message)
+        self.assertNotIn("raw parser error", payload.message)
+
+    def test_map_switch_failure_keeps_non_archive_error(self):
+        # Given: an already-open map switch that fails during view preparation.
+        runner = object.__new__(BackgroundLoaderMixin)
+        runner._load_results = queue.Queue()
+
+        # When: the worker catches the non-source failure.
+        runner._run_loader_job(
+            2,
+            lambda: (_ for _ in ()).throw(ValueError("view preparation failed")),
+            "切换失败",
+            None,
+        )
+        _token, payload = runner._load_results.get_nowait()
+
+        # Then: it is not disguised as an archive-open diagnosis.
+        self.assertIsInstance(payload, LoaderError)
+        self.assertEqual(payload.message, "view preparation failed")
+
     def test_load_path_payload_prepares_first_campaign_view(self):
         # Given: opening a campaign returns shared data plus one sub-map.
         top = MapData(path="campaign.w3n", name="战役共享")

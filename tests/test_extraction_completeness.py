@@ -2,8 +2,11 @@
 
 import unittest
 from dataclasses import dataclass
+from pathlib import Path
+from unittest.mock import patch
 
 from w3xtool.api import MapData
+from w3xtool.archive_diagnostics import ArchiveDiagnosisKind
 from w3xtool.extraction_completeness import (
     build_extraction_completeness_from_archive,
     build_extraction_completeness_report,
@@ -111,6 +114,38 @@ class ExtractionCompletenessTest(unittest.TestCase):
         self.assertIsNone(report.block_count)
         self.assertIn("命名文件：2", text)
         self.assertIn("源文件不可读", text)
+
+    def test_missing_source_is_diagnosed_without_constructing_archive(self) -> None:
+        # Given: map data retaining a non-existent original source path.
+        md = MapData(path="/missing/map.w3x", name="离线图")
+
+        # When: completeness diagnoses the unavailable source.
+        with patch(
+            "w3xtool.extraction_completeness.MPQArchive",
+            side_effect=AssertionError("must not construct MPQArchive"),
+        ) as archive_type:
+            report = build_extraction_completeness_report(md)
+
+        # Then: the bounded helper classifies it before MPQArchive fallback can copy it.
+        archive_type.assert_not_called()
+        self.assertEqual(report.archive_diagnosis_kind, ArchiveDiagnosisKind.MISSING.value)
+
+    def test_report_reuses_typed_archive_diagnosis_for_unopened_source(self) -> None:
+        # Given: an existing source file that has no MPQ header.
+        with self.subTest("no-header"):
+            from tempfile import TemporaryDirectory
+
+            with TemporaryDirectory() as tmp:
+                path = Path(tmp) / "not-mpq.w3x"
+                path.write_bytes(b"plain data")
+                md = MapData(path=str(path), name="损坏图")
+
+                # When: completeness cannot open the source archive.
+                report = build_extraction_completeness_report(md)
+
+        # Then: the existing diagnosis-kind data flow carries the typed result.
+        self.assertEqual(report.archive_diagnosis_kind, ArchiveDiagnosisKind.NO_HEADER.value)
+        self.assertTrue(any("MPQ 头" in warning for warning in report.warnings))
 
     def test_report_flags_probable_data_level_protection_without_bypassing(self) -> None:
         # Given: a map whose anonymous encrypted blocks cannot be recovered statically.
