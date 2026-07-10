@@ -1,0 +1,30 @@
+"""Constants shared by the MPQ reader modules."""
+
+from typing import Final
+
+
+FLAG_IMPLODE: Final = 0x00000100
+FLAG_COMPRESS: Final = 0x00000200
+FLAG_ENCRYPTED: Final = 0x00010000
+FLAG_FIX_KEY: Final = 0x00020000
+FLAG_SINGLE_UNIT: Final = 0x01000000
+FLAG_SECTOR_CRC: Final = 0x04000000
+FLAG_EXISTS: Final = 0x80000000
+
+COMP_HUFFMAN: Final = 0x01
+COMP_ZLIB: Final = 0x02
+COMP_PKWARE: Final = 0x08
+COMP_BZIP2: Final = 0x10
+COMP_SPARSE: Final = 0x20
+COMP_ADPCM_MONO: Final = 0x40
+COMP_ADPCM_STEREO: Final = 0x80
+
+HASH_TABLE_OFFSET: Final = 0
+HASH_NAME_A: Final = 1
+HASH_NAME_B: Final = 2
+HASH_FILE_KEY: Final = 3
+
+MPQ_HEADER_MAGIC: Final = b"MPQ\x1a"
+MPQ_USER_DATA_MAGIC: Final = b"MPQ\x1b"
+MPQ_HEADER_SIZE_V1: Final = 32
+MPQ_ALIGNMENT: Final = 512

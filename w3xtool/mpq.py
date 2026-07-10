@@ -13,82 +13,43 @@ from __future__ import annotations
 import bz2
 import struct
 import zlib
-from dataclasses import dataclass
 
 from .explode import explode
 from .huffman import huff_decompress
+from .mpq_constants import (
+    COMP_ADPCM_MONO as COMP_ADPCM_MONO,
+    COMP_ADPCM_STEREO as COMP_ADPCM_STEREO,
+    COMP_BZIP2 as COMP_BZIP2,
+    COMP_HUFFMAN as COMP_HUFFMAN,
+    COMP_PKWARE as COMP_PKWARE,
+    COMP_SPARSE as COMP_SPARSE,
+    COMP_ZLIB as COMP_ZLIB,
+    FLAG_COMPRESS as FLAG_COMPRESS,
+    FLAG_ENCRYPTED as FLAG_ENCRYPTED,
+    FLAG_EXISTS as FLAG_EXISTS,
+    FLAG_FIX_KEY as FLAG_FIX_KEY,
+    FLAG_IMPLODE as FLAG_IMPLODE,
+    FLAG_SECTOR_CRC as FLAG_SECTOR_CRC,
+    FLAG_SINGLE_UNIT as FLAG_SINGLE_UNIT,
+    HASH_FILE_KEY as HASH_FILE_KEY,
+    HASH_NAME_A as HASH_NAME_A,
+    HASH_NAME_B as HASH_NAME_B,
+    HASH_TABLE_OFFSET as HASH_TABLE_OFFSET,
+)
+from .mpq_crypto import (
+    CRYPT_TABLE as _CRYPT,
+    _decrypt as _decrypt,
+    _detect_offtable_key,
+    _hash as _hash,
+    hash_name_bytes,
+)
 from .mpq_files import STATIC_MAP_FILES as STATIC_MAP_FILES, list_archive_files
-
-# ---- 文件标志 ----
-FLAG_IMPLODE = 0x00000100      # 整文件 PKWARE 压缩（无掩码字节）
-FLAG_COMPRESS = 0x00000200     # 多压缩（每扇区首字节为压缩掩码）
-FLAG_ENCRYPTED = 0x00010000
-FLAG_FIX_KEY = 0x00020000
-FLAG_SINGLE_UNIT = 0x01000000
-FLAG_SECTOR_CRC = 0x04000000
-FLAG_EXISTS = 0x80000000
-
-# ---- 压缩掩码位（用于 FLAG_COMPRESS）----
-COMP_HUFFMAN = 0x01
-COMP_ZLIB = 0x02
-COMP_PKWARE = 0x08
-COMP_BZIP2 = 0x10
-COMP_SPARSE = 0x20
-COMP_ADPCM_MONO = 0x40
-COMP_ADPCM_STEREO = 0x80
-
-def _make_crypt_table():
-    table = [0] * 0x500
-    seed = 0x00100001
-    for index1 in range(0x100):
-        index2 = index1
-        for _ in range(5):
-            seed = (seed * 125 + 3) % 0x2AAAAB
-            temp1 = (seed & 0xFFFF) << 0x10
-            seed = (seed * 125 + 3) % 0x2AAAAB
-            temp2 = seed & 0xFFFF
-            table[index2] = (temp1 | temp2) & 0xFFFFFFFF
-            index2 += 0x100
-    return table
-
-
-_CRYPT = _make_crypt_table()
+from .mpq_layout import MPQLayout as MPQLayout, _Block as _Block
+from .mpq_layout import locate_mpq_layout as locate_mpq_layout
+from .mpq_layout import read_mpq_tables
+from .mpq_names import HashEntry, encoded_name_candidates, select_hash_entry
 
 _DERIVE_KEY = -1                  # _read_block 的哨兵：区分"按名派生密钥"与"key=None(不加密)"
-
-# hash 类型
-HASH_TABLE_OFFSET = 0
-HASH_NAME_A = 1
-HASH_NAME_B = 2
-HASH_FILE_KEY = 3
-
-
-def _hash(name: str, hash_type: int) -> int:
-    seed1 = 0x7FED7FED
-    seed2 = 0xEEEEEEEE
-    for ch in name.upper():
-        c = ord(ch)
-        value = _CRYPT[(hash_type << 8) + (c & 0xFF)]
-        seed1 = (value ^ ((seed1 + seed2) & 0xFFFFFFFF)) & 0xFFFFFFFF
-        seed2 = (c + seed1 + seed2 + (seed2 << 5) + 3) & 0xFFFFFFFF
-    return seed1
-
-
-def _decrypt(data: bytes, key: int) -> bytes:
-    n = len(data) // 4
-    if n == 0:
-        return data
-    vals = list(struct.unpack("<%dI" % n, data[: n * 4]))
-    seed1 = key & 0xFFFFFFFF
-    seed2 = 0xEEEEEEEE
-    for i in range(n):
-        seed2 = (seed2 + _CRYPT[0x400 + (seed1 & 0xFF)]) & 0xFFFFFFFF
-        value = (vals[i] ^ ((seed1 + seed2) & 0xFFFFFFFF)) & 0xFFFFFFFF
-        vals[i] = value
-        seed1 = (((~seed1 & 0xFFFFFFFF) << 0x15) + 0x11111111 | (seed1 >> 0x0B)) & 0xFFFFFFFF
-        seed2 = (value + seed2 + (seed2 << 5) + 3) & 0xFFFFFFFF
-    out = struct.pack("<%dI" % n, *vals)
-    return out + data[n * 4:]
 
 
 def _decompress_sector(data: bytes, out_size: int) -> bytes:
@@ -149,29 +110,6 @@ def _sparse_decompress(data: bytes, max_output: int | None = None) -> bytes:
     if max_output is not None:
         return bytes(out[:max_output])
     return bytes(out)
-
-
-def _detect_offtable_key(e0: int, e1: int, off0: int, max_off1: int):
-    """由内容反推扇区偏移表的解密密钥（无需文件名）。
-
-    加密文件的密钥本由「文件名」派生；保护图删名后无法这样取。但扇区偏移表头两个
-    uint32 是已知明文：第 0 个 = 偏移表自身字节数(off0)，第 1 个 = 第 0 扇区数据的结束
-    偏移(在 (off0, off0+扇区大小] 内)。据此在 256 个候选里解出能让密文解成已知明文的密钥。
-    这正是 MPQ Editor「查找未知文件」用的办法（StormLib DetectFileKeyBySectorSize）。
-
-    返回的是「解密偏移表用的密钥」（= 文件密钥 - 1）；命中不到返回 None。
-    """
-    temp = ((e0 ^ off0) - 0xEEEEEEEE) & 0xFFFFFFFF
-    for i in range(0x100):
-        key1 = (temp - _CRYPT[0x400 + i]) & 0xFFFFFFFF
-        key2 = (0xEEEEEEEE + _CRYPT[0x400 + (key1 & 0xFF)]) & 0xFFFFFFFF
-        if (e0 ^ ((key1 + key2) & 0xFFFFFFFF)) == off0:
-            k1 = (((~key1 & 0xFFFFFFFF) << 0x15) + 0x11111111 | (key1 >> 0x0B)) & 0xFFFFFFFF
-            k2 = (off0 + key2 + (key2 << 5) + 3) & 0xFFFFFFFF
-            k2 = (k2 + _CRYPT[0x400 + (k1 & 0xFF)]) & 0xFFFFFFFF
-            if off0 < (e1 ^ ((k1 + k2) & 0xFFFFFFFF)) <= max_off1:
-                return key1
-    return None
 
 
 def guess_extension(data: bytes) -> str:
@@ -241,17 +179,19 @@ def _parse_sector_offsets(raw: bytes, count: int, key) -> list:
     return offsets
 
 
-@dataclass
-class _Block:
-    file_pos: int
-    comp_size: int
-    file_size: int
-    flags: int
-
-
 class MPQArchive:
-    def __init__(self, path: str):
+    def __init__(
+        self,
+        path: str,
+        *,
+        locale_id: int = 0,
+        legacy_codecs: tuple[str, ...] | None = None,
+    ):
         self.path = path
+        self.locale_id = locale_id & 0xFFFF
+        self.platform = (locale_id >> 16) & 0xFF
+        self.legacy_codecs = legacy_codecs
+        encoded_name_candidates("", legacy_codecs=legacy_codecs)
         self._file = None
         self._tmp = None
         try:
@@ -326,125 +266,95 @@ class MPQArchive:
 
     # ---- 头与表 ----
     def _parse_header(self):
-        data = self._data
-        # 在 512 对齐位置扫描 MPQ\x1a。某些打包/混淆工具(_w3p 等)会在真头前面
-        # 放一个垃圾"诱饵"头来骗解析器，故不取第一个，而是取第一个**校验通过**的头。
-        last_err = None
-        pos = 0
-        while pos + 32 <= len(data):
-            if data[pos:pos + 4] == b"MPQ\x1a":
-                try:
-                    self._read_header_fields(pos)
-                    self._validate_header()
-                    return
-                except (ValueError, struct.error) as e:
-                    last_err = e          # 诱饵/垃圾头，继续找下一个
-            pos += 512
-        if last_err is not None:
-            raise last_err
-        raise ValueError("没找到 MPQ 头（不是有效的 .w3x/.w3n？）")
-
-    def _read_header_fields(self, offset: int):
-        data = self._data
-        self.archive_offset = offset
-        hdr = data[offset:offset + 32]
-        (magic, self.header_size, self.archive_size, self.format_version,
-         self.sector_size_shift, hash_pos, block_pos,
-         self.hash_count, self.block_count) = struct.unpack("<4sIIHHIIII", hdr)
+        layout = locate_mpq_layout(self._data)
+        self.archive_offset = layout.archive_offset
+        self.header_size = layout.header_size
+        self.archive_size = struct.unpack_from("<I", self._data, layout.archive_offset + 8)[0]
+        self.format_version = layout.format_version
+        self.sector_size_shift = layout.sector_shift
         self.sector_size = 512 << self.sector_size_shift
-        self.hash_table_pos = offset + hash_pos
-        self.block_table_pos = offset + block_pos
-
-    def _validate_header(self):
-        """拒绝非法/恶意的表大小，防止 range(hash_count) 跑数十亿次卡死(DoS)。
-
-        合法 MPQ：hash 表大小是 2 的幂、且整张表在文件内（这也把 hash_count 卡死在
-        文件大小/16 以内，挡住 DoS）。block 表则容忍"尾部越界"——保护图常把 block_count
-        注水、声明长度超过文件尾；StormLib 只读实际存在的条目即可加载，故这里只要求
-        block 表起点在文件内，越界的尾部交给 _read_tables 自然截断（avail = 实际字节//16）。
-        """
-        n = len(self._data)
-        # 扇区位移上限：真实地图恒为 3(4KB 扇区)左右。位移过大会让 512<<shift 溢出成
-        # 天文数字、行为怪异；过大值也是诱饵头特征，一并拒绝。
-        if self.sector_size_shift > 20:
-            raise ValueError("MPQ 扇区大小非法：shift=%d" % self.sector_size_shift)
-        if self.hash_count <= 0 or (self.hash_count & (self.hash_count - 1)) != 0:
-            raise ValueError("MPQ hash 表大小非法（应为 2 的幂）：%d" % self.hash_count)
-        if self.block_count < 0:
-            raise ValueError("MPQ block 表大小非法：%d" % self.block_count)
-        if self.hash_table_pos < 0 or self.hash_table_pos + self.hash_count * 16 > n:
-            raise ValueError("MPQ hash 表越界（文件损坏或非标准）")
-        if self.block_table_pos < 0 or self.block_table_pos > n:
-            raise ValueError("MPQ block 表起点越界（文件损坏或非标准）")
+        self.hash_table_pos = layout.hash_table_offset
+        self.block_table_pos = layout.block_table_offset
+        self.hash_count = layout.hash_count
+        self.block_count = layout.block_count
+        self._layout = layout
 
     def _read_tables(self):
-        data = self._data
-        # hash 表（容忍被保护/截断的表：只解析实际可用条目，其余补空）
-        raw = data[self.hash_table_pos:self.hash_table_pos + self.hash_count * 16]
-        raw = _decrypt(raw, _hash("(hash table)", HASH_FILE_KEY))
-        avail = len(raw) // 16
-        self.hash_table = []
-        for i in range(self.hash_count):
-            if i < avail:
-                name1, name2, locale, platform, block_index = struct.unpack(
-                    "<IIHHI", raw[i * 16:i * 16 + 16])
-            else:
-                name1 = name2 = 0
-                locale = platform = 0
-                block_index = 0xFFFFFFFF        # 空条目(查找时遇到即停)
-            self.hash_table.append((name1, name2, locale, platform, block_index))
-        # block 表（同样容忍截断）
-        raw = data[self.block_table_pos:self.block_table_pos + self.block_count * 16]
-        raw = _decrypt(raw, _hash("(block table)", HASH_FILE_KEY))
-        avail = len(raw) // 16
-        self.block_table = []
-        for i in range(avail):
-            fp, cs, fs, fl = struct.unpack("<IIII", raw[i * 16:i * 16 + 16])
-            self.block_table.append(_Block(fp, cs, fs, fl))
+        self.hash_table, self.block_table = read_mpq_tables(self._data, self._layout)
 
     # ---- 查找 ----
     def _find_hash_entry(self, name: str):
-        index = _hash(name, HASH_TABLE_OFFSET) & (self.hash_count - 1)
-        name_a = _hash(name, HASH_NAME_A)
-        name_b = _hash(name, HASH_NAME_B)
-        count = 0
-        i = index
-        while count < self.hash_count:
-            entry = self.hash_table[i]
-            if entry[4] == 0xFFFFFFFF:  # 空块，结束
-                return None
-            if entry[0] == name_a and entry[1] == name_b and entry[4] != 0xFFFFFFFE:
-                return entry
-            i = (i + 1) & (self.hash_count - 1)
-            count += 1
+        match = self._find_hash_match(name)
+        return match[0] if match is not None else None
+
+    def _find_hash_match(self, name: str):
+        legacy_codecs = getattr(self, "legacy_codecs", None)
+        locale_id = getattr(self, "locale_id", 0)
+        platform = getattr(self, "platform", 0)
+        for candidate in encoded_name_candidates(name, legacy_codecs):
+            entries = self._matching_hash_entries(candidate)
+            entry = select_hash_entry(
+                entries, locale_id=locale_id, platform=platform
+            )
+            if entry is not None:
+                return entry, candidate
         return None
+
+    def _matching_hash_entries(self, name: bytes) -> tuple[HashEntry, ...]:
+        index = hash_name_bytes(name, HASH_TABLE_OFFSET) & (self.hash_count - 1)
+        name_a = hash_name_bytes(name, HASH_NAME_A)
+        name_b = hash_name_bytes(name, HASH_NAME_B)
+        matches: list[HashEntry] = []
+        for count in range(self.hash_count):
+            raw_entry = self.hash_table[(index + count) & (self.hash_count - 1)]
+            entry = raw_entry if isinstance(raw_entry, HashEntry) else HashEntry(*raw_entry)
+            if entry.block_index == 0xFFFFFFFF:
+                break
+            if (
+                entry.name_a == name_a
+                and entry.name_b == name_b
+                and entry.block_index != 0xFFFFFFFE
+            ):
+                matches.append(entry)
+        return tuple(matches)
+
+    def _resolve_match(self, name: str):
+        match = self._find_hash_match(name)
+        if match is not None:
+            return match[0], name, match[1]
+        alternate = "scripts\\" + name
+        match = self._find_hash_match(alternate)
+        if match is not None:
+            return match[0], alternate, match[1]
+        return None, name, None
 
     def _resolve_entry(self, name: str):
         """先按原名找，找不到再试 scripts\\ 子目录（部分地图把文件放那里）。"""
-        e = self._find_hash_entry(name)
-        if e is not None:
-            return e, name
-        alt = "scripts\\" + name
-        e = self._find_hash_entry(alt)
-        if e is not None:
-            return e, alt
-        return None, name
+        entry, real_name, _candidate = self._resolve_match(name)
+        return entry, real_name
 
     def has_file(self, name: str) -> bool:
         return self._resolve_entry(name)[0] is not None
 
     # ---- 读取文件 ----
     def read_file(self, name: str) -> bytes:
-        entry, real = self._resolve_entry(name)
+        entry, real, candidate = self._resolve_match(name)
         if entry is None:
             raise KeyError(name)
-        bi = entry[4]
+        bi = entry.block_index
         if bi >= len(self.block_table):       # 块表被截断/索引越界
             raise KeyError(name)
         block = self.block_table[bi]
-        return self._read_block(block, real)
+        return self._read_block(block, real, name_bytes=candidate)
 
-    def _read_block(self, block: _Block, name: str, key=_DERIVE_KEY) -> bytes:
+    def _read_block(
+        self,
+        block: _Block,
+        name: str,
+        key=_DERIVE_KEY,
+        *,
+        name_bytes: bytes | None = None,
+    ) -> bytes:
         data = self._data
         start = self.archive_offset + block.file_pos
         if start < 0 or start > len(data):
@@ -457,8 +367,9 @@ class MPQArchive:
         if key == _DERIVE_KEY:           # 默认：由文件名派生密钥（无名块则由调用方显式传入）
             key = None                   # None=不加密
             if flags & FLAG_ENCRYPTED:
-                base = name.split("\\")[-1].split("/")[-1]
-                key = _hash(base, HASH_FILE_KEY)
+                encoded_name = name.encode("utf-8") if name_bytes is None else name_bytes
+                base = encoded_name.replace(b"/", b"\\").rsplit(b"\\", 1)[-1]
+                key = hash_name_bytes(base, HASH_FILE_KEY)
                 if flags & FLAG_FIX_KEY:
                     key = (key + block.file_pos) ^ block.file_size
                     key &= 0xFFFFFFFF
