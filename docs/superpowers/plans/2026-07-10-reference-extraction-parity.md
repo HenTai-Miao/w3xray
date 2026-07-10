@@ -376,7 +376,7 @@ git commit -m "fix: merge every object data source"
 - Changes compatibly: `format_box_id_text(objects, *, category=None) -> str`; existing one-argument calls remain valid.
 - Uses: `GameObject.field_values` with a label-based fallback for old callers.
 
-- [ ] **Step 1: Write ordering, deduplication, title, and WTS-output tests**
+- [x] **Step 1: Write ordering, deduplication, title, and WTS-output tests**
 
 ```python
 def test_unit_box_report_is_sorted_unique_and_includes_propernames() -> None:
@@ -393,13 +393,13 @@ def test_unit_box_report_is_sorted_unique_and_includes_propernames() -> None:
     assert "描述：称谓：称谓甲\n\n说明甲" in text
 ```
 
-- [ ] **Step 2: Run the report tests and confirm current output fails**
+- [x] **Step 2: Run the report tests and confirm current output fails**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_reference_id_reports.py -q -p no:cacheprovider`
 
 Expected: FAIL because current output preserves input order, duplicates IDs, and omits `称谓`.
 
-- [ ] **Step 3: Implement one shared ordered view and reference layout**
+- [x] **Step 3: Implement one shared ordered view and reference layout**
 
 ```python
 def sorted_unique_objects(objects: Iterable[GameObject]) -> tuple[GameObject, ...]:
@@ -414,13 +414,13 @@ Use this view in TSV and box writers. A unit block writes
 ID/name/description. Preserve Warcraft rich-text markers in the box-compatible value. Resolve the
 description from canonical `display:description`, then existing labeled fields, then `-`.
 
-- [ ] **Step 4: Run report and pack tests**
+- [x] **Step 4: Run report and pack tests**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_reference_id_reports.py tests/test_knowledge_pack.py tests/test_gui_export_safety.py -q -p no:cacheprovider`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit report parity**
+- [x] **Step 5: Commit report parity**
 
 ```bash
 git add w3xtool/knowledge_object_exports.py w3xtool/gui_export_actions.py tests/test_reference_id_reports.py tests/test_knowledge_pack.py
