@@ -98,12 +98,13 @@
 ## 会话 54：Windows/CASC/真实样本闭环
 | 项目 | 状态 | 验收条件 |
 |------|------|----------|
-| 完整回归基线 | complete | `735 passed, 4 skipped, 1 subtest passed`；跳过均为真实 Windows/war3.mpq 环境依赖 |
+| 完整回归基线 | complete | macOS `741 passed, 4 skipped, 1 subtest passed`；Windows `734 passed, 11 skipped, 1 subtest passed` |
 | CASC Root 清单内存边界 | complete | 64 KiB 分段写 stage 后原子发布；流式增长/延迟发布/异常保留旧目标测试通过 |
 | 核心 Python 类型检查 | complete | 流式核心 0 errors/0 warnings；非 GUI 新核心 0 errors；全部 `typing.Generator` 已清除 |
-| Windows 验收资产检查 | in_progress | YAML/actionlint/路径与命令测试通过；PowerShell AST 与 EXE 实跑待 Windows CI |
+| Windows 验收资产检查 | complete | YAML/actionlint/PowerShell 5.1 代码页边界测试通过；托管 Windows EXE 已实跑 |
 | 完整审查 | complete | 目标、QA、代码、安全、上下文五路复审均 PASS；QA acceptance 4 PASS/3 预期 SKIP，聚焦测试 49 passed |
-| 发布与真实环境证据 | pending | 提交并推送；hosted Windows 打包/GUI 验收取得 CI 结果；真实 Warcraft CASC 仅在具备 `w3xray-war3` 自托管机器时判定 |
+| 发布与托管 Windows 证据 | complete | 已推送 `4c1663b`；Actions `29075856581` 完成 CascLib、全测、onedir、EXE acceptance 与产物上传 |
+| 真实 Warcraft CASC 证据 | external-pending | workflow 与脚本已就绪；仓库当前 self-hosted runner 数为 0，必须接入带真实安装目录的 `w3xray-war3` 机器后判定 |
 
 ### 本轮边界
 - 不执行地图 loader、运行时解密、内存 dump、调试器注入或保护绕过。
