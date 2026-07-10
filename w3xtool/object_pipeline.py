@@ -202,7 +202,7 @@ def _field_rank(
 ) -> tuple[int, str, str, str, str, str, str, str, str]:
     priority = int(value.source_kind)
     if value.source_kind is ObjectSourceKind.TEXT_STRINGS and not identity.startswith("display:"):
-        priority = 25
+        priority = 15
     normalized_source = value.source.replace("/", "\\")
     return (
         priority,

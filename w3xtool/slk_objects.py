@@ -4,8 +4,8 @@
 .w3a/.w3u 与 INI 文本对象，读不了内嵌 SLK → 那类图的字段/引用读不全。本模块补上：
 按分类找出 MPQ 里的 *Data.slk，用 slk.parse_slk 解出，多文件按对象码合并。
 
-只负责"找文件 + 解析 + 合并"，返回 {对象码: {SLK列名: 值}}；对象构建/取名/并入 MapData
-由 api._add_slk_objects 做（与 _add_text_objects/_add_binary_objects 一致）。
+只负责"找文件 + 解析 + 合并"，返回 {对象码: {SLK列名: 值}}；统一对象候选管线负责
+构建、取名和并入 MapData。
 """
 from __future__ import annotations
 

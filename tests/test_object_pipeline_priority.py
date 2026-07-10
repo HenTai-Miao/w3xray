@@ -48,7 +48,7 @@ def test_equal_priority_source_case_ties_are_order_independent() -> None:
         "uhpm", label_for("uhpm"), "2500", "Units\\UnitData.slk", ObjectSourceKind.BINARY
     )
     lower = _candidate(
-        "uhpm", label_for("uhpm"), "2500", "units\\unitdata.slk", ObjectSourceKind.BINARY
+        "uhpm", label_for("uhpm"), "2500", "units/unitdata.slk", ObjectSourceKind.BINARY
     )
 
     # When: candidates arrive in opposite orders.
@@ -59,3 +59,16 @@ def test_equal_priority_source_case_ties_are_order_independent() -> None:
     assert forward.fields == reverse.fields
     assert forward.field_values == reverse.field_values
     assert forward.field_sources == reverse.field_sources
+
+
+def test_strings_non_display_does_not_override_slk() -> None:
+    # Given: Strings and SLK collide on the same non-display field.
+    strings = _candidate("HP", "生命", "1800", "UnitStrings.txt", ObjectSourceKind.TEXT_STRINGS)
+    slk = _candidate("HP", "生命", "1000", "UnitBalance.slk", ObjectSourceKind.SLK)
+
+    # When: source priority is applied.
+    merged = merge_object_candidates((strings, slk), {})[0]
+
+    # Then: Strings does not win outside display fields.
+    assert merged.fields == [("生命", "1000")]
+    assert merged.field_sources == {"HP": "UnitBalance.slk"}
