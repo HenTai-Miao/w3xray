@@ -546,7 +546,7 @@ git commit -m "fix: match StormLib MPQ lookup behavior"
 - Produces: `read_mpq_block(storage, block, name_bytes, key) -> bytes`.
 - Re-exports `_decompress_sector = decompress_mpq_sector` through `w3xtool.mpq`.
 
-- [ ] **Step 1: Vendor or generate pinned StormLib fixtures and write red tests**
+- [x] **Step 1: Vendor or generate pinned StormLib fixtures and write red tests**
 
 Record the StormLib 9.25 release/commit shown by the reference DLL build path, compiler command,
 input SHA256, output SHA256, compression mask, and license in
@@ -571,13 +571,13 @@ def test_stormlib_lzma_marker_dispatches_as_lzma() -> None:
     assert decompress_mpq_sector(compressed, len(expected)) == expected
 ```
 
-- [ ] **Step 2: Run compression tests and confirm unsupported-mask failures**
+- [x] **Step 2: Run compression tests and confirm unsupported-mask failures**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_mpq_compression_chain.py tests/test_mpq_adpcm.py tests/test_mpq_lzma.py -q -p no:cacheprovider`
 
 Expected: FAIL because current code uses one `elif` branch and has no ADPCM/LZMA decoder.
 
-- [ ] **Step 3: Implement bounded LZMA and reverse chain dispatch**
+- [x] **Step 3: Implement bounded LZMA and reverse chain dispatch**
 
 ```python
 def decompress_mpq_sector(data: bytes, output_size: int) -> bytes:
@@ -607,21 +607,21 @@ Reject nonzero filters and declared lengths larger than the sector contract. Par
 properties into an `lzma.FILTER_LZMA1` raw filter and cap output at the smaller matching declared
 size; preserve exact valid shorter final sectors.
 
-- [ ] **Step 4: Port bounded mono/stereo ADPCM decompression**
+- [x] **Step 4: Port bounded mono/stereo ADPCM decompression**
 
 Port StormLib's adaptive step table and channel predictor state into `mpq_adpcm.py`. Reject truncated headers, invalid channel counts, and writes beyond `output_size`; emit little-endian signed 16-bit samples.
 
-- [ ] **Step 5: Move block reading out of oversized `mpq.py`**
+- [x] **Step 5: Move block reading out of oversized `mpq.py`**
 
 Move sector offsets, single-unit, encrypted sector, CRC-table, anonymous-key recovery, and first-sector peek logic to `mpq_block_reader.py`. `MPQArchive.read_file`, `decompress_block`, `read_block_anon`, and `peek_block` delegate to it while retaining current exceptions and bounds.
 
-- [ ] **Step 6: Run compression and full MPQ regression tests**
+- [x] **Step 6: Run compression and full MPQ regression tests**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_mpq_compression_chain.py tests/test_mpq_adpcm.py tests/test_mpq_lzma.py tests/test_huffman.py tests/test_explode.py tests/test_decompress_limits.py tests/test_mpq_robust.py tests/test_mpq_enumerate.py -q -p no:cacheprovider`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit compression parity**
+- [x] **Step 7: Commit compression parity**
 
 ```bash
 git add w3xtool/mpq_compression.py w3xtool/mpq_adpcm.py w3xtool/mpq_block_reader.py w3xtool/mpq.py tests/test_mpq_compression_chain.py tests/test_mpq_adpcm.py tests/test_mpq_lzma.py tests/fixtures/reference
