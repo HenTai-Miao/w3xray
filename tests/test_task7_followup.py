@@ -6,10 +6,11 @@ from contextlib import nullcontext
 from unittest.mock import patch
 
 from tests.test_script_sources import _MemoryArchive, _classic_wct
-from w3xtool.api import MapData, scan_commands
+from w3xtool.api import MapData, commands_from_map, scan_commands
 from w3xtool.load_context import MapLoadContext
 from w3xtool.map_loader import _load_map_impl
 from w3xtool.script_string_index import build_script_string_index
+from w3xtool.wts import map_wts_table
 
 
 def test_map_loading_isolates_malformed_source_object_reference_state() -> None:
@@ -71,3 +72,41 @@ def test_scan_commands_parses_original_mixed_encoding_wts_bytes() -> None:
 
     # Then: the hint comes from raw per-entry WTS parsing, without mojibake.
     assert [(item.command, item.hint) for item in commands] == [("-x", "保留提示")]
+
+
+def test_map_wts_table_returns_empty_for_missing_legacy_text() -> None:
+    # Given / When / Then: a source-less legacy model can omit WTS entirely.
+    assert map_wts_table(MapData("x.w3x", "x")) == {}
+
+
+def test_map_wts_table_rejects_oversized_legacy_string_id() -> None:
+    # Given: the published fallback contains an integer identifier beyond the
+    # interpreter's bounded conversion limit.
+    malformed = "STRING " + "9" * 5000 + "\n{\nvalue\n}\n"
+    md = MapData("x.w3x", "x", scripts={"war3map.wts": malformed})
+
+    # When / Then: malformed compatibility input degrades to no string table.
+    assert map_wts_table(md) == {}
+
+
+def test_commands_from_map_survives_malformed_legacy_wts() -> None:
+    # Given: a valid command uses a TRIGSTR hint beside malformed fallback WTS.
+    malformed = "STRING " + "9" * 5000 + "\n{\nvalue\n}\n"
+    md = MapData(
+        "x.w3x",
+        "x",
+        scripts={
+            "war3map.j": "\n".join((
+                'call TriggerRegisterPlayerChatEvent(gg_trg_X, Player(0), "-x", true)',
+                "function Trig_X_Actions takes nothing returns nothing",
+                '    call BJDebugMsg("TRIGSTR_001")',
+                "endfunction",
+            )),
+            "war3map.wts": malformed,
+        },
+    )
+
+    # When / Then: command extraction remains available with an unresolved hint.
+    assert [(item.command, item.hint) for item in commands_from_map(md)] == [
+        ("-x", "TRIGSTR_001"),
+    ]

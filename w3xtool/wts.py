@@ -66,7 +66,10 @@ def map_wts_table(md: MapData) -> dict[int, str]:
     raw = md.scripts.get("war3map.wts") or md.scripts.get("war3campaign.wts")
     if not raw:
         return {}
-    return parse_wts(raw.encode("utf-8", "replace"))
+    try:
+        return parse_wts(raw.encode("utf-8", "replace"))
+    except (UnicodeError, ValueError):
+        return {}
 
 
 def resolve(value, wts: dict):
