@@ -6,7 +6,7 @@
 
 **Architecture:** Keep `w3xtool.api` as a compatibility facade, move map models and extraction responsibilities into focused modules, and normalize every object source into immutable candidates before one deterministic merge. Split MPQ layout, name/hash, compression, and block reading responsibilities while preserving the public `MPQArchive` API; route all later archive reads through a persistent `ArchiveSource` and all export writes through structured results.
 
-**Tech Stack:** Python 3.14, `uv`, `pytest`, standard-library `lzma`, CustomTkinter/Tkinter, existing pure-Python MPQ/Huffman/PKWARE implementations, StormLib 9.30 fixtures, Ghidra 12.1.2 with Oracle JDK 26.0.1 for reference verification.
+**Tech Stack:** Python 3.14, `uv`, `pytest`, standard-library `lzma`, CustomTkinter/Tkinter, existing pure-Python MPQ/Huffman/PKWARE implementations, StormLib 9.25 fixtures matching the reference DLL, Ghidra 12.1.2 with Oracle JDK 26.0.1 for reference verification.
 
 ## Global Constraints
 
@@ -537,7 +537,10 @@ git commit -m "fix: match StormLib MPQ lookup behavior"
 
 - [ ] **Step 1: Vendor or generate pinned StormLib fixtures and write red tests**
 
-Record StormLib release/commit, compiler command, input SHA256, output SHA256, compression mask, and license in `tests/fixtures/reference/README.md`.
+Record the StormLib 9.25 release/commit shown by the reference DLL build path, compiler command,
+input SHA256, output SHA256, compression mask, and license in
+`tests/fixtures/reference/README.md`. The latest stable StormLib may be run as a compatibility
+cross-check, but fixture truth remains 9.25.
 
 ```python
 @pytest.mark.parametrize("fixture_name", (
