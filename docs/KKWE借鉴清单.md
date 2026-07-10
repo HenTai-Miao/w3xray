@@ -116,9 +116,9 @@
 **result**: `地图与对象ID索引.tsv` 的详情列现在会显示如 `war3map.j:12:单位`、`save.j:8:技能`，未知脚本码也保留行号和“未在对象表中解析”说明。
 
 ## #21 [done 2026-07-09] WTG 触发器目录和变量清单导出到知识包
-**why**: 完整 ECA 树解析不划算，但触发器分类、触发器头、启用/自定义脚本状态和全局变量是 `war3map.wtg` 已经能稳定解析的高价值编辑器信息；此前只在 GUI/地图信息里显示摘要，资料包缺独立表格。
+**why**: 当时先交付不依赖游戏数据的触发器分类、触发器头、启用/自定义脚本状态和全局变量；此前只在 GUI/地图信息里显示摘要，资料包缺独立表格。
 **how**: 新增 `w3xtool/trigger_exports.py`，把 `TriggerTreeSummary` 格式化为 `触发器树.tsv` 和 `触发变量.tsv`；保留分类 ID/父 ID、触发器父分类、启用状态、自定义脚本、初始关闭、初始化运行、变量类型/数组/初始值，并在 ECA 未展开时写明原因。
-**result**: 知识包现在包含可筛选的触发器目录和变量清单，能覆盖“只想要目录树+触发器名+变量清单”的低成本 WTG 需求，同时仍明确不展开依赖 TriggerData.txt 的 ECA 函数体。
+**result**: 知识包包含可筛选的触发器目录和变量清单；后续 #40 已补齐依赖 `TriggerData.txt` 的 ECA 函数体和依赖 `TriggerStrings.txt` 的语义本地化。
 
 ## #22 [done 2026-07-09] 资料包目录清单：需求面到产物文件的映射
 **why**: 资料包已经输出 UI 文本、资源、配置、存档/ID、触发器、提取完整性等多份文件，但用户打开目录时仍要猜每个文件对应哪个调查面；这会降低“都加上”后的可用性。
@@ -212,21 +212,26 @@
 
 ## #40 [done 2026-07-10] TriggerData.txt 语义化 ECA 文本
 **why**: raw ECA 只列函数名和参数序号，排查触发器时仍要人工对照 World Editor 的中文模板。
-**how**: 新增 `w3xtool/triggerdata.py`，解析 `[函数名] Template/Args` 与 `[TriggerActions] Func/FuncArgs` 两种 TriggerData 形态；`触发器ECA.tsv` 旧列顺序不变，追加 `语义文本` 列，并递归展开嵌套函数参数。资料包导出时会从已选择的游戏数据目录读取 `UI/TriggerData.txt`。
-**result**: 有 TriggerData 时能看到“单位 - 创建 1 个 hfoo 于 (1 == 2)”这类编辑器式句子；没有 TriggerData 时继续输出原始函数名、参数序号和值。
+**how**: 新增 `w3xtool/triggerdata.py` 和 TriggerData/TriggerStrings schema loader；`触发器ECA.tsv` 旧列顺序不变，追加 `语义文本` 列，并递归展开嵌套函数参数。WTG 头始终可读，ECA 函数体只在 `TriggerData.txt` 匹配时展开，本地化模板另需 `TriggerStrings.txt`。
+**result**: 两份 schema 齐全时能看到编辑器式本地化句子；只有 TriggerData 时保留函数和参数语义；缺 TriggerData 时保留触发器头并结构化报告未展开入口，不猜参数字节。
 
-## #41 [done 2026-07-10] 原生 CASC idx/data 基础直读
+## #41 [done 2026-07-10] 原生 CASC idx/data 路径映射回退
 **why**: 只支持 CascView/casc-extract 散文件时，GUI 读取基础图标和 TriggerData 仍依赖用户先导出目录。
 **how**: 新增 `w3xtool/casc_source.py`，在原生安装目录满足 `.build.info` + `Data/data/*.idx` + `data.###` 且存在 `w3xray-casc-paths.tsv` 路径映射时，按 idx 定位 data archive，解出非加密 BLTE `N/Z` 块。`game_data_source.open_game_data_source()` 统一返回散文件或 CASC 源。
-**result**: 已能在可验证的本地 CASC fixture 上直读 `data.000` 中的非加密 BLTE 文件。完整暴雪 Root/Encoding/加密 BLTE/Salsa20 仍明确报不支持，不伪装成全量 CASC 实现。
+**result**: 已能在可验证的本地 CASC fixture 上直读 `data.000` 中的非加密 BLTE 文件。这个纯 Python 回退不解析 Root/Encoding 或加密 BLTE；Windows 标准安装目录的接入由后续 #42 CascLib 后端承担。
+
+## #42 [done 2026-07-10] Windows CascLib 原生安装目录后端
+**why**: path-map 回退仍要求用户提前提供内部路径到 encoded key 的映射，不能直接从标准重制版安装目录读取 TriggerData、TriggerStrings 和基础图标。
+**how**: 固定 CascLib 3.0 tag/commit/source SHA256，新增 `ctypes.c_bool` ABI 绑定、Unicode `CascOpenStorage`、窄字符 `CascOpenFile`、`CascGetFileSize64`、有界读取和句柄关闭；Windows 打包前校验 DLL SHA256 与 x64 PE，应用启动时不联网下载。`game_data_source` 优先 CascLib，失败后回退 path-map；散文件目录保持不变。
+**result**: 已实现按已知游戏逻辑路径读取原生 CASC 的 Windows 后端；macOS fake-native、源码构建和打包验证通过。真实 Windows 魔兽安装测试仍是显式环境测试且本轮未执行，因此不声明真机读取已经验证。
 
 ## 不建议做
-- 完整暴雪 CASC Root/Encoding/加密 BLTE/Salsa20：当前只做带路径映射的 idx/data + 非加密 BLTE 直读；任意官方安装目录的全量路径发现仍需实现 Root/Encoding 解析，且不影响单张 `.w3x/.w3m/.w3n` 的 MPQ 静态提取。
+- 原生 CASC 的全量未知路径枚举：Windows CascLib 后端只实现已知逻辑路径读取，且本轮尚无真实 Windows 魔兽安装证据；当前应用不遍历整个 Root 生成客户端全文件清单。无 DLL 时仍只做显式 path-map 的 idx/data + 非加密 BLTE 回退；这不影响单张 `.w3x/.w3m/.w3n` 的 MPQ 静态提取。
 - 真正数据级加密/运行时解密地图：只做静态诊断，`提取完整性.txt` 会提示大量匿名加密块不可恢复；不做运行时内存 dump、调试器绕过或平台/保护绕过。
-- war3map.w3e 地形解析：KKWE 根本无 w3e 解析器（把地形当二进制原样保留），无法借鉴；需另找 HiveWE/wc3lib 规范，解析量大而对'看地图信息'价值低。
+- 再从 KKWE 借鉴 war3map.w3e 解析：KKWE 本身没有 w3e 解析器，只把地形当二进制保留；w3xray 后续已依据独立格式资料实现 W3E 头、tilepoint、纹理、坐标范围和场景边界统计，因此这里没有可继续复用的 KKWE 逻辑。
 - 完整 JASS PEG/AST parser（grammar.lua/parser.lua/checker.lua）：几千行文法+语义+检查，远超'静态抽对象码'目标；KKWE 自己抽码也不用它而用轻量 searchjass。rank6 的词法级 tokenizer 已足够。仅 Integer256/Char16 的四种整数边界定义可作 tokenizer 校准参考。
 - metadata.lua 的 parse_id/characters 后缀推导与 repeat 分级：仅用于 SLK/INI 文本格式的派生列名（DataA、_2 等）；w3xray 读二进制 .w3a/.w3u 时 field_id 就是 MetaData 的 ID 行键本身，可直接查 FIELD_LABELS，无需此推导。w3xray 也不导出 SLK。
 - JASS 混淆器特征/converter 字面量规范化/完整 KKAPI.DzAPI native 声明：均为运行时或单向不可逆，无静态可提取逻辑。已顺手把常见 `DzAPI_Map_SaveServerValue` / `DzAPI_Map_StoreInteger` / `DzAPI_Map_SavePublicArchive` 和 `KKAPI_SaveServerValue` 作为“PlatformSave”静态存档线索记入 `存档读写线索.tsv`；不做运行时调用、参数模拟或平台兼容层。
-- imp 名转义为磁盘安全文件名($XX 方案)：仅当落盘文件名含 ':'/控制字符(主要是 CASC 名)才需要；w3x 地图导入名极少触发，且 w3xray 不支持 CASC。可在遇到 Windows 非法字符报错时再按需补，暂不优先。
+- imp 名转义为磁盘安全文件名($XX 方案)：仅当地图导入名含 `:`/控制字符时需要；原生 CASC 后端只按已知逻辑路径读取游戏基础数据，不把 CASC 全量名称直接落盘。可在真实地图触发 Windows 非法字符报错时再按需补，暂不优先。
 - WTS 正文含 } 的告警：w3xray 是只读提取器，_CLOSE 已正确处理独占行 }，正文内 } 字符不影响读取（仅影响回写，而 w3xray 不回写）。纯数据质量提示，价值低。
 - .lng 本地化文件格式：是 KKWE 自身 UI 文案存储机制，非从地图提取的数据；w3xray 字段标签走 fields.py/westrings.py 离线生成另一套，无格式借鉴价值。

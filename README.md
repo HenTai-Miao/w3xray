@@ -2,12 +2,12 @@
 
 > **X-ray your Warcraft III maps.**
 
-从零实现的魔兽争霸 III 地图/战役提取工具（纯 Python，不依赖 StormLib 等外部 DLL）。
+从零实现的魔兽争霸 III 地图/战役提取工具；地图 MPQ 解析为纯 Python，并包含基于 CascLib 3.0 的 Windows 原生 CASC 后端。
 带图形界面，可对地图里的 **单位 / 物品 / 技能 / 科技 / 可破坏物 / 装饰物 / 增益**
 做模糊搜索、查看详细字段，并提取脚本、隐藏聊天指令、合成配方，导出文件。
 支持战役 `.w3n`（多关卡子地图 + 战役级共享对象）。
 GUI 现在按偏 Warcraft III World Editor 的工作台组织：总览、对象编辑器、地图信息、
-场景放置、触发指令、合成配方、孤立对象、分析报告分别承载浏览与体检功能。
+GUI触发器、场景放置、触发指令、合成配方、孤立对象、分析报告分别承载浏览与体检功能。
 
 > 用途：研究地图、学习地图制作。不含改存档 / 过反作弊 / 开图等作弊功能。
 
@@ -30,10 +30,12 @@ Windows 上如果 `uv run pytest -q` 报 `uv trampoline failed to canonicalize s
 不经过 pytest 的 console-script 启动器。
 
 ## 重新打包 exe
-在 Windows 上运行会生成 `dist/魔兽地图提取器/魔兽地图提取器.exe`：
-```bash
+Windows 包必须先从固定源码构建 x64 CascLib；脚本会验证源码 SHA256，并生成 DLL 及其哈希。随后运行打包命令：
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/build_casclib.ps1
 uv run w3xray-dist
 ```
+DLL 和生成的哈希是本地构建产物，不提交到 Git。Windows 打包会在 PyInstaller 启动前校验 DLL 存在、SHA256 匹配且为 x64 PE；直接运行 spec 也不能绕过这道校验。
 只检查将要执行的 PyInstaller 命令，不真正打包：
 ```bash
 uv run w3xray-dist --dry-run
@@ -48,9 +50,16 @@ uv run w3xray-dist --dry-run
   uv run build_base_names.py                 # 默认硬编码安装目录
   uv run build_base_names.py --game "D:/Warcraft III/war3"
   ```
-- **重制版（1.30+，CASC）**：游戏数据改为 CASC。运行时游戏数据源支持两种入口：一是读取 CascView/casc-extract 导出的散文件目录；二是对带 `w3xray-casc-paths.tsv` 路径映射的原生安装目录直读 `.build.info` + `Data/data/*.idx` + `data.###` 里的非加密 BLTE 负载。刷新内置数据仍建议用散文件目录：
+- **重制版（1.30+，CASC）**：游戏数据改为 CASC。Windows 发行包已接入 CascLib 后端，目标是从官方安装目录按已知内部路径读取；无 CascLib 时可回退到带 `w3xray-casc-paths.tsv` 的 idx/data 非加密 BLTE 读取；所有平台也可读取 CascView/casc-extract 导出的散文件目录。本轮未在 Windows 魔兽真机上执行该后端，刷新内置数据仍建议用散文件目录：
   1. 用 [CascView](http://www.zezula.net/en/casc/main.html)（GUI）或 `wc3tools/casc-extract`（CLI，如 `casc-extract war3.w3mod:units/*` ）把游戏 `units/` 下的 `*Strings.txt`/`*Func.txt`/`*Data.slk` 与 `ui/WorldEdit*Strings.txt` 导到一个文件夹。
   2. `uv run build_base_names.py --from-dir <该文件夹>`，按打印的「找到/未找到」清单确认覆盖。
+
+## 静态提取边界
+- **WTG 头和目录**：不需要游戏数据即可读取分类、变量、触发器头和启用状态。
+- **WTG ECA 函数体**：需要与地图版本匹配的 `TriggerData.txt` 才能按函数签名安全展开；缺 schema 时保留头部并报告未展开入口，不猜参数字节。
+- **ECA 本地化语义**：在 `TriggerData.txt` 基础上还需要 `TriggerStrings.txt`；缺少它时仍保留函数名和参数原值。
+- **原生 CASC**：Windows 已实现固定版本 CascLib 的已知路径读取后端；散文件目录和显式 path-map 是跨平台回退。仓库包含需 `W3XRAY_WAR3_DIR` 的 Windows 真机测试，本次 macOS 发布验证只记录为跳过，因此这里只声明“已实现”，不声明“真机可用已验证”。
+- **保护/加密地图**：只做有界开档诊断、可恢复静态块提取和 `UnknownRaw` 原始负载保留；不执行内嵌 loader，不做运行时内存 dump、调试器或平台保护绕过。
 
 ## 功能
 - **解包**：把地图(MPQ 压缩包)内部文件全部解出；文件名发现采用**三层并集**((listfile) + 内置固定名单 + war3map.imp 导入清单)，GUI 也可选择外部 listfile 补充被删掉的文件名；无文件名的匿名 block 会逐块尝试恢复加密 key、按内容猜扩展名导出到 `Unknown/`，若从 MDX/脚本等内容反推出真实资源路径则按原路径补导出并写 `RecoveredNames/manifest.tsv`，极端损坏或无法解码的原始 payload 会保留到 `UnknownRaw/manifest.tsv`；提取完整性报告会标出疑似数据级加密/运行时解密保护，不做运行时内存 dump 或绕过。
@@ -84,11 +93,11 @@ uv run w3xray-dist --dry-run
 - **SLK 清单摘要**（CLI/核心模块）：枚举地图内嵌 `.slk` 表，解析行数与有效列数，快速判断 SLK 优化图携带了哪些对象数据表。
 - **游戏常数明细**（CLI/核心模块）：解析 `war3mapMisc.txt` 的节名、键和值，直接列出被覆盖的游戏平衡性常数。
 - **游戏配置解析**（CLI/核心模块）：解析 World Editor AI 测试生成/加载的 `.wgc`，读取基础游戏速度、禁用战争迷雾/胜负条件、相对地图路径、玩家槽位、电脑 AI 难度与自定义 AI 路径；地图包内可见 `.wgc` 会并入 MapData，外部 `.wgc` 可直接用 `uv run main.py cli <配置.wgc>` 查看。
-- **触发器树与 ECA**（CLI/GUI/核心模块）：解析 Classic 与 Reforged 1.36 风格的 `war3map.wtg`，读取触发器树格式版本、分类、变量定义、触发器/注释/自定义脚本块数量、触发器头状态，并把可顺序读取的 ECA 事件/条件/动作/调用、参数原始值、嵌套调用和子动作导出到资料包 `触发器ECA.tsv`。如果已选择的游戏数据目录/CASC 源里能读到 `UI/TriggerData.txt`，表格会追加 `语义文本` 列，把函数模板和嵌套调用展开成接近 World Editor 的中文句子；未提供 TriggerData 时旧的原始列仍保留。
+- **触发器树与 ECA**（CLI/GUI/核心模块）：解析 Classic 与 Reforged 1.36 风格的 `war3map.wtg`。分类、变量和触发器头不依赖游戏数据；ECA 事件/条件/动作/调用、参数、嵌套调用和子动作只有在匹配 `TriggerData.txt` 时才安全展开。`TriggerStrings.txt` 可用时，资料包 `触发器ECA.tsv` 的 `语义文本` 会按编辑器模板本地化；缺 schema 时保留头部和结构化诊断，不猜测函数体。
 - **小地图标记摘要**（CLI/GUI/核心模块）：解析 `war3map.mmp`，读取小地图预览标记数量、坐标、颜色，以及玩家出生点/金矿/中立建筑分类统计，用于确认开局点和资源点是否被正确标注。
 - **脚本侧引用补全 / 脚本特征**：依据 `common.j` 里每个 native 的参数类型（`CreateUnit`→单位、`UnitAddAbility`→技能、`CreateDestructable`→可破坏物…，离线烤进 `jass_natives.py`），脚本提码从早期只认物品/单位扩到**全分类**——大幅减少"孤立对象"误报（实测多张图孤立数降 1/3~2/3）。同时从 `blizzard.j` 提取暴雪 **BJ 机制**特征（对战开局/随机物品/中立建筑/电梯…）在「地图信息」展示，并把 BJ 隐式引用的基础对象并入引用根集合。数据均从工具包随包 `common.j/blizzard.j` 离线生成，不复制 .j 本身。
 - **列表交互**：各列表/表格列宽随最长内容自适应，并带横向滚动条——长地图名 / 长物品名 / 长指令说明都能拉着看全；搜索框回车才搜，逐键不重建，大图不卡
-- **编辑器式 GUI 工作台**：顶部保留打开/导出工具栏，对战图/战役图保持独立导航；主标签改为「总览 / 对象编辑器 / 地图信息 / 场景放置 / 触发指令 / 合成配方 / 孤立对象 / 分析报告」。总览集中显示对象、脚本、场景与风险快照；分析报告把 CLI 已有的审计、兼容、资源、命令、崩溃、秘籍等只读检测汇总到 GUI。
+- **编辑器式 GUI 工作台**：顶部保留打开/导出工具栏，对战图/战役图保持独立导航；主标签为「总览 / 对象编辑器 / 地图信息 / GUI触发器 / 场景放置 / 触发指令 / 合成配方 / 孤立对象 / 分析报告」。总览集中显示对象、脚本、场景与风险快照；分析报告把 CLI 已有的审计、兼容、资源、命令、崩溃、秘籍等只读检测汇总到 GUI。
 - **单实例**：只允许开一个。再次启动时会先关掉上一个实例再接管，不会多开（靠临时目录锁文件记录 pid+映像，并对 pid 复用做校验，绝不误杀同 pid 的他程序）
 
 ## 代码结构（w3xtool/）

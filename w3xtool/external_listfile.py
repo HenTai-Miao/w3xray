@@ -4,11 +4,17 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from io import StringIO
 import os
 from pathlib import PureWindowsPath
-from typing import Protocol
+from typing import Final, Protocol
 
 from .war3_encoding import decode_warcraft_string
+
+
+MAX_EXTERNAL_LISTFILE_BYTES: Final = 8 * 1024 * 1024
+MAX_EXTERNAL_LISTFILE_ENTRIES: Final = 100_000
+MAX_EXTERNAL_LISTFILE_LINE_CHARS: Final = 4096
 
 
 class ExternalNameArchive(Protocol):
@@ -30,16 +36,25 @@ def read_external_listfile(path: str | None) -> tuple[str, ...]:
     file_path = os.fspath(path)
     try:
         with open(file_path, "rb") as handle:
-            text = decode_warcraft_string(handle.read(), allow_latin1=True)
+            payload = handle.read(MAX_EXTERNAL_LISTFILE_BYTES + 1)
     except OSError:
         return ()
+    if len(payload) > MAX_EXTERNAL_LISTFILE_BYTES:
+        return ()
+    text = decode_warcraft_string(payload, allow_latin1=True)
     names: list[str] = []
-    for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
-        name = line.strip()
-        is_slash_comment = name.startswith("//") and "/" not in name[2:]
-        if not name or name.startswith("#") or is_slash_comment:
-            continue
-        names.append(name)
+    with StringIO(text, newline=None) as lines:
+        for raw_line in lines:
+            line = raw_line.rstrip("\r\n")
+            if len(line) > MAX_EXTERNAL_LISTFILE_LINE_CHARS:
+                return ()
+            name = line.strip()
+            is_slash_comment = name.startswith("//") and "/" not in name[2:]
+            if not name or name.startswith("#") or is_slash_comment:
+                continue
+            if len(names) >= MAX_EXTERNAL_LISTFILE_ENTRIES:
+                return ()
+            names.append(name)
     return tuple(names)
 
 

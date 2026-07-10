@@ -72,15 +72,21 @@
   - **#14 WTS 注释行 { 加固**（wts._OPEN 独占行锚定）：STRING 头与正文间注释行（如 `// 备注 {x}`）里的 { 不再被当成正文起点；找不到独占行 { 时退回首个 { 不回归。62 张真图新旧解析**完全一致**（零回归）。**编码改动（mbcs）评估后不做**：简中系统 mbcs≡gbk 无收益，非简中系统会把 GBK 老图错解成乱码（净风险）。
 
 ## 重制版 .doo 皮肤字段（会话 15，实测 Reforged 2.0.4 安装目录）
-- **现象**：用户重制版安装目录 `C:\Program Files (x86)\Warcraft III` 是 **CASC 存储**（`.build.info`+`Data/data/*.idx`+`data.###`），无散装地图；w3xray 只读 MPQ，直接打开装目录提不出游戏本体。但用户下载的地图（Documents\Warcraft III\Maps）仍是 MPQ，w3xray 能提（实测 `Darkborne RPG v23` 70MB 保护图：591 单位/383 物品/620 技能等全出）。
+- **当时现象**：用户重制版安装目录 `C:\Program Files (x86)\Warcraft III` 是 **CASC 存储**（`.build.info`+`Data/data/*.idx`+`data.###`），无散装地图；该轮尚未接入游戏本体数据源，当前能力以本节末尾“CASC 游戏本体数据（更新）”为准。用户下载的地图（Documents\Warcraft III\Maps）仍是 MPQ，w3xray 能提（实测 `Darkborne RPG v23` 70MB 保护图：591 单位/383 物品/620 技能等全出）。
 - **重制版 doo 格式差异**：实测重制版地图的 war3map.doo 与 war3mapUnits.doo **每条记录在 scale 后多一个 4 字节皮肤(skin)码**，但 version/sub 仍是 8/11，**无法靠版本号区分**经典/重制。
   - 证据：Darkborne 的 war3map.doo（33944 装饰物）按经典布局第 0 条 ndrops 即 -1（错位）；加 skin 后 1833000/1833000 字节恰好到 EOF。Amazonia 的 units.doo（98 单位）同理：skin 后 11670/11670 到 EOF。
   - 解法：parse_doodads/parse_units 改**两种布局都试、取能完整读完所有 count 的那个**（经典 skin=False 先试，完整即返回；否则试 skin=True）。各 count 字段加 _CAP=256 上限，错位布局快速触发换试。经典图永远先命中 skin=False，无回归。
   - 实测：27 张 Season1 重制版对战图 → 27 有装饰物、25 有单位（修前全 0）。这就是之前因"无实据"暂缓的清单 #13，现已有实据并实现。
-- **CASC 游戏本体数据**：仍不支持（纯 Python 实现 .idx 索引/BLTE 解块/encoding/root 成本极高），但只影响"读游戏内置内容/刷 base_names"，不影响读单张 .w3x 地图（地图永远是 MPQ）。
+- **CASC 游戏本体数据（更新）**：已实现固定版本 CascLib 的 Windows 已知路径读取后端，其他平台或 DLL 不可用时使用散文件/path-map 回退；当前不做原生 CASC 全量未知路径枚举。本轮没有真实 Windows 魔兽安装证据，因此这里只记录实现状态，不宣称真机读取已验证。该能力只补游戏基础数据源，不改变单张 `.w3x` 的 MPQ 静态提取路径。
 
 ## 保护图：block 表注水越界（幻想未来v1.366）
 - 加固手法：MPQ 头 `header_size` 填 `0xFFFFFFFF`(垃圾哨兵)、`block_count` 注水(2049，比 hash_count 多 1)，使 block 表声明长度超出文件尾约 16KB(实际只 ~1006 条在档内)；hash 表本身完整。
 - StormLib 容忍：只读落在文件内的 block 条目即可加载。本项目 `_read_tables` 本就按 `avail=实际字节//16` 截断、`read_file` 也挡 `block_index ≥ len(block_table)`；唯一卡点是 `_validate_header` 过严(要求整张 block 表在文件内)。
 - 修法：block 表只校验"起点在文件内"，越界尾部丢弃；hash 表仍要求整表在文件内(既是正确性——hash_count 是查找取模基数，也是反 DoS——把 hash_count 卡在 文件大小/16 内)。
-- 与"真·加密保护图"的区别：本类只是头部字段注水，文件数据本身在档且未加密；真加密图(如千风同类)是 war3map.w3u 哈希从档里剥离/偏移彻底打乱，静态无解，需内存 dump(box 的 Get.dll 路线)。
+- 与"真·加密保护图"的区别：本类只是头部字段注水，文件数据本身在档且未加密；真加密图(如千风同类)会把业务数据移出可静态恢复的 MPQ 结构。此时应由地图作者提供未保护文件、明文/listfile/key；本项目不执行内嵌 loader，也不做运行时内存 dump、调试器或平台保护绕过。
+
+## 完整静态提取总验收（会话 53）
+- WTG ECA 已形成明确的三层能力：无 schema 保留触发器头；有 `TriggerData.txt` 展开函数体；再有 `TriggerStrings.txt` 输出本地化语义文本。
+- Windows CascLib 已实现已知逻辑路径读取，散文件/path-map 为回退；macOS fake-native、源码构建和打包已验证，但没有本轮 Windows 魔兽真机证据。
+- 真实 fixture 端到端生成 72 个资料包文件，覆盖 UI 文本、资源本体、配置格式、存档/ID、对象 ID、ECA、外部 listfile 诊断和提取完整性；导出过程不修改 `MapData`。
+- 安全复审发现并修复两个边界：锚定输出采用临时文件、既有目标备份和越界恢复，不再在祖先校验前截断最终名或在发布窗口丢失原文件；外部 listfile 增加字节、行长和条目数上限并改为逐行迭代。全量验证为 **684 passed, 16 skipped, 1 subtest passed**。

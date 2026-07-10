@@ -57,11 +57,11 @@
 - 验证：千风物语可静态导出 7 个文件；普通图"魔兽争霸杂交版1.00d"不再被误标 protected。
 - 边界：千风物语真实业务脚本仍在 KKWE 加密载荷中；当前工具不执行内嵌 loader、不注入游戏、不做运行时 dump，因此对象/配方/指令仍可能为 0。
 - 追加取证：内嵌 PE 是 32 位 DLL，只有 `init` 导出，含 `.tvm0/.tvm1/.tvm2` 虚拟化节和 OpenSSL/AES 字符串；匿名 JASS loader 通过 DzAPI/Frame API 做内存参数传递。
-- export_all_files 追加 `protected_blocks/manifest.json`，记录保护块类型/大小和"完整业务脚本需要 KKWE 解密或运行时 dump"说明。
+- export_all_files 当时追加 `protected_blocks/manifest.json`，记录保护块类型/大小和静态恢复失败说明；该保护图子系统已在后续精简中删除，当前完整性报告只建议由作者提供未保护文件、明文/listfile/key。
 - main.py 追加 `analyze <地图路径>` 命令，输出保护状态、检测特征、对象/脚本统计和下一步提取策略。
 - load_map/scan_commands/scan_recipes/analyze 支持外部解密脚本参数；GUI 增加「导入解密脚本」，可用合法 war3map.j/lua/dump 补提对象引用、隐藏指令、合成配方。
 - 追加 KKWE 静态恢复：解析 KKWE 头和 zlib 分块；如果恢复出 JASS，自动作为 `.recovered.j` 扫描对象引用/指令/配方；如果恢复后仍是二进制，则导出 `.recovered.bin` 并在 manifest 记录摘要、JASS 标记和对象引用计数。
-- 千风物语实测：KKWE 6 个 zlib 分块恢复出 393210 字节，但 `recovered_text_kind=binary`、`globals/function=0`、物品/单位引用=0；MPQ 声明 archive 后还有 412752110 字节高熵追加数据。因此静态工具已走完可安全路径，完整物品/科技/技能/单位仍需合法 KKWE 解密器、源码或运行时 dump。
+- 千风物语实测：KKWE 6 个 zlib 分块恢复出 393210 字节，但 `recovered_text_kind=binary`、`globals/function=0`、物品/单位引用=0；MPQ 声明 archive 后还有 412752110 字节高熵追加数据。因此静态工具已走完可安全路径；当前只建议由作者提供未保护地图、明文/listfile/key，不提供运行时解密路线。
 
 ### 会话 4 追加（2026-06-09）——精简，回归"正常地图提取器"
 - **搜索升级**：四个搜索框支持 AND+OR（空格=且，竖线|=或，如 `智力 剑|法杖`）；`fuzzy_score` 改多关键词。
@@ -338,7 +338,7 @@
 - **#4 war3map.w3i 地图信息解析**（`w3i.py`，版本 18/25/28/31）：名/作者/描述/推荐人数/尺寸/flag/脚本语言/玩家(类型·种族·开局·名)/队伍(同盟·共享)。`_add_w3i` 存 `MapData.w3i`，新增 GUI「地图信息」标签页 + CLI 摘要。62/62 真图解析。测试 `test_w3i.py`（+8）、`test_gui_info.py`（+2）。
 - **#5 三层并集文件枚举**（`mpq.py` `STATIC_MAP_FILES` + `list_files` 重写）：(listfile)+内置固定名单+imp 导入名，删了 listfile 的保护图也能枚举固定名文件。测试 `test_mpq_enumerate.py`（+5）。
 - **#9 地图名优先取 w3i**：`_add_w3i` 里若 w3i.map_name 非空非 TRIGSTR 残留则覆盖 HM3W 头名（更权威、自动还原 TRIGSTR）。
-- **不建议做**（见清单）：完整 wtg ECA 树/TriggerData（强依赖+成本高）、CASC（纯 Python 成本极高且不影响读 .w3x）、w3e 地形（KKWE 也没解析器）、完整 JASS AST parser（过重）。
+- **当时未做**（见清单）：该轮暂缓 WTG ECA、CASC 和 W3E；这些缺口后来分别由会话 53 的 TriggerData/TriggerStrings、Windows CascLib 与地形解析任务补齐。完整 JASS AST 仍保持不做，现有静态索引使用轻量词法扫描。
 - 文档：README 结构表 +w3i/wct/field_meta，功能列表 +地图信息/自定义脚本/全量字段标签/三层枚举；gui docstring 改 5 标签页；findings.md 记录 w3i/wct/字段标签/三层枚举四项格式 + 指向清单。
 - 测试 **191→218 通过, 8 skipped**（+27 例）。
 
@@ -352,12 +352,12 @@
 
 ### 会话 15：重制版（Reforged）地图提取支持 —— .doo 皮肤字段自适应
 用户装了重制版（`C:\Program Files (x86)\Warcraft III`，CASC 存储 2.0.4.23745）问能否提取。
-- **结论**：安装目录本体是 CASC（w3xray 只读 MPQ，不支持本体）；但用户下载的地图（Documents\Warcraft III\Maps）是 MPQ，w3xray 能提（实测 Darkborne RPG v23 70MB 保护图，对象/脚本/地图信息全出）。
+- **当时结论**：该轮只实现 MPQ 地图提取，未接原生 CASC；当前已增加会话 53 的 Windows CascLib 后端和 path-map/散文件回退，但 Windows 真机读取尚未在本轮验证。用户下载的地图（Documents\Warcraft III\Maps）仍是 MPQ，w3xray 能提（实测 Darkborne RPG v23 70MB 保护图，对象/脚本/地图信息全出）。
 - **修的真问题**：重制版 war3map.doo / war3mapUnits.doo 每条在 scale 后多 4 字节皮肤码，但 version/sub 仍 8/11 无法靠版本区分 → 经典图按经典布局解析、重制图错位（单位 0、装饰物中途断）。
   - `doo.py` 重构 parse_doodads/parse_units：抽 `_read_doodad/_read_unit(r, skin)` + `_attempt_*(data,count,skin)`，**两种布局都试取完整读完 count 的那个**；各 count 加 `_CAP=256` 上限令错位快速触发换试。经典图先命中 skin=False 无回归。
   - 实测：27 张 Season1 重制版对战图 → 27 有装饰物、25 有单位（修前全 0）；Darkborne 33944 装饰物按 skin 布局 1833000/1833000 到 EOF。这是之前因"无实据"暂缓的清单 #13，现有实据并落地。
   - 测试 `test_doo.py` +2（重制版 skin 自适应 + 带掉落）。
-- CASC 本体读取仍不做（纯 Python 成本极高，且不影响读 .w3x 地图），findings.md 记录判据。
+- 该轮未实现 CASC 本体读取；后续会话 53 已增加 Windows CascLib 后端（本轮未做 Windows 真机验证），单张 `.w3x` 的 MPQ 路径保持独立。
 - 测试 **231→233 通过, 8 skipped**（+2 例）。
 
 ### 会话 16：superpowers 全项目复查 + 匿名资源完整导出增强
@@ -517,11 +517,11 @@
 - **验证**：更新 `tests/test_investigation_exports.py` 行号期望；聚焦测试 `uv run python -m pytest tests/test_investigation_exports.py tests/test_knowledge_pack.py tests/test_save_analysis.py tests/test_gui_reports.py -q` 为 **19 passed**。
 
 ### 会话 34：WTG 触发器目录和变量清单进入知识包
-继续补安全静态提取面。完整 GUI ECA 树依赖 TriggerData.txt 参数表，暂不做；本轮把已稳定解析的 WTG 分类、触发器头和变量清单导出成独立资料包表格。
+继续补安全静态提取面。该轮先把不依赖游戏数据的 WTG 分类、触发器头和变量清单导出成独立资料包表格；后续会话 53 已接入 TriggerData/TriggerStrings 驱动的完整 ECA 展开。
 
 - **触发器导出模块**（`w3xtool/trigger_exports.py`）：新增 `format_trigger_tree_tsv()` 和 `format_trigger_variables_tsv()`，输出分类 ID/父 ID、触发器名称、分类、启用状态、自定义脚本、初始关闭、初始化运行、变量类型/数组/初始值等。
 - **知识包接入**（`w3xtool/knowledge_pack.py`）：新增 `触发器树.tsv` 与 `触发变量.tsv`，并在 ECA 未展开时明确写入“缺 TriggerData.txt 参数表，只显示触发器头”。
-- **文档同步**：`docs/KKWE借鉴清单.md` 新增 #21 done，并把 WTG 完整 ECA 的“不建议做”项更新为只排除完整 ECA。
+- **文档同步**：`docs/KKWE借鉴清单.md` 新增 #21 done；该项的 ECA 缺口后来由 #40 完成。
 - **验证**：新增知识包测试覆盖触发器树/变量 TSV；聚焦测试 `uv run python -m pytest tests/test_knowledge_pack.py tests/test_wtg.py tests/test_gui_reports.py tests/test_cli_audit.py -q` 为 **36 passed**。
 
 ### 会话 35：资料包目录清单
@@ -569,3 +569,13 @@
 - **知识包接入**（`w3xtool/knowledge_pack.py`）：根目录新增 `对象ID使用摘要.tsv`；`资料包目录.tsv` 和 `需求覆盖.tsv` 同步加入口。
 - **文档同步**：`docs/KKWE借鉴清单.md` 新增 #26 done。
 - **验证**：先用缺失模块/缺失产物确认红灯，再实现转绿；`tests/test_object_id_summary.py tests/test_knowledge_pack_object_id_summary.py tests/test_knowledge_pack_manifest.py tests/test_investigation_exports.py -q` 当前为 **6 passed**。
+
+### 会话 53：完整静态提取验收、能力文档与安全收尾
+一次性验收 WTG ECA、原生 CASC、外部 listfile、资源/配置/ID 资料包和静态提取边界，不再把历史计划或未验证环境写成已完成能力。
+
+- **WTG ECA**：Classic/Reforged 触发器头始终可读；匹配 `TriggerData.txt` 时展开事件/条件/动作/调用、参数和嵌套子动作，`TriggerStrings.txt` 可用时生成编辑器式本地化语义文本。
+- **游戏基础数据源**：Windows 已实现固定 CascLib 3.0 的已知逻辑路径读取；散文件与显式 path-map 继续作为跨平台回退。macOS fake-native、固定源码构建和打包路径已验证，真实 Windows 魔兽安装测试本轮仍跳过，不声明真机读取通过。
+- **真实地图验收**：`war3net-map-script-builder.w3x` 通过 CLI + 外部 listfile + TriggerData/TriggerStrings 生成 72 个资料包文件；`触发器ECA.tsv` 出现 `Kill gg_unit_hpea_0006`，需求覆盖记录 listfile“确认 1，缺失 1”、CASC“使用散文件”、运行时解密“不支持”，命名覆盖为 `16/16 (100.0%)`。
+- **输出安全**：安全审查复现父目录移出后 `O_TRUNC` 会截断并删除外部同名文件，进一步复现最终发布窗口仍可能覆盖原文件；改为祖先预检、唯一临时文件、既有目标硬链接备份、阶段复核和越界原子恢复，非预期异常也按 inode 清理未发布临时文件。外部 listfile 增加 8 MiB、4096 字符/行、100000 有效条目的硬上限并逐行迭代，越界整体拒绝。
+- **静态边界**：真正数据级加密只做有界诊断和 `UnknownRaw` 原始负载保留；需要作者提供未保护文件、明文/listfile/key。本项目不执行内嵌 loader，不做运行时内存 dump、调试器或平台保护绕过。
+- **验证**：全量测试 **684 passed, 16 skipped, 1 subtest passed**；Task 8/安全聚焦 **15 passed**，GUI/CLI 聚焦 **34 passed**；真实 fixture CLI 退出码 0 并生成 72 个普通文件、0 个符号链接。

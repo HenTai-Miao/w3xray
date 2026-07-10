@@ -15,7 +15,7 @@ class KnowledgePackManifestTest(unittest.TestCase):
 
         # When: the knowledge pack is exported.
         with tempfile.TemporaryDirectory() as out:
-            write_knowledge_pack(md, out)
+            _ = write_knowledge_pack(md, out)
 
             # Then: users can see which file covers each investigation surface.
             with open(os.path.join(out, "资料包目录.tsv"), encoding="utf-8") as f:
@@ -40,6 +40,7 @@ class KnowledgePackManifestTest(unittest.TestCase):
             self.assertIn("脚本\t脚本局部变量索引.tsv\t脚本函数内 local 变量、初值和对象码", manifest)
             self.assertIn("脚本\t脚本字符串索引.tsv\t脚本字符串字面量、用途和函数上下文", manifest)
             self.assertIn("触发器\t触发器树.tsv\tWTG 分类、触发器头和启用状态", manifest)
+            self.assertIn("ECA 展开需匹配 TriggerData，语义本地化需 TriggerStrings", manifest)
             self.assertIn("提取完整性\t提取完整性.txt\t命名文件覆盖率和无名块提示", manifest)
             self.assertIn("总览\t需求覆盖.tsv\t用户原始需求到资料包产物的覆盖矩阵", manifest)
             self.assertIn("预放置\t预放置单位.tsv\twar3mapUnits.doo 单位、物品栏、技能和坐标", manifest)
@@ -51,7 +52,7 @@ class KnowledgePackManifestTest(unittest.TestCase):
 
         # When: the knowledge pack is exported.
         with tempfile.TemporaryDirectory() as out:
-            write_knowledge_pack(md, out)
+            _ = write_knowledge_pack(md, out)
 
             # Then: generic capabilities remain listed but empty-map rows are downgraded.
             with open(os.path.join(out, "需求覆盖.tsv"), encoding="utf-8") as f:
@@ -73,4 +74,4 @@ class KnowledgePackManifestTest(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    _ = unittest.main()

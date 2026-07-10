@@ -1,8 +1,8 @@
 """Portable best-effort directory-fd containment for output writes.
 
-The two ancestry checks detect completed directory moves around a write. They
-do not provide Linux ``openat2``-style atomic path resolution against an
-attacker that continuously renames directories between checks.
+Repeated ancestry checks detect completed directory moves around a write.
+They do not provide Linux ``openat2``-style atomic path resolution against a
+directory that is continuously renamed between checks.
 """
 
 from __future__ import annotations
@@ -14,20 +14,29 @@ from pathlib import PurePosixPath
 from typing import Final
 
 from w3xtool.safe_output_models import SafeWriteResult, SafeWriteStatus
+from w3xtool.safe_output_publication import publish_staged_file
+from w3xtool.safe_output_staging import (
+    destination_error,
+    discard_file,
+    open_staged_file,
+    remove_owned_staged_file,
+)
 
 
 ANCHORED_WRITES_AVAILABLE: Final = (
     os.open in os.supports_dir_fd
+    and os.link in os.supports_dir_fd
     and os.mkdir in os.supports_dir_fd
+    and os.rename in os.supports_dir_fd
+    and os.stat in os.supports_dir_fd
     and os.unlink in os.supports_dir_fd
+    and os.link in os.supports_follow_symlinks
+    and os.stat in os.supports_follow_symlinks
     and hasattr(os, "O_DIRECTORY")
     and hasattr(os, "O_NOFOLLOW")
 )
 _DIRECTORY_OPEN_FLAGS: Final = (
     os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
-)
-_FILE_OPEN_FLAGS: Final = (
-    os.O_CREAT | os.O_TRUNC | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
 )
 _UNSAFE_OPEN_ERRNOS: Final = frozenset((errno.EISDIR, errno.ELOOP, errno.ENOTDIR))
 
@@ -58,7 +67,7 @@ def write_bytes_anchored(
         return SafeWriteResult(_open_failure_status(exc), root_path, 0, str(exc))
 
     with ExitStack() as directories:
-        directories.callback(os.close, root_descriptor)
+        _ = directories.callback(os.close, root_descriptor)
         parent_descriptor = root_descriptor
         current_path = root_real
         for part in relative.parts[:-1]:
@@ -75,7 +84,7 @@ def write_bytes_anchored(
                     0,
                     str(exc),
                 )
-            directories.callback(os.close, parent_descriptor)
+            _ = directories.callback(os.close, parent_descriptor)
         return _write_from_parent(
             root_descriptor,
             parent_descriptor,
@@ -92,13 +101,24 @@ def _write_from_parent(
     destination: str,
     data: bytes,
 ) -> SafeWriteResult:
-    try:
-        file_descriptor = os.open(
-            name,
-            _FILE_OPEN_FLAGS,
-            0o600,
-            dir_fd=parent_descriptor,
+    containment_error = _containment_error(root_descriptor, parent_descriptor)
+    if containment_error is not None:
+        return SafeWriteResult(
+            SafeWriteStatus.UNSAFE,
+            destination,
+            0,
+            containment_error,
         )
+    unsafe_destination = destination_error(parent_descriptor, name)
+    if unsafe_destination is not None:
+        return SafeWriteResult(
+            SafeWriteStatus.UNSAFE,
+            destination,
+            0,
+            unsafe_destination,
+        )
+    try:
+        file_descriptor, temporary_name = open_staged_file(parent_descriptor)
     except OSError as exc:
         return SafeWriteResult(
             _open_failure_status(exc),
@@ -106,36 +126,57 @@ def _write_from_parent(
             0,
             str(exc),
         )
+    staged_identity = _identity(file_descriptor)
     try:
-        containment_error = _containment_error(root_descriptor, parent_descriptor)
-        if containment_error is not None:
-            return _remove_uncontained_output(
-                parent_descriptor,
-                name,
-                destination,
-                containment_error,
-            )
         try:
-            with os.fdopen(file_descriptor, "wb", closefd=False) as handle:
-                handle.write(data)
-        except OSError as exc:
-            return SafeWriteResult(
-                SafeWriteStatus.FAILED,
-                destination,
-                0,
-                str(exc),
-            )
-        containment_error = _containment_error(root_descriptor, parent_descriptor)
-        if containment_error is not None:
-            return _remove_uncontained_output(
-                parent_descriptor,
-                name,
-                destination,
-                containment_error,
-            )
+            containment_error = _containment_error(root_descriptor, parent_descriptor)
+            if containment_error is not None:
+                return discard_file(
+                    parent_descriptor,
+                    temporary_name,
+                    destination,
+                    SafeWriteStatus.UNSAFE,
+                    containment_error,
+                )
+            try:
+                with os.fdopen(file_descriptor, "wb", closefd=False) as handle:
+                    _ = handle.write(data)
+            except OSError as exc:
+                return discard_file(
+                    parent_descriptor,
+                    temporary_name,
+                    destination,
+                    SafeWriteStatus.FAILED,
+                    str(exc),
+                )
+            containment_error = _containment_error(root_descriptor, parent_descriptor)
+            if containment_error is not None:
+                return discard_file(
+                    parent_descriptor,
+                    temporary_name,
+                    destination,
+                    SafeWriteStatus.UNSAFE,
+                    containment_error,
+                )
+        finally:
+            os.close(file_descriptor)
+        publication_error = publish_staged_file(
+            parent_descriptor,
+            temporary_name,
+            name,
+            destination,
+            lambda: _containment_error(root_descriptor, parent_descriptor),
+            _open_failure_status,
+        )
+        if publication_error is not None:
+            return publication_error
+        return SafeWriteResult(SafeWriteStatus.WRITTEN, destination, len(data))
     finally:
-        os.close(file_descriptor)
-    return SafeWriteResult(SafeWriteStatus.WRITTEN, destination, len(data))
+        remove_owned_staged_file(
+            parent_descriptor,
+            temporary_name,
+            staged_identity,
+        )
 
 
 def _containment_error(root_descriptor: int, parent_descriptor: int) -> str | None:
@@ -157,7 +198,7 @@ def _is_descendant(descriptor: int, root_identity: tuple[int, int]) -> bool:
                 _DIRECTORY_OPEN_FLAGS,
                 dir_fd=current_descriptor,
             )
-            ancestors.callback(os.close, ancestor_descriptor)
+            _ = ancestors.callback(os.close, ancestor_descriptor)
             ancestor_identity = _identity(ancestor_descriptor)
             if ancestor_identity == current_identity:
                 return False
@@ -169,21 +210,6 @@ def _is_descendant(descriptor: int, root_identity: tuple[int, int]) -> bool:
 def _identity(descriptor: int) -> tuple[int, int]:
     details = os.fstat(descriptor)
     return details.st_dev, details.st_ino
-
-
-def _remove_uncontained_output(
-    parent_descriptor: int,
-    name: str,
-    destination: str,
-    reason: str,
-) -> SafeWriteResult:
-    try:
-        os.unlink(name, dir_fd=parent_descriptor)
-    except FileNotFoundError:
-        return SafeWriteResult(SafeWriteStatus.UNSAFE, destination, 0, reason)
-    except OSError as exc:
-        reason = f"{reason}; cleanup failed: {exc}"
-    return SafeWriteResult(SafeWriteStatus.UNSAFE, destination, 0, reason)
 
 
 def _open_or_create_directory(parent_descriptor: int, name: str) -> int:
