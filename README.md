@@ -11,10 +11,13 @@ GUI触发器、场景放置、触发指令、合成配方、孤立对象、分�
 
 > 用途：研究地图、学习地图制作。不含改存档 / 过反作弊 / 开图等作弊功能。
 
-## 直接用（exe）
-`dist/魔兽地图提取器/魔兽地图提取器.exe` —— 双击运行，点「打开地图 / 战役」选 `.w3x/.w3m/.w3n`。
-打包为 onedir（exe + 同目录 `_internal/` 依赖），启动快、无临时解压。
-**分发**：把整个 `dist/魔兽地图提取器/` 文件夹打成 zip 发给别人，解压后双击里面的 exe 即可。
+## 直接用（Windows Release）
+Windows Release 同时提供：
+
+- `w3xray-v0.1.1-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
+- `w3xray-v0.1.1-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢，并可能出现 SmartScreen 提示。
+
+两者功能相同；遇到杀软误报或启动问题时优先使用 ZIP 版。
 
 ## 开发运行（uv）
 ```bash
@@ -33,10 +36,11 @@ Windows 上如果 `uv run pytest -q` 报 `uv trampoline failed to canonicalize s
 不经过 pytest 的 console-script 启动器。
 
 ## 重新打包 exe
-Windows 包必须先从固定源码构建 x64 CascLib；脚本会验证源码 SHA256，并生成 DLL 及其哈希。随后运行打包命令：
+Windows 包必须先从固定源码构建 x64 CascLib；脚本会验证源码 SHA256，并生成 DLL 及其哈希。默认命令构建 onedir（exe + 同目录 `_internal/` 依赖）；加 `--onefile` 构建可直接分发的单文件 exe：
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/build_casclib.ps1
 uv run w3xray-dist
+uv run w3xray-dist --onefile
 ```
 DLL 和生成的哈希是本地构建产物，不提交到 Git。Windows 打包会在 PyInstaller 启动前校验 DLL 存在、SHA256 匹配且为 x64 PE；直接运行 spec 也不能绕过这道校验。
 只检查将要执行的 PyInstaller 命令，不真正打包：
