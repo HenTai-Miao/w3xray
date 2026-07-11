@@ -35,11 +35,15 @@
 - Modify `tools/run_windows_acceptance.ps1`: real-machine acceptance of both formats.
 - Modify `tests/test_windows_acceptance_assets.py`: exact dual-build workflow/script gates.
 - Modify `pyproject.toml` and `uv.lock`: bump package version to `0.1.1`.
+- Modify `w3xtool/__init__.py`: keep the runtime `__version__` aligned at `0.1.1`.
 - Modify `README.md`: explain ZIP versus single EXE and SmartScreen/startup trade-offs.
 
 ---
 
 ### Task 1: Add Typed Build Format Selection
+
+> Atomicity note: Tasks 1 and 2 form one implementation unit. Do not commit or hand off a public
+> `--onefile` selector until the conditional spec topology in Task 2 is complete and verified.
 
 **Files:**
 - Modify: `tests/test_dist_build.py`
@@ -214,12 +218,9 @@ PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_dist_build.py -q -p
 
 Expected before: FAIL because the environment is absent. Expected after: all `test_dist_build.py` tests pass.
 
-- [ ] **Step 5: Commit the typed build selector**
+- [ ] **Step 5: Continue directly to Task 2 without committing**
 
-```bash
-git add w3xtool/dist_build.py tests/test_dist_build.py
-git commit -m "feat: select Windows package format"
-```
+Expected: the selector remains an uncommitted implementation detail until the spec can actually build it.
 
 ---
 
@@ -338,13 +339,14 @@ uv run w3xray-dist --dry-run
 uv run w3xray-dist --dry-run --onefile
 ```
 
-Expected: tests pass; the default output path is under the app directory and onefile output is directly under `dist/`.
+Expected: tests prove the default output path is under the app directory and onefile output is directly under
+`dist/`; both dry-run commands accept their respective selectors without claiming to execute either topology.
 
 - [ ] **Step 5: Commit the spec topology**
 
 ```bash
-git add 魔兽地图提取器.spec tests/test_dist_build.py
-git commit -m "feat: build onedir and onefile from one spec"
+git add w3xtool/dist_build.py 魔兽地图提取器.spec tests/test_dist_build.py
+git commit -m "feat: build onedir and onefile packages"
 ```
 
 ---
@@ -480,6 +482,7 @@ Update `test_hosted_windows_workflow_packages_and_executes_artifact()` to requir
 
 ```python
 for required in (
+    "branches: [main]",
     "uv run w3xray-dist",
     "uv run w3xray-dist --onefile",
     "artifacts/windows-onedir",
@@ -547,8 +550,10 @@ $ReleaseDir = ".\artifacts\windows-release"
 New-Item -ItemType Directory -Path $ReleaseDir -Force | Out-Null
 $Onedir = @(Get-ChildItem -LiteralPath ".\dist" -Directory)
 if ($Onedir.Count -ne 1) { throw "Expected one onedir directory" }
+$DirectExe = @(Get-ChildItem -LiteralPath ".\dist" -Filter "*.exe" -File)
+if ($DirectExe.Count -ne 1) { throw "Expected one direct executable" }
 Compress-Archive -LiteralPath $Onedir[0].FullName -DestinationPath "$ReleaseDir\w3xray-v$Version-windows-x64.zip"
-Copy-Item -LiteralPath $OnefileExe[0].FullName -Destination "$ReleaseDir\w3xray-v$Version-windows-x64.exe"
+Copy-Item -LiteralPath $DirectExe[0].FullName -Destination "$ReleaseDir\w3xray-v$Version-windows-x64.exe"
 Copy-Item -LiteralPath ".\artifacts\windows-onedir\acceptance.json" -Destination "$ReleaseDir\windows-onedir-acceptance.json"
 Copy-Item -LiteralPath ".\artifacts\windows-onefile\acceptance.json" -Destination "$ReleaseDir\windows-onefile-acceptance.json"
 ```
@@ -585,10 +590,12 @@ git commit -m "ci: build and accept both Windows packages"
 **Files:**
 - Modify: `pyproject.toml`
 - Modify: `uv.lock`
+- Modify: `w3xtool/__init__.py`
 - Modify: `README.md`
 
 **Interfaces:**
 - Produces project version `0.1.1`.
+- Produces runtime `w3xtool.__version__ == "0.1.1"`.
 - Documents direct EXE and ZIP behavior without claiming code signing.
 
 - [ ] **Step 1: Update README packaging expectations**
@@ -604,6 +611,9 @@ Windows Release 同时提供：
 两者功能相同；遇到杀软误报或启动问题时优先使用 ZIP 版。
 ```
 
+Document both developer build commands: default `uv run w3xray-dist` for onedir and
+`uv run w3xray-dist --onefile` for the direct executable.
+
 - [ ] **Step 2: Bump the project and lockfile version**
 
 Set:
@@ -612,20 +622,23 @@ Set:
 version = "0.1.1"
 ```
 
+Also set `w3xtool.__version__` to `"0.1.1"`, then run:
+
 Then run:
 
 ```bash
 uv lock
 ```
 
-Confirm both `pyproject.toml` and the editable `w3xray` package entry in `uv.lock` report `0.1.1`.
+Confirm `pyproject.toml`, `w3xtool/__init__.py`, and the editable `w3xray` package entry in
+`uv.lock` report `0.1.1`.
 
 - [ ] **Step 3: Verify documentation and metadata**
 
 Run:
 
 ```bash
-rg -n '0\.1\.1|windows-x64\.zip|windows-x64\.exe|SmartScreen' pyproject.toml uv.lock README.md
+rg -n '0\.1\.1|windows-x64\.zip|windows-x64\.exe|SmartScreen|--onefile' pyproject.toml uv.lock w3xtool/__init__.py README.md
 git diff --check
 ```
 
@@ -634,7 +647,7 @@ Expected: version and both user assets are documented with no whitespace errors.
 - [ ] **Step 4: Commit version and documentation**
 
 ```bash
-git add pyproject.toml uv.lock README.md
+git add pyproject.toml uv.lock w3xtool/__init__.py README.md
 git commit -m "docs: prepare dual-package release"
 ```
 
@@ -655,8 +668,9 @@ git commit -m "docs: prepare dual-package release"
 Run:
 
 ```bash
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/codex-w3xray-v0.1.1.XXXXXX")
 PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest -q -rs -p no:cacheprovider
-uv run python -m compileall -q main.py w3xtool
+PYTHONPYCACHEPREFIX="$TEMP_DIR/pycache" uv run python -m compileall -q main.py w3xtool
 git diff --check
 git status --short --branch
 ```
@@ -668,6 +682,8 @@ Expected: tests and compileall exit 0; only intended committed changes exist; br
 ```bash
 git push origin local
 LOCAL_SHA=$(git rev-parse local)
+git fetch --prune origin
+git merge-base --is-ancestor origin/main local
 git switch main
 git pull --ff-only origin main
 git merge --ff-only local
@@ -682,7 +698,7 @@ Use:
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest -q -rs -p no:cacheprovider
-uv run python -m compileall -q main.py w3xtool
+PYTHONPYCACHEPREFIX="$TEMP_DIR/pycache-main" uv run python -m compileall -q main.py w3xtool
 git diff --check
 MAIN_SHA=$(git rev-parse HEAD)
 git push origin main
@@ -700,12 +716,11 @@ gh run view "$RUN_ID" --repo HenTai-Miao/w3xray --json headSha,status,conclusion
 
 Expected: `headSha` equals `MAIN_SHA`; onedir build/acceptance, onefile build/acceptance, asset preparation, and upload all conclude `success`.
 
-- [ ] **Step 4: Download and verify release-ready assets in a task temp directory**
+- [ ] **Step 4: Download and verify release-ready assets in the existing task temp directory**
 
-Create the task directory and download the exact artifact:
+Download the exact artifact:
 
 ```bash
-TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/codex-w3xray-v0.1.1.XXXXXX")
 gh run download "$RUN_ID" \
   --repo HenTai-Miao/w3xray \
   --name w3xray-windows-release-assets \
@@ -728,7 +743,16 @@ Expected: ZIP integrity passes; EXE is PE32+ x86-64; both hashes are recorded fo
 
 - [ ] **Step 5: Create the immutable release from the built commit**
 
-Confirm `v0.1.1` does not exist, then run:
+Confirm neither the remote tag nor Release exists, then run:
+
+```bash
+test -z "$(git ls-remote --tags origin refs/tags/v0.1.1)"
+if gh release view v0.1.1 --repo HenTai-Miao/w3xray >/dev/null 2>&1; then
+  exit 1
+fi
+```
+
+Then run:
 
 ```bash
 gh release create v0.1.1 \

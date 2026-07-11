@@ -38,7 +38,7 @@ EXE。现有 `v0.1.0` Release 因此发布的是便携 ZIP。
 - `uv run w3xray-dist --onefile` 生成单文件 Windows EXE。
 - 两种产物必须来自同一提交、同一 Python 依赖和同一固定 CascLib 源码。
 - Windows workflow 分别实跑两种产物的地图、战役、资料包、重复加载和 GUI 标签验收。
-- workflow 上传 onedir 目录、单文件 EXE 和各自的 `acceptance.json`。
+- workflow 上传 release-ready 的 onedir ZIP、单文件 EXE 和各自的 `acceptance.json`。
 - 下一版 Release 使用新标签发布两个用户资产：便携 ZIP 与直接 EXE。
 - 实现先提交到 `local`，完成本地验证后将 `local` 快进合并到 `main`。
 - 正式 Windows 双产物只从合并后的 `main` 精确提交构建，Release 标签也只指向该提交。
@@ -106,7 +106,8 @@ self-hosted workflow 负责。
 ## 测试与完成门槛
 
 - 构建参数测试覆盖默认模式、`--onefile`、未知参数和两种预期产物路径。
-- spec 测试确认两种模式共用 CascLib/CustomTkinter 数据源，且 onefile 不创建 `COLLECT`。
+- spec 合同测试确认两种模式共用 CascLib/CustomTkinter 数据源；onefile 拓扑最终以真实
+  Windows 构建和运行验收为准。
 - 本地完整 pytest 通过。
 - GitHub Windows workflow 中两种 EXE 均成功启动并完成 acceptance。
 - workflow 的 `headSha` 必须等于合并并推送后的 `main` HEAD。
