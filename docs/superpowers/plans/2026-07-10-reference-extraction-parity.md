@@ -1012,15 +1012,19 @@ Run: `uv run main.py cli tests/fixtures/reference/stormlib-campaign.w3n --pack "
 
 Expected: exit 0, a complete or explicitly partial report, and readable child terrain/resource outputs.
 
-- [ ] **Step 7: Execute GUI and Windows packaging acceptance**
+- [x] **Step 7: Execute GUI and Windows packaging acceptance**
 
 Run the Tk GUI smoke tests on macOS through the repository's established headless mechanism, then run or dispatch `.github/workflows/windows-package.yml`. If a real Windows Warcraft installation is unavailable, preserve `windows-real-war3` as SKIP and state that fact; do not convert it to PASS.
 
 Local acceptance evidence (2026-07-11): the complete suite returned
-`1001 passed, 4 skipped, 1 subtests passed`; source acceptance passed map load,
+`1002 passed, 4 skipped, 1 subtests passed`; source acceptance passed map load,
 campaign switching, an 87-file knowledge pack, five repeat loads, and all nine GUI
-tabs. `windows_runtime` and `real_windows_casc` remain explicit SKIP until the
-hosted Windows workflow runs and a real Warcraft installation is supplied.
+tabs. Hosted Windows run
+[`29143635239`](https://github.com/HenTai-Miao/w3xray/actions/runs/29143635239)
+then passed `995` tests with `11` explicit skips, built the onedir EXE, passed the
+Windows runtime, map, campaign, 66-file pack, five-repeat-load, and nine-tab packaged
+GUI lanes, and uploaded the executable plus `acceptance.json`. `real_windows_casc`
+remains explicit SKIP because no real Warcraft installation was supplied.
 
 - [x] **Step 8: Review changes and remove temporary artifacts**
 
@@ -1028,10 +1032,13 @@ Run: `git diff --check && git status --short`
 
 Expected: no whitespace errors; only intended source, tests, fixtures, and docs remain. Remove `${TMPDIR:-/tmp}/codex-w3xray-reference-audit-20260710`, `.debug-journal.md`, and the local exclude entry after extracting any required non-sensitive evidence into committed tests/docs.
 
-- [ ] **Step 9: Commit final integration and push**
+- [x] **Step 9: Commit final integration and push**
 
 ```bash
 git add w3xtool tests README.md docs/KKWE借鉴清单.md
 git commit -m "feat: complete reference extraction parity"
 git push origin local
 ```
+
+Pushed integration commit `37c28fb` and Windows LZMA compatibility follow-up
+`dd90efd` to `origin/local`; the hosted Windows workflow above passed on `dd90efd`.
