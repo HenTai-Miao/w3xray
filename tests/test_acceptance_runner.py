@@ -45,6 +45,48 @@ def test_core_acceptance_executes_map_campaign_export_and_repeat_load(tmp_path: 
     assert (tmp_path / "knowledge-pack" / "资料包目录.tsv").is_file()
 
 
+def test_portable_acceptance_skips_bundled_casclib(tmp_path: Path) -> None:
+    # Given: a portable acceptance run that does not require Windows.
+    module = importlib.import_module("w3xtool.acceptance_runner")
+    config = module.AcceptanceConfig(
+        map_path=_MAP,
+        campaign_path=None,
+        war3_dir=None,
+        output_dir=tmp_path,
+        run_gui=False,
+        require_windows=False,
+    )
+
+    # When: the acceptance runner executes every configured lane.
+    report = module.run_acceptance(config)
+
+    # Then: the packaged CascLib lane is explicitly skipped.
+    statuses = {check.name: check.status.value for check in report.checks}
+    assert statuses["bundled_casclib"] == "skip"
+
+
+def test_windows_acceptance_loads_bundled_casclib(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    # Given: a packaged DLL path and an observable native API constructor.
+    module = importlib.import_module("w3xtool.acceptance_runner")
+    dll = tmp_path / "CascLib.dll"
+    dll.write_bytes(b"MZfixture")
+    loaded: list[Path] = []
+
+    monkeypatch.setattr(module, "default_dll_path", lambda: dll)
+    monkeypatch.setattr(module, "CtypesCascLibApi", lambda *, dll_path: loaded.append(dll_path))
+
+    # When: Windows acceptance proves the bundled CascLib runtime can load.
+    check = module._bundled_casclib_check(require_windows=True)
+
+    # Then: construction binds the DLL and records packaged-file evidence.
+    assert check.status.value == "pass"
+    assert loaded == [dll]
+    assert "CascLib.dll" in check.detail
+
+
 def test_main_acceptance_mode_writes_machine_readable_report(tmp_path: Path) -> None:
     # Given: the public main entrypoint and explicit acceptance arguments.
     report_path = tmp_path / "acceptance.json"

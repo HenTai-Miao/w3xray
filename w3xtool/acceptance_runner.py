@@ -14,7 +14,7 @@ from time import perf_counter
 from typing import override
 
 from .api import load_map
-from .casclib_api import MAX_CASC_FILE_SIZE
+from .casclib_api import CtypesCascLibApi, MAX_CASC_FILE_SIZE, default_dll_path
 from .casclib_enumeration import CascNameType
 from .casclib_source import CascLibDataSource
 from .knowledge_pack import write_knowledge_pack_report
@@ -97,6 +97,7 @@ def run_acceptance(config: AcceptanceConfig) -> AcceptanceReport:
     config.output_dir.mkdir(parents=True, exist_ok=True)
     checks: list[AcceptanceCheck] = []
     checks.append(_platform_check(config.require_windows))
+    checks.append(_bundled_casclib_check(config.require_windows))
     checks.append(_run_check("map_load", lambda: _check_map(config.map_path)))
     checks.append(_campaign_check(config.campaign_path))
     checks.append(_run_check(
@@ -139,6 +140,18 @@ def _platform_check(require_windows: bool) -> AcceptanceCheck:
     if sys.platform != "win32":
         return AcceptanceCheck("windows_runtime", AcceptanceStatus.FAIL, f"当前平台：{sys.platform}", 0)
     return AcceptanceCheck("windows_runtime", AcceptanceStatus.PASS, platform.platform(), 0)
+
+
+def _bundled_casclib_check(require_windows: bool) -> AcceptanceCheck:
+    if not require_windows:
+        return AcceptanceCheck("bundled_casclib", AcceptanceStatus.SKIP, "未要求 Windows", 0)
+    return _run_check("bundled_casclib", _check_bundled_casclib)
+
+
+def _check_bundled_casclib() -> str:
+    path = default_dll_path()
+    _ = CtypesCascLibApi(dll_path=path)
+    return f"path={path}; bytes={path.stat().st_size}"
 
 
 def _check_map(path: Path) -> str:
