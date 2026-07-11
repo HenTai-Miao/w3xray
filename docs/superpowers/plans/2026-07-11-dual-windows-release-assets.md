@@ -18,6 +18,8 @@
 - A packaged Windows acceptance must prove the bundled CascLib DLL and required exports load even when no real Warcraft installation is available.
 - The real Warcraft CASC lane remains restricted to the existing protected self-hosted workflow.
 - Existing `v0.1.0` is immutable; dual assets ship as `v0.1.1`.
+- Implementation commits land on `local`, then `local` is fast-forwarded into `main` after local gates pass.
+- The release workflow runs from the exact merged `main` HEAD; neither `local` nor an earlier tag is a publication source.
 - Build intermediates and downloaded artifacts remain outside git and under the platform temp/build directories.
 
 ---
@@ -468,6 +470,7 @@ git commit -m "test: verify bundled CascLib at runtime"
 
 **Interfaces:**
 - Consumes: `uv run w3xray-dist` and `uv run w3xray-dist --onefile`.
+- Triggers formal push builds from `main` (with pull requests and manual dispatch preserved).
 - Produces: `artifacts/windows-onedir/acceptance.json` and `artifacts/windows-onefile/acceptance.json`.
 - Produces release-ready `artifacts/windows-release/w3xray-v0.1.1-windows-x64.zip` and `.exe`.
 
@@ -503,7 +506,7 @@ Expected: FAIL because onefile, separate evidence, and release-ready assets are 
 
 - [ ] **Step 3: Update hosted workflow with explicit paths**
 
-Keep the source block ASCII-only. The workflow sequence becomes:
+Change `push.branches` from `local` to `main`. Keep the source block ASCII-only. The workflow sequence becomes:
 
 ```yaml
 - name: Build onedir executable
@@ -637,14 +640,14 @@ git commit -m "docs: prepare dual-package release"
 
 ---
 
-### Task 6: Verify, Push, Build, and Publish v0.1.1
+### Task 6: Verify, Merge to Main, Build, and Publish v0.1.1
 
 **Files:**
 - Verify all changed files from Tasks 1-5.
 - No generated binaries are committed.
 
 **Interfaces:**
-- Consumes release-ready assets from the successful Windows workflow run for the implementation commit.
+- Consumes release-ready assets from the successful Windows workflow run for the merged `main` commit.
 - Produces tag and GitHub Release `v0.1.1` with direct ZIP and EXE downloads.
 
 - [ ] **Step 1: Run final local gates**
@@ -660,24 +663,33 @@ git status --short --branch
 
 Expected: tests and compileall exit 0; only intended committed changes exist; branch is ahead of `origin/local`.
 
-- [ ] **Step 2: Push the implementation branch**
+- [ ] **Step 2: Push `local`, then fast-forward it into `main`**
 
 ```bash
 git push origin local
+LOCAL_SHA=$(git rev-parse local)
+git switch main
+git pull --ff-only origin main
+git merge --ff-only local
+test "$(git rev-parse HEAD)" = "$LOCAL_SHA"
 ```
 
-Expected: the push succeeds and triggers `Windows package acceptance` for the pushed HEAD.
+Expected: `local` is published, `main` advances without a merge commit, and `main` HEAD exactly equals the verified `local` SHA.
 
-- [ ] **Step 3: Wait for the exact Windows run and inspect every gate**
+- [ ] **Step 3: Re-verify merged `main`, push it, and wait for its exact Windows run**
 
 Use:
 
 ```bash
-HEAD_SHA=$(git rev-parse HEAD)
+PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest -q -rs -p no:cacheprovider
+uv run python -m compileall -q main.py w3xtool
+git diff --check
+MAIN_SHA=$(git rev-parse HEAD)
+git push origin main
 RUN_ID=$(gh run list --repo HenTai-Miao/w3xray \
   --workflow "Windows package acceptance" \
-  --branch local \
-  --commit "$HEAD_SHA" \
+  --branch main \
+  --commit "$MAIN_SHA" \
   --limit 1 \
   --json databaseId \
   --jq '.[0].databaseId')
@@ -686,7 +698,7 @@ gh run watch "$RUN_ID" --repo HenTai-Miao/w3xray --exit-status
 gh run view "$RUN_ID" --repo HenTai-Miao/w3xray --json headSha,status,conclusion,jobs,url
 ```
 
-Expected: `headSha` equals pushed HEAD; onedir build/acceptance, onefile build/acceptance, asset preparation, and upload all conclude `success`.
+Expected: `headSha` equals `MAIN_SHA`; onedir build/acceptance, onefile build/acceptance, asset preparation, and upload all conclude `success`.
 
 - [ ] **Step 4: Download and verify release-ready assets in a task temp directory**
 
@@ -725,9 +737,9 @@ gh release create v0.1.1 \
   "$TEMP_DIR/windows-onedir-acceptance.json" \
   "$TEMP_DIR/windows-onefile-acceptance.json" \
   --repo HenTai-Miao/w3xray \
-  --target "$HEAD_SHA" \
+  --target "$MAIN_SHA" \
   --title "w3xray v0.1.1" \
-  --notes "Windows ZIP and direct EXE, both accepted from commit $HEAD_SHA. ZIP SHA-256: $ZIP_SHA. EXE SHA-256: $EXE_SHA. The direct EXE is unsigned and may show a SmartScreen warning; use the ZIP build if startup or antivirus compatibility is better there." \
+  --notes "Windows ZIP and direct EXE, both accepted from main commit $MAIN_SHA. ZIP SHA-256: $ZIP_SHA. EXE SHA-256: $EXE_SHA. The direct EXE is unsigned and may show a SmartScreen warning; use the ZIP build if startup or antivirus compatibility is better there." \
   --latest
 ```
 
@@ -742,6 +754,6 @@ git status --short --branch
 rm -rf -- "$TEMP_DIR"
 ```
 
-Expected: latest tag is `v0.1.1`; ZIP, direct EXE, and both acceptance reports have state `uploaded`; tag commit equals the workflow `headSha`; worktree is clean. Remove the task temp directory after verification.
+Expected: latest tag is `v0.1.1`; ZIP, direct EXE, and both acceptance reports have state `uploaded`; tag commit equals the workflow `headSha` and `main` HEAD; worktree is clean. Remove the task temp directory after verification.
 
 Do not delete or retarget `v0.1.0`.

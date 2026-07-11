@@ -1,7 +1,7 @@
 # 设计：Windows Release 同时提供便携 ZIP 与单文件 EXE
 
 - 日期：2026-07-11
-- 状态：方向已确认，待书面审阅
+- 状态：方向与发布分支流程已确认，实施中
 - 范围：PyInstaller 构建入口、Windows GitHub Actions 验收和下一版 GitHub Release
 
 ## 背景
@@ -40,6 +40,8 @@ EXE。现有 `v0.1.0` Release 因此发布的是便携 ZIP。
 - Windows workflow 分别实跑两种产物的地图、战役、资料包、重复加载和 GUI 标签验收。
 - workflow 上传 onedir 目录、单文件 EXE 和各自的 `acceptance.json`。
 - 下一版 Release 使用新标签发布两个用户资产：便携 ZIP 与直接 EXE。
+- 实现先提交到 `local`，完成本地验证后将 `local` 快进合并到 `main`。
+- 正式 Windows 双产物只从合并后的 `main` 精确提交构建，Release 标签也只指向该提交。
 
 ## 非目标
 
@@ -93,11 +95,13 @@ self-hosted workflow 负责。
 - 实施提交通过 Windows workflow 后创建下一补丁版本标签。
 - Release 附件至少包含：
   - `w3xray-vX.Y.Z-windows-x64.zip`
-  - `魔兽地图提取器-vX.Y.Z-windows-x64.exe`
+  - `w3xray-vX.Y.Z-windows-x64.exe`
   - 两种格式的验收报告。
 - ZIP SHA-256 和 EXE SHA-256 写入 Release 说明。
 - Release 说明明确：ZIP 启动更快、便于排查；单文件 EXE 首次启动较慢且可能被 SmartScreen
   提示。
+- GitHub Actions 的正式 push 触发分支是 `main`；`local` 仅承载开发提交，不作为 Release
+  构建来源。
 
 ## 测试与完成门槛
 
@@ -105,8 +109,9 @@ self-hosted workflow 负责。
 - spec 测试确认两种模式共用 CascLib/CustomTkinter 数据源，且 onefile 不创建 `COLLECT`。
 - 本地完整 pytest 通过。
 - GitHub Windows workflow 中两种 EXE 均成功启动并完成 acceptance。
+- workflow 的 `headSha` 必须等于合并并推送后的 `main` HEAD。
 - GitHub Release API 确认 ZIP、直接 EXE 和验收报告均为 `uploaded`。
-- Release 标签指向实际构建提交，工作区保持干净。
+- Release 标签指向该 `main` 构建提交，工作区保持干净。
 
 ## 风险与处理
 
