@@ -8,6 +8,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 
 from .map_archive_reader import MapArchiveReader
+from .extraction_diagnostics import read_component
 from .war3_encoding import decode_warcraft_string
 from .wct import WctDiagnostic, WctScript, parse_wct
 
@@ -29,35 +30,59 @@ class ScriptCollection:
     wts_raw: bytes | None = None
 
 
-def collect_readable_scripts(archive: MapArchiveReader) -> ScriptCollection:
+def collect_readable_scripts(
+    archive: MapArchiveReader,
+    *,
+    md: MapData | None = None,
+) -> ScriptCollection:
     """Decode text members and publish WCT only through its readable virtual text."""
     texts: dict[str, str] = {}
     wts_raw: bytes | None = None
     for name in _TEXT_MEMBERS:
         if not archive.has_file(name):
             continue
-        try:
-            raw = archive.read_file(name)
-        except (KeyError, OSError, ValueError):
+        raw = _read_script_member(archive, name, md)
+        if raw is None:
             continue
-        texts[name] = decode_warcraft_string(raw)
+        text = _decode_script_member(raw, name, md)
+        if text is None:
+            continue
+        texts[name] = text
         if name == "war3map.wts":
             wts_raw = raw
 
     binary_members = tuple(name for name in _BINARY_MEMBERS if archive.has_file(name))
     diagnostic: WctDiagnostic | None = None
     if "war3map.wct" in binary_members:
-        try:
-            raw_wct = archive.read_file("war3map.wct")
-        except (KeyError, OSError, ValueError):
-            diagnostic = WctDiagnostic.TRUNCATED
-        else:
+        raw_wct = _read_script_member(archive, "war3map.wct", md)
+        if raw_wct is not None:
             parsed = parse_wct(raw_wct)
             diagnostic = parsed.diagnostic
             readable = _format_wct_text(parsed)
             if readable is not None:
                 texts[WCT_TEXT_NAME] = readable
     return ScriptCollection(MappingProxyType(texts), binary_members, diagnostic, wts_raw)
+
+
+def _read_script_member(
+    archive: MapArchiveReader,
+    name: str,
+    md: MapData | None,
+) -> bytes | None:
+    if md is not None:
+        component = "wts" if name == "war3map.wts" else ("wct" if name == "war3map.wct" else "script")
+        return read_component(md, component, name, lambda: archive.read_file(name), stage="read")
+    try:
+        return archive.read_file(name)
+    except (KeyError, OSError, ValueError):
+        return None
+
+
+def _decode_script_member(raw: bytes, name: str, md: MapData | None) -> str | None:
+    if md is not None:
+        component = "wts" if name == "war3map.wts" else "script"
+        return read_component(md, component, name, lambda: decode_warcraft_string(raw), stage="decode")
+    return decode_warcraft_string(raw)
 
 
 def analysis_script_texts(md: MapData) -> tuple[tuple[str, str], ...]:

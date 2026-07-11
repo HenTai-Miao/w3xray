@@ -896,7 +896,7 @@ git commit -m "feat: unify Warcraft client data sources"
 - Preserves: `write_knowledge_pack(...) -> int` by returning `report.written_count`.
 - Produces: component-diagnostic and write-failure TSV sections in the pack manifest.
 
-- [ ] **Step 1: Write failed-write and full reference-parity tests**
+- [x] **Step 1: Write failed-write and full reference-parity tests**
 
 ```python
 def test_pack_reports_partial_success_instead_of_counting_failed_file(monkeypatch, tmp_path) -> None:
@@ -926,13 +926,13 @@ WTS, overlapping text/binary objects, SLK supplementation, four categories, JASS
 WTG/WCT; `stormlib-reference-parity-campaign.w3n` contains that map as a declared child.
 Record both SHA256 values and the pinned StormLib generation command.
 
-- [ ] **Step 2: Run publication/E2E tests and confirm failures**
+- [x] **Step 2: Run publication/E2E tests and confirm failures**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_knowledge_results.py tests/test_reference_extraction_parity.py tests/test_static_extraction_workflow.py -q -p no:cacheprovider`
 
 Expected: FAIL because writes collapse to integer counts and not all parity conditions are implemented.
 
-- [ ] **Step 3: Implement detailed write results and compatibility facade**
+- [x] **Step 3: Implement detailed write results and compatibility facade**
 
 ```python
 class KnowledgeWriteStatus(StrEnum):
@@ -981,7 +981,7 @@ GUI and CLI show complete/partial/failed with counts and the first failure. Writ
 `组件诊断.tsv` from `MapData.diagnostics` and write `资料包写入结果.tsv` last; then refresh
 `需求覆盖.tsv` so its publication status reflects the completed session.
 
-- [ ] **Step 4: Replace component-level silent failure with diagnostics**
+- [x] **Step 4: Replace component-level silent failure with diagnostics**
 
 Add `read_component(md, component, source, operation, recoverable=True)` in
 `extraction_diagnostics.py`. Use it in `api.py` and `map_extras.py` for WTS, scripts, SLK,
@@ -990,11 +990,11 @@ errors; an existing member that fails decoding or parsing records a warning/erro
 exception type and source name. Format all collected entries through
 `knowledge_diagnostics.format_component_diagnostics_tsv(md)`.
 
-- [ ] **Step 5: Update dynamic coverage and user-facing documentation**
+- [x] **Step 5: Update dynamic coverage and user-facing documentation**
 
 Coverage uses actual object-source counts, unresolved WTS count, script-source count, child-source readability, game-data inventory capability, component diagnostics, and write report. README and `KKWE借鉴清单.md` list what is complete, partial, runtime-only, and externally skipped; they must not claim Windows real-install PASS without an acceptance artifact.
 
-- [ ] **Step 6: Run the complete automated verification matrix**
+- [x] **Step 6: Run the complete automated verification matrix**
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest -q -p no:cacheprovider`
 
@@ -1016,7 +1016,13 @@ Expected: exit 0, a complete or explicitly partial report, and readable child te
 
 Run the Tk GUI smoke tests on macOS through the repository's established headless mechanism, then run or dispatch `.github/workflows/windows-package.yml`. If a real Windows Warcraft installation is unavailable, preserve `windows-real-war3` as SKIP and state that fact; do not convert it to PASS.
 
-- [ ] **Step 8: Review changes and remove temporary artifacts**
+Local acceptance evidence (2026-07-11): the complete suite returned
+`1001 passed, 4 skipped, 1 subtests passed`; source acceptance passed map load,
+campaign switching, an 87-file knowledge pack, five repeat loads, and all nine GUI
+tabs. `windows_runtime` and `real_windows_casc` remain explicit SKIP until the
+hosted Windows workflow runs and a real Warcraft installation is supplied.
+
+- [x] **Step 8: Review changes and remove temporary artifacts**
 
 Run: `git diff --check && git status --short`
 

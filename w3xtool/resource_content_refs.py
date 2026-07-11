@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, ContextManager, Final, Protocol
 
 from .campaign_sources import open_map_source
+from .presentation_safety import tsv_cell as _tsv
 from .resources import find_resource_paths, resource_kind
 from .war3_encoding import decode_warcraft_string
 
@@ -142,7 +143,3 @@ def _normalize_path(path: str) -> str:
     while "\\\\" in normalized:
         normalized = normalized.replace("\\\\", "\\")
     return normalized
-
-
-def _tsv(value: str) -> str:
-    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")

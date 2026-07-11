@@ -17,7 +17,8 @@ from .api import load_map
 from .casclib_api import MAX_CASC_FILE_SIZE
 from .casclib_enumeration import CascNameType
 from .casclib_source import CascLibDataSource
-from .knowledge_pack import write_knowledge_pack
+from .knowledge_pack import write_knowledge_pack_report
+from .knowledge_results import KnowledgeWriteStatus
 
 
 class AcceptanceStatus(StrEnum):
@@ -164,11 +165,15 @@ def _check_campaign(path: Path) -> str:
 def _check_knowledge_pack(map_path: Path, output_dir: Path) -> str:
     md = load_map(str(map_path))
     pack_dir = output_dir / "knowledge-pack"
-    count = write_knowledge_pack(md, str(pack_dir))
+    report = write_knowledge_pack_report(md, str(pack_dir))
     manifest = pack_dir / "资料包目录.tsv"
-    if count < 1 or not manifest.is_file():
+    if not manifest.is_file():
         raise AcceptanceCheckError("资料包没有生成 资料包目录.tsv")
-    return f"files={count}; path={pack_dir}"
+    if report.status is not KnowledgeWriteStatus.COMPLETE:
+        raise AcceptanceCheckError(
+            f"资料包部分或全部失败：成功 {report.written_count}，失败 {report.failed_count}",
+        )
+    return f"files={report.written_count}; path={pack_dir}"
 
 
 def _check_repeat_load(map_path: Path, repeat_count: int) -> str:

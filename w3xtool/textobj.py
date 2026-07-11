@@ -14,14 +14,18 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from collections.abc import Iterable, Mapping
+from typing import Final
 
 _COLOR = re.compile(r"\|c[0-9a-fA-F]{8}|\|r", re.IGNORECASE)
 _SECTION_HEAD = re.compile(rb"^\[[A-Za-z0-9]{3,4}\]")
 _WESTRING = re.compile(r"WESTRING_[A-Za-z0-9_]+")
 try:
-    from .westrings import WESTRINGS
+    from .westrings import WESTRINGS as _westrings
 except ImportError:        # 仅当数据文件缺失时兜底；语法/导入错误等真实 bug 不再被静默吞掉
-    WESTRINGS = {}
+    _westrings = {}
+
+WESTRINGS: Final[Mapping[str, str]] = _westrings
 
 
 def _sub_westring(s: str) -> str:
@@ -43,12 +47,12 @@ def looks_like_text_object(head: bytes) -> bool:
     return bool(_SECTION_HEAD.match(h))
 
 
-def parse_text_objects(text: str):
+def parse_text_objects(text: str) -> list[tuple[str, dict[str, str]]]:
     """解析为 [(code, {field: value})]。"""
     text = text.replace("\r\n", "\n").replace("\r", "\n")
-    objs = []
-    code = None
-    fields = None
+    objs: list[tuple[str, dict[str, str]]] = []
+    code: str | None = None
+    fields: dict[str, str] = {}
     for line in text.split("\n"):
         s = line.strip()
         if len(s) >= 5 and s[0] == "[" and s[-1] == "]" and " " not in s[1:-1]:
@@ -83,25 +87,26 @@ _UPGRADE_MARKERS = {"effect", "goldbase", "goldmod", "lumberbase", "lumbermod",
                     "benefit1", "base1", "mod1"}
 
 
-def classify(codes, field_keys=None) -> str:
+def classify(codes: Iterable[str], field_keys: Iterable[str] | None = None) -> str:
     """判定类型。明确是 单位/技能/科技 才归该类，其余一律"物品"(默认)。
 
     依据：单位/技能特有字段 + 代码前缀(A=技能 R=科技 n/o/h/e/u=单位)。
     物品文件多只有通用字段(Art/Name/Tip/Ubertip)，故作默认。
     """
+    code_list = tuple(codes)
     fk = set(k.lower() for k in (field_keys or []))
 
-    def hits(markers):
+    def hits(markers: set[str]) -> int:
         return len(fk & markers)
 
     su = hits(_UNIT_MARKERS)
     sa = hits(_ABILITY_MARKERS)
     sg = hits(_UPGRADE_MARKERS)
     # 代码前缀投票（强信号）
-    c = Counter(code[0] for code in codes if code)
+    c = Counter(code[0] for code in code_list if code)
     if c:
         top, n = c.most_common(1)[0]
-        frac = n / max(1, len(codes))
+        frac = n / max(1, len(code_list))
         if top == "A" and frac > 0.5:
             sa += 3
         elif top == "R" and frac > 0.5:

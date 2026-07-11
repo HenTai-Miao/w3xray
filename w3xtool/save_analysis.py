@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from bisect import bisect_right
 from collections import Counter
 from dataclasses import dataclass
-import re
 from typing import Final
 
 from .api import MapData
+from .presentation_safety import tsv_cell as _tsv
 from .save_api_catalog import object_api_category, save_api_info
 from .save_call_context import extract_call_args, structured_context, unescape_arg
 from .script_scan import _codes_in
@@ -173,7 +174,3 @@ def _context_parts(clue: SaveClue) -> tuple[tuple[str, str], ...]:
     if clue.sync_prefix:
         parts.append(("同步", clue.sync_prefix))
     return tuple(parts)
-
-
-def _tsv(value: str) -> str:
-    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")

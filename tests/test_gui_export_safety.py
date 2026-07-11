@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+import errno
 import shutil
 import tempfile
+from pathlib import Path
 from unittest.mock import patch
 
 from tests.gui_base import GuiTestCase
@@ -20,6 +21,28 @@ class _InlineThread:
 
 
 class GuiExportSafetyTest(GuiTestCase):
+    def test_export_error_redacts_absolute_source_path(self) -> None:
+        output = Path(self.create_temp_dir()) / "scripts"
+        secret = output.parent / "private" / "source.w3x"
+        md = MapData(path="x.w3x", name="错误路径安全图")
+        md.scripts = {"war3map.j": "function main takes nothing returns nothing\nendfunction\n"}
+        self.app.map_data = md
+
+        with patch("w3xtool.gui_export_actions.tmp_extract_dir", return_value=str(output)):
+            with patch("w3xtool.gui_export_actions.threading.Thread", _InlineThread):
+                with patch(
+                    "w3xtool.gui_export_actions.write_script_exports",
+                    side_effect=OSError(errno.EACCES, "denied", str(secret)),
+                ):
+                    with patch("w3xtool.gui_export_actions.messagebox.showerror") as show_error:
+                        self.app.on_export_scripts()
+                        self.app.update()
+
+        message = show_error.call_args.args[1]
+        self.assertIn("PermissionError", message)
+        self.assertNotIn(str(secret), message)
+        self.assertIn("<path>", message)
+
     def test_script_export_does_not_follow_destination_symlink(self) -> None:
         output = Path(self.create_temp_dir()) / "scripts"
         output.mkdir()

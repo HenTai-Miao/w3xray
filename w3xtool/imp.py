@@ -131,6 +131,20 @@ def parse_import_entries(data: bytes) -> tuple[ImportEntry, ...]:
     return parse_import_table(data).entries
 
 
+def import_table_parse_issue(data: bytes, table: ImportTable) -> str | None:
+    """Return why a tolerant import-table result is incomplete."""
+    if len(data) < 8:
+        return "truncated import table header"
+    _version, declared_count = struct.unpack_from("<ii", data, 0)
+    if declared_count < 0:
+        return f"negative import count: {declared_count}"
+    if declared_count > (len(data) - 8) // 2:
+        return f"import count {declared_count} exceeds payload bounds"
+    if table.entry_count != declared_count:
+        return f"recovered {table.entry_count} of {declared_count} imports"
+    return None
+
+
 def parse_imp(data: bytes) -> list:
     """解析导入表，返回导入文件路径列表（保持原顺序、去空）。"""
     return [entry.path for entry in parse_import_entries(data)]

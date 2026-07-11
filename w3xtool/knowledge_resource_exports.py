@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 
 from .game_data_source import GameDataSource, open_game_data_source
 from .knowledge_assets import export_resource_bodies, format_asset_body_manifest
@@ -27,7 +26,6 @@ def write_resources(
     game_data_path: str | None = None,
 ) -> int:
     """Write resource references, inventory and readable asset bodies."""
-    os.makedirs(out_dir, exist_ok=True)
     content_refs = build_resource_content_references(md)
     report = build_resource_report(md)
     inventory = build_resource_inventory(md, content_refs.items)

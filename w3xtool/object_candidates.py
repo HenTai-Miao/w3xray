@@ -6,17 +6,21 @@ import struct
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Final
+from typing import TYPE_CHECKING, Final, assert_never
 
 from .base_names import BASE_NAMES
 from .fields import field_type, is_concat_type, label_for
+from .extraction_diagnostics import read_component, record_component_parse_issue
 from .map_archive_reader import MapArchiveReader
 from .object_text_sources import TextObjectSourceKind, collect_text_object_records
 from .references import extract_refs_by_column, extract_refs_by_type
 from .slk_objects import SLK_CATEGORY_FILES, is_noise_col, parse_category_objects, slk_col_label
 from .textobj import _sub_westring
-from .w3obj import EXT_CATEGORY, parse_object_data
+from .w3obj import EXT_CATEGORY, parse_object_data, parse_object_data_report
 from .wts import resolve
+
+if TYPE_CHECKING:
+    from .map_data import MapData
 
 
 class ObjectSourceKind(IntEnum):
@@ -67,14 +71,17 @@ def collect_object_candidates(
     wts: Mapping[int, str],
     *,
     prefix: str = "war3map",
+    md: MapData | None = None,
 ) -> tuple[ObjectCandidate, ...]:
     """Collect candidates for one binary prefix and shared map text sources."""
     candidates: list[ObjectCandidate] = []
     if prefix == "war3map":
-        candidates.extend(_collect_text_candidates(archive, wts))
-        candidates.extend(_collect_slk_candidates(archive, wts))
+        candidates.extend(_collect_text_candidates(archive, wts, md))
+        candidates.extend(_collect_slk_candidates(archive, wts, md))
     for ext in OBJECT_EXTS:
-        candidates.extend(collect_binary_object_candidates(archive, wts, ext, prefix=prefix))
+        candidates.extend(
+            collect_binary_object_candidates(archive, wts, ext, prefix=prefix, md=md),
+        )
     return tuple(sorted(candidates, key=_candidate_sort_key))
 
 
@@ -84,15 +91,31 @@ def collect_binary_object_candidates(
     ext: str,
     *,
     prefix: str = "war3map",
+    md: MapData | None = None,
 ) -> tuple[ObjectCandidate, ...]:
     """Parse one binary object file without affecting candidates from other sources."""
     filename = f"{prefix}.{ext}"
     if not archive.has_file(filename):
         return ()
-    try:
-        parsed = parse_object_data(archive.read_file(filename), ext)
-    except (KeyError, OSError, ValueError, struct.error):
-        return ()
+    if md is not None:
+        payload = read_component(
+            md,
+            "object-binary",
+            filename,
+            lambda: archive.read_file(filename),
+            stage="read",
+        )
+        if payload is None:
+            return ()
+        report = parse_object_data_report(payload, ext)
+        for issue in report.issues:
+            record_component_parse_issue(md, "object-binary", filename, issue)
+        parsed = report.objects
+    else:
+        try:
+            parsed = parse_object_data(archive.read_file(filename), ext)
+        except (KeyError, OSError, ValueError, struct.error):
+            return ()
     category = EXT_CATEGORY.get(ext, ext)
     result: list[ObjectCandidate] = []
     for item in parsed:
@@ -118,9 +141,10 @@ def collect_binary_object_candidates(
 def _collect_text_candidates(
     archive: MapArchiveReader,
     wts: Mapping[int, str],
+    md: MapData | None,
 ) -> tuple[ObjectCandidate, ...]:
     result: list[ObjectCandidate] = []
-    for record in collect_text_object_records(archive):
+    for record in collect_text_object_records(archive, md=md):
         resolved = {key: _resolved_value(value, wts) for key, value in record.fields.items()}
         fields = tuple(
             ObjectFieldValue(
@@ -150,11 +174,12 @@ def _collect_text_candidates(
 def _collect_slk_candidates(
     archive: MapArchiveReader,
     wts: Mapping[int, str],
+    md: MapData | None,
 ) -> tuple[ObjectCandidate, ...]:
     result: list[ObjectCandidate] = []
     source = "war3map *Data.slk"
     for category in SLK_CATEGORY_FILES:
-        for code, row in sorted(parse_category_objects(archive, category).items()):
+        for code, row in sorted(parse_category_objects(archive, category, md=md).items()):
             resolved = {key: _resolved_value(value, wts) for key, value in row.items()}
             fields = tuple(
                 ObjectFieldValue(key, slk_col_label(key), value, source, ObjectSourceKind.SLK)
@@ -187,6 +212,8 @@ def _text_source_kind(kind: TextObjectSourceKind, field_name: str) -> ObjectSour
                 if field_name.casefold() in _DISPLAY_TEXT_FIELDS
                 else ObjectSourceKind.TEXT_FUNC
             )
+        case unreachable:
+            assert_never(unreachable)
 
 
 def _resolved_value(value: int | float | str, wts: Mapping[int, str]) -> str:

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
-import re
 from typing import Final
 
 from .api import MapData
+from .presentation_safety import tsv_cell as _tsv
 from .script_function_index import ScriptFunction, build_script_function_index
 from .script_scan import _codes_in
 from .script_sources import analysis_script_texts
@@ -188,7 +189,3 @@ def _unique_ordered(values: Iterable[str]) -> tuple[str, ...]:
         seen.add(value)
         result.append(value)
     return tuple(result)
-
-
-def _tsv(value: str) -> str:
-    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")

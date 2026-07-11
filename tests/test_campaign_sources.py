@@ -57,6 +57,42 @@ def test_loader_campaign_discovery_accepts_w3f_declared_order() -> None:
     assert names == ["Maps\\B.w3x", "Maps\\A.w3x"]
 
 
+def test_loader_probes_w3f_child_missing_from_archive_enumeration() -> None:
+    # Given: W3F declares a real child omitted from listfile-based enumeration.
+    class Archive:
+        def list_files(self) -> list[str]:
+            return []
+
+        def has_file(self, name: str) -> bool:
+            return name == "Maps\\Hidden.w3x"
+
+    w3f = W3fInfo(maps=[CampaignMapEntry("Maps\\Hidden.w3x", "Hidden", "", True)])
+
+    # When: the loader discovers campaign children.
+    names = _campaign_inner_maps(Archive(), (), w3f)
+
+    # Then: the declared path is probed directly and retained in W3F order.
+    assert names == ["Maps\\Hidden.w3x"]
+
+
+def test_loader_attempts_missing_w3f_child_for_diagnostics() -> None:
+    # Given: W3F declares a child that is absent from every archive source.
+    class Archive:
+        def list_files(self) -> list[str]:
+            return []
+
+        def has_file(self, _name: str) -> bool:
+            return False
+
+    w3f = W3fInfo(maps=[CampaignMapEntry("Maps\\Missing.w3x", "Missing", "", True)])
+
+    # When: campaign candidates are assembled for the loader's diagnostic loop.
+    names = _campaign_inner_maps(Archive(), (), w3f)
+
+    # Then: the declared member is attempted instead of disappearing before diagnostics.
+    assert names == ["Maps\\Missing.w3x"]
+
+
 def test_open_map_source_prefers_attached_archive_source() -> None:
     # Given: map metadata with a reopenable archive source.
     class Source:

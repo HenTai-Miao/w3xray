@@ -200,6 +200,7 @@ def test_map_loading_records_partial_wct_diagnostic() -> None:
             severity=DiagnosticSeverity.WARNING,
             message="WCT parse diagnostic: truncated",
             recoverable=True,
+            exception_type="WctDiagnostic",
         )
     ]
 

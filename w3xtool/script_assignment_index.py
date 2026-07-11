@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
 from typing import Final
 
 from .api import MapData
+from .presentation_safety import tsv_cell as _tsv
 from .resources import RESOURCE_EXTS
 from .script_function_index import ScriptFunction, build_script_function_index
 from .script_scan import _codes_in
@@ -223,7 +224,3 @@ def _looks_like_save_key(variable: str, value: str) -> bool:
 
 def _unescape(value: str) -> str:
     return value.replace("\\\\", "\\").replace('\\"', '"').replace("\\'", "'")
-
-
-def _tsv(value: str) -> str:
-    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")

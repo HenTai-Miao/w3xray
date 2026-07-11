@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
 import struct
 from contextlib import nullcontext
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, ContextManager, Final, Protocol, final
 
 from .campaign_sources import open_map_source
-from .resource_inventory import ResourceInventory, ResourceInventoryItem, build_resource_inventory
-from .safe_output import safe_relative_path, write_bytes_safely
+from .knowledge_io import write_bytes
+from .presentation_safety import tsv_cell as _tsv
+from .resource_inventory import (
+    ResourceInventory,
+    ResourceInventoryItem,
+    build_resource_inventory,
+)
+from .safe_output import safe_relative_path
 from .safe_output_models import SafeWriteStatus
 
 if TYPE_CHECKING:
@@ -146,7 +152,7 @@ def _export_one(
         return AssetBodyExport(path, "", 0, "源内缺失", source_label)
     except (OSError, ValueError, struct.error):
         return AssetBodyExport(path, "", 0, "读取失败", source_label)
-    result = write_bytes_safely(resource_dir, f"{_BODY_DIR}/{rel}", data)
+    result = write_bytes(resource_dir, f"{_BODY_DIR}/{rel}", data)
     if result.status is SafeWriteStatus.UNSAFE:
         return AssetBodyExport(path, "", 0, "路径不安全", source_label)
     if result.status is SafeWriteStatus.FAILED:
@@ -189,7 +195,3 @@ def _normalize_path(path: str) -> str:
     while "\\\\" in normalized:
         normalized = normalized.replace("\\\\", "\\")
     return normalized
-
-
-def _tsv(value: str) -> str:
-    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")

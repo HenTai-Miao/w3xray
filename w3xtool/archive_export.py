@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 import os
-import shutil
 import tempfile
-from typing import Protocol
+from collections.abc import Sequence
+from typing import Final, Protocol
 
 from .archive_export_paths import _safe_export_path
 from .archive_export_recovery import _export_recovered_named_files
 from .campaign_sources import open_map_source
 from .external_listfile import read_external_listfile
+from .map_archive_reader import DeclaredSizeArchive
 from .map_data import MapData
 from .mpq import MPQArchive, guess_extension
 from .safe_output import SafeWriteStatus, write_bytes_safely, write_text_safely
@@ -25,6 +25,8 @@ KNOWN_EXPORT_FILES = [
     "war3mapUnits.doo", "war3map.doo", "war3map.shd", "war3map.mmp",
     "war3mapMap.blp", "war3map.wpm", "testconfig.wgc", "(listfile)",
 ]
+_MAX_NAMED_EXPORT_BYTES: Final = 512 * 1024 * 1024
+_MAX_UNKNOWN_EXPORT_BYTES: Final = 512 * 1024 * 1024
 
 
 class ExportArchive(Protocol):
@@ -55,15 +57,22 @@ def _imported_names(archive: ExportArchive) -> list[str]:
 
 
 def tmp_extract_dir(name: str, *sub: str, clean: bool = False) -> str:
-    """Return the temporary extraction directory for a map name."""
-    safe_name = "".join(char if char not in '\\/:*?"<>|' else "_" for char in (name or "map")).strip() or "map"
-    root = os.path.join(tempfile.gettempdir(), "w3xtool提取", safe_name, *sub)
-    if clean and os.path.isdir(root):
-        shutil.rmtree(root, ignore_errors=True)
-    os.makedirs(root, exist_ok=True)
+    """Return a fresh private extraction directory for a map name."""
+    _ = clean  # Retained for public API compatibility; every root is already fresh.
+    safe_name = _safe_temp_segment(name)
+    safe_sub = tuple(_safe_temp_segment(part) for part in sub)
+    private_root = tempfile.mkdtemp(
+        prefix="w3xtool提取-",
+        dir=os.path.realpath(tempfile.gettempdir()),
+    )
+    root = os.path.join(private_root, safe_name, *safe_sub)
+    os.makedirs(root, mode=0o700)
     return root
 
 
+def _safe_temp_segment(value: str) -> str:
+    cleaned = "".join(char if char not in '\\/:*?"<>|' else "_" for char in (value or "map")).strip()
+    return "map" if cleaned in {"", ".", ".."} else cleaned
 def export_all_files(
     path: str,
     out_dir: str | None = None,
@@ -112,10 +121,25 @@ def _export_all_impl(
     sub_maps: list[str] = []
     exported_blocks: set[int] = set()
     raw_manifest: list[str] = []
+    named_bytes = 0
     for name in sorted(names):
-        _export_named_file(archive, out_dir, name, exported_blocks, sub_maps)
+        named_bytes += _export_named_file(
+            archive,
+            out_dir,
+            name,
+            exported_blocks,
+            sub_maps,
+            _MAX_NAMED_EXPORT_BYTES - named_bytes,
+        )
     _export_recovered_named_files(archive, out_dir, exported_blocks)
-    _export_unknown_blocks(archive, out_dir, exported_blocks, raw_manifest, sub_maps)
+    _export_unknown_blocks(
+        archive,
+        out_dir,
+        exported_blocks,
+        raw_manifest,
+        sub_maps,
+        _MAX_UNKNOWN_EXPORT_BYTES,
+    )
     if raw_manifest:
         write_text_safely(
             out_dir,
@@ -141,21 +165,33 @@ def _export_named_file(
     name: str,
     exported_blocks: set[int],
     sub_maps: list[str],
-) -> None:
+    remaining_bytes: int,
+) -> int:
     if not archive.has_file(name):
-        return
+        return 0
+    declared_size = 1
+    if isinstance(archive, DeclaredSizeArchive):
+        reported_size = archive.declared_file_size(name)
+        if reported_size is not None:
+            declared_size = max(1, reported_size)
+    if declared_size > remaining_bytes:
+        return 0
     try:
         data = archive.read_file(name)
     except (KeyError, OSError, ValueError):
-        return
+        return declared_size
+    consumed_bytes = max(declared_size, len(data))
+    if len(data) > remaining_bytes:
+        return consumed_bytes
     result = write_bytes_safely(out_dir, name, data)
     if result.status is not SafeWriteStatus.WRITTEN:
-        return
+        return consumed_bytes
     block_index = archive.block_index_of(name)
     if block_index is not None:
         exported_blocks.add(block_index)
     if name.lower().endswith((".w3x", ".w3m")):
         sub_maps.append(name)
+    return consumed_bytes
 
 
 def _export_unknown_blocks(
@@ -164,13 +200,28 @@ def _export_unknown_blocks(
     exported_blocks: set[int],
     raw_manifest: list[str],
     sub_maps: list[str],
+    max_bytes: int,
 ) -> None:
+    consumed_bytes = 0
     for index, block in archive.iter_blocks():
         if index in exported_blocks:
             continue
+        remaining_bytes = max_bytes - consumed_bytes
+        if remaining_bytes <= 0:
+            break
+        declared_size = max(1, block.file_size)
+        if declared_size > remaining_bytes:
+            continue
         data = archive.read_block_anon(block)
         if data is None:
-            _export_raw_block(archive, out_dir, index, block, raw_manifest)
+            raw = _block_raw_payload(archive, block)
+            consumed_bytes += max(declared_size, len(raw))
+            if len(raw) > remaining_bytes:
+                continue
+            _ = _export_raw_block(out_dir, index, block, raw, raw_manifest)
+            continue
+        consumed_bytes += max(declared_size, len(data))
+        if len(data) > remaining_bytes:
             continue
         ext = guess_extension(data)
         filename = "File%06d.%s" % (index, ext)
@@ -180,22 +231,22 @@ def _export_unknown_blocks(
 
 
 def _export_raw_block(
-    archive: ExportArchive,
     out_dir: str,
     index: int,
     block,
+    raw: bytes,
     manifest: list[str],
-) -> None:
+) -> int:
     filename = "File%06d.mpqraw" % index
-    raw = _block_raw_payload(archive, block)
     result = write_bytes_safely(out_dir, f"UnknownRaw/{filename}", raw)
     if result.status is not SafeWriteStatus.WRITTEN:
-        return
+        return 0
     manifest.append(
         f"{filename}\tblock={index}\tcomp_size={block.comp_size}\t"
         f"file_size={block.file_size}\tflags=0x{block.flags:08X}\t"
         f"raw_size={len(raw)}\treason=anonymous-block-unrecoverable"
     )
+    return len(raw)
 
 
 def _export_sub_maps(out_dir: str, sub_maps: list[str], external_names: Sequence[str]) -> None:

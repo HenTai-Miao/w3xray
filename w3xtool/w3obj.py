@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import struct
+from ctypes import c_float
 from dataclasses import dataclass, field
 
 from .war3_encoding import decode_warcraft_string
@@ -29,41 +30,58 @@ EXT_CATEGORY = {
 }
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class Modification:
     field_id: str
     var_type: int          # 0 int / 1 real / 2 unreal / 3 string
     level: int             # 仅 w3a/w3q/w3d 有意义，否则 0
-    value: object
+    value: int | float | str
 
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class W3Object:
+    """Mutable object accumulator populated while parsing one table entry."""
+
     old_id: str            # 基础对象 4 字符码
     new_id: str            # 自定义新码（原始表为空）
     is_custom: bool
-    mods: list = field(default_factory=list)
+    mods: list[Modification] = field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class ObjectParseReport:
+    """Recovered objects plus bounded reasons the source was incomplete."""
+
+    objects: tuple[W3Object, ...]
+    issues: tuple[str, ...]
 
 
 class _Reader:
     def __init__(self, data: bytes):
-        self.d = data
-        self.p = 0
+        self.d: bytes = data
+        self.p: int = 0
 
     def i32(self) -> int:
-        v = struct.unpack_from("<i", self.d, self.p)[0]
-        self.p += 4
-        return v
+        return self._integer(signed=True)
 
     def u32(self) -> int:
-        v = struct.unpack_from("<I", self.d, self.p)[0]
-        self.p += 4
-        return v
+        return self._integer(signed=False)
 
     def f32(self) -> float:
-        v = struct.unpack_from("<f", self.d, self.p)[0]
-        self.p += 4
+        end = self.p + 4
+        if end > len(self.d):
+            raise struct.error("truncated float")
+        v = c_float.from_buffer_copy(self.d[self.p:end]).value
+        self.p = end
         return v
+
+    def _integer(self, *, signed: bool) -> int:
+        end = self.p + 4
+        if end > len(self.d):
+            raise struct.error("truncated integer")
+        value = int.from_bytes(self.d[self.p:end], "little", signed=signed)
+        self.p = end
+        return value
 
     def tag(self) -> str:
         b = self.d[self.p:self.p + 4]
@@ -95,7 +113,7 @@ def _parse_one_object(r: _Reader, is_custom: bool, version: int, has_level: bool
     num_sets = r.u32() if version >= 3 else 1
     for _ in range(num_sets):
         if version >= 3:
-            r.u32()                  # setsFlag 位掩码，只读提取无需用到
+            _ = r.u32()              # setsFlag 位掩码，只读提取无需用到
         num_mods = r.i32()
         for _ in range(num_mods):
             field_id = r.tag()
@@ -103,7 +121,7 @@ def _parse_one_object(r: _Reader, is_custom: bool, version: int, has_level: bool
             level = 0
             if has_level:
                 level = r.i32()
-                r.i32()              # data pointer（列），忽略
+                _ = r.i32()          # data pointer（列），忽略
             if var_type == 0:
                 value = r.i32()
             elif var_type in (1, 2):
@@ -112,7 +130,7 @@ def _parse_one_object(r: _Reader, is_custom: bool, version: int, has_level: bool
                 value = r.cstr()
             else:
                 raise ValueError("未知字段类型 %d @ %d" % (var_type, r.p))
-            r.u32()                  # 末尾校验（=oldId/newId），跳过
+            _ = r.u32()              # 末尾校验（=oldId/newId），跳过
             obj.mods.append(Modification(field_id, var_type, level, value))
     return obj
 
@@ -150,31 +168,40 @@ def _recover_next_object(
     return None
 
 
-def parse_object_data(data: bytes, ext: str) -> list:
+def parse_object_data(data: bytes, ext: str) -> list[W3Object]:
     """解析一个对象数据文件，返回 W3Object 列表。
 
     单个对象解析失败(截断/字节错位/未知字段类型/注水 count)不再拖垮整个文件：
     保留出错之前已成功解析的对象，并尽量重同步到后续完整对象。
     """
-    import sys
+    return list(parse_object_data_report(data, ext).objects)
+
+
+def parse_object_data_report(data: bytes, ext: str) -> ObjectParseReport:
+    """Parse object data while retaining partial-result diagnostics."""
     has_level = ext.lower() in _LEVEL_EXTS
     r = _Reader(data)
-    objects: list = []
+    objects: list[W3Object] = []
+    issues: list[str] = []
     try:
         version = r.i32()  # 1=RoC 2=TFT 3=1.32+/重制版（对象头改成 sets 分组）
     except (struct.error, IndexError):
-        return objects
+        return ObjectParseReport((), ("truncated object header",))
+    if version not in {1, 2, 3}:
+        return ObjectParseReport((), (f"unsupported object version: {version}",))
     for table_idx in range(2):           # 0=原始表 1=自定义表
         is_custom = table_idx == 1
         try:
             count = r.i32()
         except (struct.error, IndexError):
+            issues.append(f"truncated object table {table_idx}")
             break
         # 每个对象至少有对象头：count 远超剩余字节即为损坏/注水，立即停止（防超大循环）。
         min_object_size = _min_object_size(version)
         if count < 0 or count * min_object_size > len(r.d) - r.p:
-            print("[w3obj] %s 对象数 %d 不合理（剩余 %d 字节），判为损坏"
-                  % (ext, count, len(r.d) - r.p), file=sys.stderr)
+            issues.append(
+                f"invalid {ext} object count {count} with {len(r.d) - r.p} bytes remaining",
+            )
             break
         parsed_in_table = 0
         while parsed_in_table < count:
@@ -185,14 +212,12 @@ def parse_object_data(data: bytes, ext: str) -> list:
                 recovered = _recover_next_object(r, is_custom, version, has_level, start_p)
                 if recovered is not None:
                     obj, recovered_p = recovered
-                    print("[w3obj] %s 在偏移 %d 处跳过损坏对象，偏移 %d 恢复"
-                          % (ext, start_p, recovered_p), file=sys.stderr)
+                    issues.append(f"skipped damaged {ext} object at {start_p}, resumed at {recovered_p}")
                     objects.append(obj)
                     parsed_in_table = min(count, parsed_in_table + 2)
                     continue
-                print("[w3obj] %s 解析在偏移 %d 处中断，保留前 %d 个对象"
-                      % (ext, start_p, len(objects)), file=sys.stderr)
-                return objects
+                issues.append(f"truncated {ext} object at {start_p}; recovered {len(objects)} objects")
+                return ObjectParseReport(tuple(objects), tuple(issues))
             objects.append(obj)
             parsed_in_table += 1
-    return objects
+    return ObjectParseReport(tuple(objects), tuple(issues))

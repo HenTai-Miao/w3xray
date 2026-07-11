@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from .api import MapData
+from .component_diagnostic_summary import format_component_diagnostic
+from .extraction_diagnostics import DiagnosticSeverity
 from .extraction_completeness import build_extraction_completeness_report
 from .gui_reports import GuiReportBlock
 
@@ -27,4 +29,18 @@ def build_extraction_completeness_block(md: MapData) -> GuiReportBlock:
             f"UnknownRaw {report.raw_fallback_count or 0}",
         ))
     lines.extend(f"[警告] {warning}" for warning in report.warnings[:3])
-    return GuiReportBlock("提取完整性", tuple(lines), len(report.warnings))
+    if md.diagnostics:
+        lines.append(f"组件诊断 {len(md.diagnostics)}")
+        lines.extend(
+            f"[警告] {format_component_diagnostic(item)}"
+            for item in md.diagnostics[:5]
+        )
+    component_warnings = sum(
+        item.severity in {DiagnosticSeverity.WARNING, DiagnosticSeverity.ERROR}
+        for item in md.diagnostics
+    )
+    return GuiReportBlock(
+        "提取完整性",
+        tuple(lines),
+        len(report.warnings) + component_warnings,
+    )

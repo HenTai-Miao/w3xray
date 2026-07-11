@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
 from typing import Final
 
 from .api import MapData
+from .presentation_safety import tsv_cell as _tsv
 from .script_sources import analysis_script_texts
 from .wts import map_wts_table
 
@@ -102,7 +103,3 @@ def _iter_references(md: MapData, table: dict[int, str]):
 
 def _trigstr_id(sid: int) -> str:
     return f"TRIGSTR_{sid:03d}"
-
-
-def _tsv(value: str) -> str:
-    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")

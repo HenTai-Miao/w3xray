@@ -73,6 +73,7 @@ class W3iInfo:
     custom_upgrade: bool = False
     players: list = field(default_factory=list)
     forces: list = field(default_factory=list)
+    parse_issue: str = ""
 
 
 class _Reader:
@@ -129,7 +130,10 @@ def parse_w3i(data: bytes, wts: dict | None = None) -> "W3iInfo | None":
         r.i32()                                      # map_version
         r.i32()                                      # we_version
         if version >= 28:
-            r.i32(); r.i32(); r.i32(); r.i32()       # war3 版本 4 段
+            r.i32()                                   # war3 版本 4 段
+            r.i32()
+            r.i32()
+            r.i32()
         info.map_name = rs()
         info.author = rs()
         info.description = rs()
@@ -150,57 +154,87 @@ def parse_w3i(data: bytes, wts: dict | None = None) -> "W3iInfo | None":
         r.skip(1)                                    # c1 主地表
 
         if version >= 25:
-            r.i32(); rs(); rs(); rs(); rs()          # 载入屏 id + 4z
+            r.i32()                                  # 载入屏 id + 4z
+            rs()
+            rs()
+            rs()
+            rs()
             r.i32()                                  # game_data_set
-            rs(); rs(); rs(); rs()                   # 序章 4z
-            r.i32(); r.f32(); r.f32(); r.f32(); r.skip(4)   # 雾 type+3f+4B
-            r.skip(4); rs(); r.skip(1); r.skip(4)    # 环境 weather c4 + sound z + light c1 + water 4B
+            rs()                                     # 序章 4z
+            rs()
+            rs()
+            rs()
+            r.i32()                                  # 雾 type+3f+4B
+            r.f32()
+            r.f32()
+            r.f32()
+            r.skip(4)
+            r.skip(4)                                # 环境 weather c4 + sound z + light c1 + water 4B
+            rs()
+            r.skip(1)
+            r.skip(4)
             if version >= 28:
                 info.script_type = "Lua" if r.i32() == 1 else "JASS"
             if version >= 31:
-                r.i32(); r.i32()                     # 1.32 未知 8 字节
+                r.i32()                              # 1.32 未知 8 字节
+                r.i32()
         elif version == 18:
-            r.i32(); rs(); rs(); rs()                # 载入屏 id + 3z
-            r.i32(); rs(); rs(); rs()                # 序章 id + 3z
+            r.i32()                                  # 载入屏 id + 3z
+            rs()
+            rs()
+            rs()
+            r.i32()                                  # 序章 id + 3z
+            rs()
+            rs()
+            rs()
     except (struct.error, IndexError):
+        info.parse_issue = "truncated W3I metadata header"
         return info                                  # head 半截：返回已得字段
 
     # 玩家段
     try:
         pcount = r.i32()
-        if 0 <= pcount <= len(r.d) - r.p:        # 每条至少 1 字节，按剩余字节卡上限
-            for _ in range(pcount):
-                pid = r.i32()
-                ptype = r.i32()
-                race = r.i32()
-                fixed = r.i32()
-                name = rs()
-                sx = r.f32()
-                sy = r.f32()
-                r.u32(); r.u32()                     # ally low/high
-                if version >= 31:
-                    r.i32(); r.i32()                 # 1.32 未知
-                info.players.append(Player(pid, ptype, race, fixed, name, sx, sy))
+        if not 0 <= pcount <= len(r.d) - r.p:
+            info.parse_issue = f"invalid W3I player count: {pcount}"
+            return info
+        for _ in range(pcount):
+            pid = r.i32()
+            ptype = r.i32()
+            race = r.i32()
+            fixed = r.i32()
+            name = rs()
+            sx = r.f32()
+            sy = r.f32()
+            r.u32()                              # ally low/high
+            r.u32()
+            if version >= 31:
+                r.i32()                          # 1.32 未知
+                r.i32()
+            info.players.append(Player(pid, ptype, race, fixed, name, sx, sy))
     except (struct.error, IndexError):
+        info.parse_issue = "truncated W3I player data"
         return info
 
     # 队伍段
     try:
         fcount = r.i32()
-        if 0 <= fcount <= len(r.d) - r.p:        # 每条至少 1 字节，按剩余字节卡上限
-            for _ in range(fcount):
-                fflag = r.u32()
-                mask = r.u32()
-                fname = rs()
-                players = [i + 1 for i in range(32) if mask & (1 << i)]
-                info.forces.append(Force(
-                    name=fname,
-                    allied=bool(fflag & 0x1),
-                    allied_victory=bool(fflag & 0x2),
-                    share_vision=bool(fflag & 0x8),
-                    share_control=bool(fflag & 0x10),
-                    players=players))
+        if not 0 <= fcount <= len(r.d) - r.p:
+            info.parse_issue = f"invalid W3I force count: {fcount}"
+            return info
+        for _ in range(fcount):
+            fflag = r.u32()
+            mask = r.u32()
+            fname = rs()
+            players = [i + 1 for i in range(32) if mask & (1 << i)]
+            info.forces.append(Force(
+                name=fname,
+                allied=bool(fflag & 0x1),
+                allied_victory=bool(fflag & 0x2),
+                share_vision=bool(fflag & 0x8),
+                share_control=bool(fflag & 0x10),
+                players=players))
     except (struct.error, IndexError):
+        info.parse_issue = "truncated W3I force data"
         return info
 
     return info

@@ -2,33 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Final, TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from .extraction_completeness import build_extraction_completeness_report
-from .external_listfile import ExternalListfileReport
-from .knowledge_requirement_dynamic import build_dynamic_rows, evaluate_requirement_rows
+from .knowledge_requirement_models import ExtractionCapabilities, RequirementCoverage
+from .presentation_safety import tsv_cell as _tsv
 
 if TYPE_CHECKING:
-    from .api import MapData
-
-
-@dataclass(frozen=True, slots=True)
-class RequirementCoverage:
-    request: str
-    status: str
-    primary: tuple[str, ...]
-    secondary: tuple[str, ...]
-    note: str
-
-
-@dataclass(frozen=True, slots=True)
-class ExtractionCapabilities:
-    game_data_kind: str = "missing"
-    has_trigger_schema: bool = False
-    has_trigger_strings: bool = False
-    external_listfile: ExternalListfileReport | None = None
-    archive_diagnosis_kind: str = ""
+    from .map_data import MapData
 
 
 _ROWS: Final[tuple[RequirementCoverage, ...]] = (
@@ -205,6 +186,11 @@ def format_requirement_coverage(
     capabilities: ExtractionCapabilities | None = None,
 ) -> str:
     """Return a TSV matrix that maps user requirements to pack artifacts."""
+    from .knowledge_requirement_dynamic import (
+        build_dynamic_rows,
+        evaluate_requirement_rows,
+    )
+
     completeness = build_extraction_completeness_report(md) if md is not None else None
     if capabilities is None:
         resolved = ExtractionCapabilities(
@@ -233,7 +219,3 @@ def _format_row(row: RequirementCoverage) -> str:
         _tsv("; ".join(row.secondary)),
         _tsv(row.note),
     ))
-
-
-def _tsv(value: str) -> str:
-    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")

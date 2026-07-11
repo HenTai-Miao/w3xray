@@ -30,7 +30,7 @@ class ScriptStringIndexTest(unittest.TestCase):
         # Then: values are grouped with source line, function context and static purpose.
         self.assertIn("来源\t行号\t函数\t调用\t用途\t字符串\t解析文本\t摘要", text)
         self.assertIn("war3map.j\t2\tInit\tBJDebugMsg\tUI文本\tTRIGSTR_001\t开始游戏", text)
-        self.assertIn("war3map.j\t3\tInit\tTriggerRegisterPlayerChatEvent\t聊天指令\t-save\t", text)
+        self.assertIn("war3map.j\t3\tInit\tTriggerRegisterPlayerChatEvent\t聊天指令\t'-save\t", text)
         self.assertIn("war3map.j\t4\tInit\tBlzLoadTOCFile\t资源路径\tUI\\FrameDef\\Custom.toc", text)
         self.assertIn("war3map.j\t5\tInit\tBlzSendSyncData\t同步前缀\tSAVE", text)
         self.assertIn("war3map.j\t6\tInit\tDzAPI_Map_SaveServerValue\t存档/键\thero.level", text)

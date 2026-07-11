@@ -43,6 +43,43 @@ eee3f01c2dbe16a22913b4a621780452dc2febe0557a97c54479e8742ec73b9f  stormlib-slk-m
 c6b04fce2ecdb7c7a5701c26bb3e91c3f1c5b911974654ae4514775e48c43a29  stormlib-huffman-map.w3x
 ```
 
+## Reference extraction parity fixtures
+
+`stormlib-reference-parity-map.w3x` starts from the committed MIT-licensed
+War3Net `war3net-map-script-builder.w3x` fixture and is rewritten only through
+StormLib 9.25 public archive APIs. It combines:
+
+- four custom binary object tables (`w3u`, `w3t`, `w3a`, and `w3q`);
+- GBK Func/Strings object tables with WTS references and `Propernames`;
+- an overlapping `AbilityData.slk` field used to verify supplementation;
+- simultaneous JASS and Lua plus the base map's real WTG/WCT members.
+
+`stormlib-reference-parity-campaign.w3n` stores that map as
+`Maps\Parity01.w3x`; a generated, bounded `war3campaign.w3f` declares the same
+child path so campaign order and persistent child sources are tested without a
+listfile-only shortcut.
+
+The exact generator is `tools/build_reference_parity_fixtures.cpp`, SHA256
+`71e8779b8b1a75f5cc32692078ec632ab63ecd4be379dae66b37bdf816d210d6`.
+Build and run it against the pinned StormLib 9.25 static library:
+
+```sh
+clang++ -std=c++17 -Wall -Wextra -Werror -pedantic \
+  -I"${TMPDIR:-/tmp}/codex-stormlib-925-task6/src" \
+  tools/build_reference_parity_fixtures.cpp \
+  "${TMPDIR:-/tmp}/codex-stormlib-925-task6/xcode-derived/Build/Products/Release/libStormLib.a" \
+  -lz -lbz2 -o "${TMPDIR:-/tmp}/build_reference_parity_fixtures"
+"${TMPDIR:-/tmp}/build_reference_parity_fixtures" \
+  tests/fixtures/maps/war3net-map-script-builder.w3x \
+  tests/fixtures/reference/stormlib-reference-parity-map.w3x \
+  tests/fixtures/reference/stormlib-reference-parity-campaign.w3n
+```
+
+```text
+78059e267336b1f9a4c19be3d9756ac91db61eb5590e7171a4165bfea479a3f6  stormlib-reference-parity-map.w3x
+9ee3d9a8572d0f14c7895e6445fa25ce254a17a96359d7f2a83c907010f447eb  stormlib-reference-parity-campaign.w3n
+```
+
 ## StormLib 9.25 compression fixtures
 
 The four `stormlib-compression-*.bin` files are deterministic sector-level

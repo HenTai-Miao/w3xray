@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 from .base_objects import BASE_OBJECTS
 from .map_archive_reader import MapArchiveReader
 from .map_data import GameObject, MapData
-from .object_candidates import ObjectCandidate, collect_object_candidates
+from .object_candidates import ObjectCandidate, ObjectSourceKind, collect_object_candidates
 from .object_materialization import (
     BaseObjectTable,
     build_object_index,
@@ -32,12 +32,51 @@ def populate_object_pipeline(
     all_candidates = source_candidates
     if source_candidates and include_named_bases:
         all_candidates += named_base_candidates(base_objects)
+    md.object_source_counts = _object_source_counts(all_candidates)
     objects = merge_object_candidates(all_candidates, base_objects)
     buckets: dict[str, list[GameObject]] = {}
     for item in objects:
         buckets.setdefault(item.category, []).append(item)
     md.objects = buckets
     md.obj_index = build_object_index(objects)
+
+
+def _object_source_counts(candidates: tuple[ObjectCandidate, ...]) -> dict[str, int]:
+    identities: set[tuple[str, str]] = set()
+    for candidate in candidates:
+        kinds = {field.source_kind for field in candidate.fields}
+        if not kinds:
+            kinds = {_source_kind_from_ext(candidate.ext)}
+        for kind in kinds:
+            identities.add((_source_label(kind), candidate.obj_id))
+    counts: dict[str, int] = {}
+    for label, _obj_id in sorted(identities):
+        counts[label] = counts.get(label, 0) + 1
+    return counts
+
+
+def _source_kind_from_ext(ext: str) -> ObjectSourceKind:
+    if ext == "slk":
+        return ObjectSourceKind.SLK
+    if ext == "txt":
+        return ObjectSourceKind.TEXT_FUNC
+    if ext == "base":
+        return ObjectSourceKind.BASE
+    return ObjectSourceKind.BINARY
+
+
+def _source_label(kind: ObjectSourceKind) -> str:
+    match kind:
+        case ObjectSourceKind.BASE:
+            return "base"
+        case ObjectSourceKind.SLK:
+            return "slk"
+        case ObjectSourceKind.TEXT_FUNC | ObjectSourceKind.TEXT_STRINGS:
+            return "text"
+        case ObjectSourceKind.BINARY:
+            return "binary"
+        case unreachable:
+            assert_never(unreachable)
 
 
 def load_object_pipeline(

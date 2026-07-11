@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final, Protocol
 
 from .imp import ImportSummary
+from .presentation_safety import tsv_cell as _tsv
 from .resources import build_resource_report
 
 if TYPE_CHECKING:
@@ -219,7 +220,3 @@ def _normalize_path(path: str) -> str:
     while "\\\\" in normalized:
         normalized = normalized.replace("\\\\", "\\")
     return normalized
-
-
-def _tsv(value: str) -> str:
-    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")

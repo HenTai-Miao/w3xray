@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-import os
 
 from .api import GameObject, MapData
 from .knowledge_io import safe_filename, tsv, write_text
@@ -11,7 +10,6 @@ from .knowledge_io import safe_filename, tsv, write_text
 
 def write_object_ids(md: MapData, out_dir: str) -> int:
     """Write per-category object ID TSV files."""
-    os.makedirs(out_dir, exist_ok=True)
     count = 0
     for category, objects in sorted(md.objects.items()):
         rows = ["分类\tID\t10进制\t基础ID\t名称\t自定义\t说明"]
@@ -31,7 +29,6 @@ def write_object_ids(md: MapData, out_dir: str) -> int:
 
 def write_box_ids(md: MapData, out_dir: str) -> int:
     """Write legacy box-compatible ID text files."""
-    os.makedirs(out_dir, exist_ok=True)
     count = 0
     for category, objects in sorted(md.objects.items()):
         count += write_text(

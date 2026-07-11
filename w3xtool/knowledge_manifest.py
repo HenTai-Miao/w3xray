@@ -4,9 +4,13 @@ from __future__ import annotations
 
 from typing import Final
 
+from .presentation_safety import tsv_cell as _tsv
+
 _ROWS: Final = (
     ("总览", "资料包审计.txt", "各调查面的计数和源文件状态"),
     ("总览", "需求覆盖.tsv", "用户原始需求到资料包产物的覆盖矩阵，含 WTG/listfile/CASC/运行时边界"),
+    ("总览", "组件诊断.tsv", "存在但读取或解析失败的地图组件诊断"),
+    ("总览", "资料包写入结果.tsv", "每个资料包文件的最终写入状态、字节数和错误"),
     ("地图信息", "地图信息.txt", "地图名、作者、玩家、队伍、触发器摘要和导入摘要"),
     ("UI文本", "UI文本_TRIGSTR.tsv", "TRIGSTR 字符串表"),
     ("UI文本", "UI文本引用.tsv", "脚本、对象字段和 UI 文本引用位置"),
@@ -57,7 +61,3 @@ def format_knowledge_manifest() -> str:
     rows = ["主题\t文件\t用途"]
     rows.extend("\t".join((_tsv(topic), _tsv(path), _tsv(detail))) for topic, path, detail in _ROWS)
     return "\n".join(rows) + "\n"
-
-
-def _tsv(value: str) -> str:
-    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")

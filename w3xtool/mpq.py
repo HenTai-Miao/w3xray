@@ -9,7 +9,7 @@ from .mpq_block_reader import (
     DERIVE_KEY as _DERIVE_KEY,
     decompress_mpq_block,
     decompress_unencrypted_block,
-    parse_sector_offsets as _parse_sector_offsets,
+    parse_sector_offsets as _parse_sector_offsets,  # noqa: F401 - compatibility export
     peek_mpq_block,
     read_mpq_block,
     read_mpq_block_anonymous,
@@ -41,14 +41,14 @@ from .mpq_constants import (
     HASH_NAME_B as HASH_NAME_B,
     HASH_TABLE_OFFSET as HASH_TABLE_OFFSET,
 )
-from .huffman import huff_decompress as huff_decompress
 from .mpq_crypto import (
-    CRYPT_TABLE as _CRYPT,
+    CRYPT_TABLE as _CRYPT,  # noqa: F401 - compatibility export
     _decrypt as _decrypt,
     _detect_offtable_key as _detect_offtable_key,
     _hash as _hash,
     hash_name_bytes,
 )
+from .huffman import huff_decompress as huff_decompress
 from .mpq_file_types import guess_extension as guess_extension
 from .mpq_files import STATIC_MAP_FILES as STATIC_MAP_FILES, list_archive_files
 from .mpq_layout import (
@@ -61,6 +61,7 @@ from .mpq_names import HashEntry, encoded_name_candidates, select_hash_entry
 
 _decompress_sector = decompress_mpq_sector
 _sparse_decompress = sparse_decompress
+
 
 class MPQArchive:
     def __init__(
@@ -221,6 +222,15 @@ class MPQArchive:
             raise KeyError(name)
         block = self.block_table[bi]
         return self._read_block(block, real, name_bytes=candidate)
+
+    def declared_file_size(self, name: str) -> int | None:
+        try:
+            block_index = self.block_index_of(name)
+        except AttributeError:
+            return None
+        if block_index is None:
+            return None
+        return self.block_table[block_index].file_size
 
     def _read_block(
         self,

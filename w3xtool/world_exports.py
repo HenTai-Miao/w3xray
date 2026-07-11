@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from .knowledge_io import tsv as _tsv
 from .w3world import Camera, Region, Sound
 
 
@@ -92,7 +93,3 @@ def _num(value: float) -> str:
 
 def _yes_no(value: bool) -> str:
     return "是" if value else "否"
-
-
-def _tsv(value: str) -> str:
-    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")

@@ -17,6 +17,7 @@ from .cli_detail_summary import (
     iter_slk_summary_lines,
 )
 from .game_config_summary import iter_embedded_game_config_summary_lines
+from .component_diagnostic_summary import iter_component_diagnostic_lines
 from .wtg_diagnostics import format_summary_diagnostics
 
 if TYPE_CHECKING:
@@ -67,6 +68,7 @@ def iter_cli_summary_lines(md: MapData) -> Iterator[str]:
     from .cli_structure import iter_map_structure_summary_lines
 
     yield from iter_map_structure_summary_lines(md)
+    yield from iter_component_diagnostic_lines(md)
     yield from iter_slk_summary_lines(md)
     yield from iter_gameplay_constant_summary_lines(md)
     yield from iter_script_diagnostic_lines(md)

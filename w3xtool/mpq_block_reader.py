@@ -22,6 +22,7 @@ from .mpq_layout import ArchiveBytes, _Block
 
 DERIVE_KEY: Final = -1
 BLOCK_RECOVERY_ERRORS: Final = (KeyError, ValueError, struct.error)
+MAX_DECOMPRESSED_FILE_SIZE: Final = 256 * 1024 * 1024
 
 
 class MPQBlockError(ValueError):
@@ -129,6 +130,10 @@ def read_mpq_block(
     key: int | None,
 ) -> bytes:
     """Read one named or anonymous MPQ block with encryption and sector handling."""
+    if block.file_size > MAX_DECOMPRESSED_FILE_SIZE:
+        raise MPQBlockError(
+            f"MPQ declared file size {block.file_size} exceeds {MAX_DECOMPRESSED_FILE_SIZE}",
+        )
     raw = _raw_block(storage, block, name_bytes)
     resolved_key = _resolve_key(block, name_bytes, key)
     compressed = bool(block.flags & (FLAG_COMPRESS | FLAG_IMPLODE))
@@ -144,6 +149,8 @@ def read_mpq_block(
 
 def recover_mpq_block_key(storage: MPQBlockStorage, block: _Block) -> int | None:
     """Recover an anonymous encrypted block key from known sector offsets."""
+    if block.file_size > MAX_DECOMPRESSED_FILE_SIZE:
+        return None
     flags = block.flags
     if not flags & FLAG_ENCRYPTED or flags & FLAG_SINGLE_UNIT:
         return None
@@ -201,7 +208,11 @@ def read_mpq_block_anonymous(
 
 def peek_mpq_block(storage: MPQBlockStorage, block: _Block, size: int = 64) -> bytes:
     """Decode only the first unencrypted sector for format probing."""
-    if block.flags & FLAG_ENCRYPTED or size <= 0:
+    if (
+        block.flags & FLAG_ENCRYPTED
+        or size <= 0
+        or block.file_size > MAX_DECOMPRESSED_FILE_SIZE
+    ):
         return b""
     try:
         raw = _raw_block(storage, block, b"")

@@ -9,9 +9,9 @@ from typing import Final, override
 
 from .casclib_enumeration import CascEntry, CascNameType
 from .game_data_inventory import GameDataInventorySource
+from .presentation_safety import tsv_cell as _tsv
 from .safe_output import write_chunks_safely
 from .safe_output_models import SafeWriteStatus
-
 
 _CHUNK_BYTES: Final = 64 * 1024
 _HEADER: Final = (
@@ -123,7 +123,3 @@ def _entry_tsv(entry: CascEntry) -> str:
         "" if entry.content_flags is None else str(entry.content_flags),
     )
     return "\t".join(_tsv(value) for value in values)
-
-
-def _tsv(value: str) -> str:
-    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")

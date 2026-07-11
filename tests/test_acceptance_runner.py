@@ -120,6 +120,34 @@ def test_main_acceptance_mode_loads_and_visits_all_gui_tabs(tmp_path: Path) -> N
     assert "tabs=9" in gui_check["detail"]
 
 
+def test_packaged_acceptance_rejects_partial_publication(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    # Given: publication writes its manifest but reports one failed artifact.
+    module = importlib.import_module("w3xtool.acceptance_runner")
+    from w3xtool.knowledge_results import KnowledgeWriteItem, KnowledgeWriteReport
+    from w3xtool.map_data import MapData
+
+    partial = KnowledgeWriteReport((
+        KnowledgeWriteItem("资料包目录.tsv", True, 10, None),
+        KnowledgeWriteItem("对象ID/单位.tsv", False, 0, "disk full"),
+    ))
+
+    def publish(_md: MapData, pack_dir: str) -> KnowledgeWriteReport:
+        path = Path(pack_dir)
+        path.mkdir(parents=True)
+        (path / "资料包目录.tsv").write_text("ok", encoding="utf-8")
+        return partial
+
+    monkeypatch.setattr(module, "load_map", lambda _path: MapData("fixture.w3x", "fixture"))
+    monkeypatch.setattr(module, "write_knowledge_pack_report", publish, raising=False)
+
+    # When/Then: the packaged acceptance lane refuses to false-pass a partial pack.
+    with pytest.raises(module.AcceptanceCheckError, match="部分"):
+        module._check_knowledge_pack(Path("fixture.w3x"), tmp_path)
+
+
 def test_real_casc_acceptance_reopens_one_unknown_root_identity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -2,20 +2,24 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-from dataclasses import dataclass
+import os
 import sys
+from collections.abc import Sequence
+from dataclasses import dataclass, replace
 from typing import assert_never
 
 from .api import load_map
 from .archive_diagnostics import diagnose_archive_open
-from .cli_summary import iter_cli_summary_lines
 from .cli_output import configure_cli_output
+from .cli_summary import iter_cli_summary_lines
 from .external_listfile import read_external_listfile
 from .game_config_summary import iter_game_config_summary_lines
 from .gameconfig import read_game_configuration_file
-from .knowledge_pack import write_knowledge_pack
+from .knowledge_io import safe_filename
+from .knowledge_pack import write_knowledge_pack_report
+from .knowledge_results import KnowledgeWriteReport, KnowledgeWriteStatus
 from .load_context import build_map_load_context
+from .presentation_safety import format_user_exception, single_line_text
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,7 +36,7 @@ class CliOptionError(ValueError):
     detail: str
 
     def __str__(self) -> str:
-        return self.detail
+        return single_line_text(self.detail)
 
 
 def parse_cli_options(argv: Sequence[str]) -> CliOptions:
@@ -94,32 +98,93 @@ def run_cli(options: CliOptions) -> int:
     try:
         summary_lines = tuple(iter_cli_summary_lines(map_data))
     except Exception as exc:  # noqa: BROAD_EXCEPT_OK - summary boundary returns CLI code 2.
-        print(f"无法生成地图摘要：{type(exc).__name__}: {exc}", file=sys.stderr)
+        error = format_user_exception(exc, paths=(options.map_path,))
+        print(f"无法生成地图摘要：{error}", file=sys.stderr)
         return 2
     for line in summary_lines:
-        print(line)
+        print(single_line_text(line))
     if options.pack_dir is None:
         return 0
     try:
-        count = write_knowledge_pack(
-            map_data,
-            options.pack_dir,
+        report = _write_cli_packs(map_data, options, external_names)
+    except Exception as exc:  # noqa: BROAD_EXCEPT_OK - export boundary reports stable CLI failure.
+        error = format_user_exception(
+            exc,
+            paths=(options.map_path, options.pack_dir or "", options.game_data_path or ""),
+        )
+        print(f"无法写入资料包：{error}", file=sys.stderr)
+        return 2
+    match report.status:
+        case KnowledgeWriteStatus.COMPLETE:
+            print(single_line_text(
+                f"资料包: 完整，{report.written_count} 个文件 -> {options.pack_dir}",
+            ))
+            return 0
+        case KnowledgeWriteStatus.PARTIAL:
+            print(single_line_text(
+                f"资料包: 部分完成，成功 {report.written_count}，"
+                f"失败 {report.failed_count} -> {options.pack_dir}",
+            ))
+            _print_first_write_failure(report)
+            return 0
+        case KnowledgeWriteStatus.FAILED:
+            print(
+                single_line_text(
+                    f"资料包写入失败，成功 {report.written_count}，"
+                    f"失败 {report.failed_count} -> {options.pack_dir}",
+                ),
+                file=sys.stderr,
+            )
+            _print_first_write_failure(report)
+            return 2
+        case unreachable:
+            assert_never(unreachable)
+
+
+def _print_first_write_failure(report: KnowledgeWriteReport) -> None:
+    failure = report.first_failure
+    if failure is not None:
+        print(
+            single_line_text(f"首个失败: {failure.path}: {failure.error or '未知错误'}"),
+            file=sys.stderr,
+        )
+
+
+def _write_cli_packs(
+    map_data,
+    options: CliOptions,
+    external_names: Sequence[str],
+) -> KnowledgeWriteReport:
+    """Publish the selected map and every loaded campaign child."""
+    if options.pack_dir is None:
+        return KnowledgeWriteReport(())
+    parent = write_knowledge_pack_report(
+        map_data,
+        options.pack_dir,
+        external_names=external_names,
+        game_data_path=options.game_data_path,
+    )
+    items = list(parent.items)
+    for index, child in enumerate(map_data.sub_maps, start=1):
+        directory = f"{index:03d}_{safe_filename(child.name)}"
+        prefix = f"子地图/{directory}"
+        child_report = write_knowledge_pack_report(
+            child,
+            os.path.join(options.pack_dir, "子地图", directory),
             external_names=external_names,
             game_data_path=options.game_data_path,
+            publication_root=options.pack_dir,
         )
-    except Exception as exc:  # noqa: BROAD_EXCEPT_OK - export boundary reports stable CLI failure.
-        print(f"无法写入资料包：{type(exc).__name__}: {exc}", file=sys.stderr)
-        return 2
-    print(f"资料包: {count} 个文件 -> {options.pack_dir}")
-    return 0
+        items.extend(replace(item, path=f"{prefix}/{item.path}") for item in child_report.items)
+    return KnowledgeWriteReport(tuple(items))
 
 
 def _run_game_config(path: str) -> int:
     try:
         config = read_game_configuration_file(path)
     except (OSError, ValueError) as exc:
-        print(f"无法解析游戏配置：{type(exc).__name__}: {exc}", file=sys.stderr)
+        print(f"无法解析游戏配置：{format_user_exception(exc, paths=(path,))}", file=sys.stderr)
         return 2
     for line in iter_game_config_summary_lines(path, config):
-        print(line)
+        print(single_line_text(line))
     return 0

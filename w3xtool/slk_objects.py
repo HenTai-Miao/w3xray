@@ -10,9 +10,20 @@
 from __future__ import annotations
 
 import re
+from typing import TYPE_CHECKING, Protocol
 
+from .extraction_diagnostics import ComponentParseError, read_component, record_component_parse_issue
 from .slk import parse_slk
 from .war3_encoding import decode_warcraft_string
+
+if TYPE_CHECKING:
+    from .map_data import MapData
+
+
+class SlkArchive(Protocol):
+    def has_file(self, name: str) -> bool: ...
+
+    def read_file(self, name: str) -> bytes: ...
 
 # 分类 → 该类的 SLK 文件（单位跨多文件，按对象码合并列）。
 SLK_CATEGORY_FILES = {
@@ -80,9 +91,9 @@ def is_noise_col(col: str, category: str) -> bool:
     return col in SLK_NOISE_COLS.get(category, {"code"})
 
 
-def _find_name(archive, name: str):
+def _find_name(archive: SlkArchive, name: str) -> str | None:
     """按几种前缀/大小写在 MPQ 里找该 SLK 的实际内部名；只查存在性，不读内容。"""
-    bases = {name, name.lower(), name.upper()}
+    bases = tuple(dict.fromkeys((name, name.lower(), name.upper())))
     for pre in _PREFIXES:
         for b in bases:
             fn = pre + b
@@ -91,39 +102,57 @@ def _find_name(archive, name: str):
     return None
 
 
-def _read_text(archive, name: str):
+def _read_text(archive: SlkArchive, name: str, md: MapData | None = None) -> tuple[str, str] | None:
     """在 MPQ 里找并读出该 SLK 文本；找不到/解码失败返回 None。"""
     fn = _find_name(archive, name)
     if fn is None:
         return None
+    if md is not None:
+        text = read_component(
+            md,
+            "slk",
+            fn,
+            lambda: decode_warcraft_string(archive.read_file(fn)),
+        )
+        return (fn, text) if text is not None else None
     try:
-        return decode_warcraft_string(archive.read_file(fn))
-    except Exception:
+        return fn, decode_warcraft_string(archive.read_file(fn))
+    except (KeyError, OSError, UnicodeError, ValueError):
         return None
 
 
 def _looks_like_code(key: str) -> bool:
     """对象码恒为 4 字符可见 ASCII；剔除表头/占位等非对象行键。"""
-    return (isinstance(key, str) and len(key) == 4
-            and all(0x20 <= ord(c) < 0x7F for c in key))
+    return len(key) == 4 and all(0x20 <= ord(c) < 0x7F for c in key)
 
 
-def parse_category_objects(archive, category: str) -> dict:
+def parse_category_objects(
+    archive: SlkArchive,
+    category: str,
+    *,
+    md: MapData | None = None,
+) -> dict[str, dict[str, str]]:
     """解析某分类的全部 SLK 文件，按对象码合并列，返回 {码: {列名: 值}}。
 
     单位类跨 UnitData/UnitBalance/UnitUI/UnitWeapons/UnitAbilities 合并同码行。
     某文件缺失/解析失败时跳过该文件（不拖垮整类）。
     """
     files = SLK_CATEGORY_FILES.get(category, [])
-    merged: dict = {}
+    merged: dict[str, dict[str, str]] = {}
     for fn in files:
-        text = _read_text(archive, fn)
-        if not text:
+        source_text = _read_text(archive, fn, md)
+        if source_text is None:
             continue
-        try:
+        source, text = source_text
+        if md is not None:
+            parsed = read_component(md, "slk", source, lambda: _parse_slk_component(text), stage="parse")
+            if parsed is None:
+                continue
+            rows = parsed
+        else:
             rows = parse_slk(text)
-        except Exception:
-            continue
+        if md is not None and text.rstrip().splitlines()[-1].strip() != "E":
+            record_component_parse_issue(md, "slk", source, "missing SLK terminator")
         for code, row in rows.items():
             if not _looks_like_code(code):
                 continue
@@ -131,7 +160,13 @@ def parse_category_objects(archive, category: str) -> dict:
     return merged
 
 
-def has_any_slk_objects(archive) -> bool:
+def _parse_slk_component(text: str) -> dict[str, dict[str, str]]:
+    if not text.lstrip().startswith("ID;"):
+        raise ComponentParseError("missing SLK ID header")
+    return parse_slk(text)
+
+
+def has_any_slk_objects(archive: SlkArchive) -> bool:
     """快速判断这张图是否带内嵌 SLK 对象数据（任一分类文件存在）。只查存在性，不读内容。"""
     for files in SLK_CATEGORY_FILES.values():
         for fn in files:

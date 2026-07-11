@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import StrEnum
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import tempfile
-from typing import Final, TYPE_CHECKING
+from contextlib import suppress
+from dataclasses import dataclass
+from enum import StrEnum
+from pathlib import Path
+from typing import TYPE_CHECKING, Final
 
 from .bounded_file import BoundedFileError, read_bounded_regular_file
 from .mpq import MPQArchive
+from .presentation_safety import tsv_cell as _tsv
 from .save_analysis import build_save_report
 
 if TYPE_CHECKING:
@@ -212,10 +214,8 @@ def _read_mpq_text(snapshot: bytes) -> tuple[str | None, str]:
             _ = handle.write(snapshot)
         return _read_mpq_text_path(Path(temporary_path))
     finally:
-        try:
+        with suppress(FileNotFoundError):
             os.unlink(temporary_path)
-        except FileNotFoundError:
-            pass
 
 
 def _read_mpq_text_path(path: Path) -> tuple[str | None, str]:
@@ -251,7 +251,3 @@ def _diagnostic(kind: SaveFileKind) -> str:
     if kind is SaveFileKind.BINARY:
         return "不透明二进制，仅记录哈希和大小；未解密"
     return "只读静态证据；未执行平台 API，未修改原文件"
-
-
-def _tsv(value: str) -> str:
-    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")

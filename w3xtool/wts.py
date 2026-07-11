@@ -9,19 +9,22 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
+from typing import Final
 from typing import TYPE_CHECKING
 
 from .war3_encoding import decode_warcraft_string
+from .extraction_diagnostics import ComponentParseError
 
 if TYPE_CHECKING:
     from .map_data import MapData
 
-_HEADER = re.compile(rb"STRING\s+(\d+)", re.IGNORECASE)
+_HEADER: Final[re.Pattern[bytes]] = re.compile(rb"STRING\s+(\d+)", re.IGNORECASE)
 # 开/闭括号都要求**独占一行**(行首 {/} + 仅尾随空白)：
 # - 闭合独占行：避免误伤 GBK 尾字节 0x7D，也避免正文里 "} else {" 这类被当成闭合提前截断。
 # - 开括号独占行：避免 STRING 头与正文之间的注释行(如 "// 备注 {x}")里的 { 被当成正文起点。
-_OPEN = re.compile(rb"(?m)^\{[ \t]*$")
-_CLOSE = re.compile(rb"(?m)^\}[ \t]*$")
+_OPEN: Final[re.Pattern[bytes]] = re.compile(rb"(?m)^\{[ \t]*$")
+_CLOSE: Final[re.Pattern[bytes]] = re.compile(rb"(?m)^\}[ \t]*$")
 
 
 def _decode_str(b: bytes) -> str:
@@ -59,6 +62,27 @@ def parse_wts(data: bytes) -> dict[int, str]:
     return table
 
 
+def parse_wts_component(data: bytes) -> dict[int, str]:
+    """Parse WTS and reject headers whose bodies were not fully recovered."""
+    return validate_wts_component(data, parse_wts(data))
+
+
+def validate_wts_component(data: bytes, table: dict[int, str]) -> dict[int, str]:
+    """Reject a tolerant WTS result that omitted declared string blocks."""
+    expected = {int(match.group(1)) for match in _HEADER.finditer(data)}
+    normalized = data.removeprefix(b"\xef\xbb\xbf").replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    if not expected and any(
+        line.strip() and not line.lstrip().startswith(b"//")
+        for line in normalized.split(b"\n")
+    ):
+        raise ComponentParseError("missing WTS STRING header")
+    missing = expected.difference(table)
+    if missing:
+        first = min(missing)
+        raise ComponentParseError(f"incomplete WTS block: STRING {first}")
+    return table
+
+
 def map_wts_table(md: MapData) -> dict[int, str]:
     """Return retained byte-parsed WTS values with text as legacy fallback."""
     if md.ui_strings is not None:
@@ -72,7 +96,7 @@ def map_wts_table(md: MapData) -> dict[int, str]:
         return {}
 
 
-def resolve(value, wts: dict):
+def resolve(value: int | float | str, wts: Mapping[int, str]) -> int | float | str:
     """把 'TRIGSTR_390' 这类引用换成实际文本；其它原样返回。"""
     if isinstance(value, str) and value.startswith("TRIGSTR_"):
         try:

@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from bisect import bisect_right
 from dataclasses import dataclass
-import re
 from typing import Final
 
 from .api import MapData
+from .presentation_safety import tsv_cell as _tsv
 from .save_call_context import extract_call_args, unescape_arg
 from .script_function_index import ScriptFunction, build_script_function_index
 from .script_sources import analysis_script_texts
@@ -208,7 +209,3 @@ def _line_starts(text: str) -> list[int]:
     starts = [0]
     starts.extend(match.end() for match in re.finditer("\n", text))
     return starts
-
-
-def _tsv(value: str) -> str:
-    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")

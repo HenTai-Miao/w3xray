@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass
-import re
 from typing import Final
 
 from .api import GameObject, MapData
 from .base_names import BASE_NAMES
 from .object_id_usage import code_decimal
+from .presentation_safety import tsv_cell as _tsv
 from .script_call_catalog import ScriptCall, build_script_call_catalog
 from .script_function_index import ScriptFunction, build_script_function_index
 from .script_scan import _codes_in, scan_object_refs
@@ -261,7 +262,3 @@ def _strip_comment(line: str) -> str:
             return line[:index]
         index += 1
     return line
-
-
-def _tsv(value: str) -> str:
-    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")

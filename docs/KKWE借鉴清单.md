@@ -230,6 +230,11 @@
 **how**: 按固定 CascLib 3.0 ABI 接入 `CascFindFirstFile/Next/Close`，保留 `CASC_FIND_DATA` 的 NameType、FileDataID、CKey、EKey、大小和本地状态；GUI 每页 200 条，CLI 清单按约 64 KiB 分块写 stage，未知条目按 CascLib 返回的 `FILE%08X.dat`/CKey/EKey 合成名重开和安全导出。
 **result**: fake-native ABI、分页、流式清单和未知身份重开契约已自动化；Windows acceptance 会从真实 Root 找一个本地未知条目重开并核对大小。真实安装是否通过只以 self-hosted 报告为准。
 
+## #44 [done 2026-07-11] 参考提取奇偶性、组件诊断与结构化资料包结果
+**why**: 旧资料包把所有写入压成整数计数，单文件失败会被其他成功项掩盖；脚本、WTS、SLK、对象表、W3I/W3F、WTG、世界数据、WGC、MMP、IMP 和战役子图的局部失败也可能静默降级。缺少一张同时含四类对象、多来源重叠、双脚本和声明式战役子图的真实容器验收图。
+**how**: 新增 `KnowledgeWriteReport`/`KnowledgeWriteItem` 和 `ContextVar` 写入会话，文本、资源正文和 Unknown 二进制都锚定到同一个顶层输出根，并按资料包相对路径记录最终状态；新增 `read_component()`、容错解析结果诊断、`组件诊断.tsv`、CLI/GUI 诊断摘要及动态 `需求覆盖.tsv`。使用固定 StormLib 9.25 生成 `stormlib-reference-parity-map.w3x` 和 `stormlib-reference-parity-campaign.w3n`，覆盖 GBK Func/Strings、WTS、四类二进制对象、SLK 补字段、JASS+Lua、WTG/WCT 和 W3F 声明子图；同时限制单文件解压、战役子图、listfile、匿名块、恢复导出和 SLK 坐标规模。
+**result**: 四类盒子兼容 ID 报告在真实 MPQ 上按 rawcode 排序、去重且无未解析 `TRIGSTR_`；W3F 声明路径即使不在 listfile 也会尝试并保留缺失诊断，CLI 自动生成 `子地图/001_名称/`，子图可在父归档关闭后重开并独立生成完整资料包。`资料包写入结果.tsv` 包含自身且与最终 `需求覆盖.tsv`/API 计数一致；GUI/CLI 明确区分完整、部分和失败，部分成功列出首个失败但保留已写文件，完全失败返回非零，Windows 打包验收不会把部分结果记为 PASS。当前完整的是静态提取和本地 fixture 证据；缺 schema/损坏数据属于部分结果；loader/平台 API/运行时解密明确不执行；真实 Windows Warcraft 安装验收仍为外部 SKIP，不能由 macOS 结果替代。
+
 ## 不建议做
 - 真正数据级加密/运行时解密地图：只做静态诊断，`提取完整性.txt` 会提示大量匿名加密块不可恢复；不做运行时内存 dump、调试器绕过或平台/保护绕过。
 - 再从 KKWE 借鉴 war3map.w3e 解析：KKWE 本身没有 w3e 解析器，只把地形当二进制保留；w3xray 后续已依据独立格式资料实现 W3E 头、tilepoint、纹理、坐标范围和场景边界统计，因此这里没有可继续复用的 KKWE 逻辑。

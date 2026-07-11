@@ -2,22 +2,25 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from enum import StrEnum
 from types import MappingProxyType
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
+from .extraction_diagnostics import ComponentParseError, read_component, record_component_parse_issue
 from .map_archive_reader import AnonymousTextObjectArchive, MapArchiveReader
+from .object_text_names import (
+    TextObjectSourceKind as TextObjectSourceKind,
+    normalized_name,
+    source_name_key,
+    trusted_names,
+    trusted_source_kind,
+)
 from .textobj import classify, looks_like_text_object, parse_text_objects
 from .war3_encoding import decode_warcraft_string
 
-
-class TextObjectSourceKind(StrEnum):
-    FUNC = "func"
-    STRINGS = "strings"
-    ANONYMOUS = "anonymous"
+if TYPE_CHECKING:
+    from .map_data import MapData
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,58 +37,70 @@ class TextObjectRecord:
         object.__setattr__(self, "field_sources", _immutable_mapping(self.field_sources))
 
 
-_TRUSTED_NAME: Final[re.Pattern[str]] = re.compile(
-    r"(?:^|[\\/])(?:[a-z]+)?(?:unit|item|ability|upgrade)(func|strings)\.txt$",
-    re.IGNORECASE,
-)
 _DISPLAY_FIELDS: Final[frozenset[str]] = frozenset(
     {"name", "propernames", "tip", "ubertip", "description", "editorsuffix"},
 )
 _MAX_TEXT_OBJECT_BYTES: Final = 4 * 1024 * 1024
 _ANONYMOUS_HEAD_BYTES: Final = 8 * 1024
-_RACES: Final[tuple[str, ...]] = ("Human", "Orc", "Undead", "NightElf", "Neutral")
-_TRUSTED_REFERENCE_NAMES: Final[tuple[str, ...]] = (
-    "units\\itemfunc.txt",
-    "units\\itemstrings.txt",
-    "units\\campaignunitfunc.txt",
-    "units\\campaignunitstrings.txt",
-    "Units\\HumanUnitFunc.txt",
-    "Units\\HumanUnitStrings.txt",
-    "units\\campaignabilityfunc.txt",
-    "units\\campaignabilitystrings.txt",
-    "Units\\HumanAbilityFunc.txt",
-    "Units\\HumanAbilityStrings.txt",
-    "Units\\CampaignUpgradeFunc.txt",
-    "Units\\campaignupgradestrings.txt",
-    "Units\\HumanUpgradeFunc.txt",
-    "Units\\HumanUpgradeStrings.txt",
-    "Units\\NeutralUpgradeFunc.txt",
-    "Units\\NeutralUpgradeStrings.txt",
-) + tuple(
-    f"Units\\{race}{object_type}{source}.txt"
-    for race in _RACES
-    for object_type in ("Unit", "Ability", "Upgrade")
-    for source in ("Func", "Strings")
-)
 
 
 def collect_text_object_records(
     archive: MapArchiveReader,
     known_names: Sequence[str] = (),
+    *,
+    md: MapData | None = None,
 ) -> tuple[TextObjectRecord, ...]:
     """Collect named trusted sources and optional anonymous object-table blocks."""
     records: list[TextObjectRecord] = []
-    for name in _trusted_names(archive, known_names):
-        kind = _trusted_source_kind(name)
+    for name in trusted_names(archive, known_names):
+        kind = trusted_source_kind(name)
         if kind is None or not archive.has_file(name):
             continue
-        try:
-            payload = archive.read_file(name)
-        except (KeyError, OSError, ValueError):
-            continue
-        records.extend(_records_from_payload(payload, name, kind, minimum_objects=1))
+        if md is not None:
+            payload = read_component(
+                md,
+                "object-text",
+                name,
+                lambda source=name: archive.read_file(source),
+                stage="read",
+            )
+            if payload is None:
+                continue
+        else:
+            try:
+                payload = archive.read_file(name)
+            except (KeyError, OSError, ValueError):
+                continue
+        payload_bytes = payload
+        source_kind = kind
+        if md is None:
+            parsed_records = _records_from_payload(
+                payload_bytes,
+                name,
+                source_kind,
+                minimum_objects=1,
+            )
+        else:
+            parsed_result = read_component(
+                md,
+                "object-text",
+                name,
+                lambda: _require_named_records(payload_bytes, name, source_kind),
+                stage="parse",
+            )
+            if parsed_result is None:
+                continue
+            parsed_records, empty_sections = parsed_result
+            if empty_sections:
+                record_component_parse_issue(
+                    md,
+                    "object-text",
+                    name,
+                    f"ignored {empty_sections} object section(s) without fields",
+                )
+        records.extend(parsed_records)
     if isinstance(archive, AnonymousTextObjectArchive):
-        records.extend(_anonymous_records(archive))
+        records.extend(_anonymous_records(archive, md))
     return tuple(sorted(records, key=_record_sort_key))
 
 
@@ -102,32 +117,83 @@ def merge_text_object_records(
     )
 
 
-def _anonymous_records(archive: AnonymousTextObjectArchive) -> tuple[TextObjectRecord, ...]:
+def _anonymous_records(
+    archive: AnonymousTextObjectArchive,
+    md: MapData | None,
+) -> tuple[TextObjectRecord, ...]:
     records: list[TextObjectRecord] = []
     for index, block in archive.iter_blocks():
         if block.file_size > _MAX_TEXT_OBJECT_BYTES:
             continue
-        try:
-            head = archive.peek_block(block, _ANONYMOUS_HEAD_BYTES)[:_ANONYMOUS_HEAD_BYTES]
-        except (OSError, ValueError):
-            continue
+        source_name = f"anonymous:block:{index:06d}"
+        if md is not None:
+            head_result = read_component(
+                md,
+                "object-text",
+                source_name,
+                lambda: archive.peek_block(block, _ANONYMOUS_HEAD_BYTES)[:_ANONYMOUS_HEAD_BYTES],
+                stage="probe",
+            )
+            if head_result is None:
+                continue
+            head = head_result
+        else:
+            try:
+                head = archive.peek_block(block, _ANONYMOUS_HEAD_BYTES)[:_ANONYMOUS_HEAD_BYTES]
+            except (OSError, ValueError):
+                continue
         if not looks_like_text_object(head) or b"name=" not in head.lower():
             continue
-        try:
-            payload = archive.read_block_anon(block)
-        except (OSError, ValueError):
-            continue
+        if md is not None:
+            payload = read_component(
+                md,
+                "object-text",
+                source_name,
+                lambda: archive.read_block_anon(block),
+                stage="read",
+            )
+        else:
+            try:
+                payload = archive.read_block_anon(block)
+            except (OSError, ValueError):
+                continue
         if payload is None:
             continue
-        records.extend(
-            _records_from_payload(
-                payload,
-                f"anonymous:block:{index:06d}",
+        payload_bytes = payload
+        if md is None:
+            parsed_records = _records_from_payload(
+                payload_bytes,
+                source_name,
                 TextObjectSourceKind.ANONYMOUS,
                 minimum_objects=8,
             )
-        )
+        else:
+            parsed_records = read_component(
+                md,
+                "object-text",
+                source_name,
+                lambda: _records_from_payload(
+                    payload_bytes,
+                    source_name,
+                    TextObjectSourceKind.ANONYMOUS,
+                    minimum_objects=8,
+                ),
+                stage="parse",
+            ) or ()
+        records.extend(parsed_records)
     return tuple(records)
+
+
+def _require_named_records(
+    payload: bytes,
+    source_name: str,
+    source_kind: TextObjectSourceKind,
+) -> tuple[tuple[TextObjectRecord, ...], int]:
+    records = _records_from_payload(payload, source_name, source_kind, minimum_objects=1)
+    if payload.strip() and not records:
+        raise ComponentParseError(f"no valid object sections in {source_name}")
+    sections = parse_text_objects(decode_warcraft_string(payload))
+    return records, sum(not fields for _obj_id, fields in sections)
 
 
 def _records_from_payload(
@@ -159,23 +225,6 @@ def _records_from_payload(
     )
 
 
-def _trusted_names(archive: MapArchiveReader, known_names: Sequence[str]) -> tuple[str, ...]:
-    candidates: dict[str, str] = {}
-    for name in _TRUSTED_REFERENCE_NAMES:
-        _add_candidate(candidates, name)
-    for name in (*known_names, *archive.list_files()):
-        if _trusted_source_kind(name) is not None:
-            _add_candidate(candidates, name)
-    return tuple(sorted(candidates.values(), key=_source_name_key))
-
-
-def _add_candidate(candidates: dict[str, str], name: str) -> None:
-    normalized = _normalized_name(name)
-    previous = candidates.get(normalized)
-    if previous is None or _source_name_key(name) < _source_name_key(previous):
-        candidates[normalized] = name
-
-
 def _merge_group(records: Sequence[TextObjectRecord]) -> TextObjectRecord:
     ordered = tuple(sorted(records, key=_record_sort_key))
     selected: dict[str, tuple[int, str, str, str]] = {}
@@ -186,7 +235,7 @@ def _merge_group(records: Sequence[TextObjectRecord]) -> TextObjectRecord:
             source_name = record.field_sources.get(field_name, record.source_name)
             candidate = (
                 _field_rank(record.source_kind, field_name),
-                _normalized_name(source_name),
+                normalized_name(source_name),
                 source_name,
                 value,
             )
@@ -212,29 +261,14 @@ def _field_rank(kind: TextObjectSourceKind, field_name: str) -> int:
     return 30 if kind is TextObjectSourceKind.FUNC else 20
 
 
-def _trusted_source_kind(name: str) -> TextObjectSourceKind | None:
-    match = _TRUSTED_NAME.search(name)
-    if match is None:
-        return None
-    return TextObjectSourceKind.FUNC if match.group(1).casefold() == "func" else TextObjectSourceKind.STRINGS
-
-
 def _immutable_mapping(values: Mapping[str, str]) -> Mapping[str, str]:
     return MappingProxyType(dict(values))
-
-
-def _normalized_name(name: str) -> str:
-    return name.replace("/", "\\").casefold()
-
-
-def _source_name_key(name: str) -> tuple[str, str]:
-    return _normalized_name(name), name
 
 
 def _record_sort_key(record: TextObjectRecord) -> tuple[str, str, str, str, tuple[tuple[str, str], ...]]:
     return (
         record.category.casefold(),
         record.obj_id.casefold(),
-        *_source_name_key(record.source_name),
+        *source_name_key(record.source_name),
         tuple(sorted(record.fields.items())),
     )

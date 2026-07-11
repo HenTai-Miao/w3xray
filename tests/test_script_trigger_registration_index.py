@@ -45,7 +45,7 @@ class ScriptTriggerRegistrationIndexTest(unittest.TestCase):
             text,
         )
         self.assertIn(
-            "war3map.j\t4\tInitTrig_Save\t聊天事件\tgg_trg_Save\tTriggerRegisterPlayerChatEvent\t-save\t-save",
+            "war3map.j\t4\tInitTrig_Save\t聊天事件\tgg_trg_Save\tTriggerRegisterPlayerChatEvent\t'-save\t'-save",
             text,
         )
         self.assertIn(

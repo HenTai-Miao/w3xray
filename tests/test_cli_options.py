@@ -17,6 +17,7 @@ from w3xtool.api import MapData
 from w3xtool.cli_summary import iter_cli_summary_lines
 from w3xtool.cli_options import CliOptionError, CliOptions, parse_cli_options, run_cli
 from w3xtool.game_config_summary import iter_game_config_summary_lines
+from w3xtool.knowledge_results import KnowledgeWriteItem, KnowledgeWriteReport
 from w3xtool.load_context import MapLoadContext
 
 
@@ -111,9 +112,13 @@ def test_run_cli_reuses_listfile_context_and_pack_writer(tmp_path: Path, monkeyp
         lambda _md: iter(("地图: CLI fixture",)),
     )
     monkeypatch.setattr(
-        "w3xtool.cli_options.write_knowledge_pack",
+        "w3xtool.cli_options.write_knowledge_pack_report",
         lambda _md, out, external_names=(), game_data_path=None: (
-            calls.append(("pack", (out, external_names, game_data_path))) or 7
+            calls.append(("pack", (out, external_names, game_data_path)))
+            or KnowledgeWriteReport(tuple(
+                KnowledgeWriteItem(f"file-{index}.txt", True, index, None)
+                for index in range(7)
+            ))
         ),
     )
 
@@ -124,7 +129,7 @@ def test_run_cli_reuses_listfile_context_and_pack_writer(tmp_path: Path, monkeyp
     captured = capsys.readouterr()
     assert code == 0
     assert "地图: CLI fixture" in captured.out
-    assert "资料包: 7 个文件" in captured.out
+    assert "资料包: 完整，7 个文件" in captured.out
     assert captured.err == ""
     assert calls == [
         ("listfile", "names.txt"),
@@ -132,6 +137,61 @@ def test_run_cli_reuses_listfile_context_and_pack_writer(tmp_path: Path, monkeyp
         ("load", ("fixture.w3x", context)),
         ("pack", (str(tmp_path / "pack"), ("hidden.blp",), "game-data")),
     ]
+
+
+@pytest.mark.parametrize(
+    ("report", "expected_code", "stdout_text", "stderr_text"),
+    (
+        (
+            KnowledgeWriteReport((
+                KnowledgeWriteItem("地图信息.txt", True, 10, None),
+                KnowledgeWriteItem("对象ID/单位.tsv", False, 0, "disk full"),
+            )),
+            0,
+            "资料包: 部分完成，成功 1，失败 1",
+            "首个失败: 对象ID/单位.tsv: disk full",
+        ),
+        (
+            KnowledgeWriteReport((
+                KnowledgeWriteItem("地图信息.txt", False, 0, "read-only filesystem"),
+            )),
+            2,
+            "",
+            "资料包写入失败，成功 0，失败 1",
+        ),
+    ),
+)
+def test_cli_reports_partial_and_failed_pack_results(
+    report: KnowledgeWriteReport,
+    expected_code: int,
+    stdout_text: str,
+    stderr_text: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Given: map loading succeeds and publication returns a non-complete result.
+    md = MapData(path="fixture.w3x", name="CLI fixture")
+    monkeypatch.setattr("w3xtool.cli_options.read_external_listfile", lambda _path: ())
+    monkeypatch.setattr(
+        "w3xtool.cli_options.build_map_load_context",
+        lambda **_kwargs: MapLoadContext(),
+    )
+    monkeypatch.setattr("w3xtool.cli_options.load_map", lambda _path, **_kwargs: md)
+    monkeypatch.setattr("w3xtool.cli_options.iter_cli_summary_lines", lambda _md: ())
+    monkeypatch.setattr(
+        "w3xtool.cli_options.write_knowledge_pack_report",
+        lambda *_args, **_kwargs: report,
+    )
+
+    # When: the CLI publishes the knowledge pack.
+    code = run_cli(CliOptions("fixture.w3x", pack_dir=str(tmp_path / "pack")))
+
+    # Then: exit status and the first failed path reflect the structured outcome.
+    captured = capsys.readouterr()
+    assert code == expected_code
+    assert stdout_text in captured.out
+    assert stderr_text in captured.err
 
 
 def test_cli_summary_failure_returns_two_without_archive_diagnosis(monkeypatch, capsys) -> None:

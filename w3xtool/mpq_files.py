@@ -3,10 +3,26 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Final, Protocol
+from io import StringIO
+from typing import TYPE_CHECKING, Final, Protocol
 
-from .imp import ImportTable, parse_import_table
+from .external_listfile import (
+    MAX_EXTERNAL_LISTFILE_BYTES,
+    MAX_EXTERNAL_LISTFILE_ENTRIES,
+    MAX_EXTERNAL_LISTFILE_LINE_CHARS,
+)
+from .extraction_diagnostics import read_component, record_component_parse_issue
+from .imp import ImportTable, import_table_parse_issue, parse_import_table
+from .map_archive_reader import DeclaredSizeArchive
 from .war3_encoding import decode_warcraft_string
+
+if TYPE_CHECKING:
+    from .map_data import MapData
+
+_MAX_LISTFILE_BYTES: Final = MAX_EXTERNAL_LISTFILE_BYTES
+_MAX_LISTFILE_NAMES: Final = MAX_EXTERNAL_LISTFILE_ENTRIES
+_MAX_LISTFILE_LINE_CHARS: Final = MAX_EXTERNAL_LISTFILE_LINE_CHARS
+_MAX_ARCHIVE_NAME_CHARS: Final = 1024
 
 
 class FileListingArchive(Protocol):
@@ -62,16 +78,36 @@ def list_archive_files(
     return names
 
 
-def import_tables_from_archive(archive: FileListingArchive) -> tuple[ImportTable, ...]:
+def import_tables_from_archive(
+    archive: FileListingArchive,
+    *,
+    md: MapData | None = None,
+) -> tuple[ImportTable, ...]:
     """Parse every known map/campaign import table available in an archive."""
     tables: list[ImportTable] = []
     for table_name in IMPORT_TABLE_FILES:
         if not archive.has_file(table_name):
             continue
-        try:
-            tables.append(parse_import_table(archive.read_file(table_name)))
-        except (KeyError, OSError, ValueError):
-            continue
+        if md is not None:
+            payload = read_component(
+                md,
+                "imp",
+                table_name,
+                lambda source=table_name: archive.read_file(source),
+                stage="read",
+            )
+            if payload is None:
+                continue
+            table = parse_import_table(payload)
+            issue = import_table_parse_issue(payload, table)
+            if issue is not None:
+                record_component_parse_issue(md, "imp", table_name, issue)
+            tables.append(table)
+        else:
+            try:
+                tables.append(parse_import_table(archive.read_file(table_name)))
+            except (KeyError, OSError, ValueError):
+                continue
     return tuple(tables)
 
 
@@ -106,12 +142,24 @@ def _add_listfile_names(
 ) -> None:
     if not archive.has_file("(listfile)"):
         return
+    if isinstance(archive, DeclaredSizeArchive):
+        declared_size = archive.declared_file_size("(listfile)")
+        if declared_size is not None and declared_size > _MAX_LISTFILE_BYTES:
+            return
     try:
-        text = decode_warcraft_string(archive.read_file("(listfile)"))
+        payload = archive.read_file("(listfile)")
     except (KeyError, OSError, ValueError):
         return
-    for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
-        _add_name(archive, names, seen, line.strip(), verify=False)
+    if len(payload) > _MAX_LISTFILE_BYTES:
+        return
+    text = decode_warcraft_string(payload)
+    with StringIO(text, newline=None) as lines:
+        for index, raw_line in enumerate(lines):
+            if index >= _MAX_LISTFILE_NAMES:
+                break
+            line = raw_line.rstrip("\r\n")
+            if len(line) <= _MAX_LISTFILE_LINE_CHARS:
+                _add_name(archive, names, seen, line.strip(), verify=False)
 
 
 def _add_import_names(
@@ -144,7 +192,7 @@ def _add_name(
     *,
     verify: bool,
 ) -> None:
-    if not name:
+    if not name or len(name) > _MAX_ARCHIVE_NAME_CHARS:
         return
     key = name.lower()
     if key in seen:

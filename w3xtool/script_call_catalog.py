@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+import re
 from bisect import bisect_right
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
-import re
 from typing import Final
 
 from .api import MapData
+from .presentation_safety import tsv_cell as _tsv
 from .save_api_catalog import object_api_category, save_api_info
 from .save_call_context import extract_call_args, unescape_arg
 from .script_scan import _codes_in
@@ -208,7 +209,3 @@ def _unique_ordered(values: Iterable[str]) -> tuple[str, ...]:
         seen.add(value)
         result.append(value)
     return tuple(result)
-
-
-def _tsv(value: str) -> str:
-    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")

@@ -17,9 +17,6 @@ from w3xtool.safe_output_anchored import write_chunks_anchored
 from w3xtool.safe_output_chunk_writer import write_chunks_to_descriptor
 from w3xtool.safe_output_models import SafeWriteResult, SafeWriteStatus
 
-_FILE_OPEN_FLAGS: Final = (
-    os.O_CREAT | os.O_TRUNC | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
-)
 _UNSAFE_OPEN_ERRNOS: Final = frozenset((errno.EISDIR, errno.ELOOP, errno.ENOTDIR))
 
 
@@ -90,21 +87,8 @@ def write_chunks_safely(
 
 
 def _write_bytes_by_path(root: str, name: str, data: bytes) -> SafeWriteResult:
-    """Use path checks on platforms without anchored directory operations."""
-    destination, status, error = _prepare_destination(root, name)
-    if status is not None:
-        return SafeWriteResult(status, destination, 0, error)
-    try:
-        descriptor = os.open(destination, _FILE_OPEN_FLAGS, 0o600)
-    except OSError as exc:
-        failure = _open_failure_status(exc)
-        return SafeWriteResult(failure, destination, 0, str(exc))
-    try:
-        with os.fdopen(descriptor, "wb") as handle:
-            _ = handle.write(data)
-    except OSError as exc:
-        return SafeWriteResult(SafeWriteStatus.FAILED, destination, 0, str(exc))
-    return SafeWriteResult(SafeWriteStatus.WRITTEN, destination, len(data))
+    """Stage bytes on platforms without anchored directory operations."""
+    return _write_chunks_by_path(root, name, (data,))
 
 
 def _write_chunks_by_path(

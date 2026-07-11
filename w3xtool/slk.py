@@ -8,10 +8,25 @@ SLK 记录：
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Final, override
 
-def parse_slk(text: str) -> dict:
-    cells = {}            # (y, x) -> value
-    max_x = max_y = 0
+_MAX_COLUMNS: Final = 4096
+_MAX_ROWS: Final = 65536
+_MAX_CELLS: Final = 1_000_000
+
+
+@dataclass(frozen=True, slots=True)
+class SlkParseError(ValueError):
+    detail: str
+
+    @override
+    def __str__(self) -> str:
+        return self.detail
+
+
+def parse_slk(text: str) -> dict[str, dict[str, str]]:
+    cells: dict[tuple[int, int], str] = {}
     cur_x = cur_y = 1
     for line in text.replace("\r\n", "\n").split("\n"):
         if not line or line[0] not in "CF":
@@ -31,14 +46,22 @@ def parse_slk(text: str) -> dict:
             t, rest = f[0], f[1:]
             if t == "X":
                 try:
-                    cur_x = int(rest)
-                except ValueError:
-                    pass
+                    candidate = int(rest)
+                except ValueError as exc:
+                    raise SlkParseError(f"invalid SLK column: {rest}") from exc
+                else:
+                    if not 1 <= candidate <= _MAX_COLUMNS:
+                        raise SlkParseError(f"SLK column out of bounds: {candidate}")
+                    cur_x = candidate
             elif t == "Y":
                 try:
-                    cur_y = int(rest)
-                except ValueError:
-                    pass
+                    candidate = int(rest)
+                except ValueError as exc:
+                    raise SlkParseError(f"invalid SLK row: {rest}") from exc
+                else:
+                    if not 1 <= candidate <= _MAX_ROWS:
+                        raise SlkParseError(f"SLK row out of bounds: {candidate}")
+                    cur_y = candidate
             elif t == "K" and kind == "C":
                 val = rest
         if kind != "C" or val is None:
@@ -46,22 +69,27 @@ def parse_slk(text: str) -> dict:
         if val.startswith('"') and val.endswith('"'):
             val = val[1:-1]
         cells[(cur_y, cur_x)] = val
-        max_x = max(max_x, cur_x)
-        max_y = max(max_y, cur_y)
+        if len(cells) > _MAX_CELLS:
+            raise SlkParseError(f"SLK cell count exceeds {_MAX_CELLS}")
 
     # 第1行=列名，第1列=行键
-    headers = {x: cells.get((1, x), "") for x in range(1, max_x + 1)}
-    rows = {}
-    for y in range(2, max_y + 1):
-        key = cells.get((y, 1))
+    headers = {x: value for (y, x), value in cells.items() if y == 1}
+    source_rows: dict[int, dict[int, str]] = {}
+    for (y, x), value in cells.items():
+        if y > 1:
+            source_rows.setdefault(y, {})[x] = value
+    rows: dict[str, dict[str, str]] = {}
+    for row in source_rows.values():
+        key = row.get(1)
         if not key:
             continue
-        row = {}
-        for x in range(2, max_x + 1):
+        parsed_row = {}
+        for x, value in row.items():
+            if x == 1:
+                continue
             col = headers.get(x)
-            v = cells.get((y, x))
-            if col and v is not None and v != "":
-                row[col] = v
-        if row:
-            rows[key] = row
+            if col and value != "":
+                parsed_row[col] = value
+        if parsed_row:
+            rows[key] = parsed_row
     return rows

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from .extraction_completeness import build_extraction_completeness_report
 from .investigation_exports import config_format_entries
 from .map_identity import MapIdentity, build_map_identity
+from .presentation_safety import tsv_cell as _tsv
 from .resource_inventory import build_resource_inventory
 from .save_analysis import build_save_report
 from .ui_texts import build_ui_text_report
@@ -52,12 +53,6 @@ def format_knowledge_audit(md: MapData) -> str:
         ),
     ]
     return "\n".join(lines) + "\n"
-
-
-def _tsv(value: str) -> str:
-    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")
-
-
 def _identity_line(identity: MapIdentity) -> str:
     if not identity.readable:
         return "地图身份\t源文件不可读"

@@ -9,10 +9,18 @@ from .external_listfile import ExternalListfileReport
 
 if TYPE_CHECKING:
     from .archive_source import ArchiveSource
+    from .doo import Doodad, Unit
     from .extraction_diagnostics import ExtractionDiagnostic
+    from .gameconfig import NamedGameConfiguration
+    from .imp import ImportSummary
+    from .mmp import PreviewIconSummary
+    from .w3f import W3fInfo
+    from .w3i import W3iInfo
+    from .w3world import Camera, Region, Sound
+    from .wtg_models import TriggerTreeSummary
 
 
-@dataclass(slots=True)
+@dataclass(slots=True)  # noqa: MUTABLE_OK
 class GameObject:
     """Mutable object builder populated by the extraction pipeline."""
 
@@ -36,7 +44,7 @@ class GameObject:
         return int.from_bytes(value, "big")
 
 
-@dataclass(slots=True)
+@dataclass(slots=True)  # noqa: MUTABLE_OK
 class MapData:
     """Mutable map builder preserving the original public extraction fields.
 
@@ -52,26 +60,28 @@ class MapData:
     external_listfile: ExternalListfileReport | None = None
     sub_maps: list[MapData] = field(default_factory=list)
     obj_index: dict[str, GameObject] = field(default_factory=dict)
-    doodads: list[object] = field(default_factory=list)
-    units: list[object] = field(default_factory=list)
-    regions: list[object] = field(default_factory=list)
-    cameras: list[object] = field(default_factory=list)
-    sounds: list[object] = field(default_factory=list)
-    game_configs: list[object] = field(default_factory=list)
-    trigger_summary: object | None = None
-    preview_icons: object | None = None
-    import_summary: object | None = None
-    w3i: object | None = None
-    w3f: object | None = None
+    doodads: list[Doodad] = field(default_factory=list)
+    units: list[Unit] = field(default_factory=list)
+    regions: list[Region] = field(default_factory=list)
+    cameras: list[Camera] = field(default_factory=list)
+    sounds: list[Sound] = field(default_factory=list)
+    game_configs: list[NamedGameConfiguration] = field(default_factory=list)
+    trigger_summary: TriggerTreeSummary | None = None
+    preview_icons: PreviewIconSummary | None = None
+    import_summary: ImportSummary | None = None
+    w3i: W3iInfo | None = None
+    w3f: W3fInfo | None = None
     references: dict[str, list[tuple[str, list[tuple[str, str | None]]]]] = field(default_factory=dict)
     referenced_by: dict[str, list[tuple[str, str, str]]] = field(default_factory=dict)
     orphans: list[GameObject] = field(default_factory=list)
     ref_low_coverage: bool = False
-    script_features: list[object] = field(default_factory=list)
+    script_features: list[str] = field(default_factory=list)
     author_bundle_files: tuple[str, ...] = ()
     archive_source: ArchiveSource | None = None
     diagnostics: list[ExtractionDiagnostic] = field(default_factory=list)
+    diagnostic_keys: set[ExtractionDiagnostic] = field(default_factory=set, init=False, repr=False)
     ui_strings: dict[int, str] | None = None
+    object_source_counts: dict[str, int] = field(default_factory=dict)
     _closed: bool = field(default=False, init=False, repr=False)
 
     def category_counts(self) -> dict[str, int]:

@@ -5,12 +5,15 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
+from .presentation_safety import tsv_cell as _tsv
+
 if TYPE_CHECKING:
     from .wtg import TriggerCategory, TriggerTreeSummary
     from .wtg_eca import TriggerEcaFunction, TriggerEcaParameter
 
 from .triggerdata import TriggerDataTable, render_eca_semantic
 from .wtg_eca import function_type_label, parameter_type_label
+
 
 def format_trigger_tree_tsv(summary: TriggerTreeSummary | None) -> str:
     """Return trigger folders and headers as a TSV table."""
@@ -266,7 +269,3 @@ def _parent_id(value: int) -> str:
 
 def _yes_no(value: bool) -> str:
     return "是" if value else "否"
-
-
-def _tsv(value: str) -> str:
-    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")

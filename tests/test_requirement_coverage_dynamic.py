@@ -5,9 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from w3xtool.api import MapData
+from w3xtool.archive_source import PathArchiveSource
+from w3xtool.extraction_diagnostics import read_component
 from w3xtool.external_listfile import ExternalListfileReport
 from w3xtool.knowledge_pack import write_knowledge_pack
 from w3xtool.knowledge_requirements import ExtractionCapabilities, format_requirement_coverage
+from w3xtool.w3f import CampaignMapEntry, W3fInfo
 from w3xtool.wtg_diagnostics import UnknownTriggerFunction
 from w3xtool.wtg_models import TriggerHeader, TriggerTreeSummary
 
@@ -107,6 +110,51 @@ def test_knowledge_pack_reports_missing_archive_diagnosis(tmp_path: Path) -> Non
     assert "归档诊断\t文件缺失" in coverage
 
 
+def test_requirement_coverage_uses_all_runtime_extraction_facts() -> None:
+    # Given: merged object sources, two scripts, one unresolved WTS token, and a partial campaign.
+    md = MapData(path="campaign.w3n", name="campaign")
+    md.object_source_counts = {"binary": 2, "slk": 1, "text": 3}
+    md.scripts = {
+        "war3map.j": 'call BJDebugMsg("TRIGSTR_001")',
+        "war3map.lua": 'print("TRIGSTR_002")',
+    }
+    md.ui_strings = {1: "resolved"}
+    md.w3f = W3fInfo(maps=[
+        CampaignMapEntry("Map01.w3x", "One", "Chapter 1", True),
+        CampaignMapEntry("Map02.w3x", "Two", "Chapter 2", True),
+    ])
+    md.sub_maps = [
+        MapData(
+            "Map01.w3x",
+            "One",
+            archive_source=PathArchiveSource("Map01.w3x"),
+        ),
+    ]
+    read_component(
+        md,
+        "campaign-child",
+        "Map02.w3x",
+        lambda: _raise_os_error("bad child"),
+    )
+    capabilities = ExtractionCapabilities(game_data_inventory_view="known_paths")
+
+    # When: map-specific coverage is formatted.
+    text = format_requirement_coverage(md, capabilities)
+
+    # Then: every requested runtime fact appears as an evidence-backed row.
+    assert "对象来源\t已合并" in text
+    assert "二进制 2，SLK 1，文本 3" in text
+    assert "WTS 还原\t部分还原" in text
+    assert "未解析 1" in text
+    assert "脚本来源\t已提取" in text
+    assert "JASS 1，Lua 1" in text
+    assert "战役子图\t部分加载" in text
+    assert "声明 2，已加载且可重开 1，失败 1" in text
+    assert "客户端数据清单\t已知路径视图" in text
+    assert "组件诊断\t有警告" in text
+    assert "警告 1，错误 0" in text
+
+
 def _summary_with_missing_schema() -> TriggerTreeSummary:
     return TriggerTreeSummary(
         version=7,
@@ -122,3 +170,7 @@ def _summary_with_missing_schema() -> TriggerTreeSummary:
         missing_schema_functions=(UnknownTriggerFunction("初始化", "MissingAction", 2, 0x20),),
         has_unexpanded_functions=True,
     )
+
+
+def _raise_os_error(message: str) -> None:
+    raise OSError(message)

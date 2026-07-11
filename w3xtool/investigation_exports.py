@@ -8,6 +8,7 @@ from .api import GameObject, MapData
 from .map_identity import build_map_identity
 from .object_id_summary import preplaced_code_counts
 from .object_id_usage import build_object_id_usage, code_decimal
+from .presentation_safety import tsv_cell as _tsv
 from .save_analysis import build_save_report
 
 _FORMAT_DESCRIPTIONS: Final = {
@@ -78,7 +79,7 @@ def format_map_object_id_index(md: MapData) -> str:
     referenced_codes = set(md.referenced_by)
     preplaced_codes = _preplaced_codes(md)
     rows = ["类型\t分类\tID\t10进制\t名称\t来源\t使用情况\t详情"]
-    rows.append("\t".join(("地图", md.name, md.path, "", "", "", "", "")))
+    rows.append("\t".join(("地图", _tsv(md.name), _tsv(md.path), "", "", "", "", "")))
     rows.extend(_map_summary_rows(md))
     for category, objects in _ordered_objects(md):
         for obj in objects:
@@ -217,12 +218,6 @@ def _preplaced_codes(md: MapData) -> set[str]:
 
 def _source_names(details: tuple[str, ...]) -> str:
     return ",".join(sorted({detail.split(":", 1)[0] for detail in details}))
-
-
-def _tsv(value: str) -> str:
-    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")
-
-
 def _extension(path: str) -> str:
     if "." not in path:
         return ""

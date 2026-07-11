@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
 from typing import Final
 
 from .api import MapData
+from .presentation_safety import tsv_cell as _tsv
 from .resources import RESOURCE_EXTS
 from .script_scan import _codes_in
 from .script_sources import analysis_script_texts
@@ -206,7 +207,3 @@ def _unescape(value: str) -> str:
 
 def _yes_no(value: bool) -> str:
     return "是" if value else "否"
-
-
-def _tsv(value: str) -> str:
-    return value.replace("\t", " ").replace("\r", " ").replace("\n", " ")

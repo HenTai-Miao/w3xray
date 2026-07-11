@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
 import mmap
-from pathlib import Path
 import re
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Final, override
 
 from .bounded_file import (
@@ -77,6 +77,14 @@ class AuthorPlaintextBundle:
             return payload
         raise FileNotFoundError(name)
 
+    def declared_file_size(self, name: str) -> int | None:
+        """Return a verified plaintext member size without reopening it."""
+        key = _normalize_name(name)
+        for item in self.files:
+            if _normalize_name(item.name) == key:
+                return item.size
+        return None
+
 
 class PlaintextOverlayArchive:
     """Expose verified plaintext before an optional underlying MPQ archive."""
@@ -107,6 +115,15 @@ class PlaintextOverlayArchive:
         if self._base is None:
             raise FileNotFoundError(name)
         return self._base.read_file(name)
+
+    def declared_file_size(self, name: str) -> int | None:
+        """Return the selected overlay member's verified or MPQ-declared size."""
+        bundle_size = self._bundle.declared_file_size(name)
+        if bundle_size is not None:
+            return bundle_size
+        if self._base is None:
+            return None
+        return self._base.declared_file_size(name)
 
     def list_files(self) -> list[str]:
         names = list(self._base.list_files()) if self._base is not None else []

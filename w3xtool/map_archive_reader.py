@@ -20,6 +20,13 @@ class MapArchiveReader(Protocol):
     def close(self) -> None: ...
 
 
+@runtime_checkable
+class DeclaredSizeArchive(Protocol):
+    """Optional capability for rejecting oversized members before reading."""
+
+    def declared_file_size(self, name: str) -> int | None: ...
+
+
 class TextObjectBlock(Protocol):
     """Block metadata needed to bound anonymous text-object reads."""
 

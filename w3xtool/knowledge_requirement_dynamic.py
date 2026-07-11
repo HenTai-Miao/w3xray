@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 from .extraction_completeness import (
     ExtractionCompletenessReport,
     build_extraction_completeness_report,
 )
+from .knowledge_results import KnowledgeWriteStatus
+from .knowledge_requirement_facts import build_runtime_fact_rows
+from .knowledge_requirement_models import ExtractionCapabilities, RequirementCoverage
 
 if TYPE_CHECKING:
-    from .api import MapData
-    from .knowledge_requirements import ExtractionCapabilities, RequirementCoverage
+    from .map_data import MapData
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,9 +37,7 @@ def build_dynamic_rows(
     capabilities: ExtractionCapabilities,
 ) -> tuple[RequirementCoverage, ...]:
     """Build technical rows whose status comes from this load."""
-    from .knowledge_requirements import RequirementCoverage
-
-    summary = getattr(md, "trigger_summary", None) if md is not None else None
+    summary = md.trigger_summary if md is not None else None
     functions = tuple(getattr(summary, "eca_functions", ()) or ())
     triggers = tuple(getattr(summary, "triggers", ()) or ())
     partial = bool(
@@ -67,12 +67,49 @@ def build_dynamic_rows(
     )
     diagnosis = _diagnosis_label(capabilities.archive_diagnosis_kind)
     return (
+        *build_runtime_fact_rows(md, capabilities),
+        _publication_row(capabilities),
         RequirementCoverage("WTG ECA", eca_status, ("触发器ECA.tsv",), ("触发器树.tsv",), eca_note),
         RequirementCoverage("外部 listfile", listfile_status, ("内部文件清单.txt",), (), listfile_note),
         RequirementCoverage("原生 CASC", casc_status, (), ("触发器ECA.tsv", "资源/"), "只读游戏基础数据源。"),
         RequirementCoverage("归档诊断", diagnosis, ("提取完整性.txt",), (), "开档失败时仅报告有界静态证据。"),
         RequirementCoverage("运行时解密", "不支持", (), ("提取完整性.txt",), "仅做静态诊断与原始负载保留。"),
     )
+
+
+def _publication_row(capabilities: ExtractionCapabilities) -> RequirementCoverage:
+    report = capabilities.write_report
+    if report is None:
+        return RequirementCoverage(
+            "资料包发布",
+            "未运行",
+            ("资料包写入结果.tsv",),
+            ("组件诊断.tsv",),
+            "尚无本次写盘结果。",
+        )
+    status = _publication_status_label(report.status)
+    note = f"成功 {report.written_count}，失败 {report.failed_count}。"
+    first_failure = next((item for item in report.items if not item.written), None)
+    if first_failure is not None:
+        note += f" 首个失败：{first_failure.path}（{first_failure.error or '未知错误'}）。"
+    return RequirementCoverage(
+        "资料包发布",
+        status,
+        ("资料包写入结果.tsv",),
+        ("组件诊断.tsv",),
+        note,
+    )
+
+
+def _publication_status_label(status: KnowledgeWriteStatus) -> str:
+    match status:  # noqa: MATCH_OK - assert_never below proves exhaustiveness.
+        case KnowledgeWriteStatus.COMPLETE:
+            return "完整"
+        case KnowledgeWriteStatus.PARTIAL:
+            return "部分完成"
+        case KnowledgeWriteStatus.FAILED:
+            return "失败"
+    assert_never(status)
 
 
 def evaluate_requirement_rows(
@@ -88,7 +125,7 @@ def evaluate_requirement_rows(
         f" 当前地图：内部文件 {facts.files}，对象 {facts.objects}，"
         f"脚本 {facts.scripts}，ECA {facts.eca}。"
     )
-    evaluated = []
+    evaluated: list[RequirementCoverage] = []
     for row in rows:
         available = _request_available(row.request, facts)
         if row.request == "核对提取是否完整":
@@ -105,8 +142,8 @@ def _map_facts(
     md: MapData,
     completeness: ExtractionCompletenessReport | None = None,
 ) -> _MapFacts:
-    summary = getattr(md, "trigger_summary", None)
-    files = tuple(getattr(md, "all_files", ()) or ())
+    summary = md.trigger_summary
+    files = tuple(md.all_files)
     resolved_completeness = (
         completeness
         if completeness is not None
@@ -114,10 +151,10 @@ def _map_facts(
     )
     return _MapFacts(
         files=len(files),
-        objects=sum(len(items) for items in (getattr(md, "objects", {}) or {}).values()),
-        scripts=len(getattr(md, "scripts", {}) or {}),
-        placements=len(getattr(md, "units", ()) or ()) + len(getattr(md, "doodads", ()) or ()),
-        world=sum(len(getattr(md, name, ()) or ()) for name in ("regions", "cameras", "sounds")),
+        objects=sum(len(items) for items in md.objects.values()),
+        scripts=len(md.scripts),
+        placements=len(md.units) + len(md.doodads),
+        world=len(md.regions) + len(md.cameras) + len(md.sounds),
         triggers=len(tuple(getattr(summary, "triggers", ()) or ())),
         variables=len(tuple(getattr(summary, "variables", ()) or ())),
         eca=len(tuple(getattr(summary, "eca_functions", ()) or ())),
@@ -128,7 +165,7 @@ def _map_facts(
 
 
 def _request_available(request: str, facts: _MapFacts) -> bool | None:
-    match request:
+    match request:  # noqa: MATCH_OK - requirement names are an open catalog.
         case "提取/整理 UI 文本":
             return bool(facts.scripts or facts.objects)
         case "提取/整理图标和资源":
