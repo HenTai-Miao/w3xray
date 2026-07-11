@@ -47,7 +47,11 @@ if ($LASTEXITCODE -ne 0) { throw "uv run w3xray-dist failed" }
 
 $DistDir = Join-Path $RepoRoot "dist"
 $OnedirEvidenceDir = Join-Path $EvidenceDir "windows-onedir"
-$OnedirExe = @(Get-ChildItem -LiteralPath $DistDir -Filter "*.exe" -File -Recurse)
+$Onedir = @(Get-ChildItem -LiteralPath $DistDir -Directory)
+if ($Onedir.Count -ne 1) {
+    throw "Expected one onedir directory"
+}
+$OnedirExe = @(Get-ChildItem -LiteralPath $Onedir[0].FullName -Filter "*.exe" -File -Recurse)
 if ($OnedirExe.Count -ne 1) {
     throw "Expected one onedir executable"
 }

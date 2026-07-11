@@ -27,7 +27,9 @@ jobs:
       - name: Execute packaged onedir acceptance
         shell: powershell
         run: |
-          $OnedirExe = @(Get-ChildItem -LiteralPath ".\dist" -Filter "*.exe" -File -Recurse)
+          $Onedir = @(Get-ChildItem -LiteralPath ".\dist" -Directory)
+          if ($Onedir.Count -ne 1) { throw "Expected one onedir directory" }
+          $OnedirExe = @(Get-ChildItem -LiteralPath $Onedir[0].FullName -Filter "*.exe" -File -Recurse)
           if ($OnedirExe.Count -ne 1) { throw "Expected one onedir executable" }
           & $OnedirExe[0].FullName acceptance `
             --map ".\tests\fixtures\maps\war3net-map-script-builder.w3x" `

@@ -87,6 +87,48 @@ def test_hosted_windows_workflow_packages_and_executes_artifact() -> None:
     assert "if-no-files-found: error" in upload_step
 
 
+def test_real_machine_onedir_discovery_ignores_stale_direct_exe() -> None:
+    # Given: an onedir phase that can inherit a direct EXE from an earlier run.
+    script = (_ROOT / "tools" / "run_windows_acceptance.ps1").read_text(encoding="utf-8")
+    onedir_phase = script.split("\n& uv run w3xray-dist\n", maxsplit=1)[1].split(
+        "\n& uv run w3xray-dist --onefile\n",
+        maxsplit=1,
+    )[0]
+
+    # When/Then: discovery enters the sole onedir directory before searching recursively.
+    required = (
+        "$Onedir = @(Get-ChildItem -LiteralPath $DistDir -Directory)",
+        "$Onedir.Count -ne 1",
+        '$OnedirExe = @(Get-ChildItem -LiteralPath $Onedir[0].FullName -Filter "*.exe" -File -Recurse)',
+    )
+    assert [onedir_phase.index(value) for value in required] == sorted(
+        onedir_phase.index(value) for value in required
+    )
+    assert 'Get-ChildItem -LiteralPath $DistDir -Filter "*.exe" -File -Recurse' not in onedir_phase
+
+
+def test_hosted_onedir_discovery_ignores_stale_direct_exe() -> None:
+    # Given: the hosted onedir acceptance block.
+    workflow = (_ROOT / ".github" / "workflows" / "windows-package.yml").read_text(
+        encoding="utf-8",
+    )
+    onedir_phase = workflow.split(
+        "      - name: Execute packaged onedir acceptance\n",
+        maxsplit=1,
+    )[1].split("      - name: Build onefile executable\n", maxsplit=1)[0]
+
+    # When/Then: discovery enters the sole onedir directory before searching recursively.
+    required = (
+        '$Onedir = @(Get-ChildItem -LiteralPath ".\\dist" -Directory)',
+        "$Onedir.Count -ne 1",
+        '$OnedirExe = @(Get-ChildItem -LiteralPath $Onedir[0].FullName -Filter "*.exe" -File -Recurse)',
+    )
+    assert [onedir_phase.index(value) for value in required] == sorted(
+        onedir_phase.index(value) for value in required
+    )
+    assert 'Get-ChildItem -LiteralPath ".\\dist" -Filter "*.exe" -File -Recurse' not in onedir_phase
+
+
 def test_real_machine_powershell_51_script_has_no_utf8_source_tokens() -> None:
     # Windows PowerShell 5.1 reads BOM-less scripts through the legacy code page.
     script = (_ROOT / "tools" / "run_windows_acceptance.ps1").read_text(encoding="utf-8")
