@@ -114,9 +114,15 @@ def _export_inventory_item(
     map_source: _ReadableSource | None,
     game_data_source: GameDataSource | None,
 ) -> AssetBodyExport:
-    if item.status.startswith("存在/"):
-        return _export_one(item.path, resource_dir, map_source, "地图数据")
-    if _is_referenced_object_icon(item) and game_data_source is not None:
+    is_object_icon = _is_referenced_object_icon(item)
+    if item.status.startswith("存在/") or is_object_icon:
+        if map_source is not None:
+            map_result = _export_one(item.path, resource_dir, map_source, "地图数据")
+            if map_result.status != "源内缺失":
+                return map_result
+        elif item.status.startswith("存在/"):
+            return _export_one(item.path, resource_dir, None, "地图数据")
+    if is_object_icon and game_data_source is not None:
         result = _export_one(item.path, resource_dir, game_data_source, "客户端数据")
         if result.status != "源内缺失":
             return result
@@ -149,7 +155,7 @@ def _export_one(
 
 
 def _is_referenced_object_icon(item: ResourceInventoryItem) -> bool:
-    return item.kind == "图标" and any(source.startswith("对象 ") for source in item.sources)
+    return any(source.startswith("对象 ") for source in item.sources)
 
 
 def _open_source(md: MapData) -> ContextManager[_ReadableSource] | None:

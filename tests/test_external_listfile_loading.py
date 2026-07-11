@@ -11,6 +11,7 @@ from w3xtool.external_listfile import (
     validate_external_names,
 )
 from w3xtool.gui_loader import LoadedMap, load_path_payload
+from w3xtool.client_object_data import ClientBaseObject
 from w3xtool.knowledge_pack import write_knowledge_pack
 from w3xtool.load_context import MapLoadContext
 
@@ -112,6 +113,34 @@ def test_gui_loader_builds_schema_and_external_context_from_selected_sources() -
     assert captured[0].trigger_schema is not None
     assert captured[0].trigger_schema.has_trigger_strings
     assert captured[0].author_bundle_path == "author-bundle"
+
+
+def test_gui_loader_preserves_context_with_only_client_base_objects(monkeypatch) -> None:
+    # Given: selected game data yielded object tables but no TriggerData or listfile data.
+    context = MapLoadContext(
+        client_base_objects=(ClientBaseObject("hX01", "单位", (("名称", "Client Base"),)),),
+    )
+    captured: list[MapLoadContext | None] = []
+    monkeypatch.setattr("w3xtool.gui_loader.build_map_load_context", lambda **_kwargs: context)
+
+    def load(path: str, *, load_context: MapLoadContext | None = None) -> MapData:
+        captured.append(load_context)
+        return MapData(path=path, name="client context")
+
+    def prepare(
+        active: MapData,
+        campaign_path: str | None,
+        views: list[tuple[str, MapData]] | None,
+        *,
+        load_options: dict[str, bool] | None,
+    ) -> LoadedMap:
+        return LoadedMap(active, [], [], None, views, campaign_path)
+
+    # When: the normal GUI path loader hands off the built context.
+    load_path_payload("fixture.w3x", load=load, prepare=prepare, game_data_path="client-data")
+
+    # Then: object-only enrichment reaches the map loader unchanged.
+    assert captured == [context]
 
 
 def test_repeated_pack_exports_do_not_mutate_map_file_listing(tmp_path) -> None:

@@ -142,6 +142,7 @@ def _load_with_context(
         not context.external_names
         and context.trigger_schema is None
         and context.author_bundle_path is None
+        and not context.client_base_objects
     ):
         return load(path)
     return load(path, load_context=context)
@@ -195,7 +196,7 @@ def build_icon_resolver(
 def _safe_list_loader(loader: Callable[[MapData], list], md: MapData) -> list:
     try:
         return loader(md)
-    except Exception:
+    except Exception:  # noqa: BROAD_EXCEPT_OK - GUI preparation logs and isolates optional report failure.
         traceback.print_exc()
         return []
 
@@ -207,7 +208,7 @@ def _safe_resolver_loader(
 ) -> IconResolver | None:
     try:
         return loader(md, campaign_path)
-    except Exception:
+    except Exception:  # noqa: BROAD_EXCEPT_OK - GUI preparation logs and isolates optional resolver failure.
         traceback.print_exc()
         return None
 
@@ -219,6 +220,6 @@ def _safe_default_resolver_loader(
 ) -> IconResolver | None:
     try:
         return build_icon_resolver(md, campaign_path, game_data_path)
-    except Exception:
+    except Exception:  # noqa: BROAD_EXCEPT_OK - GUI preparation logs and isolates optional resolver failure.
         traceback.print_exc()
         return None

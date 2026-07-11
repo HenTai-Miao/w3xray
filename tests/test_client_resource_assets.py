@@ -10,6 +10,7 @@ from w3xtool.knowledge_pack import write_knowledge_pack
 from w3xtool.map_data import GameObject, MapData
 
 _ICON = "ReplaceableTextures\\CommandButtons\\BTNClient.blp"
+_CUSTOM_ICON = "UI\\CustomIcon.blp"
 
 
 def test_referenced_client_icon_is_exported_with_explicit_source(tmp_path: Path) -> None:
@@ -42,7 +43,6 @@ def test_map_body_wins_over_same_named_client_icon(tmp_path: Path) -> None:
     client_icon.parent.mkdir(parents=True)
     client_icon.write_bytes(b"BLP1client")
     md = _map_with_icon(map_root)
-    md.all_files = [_ICON]
     client_source = DirectoryDataSource(str(client_root))
 
     # When: resource bodies are resolved against both sources.
@@ -59,8 +59,31 @@ def test_map_body_wins_over_same_named_client_icon(tmp_path: Path) -> None:
     assert Path(tmp_path / "resources" / exported.exported_path).read_bytes() == b"BLP1map"
 
 
-def _map_with_icon(path: Path) -> MapData:
-    obj = GameObject("单位", "w3u", "H001", "hX01", "Client unit", True, icon=_ICON)
+def test_nonstandard_object_icon_path_can_fall_back_to_client_data(tmp_path: Path) -> None:
+    # Given: the object icon is authoritative even without a BTN filename convention.
+    client_root = tmp_path / "client"
+    client_icon = client_root / "UI" / "CustomIcon.blp"
+    client_icon.parent.mkdir(parents=True)
+    client_icon.write_bytes(b"BLP1custom")
+    md = _map_with_icon(tmp_path / "missing.w3x", icon=_CUSTOM_ICON)
+    client_source = DirectoryDataSource(str(client_root))
+
+    # When: the referenced icon body is exported.
+    report = export_resource_bodies(
+        md,
+        str(tmp_path / "resources"),
+        game_data_source=client_source,
+    )
+
+    # Then: object provenance enables fallback regardless of path naming heuristics.
+    exported = report.items[0]
+    assert exported.status == "已导出"
+    assert exported.source == "客户端数据"
+    assert Path(tmp_path / "resources" / exported.exported_path).read_bytes() == b"BLP1custom"
+
+
+def _map_with_icon(path: Path, *, icon: str = _ICON) -> MapData:
+    obj = GameObject("单位", "w3u", "H001", "hX01", "Client unit", True, icon=icon)
     md = MapData(path=str(path), name="client icon map", objects={"单位": [obj]})
     md.obj_index = {obj.obj_id: obj}
     return md
