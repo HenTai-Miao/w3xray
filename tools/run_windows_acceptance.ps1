@@ -46,26 +46,51 @@ if ($LASTEXITCODE -ne 0) { throw "uv run w3xray-test failed" }
 if ($LASTEXITCODE -ne 0) { throw "uv run w3xray-dist failed" }
 
 $DistDir = Join-Path $RepoRoot "dist"
-$Executables = @(Get-ChildItem -LiteralPath $DistDir -Filter "*.exe" -File -Recurse)
-if ($Executables.Count -ne 1) {
-    throw "Expected exactly one packaged executable, found $($Executables.Count)"
+$OnedirEvidenceDir = Join-Path $EvidenceDir "windows-onedir"
+$OnedirExe = @(Get-ChildItem -LiteralPath $DistDir -Filter "*.exe" -File -Recurse)
+if ($OnedirExe.Count -ne 1) {
+    throw "Expected one onedir executable"
 }
-$Exe = $Executables[0].FullName
 
-New-Item -ItemType Directory -Path $EvidenceDir -Force | Out-Null
-$Report = Join-Path $EvidenceDir "acceptance.json"
-$AcceptanceArgs = @(
+New-Item -ItemType Directory -Path $OnedirEvidenceDir -Force | Out-Null
+$OnedirReport = Join-Path $OnedirEvidenceDir "acceptance.json"
+$OnedirAcceptanceArgs = @(
     "acceptance",
     "--map", $MapPath,
     "--campaign", $CampaignPath,
-    "--output", $EvidenceDir,
-    "--report", $Report,
+    "--output", $OnedirEvidenceDir,
+    "--report", $OnedirReport,
     "--repeat", "10",
     "--require-windows",
     "--war3-dir", $env:W3XRAY_WAR3_DIR
 )
-& $Exe @AcceptanceArgs
-if ($LASTEXITCODE -ne 0) { throw "Packaged EXE acceptance failed; report: $Report" }
+& $OnedirExe[0].FullName @OnedirAcceptanceArgs
+if ($LASTEXITCODE -ne 0) { throw "Onedir EXE acceptance failed; report: $OnedirReport" }
+
+& uv run w3xray-dist --onefile
+if ($LASTEXITCODE -ne 0) { throw "uv run w3xray-dist --onefile failed" }
+
+$OnefileEvidenceDir = Join-Path $EvidenceDir "windows-onefile"
+$OnefileExe = @(Get-ChildItem -LiteralPath $DistDir -Filter "*.exe" -File)
+if ($OnefileExe.Count -ne 1) {
+    throw "Expected one direct executable"
+}
+
+New-Item -ItemType Directory -Path $OnefileEvidenceDir -Force | Out-Null
+$OnefileReport = Join-Path $OnefileEvidenceDir "acceptance.json"
+$OnefileAcceptanceArgs = @(
+    "acceptance",
+    "--map", $MapPath,
+    "--campaign", $CampaignPath,
+    "--output", $OnefileEvidenceDir,
+    "--report", $OnefileReport,
+    "--repeat", "10",
+    "--require-windows",
+    "--war3-dir", $env:W3XRAY_WAR3_DIR
+)
+& $OnefileExe[0].FullName @OnefileAcceptanceArgs
+if ($LASTEXITCODE -ne 0) { throw "Onefile EXE acceptance failed; report: $OnefileReport" }
 
 Write-Host "Windows acceptance passed"
-Write-Host "Evidence: $Report"
+Write-Host "Onedir evidence: $OnedirReport"
+Write-Host "Onefile evidence: $OnefileReport"

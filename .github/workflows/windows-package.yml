@@ -2,7 +2,7 @@ name: Windows package acceptance
 
 on:
   push:
-    branches: [local]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -24,27 +24,49 @@ jobs:
         run: uv run w3xray-test
       - name: Build onedir executable
         run: uv run w3xray-dist
-      - name: Execute packaged GUI acceptance
+      - name: Execute packaged onedir acceptance
         shell: powershell
         run: |
-          $Executables = @(Get-ChildItem -LiteralPath ".\dist" -Filter "*.exe" -File -Recurse)
-          if ($Executables.Count -ne 1) {
-            throw "Expected exactly one packaged executable, found $($Executables.Count)"
-          }
-          $exe = $Executables[0].FullName
-          & $exe acceptance `
+          $OnedirExe = @(Get-ChildItem -LiteralPath ".\dist" -Filter "*.exe" -File -Recurse)
+          if ($OnedirExe.Count -ne 1) { throw "Expected one onedir executable" }
+          & $OnedirExe[0].FullName acceptance `
             --map ".\tests\fixtures\maps\war3net-map-script-builder.w3x" `
             --campaign ".\tests\fixtures\reference\stormlib-campaign.w3n" `
-            --output ".\artifacts\windows-package" `
-            --report ".\artifacts\windows-package\acceptance.json" `
-            --repeat 5 `
-            --require-windows
+            --output ".\artifacts/windows-onedir" `
+            --report ".\artifacts/windows-onedir/acceptance.json" `
+            --repeat 5 --require-windows
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Upload executable and evidence
+      - name: Build onefile executable
+        run: uv run w3xray-dist --onefile
+      - name: Execute packaged onefile acceptance
+        shell: powershell
+        run: |
+          $OnefileExe = @(Get-ChildItem -LiteralPath ".\dist" -Filter "*.exe" -File)
+          if ($OnefileExe.Count -ne 1) { throw "Expected one direct executable" }
+          & $OnefileExe[0].FullName acceptance `
+            --map ".\tests\fixtures\maps\war3net-map-script-builder.w3x" `
+            --campaign ".\tests\fixtures\reference\stormlib-campaign.w3n" `
+            --output ".\artifacts/windows-onefile" `
+            --report ".\artifacts/windows-onefile/acceptance.json" `
+            --repeat 5 --require-windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Prepare release assets
+        shell: powershell
+        run: |
+          $Version = uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])"
+          $ReleaseDir = ".\artifacts\windows-release"
+          New-Item -ItemType Directory -Path $ReleaseDir -Force | Out-Null
+          $Onedir = @(Get-ChildItem -LiteralPath ".\dist" -Directory)
+          if ($Onedir.Count -ne 1) { throw "Expected one onedir directory" }
+          $DirectExe = @(Get-ChildItem -LiteralPath ".\dist" -Filter "*.exe" -File)
+          if ($DirectExe.Count -ne 1) { throw "Expected one direct executable" }
+          Compress-Archive -LiteralPath $Onedir[0].FullName -DestinationPath "$ReleaseDir\w3xray-v$Version-windows-x64.zip"
+          Copy-Item -LiteralPath $DirectExe[0].FullName -Destination "$ReleaseDir\w3xray-v$Version-windows-x64.exe"
+          Copy-Item -LiteralPath ".\artifacts/windows-onedir/acceptance.json" -Destination "$ReleaseDir\windows-onedir-acceptance.json"
+          Copy-Item -LiteralPath ".\artifacts/windows-onefile/acceptance.json" -Destination "$ReleaseDir\windows-onefile-acceptance.json"
+      - name: Upload release assets
         uses: actions/upload-artifact@v4
         with:
-          name: w3xray-windows-onedir
-          path: |
-            dist/魔兽地图提取器/
-            artifacts/windows-package/acceptance.json
+          name: w3xray-windows-release-assets
+          path: artifacts/windows-release/*
           if-no-files-found: error

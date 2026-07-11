@@ -18,33 +18,35 @@ def test_windows_acceptance_script_builds_tests_packages_and_runs_exe() -> None:
         "build_casclib.ps1",
         "uv run w3xray-test",
         "uv run w3xray-dist",
+        "windows-onedir",
         "Get-ChildItem",
         '"*.exe"',
-        "$Executables.Count -ne 1",
-        '"acceptance"',
-        '"--require-windows"',
-        '"--war3-dir"',
+        "$OnedirExe.Count -ne 1",
+        "uv run w3xray-dist --onefile",
+        "windows-onefile",
+        "$OnefileExe.Count -ne 1",
     )
     positions = [script.index(value) for value in required]
     assert positions == sorted(positions)
+    for argument in ('"acceptance"', '"--require-windows"', '"--war3-dir"'):
+        assert script.count(argument) == 2
 
 
 def test_hosted_windows_workflow_packages_and_executes_artifact() -> None:
     # Given: the hosted Windows build workflow.
     workflow = (_ROOT / ".github" / "workflows" / "windows-package.yml").read_text(encoding="utf-8")
 
-    # When/Then: it builds the pinned DLL, runs tests, packages, runs GUI acceptance, and uploads evidence.
+    # When/Then: it accepts both package formats and uploads release-ready assets.
     for required in (
-        "windows-2022",
-        "tools/build_casclib.ps1",
-        "uv run w3xray-test",
+        "branches: [main]",
         "uv run w3xray-dist",
-        "Get-ChildItem",
-        '"*.exe"',
-        "$Executables.Count -ne 1",
-        "acceptance",
-        "--require-windows",
-        "actions/upload-artifact@",
+        "uv run w3xray-dist --onefile",
+        "artifacts/windows-onedir",
+        "artifacts/windows-onefile",
+        "Compress-Archive",
+        "w3xray-v$Version-windows-x64.zip",
+        "w3xray-v$Version-windows-x64.exe",
+        "actions/upload-artifact@v4",
     ):
         assert required in workflow
 
@@ -60,8 +62,8 @@ def test_hosted_powershell_51_acceptance_step_has_no_utf8_source_tokens() -> Non
     workflow = (_ROOT / ".github" / "workflows" / "windows-package.yml").read_text(
         encoding="utf-8",
     )
-    acceptance_step = workflow.split("- name: Execute packaged GUI acceptance", maxsplit=1)[1]
-    acceptance_step = acceptance_step.split("- name: Upload executable and evidence", maxsplit=1)[0]
+    acceptance_step = workflow.split("- name: Execute packaged onedir acceptance", maxsplit=1)[1]
+    acceptance_step = acceptance_step.split("- name: Upload release assets", maxsplit=1)[0]
 
     assert acceptance_step.isascii()
 
