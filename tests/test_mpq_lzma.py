@@ -54,6 +54,24 @@ def test_lzma_marker_is_standalone_not_zlib_and_bzip_flags() -> None:
     assert actual == expected
 
 
+def test_lzma_decode_does_not_depend_on_format_alone_container(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: a platform rejects the synthetic ALONE container used by test streams.
+    original = lzma.LZMADecompressor
+
+    def platform_decoder(*, format, filters=None):
+        if format == lzma.FORMAT_ALONE:
+            raise lzma.LZMAError("platform rejects assembled ALONE container")
+        return original(format=format, filters=filters)
+
+    monkeypatch.setattr("w3xtool.mpq_compression.lzma.LZMADecompressor", platform_decoder)
+    expected = b"cross-platform raw LZMA" * 8
+
+    # When/Then: MPQ properties drive a RAW decoder instead of container inference.
+    assert decompress_mpq_sector(_lzma_sector(expected), len(expected)) == expected
+
+
 @pytest.mark.parametrize("payload", (b"\x12", b"\x12\x00", b"\x12" + b"\x00" * 13))
 def test_truncated_lzma_header_or_stream_is_rejected(payload: bytes) -> None:
     with pytest.raises(MPQCompressionError, match="LZMA"):

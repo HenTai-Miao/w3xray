@@ -157,17 +157,42 @@ def _decode_lzma(data: bytes, output_size: int, mask: int) -> bytes:
     declared = int.from_bytes(data[6:14], "little")
     if declared > output_size:
         raise MPQCompressionError(mask, "LZMA declared size exceeds output contract")
+    remainder, lc = divmod(prop, 9)
+    pb, lp = divmod(remainder, 5)
+    filters = [{
+        "id": lzma.FILTER_LZMA1,
+        "dict_size": max(4096, dictionary_size),
+        "lc": lc,
+        "lp": lp,
+        "pb": pb,
+    }]
     try:
-        decoder = lzma.LZMADecompressor(format=lzma.FORMAT_ALONE)
-        result = decoder.decompress(data[1:], max_length=declared + 1)
+        decoder = lzma.LZMADecompressor(format=lzma.FORMAT_RAW, filters=filters)
+        result = decoder.decompress(data[_LZMA_HEADER_SIZE:], max_length=declared + 1)
     except lzma.LZMAError as error:
         raise MPQCompressionError(
-            mask, f"corrupt LZMA stream or size declaration: {error}"
+            mask, f"corrupt or truncated LZMA stream: {error}"
         ) from error
     if len(result) > declared:
         raise MPQCompressionError(
             mask, "LZMA decoded size exceeds declaration (trailing data)"
         )
+    if not decoder.eof:
+        result = _validate_lzma_alone(data, declared, mask)
+    if decoder.unused_data:
+        raise MPQCompressionError(mask, "trailing LZMA data")
+    if len(result) != declared:
+        raise MPQCompressionError(mask, "LZMA decoded size does not match declaration")
+    return result
+
+
+def _validate_lzma_alone(data: bytes, declared: int, mask: int) -> bytes:
+    """Validate known-size StormLib streams that legitimately omit an end marker."""
+    try:
+        decoder = lzma.LZMADecompressor(format=lzma.FORMAT_ALONE)
+        result = decoder.decompress(data[1:], max_length=declared + 1)
+    except lzma.LZMAError as error:
+        raise MPQCompressionError(mask, f"truncated LZMA stream: {error}") from error
     if not decoder.eof:
         raise MPQCompressionError(mask, "truncated LZMA stream")
     if decoder.unused_data:
