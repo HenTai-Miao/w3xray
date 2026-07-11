@@ -4,8 +4,23 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 
 _ROOT = Path(__file__).resolve().parents[1]
+
+
+def _onefile_acceptance_sources() -> tuple[tuple[str, str], ...]:
+    script = (_ROOT / "tools" / "run_windows_acceptance.ps1").read_text(encoding="utf-8")
+
+    workflow = (_ROOT / ".github" / "workflows" / "windows-package.yml").read_text(
+        encoding="utf-8",
+    )
+    hosted = workflow.split(
+        "      - name: Execute packaged onefile acceptance\n",
+        maxsplit=1,
+    )[1].split("      - name: Prepare release assets\n", maxsplit=1)[0]
+    return (("real-machine", script), ("hosted", hosted))
 
 
 def test_windows_acceptance_script_builds_tests_packages_and_runs_exe() -> None:
@@ -67,8 +82,9 @@ def test_hosted_windows_workflow_packages_and_executes_artifact() -> None:
     ) == 1
     assert '--report ".\\artifacts/windows-onedir/acceptance.json"' in onedir_acceptance
     assert "--repeat 5 --require-windows" in onedir_acceptance
-    assert '--report ".\\artifacts/windows-onefile/acceptance.json"' in onefile_acceptance
-    assert "--repeat 5 --require-windows" in onefile_acceptance
+    assert '"--report", $OnefileReport' in onefile_acceptance
+    assert '"--repeat", "5"' in onefile_acceptance
+    assert '"--require-windows"' in onefile_acceptance
     assert (
         '$DirectExe = @(Get-ChildItem -LiteralPath ".\\dist" -Filter "*.exe" -File)'
         in release_preparation
@@ -127,6 +143,96 @@ def test_hosted_onedir_discovery_ignores_stale_direct_exe() -> None:
         onedir_phase.index(value) for value in required
     )
     assert 'Get-ChildItem -LiteralPath ".\\dist" -Filter "*.exe" -File -Recurse' not in onedir_phase
+
+
+@pytest.mark.parametrize(("surface", "source"), _onefile_acceptance_sources())
+def test_onefile_acceptance_removes_stale_evidence_before_launch(
+    surface: str,
+    source: str,
+) -> None:
+    # Given: a onefile acceptance surface that can inherit evidence from an earlier run.
+    removal = "Remove-Item -LiteralPath $OnefileEvidenceDir -Recurse -Force"
+
+    # When/Then: stale evidence is deleted before the new acceptance arguments are built.
+    assert removal in source, f"{surface} onefile acceptance retains stale evidence"
+    assert source.index(removal) < source.index("$OnefileAcceptanceArgs")
+
+
+@pytest.mark.parametrize(("surface", "source"), _onefile_acceptance_sources())
+def test_onefile_acceptance_uses_absolute_paths_and_working_directory(
+    surface: str,
+    source: str,
+) -> None:
+    # Given: fixtures and evidence can live beneath paths containing spaces.
+    required = (
+        "$MapPath = (Resolve-Path",
+        "$CampaignPath = (Resolve-Path",
+        "$OnefileEvidenceDir =",
+        "$OnefileReport =",
+        "$OnefileWorkingDirectory =",
+        "-WorkingDirectory $OnefileWorkingDirectory",
+    )
+
+    # When/Then: the direct process receives only absolute paths and an explicit working directory.
+    missing = [value for value in required if value not in source]
+    assert not missing, f"{surface} onefile acceptance lacks absolute path setup: {missing}"
+    assert '".\\tests\\fixtures' not in source
+    assert '".\\artifacts/windows-onefile' not in source
+
+
+@pytest.mark.parametrize(("surface", "source"), _onefile_acceptance_sources())
+def test_onefile_acceptance_waits_and_validates_fresh_report(
+    surface: str,
+    source: str,
+) -> None:
+    # Given: a windowed PyInstaller EXE can detach from a direct PowerShell invocation.
+    required = (
+        "$OnefileProcess = Start-Process",
+        "-Wait",
+        "-PassThru",
+        "$OnefileProcess.ExitCode",
+        "Test-Path -LiteralPath $OnefileReport",
+        "Get-Content -LiteralPath $OnefileReport -Raw -Encoding UTF8 | ConvertFrom-Json",
+        ".overall_status",
+        ".executable",
+    )
+
+    # When/Then: launch, wait/exit, fresh-file, and JSON gates execute in that order.
+    missing = [value for value in required if value not in source]
+    assert not missing, f"{surface} onefile acceptance lacks completion gates: {missing}"
+    positions = [source.index(value) for value in required]
+    assert positions == sorted(positions)
+
+
+@pytest.mark.parametrize(("surface", "source"), _onefile_acceptance_sources())
+def test_onefile_acceptance_rejects_unsafe_direct_invocation(
+    surface: str,
+    source: str,
+) -> None:
+    # Given: `&` plus LASTEXITCODE did not wait for the windowed onefile process tree.
+    # When/Then: both surfaces use the shared encoder and reject that launch pattern.
+    assert "ConvertTo-WindowsCommandLine $OnefileAcceptanceArgs" in source, surface
+    assert not any(line.lstrip().startswith("& $OnefileExe") for line in source.splitlines()), surface
+
+
+def test_windows_process_helper_quotes_powershell_51_argument_lists() -> None:
+    # Given: Start-Process on Windows PowerShell 5.1 joins ArgumentList values itself.
+    helper_path = _ROOT / "tools" / "windows_process.ps1"
+    assert helper_path.is_file(), "shared Windows command-line encoder is missing"
+    helper = helper_path.read_text(encoding="utf-8")
+
+    # When/Then: quotes and trailing backslashes are escaped before one command line is joined.
+    required = (
+        "[AllowEmptyString()]",
+        "$Argument -notmatch '[\\s\"]'",
+        "[regex]::Replace($Argument, '(\\\\*)\"', '$1$1\\\"')",
+        "[regex]::Replace($escaped, '(\\\\+)$', '$1$1')",
+        "return '\"' + $escaped + '\"'",
+        '$encodedArguments -join " "',
+    )
+    missing = [value for value in required if value not in helper]
+    assert not missing, f"unsafe Windows argument encoder: {missing}"
+    assert helper.isascii()
 
 
 def test_real_machine_powershell_51_script_has_no_utf8_source_tokens() -> None:

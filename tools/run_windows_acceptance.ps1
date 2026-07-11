@@ -9,7 +9,8 @@ param(
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
-$RepoRoot = Split-Path -Parent $PSScriptRoot
+$RepoRoot = (Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptRoot)).Path
+. (Join-Path $PSScriptRoot "windows_process.ps1")
 if (-not $MapPath) {
     $MapPath = Join-Path $RepoRoot "tests/fixtures/maps/war3net-map-script-builder.w3x"
 }
@@ -31,6 +32,9 @@ if (-not (Test-Path -LiteralPath $CampaignPath -PathType Leaf)) {
     throw "Campaign fixture not found: $CampaignPath"
 }
 
+$MapPath = (Resolve-Path -LiteralPath $MapPath).Path
+$CampaignPath = (Resolve-Path -LiteralPath $CampaignPath).Path
+$EvidenceDir = [System.IO.Path]::GetFullPath($EvidenceDir)
 $env:W3XRAY_WAR3_DIR = (Resolve-Path -LiteralPath $War3Dir).Path
 
 & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "build_casclib.ps1")
@@ -75,11 +79,16 @@ if ($LASTEXITCODE -ne 0) { throw "Onedir EXE acceptance failed; report: $OnedirR
 if ($LASTEXITCODE -ne 0) { throw "uv run w3xray-dist --onefile failed" }
 
 $OnefileEvidenceDir = Join-Path $EvidenceDir "windows-onefile"
+$OnefileWorkingDirectory = $RepoRoot
 $OnefileExe = @(Get-ChildItem -LiteralPath $DistDir -Filter "*.exe" -File)
 if ($OnefileExe.Count -ne 1) {
     throw "Expected one direct executable"
 }
+$OnefileExePath = (Resolve-Path -LiteralPath $OnefileExe[0].FullName).Path
 
+if (Test-Path -LiteralPath $OnefileEvidenceDir) {
+    Remove-Item -LiteralPath $OnefileEvidenceDir -Recurse -Force
+}
 New-Item -ItemType Directory -Path $OnefileEvidenceDir -Force | Out-Null
 $OnefileReport = Join-Path $OnefileEvidenceDir "acceptance.json"
 $OnefileAcceptanceArgs = @(
@@ -92,8 +101,27 @@ $OnefileAcceptanceArgs = @(
     "--require-windows",
     "--war3-dir", $env:W3XRAY_WAR3_DIR
 )
-& $OnefileExe[0].FullName @OnefileAcceptanceArgs
-if ($LASTEXITCODE -ne 0) { throw "Onefile EXE acceptance failed; report: $OnefileReport" }
+$OnefileCommandLine = ConvertTo-WindowsCommandLine $OnefileAcceptanceArgs
+$OnefileProcess = Start-Process `
+    -FilePath $OnefileExePath `
+    -ArgumentList $OnefileCommandLine `
+    -WorkingDirectory $OnefileWorkingDirectory `
+    -Wait `
+    -PassThru
+if ($OnefileProcess.ExitCode -ne 0) {
+    throw "Onefile EXE acceptance failed with exit code $($OnefileProcess.ExitCode); report: $OnefileReport"
+}
+if (-not (Test-Path -LiteralPath $OnefileReport -PathType Leaf)) {
+    throw "Onefile EXE acceptance did not write report: $OnefileReport"
+}
+$OnefileResult = Get-Content -LiteralPath $OnefileReport -Raw -Encoding UTF8 | ConvertFrom-Json
+if ($OnefileResult.overall_status -ne "pass") {
+    throw "Onefile EXE acceptance report did not pass: $OnefileReport"
+}
+$ReportedExecutable = [System.IO.Path]::GetFullPath([string]$OnefileResult.executable)
+if (-not [StringComparer]::OrdinalIgnoreCase.Equals($ReportedExecutable, $OnefileExePath)) {
+    throw "Onefile EXE acceptance report identifies a different executable: $ReportedExecutable"
+}
 
 Write-Host "Windows acceptance passed"
 Write-Host "Onedir evidence: $OnedirReport"
