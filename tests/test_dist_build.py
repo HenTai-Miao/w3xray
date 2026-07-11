@@ -184,9 +184,11 @@ def test_windows_dist_accepts_matching_x64_pe(tmp_path: Path) -> None:
     validate_casclib_dist_assets(tmp_path, system="Windows")
 
 
+@pytest.mark.parametrize("dist_format", [DistFormat.ONEDIR, DistFormat.ONEFILE])
 def test_windows_dry_run_executes_native_asset_gate(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    dist_format: DistFormat,
 ) -> None:
     # Given: a Windows dist configuration with a spec but no CascLib artifacts.
     spec_path = tmp_path / f"{APP_NAME}.spec"
@@ -197,6 +199,7 @@ def test_windows_dry_run_executes_native_asset_gate(
         dist_path=tmp_path / "dist",
         work_path=tmp_path / "build",
         clean=True,
+        format=dist_format,
     )
     monkeypatch.setattr("w3xtool.casclib_dist.platform.system", lambda: "Windows")
 
@@ -205,14 +208,23 @@ def test_windows_dry_run_executes_native_asset_gate(
         run_dist_build(config, dry_run=True)
 
 
-def test_run_dist_build_passes_onefile_mode_to_spec(
+@pytest.mark.parametrize(
+    ("dist_format", "expected_mode"),
+    [
+        (DistFormat.ONEDIR, "onedir"),
+        (DistFormat.ONEFILE, "onefile"),
+    ],
+)
+def test_run_dist_build_passes_selected_mode_to_spec(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    dist_format: DistFormat,
+    expected_mode: str,
 ) -> None:
-    # Given: a onefile build config and a captured subprocess environment.
+    # Given: a selected build format and a captured subprocess environment.
     spec_path = tmp_path / f"{APP_NAME}.spec"
     spec_path.write_text("", encoding="utf-8")
-    config = replace(default_dist_config(tmp_path), format=DistFormat.ONEFILE)
+    config = replace(default_dist_config(tmp_path), format=dist_format)
     captured: dict[str, str] = {}
 
     def run(
@@ -227,10 +239,14 @@ def test_run_dist_build_passes_onefile_mode_to_spec(
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr("w3xtool.dist_build.subprocess.run", run)
+    monkeypatch.setattr(
+        "w3xtool.dist_build.validate_casclib_dist_assets",
+        lambda _project_root: None,
+    )
 
-    # When/Then: the spec receives the onefile mode through its environment.
+    # When/Then: the spec receives the selected mode through its environment.
     assert run_dist_build(config) == 0
-    assert captured[BUILD_MODE_ENV] == "onefile"
+    assert captured[BUILD_MODE_ENV] == expected_mode
 
 
 def test_casclib_provenance_and_build_script_are_pinned() -> None:
