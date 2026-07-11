@@ -15,7 +15,7 @@ GUI触发器、场景放置、触发指令、合成配方、孤立对象、分�
 Windows Release 同时提供：
 
 - `w3xray-v0.1.1-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
-- `w3xray-v0.1.1-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢，并可能出现 SmartScreen 提示。
+- `w3xray-v0.1.1-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
 
 两者功能相同；遇到杀软误报或启动问题时优先使用 ZIP 版。
 
@@ -55,7 +55,12 @@ uv run w3xray-dist --dry-run
 powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
   -War3Dir "C:\Program Files (x86)\Warcraft III"
 ```
-结果写入系统临时目录的 `acceptance.json`。仓库还包含
+默认结果写入系统临时目录的时间戳证据目录 `w3xray-acceptance-YYYYMMDD-HHMMSS/`，两份报告的相对路径分别为：
+
+- `windows-onedir/acceptance.json`
+- `windows-onefile/acceptance.json`
+
+仓库还包含
 `.github/workflows/windows-package.yml`（hosted Windows 打包验收）和
 `windows-real-war3.yml`（带 `w3xray-war3` 标签的 self-hosted 真安装验收）。
 
