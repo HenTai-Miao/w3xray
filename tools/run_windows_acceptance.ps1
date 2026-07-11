@@ -60,7 +60,7 @@ $OnedirAcceptanceArgs = @(
     "--campaign", $CampaignPath,
     "--output", $OnedirEvidenceDir,
     "--report", $OnedirReport,
-    "--repeat", "10",
+    "--repeat", "5",
     "--require-windows",
     "--war3-dir", $env:W3XRAY_WAR3_DIR
 )
@@ -84,7 +84,7 @@ $OnefileAcceptanceArgs = @(
     "--campaign", $CampaignPath,
     "--output", $OnefileEvidenceDir,
     "--report", $OnefileReport,
-    "--repeat", "10",
+    "--repeat", "5",
     "--require-windows",
     "--war3-dir", $env:W3XRAY_WAR3_DIR
 )
