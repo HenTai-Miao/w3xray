@@ -1,20 +1,30 @@
 """Project-local PyInstaller dist builder."""
 from __future__ import annotations
 
+import os
 import platform
 import shlex
 import subprocess
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
+from enum import StrEnum
 from pathlib import Path
-from typing import Final
+from typing import Final, assert_never
 
 from .casclib_dist import CascLibDistError, validate_casclib_dist_assets
 from .cli_output import configure_cli_output
 
 APP_NAME: Final = "魔兽地图提取器"
 SPEC_FILE: Final = f"{APP_NAME}.spec"
+BUILD_MODE_ENV: Final = "W3XRAY_PYINSTALLER_MODE"
+
+
+class DistFormat(StrEnum):
+    """Supported PyInstaller package topologies."""
+
+    ONEDIR = "onedir"
+    ONEFILE = "onefile"
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +36,7 @@ class DistBuildConfig:
     dist_path: Path
     work_path: Path
     clean: bool
+    format: DistFormat = DistFormat.ONEDIR
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +45,7 @@ class DistCliOptions:
 
     dry_run: bool = False
     clean: bool = True
+    format: DistFormat = DistFormat.ONEDIR
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,7 +135,13 @@ def build_pyinstaller_command(
 
 def expected_artifact_path(config: DistBuildConfig, *, system: str | None = None) -> Path:
     """Return the executable path users should launch after a successful build."""
-    app_dir = config.dist_path / APP_NAME
+    match config.format:
+        case DistFormat.ONEFILE:
+            app_dir = config.dist_path
+        case DistFormat.ONEDIR:
+            app_dir = config.dist_path / APP_NAME
+        case unreachable:
+            assert_never(unreachable)
     current_system = system or platform.system()
     match current_system:  # noqa: MATCH_OK - platform names are an open string set.
         case "Windows":
@@ -145,6 +163,8 @@ def parse_cli_options(argv: Sequence[str]) -> DistCliOptions:
                 options = replace(options, clean=False)
             case "--clean":
                 options = replace(options, clean=True)
+            case "--onefile":
+                options = replace(options, format=DistFormat.ONEFILE)
             case "-h" | "--help":
                 raise DistHelpRequested()
             case unknown:
@@ -163,7 +183,12 @@ def run_dist_build(config: DistBuildConfig, *, dry_run: bool = False) -> int:
     if dry_run:
         print("dry-run: 未执行 PyInstaller。")
         return 0
-    result = subprocess.run(command, cwd=config.project_root, check=False)
+    result = subprocess.run(
+        command,
+        cwd=config.project_root,
+        check=False,
+        env={**os.environ, BUILD_MODE_ENV: config.format.value},
+    )
     if result.returncode == 0:
         print("构建完成:")
         print(f"  当前平台产物: {expected_artifact_path(config)}")
@@ -175,11 +200,12 @@ def help_text() -> str:
     """Return CLI help for the dist builder."""
     return "\n".join(
         (
-            "用法: uv run w3xray-dist [--dry-run] [--no-clean]",
+            "用法: uv run w3xray-dist [--dry-run] [--no-clean] [--onefile]",
             "",
             "选项:",
             "  --dry-run   只打印 PyInstaller 命令，不执行构建",
             "  --no-clean  不传递 PyInstaller --clean",
+            "  --onefile   构建单文件可执行程序（默认为 onedir）",
             "  -h, --help  显示帮助",
             "",
             "说明: PyInstaller 不是跨平台编译器；Windows .exe 需要在 Windows 上构建。",
@@ -192,7 +218,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     configure_cli_output()
     try:
         options = parse_cli_options(tuple(sys.argv[1:] if argv is None else argv))
-        config = replace(default_dist_config(), clean=options.clean)
+        config = replace(
+            default_dist_config(),
+            clean=options.clean,
+            format=options.format,
+        )
         return run_dist_build(config, dry_run=options.dry_run)
     except DistHelpRequested:
         print(help_text())

@@ -6,6 +6,8 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -13,9 +15,13 @@ import pytest
 from w3xtool.casclib_dist import CascLibDistError, validate_casclib_dist_assets
 from w3xtool.dist_build import (
     APP_NAME,
+    BUILD_MODE_ENV,
     DistBuildConfig,
+    DistFormat,
     build_pyinstaller_command,
+    default_dist_config,
     expected_artifact_path,
+    parse_cli_options,
     run_dist_build,
 )
 
@@ -64,6 +70,30 @@ def test_expected_artifact_path_uses_windows_exe_suffix(tmp_path: Path) -> None:
 
     # Then: the distributable entrypoint is the exe inside the onedir folder.
     assert artifact_path == tmp_path / "dist" / APP_NAME / f"{APP_NAME}.exe"
+
+
+def test_onefile_option_selects_direct_executable(tmp_path: Path) -> None:
+    # Given: the onefile CLI selector.
+    options = parse_cli_options(("--onefile",))
+    config = replace(default_dist_config(tmp_path), format=options.format)
+
+    # When/Then: the selected Windows artifact is the direct executable.
+    assert options.format is DistFormat.ONEFILE
+    assert expected_artifact_path(config, system="Windows") == (
+        tmp_path / "dist" / f"{APP_NAME}.exe"
+    )
+
+
+def test_default_format_remains_onedir(tmp_path: Path) -> None:
+    # Given: no explicit package format selector.
+    options = parse_cli_options(())
+    config = replace(default_dist_config(tmp_path), format=options.format)
+
+    # When/Then: the default Windows artifact remains inside the app directory.
+    assert options.format is DistFormat.ONEDIR
+    assert expected_artifact_path(config, system="Windows") == (
+        tmp_path / "dist" / APP_NAME / f"{APP_NAME}.exe"
+    )
 
 
 def test_dist_build_module_dry_run_prints_pyinstaller_command() -> None:
@@ -175,6 +205,34 @@ def test_windows_dry_run_executes_native_asset_gate(
         run_dist_build(config, dry_run=True)
 
 
+def test_run_dist_build_passes_onefile_mode_to_spec(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: a onefile build config and a captured subprocess environment.
+    spec_path = tmp_path / f"{APP_NAME}.spec"
+    spec_path.write_text("", encoding="utf-8")
+    config = replace(default_dist_config(tmp_path), format=DistFormat.ONEFILE)
+    captured: dict[str, str] = {}
+
+    def run(
+        command: Sequence[str],
+        *,
+        cwd: Path,
+        check: bool,
+        env: dict[str, str],
+    ) -> subprocess.CompletedProcess[str]:
+        _ = cwd, check
+        captured.update(env)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("w3xtool.dist_build.subprocess.run", run)
+
+    # When/Then: the spec receives the onefile mode through its environment.
+    assert run_dist_build(config) == 0
+    assert captured[BUILD_MODE_ENV] == "onefile"
+
+
 def test_casclib_provenance_and_build_script_are_pinned() -> None:
     # Given: the committed provenance and Windows build recipe.
     root = Path(__file__).resolve().parents[1]
@@ -207,12 +265,21 @@ def test_casclib_provenance_and_build_script_are_pinned() -> None:
         assert required in script
 
 
-def test_spec_adds_casclib_only_on_windows() -> None:
-    # Given: the repository PyInstaller spec.
+def test_spec_supports_onedir_and_onefile_from_one_analysis() -> None:
+    # Given: the shared repository PyInstaller spec.
     spec = (Path(__file__).resolve().parents[1] / f"{APP_NAME}.spec").read_text(encoding="utf-8")
 
-    # When/Then: DLL and license additions are guarded by the Windows platform.
+    # When/Then: both output topologies share one dependency analysis.
+    assert "W3XRAY_PYINSTALLER_MODE" in spec
+    assert "build_mode == 'onefile'" in spec
+    assert "a.binaries" in spec
+    assert "a.datas" in spec
+    assert "exclude_binaries=False" in spec
+    assert "exclude_binaries=True" in spec
+    assert "COLLECT(" in spec
+    assert spec.count("Analysis(") == 1
     assert "if sys.platform == 'win32':" in spec
     assert "validate_casclib_dist_assets(spec_root, system='Windows')" in spec
     assert "CascLib.dll" in spec
     assert "third_party/CascLib/LICENSE" in spec
+    assert "collect_all('customtkinter')" in spec

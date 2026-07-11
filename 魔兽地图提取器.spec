@@ -1,9 +1,14 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
 import sys
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 from w3xtool.casclib_dist import validate_casclib_dist_assets
+
+build_mode = os.environ.get('W3XRAY_PYINSTALLER_MODE', 'onedir')
+if build_mode not in {'onedir', 'onefile'}:
+    raise ValueError(f'unsupported W3XRAY_PYINSTALLER_MODE: {build_mode}')
 
 datas = []
 binaries = []
@@ -41,31 +46,46 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
-exe = EXE(
-    pyz,
-    a.scripts,
-    [],
-    exclude_binaries=True,     # onedir：依赖交给 COLLECT，启动几乎无解压开销
-    name='魔兽地图提取器',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=False,                 # 关闭 UPX：加快启动、减少杀软误报
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=False,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-)
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.datas,
-    strip=False,
-    upx=False,
-    upx_exclude=[],
-    name='魔兽地图提取器',
-)
+common_exe_options = {
+    'name': '魔兽地图提取器',
+    'debug': False,
+    'bootloader_ignore_signals': False,
+    'strip': False,
+    'upx': False,
+    'upx_exclude': [],
+    'runtime_tmpdir': None,
+    'console': False,
+    'disable_windowed_traceback': False,
+    'argv_emulation': False,
+    'target_arch': None,
+    'codesign_identity': None,
+    'entitlements_file': None,
+}
+
+if build_mode == 'onefile':
+    exe = EXE(
+        pyz,
+        a.scripts,
+        a.binaries,
+        a.datas,
+        [],
+        exclude_binaries=False,
+        **common_exe_options,
+    )
+else:
+    exe = EXE(
+        pyz,
+        a.scripts,
+        [],
+        exclude_binaries=True,
+        **common_exe_options,
+    )
+    coll = COLLECT(
+        exe,
+        a.binaries,
+        a.datas,
+        strip=False,
+        upx=False,
+        upx_exclude=[],
+        name='魔兽地图提取器',
+    )
