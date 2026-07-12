@@ -1,0 +1,100 @@
+name: macOS and Linux package acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Git ref to build and package
+        required: true
+        default: v0.1.1
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: ${{ matrix.platform }}-${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            platform: macos
+            arch: x64
+          - runner: macos-15-arm64
+            platform: macos
+            arch: arm64
+          - runner: ubuntu-24.04
+            platform: linux
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Record source identity
+        shell: bash
+        env:
+          SOURCE_REF_INPUT: ${{ inputs.source_ref }}
+        run: |
+          printf 'SOURCE_REF=%s\n' "$SOURCE_REF_INPUT"
+          printf 'SOURCE_SHA=%s\n' "$(git rev-parse HEAD)"
+          printf 'RUNNER_ARCH=%s\n' "$(uname -m)"
+      - name: Install Python dependencies
+        shell: bash
+        run: uv sync --dev
+      - name: Run full test suite
+        shell: bash
+        run: uv run w3xray-test
+      - name: Build onedir executable
+        shell: bash
+        run: uv run w3xray-dist
+      - name: Execute packaged acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          Executable="dist/魔兽地图提取器/魔兽地图提取器"
+          EvidenceDir="artifacts/${{ matrix.platform }}-${{ matrix.arch }}-acceptance"
+          Report="$EvidenceDir/acceptance.json"
+          test -x "$Executable"
+          rm -rf "$EvidenceDir"
+          mkdir -p "$EvidenceDir"
+          "$Executable" acceptance \
+            --map "tests/fixtures/maps/war3net-map-script-builder.w3x" \
+            --campaign "tests/fixtures/reference/stormlib-campaign.w3n" \
+            --output "$EvidenceDir" \
+            --report "$Report" \
+            --repeat 5 \
+            --no-gui
+          jq -e '.overall_status == "pass"' "$Report"
+      - name: Prepare release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          Version="$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+          AppDir="dist/魔兽地图提取器"
+          ReleaseDir="artifacts/${{ matrix.platform }}-${{ matrix.arch }}-release"
+          Report="artifacts/${{ matrix.platform }}-${{ matrix.arch }}-acceptance/acceptance.json"
+          rm -rf "$ReleaseDir"
+          mkdir -p "$ReleaseDir"
+          if [[ '${{ matrix.platform }}' == 'macos' ]]; then
+            ditto -c -k --keepParent \
+              "$AppDir" \
+              "$ReleaseDir/w3xray-v$Version-macos-${{ matrix.arch }}.zip"
+          else
+            tar -C dist -czf \
+              "$ReleaseDir/w3xray-v$Version-linux-${{ matrix.arch }}.tar.gz" \
+              "魔兽地图提取器"
+          fi
+          cp "$Report" "$ReleaseDir/${{ matrix.platform }}-${{ matrix.arch }}-acceptance.json"
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: w3xray-${{ matrix.platform }}-${{ matrix.arch }}-release-assets
+          path: artifacts/${{ matrix.platform }}-${{ matrix.arch }}-release/*
+          if-no-files-found: error

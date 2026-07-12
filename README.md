@@ -11,13 +11,25 @@ GUI触发器、场景放置、触发指令、合成配方、孤立对象、分�
 
 > 用途：研究地图、学习地图制作。不含改存档 / 过反作弊 / 开图等作弊功能。
 
-## 直接用（Windows Release）
-Windows Release 同时提供：
+## 直接用（GitHub Releases）
+
+Windows x64 同时提供：
 
 - `w3xray-v0.1.1-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
 - `w3xray-v0.1.1-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
 
 两者功能相同；遇到杀软误报或启动问题时优先使用 ZIP 版。
+
+macOS 提供两个未签名、未公证的 onedir ZIP，请按 Mac 处理器选择并完整解压：
+
+- `w3xray-v0.1.1-macos-arm64.zip`：Apple Silicon（M1/M2/M3/M4/M5）。
+- `w3xray-v0.1.1-macos-x64.zip`：Intel Mac。
+
+Linux 提供：
+
+- `w3xray-v0.1.1-linux-x64.tar.gz`：Linux x86-64，解压后运行 `./魔兽地图提取器/魔兽地图提取器`。
+
+macOS/Linux 包支持地图与战役的静态提取；Windows 专用的 CascLib 游戏客户端原生后端不包含在这两类包中。macOS 首次运行可能出现 Gatekeeper 未验证开发者提示。
 
 ## 开发运行（uv）
 ```bash
