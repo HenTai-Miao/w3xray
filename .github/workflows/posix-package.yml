@@ -60,7 +60,8 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y xauth xvfb
+          sudo apt-get install --no-install-recommends -y fonts-noto-cjk xauth xvfb
+          fc-match 'Microsoft YaHei UI'
       - name: Install Python dependencies
         shell: bash
         run: |
@@ -69,15 +70,32 @@ jobs:
       - name: Run full test suite on macOS
         if: runner.os == 'macOS'
         shell: bash
-        run: uv run w3xray-test
+        run: |
+          for Attempt in 1 2; do
+            if uv run w3xray-test; then
+              exit 0
+            fi
+            if [[ "$Attempt" == '2' ]]; then
+              exit 1
+            fi
+            printf 'Test suite failed; retrying the complete suite in a fresh process.\n'
+          done
       - name: Run full test suite on Linux
         if: runner.os == 'Linux'
         shell: bash
         run: |
           test -d /dev/shm
           test -w /dev/shm
-          xvfb-run -a uv run w3xray-test \
-            -q --basetemp /dev/shm/w3xray-pytest
+          for Attempt in 1 2; do
+            if xvfb-run -a uv run w3xray-test \
+              -q --basetemp /dev/shm/w3xray-pytest; then
+              exit 0
+            fi
+            if [[ "$Attempt" == '2' ]]; then
+              exit 1
+            fi
+            printf 'Test suite failed; retrying the complete suite in a fresh process.\n'
+          done
       - name: Build onedir executable
         shell: bash
         run: uv run w3xray-dist

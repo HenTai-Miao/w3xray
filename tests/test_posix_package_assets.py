@@ -33,12 +33,15 @@ def test_posix_workflow_tests_accepts_and_archives_onedir_package() -> None:
 
     for required in (
         "brew install python-tk@3.14",
-        "sudo apt-get install --no-install-recommends -y xauth xvfb",
+        "sudo apt-get install --no-install-recommends -y fonts-noto-cjk xauth xvfb",
+        "fc-match 'Microsoft YaHei UI'",
         "uv sync --dev",
         "import tkinter; print(tkinter.TkVersion)",
         "uv run w3xray-test",
         "xvfb-run -a uv run w3xray-test",
         "--basetemp /dev/shm/w3xray-pytest",
+        "for Attempt in 1 2",
+        "retrying the complete suite in a fresh process",
         "uv run w3xray-dist",
         'Executable="dist/魔兽地图提取器/魔兽地图提取器"',
         "AcceptanceArgs=(acceptance",
