@@ -47,6 +47,8 @@ def test_posix_workflow_tests_accepts_and_archives_onedir_package() -> None:
         'test -f "$PythonLibDir/libtcl9.0.so"',
         'test -f "$PythonLibDir/libtcl9tk9.0.so"',
         'export LD_LIBRARY_PATH="$PythonLibDir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"',
+        'hook-PIL.ImageTk.py',
+        'hiddenimports = ["PIL._tkinter_finder"]',
         "uv run w3xray-dist",
         'Executable="dist/魔兽地图提取器/魔兽地图提取器"',
         "AcceptanceArgs=(acceptance",

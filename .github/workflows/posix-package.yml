@@ -126,6 +126,9 @@ jobs:
             test -f "$PythonLibDir/libtcl9tk9.0.so"
             export LD_LIBRARY_PATH="$PythonLibDir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
             printf 'PYTHON_LIBRARY_PATH=%s\n' "$PythonLibDir"
+            PyInstallerHookDir="$(uv run python -c 'import pathlib, PyInstaller; print(pathlib.Path(PyInstaller.__file__).parent / "hooks")')"
+            printf '%s\n' 'hiddenimports = ["PIL._tkinter_finder"]' \
+              >"$PyInstallerHookDir/hook-PIL.ImageTk.py"
           fi
           uv run w3xray-dist
       - name: Execute packaged acceptance
