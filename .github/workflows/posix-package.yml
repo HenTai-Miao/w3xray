@@ -117,7 +117,17 @@ jobs:
           done
       - name: Build onedir executable
         shell: bash
-        run: uv run w3xray-dist
+        env:
+          TARGET_PLATFORM: ${{ matrix.platform }}
+        run: |
+          if [[ "$TARGET_PLATFORM" == 'linux' ]]; then
+            PythonLibDir="$(uv run python -c 'import pathlib, sys; print(pathlib.Path(sys.base_prefix) / "lib")')"
+            test -f "$PythonLibDir/libtcl9.0.so"
+            test -f "$PythonLibDir/libtcl9tk9.0.so"
+            export LD_LIBRARY_PATH="$PythonLibDir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            printf 'PYTHON_LIBRARY_PATH=%s\n' "$PythonLibDir"
+          fi
+          uv run w3xray-dist
       - name: Execute packaged acceptance
         shell: bash
         env:
