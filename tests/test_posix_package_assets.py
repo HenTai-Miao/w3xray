@@ -19,32 +19,46 @@ def test_posix_workflow_targets_release_tag_on_supported_runners() -> None:
     assert "SOURCE_REF_INPUT: ${{ inputs.source_ref }}" in workflow
     assert "'${{ inputs.source_ref }}'" not in workflow
     for target in (
-        "runner: macos-15\n            platform: macos\n            arch: x64",
-        "runner: macos-15-arm64\n            platform: macos\n            arch: arm64",
+        "runner: macos-15-intel\n            platform: macos\n            arch: x64\n            machine: x86_64",
+        "runner: macos-15\n            platform: macos\n            arch: arm64\n            machine: arm64",
         "runner: ubuntu-24.04\n            platform: linux\n            arch: x64",
     ):
         assert target in workflow
+    assert "EXPECTED_MACHINE: ${{ matrix.machine }}" in workflow
+    assert 'test "$ActualMachine" = "$EXPECTED_MACHINE"' in workflow
 
 
 def test_posix_workflow_tests_accepts_and_archives_onedir_package() -> None:
     workflow = _WORKFLOW.read_text(encoding="utf-8")
 
     for required in (
+        "brew install python-tk@3.14",
+        "sudo apt-get install --no-install-recommends -y xauth xvfb",
         "uv sync --dev",
+        "import tkinter; print(tkinter.TkVersion)",
         "uv run w3xray-test",
+        "xvfb-run -a uv run w3xray-test",
+        "--basetemp /dev/shm/w3xray-pytest",
         "uv run w3xray-dist",
         'Executable="dist/魔兽地图提取器/魔兽地图提取器"',
-        '"$Executable" acceptance',
-        "--no-gui",
+        "AcceptanceArgs=(acceptance",
+        '"$Executable" "${AcceptanceArgs[@]}"',
+        'xvfb-run -a "$Executable" "${AcceptanceArgs[@]}"',
         "overall_status == \"pass\"",
         "ditto -c -k --keepParent",
         "tar -C dist -czf",
+        "unzip -t",
+        "tar -tzf",
+        'test -x "$ArchivedExecutable"',
+        'file "$ArchivedExecutable"',
+        'grep -Fq "$ExpectedArchitecture"',
         "w3xray-v$Version-macos-${{ matrix.arch }}.zip",
         "w3xray-v$Version-linux-${{ matrix.arch }}.tar.gz",
         "actions/upload-artifact@v4",
         "if-no-files-found: error",
     ):
         assert required in workflow
+    assert "--no-gui" not in workflow
 
 
 def test_readme_lists_macos_and_linux_release_assets() -> None:

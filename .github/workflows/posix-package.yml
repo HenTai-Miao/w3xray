@@ -18,15 +18,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-15
+          - runner: macos-15-intel
             platform: macos
             arch: x64
-          - runner: macos-15-arm64
+            machine: x86_64
+          - runner: macos-15
             platform: macos
             arch: arm64
+            machine: arm64
           - runner: ubuntu-24.04
             platform: linux
             arch: x64
+            machine: x86_64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
@@ -40,22 +43,48 @@ jobs:
       - name: Record source identity
         shell: bash
         env:
+          EXPECTED_MACHINE: ${{ matrix.machine }}
           SOURCE_REF_INPUT: ${{ inputs.source_ref }}
         run: |
           printf 'SOURCE_REF=%s\n' "$SOURCE_REF_INPUT"
           printf 'SOURCE_SHA=%s\n' "$(git rev-parse HEAD)"
-          printf 'RUNNER_ARCH=%s\n' "$(uname -m)"
+          ActualMachine="$(uname -m)"
+          printf 'RUNNER_ARCH=%s\n' "$ActualMachine"
+          test "$ActualMachine" = "$EXPECTED_MACHINE"
+      - name: Install macOS Tk support
+        if: runner.os == 'macOS'
+        shell: bash
+        run: brew install python-tk@3.14
+      - name: Install Linux virtual display
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y xauth xvfb
       - name: Install Python dependencies
         shell: bash
-        run: uv sync --dev
-      - name: Run full test suite
+        run: |
+          uv sync --dev
+          uv run python -c 'import tkinter; print(tkinter.TkVersion)'
+      - name: Run full test suite on macOS
+        if: runner.os == 'macOS'
         shell: bash
         run: uv run w3xray-test
+      - name: Run full test suite on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          test -d /dev/shm
+          test -w /dev/shm
+          xvfb-run -a uv run w3xray-test \
+            -q --basetemp /dev/shm/w3xray-pytest
       - name: Build onedir executable
         shell: bash
         run: uv run w3xray-dist
       - name: Execute packaged acceptance
         shell: bash
+        env:
+          TARGET_PLATFORM: ${{ matrix.platform }}
         run: |
           set -euo pipefail
           Executable="dist/魔兽地图提取器/魔兽地图提取器"
@@ -64,13 +93,17 @@ jobs:
           test -x "$Executable"
           rm -rf "$EvidenceDir"
           mkdir -p "$EvidenceDir"
-          "$Executable" acceptance \
+          AcceptanceArgs=(acceptance \
             --map "tests/fixtures/maps/war3net-map-script-builder.w3x" \
             --campaign "tests/fixtures/reference/stormlib-campaign.w3n" \
             --output "$EvidenceDir" \
             --report "$Report" \
-            --repeat 5 \
-            --no-gui
+            --repeat 5)
+          if [[ "$TARGET_PLATFORM" == 'linux' ]]; then
+            xvfb-run -a "$Executable" "${AcceptanceArgs[@]}"
+          else
+            "$Executable" "${AcceptanceArgs[@]}"
+          fi
           jq -e '.overall_status == "pass"' "$Report"
       - name: Prepare release assets
         shell: bash
@@ -92,6 +125,36 @@ jobs:
               "魔兽地图提取器"
           fi
           cp "$Report" "$ReleaseDir/${{ matrix.platform }}-${{ matrix.arch }}-acceptance.json"
+      - name: Validate release asset
+        shell: bash
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+          TARGET_PLATFORM: ${{ matrix.platform }}
+        run: |
+          set -euo pipefail
+          Version="$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
+          ReleaseDir="artifacts/$TARGET_PLATFORM-$TARGET_ARCH-release"
+          ExtractDir="artifacts/$TARGET_PLATFORM-$TARGET_ARCH-archive-check"
+          rm -rf "$ExtractDir"
+          mkdir -p "$ExtractDir"
+          if [[ "$TARGET_PLATFORM" == 'macos' ]]; then
+            Package="$ReleaseDir/w3xray-v$Version-macos-$TARGET_ARCH.zip"
+            unzip -tq "$Package"
+            ditto -x -k "$Package" "$ExtractDir"
+            ExpectedArchitecture="$TARGET_ARCH"
+            if [[ "$TARGET_ARCH" == 'x64' ]]; then
+              ExpectedArchitecture='x86_64'
+            fi
+          else
+            Package="$ReleaseDir/w3xray-v$Version-linux-$TARGET_ARCH.tar.gz"
+            tar -tzf "$Package" >/dev/null
+            tar -xzf "$Package" -C "$ExtractDir"
+            ExpectedArchitecture='x86-64'
+          fi
+          ArchivedExecutable="$ExtractDir/魔兽地图提取器/魔兽地图提取器"
+          test -x "$ArchivedExecutable"
+          file "$ArchivedExecutable" | tee "$ExtractDir/executable-file.txt"
+          grep -Fq "$ExpectedArchitecture" "$ExtractDir/executable-file.txt"
       - name: Upload release assets
         uses: actions/upload-artifact@v4
         with:
