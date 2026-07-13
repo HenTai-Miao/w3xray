@@ -225,6 +225,17 @@ class MPQArchive:
         """读取无名块，加密块先由内容反推密钥。"""
         return read_mpq_block_anonymous(self, block)
 
+    def read_block_with_key(self, block_index: int, key: int) -> bytes:
+        """Read one block with an already-final 32-bit MPQ file key."""
+        if block_index < 0 or block_index >= len(self.block_table):
+            raise KeyError(f"block index out of range: {block_index}")
+        return read_mpq_block(
+            self,
+            self.block_table[block_index],
+            b"",
+            key & 0xFFFF_FFFF,
+        )
+
     def iter_blocks(self):
         """枚举块表里实际存在的 (索引, _Block)。"""
         for idx, block in enumerate(self.block_table):
