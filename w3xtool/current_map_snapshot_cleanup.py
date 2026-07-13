@@ -127,7 +127,7 @@ def _valid_owner_marker(directory: Path) -> bool:
         if (
             not stat.S_ISREG(before_details.st_mode)
             or before_details.st_size != len(_OWNER_MARKER_CONTENT)
-            or before_details.st_nlink != 1
+            or (os.name == "posix" and before_details.st_nlink != 1)
             or not _private_to_current_user(before_details)
         ):
             return False

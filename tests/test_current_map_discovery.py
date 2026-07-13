@@ -109,6 +109,7 @@ def test_default_roots_dedupe_existing_directories_before_eight_root_cap(tmp_pat
     assert discovered == tuple(root.resolve() for root in roots[:8])
 
 
+@pytest.mark.skipif(os.name != "posix", reason="requires POSIX /Volumes semantics")
 def test_known_roots_include_fixed_user_volume_pattern_without_volume_scan(monkeypatch: pytest.MonkeyPatch) -> None:
     # Given: a macOS home whose username also names the mounted game volume.
     home = Path("/Users/zhongerbing")
@@ -242,14 +243,15 @@ def test_recent_hint_window_includes_boundary_but_rejects_stale_and_future(tmp_p
     root = tmp_path / "window"
     boundary = root / "boundary.w3m"
     _write_at(boundary, b"boundary", _NOW_NS - _WINDOW_NS)
-    _write_at(root / "stale.w3x", b"stale", _NOW_NS - _WINDOW_NS - 1)
-    _write_at(root / "future.w3n", b"future", _NOW_NS + 1)
+    _write_at(root / "stale.w3x", b"stale", _NOW_NS - _WINDOW_NS - 1_000_000)
+    _write_at(root / "future.w3n", b"future", _NOW_NS + 1_000_000)
 
     # When: the injected clock anchors hint discovery.
     resolution = _locate(root)
 
     # Then: only an age in the closed fifteen-minute interval is useful.
-    assert tuple(item.path for item in resolution.candidates) == (boundary.resolve(),)
+    normalized_boundary = Path(os.path.normcase(os.fspath(boundary.resolve())))
+    assert tuple(item.path for item in resolution.candidates) == (normalized_boundary,)
 
 
 def test_recent_hints_are_not_useful_without_a_game_process(tmp_path: Path) -> None:

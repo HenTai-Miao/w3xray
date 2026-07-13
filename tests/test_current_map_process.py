@@ -54,6 +54,7 @@ def test_malformed_process_output_returns_typed_unavailable_report(
     assert report == ProcessProbeReport((), False, ProbeIssue.MALFORMED_OUTPUT)
 
 
+@pytest.mark.skipif(os.name != "posix", reason="requires the POSIX /proc adapter")
 def test_proc_fd_symlinks_produce_pid_linked_direct_evidence(tmp_path: Path) -> None:
     # Given: a synthetic proc fd tree points at one Chinese map and one non-map.
     process = GameProcess(301, "Warcraft III", "war3")
@@ -76,6 +77,7 @@ def test_proc_fd_symlinks_produce_pid_linked_direct_evidence(tmp_path: Path) -> 
     )
 
 
+@pytest.mark.skipif(os.name != "posix", reason="requires the POSIX /proc adapter")
 def test_proc_readlink_permission_is_unavailable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -98,6 +100,7 @@ def test_proc_readlink_permission_is_unavailable(
     assert report == OpenMapProbeReport((), False, ProbeIssue.ACCESS_DENIED)
 
 
+@pytest.mark.skipif(os.name != "posix", reason="requires the POSIX /proc adapter")
 def test_proc_mixed_success_and_permission_is_unavailable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -126,6 +129,7 @@ def test_proc_mixed_success_and_permission_is_unavailable(
     assert report == OpenMapProbeReport((), False, ProbeIssue.ACCESS_DENIED)
 
 
+@pytest.mark.skipif(os.name != "posix", reason="requires POSIX /proc and lsof adapters")
 def test_public_open_probe_falls_back_to_lsof_after_proc_denial(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
