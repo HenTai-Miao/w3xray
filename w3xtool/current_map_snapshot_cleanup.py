@@ -75,7 +75,7 @@ def cleanup_stale_snapshots(temp_root: Path, now_ns: int) -> None:
             if not entry.name.startswith(SNAPSHOT_DIR_PREFIX):
                 continue
             try:
-                details = entry.stat(follow_symlinks=False)
+                details = os.lstat(entry.path)
             except OSError:
                 continue
             if not stat.S_ISDIR(details.st_mode) or details.st_mtime_ns > cutoff_ns:
@@ -127,7 +127,7 @@ def _valid_owner_marker(directory: Path) -> bool:
         if (
             not stat.S_ISREG(before_details.st_mode)
             or before_details.st_size != len(_OWNER_MARKER_CONTENT)
-            or (os.name == "posix" and before_details.st_nlink != 1)
+            or before_details.st_nlink != 1
             or not _private_to_current_user(before_details)
         ):
             return False
