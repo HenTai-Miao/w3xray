@@ -138,6 +138,7 @@ class GuiLifecycleMixin:
                 self.icons.close()
             except OSError:
                 _LOGGER.debug("failed to close icon resolver during shutdown", exc_info=True)
+        self._shutdown_current_map_gui()
         self.destroy()
 
     def on_open(self) -> None:

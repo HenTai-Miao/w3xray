@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-import builtins
+import os
 from pathlib import Path
 import struct
+import subprocess
+import sys
 from unittest.mock import patch
 
+import pytest
+
+from w3xtool import archive_diagnostics
 from w3xtool.archive_diagnostics import (
     ArchiveDiagnosisKind,
     diagnose_archive_open,
@@ -158,7 +163,11 @@ def test_missing_and_permission_failures_are_distinct(tmp_path: Path) -> None:
 
     # When: each source is diagnosed.
     missing_diagnosis = diagnose_archive_open(str(missing))
-    with patch.object(builtins, "open", side_effect=PermissionError(13, "denied")):
+    with patch.object(
+        archive_diagnostics,
+        "open_regular_binary",
+        side_effect=PermissionError(13, "denied"),
+    ):
         denied_diagnosis = diagnose_archive_open(str(denied))
 
     # Then: callers can distinguish absence from source permission failure.
@@ -172,8 +181,7 @@ def test_directory_read_failure_is_conservative(tmp_path: Path) -> None:
     path.mkdir()
 
     # When: it is diagnosed.
-    with patch.object(builtins, "open", side_effect=PermissionError(13, "directory")):
-        diagnosis = diagnose_archive_open(str(path))
+    diagnosis = diagnose_archive_open(str(path))
 
     # Then: the helper reports an OS read failure without claiming damage.
     assert diagnosis.kind is ArchiveDiagnosisKind.READ_ERROR
@@ -182,12 +190,12 @@ def test_directory_read_failure_is_conservative(tmp_path: Path) -> None:
 def test_probe_uses_only_bounded_header_reads(tmp_path: Path) -> None:
     # Given: a file with a valid header and a payload that must not be scanned.
     path = _write_chunks(tmp_path / "bounded.w3x", ((0, _header()),), total_size=2 * 1024 * 1024)
-    real_open = builtins.open
+    real_open = archive_diagnostics.open_regular_binary
     read_sizes: list[int] = []
 
     class TrackingReader:
-        def __init__(self, source: str, mode: str) -> None:
-            self._handle = real_open(source, mode)
+        def __init__(self, handle) -> None:
+            self._handle = handle
 
         def __enter__(self):
             return self
@@ -205,8 +213,16 @@ def test_probe_uses_only_bounded_header_reads(tmp_path: Path) -> None:
             read_sizes.append(size)
             return self._handle.read(size)
 
+    def tracking_open(source: str):
+        handle, size = real_open(source)
+        return TrackingReader(handle), size
+
     # When: the helper probes the file.
-    with patch.object(builtins, "open", side_effect=TrackingReader):
+    with patch.object(
+        archive_diagnostics,
+        "open_regular_binary",
+        side_effect=tracking_open,
+    ):
         diagnose_archive_open(str(path))
 
     # Then: no whole-file or payload-sized read occurs.
@@ -229,3 +245,32 @@ def test_header_beyond_sixteen_mib_scan_window_is_ignored(tmp_path: Path) -> Non
 
     # Then: data beyond the bounded search window is not inspected.
     assert diagnosis.kind is ArchiveDiagnosisKind.NO_HEADER
+
+
+def test_fifo_diagnosis_returns_without_waiting_for_writer(tmp_path: Path) -> None:
+    # Given: a FIFO path with no writer process connected.
+    if not hasattr(os, "mkfifo"):
+        pytest.skip("mkfifo is unavailable")
+    fifo = tmp_path / "diagnostic-stream.w3x"
+    os.mkfifo(fifo)
+    script = "\n".join(
+        (
+            "import sys",
+            "from w3xtool.archive_diagnostics import (",
+            "    ArchiveDiagnosisKind, diagnose_archive_open,",
+            ")",
+            "result = diagnose_archive_open(sys.argv[1])",
+            "raise SystemExit(0 if result.kind is ArchiveDiagnosisKind.READ_ERROR else 2)",
+        )
+    )
+
+    # When: bounded diagnostics inspect that path in a fresh process.
+    completed = subprocess.run(
+        (sys.executable, "-c", script, str(fifo)),
+        check=False,
+        capture_output=True,
+        timeout=2,
+    )
+
+    # Then: diagnosis returns conservatively without waiting for a peer.
+    assert completed.returncode == 0, completed.stderr.decode(errors="replace")

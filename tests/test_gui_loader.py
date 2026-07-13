@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 import queue
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from w3xtool.api import MapData
 from w3xtool.gui_loader import LoaderError, LoadedMap, load_path_payload, prepare_map_view, switch_map_payload
@@ -12,7 +13,124 @@ from w3xtool.gui_loader_runner import BackgroundLoaderMixin
 from w3xtool.load_options import object_only_load_options
 
 
+class _Status:
+    def configure(self, **_values) -> None:
+        return
+
+
+class _LoaderRunner(BackgroundLoaderMixin):
+    def __init__(self) -> None:
+        self.status = _Status()
+        self.scheduled = []
+        self.cancelled = []
+        self._init_background_loader()
+
+    def after(self, _delay_ms, callback):
+        self.scheduled.append(callback)
+        return f"after-{len(self.scheduled)}"
+
+    def after_cancel(self, poll_id) -> None:
+        self.cancelled.append(poll_id)
+
+
+class _Resolver:
+    def __init__(self) -> None:
+        self.closed = threading.Event()
+
+    def close(self) -> None:
+        self.closed.set()
+
+
 class TestGuiLoader(unittest.TestCase):
+    def test_shutdown_drains_already_queued_loaded_map_resolver(self):
+        # Given: a completed result owns a resolver that UI polling has not consumed.
+        runner = _LoaderRunner()
+        resolver = _Resolver()
+        payload = LoadedMap(MapData(path="x.w3x", name="queued"), [], [], resolver, None, None)
+        runner._load_results.put((1, payload))
+
+        # When: loader shutdown runs.
+        runner._shutdown_background_loader()
+
+        # Then: the queued resolver is closed and the queue is empty.
+        self.assertTrue(resolver.closed.is_set())
+        self.assertTrue(runner._load_results.empty())
+
+    def test_shutdown_waits_for_blocked_worker_then_discards_payload(self):
+        # Given: a worker is blocked before it can queue a resolver-bearing payload.
+        runner = _LoaderRunner()
+        resolver = _Resolver()
+        worker_started = threading.Event()
+        release_worker = threading.Event()
+        join_called = threading.Event()
+        shutdown_done = threading.Event()
+        real_thread = threading.Thread
+
+        class _ObservedThread:
+            def __init__(self, *, target, args, daemon: bool, name: str) -> None:
+                self._thread = real_thread(target=target, args=args, daemon=daemon, name=name)
+
+            def start(self) -> None:
+                self._thread.start()
+
+            def join(self) -> None:
+                join_called.set()
+                self._thread.join()
+
+            def is_alive(self) -> bool:
+                return self._thread.is_alive()
+
+        def build_payload() -> LoadedMap:
+            worker_started.set()
+            self.assertTrue(release_worker.wait(2))
+            return LoadedMap(MapData(path="x.w3x", name="blocked"), [], [], resolver, None, None)
+
+        def shutdown() -> None:
+            runner._shutdown_background_loader()
+            shutdown_done.set()
+
+        with patch("w3xtool.gui_loader_runner.threading.Thread", _ObservedThread):
+            runner._start_loader_job(
+                status="busy",
+                build_payload=build_payload,
+                error_status="failed",
+                source_path=None,
+            )
+            self.assertTrue(worker_started.wait(2))
+            closer = real_thread(target=shutdown, daemon=True)
+            closer.start()
+            self.assertTrue(join_called.wait(2))
+            self.assertFalse(shutdown_done.is_set())
+            release_worker.set()
+            self.assertTrue(shutdown_done.wait(2))
+            closer.join()
+
+        # Then: shutdown returns only after discarding the worker payload.
+        self.assertTrue(resolver.closed.is_set())
+        self.assertTrue(runner._load_results.empty())
+        self.assertEqual(runner._load_workers, {})
+
+    def test_poll_reaps_worker_for_completed_stale_result(self):
+        # Given: a completed worker has queued a result from an obsolete token.
+        runner = _LoaderRunner()
+        joined = []
+
+        class _CompletedThread:
+            def join(self) -> None:
+                joined.append(True)
+
+        runner._load_token = 2
+        runner._load_pending.add(1)
+        runner._load_workers[1] = _CompletedThread()
+        runner._load_results.put((1, LoaderError("old", "old", "old")))
+
+        # When: normal polling discards that stale result.
+        runner._poll_loader_results()
+
+        # Then: the completed thread handle is reaped with its result.
+        self.assertEqual(joined, [True])
+        self.assertEqual(runner._load_workers, {})
+
     def test_source_open_failure_uses_archive_diagnosis(self):
         # Given: a real selected source with no MPQ header and a failing loader.
         runner = object.__new__(BackgroundLoaderMixin)

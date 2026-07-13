@@ -38,6 +38,16 @@ def build_topbar(app) -> None:
         command=app.on_open,
         **primary_button_style(),
     ).pack(side="left", padx=(0, 12))
+    app.current_map_button = ctk.CTkButton(
+        bar,
+        text="获取当前地图",
+        font=(FONT, 13, "bold"),
+        width=116,
+        height=36,
+        command=lambda: app.on_open_current_map(),
+        **secondary_button_style(),
+    )
+    app.current_map_button.pack(side="left", padx=(0, 12))
     app.map_label = ctk.CTkLabel(
         bar,
         text="未打开",

@@ -1,13 +1,19 @@
 """MPQ 头健壮性：拒绝非法/恶意的表大小，避免 range(hash_count) 跑数十亿次卡死(DoS)。
 
-合法 MPQ 的 hash 表大小是 2 的幂，且 hash/block 表都能放进文件内。
+合法 MPQ 的 hash 表大小是 2 的幂且整表在文件内；block 表允许声明尾部注水，
+但起点必须在文件内，实际可读项受固定物化预算限制。
 """
 import os
+import mmap
 import struct
 import tempfile
 import unittest
+from pathlib import Path
+
+import pytest
 
 from w3xtool.mpq import MPQArchive
+from w3xtool.mpq_layout import MPQLayoutError, locate_mpq_layout
 
 
 def _write_mpq(hdr_bytes, total_size):
@@ -34,6 +40,65 @@ def _write_chunks(chunks, total_size):
     with open(path, "wb") as f:
         f.write(buf)
     return path
+
+
+def _write_sparse_mpq(path: Path, header: bytes, total_size: int, offset: int = 0) -> Path:
+    with path.open("wb") as handle:
+        handle.truncate(total_size)
+        handle.seek(offset)
+        handle.write(header)
+    return path
+
+
+def test_main_header_discovery_stops_at_sixteen_mib_budget(tmp_path: Path) -> None:
+    header_offset = 16 * 1024 * 1024 + 512
+    path = _write_sparse_mpq(
+        tmp_path / "late-header.w3x",
+        _hdr(4, 1, hash_pos=32, block_pos=96),
+        header_offset + 112,
+        header_offset,
+    )
+    with path.open("rb") as handle, mmap.mmap(
+        handle.fileno(),
+        0,
+        access=mmap.ACCESS_READ,
+    ) as data:
+        with pytest.raises(MPQLayoutError, match="没找到 MPQ 头"):
+            locate_mpq_layout(data)
+
+
+def test_hash_table_entry_budget_rejects_sparse_archive(tmp_path: Path) -> None:
+    hash_count = 1 << 19
+    block_position = 32 + hash_count * 16
+    path = _write_sparse_mpq(
+        tmp_path / "large-hash-table.w3x",
+        _hdr(hash_count, 0, hash_pos=32, block_pos=block_position),
+        block_position,
+    )
+    with path.open("rb") as handle, mmap.mmap(
+        handle.fileno(),
+        0,
+        access=mmap.ACCESS_READ,
+    ) as data:
+        with pytest.raises(MPQLayoutError, match="hash 表过大"):
+            locate_mpq_layout(data)
+
+
+def test_block_table_entry_budget_rejects_sparse_archive(tmp_path: Path) -> None:
+    block_count = (1 << 18) + 1
+    block_position = 96
+    path = _write_sparse_mpq(
+        tmp_path / "large-block-table.w3x",
+        _hdr(4, block_count, hash_pos=32, block_pos=block_position),
+        block_position + block_count * 16,
+    )
+    with path.open("rb") as handle, mmap.mmap(
+        handle.fileno(),
+        0,
+        access=mmap.ACCESS_READ,
+    ) as data:
+        with pytest.raises(MPQLayoutError, match="block 表过大"):
+            locate_mpq_layout(data)
 
 
 class TestMpqHeader(unittest.TestCase):

@@ -6,10 +6,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 import errno
 import os
-import struct
 from typing import BinaryIO, Final
 
-_HEADER: Final = struct.Struct("<4sIIHHIIII")
+from .archive_layout_probe import MPQ_HEADER, validate_mpq_candidate
+from .mpq_constants import WAR3_MAP_MAGIC
+from .mpq_storage import open_regular_binary
+
 _MAGIC: Final = b"MPQ\x1a"
 _ALIGNMENT: Final = 512
 _SCAN_LIMIT: Final = 16 * 1024 * 1024
@@ -45,8 +47,8 @@ def diagnose_archive_open(
             (f"path={path}", "path_type=directory") + _error_evidence(error),
         )
     try:
-        with open(path, "rb") as handle:
-            file_size = os.fstat(handle.fileno()).st_size
+        handle, file_size = open_regular_binary(path)
+        with handle:
             return _diagnose_readable(handle, path, file_size, error)
     except FileNotFoundError as exc:
         return _diagnosis(
@@ -91,20 +93,28 @@ def _diagnose_readable(
     scan_end = min(file_size, _SCAN_LIMIT)
     first_damage: tuple[str, ...] | None = None
     first_unsupported: tuple[str, ...] | None = None
+    war3_map = False
     offset = 0
     try:
         while offset < scan_end:
             handle.seek(offset)
-            raw = handle.read(_HEADER.size)
+            raw = handle.read(MPQ_HEADER.size)
+            if offset == 0:
+                war3_map = raw[:4] == WAR3_MAP_MAGIC
             if raw[:4] == _MAGIC:
-                evidence = _validate_candidate(raw, offset, file_size)
+                evidence = validate_mpq_candidate(
+                    raw,
+                    offset,
+                    file_size,
+                    war3_map=war3_map,
+                )
                 if "structure=valid" in evidence:
                     return ArchiveOpenDiagnosis(
                         ArchiveDiagnosisKind.READ_ERROR,
                         "MPQ 头和表边界可读，但有界诊断无法确定开档失败原因。",
                         evidence + _error_evidence(error),
                     )
-                if any(item.startswith("format_version=") for item in evidence):
+                if "format_unsupported" in evidence:
                     if first_unsupported is None:
                         first_unsupported = evidence
                 elif first_damage is None:
@@ -140,47 +150,6 @@ def _diagnose_readable(
             "alignment=512",
         ) + _error_evidence(error),
     )
-
-
-def _validate_candidate(raw: bytes, offset: int, file_size: int) -> tuple[str, ...]:
-    base = (f"candidate_offset={offset}", f"file_size={file_size}")
-    if len(raw) < _HEADER.size:
-        return base + ("header_truncated",)
-    (
-        _magic,
-        header_size,
-        _archive_size,
-        format_version,
-        sector_shift,
-        hash_pos,
-        block_pos,
-        hash_count,
-        block_count,
-    ) = _HEADER.unpack(raw)
-    fields = base + (
-        f"header_size={header_size}",
-        f"hash_count={hash_count}",
-        f"block_count={block_count}",
-    )
-    if sector_shift > 20:
-        return fields + (f"sector_shift={sector_shift}", "sector_shift_invalid")
-    if hash_count <= 0 or hash_count & (hash_count - 1):
-        return fields + ("hash_count_not_power_of_two",)
-    hash_start = offset + hash_pos
-    hash_end = hash_start + hash_count * 16
-    if hash_end > file_size:
-        return fields + (
-            f"hash_table_start={hash_start}",
-            f"hash_table_end={hash_end}",
-            "hash_table_oob",
-        )
-    block_start = offset + block_pos
-    if block_start > file_size:
-        return fields + (f"block_table_start={block_start}", "block_table_start_oob")
-    if format_version != 0:
-        return fields + (f"format_version={format_version}",)
-    return fields + ("structure=valid",)
-
 
 def _diagnosis(
     kind: ArchiveDiagnosisKind,

@@ -27,6 +27,19 @@ def main() -> None:
         from w3xtool.real_save_cli import run_real_save_cli
 
         raise SystemExit(run_real_save_cli(tuple(sys.argv[2:])))
+    if len(sys.argv) >= 2 and sys.argv[1] == "current":
+        from w3xtool.current_map_cli import (
+            CurrentMapCliOptionError,
+            parse_current_map_cli_options,
+            run_current_map_cli,
+        )
+
+        try:
+            options = parse_current_map_cli_options(tuple(sys.argv[2:]))
+        except CurrentMapCliOptionError as exc:
+            print(f"当前地图参数错误：{exc}", file=sys.stderr)
+            raise SystemExit(2) from None
+        raise SystemExit(run_current_map_cli(options))
     if len(sys.argv) >= 3 and sys.argv[1] in {"wgc", "gameconfig"}:
         from w3xtool.gameconfig import read_game_configuration_file
 

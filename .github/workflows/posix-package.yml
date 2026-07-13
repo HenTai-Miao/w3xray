@@ -6,7 +6,7 @@ on:
       source_ref:
         description: Git ref to build and package
         required: true
-        default: v0.1.1
+        default: v0.1.2
 
 permissions:
   contents: read

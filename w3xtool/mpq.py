@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import struct
-from contextlib import suppress
 
 from .explode import explode as explode
 from .mpq_block_reader import (
@@ -58,6 +57,7 @@ from .mpq_layout import (
     read_mpq_tables,
 )
 from .mpq_names import HashEntry, encoded_name_candidates, select_hash_entry
+from .mpq_storage import MPQBackingStore, open_mpq_backing
 
 _decompress_sector = decompress_mpq_sector
 _sparse_decompress = sparse_decompress
@@ -76,69 +76,34 @@ class MPQArchive:
         self.platform = (locale_id >> 16) & 0xFF
         self.legacy_codecs = legacy_codecs
         encoded_name_candidates("", legacy_codecs=legacy_codecs)
-        self._file = None
-        self._tmp = None
+        self._backing: MPQBackingStore = open_mpq_backing(path)
+        self._sync_backing()
+        initialized = False
         try:
-            self._open(path)
-        except (PermissionError, OSError):
-            # 文件被独占(例如正在被游戏/平台占用) → 复制到临时目录再读
-            import tempfile, shutil, os
-            fd, tmp = tempfile.mkstemp(suffix=os.path.splitext(path)[1] or ".w3x")
-            os.close(fd)
-            shutil.copyfile(path, tmp)   # 只读复制，源文件被独占也能复制
-            self._tmp = tmp
-            self._open(tmp)
-        # 小图已整块读入内存，临时副本可立即删除
-        if self._tmp and self._file is None:
-            with suppress(OSError):
-                import os
-                os.remove(self._tmp)
-                self._tmp = None
-        self._parse_header()
-        self._read_tables()
-        self._names = None
+            self._parse_header()
+            self._read_tables()
+            self._names = None
+            initialized = True
+        finally:
+            if not initialized:
+                self.close()
 
     # ---- 资源释放：关闭文件句柄/mmap、删除大图独占时的临时副本 ----
-    def close(self):
-        """释放底层文件句柄与 mmap，并删除复制出来的临时副本。可重复调用。
+    def close(self) -> None:
+        """Release the owned backing store; repeated calls are harmless."""
+        self._backing.close()
+        self._sync_backing()
 
-        大图用 mmap 会一直持有文件句柄(Windows 上锁住源文件)；独占大图还会留下
-        临时副本 self._tmp。不显式关闭就只能等 GC，期间句柄/磁盘不释放。
-        """
-        import mmap as _mmap
-        data = getattr(self, "_data", None)
-        if isinstance(data, _mmap.mmap):
-            with suppress(BufferError, OSError, ValueError):
-                data.close()
-        self._data = b""
-        if self._file is not None:
-            with suppress(OSError):
-                self._file.close()
-            self._file = None
-        if self._tmp:
-            with suppress(OSError):
-                import os
-                os.remove(self._tmp)
-            self._tmp = None
+    def _sync_backing(self) -> None:
+        self._data = self._backing.data
+        self._file = self._backing.handle
+        self._tmp = self._backing.temporary_path
 
     def __enter__(self):
         return self
 
     def __exit__(self, *exc):
         self.close()
-
-    def _open(self, path: str):
-        import os
-        size = os.path.getsize(path)
-        # 以"读 + 允许他人读写"方式打开，尽量不与运行中的游戏冲突
-        self._file = open(path, "rb")
-        if size > 40 * 1024 * 1024:
-            import mmap
-            self._data = mmap.mmap(self._file.fileno(), 0, access=mmap.ACCESS_READ)
-        else:
-            self._data = self._file.read()
-            self._file.close()
-            self._file = None
 
     # ---- 头与表 ----
     def _parse_header(self):

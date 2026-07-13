@@ -8,6 +8,7 @@ import customtkinter as ctk
 
 from .api import MapData
 from .gui_clipboard import ClipboardMixin
+from .gui_current_map import CurrentMapGuiMixin
 from .gui_casc_browser import CascBrowserMixin
 from .gui_data_refresh import DataRefreshMixin
 from .gui_data_tabs import DataTabLayoutMixin
@@ -48,6 +49,7 @@ class App(
     DataRefreshMixin,
     SourceBrowserMixin,
     ObjectDetailMixin,
+    CurrentMapGuiMixin,
     GuiLifecycleMixin,
     ClipboardMixin,
     ctk.CTk,
@@ -82,6 +84,7 @@ class App(
         self._blank = None
         self._casc_browser_dialog = None
 
+        self._init_current_map_gui()
         self._init_load_options()
         self._init_background_loader()
         self._init_object_filter_runner()

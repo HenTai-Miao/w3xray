@@ -15,19 +15,19 @@ GUI触发器、场景放置、触发指令、合成配方、孤立对象、分�
 
 Windows x64 同时提供：
 
-- `w3xray-v0.1.1-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
-- `w3xray-v0.1.1-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
+- `w3xray-v0.1.2-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
+- `w3xray-v0.1.2-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
 
 两者功能相同；遇到杀软误报或启动问题时优先使用 ZIP 版。
 
 macOS 提供两个未签名、未公证的 onedir ZIP，请按 Mac 处理器选择并完整解压：
 
-- `w3xray-v0.1.1-macos-arm64.zip`：Apple Silicon（M1/M2/M3/M4/M5）。
-- `w3xray-v0.1.1-macos-x64.zip`：Intel Mac。
+- `w3xray-v0.1.2-macos-arm64.zip`：Apple Silicon（M1/M2/M3/M4/M5）。
+- `w3xray-v0.1.2-macos-x64.zip`：Intel Mac。
 
 Linux 提供：
 
-- `w3xray-v0.1.1-linux-x64.tar.gz`：Linux x86-64，解压后运行 `./魔兽地图提取器/魔兽地图提取器`。
+- `w3xray-v0.1.2-linux-x64.tar.gz`：Linux x86-64，解压后运行 `./魔兽地图提取器/魔兽地图提取器`。
 
 macOS/Linux 包支持地图与战役的静态提取；Windows 专用的 CascLib 游戏客户端原生后端不包含在这两类包中。macOS 首次运行可能出现 Gatekeeper 未验证开发者提示。
 
@@ -35,6 +35,7 @@ macOS/Linux 包支持地图与战役的静态提取；Windows 专用的 CascLib 
 ```bash
 uv run main.py                 # 启动图形界面
 uv run main.py cli <地图路径>   # 命令行快速查看分类统计
+uv run main.py current         # 获取游戏进程正在使用的地图并解析只读快照
 uv run main.py cli <配置.wgc>   # 命令行查看 World Editor AI 测试配置
 uv run main.py casc --help      # CASC Root 全量清单 / 单文件导出
 uv run main.py save --help      # 真实存档文件只读证据分析
@@ -42,6 +43,33 @@ uv run main.py acceptance --help # 源码或打包 EXE 验收并生成 JSON
 uv run w3xray-test             # 运行测试（Windows 下避开 pytest.exe trampoline）
 ```
 CLI 输出会附带只读「审计 / 组件诊断 / 地形 / 地图结构 / SLK / 游戏常数 / 游戏配置 / 触发器树 / 小地图标记 / 导入资源 / 脚本诊断 / 崩溃风险 / 秘籍口令 / 命令 / 资源 / 兼容」摘要，提示缺失地图信息、war3map.w3e 地形纹理、网格、世界坐标范围、地形点高度/水位/坡道/荒芜/边界/边缘统计、预放置单位/装饰物越界、实际地表/悬崖纹理使用分布、地形中文名/贴图路径、区域/镜头/声音/路径图摘要与可读条目、路径图禁止行走/飞行/建造等 pathing flag 统计、war3map.shd 阴影图覆盖统计、内嵌 SLK 表行列摘要、war3mapMisc.txt 覆盖项、`.wgc` AI 测试/对局配置、`war3map.wtg` 触发器树结构、`war3map.mmp` 小地图标记、`war3map.imp` 标准/自定义导入路径与疑似缺失资源、脚本缺失、异步/本地状态风险调用、已知崩溃配置、官方秘籍/调试口令残留、引用覆盖偏低、孤立对象比例偏高、重复命令串、脚本数值 Order ID 解码、自定义游戏平衡常数、未引用素材、1.20E return bug 迁移风险、1.24E 兼容风险等；这些提示只用于人工排查，不会修改地图。
+
+## 获取当前地图（只读）
+
+Warcraft III 对局运行时，可在 GUI 顶栏点击「获取当前地图」。探测在后台线程中完成：唯一的直接证据会自动建立快照并加载；只有提示证据时会先显示来源和路径，必须由用户确认；候选不唯一、未找到或平台探针不可用时不会猜测或打开地图。
+
+CLI 概要为 `uv run main.py current [--root PATH] [--accept-suggestion]`。`--root PATH` 可重复，用于补充有界搜索目录；还可把现有地图 CLI 的 `--listfile PATH`、`--game-data PATH`、`--author-bundle PATH`、`--pack PATH` 原样转发给后续只读解析。例如：
+
+```bash
+uv run main.py current
+uv run main.py current --root "/path/to/Warcraft III/Maps" --accept-suggestion
+uv run main.py current --listfile names.txt --game-data /path/to/game-data --author-bundle /path/to/bundle --pack /path/to/report
+```
+
+定位结果按证据强度处理：
+
+| 状态 | 含义 | GUI / CLI 行为 |
+|------|------|----------------|
+| `FOUND` | 唯一直接证据：Warcraft 游戏进程打开的地图文件，或该进程启动参数中的明确地图路径 | 自动创建快照并加载 |
+| `AMBIGUOUS` | 多个直接证据候选 | 展示说明/候选，不按修改时间猜测，也不创建快照 |
+| `SUGGESTED` | 没有直接证据，只有游戏运行期间的近期地图缓存或近期 `.wgc` 引用 | GUI 仅对唯一候选弹窗确认；CLI 仅在唯一候选且显式传入 `--accept-suggestion` 时继续 |
+| `NOT_FOUND` / `UNAVAILABLE` | 未发现可用候选，或当前平台无法可靠执行直接探针 | 报告原因，不创建快照 |
+
+World Editor、Battle.net、启动器和下载客户端不算游戏进程；“最近修改”本身也绝不会成为自动打开依据。任何非唯一结果都不会因 `--accept-suggestion` 而被强行选择。
+
+通过证据门槛后，工具只读打开现存的 regular `.w3x/.w3m/.w3n`，复制到系统临时目录下权限受控的唯一目录，并固定命名为 `current.<原扩展名>`。复制前后会核对源文件的设备号、inode、大小和纳秒 mtime，同时计算快照 SHA-256；源文件在复制期间发生变化会使快照失败并被删除。解析器只读取快照，源地图不会被修改。CLI 在解析返回后删除快照；GUI 在本次应用会话结束时统一删除，下一次启动只会有界清理本工具拥有的陈旧快照。
+
+此功能只使用操作系统可见的进程列表、命令行、打开文件路径和磁盘元数据：**不读取游戏内存，不打开 `Game.dll`，不注入 DLL，不执行地图/平台代码，不提权，也不做数据级运行时解密**。如果自定义加密只在游戏内存中解密，本工具无法恢复明文；快照只保留磁盘上已有的字节，并交给现有静态兼容解析器。
 
 Windows 上如果 `uv run pytest -q` 报 `uv trampoline failed to canonicalize script path`，
 用 `uv run w3xray-test` 或 `uv run python -m pytest -q`；这两种方式直接走 Python 模块入口，
@@ -104,6 +132,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
 - **外部验收 SKIP**：本次开发环境不是带真实 Warcraft III 安装的 Windows 主机。Windows 打包与真安装工作流已经存在，但只有 hosted/self-hosted 产生的验收 JSON 才能记为 PASS；本地 macOS 测试不替代该证据。
 
 ## 功能
+- **获取当前地图**：GUI 顶栏按钮或 CLI `main.py current` 根据游戏进程与磁盘证据定位 `.w3x/.w3m/.w3n`，通过置信度门槛后只解析私有临时快照，不改源地图。
 - **解包**：把地图(MPQ 压缩包)内部文件全部解出；文件名发现采用**三层并集**((listfile) + 内置固定名单 + war3map.imp 导入清单)，GUI 也可选择外部 listfile 补充被删掉的文件名；无文件名的匿名 block 会逐块尝试恢复加密 key、按内容猜扩展名导出到 `Unknown/`，若从 MDX/脚本等内容反推出真实资源路径则按原路径补导出并写 `RecoveredNames/manifest.tsv`，极端损坏或无法解码的原始 payload 会保留到 `UnknownRaw/manifest.tsv`；提取完整性报告会标出疑似数据级加密/运行时解密保护，不做运行时内存 dump 或绕过。
 - **CASC 客户端浏览**：选择可读的 Windows 原生游戏数据后，「数据工具」可分页浏览整个 Root（每页 200 条）、按 mask 重扫并导出所选；CLI `casc inventory` 输出含路径类型、FileDataID、CKey、EKey、大小和本地可用状态的 TSV，`casc extract` 按任一稳定标识导出单文件。
 - **作者明文补充包**：`cli <地图> --author-bundle <目录>` 或 GUI「数据工具」接入。补充包必须包含 `w3xray-author-bundle.tsv`，首行是 `W3XRAY-AUTHOR-BUNDLE<TAB>1`，第二行绑定源地图 SHA256，后续每行绑定内部路径和文件 SHA256；文件放在包内 `files/`，路径穿越、重复名、哈希不符和容量超限都会拒绝。
@@ -191,7 +220,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
 
 ## 技术说明
 - 魔兽地图是 MPQ v1 压缩包（`.w3x` 前有 512 字节 HM3W 头）。
-- MPQ 头定位会扫描 512 对齐位置，跳过校验不过的诱饵头，取第一个合法头（兼容 `_w3p` 等头部混淆图）。
+- MPQ 头定位会在文件前 16 MiB 扫描 512 对齐位置，跳过校验不过的诱饵头，取第一个合法头（兼容 `_w3p` 等头部混淆图，同时限制恶意稀疏文件的扫描成本）；偏移 0 的合法 UserData 包装仍是权威入口。
 - 压缩支持 zlib / bzip2 / PKWARE explode / 稀疏 / 自适应 Huffman(0x01，移植自 StormLib)，文件加密(ENCRYPTED/FIX_KEY)亦支持。
 - 导出时不只依赖文件名：对 hash 表有名、但 listfile 缺失的文件，继续用三层并集查找；对 hash 表无名的匿名 block，会用 MPQ 扇区偏移表反推加密 key 后解压，按文件魔数/文本特征导出到 `Unknown/`。如果匿名资源内容里暴露了 `war3mapImported\*.blp/mdx/...` 等路径，工具会用 MPQ hash 反查对应 block 并恢复到原始路径；无法解码的 block 不静默丢弃，而是把原始 payload 写入 `UnknownRaw/` 供后续人工确认。
 - 字符串按条 UTF-8 优先、失败回退 GBK（兼容老中文图与 UTF-8/GBK 混合编码的 wts）。

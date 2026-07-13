@@ -3,11 +3,16 @@
 - 扇区偏移表必须单调且在数据内，否则抛清晰 ValueError（而非静默产出错误字节）。
 - block 指向文件外时应报错（而非静默返回空数据）。
 """
+import mmap
 import os
 import struct
 import tempfile
 import unittest
+from pathlib import Path
 
+import pytest
+
+from w3xtool import mpq_storage
 from w3xtool.mpq import (
     FLAG_COMPRESS,
     FLAG_ENCRYPTED,
@@ -29,6 +34,39 @@ def _write_min_mpq():
     with open(path, "wb") as f:
         f.write(buf)
     return path
+
+
+def test_constructor_failure_closes_real_mmap_and_handle(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "large-invalid.w3x"
+    with path.open("wb") as handle:
+        handle.truncate(41 * 1024 * 1024)
+    real_mmap = mmap.mmap
+    real_open = mpq_storage.open_regular_binary
+    mapped_objects: list[mmap.mmap] = []
+    source_handles = []
+
+    def tracking_mmap(*args, **kwargs):
+        mapped = real_mmap(*args, **kwargs)
+        mapped_objects.append(mapped)
+        return mapped
+
+    def tracking_open(file: str):
+        handle, size = real_open(file)
+        if Path(file) == path:
+            source_handles.append(handle)
+        return handle, size
+
+    monkeypatch.setattr(mmap, "mmap", tracking_mmap)
+    monkeypatch.setattr(mpq_storage, "open_regular_binary", tracking_open)
+
+    with pytest.raises(ValueError, match="没找到 MPQ 头"):
+        MPQArchive(str(path))
+
+    assert len(mapped_objects) == 1 and mapped_objects[0].closed
+    assert len(source_handles) == 1 and source_handles[0].closed
 
 
 class TestSectorOffsets(unittest.TestCase):

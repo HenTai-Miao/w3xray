@@ -5,6 +5,7 @@ from __future__ import annotations
 import mmap
 import struct
 from dataclasses import dataclass
+from typing import Final
 
 from .mpq_constants import (
     HASH_FILE_KEY,
@@ -12,6 +13,8 @@ from .mpq_constants import (
     MPQ_HEADER_MAGIC,
     MPQ_HEADER_SIZE_V1,
     MPQ_USER_DATA_MAGIC,
+    UINT32_MAX,
+    WAR3_MAP_MAGIC,
 )
 from .mpq_crypto import _decrypt, hash_name_bytes
 from .mpq_names import HashEntry
@@ -47,6 +50,67 @@ class MPQLayoutError(ValueError):
 
 type ArchiveBytes = bytes | mmap.mmap
 
+_HEADER_SCAN_LIMIT: Final = 16 * 1024 * 1024
+_MAX_TABLE_ENTRIES: Final = 1 << 18
+
+
+def normalize_classic_header_size(
+    archive_offset: int,
+    stored_header_size: int,
+    file_size: int,
+    *,
+    protected_classic: bool,
+) -> int:
+    """Return the bounded effective header size for one classic candidate."""
+    if stored_header_size < MPQ_HEADER_SIZE_V1 or (
+        not protected_classic
+        and archive_offset + stored_header_size > file_size
+    ):
+        raise MPQLayoutError(f"MPQ 头大小非法：{stored_header_size}")
+    return MPQ_HEADER_SIZE_V1 if protected_classic else stored_header_size
+
+
+def classic_table_offsets_use_wrap(
+    archive_offset: int,
+    hash_position: int,
+    block_position: int,
+    *,
+    protected_classic: bool,
+) -> bool:
+    """Validate that a protected layout wraps both tables or neither table."""
+    if not protected_classic:
+        return False
+    hash_wraps = archive_offset + hash_position > UINT32_MAX
+    block_wraps = archive_offset + block_position > UINT32_MAX
+    if hash_wraps != block_wraps:
+        raise MPQLayoutError("MPQ hash/block 表偏移必须同时回绕")
+    return hash_wraps
+
+
+def resolve_classic_table_offset(
+    archive_offset: int,
+    stored_offset: int,
+    *,
+    wrap_32bit: bool,
+) -> int:
+    """Resolve a classic MPQ table position using its container arithmetic."""
+    absolute = archive_offset + stored_offset
+    return absolute & 0xFFFFFFFF if wrap_32bit else absolute
+
+
+def validate_classic_table_budget(
+    hash_count: int,
+    block_count: int,
+    block_offset: int,
+    file_size: int,
+) -> None:
+    """Reject table layouts whose readable entries exceed fixed memory budgets."""
+    if hash_count > _MAX_TABLE_ENTRIES:
+        raise MPQLayoutError(f"MPQ hash 表过大：{hash_count}")
+    readable_blocks = min(block_count, (file_size - block_offset) // 16)
+    if readable_blocks > _MAX_TABLE_ENTRIES:
+        raise MPQLayoutError(f"MPQ block 表过大：{readable_blocks}")
+
 
 def locate_mpq_layout(data: ArchiveBytes) -> MPQLayout:
     """Locate the first valid main header, honoring an authoritative UserData wrapper."""
@@ -55,7 +119,8 @@ def locate_mpq_layout(data: ArchiveBytes) -> MPQLayout:
 
     last_error: MPQLayoutError | None = None
     offset = 0
-    while offset + MPQ_HEADER_SIZE_V1 <= len(data):
+    scan_end = min(len(data), _HEADER_SCAN_LIMIT)
+    while offset + MPQ_HEADER_SIZE_V1 <= scan_end:
         magic = data[offset : offset + 4]
         if magic in (MPQ_HEADER_MAGIC, MPQ_USER_DATA_MAGIC):
             try:
@@ -91,18 +156,38 @@ def _parse_main_header(data: ArchiveBytes, offset: int) -> MPQLayout:
     magic, header_size, _archive_size, version, shift, hash_pos, block_pos, hashes, blocks = fields
     if magic != MPQ_HEADER_MAGIC:
         raise MPQLayoutError("无效的 MPQ 主头签名")
-    if header_size < MPQ_HEADER_SIZE_V1 or offset + header_size > len(data):
-        raise MPQLayoutError(f"MPQ 头大小非法：{header_size}")
+    protected_classic = data[:4] == WAR3_MAP_MAGIC and version == 0
+    header_size = normalize_classic_header_size(
+        offset,
+        header_size,
+        len(data),
+        protected_classic=protected_classic,
+    )
     if shift > 20:
         raise MPQLayoutError(f"MPQ 扇区大小非法：shift={shift}")
     if hashes <= 0 or hashes & (hashes - 1):
         raise MPQLayoutError(f"MPQ hash 表大小非法（应为 2 的幂）：{hashes}")
-    hash_offset = offset + hash_pos
-    block_offset = offset + block_pos
-    if hash_offset + hashes * 16 > len(data):
+    classic_table_offsets_use_wrap(
+        offset,
+        hash_pos,
+        block_pos,
+        protected_classic=protected_classic,
+    )
+    hash_offset = resolve_classic_table_offset(
+        offset,
+        hash_pos,
+        wrap_32bit=protected_classic,
+    )
+    block_offset = resolve_classic_table_offset(
+        offset,
+        block_pos,
+        wrap_32bit=protected_classic,
+    )
+    if hash_offset < 0 or hash_offset + hashes * 16 > len(data):
         raise MPQLayoutError("MPQ hash 表越界（文件损坏或非标准）")
-    if block_offset > len(data):
+    if block_offset < 0 or block_offset > len(data):
         raise MPQLayoutError("MPQ block 表起点越界（文件损坏或非标准）")
+    validate_classic_table_budget(hashes, blocks, block_offset, len(data))
     return MPQLayout(
         archive_offset=offset,
         header_size=header_size,

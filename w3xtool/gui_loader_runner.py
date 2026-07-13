@@ -34,6 +34,7 @@ class BackgroundLoaderMixin:
         self._load_token = 0
         self._load_pending: set[int] = set()
         self._load_poll_id: str | None = None
+        self._load_workers: dict[int, threading.Thread] = {}
 
     def _shutdown_background_loader(self) -> None:
         self._load_token += 1
@@ -42,9 +43,18 @@ class BackgroundLoaderMixin:
         if poll_id:
             try:
                 self.after_cancel(poll_id)
-            except Exception:  # noqa: BROAD_EXCEPT_OK - Tk may raise TclError during shutdown.
+            except Exception:  # noqa: BLE001  # noqa: BROAD_EXCEPT_OK - Tk may raise TclError during shutdown.
                 self._load_poll_id = None
         self._load_poll_id = None
+        for worker in self._load_workers.values():
+            worker.join()
+        self._load_workers.clear()
+        while True:
+            try:
+                _token, payload = self._load_results.get_nowait()
+            except queue.Empty:
+                break
+            _discard_loader_payload(payload)
 
     def _start_path_load(self, path: str) -> None:
         options = dict(self.load_options)
@@ -113,6 +123,7 @@ class BackgroundLoaderMixin:
             daemon=True,
             name=f"w3xray-loader-{token}",
         )
+        self._load_workers[token] = worker
         worker.start()
         self._schedule_load_poll()
 
@@ -125,7 +136,7 @@ class BackgroundLoaderMixin:
     ) -> None:
         try:
             payload = build_payload()
-        except Exception as exc:  # noqa: BROAD_EXCEPT_OK - worker boundary returns typed GUI payloads.
+        except Exception as exc:  # noqa: BLE001  # noqa: BROAD_EXCEPT_OK - worker boundary returns typed GUI payloads.
             traceback.print_exc()
             message = (
                 diagnose_archive_open(source_path, exc).message
@@ -147,6 +158,9 @@ class BackgroundLoaderMixin:
             except queue.Empty:
                 break
             self._load_pending.discard(token)
+            worker = self._load_workers.pop(token, None)
+            if worker is not None:
+                worker.join()
             if token != self._load_token:
                 _discard_loader_payload(payload)
                 continue
@@ -194,7 +208,7 @@ def _discard_loader_payload(payload: LoaderPayload) -> None:
             if resolver is not None and hasattr(resolver, "close"):
                 try:
                     resolver.close()
-                except Exception:  # noqa: BROAD_EXCEPT_OK - third-party resolver close is best effort.
+                except Exception:  # noqa: BLE001  # noqa: BROAD_EXCEPT_OK - third-party resolver close is best effort.
                     return
         case LoadedCampaign() | LoaderError():
             return
