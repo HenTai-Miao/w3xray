@@ -18,6 +18,8 @@ from .game_data_source import GameDataSource
 from .icon_resources import (
     AnonymousIconArchive,
     IconObjectReference,
+    NamedIconResource,
+    TrustedIconEvidenceSource,
     collect_icon_references,
     iter_anonymous_blps,
     resolve_named_icon,
@@ -30,6 +32,7 @@ def export_map_icons(
     maps: tuple[MapData, ...],
     stage: Path,
     game_source: GameDataSource | None,
+    source_digest: str,
 ) -> tuple[tuple[IconExportRecord, ...], int, int]:
     """Discover and stream-export every provable icon from one map tree."""
     records: list[IconExportRecord] = []
@@ -48,20 +51,7 @@ def export_map_icons(
                 if resource is None:
                     unresolved.add(reference.normalized_path.casefold())
                     continue
-                key = (resource.normalized_path.casefold(), resource.sha256)
-                previous = named_indexes.get(key)
-                if previous is None:
-                    named_indexes[key] = len(records)
-                    records.append(export_named_icon(str(stage), resource))
-                else:
-                    current = records[previous]
-                    merged = tuple(
-                        sorted(
-                            set((*current.objects, *resource.objects)),
-                            key=_reference_key,
-                        )
-                    )
-                    records[previous] = replace(current, objects=merged)
+                _merge_named_icon(records, named_indexes, stage, resource)
             ledger = item.extraction_ledger
             if ledger is None:
                 continue
@@ -74,6 +64,10 @@ def export_map_icons(
                 records.append(export_anonymous_icon(str(stage), resource))
                 exported += 1
             anonymous_failures += max(0, expected - exported)
+        if isinstance(game_source, TrustedIconEvidenceSource):
+            for resource in game_source.cached_icons_for(source_digest):
+                unresolved.discard(resource.normalized_path.casefold())
+                _merge_named_icon(records, named_indexes, stage, resource)
     return (
         canonicalize_icon_paths(stage, tuple(records)),
         len(unresolved),
@@ -119,6 +113,25 @@ def _anonymous_blp_count(ledger: ExtractionLedger) -> int:
 
 def _reference_key(item: IconObjectReference) -> tuple[str, str, str]:
     return item.category.casefold(), item.object_id, item.object_name
+
+
+def _merge_named_icon(
+    records: list[IconExportRecord],
+    named_indexes: dict[tuple[str, str], int],
+    stage: Path,
+    resource: NamedIconResource,
+) -> None:
+    key = (resource.normalized_path.casefold(), resource.sha256)
+    previous = named_indexes.get(key)
+    if previous is None:
+        named_indexes[key] = len(records)
+        records.append(export_named_icon(str(stage), resource))
+        return
+    current = records[previous]
+    merged = tuple(
+        sorted(set((*current.objects, *resource.objects)), key=_reference_key)
+    )
+    records[previous] = replace(current, objects=merged)
 
 
 def _canonical_path(name: str, actual_paths: dict[str, list[str]]) -> str:

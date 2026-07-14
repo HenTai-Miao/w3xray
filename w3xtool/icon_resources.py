@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from .extraction_ledger import BlockSource, BlockState, ExtractionLedger
-from .game_data_source import GameDataSource
 from .map_data import GameObject
 
 
@@ -17,6 +16,14 @@ class NamedIconArchive(Protocol):
 
     @property
     def path(self) -> str: ...
+
+    def has_file(self, name: str) -> bool: ...
+
+    def read_file(self, name: str) -> bytes: ...
+
+
+class NamedIconDataSource(Protocol):
+    """Minimal client-data surface needed for named icon resolution."""
 
     def has_file(self, name: str) -> bool: ...
 
@@ -44,6 +51,13 @@ class SourcedGameDataSource(Protocol):
     """Optional client-data capability that reports exact provenance."""
 
     def read_file_with_source(self, name: str) -> tuple[bytes, str]: ...
+
+
+@runtime_checkable
+class TrustedIconEvidenceSource(Protocol):
+    """Optional source capability for exact-map cached icon evidence."""
+
+    def cached_icons_for(self, source_digest: str) -> tuple[NamedIconResource, ...]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,7 +123,7 @@ def collect_icon_references(objects: Iterable[GameObject]) -> tuple[IconReferenc
 def resolve_named_icon(
     reference: IconReference,
     map_archives: Iterable[NamedIconArchive],
-    game_source: GameDataSource | None,
+    game_source: NamedIconDataSource | None,
 ) -> NamedIconResource | None:
     """Resolve raw icon bytes in map/campaign/client priority order."""
     candidates = _path_candidates(reference.normalized_path)
@@ -190,7 +204,7 @@ def _read_named(source: NamedIconArchive, name: str) -> bytes | None:
         return None
 
 
-def _read_client(source: GameDataSource, name: str) -> tuple[bytes, str] | None:
+def _read_client(source: NamedIconDataSource, name: str) -> tuple[bytes, str] | None:
     try:
         if not source.has_file(name):
             return None

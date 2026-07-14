@@ -18,7 +18,9 @@ _MAP = _ROOT / "tests" / "fixtures" / "maps" / "war3net-map-script-builder.w3x"
 _CAMPAIGN = _ROOT / "tests" / "fixtures" / "reference" / "stormlib-campaign.w3n"
 
 
-def test_core_acceptance_executes_map_campaign_export_and_repeat_load(tmp_path: Path) -> None:
+def test_core_acceptance_executes_map_campaign_export_and_repeat_load(
+    tmp_path: Path,
+) -> None:
     # Given: portable real map/campaign fixtures and a clean evidence directory.
     module = importlib.import_module("w3xtool.acceptance_runner")
     config = module.AcceptanceConfig(
@@ -76,7 +78,9 @@ def test_windows_acceptance_loads_bundled_casclib(
     loaded: list[Path] = []
 
     monkeypatch.setattr(module, "default_dll_path", lambda: dll)
-    monkeypatch.setattr(module, "CtypesCascLibApi", lambda *, dll_path: loaded.append(dll_path))
+    monkeypatch.setattr(
+        module, "CtypesCascLibApi", lambda *, dll_path: loaded.append(dll_path)
+    )
 
     # When: Windows acceptance proves the bundled CascLib runtime can load.
     check = module._bundled_casclib_check(require_windows=True)
@@ -154,12 +158,12 @@ def test_main_acceptance_mode_loads_and_visits_all_gui_tabs(tmp_path: Path) -> N
         check=False,
     )
 
-    # Then: the lane reports all nine tabs through the public entrypoint.
+    # Then: the lane reports all ten tabs through the public entrypoint.
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(report_path.read_text(encoding="utf-8"))
     gui_check = next(item for item in payload["checks"] if item["name"] == "gui_tabs")
     assert gui_check["status"] == "pass"
-    assert "tabs=9" in gui_check["detail"]
+    assert "tabs=10" in gui_check["detail"]
 
 
 def test_packaged_acceptance_rejects_partial_publication(
@@ -171,10 +175,12 @@ def test_packaged_acceptance_rejects_partial_publication(
     from w3xtool.knowledge_results import KnowledgeWriteItem, KnowledgeWriteReport
     from w3xtool.map_data import MapData
 
-    partial = KnowledgeWriteReport((
-        KnowledgeWriteItem("资料包目录.tsv", True, 10, None),
-        KnowledgeWriteItem("对象ID/单位.tsv", False, 0, "disk full"),
-    ))
+    partial = KnowledgeWriteReport(
+        (
+            KnowledgeWriteItem("资料包目录.tsv", True, 10, None),
+            KnowledgeWriteItem("对象ID/单位.tsv", False, 0, "disk full"),
+        )
+    )
 
     def publish(_md: MapData, pack_dir: str) -> KnowledgeWriteReport:
         path = Path(pack_dir)
@@ -182,7 +188,9 @@ def test_packaged_acceptance_rejects_partial_publication(
         (path / "资料包目录.tsv").write_text("ok", encoding="utf-8")
         return partial
 
-    monkeypatch.setattr(module, "load_map", lambda _path: MapData("fixture.w3x", "fixture"))
+    monkeypatch.setattr(
+        module, "load_map", lambda _path: MapData("fixture.w3x", "fixture")
+    )
     monkeypatch.setattr(module, "write_knowledge_pack_report", publish, raising=False)
 
     # When/Then: the packaged acceptance lane refuses to false-pass a partial pack.

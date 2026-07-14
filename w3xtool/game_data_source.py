@@ -17,6 +17,7 @@ from .game_data_inventory import (
     inventory_name_matches,
     known_path_entry,
 )
+from .trusted_icon_cache import TrustedIconCacheDataSource, is_trusted_icon_cache
 
 
 class GameDataSource(Protocol):
@@ -111,6 +112,10 @@ def probe_game_data_path(path: str | None) -> GameDataProbe:
         return GameDataProbe("missing", False, "未选择游戏数据目录")
     if not os.path.isdir(path):
         return GameDataProbe("missing", False, "路径不存在")
+    if is_trusted_icon_cache(path):
+        return GameDataProbe(
+            "trusted_icon_cache", True, "可信历史图标缓存：逐文件哈希只读", "cache"
+        )
     if is_classic_mpq_install(path):
         return GameDataProbe(
             "classic_mpq", True, "经典 MPQ 目录：按补丁优先级只读", "mpq"
@@ -146,6 +151,11 @@ def open_game_data_source(path: str | None) -> GameDataSource | None:
     probe = probe_game_data_path(path)
     if not probe.is_readable or path is None:
         return None
+    if probe.kind == "trusted_icon_cache":
+        try:
+            return TrustedIconCacheDataSource(path)
+        except OSError, ValueError:
+            return None
     if probe.kind == "classic_mpq":
         try:
             return ClassicMpqDataSource(path)

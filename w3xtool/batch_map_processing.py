@@ -78,7 +78,7 @@ def process_one_map(
         maps = item_reports.maps
         descriptions = audit_object_descriptions(item_reports.objects)
         icons, unresolved, anonymous_failures = export_map_icons(
-            root, maps, stage, game_source
+            root, maps, stage, game_source, fingerprint.sha256
         )
         ledgers = tuple(
             item.extraction_ledger for item in maps if item.extraction_ledger

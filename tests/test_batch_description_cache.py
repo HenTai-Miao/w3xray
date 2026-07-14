@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 import w3xtool.batch_runner as batch_runner
+from w3xtool.batch_description_cache import build_and_publish_description_cache
 from w3xtool.batch_models import MapBatchResult, MapBatchState, SourceFingerprint
 from w3xtool.batch_runner import BatchOptions, run_batch
 from w3xtool.load_context import MapLoadContext
@@ -101,10 +102,60 @@ def test_batch_builds_and_publishes_cache_before_processing_maps(
     assert rows[2][4] == "完整说明"
 
 
-def _write_owned_client_fill(output: Path) -> None:
+def test_batch_preserves_published_cache_when_client_rows_are_no_longer_present(
+    tmp_path: Path,
+) -> None:
+    # Given: the first run publishes trusted entries from owned client-fill rows.
+    output = tmp_path / "output"
+    _write_owned_client_fill(output)
+    first = build_and_publish_description_cache(str(output))
     report = output / "地图" / "legacy" / "对象描述.tsv"
+    marker = report.parent / ".w3xray-batch-owned"
+    report.unlink()
+    marker.unlink()
+    report.parent.rmdir()
+    report.parent.parent.rmdir()
+
+    # When: a later run has no remaining client-fill report to rediscover.
+    second = build_and_publish_description_cache(str(output))
+
+    # Then: the validated standalone cache remains available and republished.
+    assert len(first.entries) == len(second.entries) == 2
+    assert second.lookup("物品", "ratf", "扩展提示", None)[0].raw_value == "完整说明"
+
+
+def test_batch_removes_previous_value_when_current_owned_reports_conflict(
+    tmp_path: Path,
+) -> None:
+    # Given: a published value is followed by two current owned reports that disagree.
+    output = tmp_path / "output"
+    _write_owned_client_fill(output)
+    build_and_publish_description_cache(str(output))
+    _write_owned_client_fill(
+        output,
+        directory="conflict",
+        digest="b" * 64,
+        description="冲突说明",
+    )
+
+    # When: all historical and current candidates are rebuilt together.
+    cache = build_and_publish_description_cache(str(output))
+
+    # Then: the exact key is removed instead of retaining the stale published value.
+    assert cache.lookup("物品", "ratf", "扩展提示", None) == ()
+    assert cache.conflict_count == 1
+
+
+def _write_owned_client_fill(
+    output: Path,
+    *,
+    directory: str = "legacy",
+    digest: str = "a" * 64,
+    description: str = "完整说明",
+) -> None:
+    report = output / "地图" / directory / "对象描述.tsv"
     report.parent.mkdir(parents=True)
-    (report.parent / ".w3xray-batch-owned").write_text("a" * 64, encoding="ascii")
+    (report.parent / ".w3xray-batch-owned").write_text(digest, encoding="ascii")
     with report.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
         writer.writerow(_LEGACY_HEADER)
@@ -119,8 +170,8 @@ def _write_owned_client_fill(output: Path) -> None:
                 "基础提示",
                 "基础提示",
                 "base:ratf",
-                "完整说明",
-                "完整说明",
+                description,
+                description,
                 "base:ratf",
                 "客户端补全",
             )

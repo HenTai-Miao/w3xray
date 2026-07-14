@@ -7,9 +7,11 @@ from pathlib import Path
 from typing import Final, override
 
 from .description_cache import (
+    EMPTY_DESCRIPTION_CACHE,
     DescriptionCache,
     build_description_cache_from_batch,
     format_description_cache_tsv,
+    load_description_cache,
 )
 from .safe_output import write_text_safely
 from .safe_output_models import SafeWriteStatus
@@ -31,7 +33,14 @@ class BatchDescriptionCacheError(OSError):
 
 def build_and_publish_description_cache(output_root: str) -> DescriptionCache:
     """Freeze trusted owned evidence before any source map is processed."""
-    cache = build_description_cache_from_batch(Path(output_root))
+    root = Path(output_root)
+    report = root / DESCRIPTION_CACHE_REPORT
+    previous = (
+        load_description_cache(str(report))
+        if report.is_file()
+        else EMPTY_DESCRIPTION_CACHE
+    )
+    cache = build_description_cache_from_batch(root, previous)
     result = write_text_safely(
         output_root,
         DESCRIPTION_CACHE_REPORT,

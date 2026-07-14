@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from .gui_item_relation_layout import ALL_RELATIONS_LABEL, ItemRelationLayoutMixin
+from .gui_item_relation_layout import ItemRelationLayoutMixin
 from .item_relation_models import ItemRelation, RelationObject
 from .item_relation_presentation import format_relation_evidence
+from .item_relation_query import filter_item_relations
 from .map_data import GameObject
-from .search import compile_query
 from .theme import CARD, ROW_ALT
 
 
@@ -21,22 +21,13 @@ class ItemRelationGuiMixin(ItemRelationLayoutMixin):
         self.item_relation_rows = {}
         md = self.map_data
         records = () if md is None else md.item_relations.records
-        query = compile_query(self.item_relation_search.get().strip())
-        kind_filter = self.item_relation_kind.get()
-        confidence_filter = self.item_relation_confidence.get()
-        for relation in records:
-            if (
-                kind_filter != ALL_RELATIONS_LABEL
-                and relation.kind.value != kind_filter
-            ):
-                continue
-            if (
-                confidence_filter != ALL_RELATIONS_LABEL
-                and relation.confidence.value != confidence_filter
-            ):
-                continue
-            if query.score(format_relation_evidence(relation)) is None:
-                continue
+        visible = filter_item_relations(
+            records,
+            self.item_relation_search.get(),
+            self.item_relation_kind.get(),
+            self.item_relation_confidence.get(),
+        )
+        for relation in visible:
             iid = relation.relation_id
             self.item_relation_rows[iid] = relation
             tag = "odd" if len(self.item_relation_rows) % 2 else "even"

@@ -5,11 +5,13 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, assert_never
 
+from .base_names import BASE_NAMES
 from .base_objects import BASE_OBJECTS
 from .map_archive_reader import MapArchiveReader
 from .map_data import GameObject, MapData
 from .object_candidates import (
     ObjectCandidate,
+    ObjectFieldValue,
     ObjectSourceKind,
     collect_object_candidates,
 )
@@ -38,10 +40,14 @@ def populate_object_pipeline(
     client_text_available: bool = False,
 ) -> None:
     """Replace object buckets and index from one final candidate merge."""
+    from .description_cache import EMPTY_DESCRIPTION_CACHE
+
+    cache = description_cache or EMPTY_DESCRIPTION_CACHE
     source_candidates = tuple(candidates)
     all_candidates = source_candidates
     if source_candidates and include_named_bases:
         all_candidates += named_base_candidates(base_objects)
+        all_candidates += _cached_base_candidates(cache)
     md.object_source_counts = _object_source_counts(all_candidates)
     objects = merge_object_candidates(all_candidates, base_objects)
     buckets: dict[str, list[GameObject]] = {}
@@ -49,15 +55,43 @@ def populate_object_pipeline(
         buckets.setdefault(item.category, []).append(item)
     md.objects = buckets
     md.obj_index = build_object_index(objects)
-    from .description_cache import EMPTY_DESCRIPTION_CACHE
     from .object_text_index import build_object_text_index
 
     md.object_texts = build_object_text_index(
         objects,
         source_candidates,
         client_objects,
-        description_cache or EMPTY_DESCRIPTION_CACHE,
+        cache,
         client_text_available=client_text_available,
+    )
+
+
+def _cached_base_candidates(
+    cache: DescriptionCache,
+) -> tuple[ObjectCandidate, ...]:
+    identities = sorted(
+        {(entry.category, entry.base_id) for entry in cache.entries},
+        key=lambda value: (value[0].casefold(), value[1]),
+    )
+    return tuple(
+        ObjectCandidate(
+            category,
+            base_id,
+            base_id,
+            False,
+            "base",
+            (
+                ObjectFieldValue(
+                    "display:name",
+                    "名称",
+                    BASE_NAMES.get(base_id, base_id),
+                    "base names",
+                    ObjectSourceKind.BASE,
+                ),
+            ),
+            (),
+        )
+        for category, base_id in identities
     )
 
 

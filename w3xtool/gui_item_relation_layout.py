@@ -9,6 +9,7 @@ from typing import Final
 import customtkinter as ctk
 
 from .item_relation_models import ItemRelation, ItemRelationKind, RelationConfidence
+from .item_relation_query import ALL_RELATIONS_LABEL
 from .theme import (
     BG,
     BORDER,
@@ -23,7 +24,6 @@ from .theme import (
     secondary_button_style,
 )
 
-ALL_RELATIONS_LABEL: Final = "全部"
 _COLUMNS: Final = (
     ("kind", "关系类型", 130),
     ("item", "装备", 200),

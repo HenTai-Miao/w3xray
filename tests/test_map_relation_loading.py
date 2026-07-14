@@ -11,6 +11,9 @@ from w3xtool.gui_loader import LoadedMap, load_path_payload
 from w3xtool.load_context import MapLoadContext
 from w3xtool.map_data import MapData
 from w3xtool.map_loader import _load_map_impl
+from w3xtool.object_candidates import ObjectCandidate
+from w3xtool.object_pipeline import populate_object_pipeline
+from w3xtool.object_text_models import ObjectTextState
 
 
 class _Archive:
@@ -105,3 +108,44 @@ def test_description_cache_path_reaches_gui_map_load_context(tmp_path: Path) -> 
     # Then: the context is not optimized away and contains the selected evidence.
     assert captured[0] is not None
     assert captured[0].description_cache.lookup("物品", "ratf", "扩展提示", None)
+
+
+def test_cache_only_base_identity_is_materialized_without_client_data() -> None:
+    # Given: a verified client description exists only in the trusted cache.
+    cache = DescriptionCache.build(
+        (
+            DescriptionCacheEntry(
+                "单位",
+                "Ewar",
+                "基础提示",
+                None,
+                "召唤守望者",
+                "召唤守望者",
+                "a" * 64,
+                "owned.tsv",
+            ),
+        )
+    )
+    source = ObjectCandidate("物品", "I001", "ratf", True, "w3t", (), ())
+    md = MapData("fixture.w3x", "fixture")
+
+    # When: the map loads without client tables but with the trusted cache.
+    populate_object_pipeline(
+        md,
+        (source,),
+        {},
+        description_cache=cache,
+        client_text_available=False,
+    )
+
+    # Then: the base object exists and its cached role remains searchable.
+    assert md.obj_index["Ewar"].is_custom is False
+    row = next(
+        item
+        for item in md.object_texts.for_object("单位", "Ewar")
+        if item.role == "基础提示"
+    )
+    assert (row.raw_value, row.state) == (
+        "召唤守望者",
+        ObjectTextState.CACHE_FILL,
+    )
