@@ -14,7 +14,6 @@ from .gui_topbar import build_topbar
 from .map_gallery import build_map_gallery
 from .object_gallery import build_object_gallery
 from .theme import (
-    ACCENT,
     ACCENT_DARK,
     ACCENT_HOVER,
     BG,
@@ -34,11 +33,9 @@ from .theme import (
     SUBTLE,
     TEXT,
     TEXT_STRONG,
-    TITLE_FONT,
     TOPBAR,
     card_style,
     entry_style,
-    primary_button_style,
     secondary_button_style,
 )
 
@@ -71,13 +68,14 @@ class ShellLayoutMixin:
         )
         self.tabs.pack(fill="both", expand=True)
         self.editor_tab_labels = (
-            "总览", "对象编辑器", "地图信息", "GUI触发器", "场景放置", "触发指令",
-            "合成配方", "孤立对象", "分析报告")
+            "总览", "对象编辑器", "地图信息", "GUI触发器", "场景放置", "掉落/获取",
+            "触发指令", "合成配方", "孤立对象", "分析报告")
         self.tab_overview = self.tabs.add("总览")
         self.tab_obj = self.tabs.add("对象编辑器")
         self.tab_info = self.tabs.add("地图信息")
         self.tab_trigger_eca = self.tabs.add("GUI触发器")
         self.tab_pre = self.tabs.add("场景放置")
+        self.tab_item_relations = self.tabs.add("掉落/获取")
         self.tab_cmd = self.tabs.add("触发指令")
         self.tab_rec = self.tabs.add("合成配方")
         self.tab_orphan = self.tabs.add("孤立对象")
@@ -87,6 +85,7 @@ class ShellLayoutMixin:
         self._build_info_tab(self.tab_info)
         self._build_trigger_eca_tab(self.tab_trigger_eca)
         self._build_preplaced_tab(self.tab_pre)
+        self._build_item_relation_tab(self.tab_item_relations)
         self._build_cmd_tab(self.tab_cmd)
         self._build_rec_tab(self.tab_rec)
         self._build_orphan_tab(self.tab_orphan)

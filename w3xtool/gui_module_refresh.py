@@ -46,6 +46,7 @@ class ModuleRefreshMixin:
         self._refresh_orphans() if self._load_option_enabled(ORPHANS_KEY) else self._clear_orphans()
         self._refresh_info() if self._load_option_enabled(MAP_INFO_KEY) else self._clear_info()
         self._refresh_editor_reports() if self._load_option_enabled(REPORTS_KEY) else self._clear_reports()
+        self._refresh_item_relations()
 
     def _clear_object_browser(self) -> None:
         for cat in PARALLEL_CATS:

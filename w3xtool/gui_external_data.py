@@ -8,6 +8,7 @@ from tkinter import filedialog, messagebox
 
 from .api import tmp_extract_dir
 from .author_plaintext_bundle import MANIFEST_NAME
+from .description_cache import load_description_cache
 from .knowledge_io import write_text
 from .real_save_files import analyze_real_save_path, format_real_save_report_tsv
 
@@ -33,10 +34,53 @@ class ExternalDataToolsMixin:
         self._refresh_external_source_labels()
         self._reload_active_source()
 
+    def on_pick_description_cache(self) -> None:
+        path = filedialog.askopenfilename(
+            title="选择 W3XRAY 可信描述缓存",
+            filetypes=[("TSV 缓存", "*.tsv"), ("所有文件", "*.*")],
+        )
+        if not path:
+            return
+        issue = _description_cache_issue(path)
+        if issue:
+            messagebox.showerror("可信描述缓存无效", issue)
+            return
+        self.description_cache_path = path
+        self._save_config(description_cache_path=path)
+        self._refresh_description_cache_state()
+        self._reload_active_source()
+
+    def on_clear_description_cache(self) -> None:
+        self.description_cache_path = None
+        self._save_config(description_cache_path=None)
+        self._refresh_description_cache_state()
+        self._reload_active_source()
+
+    def _restore_description_cache(self) -> None:
+        path = self._load_config().get("description_cache_path")
+        self.description_cache_path = (
+            path
+            if isinstance(path, str) and not _description_cache_issue(path)
+            else None
+        )
+        self._refresh_description_cache_state()
+
+    def _refresh_description_cache_state(self) -> None:
+        if hasattr(self, "data_tools_menu"):
+            self.data_tools_menu.entryconfigure(
+                "清除可信描述缓存",
+                state="normal" if self.description_cache_path else "disabled",
+            )
+        if hasattr(self, "data_tools_button"):
+            active = bool(self.author_bundle_path or self.description_cache_path)
+            self.data_tools_button.configure(text="数据工具*" if active else "数据工具")
+
     def on_analyze_real_save_file(self) -> None:
         if not self._need_map():
             return
-        path = filedialog.askopenfilename(title="选择真实存档文件", filetypes=[("所有文件", "*.*")])
+        path = filedialog.askopenfilename(
+            title="选择真实存档文件", filetypes=[("所有文件", "*.*")]
+        )
         if path:
             self._start_real_save_analysis(path)
 
@@ -55,12 +99,23 @@ class ExternalDataToolsMixin:
         def work() -> None:
             try:
                 report = analyze_real_save_path(path, md)
-                count = write_text(out, "真实存档分析.tsv", format_real_save_report_tsv(report))
+                count = write_text(
+                    out, "真实存档分析.tsv", format_real_save_report_tsv(report)
+                )
                 if report.warnings:
-                    count += write_text(out, "真实存档警告.txt", "\n".join(report.warnings) + "\n")
+                    count += write_text(
+                        out, "真实存档警告.txt", "\n".join(report.warnings) + "\n"
+                    )
                 self.after(0, lambda: self._open_dir(out, count, "存档分析文件"))
-            except Exception as exc:  # noqa: BROAD_EXCEPT_OK - GUI worker reports bounded analysis failures.
+            except Exception as exc:  # noqa: BLE001  # noqa: BROAD_EXCEPT_OK - GUI worker boundary reports failures.
                 message = str(exc)
                 self.after(0, lambda: messagebox.showerror("存档分析失败", message))
 
         threading.Thread(target=work, daemon=True).start()
+
+
+def _description_cache_issue(path: str) -> str:
+    if os.path.islink(path) or not os.path.isfile(path):
+        return f"必须选择普通且非符号链接的缓存文件：{path}"
+    cache = load_description_cache(path)
+    return "\n".join(cache.diagnostics)

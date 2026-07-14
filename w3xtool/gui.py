@@ -15,6 +15,7 @@ from .gui_data_tabs import DataTabLayoutMixin
 from .gui_export_actions import ExportActionsMixin
 from .gui_external_data import ExternalDataToolsMixin
 from .gui_icon_cache import IconCacheMixin
+from .gui_item_relations import ItemRelationGuiMixin
 from .gui_lifecycle import GuiLifecycleMixin
 from .gui_load_settings import LoadSettingsMixin
 from .gui_loader_runner import BackgroundLoaderMixin
@@ -35,6 +36,7 @@ ctk.set_default_color_theme("green")
 class App(
     CascBrowserMixin,
     ExternalDataToolsMixin,
+    ItemRelationGuiMixin,
     LoadSettingsMixin,
     IconCacheMixin,
     ModuleRefreshMixin,
@@ -72,6 +74,7 @@ class App(
         self.external_listfile_path = None
         self.game_data_path = None
         self.author_bundle_path = None
+        self.description_cache_path = None
         self.mode = "battle"
         self._campaign_views = None
         self._campaign_path = None
@@ -91,6 +94,7 @@ class App(
         self._init_pane_state()
         self._build_topbar()
         self._restore_external_sources()
+        self._restore_description_cache()
         self._build_tabs()
         self._build_statusbar()
         self._setup_tree_style()

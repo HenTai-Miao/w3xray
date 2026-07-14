@@ -8,6 +8,7 @@
 复位回 `__init__` 的干净基线（清空各 Treeview、还原会被断言读取的列宽与
 导航状态），App 在进程退出时统一销毁。
 """
+
 import atexit
 import time
 import unittest
@@ -22,7 +23,7 @@ def _get_app() -> App:
     global _APP
     if _APP is None:
         _APP = App()
-        _APP.withdraw()                 # 测试期间不弹窗
+        _APP.withdraw()  # 测试期间不弹窗
         atexit.register(_teardown)
     return _APP
 
@@ -53,6 +54,7 @@ class GuiTestCase(unittest.TestCase):
         app.external_listfile_path = None
         app.game_data_path = None
         app.author_bundle_path = None
+        app.description_cache_path = None
         app._refresh_external_source_labels()
         app.recipes = []
         app._apply_load_options(default_load_options(), persist=False, refresh=False)
@@ -61,8 +63,16 @@ class GuiTestCase(unittest.TestCase):
         app._dir_campaigns = []
         app._node_map = {}
         # 清空所有 Treeview，避免上个用例的行/iid 残留
-        for tv in (app.map_list, app.cmd_tree, app.rec_tree, app.trigger_eca_tree,
-                   app.unit_tree, app.doodad_tree, *app.col_trees.values()):
+        for tv in (
+            app.map_list,
+            app.cmd_tree,
+            app.rec_tree,
+            app.trigger_eca_tree,
+            app.item_relation_tree,
+            app.unit_tree,
+            app.doodad_tree,
+            *app.col_trees.values(),
+        ):
             tv.delete(*tv.get_children())
         for cat in app.col_results:
             app.col_results[cat] = []
@@ -79,10 +89,18 @@ class GuiTestCase(unittest.TestCase):
         app._trigger_eca_groups = ()
         app._trigger_eca_map = None
         app.trigger_eca_status.configure(
-            text="打开地图后这里列出 GUI 触发器事件、条件、动作与嵌套调用")
+            text="打开地图后这里列出 GUI 触发器事件、条件、动作与嵌套调用"
+        )
         app.trigger_eca_detail.configure(state="normal")
         app.trigger_eca_detail.delete("1.0", "end")
         app.trigger_eca_detail.configure(state="disabled")
+        app.item_relation_search.set("")
+        app.item_relation_kind.set("全部")
+        app.item_relation_confidence.set("全部")
+        app.item_relation_rows = {}
+        app._set_relation_detail("")
+        app.item_relation_target_button.configure(state="disabled")
+        app.item_relation_source_button.configure(state="disabled")
         # 地图信息框复位（只读 textbox 需临时切到可写态清空）
         app.info_box.configure(state="normal")
         app.info_box.delete("1.0", "end")

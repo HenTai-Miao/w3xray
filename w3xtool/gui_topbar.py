@@ -81,6 +81,9 @@ def build_topbar(app) -> None:
     app.data_tools_menu.add_command(label="选择作者明文补充包", command=app.on_pick_author_bundle)
     app.data_tools_menu.add_command(label="清除作者明文补充包", command=app.on_clear_author_bundle)
     app.data_tools_menu.add_separator()
+    app.data_tools_menu.add_command(label="选择可信描述缓存", command=app.on_pick_description_cache)
+    app.data_tools_menu.add_command(label="清除可信描述缓存", command=app.on_clear_description_cache)
+    app.data_tools_menu.add_separator()
     app.data_tools_menu.add_command(label="分析真实存档文件", command=app.on_analyze_real_save_file)
     app.data_tools_menu.add_command(label="分析真实存档目录", command=app.on_analyze_real_save_directory)
     app.data_tools_button = ctk.CTkButton(

@@ -13,8 +13,8 @@ class TestEditorStyleLayout(GuiTestCase):
     def test_editor_tabs_are_present(self):
         # Given: the GUI has been constructed.
         expected = (
-            "总览", "对象编辑器", "地图信息", "GUI触发器", "场景放置", "触发指令",
-            "合成配方", "孤立对象", "分析报告",
+            "总览", "对象编辑器", "地图信息", "GUI触发器", "场景放置", "掉落/获取",
+            "触发指令", "合成配方", "孤立对象", "分析报告",
         )
 
         # When/Then: the editor-style workspace exposes the expected sections.

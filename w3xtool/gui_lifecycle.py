@@ -124,7 +124,7 @@ class GuiLifecycleMixin:
             clear_state = "normal" if self.author_bundle_path else "disabled"
             self.data_tools_menu.entryconfigure("清除作者明文补充包", state=clear_state)
         if hasattr(self, "data_tools_button"):
-            self.data_tools_button.configure(text="数据工具*" if self.author_bundle_path else "数据工具")
+            self._refresh_description_cache_state()
 
     def _on_close(self) -> None:
         dialog = getattr(self, "_casc_browser_dialog", None)
