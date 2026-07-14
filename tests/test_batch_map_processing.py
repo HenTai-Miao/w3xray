@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import csv
 import hashlib
+import io
 import struct
 from collections.abc import Iterable
 from contextlib import nullcontext
@@ -162,10 +164,10 @@ def test_process_one_map_publishes_named_anonymous_and_description_artifacts(
     assert (result.original_written_count, result.png_written_count) == (2, 2)
     assert tuple(output.glob("图标/原始/具名/Icons/*.blp"))
     assert tuple(output.glob("图标/原始/匿名/*.blp"))
-    assert "|cffffcc00说明|r|n第二行" in (output / "对象描述.tsv").read_text(
-        encoding="utf-8"
-    )
-    assert "说明\\n第二行" in (output / "对象描述.tsv").read_text(encoding="utf-8")
+    description_text = (output / "对象描述.tsv").read_text(encoding="utf-8")
+    description = next(csv.DictReader(io.StringIO(description_text), delimiter="\t"))
+    assert description["原始说明"] == "|cffffcc00说明|r|n第二行"
+    assert description["可读说明"] == "说明\n第二行"
     assert archive_source.closed
 
 

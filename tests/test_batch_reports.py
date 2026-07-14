@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import io
 from pathlib import Path
 
 import pytest
@@ -104,7 +105,9 @@ def test_description_tsv_keeps_raw_and_readable_columns_separate() -> None:
 
     # Then
     assert "原始说明\t可读说明\t说明来源\t完整性状态" in report
-    assert "|cffff0000说明|r|n第二行\t说明\\n第二行\twar3map.w3a\t地图原值" in report
+    row = next(csv.DictReader(io.StringIO(report), delimiter="\t"))
+    assert row["原始说明"] == "|cffff0000说明|r|n第二行"
+    assert row["可读说明"] == "说明\n第二行"
 
 
 def test_description_tsv_preserves_a_leading_quote_without_merging_columns() -> None:
@@ -123,6 +126,24 @@ def test_description_tsv_preserves_a_leading_quote_without_merging_columns() -> 
     assert row["原始说明"] == text
     assert row["可读说明"] == text
     assert row["完整性状态"] == DescriptionState.MAP_VALUE.value
+
+
+def test_description_tsv_round_trips_tabs_and_physical_newlines() -> None:
+    # Given: legacy description output receives lossless raw evidence.
+    text = '"开头\t字段\r\n第二行\n第三行'
+    record = _description_record(
+        raw_description=text,
+        readable_description="开头\t字段\n第二行\n第三行",
+    )
+
+    # When: the report is parsed by the standard TSV reader.
+    row = next(
+        csv.DictReader(io.StringIO(format_description_tsv((record,))), delimiter="\t")
+    )
+
+    # Then: quoted TSV restores both versions exactly.
+    assert row["原始说明"] == text
+    assert row["可读说明"] == "开头\t字段\n第二行\n第三行"
 
 
 def test_icon_index_includes_true_source_and_all_object_references() -> None:
