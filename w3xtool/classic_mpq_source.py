@@ -66,6 +66,7 @@ class ClassicMpqDataSource:
                 archive.close()
             raise
         self.root = str(Path(root))
+        self._paths = paths
         self._archives = tuple(archives)
         self._closed = False
 
@@ -76,10 +77,15 @@ class ClassicMpqDataSource:
 
     def read_file(self, name: str) -> bytes:
         """Read the highest-priority matching member."""
+        payload, _source_path = self.read_file_with_source(name)
+        return payload
+
+    def read_file_with_source(self, name: str) -> tuple[bytes, str]:
+        """Read a member and identify the exact MPQ layer that supplied it."""
         member = _member_name(name)
-        for archive in self._archives:
+        for source_path, archive in zip(self._paths, self._archives, strict=True):
             if archive.has_file(member):
-                return archive.read_file(member)
+                return archive.read_file(member), source_path
         raise FileNotFoundError(name)
 
     def close(self) -> None:

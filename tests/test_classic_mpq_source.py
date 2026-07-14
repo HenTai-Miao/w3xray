@@ -51,6 +51,25 @@ def test_classic_source_reads_the_highest_priority_archive(tmp_path: Path) -> No
     source.close()
 
 
+def test_classic_source_reports_the_archive_that_supplied_a_member(tmp_path: Path) -> None:
+    # Given
+    archives = {
+        "War3Patch.mpq": _FakeArchive({"Icons\\BTN.blp": b"patch"}),
+        "war3.mpq": _FakeArchive({"Icons\\BTN.blp": b"base"}),
+    }
+    for name in archives:
+        (tmp_path / name).touch()
+    source = ClassicMpqDataSource(str(tmp_path), archive_factory=_factory(archives))
+
+    # When
+    payload, source_path = source.read_file_with_source("Icons/BTN.blp")
+
+    # Then
+    assert payload == b"patch"
+    assert Path(source_path).name == "War3Patch.mpq"
+    source.close()
+
+
 def test_classic_paths_follow_documented_priority(tmp_path: Path) -> None:
     # Given
     for name in ("war3.mpq", "War3x.mpq", "War3xLocal.mpq", "War3Patch.mpq"):
