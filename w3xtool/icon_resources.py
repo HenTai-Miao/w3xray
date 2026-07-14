@@ -160,7 +160,7 @@ def iter_anonymous_blps(
 
 
 def _normalize_icon_path(path: str) -> str:
-    return path.strip().strip('"').replace("/", "\\").lstrip("\\")
+    return path.strip().strip('"').replace("/", "\\")
 
 
 def _path_candidates(path: str) -> tuple[str, ...]:
