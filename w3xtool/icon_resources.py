@@ -29,6 +29,7 @@ class AnonymousIconBlock(Protocol):
     file_size: int
 
 
+@runtime_checkable
 class AnonymousIconArchive(Protocol):
     """Block-level surface used to reopen ledger evidence."""
 
@@ -75,6 +76,7 @@ class AnonymousIconResource:
     payload: bytes
     sha256: str
     basename: str
+    source_path: str
     ledger_source: BlockSource
     ledger_state: BlockState
     original_path: None = None
@@ -154,6 +156,7 @@ def iter_anonymous_blps(
             payload=payload,
             sha256=digest,
             basename=f"block_{block_index:06d}_{digest[:8]}",
+            source_path=ledger.source_path,
             ledger_source=entry.source,
             ledger_state=entry.state,
         )

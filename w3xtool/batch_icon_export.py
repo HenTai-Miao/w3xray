@@ -93,7 +93,7 @@ def export_anonymous_icon(root: str, resource: AnonymousIconResource) -> IconExp
         kind=IconKind.ANONYMOUS,
         requested_path="",
         resolved_path="",
-        source_path=resource.ledger_source.value,
+        source_path=resource.source_path,
         block_index=resource.block_index,
         digest=resource.sha256,
         payload=resource.payload,

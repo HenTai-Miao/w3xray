@@ -22,6 +22,7 @@ def _anonymous_resource(payload: bytes, *, block_index: int = 9) -> AnonymousIco
         payload=payload,
         sha256=digest,
         basename=f"block_{block_index:06d}_{digest[:8]}",
+        source_path="map.w3x",
         ledger_source=BlockSource.ARCHIVE_RECOVERED,
         ledger_state=BlockState.DECODED,
     )

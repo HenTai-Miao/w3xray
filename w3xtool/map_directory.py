@@ -11,10 +11,32 @@ from typing import Final
 from .api import quick_map_name
 
 BATTLE_MAP_EXTENSIONS: Final = frozenset({".w3x", ".w3m"})
+MAP_SOURCE_EXTENSIONS: Final = frozenset({".w3x", ".w3m", ".w3n"})
 DEFAULT_SCAN_WORKERS: Final = 8
 
 MapNameLoader = Callable[[str], str]
 BattleMapEntry = tuple[str, str]
+
+
+def scan_map_sources(directory: str) -> tuple[str, ...]:
+    """Return every supported map or campaign in stable relative-path order."""
+    root_path = os.path.abspath(directory)
+    sources: list[str] = []
+    for root, dirs, files in os.walk(root_path):
+        dirs.sort(key=lambda name: (name.casefold(), name))
+        files.sort(key=lambda name: (name.casefold(), name))
+        for filename in files:
+            if Path(filename).suffix.casefold() in MAP_SOURCE_EXTENSIONS:
+                sources.append(os.path.join(root, filename))
+    return tuple(
+        sorted(
+            sources,
+            key=lambda path: (
+                os.path.relpath(path, root_path).casefold(),
+                os.path.relpath(path, root_path),
+            ),
+        ),
+    )
 
 
 def scan_battle_maps(

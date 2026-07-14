@@ -181,6 +181,7 @@ def test_anonymous_blp_name_uses_block_and_payload_digest() -> None:
     digest = hashlib.sha256(payload).hexdigest()
     assert resources[0].basename == f"block_000017_{digest[:8]}"
     assert resources[0].original_path is None
+    assert resources[0].source_path == "map.w3x"
     assert archive.read_indexes == [17]
 
 
