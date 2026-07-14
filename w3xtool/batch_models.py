@@ -1,0 +1,62 @@
+"""Immutable state models shared by batch extraction and reporting."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import StrEnum
+from typing import override
+
+
+class MapBatchState(StrEnum):
+    COMPLETE = "完整"
+    PARTIAL = "部分完成"
+    RESTRICTED = "受限"
+    FAILED = "失败"
+
+
+@dataclass(frozen=True, slots=True)
+class BatchStateFormatError(ValueError):
+    """Reject malformed or incompatible persisted batch state."""
+
+    detail: str
+
+    @override
+    def __str__(self) -> str:
+        return self.detail
+
+
+@dataclass(frozen=True, slots=True)
+class SourceFingerprint:
+    path: str
+    size: int
+    mtime_ns: int
+    sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class MapBatchResult:
+    source: SourceFingerprint
+    display_name: str
+    output_directory: str
+    stage: str
+    state: MapBatchState
+    first_error: str
+    object_count: int
+    description_counts: tuple[tuple[str, int], ...]
+    named_icon_count: int
+    anonymous_icon_count: int
+    original_written_count: int
+    png_written_count: int
+    icon_failure_count: int
+    restricted_block_count: int
+    elapsed_ms: int
+
+
+@dataclass(frozen=True, slots=True)
+class BatchState:
+    schema_version: int
+    results: tuple[MapBatchResult, ...]
+
+    def __post_init__(self) -> None:
+        if self.schema_version != 1:
+            raise BatchStateFormatError("unsupported batch state schema")
