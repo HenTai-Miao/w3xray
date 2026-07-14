@@ -10,11 +10,14 @@ from .item_relation_endpoints import doo_evidence, relation_resolution, resolve_
 from .item_relation_fields import object_field_relations
 from .item_relation_models import (
     ItemRelation,
+    ItemRelationIndex,
     ItemRelationKind,
     RelationCompleteness,
     RelationConfidence,
     RelationObject,
 )
+from .item_relation_recipes import build_recipe_item_relations
+from .item_relation_scripts import build_script_item_relations
 from .map_data import MapData
 
 
@@ -25,6 +28,14 @@ def build_structural_item_relations(md: MapData) -> tuple[ItemRelation, ...]:
     rows.extend(_doodad_drop_relations(md))
     rows.extend(object_field_relations(md))
     return tuple(rows)
+
+
+def build_item_relation_index(md: MapData) -> ItemRelationIndex:
+    """Build one immutable index from every supported static relation channel."""
+    rows = list(build_structural_item_relations(md))
+    rows.extend(build_recipe_item_relations(md))
+    rows.extend(build_script_item_relations(md))
+    return ItemRelationIndex.build(rows)
 
 
 def _unit_placement_relations(md: MapData) -> Iterable[ItemRelation]:

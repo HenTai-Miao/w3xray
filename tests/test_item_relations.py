@@ -2,7 +2,10 @@
 
 from w3xtool.doo import Doodad, Unit
 from w3xtool.doo_drops import DropEntry, DropSet
-from w3xtool.item_relation_builder import build_structural_item_relations
+from w3xtool.item_relation_builder import (
+    build_item_relation_index,
+    build_structural_item_relations,
+)
 from w3xtool.item_relation_models import ItemRelationKind, RelationCompleteness
 from w3xtool.map_data import GameObject, MapData
 
@@ -216,3 +219,38 @@ def test_shop_without_placement_remains_as_partial_type_level_evidence() -> None
     assert row.instance_serial is None
     assert row.completeness is RelationCompleteness.PARTIAL
     assert "未预放置" in row.unresolved_reason
+
+
+def test_combined_index_counts_recipe_materials_and_preserves_source_evidence() -> None:
+    # Given: a source-aware recipe with a duplicate material.
+    objects = (
+        _object("物品", "I001", "材料甲"),
+        _object("物品", "I002", "材料乙"),
+        _object("物品", "I999", "成品"),
+    )
+    script = "\n".join((
+        "function Forge takes nothing returns nothing",
+        "call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I001'))",
+        "call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I001'))",
+        "call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I002'))",
+        "call UnitAddItemById(u, 'I999')",
+        "endfunction",
+    ))
+    md = MapData(path="x.w3x", name="配方图", scripts={"war3map.j": script})
+    md.objects = {"物品": list(objects)}
+    md.obj_index = {item.obj_id: item for item in objects}
+
+    # When: every relation channel is combined into one immutable index.
+    index = build_item_relation_index(md)
+
+    # Then: the recipe retains counted ingredients and source/function/line evidence.
+    recipe = next(row for row in index.records if row.kind is ItemRelationKind.RECIPE)
+    assert [(entry.item.object_id, entry.count) for entry in recipe.ingredients] == [
+        ("I001", 2),
+        ("I002", 1),
+    ]
+    assert (
+        recipe.evidence.source,
+        recipe.evidence.function,
+        recipe.evidence.line,
+    ) == ("war3map.j", "Forge", 5)

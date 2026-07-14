@@ -7,7 +7,7 @@ from bisect import bisect_right
 from dataclasses import dataclass
 from typing import Final
 
-from .api import MapData
+from .map_data import MapData
 from .presentation_safety import tsv_cell as _tsv
 from .save_call_context import extract_call_args, unescape_arg
 from .script_function_index import ScriptFunction, build_script_function_index
