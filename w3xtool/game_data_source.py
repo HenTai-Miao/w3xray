@@ -10,6 +10,7 @@ from typing import Protocol, final
 from .casclib_api import CascLibLoadError, CascNativeError
 from .casclib_source import CascLibDataSource, probe_casclib
 from .casc_source import CascDataSource, has_casc_path_map
+from .classic_mpq_source import ClassicMpqDataSource, is_classic_mpq_install
 from .game_data_inventory import (
     GameDataEntry,
     GameDataInventoryView,
@@ -110,6 +111,8 @@ def probe_game_data_path(path: str | None) -> GameDataProbe:
         return GameDataProbe("missing", False, "未选择游戏数据目录")
     if not os.path.isdir(path):
         return GameDataProbe("missing", False, "路径不存在")
+    if is_classic_mpq_install(path):
+        return GameDataProbe("classic_mpq", True, "经典 MPQ 目录：按补丁优先级只读", "mpq")
     if _looks_like_native_casc(path):
         native_probe = probe_casclib(path)
         if native_probe.is_available:
@@ -141,6 +144,11 @@ def open_game_data_source(path: str | None) -> GameDataSource | None:
     probe = probe_game_data_path(path)
     if not probe.is_readable or path is None:
         return None
+    if probe.kind == "classic_mpq":
+        try:
+            return ClassicMpqDataSource(path)
+        except (OSError, ValueError):
+            return None
     if probe.kind == "native_casc":
         if probe.backend == "casclib":
             try:
