@@ -6,6 +6,7 @@ import struct
 
 import pytest
 
+from w3xtool.client_object_data import snapshot_client_base_objects
 from w3xtool.load_context import build_map_load_context
 from w3xtool.map_data import MapData
 from w3xtool.map_loader import _load_map_impl
@@ -82,6 +83,42 @@ def test_load_context_snapshots_client_bases_before_closing_source(
     md = _load_map_impl(archive, archive.path, 0, None, context)
     assert md.obj_index["H001"].name == "Client Base"
     assert md.obj_index["H001"].icon.endswith("BTNClient.blp")
+
+
+def test_client_snapshot_retains_all_text_evidence_after_source_close() -> None:
+    # Given: both Func and Strings tables contain distinct values for one base object.
+    source = FakeClientSource(
+        {
+            "Units\\HumanUnitFunc.txt": b"[hX01]\nName=Internal\nUbertip=First\n",
+            "Units\\HumanUnitStrings.txt": b"[hX01]\nName=Localized\nUbertip=Second\n",
+        },
+    )
+
+    # When: client evidence is snapshotted and the native source is closed.
+    snapshot = snapshot_client_base_objects(source)
+    source.close()
+
+    # Then: availability and both source-bearing variants survive independently.
+    assert snapshot.text_available is True
+    assert len(snapshot.objects) == 1
+    evidence = snapshot.objects[0].evidence_fields
+    assert {field.value for field in evidence if field.key.casefold() == "ubertip"} == {
+        "First",
+        "Second",
+    }
+    assert {field.source for field in evidence if field.key.casefold() == "ubertip"} == {
+        "Units\\HumanUnitFunc.txt",
+        "Units\\HumanUnitStrings.txt",
+    }
+
+
+def test_absent_client_source_has_no_text_availability() -> None:
+    # Given / When: no Warcraft client source is selected.
+    snapshot = snapshot_client_base_objects(None)
+
+    # Then: the absence is explicit rather than an empty-but-available snapshot.
+    assert snapshot.objects == ()
+    assert snapshot.text_available is False
 
 
 def _client_source() -> FakeClientSource:

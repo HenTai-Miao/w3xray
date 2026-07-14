@@ -7,7 +7,7 @@ import mmap
 from typing import Final, final
 
 from .game_data_source import GameDataSource
-from .object_candidates import collect_object_candidates
+from .object_candidates import ObjectFieldValue, collect_object_candidates
 from .object_materialization import BaseObjectTable, merge_object_candidates
 
 _RACES: Final[tuple[str, ...]] = ("Human", "Orc", "NightElf", "Undead", "Neutral", "Campaign")
@@ -32,6 +32,15 @@ class ClientBaseObject:
     obj_id: str
     category: str
     fields: tuple[tuple[str, str], ...]
+    evidence_fields: tuple[ObjectFieldValue, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ClientObjectSnapshot:
+    """Closed-source-safe client objects and text availability."""
+
+    objects: tuple[ClientBaseObject, ...]
+    text_available: bool
 
 
 @final
@@ -60,22 +69,50 @@ class _ClientObjectArchive:
 
 def collect_client_base_objects(source: GameDataSource | None) -> tuple[ClientBaseObject, ...]:
     """Parse bounded object tables without retaining the source handle."""
+    return snapshot_client_base_objects(source).objects
+
+
+def snapshot_client_base_objects(source: GameDataSource | None) -> ClientObjectSnapshot:
+    """Snapshot every client text candidate before its source closes."""
     if source is None:
-        return ()
+        return ClientObjectSnapshot((), False)
     archive = _ClientObjectArchive(source)
+    text_available = any(source.has_file(name) for name in _CLIENT_TEXT_NAMES)
     try:
         candidates = collect_object_candidates(archive, {})
     except (OSError, ValueError):
-        return ()
+        return ClientObjectSnapshot((), text_available)
     objects = merge_object_candidates(candidates, {})
-    return tuple(
+    evidence_by_object: dict[tuple[str, str], list[ObjectFieldValue]] = {}
+    for candidate in candidates:
+        evidence_by_object.setdefault((candidate.category, candidate.obj_id), []).extend(
+            candidate.fields,
+        )
+    snapshot = tuple(
         ClientBaseObject(
-            obj_id=item.obj_id,
-            category=item.category,
-            fields=tuple((label, value) for label, value in item.fields if value),
+            item.obj_id,
+            item.category,
+            tuple((label, value) for label, value in item.fields if value),
+            tuple(
+                sorted(
+                    evidence_by_object.get((item.category, item.obj_id), ()),
+                    key=_evidence_sort_key,
+                ),
+            ),
         )
         for item in objects
-        if len(item.obj_id) == 4 and item.fields
+        if len(item.obj_id) == 4 and (item.fields or evidence_by_object.get((item.category, item.obj_id)))
+    )
+    return ClientObjectSnapshot(snapshot, text_available)
+
+
+def _evidence_sort_key(field: ObjectFieldValue) -> tuple[str, str, str, int, str]:
+    return (
+        field.key.casefold(),
+        field.source.casefold(),
+        field.source,
+        int(field.source_kind),
+        field.value,
     )
 
 
