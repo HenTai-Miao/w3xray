@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from .archive_source import ArchiveSource
     from .doo import Doodad, Unit
     from .extraction_diagnostics import ExtractionDiagnostic
+    from .extraction_ledger import ExtractionLedger
     from .gameconfig import NamedGameConfiguration
     from .imp import ImportSummary
     from .mmp import PreviewIconSummary
@@ -88,6 +89,7 @@ class MapData:
     )
     ui_strings: dict[int, str] | None = None
     object_source_counts: dict[str, int] = field(default_factory=dict)
+    extraction_ledger: ExtractionLedger | None = None
     object_texts: ObjectTextIndex = field(default_factory=empty_object_text_index)
     item_relations: ItemRelationIndex = field(default_factory=empty_item_relation_index)
     _closed: bool = field(default=False, init=False, repr=False)

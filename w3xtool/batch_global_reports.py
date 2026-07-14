@@ -17,6 +17,8 @@ def format_batch_summary_tsv(state: BatchState) -> str:
         "状态",
         "对象数",
         "描述状态计数",
+        "关系类型计数",
+        "关系不完整",
         "具名图标",
         "匿名图标",
         "原始写出",
@@ -31,6 +33,9 @@ def format_batch_summary_tsv(state: BatchState) -> str:
         counts = ";".join(
             f"{label}={count}" for label, count in result.description_counts
         )
+        relation_counts = ";".join(
+            f"{label}={count}" for label, count in result.relation_counts
+        )
         rows.append(
             (
                 result.source.path,
@@ -41,6 +46,8 @@ def format_batch_summary_tsv(state: BatchState) -> str:
                 result.state.value,
                 str(result.object_count),
                 counts,
+                relation_counts,
+                str(result.relation_incomplete_count),
                 str(result.named_icon_count),
                 str(result.anonymous_icon_count),
                 str(result.original_written_count),

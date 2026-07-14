@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import os
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Final, override
 
+from .batch_description_cache import build_and_publish_description_cache
 from .batch_models import (
+    BATCH_SCHEMA_VERSION,
     BatchState,
     BatchStateFormatError,
     MapBatchResult,
@@ -37,6 +39,10 @@ REQUIRED_MAP_REPORTS: Final = (
     "对象描述.tsv",
     "图标完整性.txt",
     "描述完整性.txt",
+    "对象完整描述.tsv",
+    "掉落与获取关系.tsv",
+    "装备技能关系.tsv",
+    "关系完整性.txt",
 )
 _STATE_FILE: Final = "批量提取状态.json"
 
@@ -73,7 +79,10 @@ def run_batch(options: BatchOptions) -> BatchState:
     normalized = _normalized_options(options)
     _validate_roots(normalized)
     previous = _read_previous_state(normalized.output_root)
-    context = build_map_load_context(game_data_path=normalized.game_data_path)
+    context = replace(
+        build_map_load_context(game_data_path=normalized.game_data_path),
+        description_cache=build_and_publish_description_cache(normalized.output_root),
+    )
     results: list[MapBatchResult] = []
     for index, path in enumerate(
         scan_map_sources(normalized.source_directory), start=1
@@ -97,8 +106,11 @@ def run_batch(options: BatchOptions) -> BatchState:
                 except (OSError, ValueError, KeyError, IndexError, struct.error) as exc:
                     result = _failed_result(fingerprint, exc)
         results.append(result)
-        _publish_global_reports(normalized.output_root, BatchState(1, tuple(results)))
-    state = BatchState(1, tuple(results))
+        _publish_global_reports(
+            normalized.output_root,
+            BatchState(BATCH_SCHEMA_VERSION, tuple(results)),
+        )
+    state = BatchState(BATCH_SCHEMA_VERSION, tuple(results))
     if not results:
         _publish_global_reports(normalized.output_root, state)
     return state

@@ -6,6 +6,7 @@ import json
 from typing import TypedDict
 
 from .batch_models import (
+    BATCH_SCHEMA_VERSION,
     BatchState,
     BatchStateFormatError,
     MapBatchResult,
@@ -37,6 +38,8 @@ class _ResultJson(TypedDict):
     icon_failure_count: int
     restricted_block_count: int
     elapsed_ms: int
+    relation_counts: list[tuple[str, int]]
+    relation_incomplete_count: int
 
 
 class _StateJson(TypedDict):
@@ -61,7 +64,10 @@ def parse_batch_state_json(text: str) -> BatchState:
         payload = json.loads(text)
     except json.JSONDecodeError as exc:
         raise BatchStateFormatError(f"invalid batch state JSON: {exc.msg}") from exc
-    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema_version") != BATCH_SCHEMA_VERSION
+    ):
         raise BatchStateFormatError("unsupported batch state schema")
     raw_results = payload.get("results")
     if not isinstance(raw_results, list):
@@ -70,7 +76,7 @@ def parse_batch_state_json(text: str) -> BatchState:
         results = tuple(_parse_result(item) for item in raw_results)
     except (KeyError, TypeError, ValueError) as exc:
         raise BatchStateFormatError(f"invalid batch state result: {exc}") from exc
-    return BatchState(schema_version=1, results=results)
+    return BatchState(schema_version=BATCH_SCHEMA_VERSION, results=results)
 
 
 def _result_json(result: MapBatchResult) -> _ResultJson:
@@ -95,6 +101,8 @@ def _result_json(result: MapBatchResult) -> _ResultJson:
         icon_failure_count=result.icon_failure_count,
         restricted_block_count=result.restricted_block_count,
         elapsed_ms=result.elapsed_ms,
+        relation_counts=list(result.relation_counts),
+        relation_incomplete_count=result.relation_incomplete_count,
     )
 
 
@@ -122,6 +130,10 @@ def _parse_result(raw) -> MapBatchResult:
         icon_failure_count=int(raw["icon_failure_count"]),
         restricted_block_count=int(raw["restricted_block_count"]),
         elapsed_ms=int(raw["elapsed_ms"]),
+        relation_counts=tuple(
+            (str(item[0]), int(item[1])) for item in raw["relation_counts"]
+        ),
+        relation_incomplete_count=int(raw["relation_incomplete_count"]),
     )
 
 

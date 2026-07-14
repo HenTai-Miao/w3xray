@@ -253,3 +253,27 @@ def test_no_retry_failed_reuses_an_unchanged_failed_result(
     # Then
     assert second == first
     assert calls == 1
+
+
+def test_resume_reprocesses_when_v2_reports_are_missing(tmp_path: Path) -> None:
+    # Given: a schema-v1-era result directory has every legacy report.
+    fingerprint = SourceFingerprint("/maps/sample.w3x", 3, 4, "a" * 64)
+    relative = "地图/001_sample_aaaaaaaa"
+    destination = tmp_path / relative
+    destination.mkdir(parents=True)
+    for name in (
+        "地图摘要.txt",
+        "图标索引.tsv",
+        "对象描述.tsv",
+        "图标完整性.txt",
+        "描述完整性.txt",
+    ):
+        (destination / name).write_text("legacy\n", encoding="utf-8")
+    (destination / OWNERSHIP_MARKER).write_text("a" * 64, encoding="ascii")
+    result = _result(fingerprint, output_directory=relative)
+
+    # When
+    reusable = batch_runner._published_result_exists(str(tmp_path), result)
+
+    # Then: complete text and relation reports are mandatory for schema v2.
+    assert not reusable

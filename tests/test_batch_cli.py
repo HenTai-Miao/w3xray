@@ -85,7 +85,7 @@ def test_run_batch_cli_returns_one_only_when_a_map_failed(
 ) -> None:
     # Given
     state = BatchState(
-        1, (_result(MapBatchState.COMPLETE), _result(MapBatchState.FAILED))
+        2, (_result(MapBatchState.COMPLETE), _result(MapBatchState.FAILED))
     )
     monkeypatch.setattr(batch_cli, "run_batch", lambda _options: state)
 

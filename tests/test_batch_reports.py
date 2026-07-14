@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 import io
-from pathlib import Path
 
 import pytest
 
@@ -15,19 +14,12 @@ from w3xtool.batch_icon_export import (
     IconKind,
 )
 from w3xtool.batch_models import (
-    BatchState,
-    BatchStateFormatError,
-    MapBatchResult,
     MapBatchState,
-    SourceFingerprint,
 )
 from w3xtool.batch_reports import (
     derive_map_state,
-    format_batch_state_json,
-    format_batch_summary_tsv,
     format_description_tsv,
     format_icon_index_tsv,
-    parse_batch_state_json,
 )
 from w3xtool.icon_resources import IconObjectReference
 
@@ -73,26 +65,6 @@ def _icon_record(
         state=state,
         error="" if state is IconExportState.COMPLETE else "decode failed",
         objects=(IconObjectReference("技能", "A001", "暴风雪"),),
-    )
-
-
-def _map_result(*, source_path: str = "/maps/a.w3x") -> MapBatchResult:
-    return MapBatchResult(
-        source=SourceFingerprint(source_path, 100, 123456, "a" * 64),
-        display_name=Path(source_path).stem,
-        output_directory="地图/001_a_aaaaaaaa",
-        stage="published",
-        state=MapBatchState.COMPLETE,
-        first_error="",
-        object_count=1,
-        description_counts=((DescriptionState.MAP_VALUE.value, 1),),
-        named_icon_count=1,
-        anonymous_icon_count=0,
-        original_written_count=1,
-        png_written_count=1,
-        icon_failure_count=0,
-        restricted_block_count=0,
-        elapsed_ms=25,
     )
 
 
@@ -159,31 +131,13 @@ def test_icon_index_includes_true_source_and_all_object_references() -> None:
     assert "技能:A001:暴风雪" in report
 
 
-def test_batch_state_json_round_trips_source_fingerprint() -> None:
-    # Given
-    state = BatchState(schema_version=1, results=(_map_result(),))
-
-    # When
-    restored = parse_batch_state_json(format_batch_state_json(state))
-
-    # Then
-    assert restored == state
-
-
-def test_batch_state_json_rejects_an_unknown_schema() -> None:
-    # Given
-    payload = '{"schema_version": 2, "results": []}'
-
-    # When / Then
-    with pytest.raises(BatchStateFormatError, match="schema"):
-        parse_batch_state_json(payload)
-
-
 @pytest.mark.parametrize(
     (
         "structural_error",
         "restricted",
         "ledger_incomplete",
+        "text_incomplete",
+        "relation_incomplete",
         "icon_state",
         "description_state",
         "expected",
@@ -193,6 +147,8 @@ def test_batch_state_json_rejects_an_unknown_schema() -> None:
             True,
             0,
             False,
+            False,
+            False,
             IconExportState.COMPLETE,
             DescriptionState.MAP_VALUE,
             MapBatchState.FAILED,
@@ -200,6 +156,8 @@ def test_batch_state_json_rejects_an_unknown_schema() -> None:
         (
             False,
             1,
+            False,
+            False,
             False,
             IconExportState.COMPLETE,
             DescriptionState.MAP_VALUE,
@@ -209,6 +167,8 @@ def test_batch_state_json_rejects_an_unknown_schema() -> None:
             False,
             0,
             True,
+            False,
+            False,
             IconExportState.COMPLETE,
             DescriptionState.MAP_VALUE,
             MapBatchState.PARTIAL,
@@ -216,6 +176,8 @@ def test_batch_state_json_rejects_an_unknown_schema() -> None:
         (
             False,
             0,
+            False,
+            False,
             False,
             IconExportState.PNG_FAILED,
             DescriptionState.MAP_VALUE,
@@ -225,6 +187,8 @@ def test_batch_state_json_rejects_an_unknown_schema() -> None:
             False,
             0,
             False,
+            False,
+            False,
             IconExportState.COMPLETE,
             DescriptionState.SOURCE_MISSING,
             MapBatchState.PARTIAL,
@@ -233,9 +197,31 @@ def test_batch_state_json_rejects_an_unknown_schema() -> None:
             False,
             0,
             False,
+            False,
+            False,
             IconExportState.COMPLETE,
             DescriptionState.MAP_EXPLICIT_EMPTY,
             MapBatchState.COMPLETE,
+        ),
+        (
+            False,
+            0,
+            False,
+            True,
+            False,
+            IconExportState.COMPLETE,
+            DescriptionState.MAP_VALUE,
+            MapBatchState.PARTIAL,
+        ),
+        (
+            False,
+            0,
+            False,
+            False,
+            True,
+            IconExportState.COMPLETE,
+            DescriptionState.MAP_VALUE,
+            MapBatchState.PARTIAL,
         ),
     ),
 )
@@ -243,6 +229,8 @@ def test_map_state_follows_completeness_precedence(
     structural_error: bool,
     restricted: int,
     ledger_incomplete: bool,
+    text_incomplete: bool,
+    relation_incomplete: bool,
     icon_state: IconExportState,
     description_state: DescriptionState,
     expected: MapBatchState,
@@ -256,27 +244,11 @@ def test_map_state_follows_completeness_precedence(
         structural_error=structural_error,
         restricted_block_count=restricted,
         ledger_incomplete=ledger_incomplete,
+        text_incomplete=text_incomplete,
+        relation_incomplete=relation_incomplete,
         icons=icons,
         descriptions=descriptions,
     )
 
     # Then
     assert state is expected
-
-
-def test_global_summary_is_sorted_by_source_path() -> None:
-    # Given
-    state = BatchState(
-        schema_version=1,
-        results=(
-            _map_result(source_path="/maps/z.w3x"),
-            _map_result(source_path="/maps/a.w3x"),
-        ),
-    )
-
-    # When
-    lines = format_batch_summary_tsv(state).splitlines()
-
-    # Then
-    assert lines[1].startswith("/maps/a.w3x\t")
-    assert lines[2].startswith("/maps/z.w3x\t")

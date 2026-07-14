@@ -124,6 +124,8 @@ def derive_map_state(
     structural_error: bool,
     restricted_block_count: int,
     ledger_incomplete: bool,
+    text_incomplete: bool,
+    relation_incomplete: bool,
     icons: Iterable[IconExportRecord],
     descriptions: Iterable[DescriptionRecord],
 ) -> MapBatchState:
@@ -138,7 +140,13 @@ def derive_map_state(
     description_missing = any(
         record.state is DescriptionState.SOURCE_MISSING for record in descriptions
     )
-    if ledger_incomplete or icon_incomplete or description_missing:
+    if (
+        ledger_incomplete
+        or text_incomplete
+        or relation_incomplete
+        or icon_incomplete
+        or description_missing
+    ):
         return MapBatchState.PARTIAL
     return MapBatchState.COMPLETE
 
@@ -155,6 +163,8 @@ def format_map_summary(result: MapBatchResult) -> str:
         f"匿名图标：{result.anonymous_icon_count}",
         f"原始写出：{result.original_written_count}",
         f"PNG 成功：{result.png_written_count}",
+        f"关系数：{sum(count for _label, count in result.relation_counts)}",
+        f"关系不完整：{result.relation_incomplete_count}",
         f"首个错误：{result.first_error}",
     )
     return "\n".join(lines) + "\n"

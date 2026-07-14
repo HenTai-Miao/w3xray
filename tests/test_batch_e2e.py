@@ -27,9 +27,14 @@ def test_batch_e2e_publishes_per_map_and_global_reports(tmp_path: Path) -> None:
     assert tuple(output.glob("地图/*/地图摘要.txt"))
     assert tuple(output.glob("地图/*/图标索引.tsv"))
     assert tuple(output.glob("地图/*/对象描述.tsv"))
+    assert tuple(output.glob("地图/*/对象完整描述.tsv"))
+    assert tuple(output.glob("地图/*/掉落与获取关系.tsv"))
+    assert tuple(output.glob("地图/*/装备技能关系.tsv"))
+    assert tuple(output.glob("地图/*/关系完整性.txt"))
     assert (output / "批量提取汇总.tsv").is_file()
     assert (output / "批量提取状态.json").is_file()
     assert (output / "失败与重试.tsv").is_file()
+    assert (output / "可信描述缓存.tsv").is_file()
 
 
 def test_batch_e2e_continues_after_a_corrupt_sibling(tmp_path: Path) -> None:

@@ -18,6 +18,7 @@ from .batch_icon_export import (
     IconKind,
 )
 from .batch_map_icons import export_map_icons
+from .batch_item_reports import BatchItemReports, build_batch_item_reports
 from .batch_map_publication import (
     create_map_stage,
     discard_map_stage,
@@ -27,7 +28,6 @@ from .batch_map_publication import (
 from .batch_models import MapBatchResult, MapBatchState, SourceFingerprint
 from .batch_reports import (
     derive_map_state,
-    description_state_counts,
     format_description_completeness,
     format_description_tsv,
     format_icon_completeness,
@@ -37,7 +37,6 @@ from .batch_reports import (
 from .extraction_ledger import BlockState
 from .game_data_source import GameDataSource, open_game_data_source
 from .load_context import MapLoadContext
-from .map_data import GameObject, MapData
 from .map_loader import load_map
 from .safe_output import write_text_safely
 from .safe_output_models import SafeWriteStatus
@@ -75,8 +74,9 @@ def process_one_map(
     try:
         game_source = open_game_data_source(options.game_data_path)
         stage = create_map_stage(options.output_root)
-        maps = _all_maps(root)
-        descriptions = audit_object_descriptions(_all_objects(maps))
+        item_reports = build_batch_item_reports(root)
+        maps = item_reports.maps
+        descriptions = audit_object_descriptions(item_reports.objects)
         icons, unresolved, anonymous_failures = export_map_icons(
             root, maps, stage, game_source
         )
@@ -99,6 +99,8 @@ def process_one_map(
             ledger_incomplete=ledger_incomplete
             or bool(unresolved)
             or bool(anonymous_failures),
+            text_incomplete=bool(item_reports.text_incomplete_count),
+            relation_incomplete=bool(item_reports.relation_incomplete_count),
             icons=icons,
             descriptions=descriptions,
         )
@@ -115,6 +117,7 @@ def process_one_map(
             anonymous_failures,
             restricted,
             elapsed_ms,
+            item_reports,
         )
         _write_reports(
             stage,
@@ -124,6 +127,7 @@ def process_one_map(
             unresolved,
             restricted,
             fingerprint.sha256,
+            item_reports,
         )
         _ = publish_map_stage(stage, options.output_root, relative, fingerprint.sha256)
         stage = None
@@ -146,6 +150,7 @@ def _map_result(
     anonymous_failures: int,
     restricted: int,
     elapsed_ms: int,
+    item_reports: BatchItemReports,
 ) -> MapBatchResult:
     first_error = next((item.error for item in icons if item.error), "")
     if not first_error and unresolved:
@@ -165,7 +170,7 @@ def _map_result(
         state=state,
         first_error=first_error,
         object_count=len({(item.category, item.object_id) for item in descriptions}),
-        description_counts=description_state_counts(descriptions),
+        description_counts=item_reports.description_counts,
         named_icon_count=sum(item.kind is IconKind.NAMED for item in icons),
         anonymous_icon_count=sum(item.kind is IconKind.ANONYMOUS for item in icons),
         original_written_count=sum(item.original_written for item in icons),
@@ -177,6 +182,8 @@ def _map_result(
         ),
         restricted_block_count=restricted,
         elapsed_ms=elapsed_ms,
+        relation_counts=item_reports.relation_counts,
+        relation_incomplete_count=item_reports.relation_incomplete_count,
     )
 
 
@@ -188,6 +195,7 @@ def _write_reports(
     unresolved: int,
     restricted: int,
     digest: str,
+    item_reports: BatchItemReports,
 ) -> None:
     reports = (
         ("地图摘要.txt", format_map_summary(result)),
@@ -202,25 +210,10 @@ def _write_reports(
             ),
         ),
         ("描述完整性.txt", format_description_completeness(descriptions)),
+        *item_reports.artifacts(),
         (".w3xray-batch-owned", digest),
     )
     for name, text in reports:
         write = write_text_safely(str(stage), name, text)
         if write.status is not SafeWriteStatus.WRITTEN:
             raise BatchMapProcessingError(name, write.error or write.status.value)
-
-
-def _all_maps(root: MapData) -> tuple[MapData, ...]:
-    return (
-        (root, *(child for item in (root, *root.sub_maps) for child in item.sub_maps))
-        if root.sub_maps
-        else (root,)
-    )
-
-
-def _map_objects(item: MapData) -> tuple[GameObject, ...]:
-    return tuple(obj for values in item.objects.values() for obj in values)
-
-
-def _all_objects(maps: tuple[MapData, ...]) -> tuple[GameObject, ...]:
-    return tuple(obj for item in maps for obj in _map_objects(item))

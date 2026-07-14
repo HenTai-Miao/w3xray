@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import override
+from typing import Final, override
+
+
+BATCH_SCHEMA_VERSION: Final = 2
 
 
 class MapBatchState(StrEnum):
@@ -50,6 +53,8 @@ class MapBatchResult:
     icon_failure_count: int
     restricted_block_count: int
     elapsed_ms: int
+    relation_counts: tuple[tuple[str, int], ...] = ()
+    relation_incomplete_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,5 +63,5 @@ class BatchState:
     results: tuple[MapBatchResult, ...]
 
     def __post_init__(self) -> None:
-        if self.schema_version != 1:
+        if self.schema_version != BATCH_SCHEMA_VERSION:
             raise BatchStateFormatError("unsupported batch state schema")
