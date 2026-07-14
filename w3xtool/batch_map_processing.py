@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from contextlib import ExitStack
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic_ns
 from typing import Protocol, override
@@ -17,9 +16,8 @@ from .batch_icon_export import (
     IconExportRecord,
     IconExportState,
     IconKind,
-    export_anonymous_icon,
-    export_named_icon,
 )
+from .batch_map_icons import export_map_icons
 from .batch_map_publication import (
     create_map_stage,
     discard_map_stage,
@@ -36,16 +34,8 @@ from .batch_reports import (
     format_icon_index_tsv,
     format_map_summary,
 )
-from .campaign_sources import open_map_source
-from .extraction_ledger import BlockState, ExtractionLedger
+from .extraction_ledger import BlockState
 from .game_data_source import GameDataSource, open_game_data_source
-from .icon_resources import (
-    AnonymousIconArchive,
-    IconObjectReference,
-    collect_icon_references,
-    iter_anonymous_blps,
-    resolve_named_icon,
-)
 from .load_context import MapLoadContext
 from .map_data import GameObject, MapData
 from .map_loader import load_map
@@ -85,10 +75,13 @@ def process_one_map(
     try:
         game_source = open_game_data_source(options.game_data_path)
         stage = create_map_stage(options.output_root)
-        descriptions = audit_object_descriptions(_all_objects(root))
-        icons, unresolved, anonymous_failures = _export_icons(root, stage, game_source)
+        maps = _all_maps(root)
+        descriptions = audit_object_descriptions(_all_objects(maps))
+        icons, unresolved, anonymous_failures = export_map_icons(
+            root, maps, stage, game_source
+        )
         ledgers = tuple(
-            item.extraction_ledger for item in _all_maps(root) if item.extraction_ledger
+            item.extraction_ledger for item in maps if item.extraction_ledger
         )
         restricted = sum(
             ledger.count(BlockState.ENCRYPTED_BLOCKED) for ledger in ledgers
@@ -140,57 +133,6 @@ def process_one_map(
         if game_source is not None:
             game_source.close()
         root.close()
-
-
-def _export_icons(
-    root: MapData,
-    stage: Path,
-    game_source: GameDataSource | None,
-) -> tuple[tuple[IconExportRecord, ...], int, int]:
-    records: list[IconExportRecord] = []
-    named_indexes: dict[tuple[str, str], int] = {}
-    unresolved: set[str] = set()
-    anonymous_failures = 0
-    maps = _all_maps(root)
-    with ExitStack() as stack:
-        opened = tuple(
-            (item, stack.enter_context(open_map_source(item))) for item in maps
-        )
-        root_archive = opened[0][1]
-        for item, archive in opened:
-            sources = (archive,) if item is root else (archive, root_archive)
-            for reference in collect_icon_references(_map_objects(item)):
-                resource = resolve_named_icon(reference, sources, game_source)
-                if resource is None:
-                    unresolved.add(reference.normalized_path.casefold())
-                    continue
-                key = (resource.normalized_path.casefold(), resource.sha256)
-                previous = named_indexes.get(key)
-                if previous is None:
-                    named_indexes[key] = len(records)
-                    records.append(export_named_icon(str(stage), resource))
-                else:
-                    current = records[previous]
-                    merged = tuple(
-                        sorted(
-                            set((*current.objects, *resource.objects)),
-                            key=_reference_key,
-                        )
-                    )
-                    records[previous] = replace(current, objects=merged)
-            ledger = item.extraction_ledger
-            if ledger is None:
-                continue
-            expected = _anonymous_blp_count(ledger)
-            if not isinstance(archive, AnonymousIconArchive):
-                anonymous_failures += expected
-                continue
-            exported = 0
-            for resource in iter_anonymous_blps(archive, ledger):
-                records.append(export_anonymous_icon(str(stage), resource))
-                exported += 1
-            anonymous_failures += max(0, expected - exported)
-    return tuple(records), len(unresolved), anonymous_failures
 
 
 def _map_result(
@@ -280,18 +222,5 @@ def _map_objects(item: MapData) -> tuple[GameObject, ...]:
     return tuple(obj for values in item.objects.values() for obj in values)
 
 
-def _all_objects(root: MapData) -> tuple[GameObject, ...]:
-    return tuple(obj for item in _all_maps(root) for obj in _map_objects(item))
-
-
-def _anonymous_blp_count(ledger: ExtractionLedger) -> int:
-    return sum(
-        entry.block_index is not None
-        and entry.internal_path.replace("\\", "/").casefold().startswith("unknown/")
-        and entry.internal_path.casefold().endswith(".blp")
-        for entry in ledger.entries
-    )
-
-
-def _reference_key(item: IconObjectReference) -> tuple[str, str, str]:
-    return item.category.casefold(), item.object_id, item.object_name
+def _all_objects(maps: tuple[MapData, ...]) -> tuple[GameObject, ...]:
+    return tuple(obj for item in maps for obj in _map_objects(item))
