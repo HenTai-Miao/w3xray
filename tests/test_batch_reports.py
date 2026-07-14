@@ -140,14 +140,63 @@ def test_batch_state_json_rejects_an_unknown_schema() -> None:
 
 
 @pytest.mark.parametrize(
-    ("structural_error", "restricted", "ledger_incomplete", "icon_state", "description_state", "expected"),
     (
-        (True, 0, False, IconExportState.COMPLETE, DescriptionState.MAP_VALUE, MapBatchState.FAILED),
-        (False, 1, False, IconExportState.COMPLETE, DescriptionState.MAP_VALUE, MapBatchState.RESTRICTED),
-        (False, 0, True, IconExportState.COMPLETE, DescriptionState.MAP_VALUE, MapBatchState.PARTIAL),
-        (False, 0, False, IconExportState.PNG_FAILED, DescriptionState.MAP_VALUE, MapBatchState.PARTIAL),
-        (False, 0, False, IconExportState.COMPLETE, DescriptionState.SOURCE_MISSING, MapBatchState.PARTIAL),
-        (False, 0, False, IconExportState.COMPLETE, DescriptionState.MAP_EXPLICIT_EMPTY, MapBatchState.COMPLETE),
+        "structural_error",
+        "restricted",
+        "ledger_incomplete",
+        "icon_state",
+        "description_state",
+        "expected",
+    ),
+    (
+        (
+            True,
+            0,
+            False,
+            IconExportState.COMPLETE,
+            DescriptionState.MAP_VALUE,
+            MapBatchState.FAILED,
+        ),
+        (
+            False,
+            1,
+            False,
+            IconExportState.COMPLETE,
+            DescriptionState.MAP_VALUE,
+            MapBatchState.RESTRICTED,
+        ),
+        (
+            False,
+            0,
+            True,
+            IconExportState.COMPLETE,
+            DescriptionState.MAP_VALUE,
+            MapBatchState.PARTIAL,
+        ),
+        (
+            False,
+            0,
+            False,
+            IconExportState.PNG_FAILED,
+            DescriptionState.MAP_VALUE,
+            MapBatchState.PARTIAL,
+        ),
+        (
+            False,
+            0,
+            False,
+            IconExportState.COMPLETE,
+            DescriptionState.SOURCE_MISSING,
+            MapBatchState.PARTIAL,
+        ),
+        (
+            False,
+            0,
+            False,
+            IconExportState.COMPLETE,
+            DescriptionState.MAP_EXPLICIT_EMPTY,
+            MapBatchState.COMPLETE,
+        ),
     ),
 )
 def test_map_state_follows_completeness_precedence(
@@ -179,7 +228,10 @@ def test_global_summary_is_sorted_by_source_path() -> None:
     # Given
     state = BatchState(
         schema_version=1,
-        results=(_map_result(source_path="/maps/z.w3x"), _map_result(source_path="/maps/a.w3x")),
+        results=(
+            _map_result(source_path="/maps/z.w3x"),
+            _map_result(source_path="/maps/a.w3x"),
+        ),
     )
 
     # When

@@ -43,7 +43,9 @@ def create_map_stage(output_root: str) -> Path:
     return Path(tempfile.mkdtemp(prefix=".w3xray-map-stage-", dir=maps_root))
 
 
-def publish_map_stage(stage: Path, output_root: str, relative: str, digest: str) -> Path:
+def publish_map_stage(
+    stage: Path, output_root: str, relative: str, digest: str
+) -> Path:
     """Atomically replace only a previously owned content-addressed result."""
     destination_text = safe_destination(output_root, relative)
     if destination_text is None:
@@ -70,7 +72,9 @@ def discard_map_stage(stage: Path | None, output_root: str) -> None:
     if stage is None or not stage.exists() or stage.is_symlink():
         return
     maps_root = Path(output_root, "地图").resolve()
-    if stage.parent.resolve() == maps_root and stage.name.startswith(".w3xray-map-stage-"):
+    if stage.parent.resolve() == maps_root and stage.name.startswith(
+        ".w3xray-map-stage-"
+    ):
         shutil.rmtree(stage)
 
 
@@ -84,6 +88,8 @@ def _require_owned_destination(destination: Path, digest: str) -> None:
             and marker.read_text(encoding="ascii") == digest
         )
     except OSError as exc:
-        raise BatchMapPublicationError(f"cannot inspect previous map output: {exc}") from exc
+        raise BatchMapPublicationError(
+            f"cannot inspect previous map output: {exc}"
+        ) from exc
     if not owned:
         raise BatchMapPublicationError("refusing to replace unowned map output")

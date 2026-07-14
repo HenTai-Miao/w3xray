@@ -39,7 +39,10 @@ def _game_object(
 class _FakeNamedSource:
     def __init__(self, path: str, files: dict[str, bytes]) -> None:
         self.path = path
-        self._files = {name.replace("/", "\\").casefold(): payload for name, payload in files.items()}
+        self._files = {
+            name.replace("/", "\\").casefold(): payload
+            for name, payload in files.items()
+        }
 
     def has_file(self, name: str) -> bool:
         return name.replace("/", "\\").casefold() in self._files
@@ -77,7 +80,9 @@ class _FakeAnonymousArchive:
         self.read_indexes: list[int] = []
 
     def iter_blocks(self) -> tuple[tuple[int, _Block], ...]:
-        return tuple((index, _Block(len(payload))) for index, payload in self._blocks.items())
+        return tuple(
+            (index, _Block(len(payload))) for index, payload in self._blocks.items()
+        )
 
     def read_block_anon(self, block: _Block) -> bytes | None:
         for index, payload in self._blocks.items():
@@ -134,7 +139,9 @@ def test_named_icon_resolution_prefers_map_and_records_the_true_source() -> None
         (_game_object(category="单位", obj_id="H001", icon="Icons/BTNHero"),),
     )
     map_source = _FakeNamedSource("map.w3x", {"Icons\\BTNHero.blp": b"BLP1map"})
-    client_source = _FakeClientSource("War3Patch.mpq", {"Icons\\BTNHero.blp": b"BLP1client"})
+    client_source = _FakeClientSource(
+        "War3Patch.mpq", {"Icons\\BTNHero.blp": b"BLP1client"}
+    )
 
     # When
     resource = resolve_named_icon(reference, (map_source,), client_source)
@@ -153,7 +160,9 @@ def test_named_icon_resolution_uses_client_archive_provenance() -> None:
     (reference,) = collect_icon_references(
         (_game_object(category="技能", obj_id="A001", icon="Icons\\BTNSpell.blp"),),
     )
-    client_source = _FakeClientSource("War3x.mpq", {"Icons\\BTNSpell.blp": b"BLP1client"})
+    client_source = _FakeClientSource(
+        "War3x.mpq", {"Icons\\BTNSpell.blp": b"BLP1client"}
+    )
 
     # When
     resource = resolve_named_icon(reference, (), client_source)

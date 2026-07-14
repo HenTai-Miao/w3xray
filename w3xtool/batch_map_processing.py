@@ -8,7 +8,11 @@ from pathlib import Path
 from time import monotonic_ns
 from typing import Protocol, override
 
-from .batch_descriptions import DescriptionRecord, DescriptionState, audit_object_descriptions
+from .batch_descriptions import (
+    DescriptionRecord,
+    DescriptionState,
+    audit_object_descriptions,
+)
 from .batch_icon_export import (
     IconExportRecord,
     IconExportState,
@@ -83,16 +87,25 @@ def process_one_map(
         stage = create_map_stage(options.output_root)
         descriptions = audit_object_descriptions(_all_objects(root))
         icons, unresolved, anonymous_failures = _export_icons(root, stage, game_source)
-        ledgers = tuple(item.extraction_ledger for item in _all_maps(root) if item.extraction_ledger)
-        restricted = sum(ledger.count(BlockState.ENCRYPTED_BLOCKED) for ledger in ledgers)
-        ledger_incomplete = any(
-            ledger.count(BlockState.RAW_ONLY) or ledger.count(BlockState.DAMAGED)
-            for ledger in ledgers
-        ) or root.extraction_ledger is None
+        ledgers = tuple(
+            item.extraction_ledger for item in _all_maps(root) if item.extraction_ledger
+        )
+        restricted = sum(
+            ledger.count(BlockState.ENCRYPTED_BLOCKED) for ledger in ledgers
+        )
+        ledger_incomplete = (
+            any(
+                ledger.count(BlockState.RAW_ONLY) or ledger.count(BlockState.DAMAGED)
+                for ledger in ledgers
+            )
+            or root.extraction_ledger is None
+        )
         state = derive_map_state(
             structural_error=False,
             restricted_block_count=restricted,
-            ledger_incomplete=ledger_incomplete or bool(unresolved) or bool(anonymous_failures),
+            ledger_incomplete=ledger_incomplete
+            or bool(unresolved)
+            or bool(anonymous_failures),
             icons=icons,
             descriptions=descriptions,
         )
@@ -110,7 +123,15 @@ def process_one_map(
             restricted,
             elapsed_ms,
         )
-        _write_reports(stage, result, icons, descriptions, unresolved, restricted, fingerprint.sha256)
+        _write_reports(
+            stage,
+            result,
+            icons,
+            descriptions,
+            unresolved,
+            restricted,
+            fingerprint.sha256,
+        )
         _ = publish_map_stage(stage, options.output_root, relative, fingerprint.sha256)
         stage = None
         return result
@@ -132,7 +153,9 @@ def _export_icons(
     anonymous_failures = 0
     maps = _all_maps(root)
     with ExitStack() as stack:
-        opened = tuple((item, stack.enter_context(open_map_source(item))) for item in maps)
+        opened = tuple(
+            (item, stack.enter_context(open_map_source(item))) for item in maps
+        )
         root_archive = opened[0][1]
         for item, archive in opened:
             sources = (archive,) if item is root else (archive, root_archive)
@@ -148,7 +171,12 @@ def _export_icons(
                     records.append(export_named_icon(str(stage), resource))
                 else:
                     current = records[previous]
-                    merged = tuple(sorted(set((*current.objects, *resource.objects)), key=_reference_key))
+                    merged = tuple(
+                        sorted(
+                            set((*current.objects, *resource.objects)),
+                            key=_reference_key,
+                        )
+                    )
                     records[previous] = replace(current, objects=merged)
             ledger = item.extraction_ledger
             if ledger is None:
@@ -182,7 +210,9 @@ def _map_result(
         first_error = f"unresolved named icons: {unresolved}"
     if not first_error and anonymous_failures:
         first_error = f"anonymous BLP read failures: {anonymous_failures}"
-    missing = sum(item.state is DescriptionState.SOURCE_MISSING for item in descriptions)
+    missing = sum(
+        item.state is DescriptionState.SOURCE_MISSING for item in descriptions
+    )
     if not first_error and missing:
         first_error = f"missing descriptions: {missing}"
     return MapBatchResult(
@@ -221,7 +251,14 @@ def _write_reports(
         ("地图摘要.txt", format_map_summary(result)),
         ("图标索引.tsv", format_icon_index_tsv(icons)),
         ("对象描述.tsv", format_description_tsv(descriptions)),
-        ("图标完整性.txt", format_icon_completeness(icons, unresolved_named_count=unresolved, restricted_block_count=restricted)),
+        (
+            "图标完整性.txt",
+            format_icon_completeness(
+                icons,
+                unresolved_named_count=unresolved,
+                restricted_block_count=restricted,
+            ),
+        ),
         ("描述完整性.txt", format_description_completeness(descriptions)),
         (".w3xray-batch-owned", digest),
     )
@@ -232,7 +269,11 @@ def _write_reports(
 
 
 def _all_maps(root: MapData) -> tuple[MapData, ...]:
-    return (root, *(child for item in (root, *root.sub_maps) for child in item.sub_maps)) if root.sub_maps else (root,)
+    return (
+        (root, *(child for item in (root, *root.sub_maps) for child in item.sub_maps))
+        if root.sub_maps
+        else (root,)
+    )
 
 
 def _map_objects(item: MapData) -> tuple[GameObject, ...]:

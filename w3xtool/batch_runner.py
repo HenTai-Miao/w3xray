@@ -27,7 +27,9 @@ from .map_directory import scan_map_sources
 from .safe_output import safe_destination, write_text_safely
 from .safe_output_models import SafeWriteStatus
 
-DEFAULT_BATCH_OUTPUT: Final = "/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output"
+DEFAULT_BATCH_OUTPUT: Final = (
+    "/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output"
+)
 OWNERSHIP_MARKER: Final = ".w3xray-batch-owned"
 REQUIRED_MAP_REPORTS: Final = (
     "地图摘要.txt",
@@ -73,7 +75,9 @@ def run_batch(options: BatchOptions) -> BatchState:
     previous = _read_previous_state(normalized.output_root)
     context = build_map_load_context(game_data_path=normalized.game_data_path)
     results: list[MapBatchResult] = []
-    for index, path in enumerate(scan_map_sources(normalized.source_directory), start=1):
+    for index, path in enumerate(
+        scan_map_sources(normalized.source_directory), start=1
+    ):
         try:
             fingerprint = fingerprint_source(path)
         except (OSError, ValueError) as exc:
@@ -144,7 +148,9 @@ def _validate_roots(options: BatchOptions) -> None:
     try:
         common = os.path.commonpath((source, output))
     except ValueError as exc:
-        raise BatchConfigurationError("source and output roots cannot be compared") from exc
+        raise BatchConfigurationError(
+            "source and output roots cannot be compared"
+        ) from exc
     if common in {source, output}:
         raise BatchConfigurationError("source and output roots overlap")
 
@@ -166,7 +172,7 @@ def _read_previous_state(output_root: str) -> BatchState | None:
         return None
     try:
         return parse_batch_state_json(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, BatchStateFormatError):
+    except OSError, UnicodeError, BatchStateFormatError:
         return None
 
 
@@ -183,7 +189,9 @@ def _reusable_result(
         if result.source != fingerprint:
             continue
         if result.state is MapBatchState.COMPLETE:
-            if result.stage == "published" and _published_result_exists(output_root, result):
+            if result.stage == "published" and _published_result_exists(
+                output_root, result
+            ):
                 return result
             continue
         if result.state is MapBatchState.FAILED and not retry_failed:
@@ -197,7 +205,10 @@ def _published_result_exists(output_root: str, result: MapBatchResult) -> bool:
         return False
     marker = Path(directory, OWNERSHIP_MARKER)
     try:
-        if marker.is_symlink() or marker.read_text(encoding="ascii") != result.source.sha256:
+        if (
+            marker.is_symlink()
+            or marker.read_text(encoding="ascii") != result.source.sha256
+        ):
             return False
     except OSError:
         return False
@@ -207,7 +218,9 @@ def _published_result_exists(output_root: str, result: MapBatchResult) -> bool:
     )
 
 
-def _failed_result(fingerprint: SourceFingerprint, exc: BaseException) -> MapBatchResult:
+def _failed_result(
+    fingerprint: SourceFingerprint, exc: BaseException
+) -> MapBatchResult:
     return MapBatchResult(
         source=fingerprint,
         display_name=Path(fingerprint.path).stem,

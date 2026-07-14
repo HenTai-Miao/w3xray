@@ -67,7 +67,9 @@ def _publish_fake_result(
     return _result(fingerprint, output_directory=relative)
 
 
-def test_scan_map_sources_includes_campaigns_in_stable_path_order(tmp_path: Path) -> None:
+def test_scan_map_sources_includes_campaigns_in_stable_path_order(
+    tmp_path: Path,
+) -> None:
     # Given
     for name in ("z.w3n", "A.w3x", "nested/b.w3m", "ignored.txt"):
         _write_map(tmp_path / name)
@@ -92,10 +94,16 @@ def test_batch_continues_after_one_map_fails_and_does_not_modify_sources(
     bad = _write_map(source_root / "a_bad.w3x", b"bad")
     good = _write_map(source_root / "b_good.w3x", b"good")
     before = {
-        path: (path.stat().st_size, path.stat().st_mtime_ns, hashlib.sha256(path.read_bytes()).hexdigest())
+        path: (
+            path.stat().st_size,
+            path.stat().st_mtime_ns,
+            hashlib.sha256(path.read_bytes()).hexdigest(),
+        )
         for path in (bad, good)
     }
-    monkeypatch.setattr(batch_runner, "build_map_load_context", lambda **_kwargs: MapLoadContext())
+    monkeypatch.setattr(
+        batch_runner, "build_map_load_context", lambda **_kwargs: MapLoadContext()
+    )
 
     def process(
         index: int,
@@ -113,9 +121,16 @@ def test_batch_continues_after_one_map_fails_and_does_not_modify_sources(
     state = run_batch(BatchOptions(str(source_root), str(tmp_path / "output")))
 
     # Then
-    assert [result.state for result in state.results] == [MapBatchState.FAILED, MapBatchState.COMPLETE]
+    assert [result.state for result in state.results] == [
+        MapBatchState.FAILED,
+        MapBatchState.COMPLETE,
+    ]
     after = {
-        path: (path.stat().st_size, path.stat().st_mtime_ns, hashlib.sha256(path.read_bytes()).hexdigest())
+        path: (
+            path.stat().st_size,
+            path.stat().st_mtime_ns,
+            hashlib.sha256(path.read_bytes()).hexdigest(),
+        )
         for path in (bad, good)
     }
     assert after == before
@@ -129,7 +144,9 @@ def test_resume_skips_only_an_unchanged_published_success(
     source_root = tmp_path / "Maps"
     _write_map(source_root / "sample.w3x")
     calls = 0
-    monkeypatch.setattr(batch_runner, "build_map_load_context", lambda **_kwargs: MapLoadContext())
+    monkeypatch.setattr(
+        batch_runner, "build_map_load_context", lambda **_kwargs: MapLoadContext()
+    )
 
     def process(
         index: int,
@@ -161,7 +178,9 @@ def test_resume_reprocesses_a_changed_source(
     source_root = tmp_path / "Maps"
     source = _write_map(source_root / "sample.w3x", b"first")
     calls = 0
-    monkeypatch.setattr(batch_runner, "build_map_load_context", lambda **_kwargs: MapLoadContext())
+    monkeypatch.setattr(
+        batch_runner, "build_map_load_context", lambda **_kwargs: MapLoadContext()
+    )
 
     def process(
         index: int,
@@ -206,7 +225,9 @@ def test_no_retry_failed_reuses_an_unchanged_failed_result(
     source_root = tmp_path / "Maps"
     _write_map(source_root / "broken.w3x")
     calls = 0
-    monkeypatch.setattr(batch_runner, "build_map_load_context", lambda **_kwargs: MapLoadContext())
+    monkeypatch.setattr(
+        batch_runner, "build_map_load_context", lambda **_kwargs: MapLoadContext()
+    )
 
     def fail(
         _index: int,

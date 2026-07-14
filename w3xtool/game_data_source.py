@@ -112,7 +112,9 @@ def probe_game_data_path(path: str | None) -> GameDataProbe:
     if not os.path.isdir(path):
         return GameDataProbe("missing", False, "路径不存在")
     if is_classic_mpq_install(path):
-        return GameDataProbe("classic_mpq", True, "经典 MPQ 目录：按补丁优先级只读", "mpq")
+        return GameDataProbe(
+            "classic_mpq", True, "经典 MPQ 目录：按补丁优先级只读", "mpq"
+        )
     if _looks_like_native_casc(path):
         native_probe = probe_casclib(path)
         if native_probe.is_available:
@@ -147,18 +149,18 @@ def open_game_data_source(path: str | None) -> GameDataSource | None:
     if probe.kind == "classic_mpq":
         try:
             return ClassicMpqDataSource(path)
-        except (OSError, ValueError):
+        except OSError, ValueError:
             return None
     if probe.kind == "native_casc":
         if probe.backend == "casclib":
             try:
                 return CascLibDataSource(path)
-            except (CascLibLoadError, CascNativeError):
+            except CascLibLoadError, CascNativeError:
                 if not has_casc_path_map(path):
                     return None
         try:
             return CascDataSource(path)
-        except (FileNotFoundError, OSError, ValueError):
+        except FileNotFoundError, OSError, ValueError:
             return None
     try:
         return DirectoryDataSource(path)

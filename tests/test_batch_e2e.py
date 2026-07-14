@@ -7,7 +7,9 @@ from pathlib import Path
 
 from w3xtool.batch_cli import BatchCliOptions, run_batch_cli
 
-_FIXTURE = Path(__file__).parent / "fixtures" / "maps" / "war3net-map-script-builder.w3x"
+_FIXTURE = (
+    Path(__file__).parent / "fixtures" / "maps" / "war3net-map-script-builder.w3x"
+)
 
 
 def test_batch_e2e_publishes_per_map_and_global_reports(tmp_path: Path) -> None:

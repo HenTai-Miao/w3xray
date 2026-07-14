@@ -86,7 +86,9 @@ def export_named_icon(root: str, resource: NamedIconResource) -> IconExportRecor
     )
 
 
-def export_anonymous_icon(root: str, resource: AnonymousIconResource) -> IconExportRecord:
+def export_anonymous_icon(
+    root: str, resource: AnonymousIconResource
+) -> IconExportRecord:
     """Write one anonymous BLP under its evidence-derived stable basename."""
     return _export(
         root=root,

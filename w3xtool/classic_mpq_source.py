@@ -35,7 +35,11 @@ def classic_mpq_paths(root: str) -> tuple[str, ...]:
     if not directory.is_dir():
         return ()
     try:
-        by_name = {entry.name.casefold(): entry for entry in directory.iterdir() if entry.is_file()}
+        by_name = {
+            entry.name.casefold(): entry
+            for entry in directory.iterdir()
+            if entry.is_file()
+        }
     except OSError:
         return ()
     return tuple(
@@ -47,21 +51,25 @@ def classic_mpq_paths(root: str) -> tuple[str, ...]:
 
 def is_classic_mpq_install(root: str) -> bool:
     """Return whether the directory contains the required base archive."""
-    return any(Path(path).name.casefold() == "war3.mpq" for path in classic_mpq_paths(root))
+    return any(
+        Path(path).name.casefold() == "war3.mpq" for path in classic_mpq_paths(root)
+    )
 
 
 @final
 class ClassicMpqDataSource:
     """Layer classic MPQs without modifying or copying their contents."""
 
-    def __init__(self, root: str, *, archive_factory: ArchiveFactory = MPQArchive) -> None:
+    def __init__(
+        self, root: str, *, archive_factory: ArchiveFactory = MPQArchive
+    ) -> None:
         paths = classic_mpq_paths(root)
         if not any(Path(path).name.casefold() == "war3.mpq" for path in paths):
             raise FileNotFoundError(root)
         archives: list[ClassicArchive] = []
         try:
             archives.extend(archive_factory(path) for path in paths)
-        except (OSError, ValueError):
+        except OSError, ValueError:
             for archive in archives:
                 archive.close()
             raise

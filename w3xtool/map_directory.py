@@ -51,7 +51,9 @@ def scan_battle_maps(
         return []
 
     workers = _worker_count(len(files), max_workers)
-    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="w3xray-scan") as pool:
+    with ThreadPoolExecutor(
+        max_workers=workers, thread_name_prefix="w3xray-scan"
+    ) as pool:
         return list(pool.map(lambda path: (path, name_loader(path)), files))
 
 

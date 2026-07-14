@@ -13,7 +13,10 @@ from w3xtool.game_data_source import open_game_data_source, probe_game_data_path
 
 class _FakeArchive:
     def __init__(self, files: dict[str, bytes]) -> None:
-        self._files = {name.replace("/", "\\").casefold(): payload for name, payload in files.items()}
+        self._files = {
+            name.replace("/", "\\").casefold(): payload
+            for name, payload in files.items()
+        }
         self.close_count = 0
 
     def has_file(self, name: str) -> bool:
@@ -51,7 +54,9 @@ def test_classic_source_reads_the_highest_priority_archive(tmp_path: Path) -> No
     source.close()
 
 
-def test_classic_source_reports_the_archive_that_supplied_a_member(tmp_path: Path) -> None:
+def test_classic_source_reports_the_archive_that_supplied_a_member(
+    tmp_path: Path,
+) -> None:
     # Given
     archives = {
         "War3Patch.mpq": _FakeArchive({"Icons\\BTN.blp": b"patch"}),
@@ -118,7 +123,9 @@ def test_classic_source_close_is_idempotent(tmp_path: Path) -> None:
     assert archive.close_count == 1
 
 
-def test_game_data_probe_prefers_classic_mpqs_over_generic_files(tmp_path: Path) -> None:
+def test_game_data_probe_prefers_classic_mpqs_over_generic_files(
+    tmp_path: Path,
+) -> None:
     # Given
     (tmp_path / "war3.mpq").write_bytes(b"container")
 
@@ -126,10 +133,16 @@ def test_game_data_probe_prefers_classic_mpqs_over_generic_files(tmp_path: Path)
     probe = probe_game_data_path(str(tmp_path))
 
     # Then
-    assert (probe.kind, probe.is_readable, probe.backend) == ("classic_mpq", True, "mpq")
+    assert (probe.kind, probe.is_readable, probe.backend) == (
+        "classic_mpq",
+        True,
+        "mpq",
+    )
 
 
-def test_open_classic_source_returns_none_for_an_invalid_archive(tmp_path: Path) -> None:
+def test_open_classic_source_returns_none_for_an_invalid_archive(
+    tmp_path: Path,
+) -> None:
     # Given
     (tmp_path / "war3.mpq").write_bytes(b"not an MPQ")
 

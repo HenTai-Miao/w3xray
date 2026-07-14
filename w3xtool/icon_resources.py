@@ -136,7 +136,11 @@ def iter_anonymous_blps(
     seen: set[int] = set()
     for entry in ledger.entries:
         block_index = entry.block_index
-        if block_index is None or block_index in seen or not _is_anonymous_blp(entry.internal_path):
+        if (
+            block_index is None
+            or block_index in seen
+            or not _is_anonymous_blp(entry.internal_path)
+        ):
             continue
         seen.add(block_index)
         block = blocks.get(block_index)
@@ -144,7 +148,7 @@ def iter_anonymous_blps(
             continue
         try:
             payload = archive.read_block_anon(block)
-        except (KeyError, OSError, ValueError):
+        except KeyError, OSError, ValueError:
             continue
         if payload is None or not payload.startswith((b"BLP1", b"BLP2")):
             continue
@@ -171,13 +175,17 @@ def _path_candidates(path: str) -> tuple[str, ...]:
     base = path.rsplit(".", 1)[0] if "." in leaf else path
     ordered = (path, f"{base}.blp", f"{base}.tga", f"{base}.dds")
     seen: set[str] = set()
-    return tuple(item for item in ordered if not (item.casefold() in seen or seen.add(item.casefold())))
+    return tuple(
+        item
+        for item in ordered
+        if not (item.casefold() in seen or seen.add(item.casefold()))
+    )
 
 
 def _read_named(source: NamedIconArchive, name: str) -> bytes | None:
     try:
         return source.read_file(name) if source.has_file(name) else None
-    except (KeyError, OSError, ValueError):
+    except KeyError, OSError, ValueError:
         return None
 
 
@@ -188,7 +196,7 @@ def _read_client(source: GameDataSource, name: str) -> tuple[bytes, str] | None:
         if isinstance(source, SourcedGameDataSource):
             return source.read_file_with_source(name)
         return source.read_file(name), "client-data"
-    except (KeyError, OSError, ValueError):
+    except KeyError, OSError, ValueError:
         return None
 
 

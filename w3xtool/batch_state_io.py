@@ -48,7 +48,9 @@ def format_batch_state_json(state: BatchState) -> str:
     """Serialize batch state with stable key and row ordering."""
     payload = _StateJson(
         schema_version=state.schema_version,
-        results=[_result_json(result) for result in sorted(state.results, key=_result_key)],
+        results=[
+            _result_json(result) for result in sorted(state.results, key=_result_key)
+        ],
     )
     return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
 

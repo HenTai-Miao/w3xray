@@ -47,7 +47,9 @@ class _Archive:
     def __init__(self, named: dict[str, bytes], anonymous: dict[int, bytes]) -> None:
         self._named = {name.casefold(): payload for name, payload in named.items()}
         self._anonymous = anonymous
-        self._blocks = {index: _Block(len(payload)) for index, payload in anonymous.items()}
+        self._blocks = {
+            index: _Block(len(payload)) for index, payload in anonymous.items()
+        }
 
     def has_file(self, name: str) -> bool:
         return name.casefold() in self._named
@@ -60,7 +62,11 @@ class _Archive:
 
     def read_block_anon(self, block: _Block) -> bytes | None:
         return next(
-            (self._anonymous[index] for index, candidate in self._blocks.items() if candidate is block),
+            (
+                self._anonymous[index]
+                for index, candidate in self._blocks.items()
+                if candidate is block
+            ),
             None,
         )
 
@@ -123,8 +129,12 @@ def test_process_one_map_publishes_named_anonymous_and_description_artifacts(
     source_path = tmp_path / "sample.w3x"
     source_path.write_bytes(b"map source stays read only")
     loaded = _loaded_map(str(source_path), r"Icons\BTNHero.blp")
-    monkeypatch.setattr(batch_map_processing, "load_map", lambda *_args, **_kwargs: loaded)
-    monkeypatch.setattr(batch_map_processing, "open_game_data_source", lambda _path: None)
+    monkeypatch.setattr(
+        batch_map_processing, "load_map", lambda *_args, **_kwargs: loaded
+    )
+    monkeypatch.setattr(
+        batch_map_processing, "open_game_data_source", lambda _path: None
+    )
     fingerprint = fingerprint_source(str(source_path))
     options = BatchOptions(str(tmp_path), str(tmp_path / "output"))
 
@@ -138,7 +148,9 @@ def test_process_one_map_publishes_named_anonymous_and_description_artifacts(
     assert (result.original_written_count, result.png_written_count) == (2, 2)
     assert tuple(output.glob("图标/原始/具名/Icons/*.blp"))
     assert tuple(output.glob("图标/原始/匿名/*.blp"))
-    assert "|cffffcc00说明|r|n第二行" in (output / "对象描述.tsv").read_text(encoding="utf-8")
+    assert "|cffffcc00说明|r|n第二行" in (output / "对象描述.tsv").read_text(
+        encoding="utf-8"
+    )
     assert "说明\\n第二行" in (output / "对象描述.tsv").read_text(encoding="utf-8")
     assert loaded.archive_source is not None
     assert loaded.archive_source.closed
@@ -152,8 +164,12 @@ def test_process_one_map_publishes_partial_result_for_an_unresolved_named_icon(
     source_path = tmp_path / "sample.w3x"
     source_path.write_bytes(b"map")
     loaded = _loaded_map(str(source_path), r"Icons\Missing.blp")
-    monkeypatch.setattr(batch_map_processing, "load_map", lambda *_args, **_kwargs: loaded)
-    monkeypatch.setattr(batch_map_processing, "open_game_data_source", lambda _path: None)
+    monkeypatch.setattr(
+        batch_map_processing, "load_map", lambda *_args, **_kwargs: loaded
+    )
+    monkeypatch.setattr(
+        batch_map_processing, "open_game_data_source", lambda _path: None
+    )
 
     # When
     result = process_one_map(
@@ -178,7 +194,9 @@ def test_process_one_map_closes_loaded_map_when_client_source_open_fails(
     source_path = tmp_path / "sample.w3x"
     source_path.write_bytes(b"map")
     loaded = _loaded_map(str(source_path), r"Icons\BTNHero.blp")
-    monkeypatch.setattr(batch_map_processing, "load_map", lambda *_args, **_kwargs: loaded)
+    monkeypatch.setattr(
+        batch_map_processing, "load_map", lambda *_args, **_kwargs: loaded
+    )
 
     def fail_open(_path: str | None) -> None:
         raise OSError("client unavailable")

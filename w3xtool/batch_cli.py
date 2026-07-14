@@ -73,7 +73,11 @@ def parse_batch_cli_options(argv: Sequence[str]) -> BatchCliOptions:
             index += 1
             continue
         value_index = index + 1
-        if value_index >= len(argv) or not argv[value_index] or argv[value_index].startswith("--"):
+        if (
+            value_index >= len(argv)
+            or not argv[value_index]
+            or argv[value_index].startswith("--")
+        ):
             raise BatchCliOptionError(f"参数缺少路径值：{option}")
         value = argv[value_index]
         match _ValueOption(option):
@@ -95,9 +99,11 @@ def run_batch_cli(options: BatchCliOptions) -> int:
         print(f"批量提取失败：{single_line_text(str(exc))}", file=sys.stderr)
         return 2
     for result in state.results:
-        print(single_line_text(
-            f"[{result.state.value}] {result.display_name} -> {result.output_directory or '未发布'}",
-        ))
+        print(
+            single_line_text(
+                f"[{result.state.value}] {result.display_name} -> {result.output_directory or '未发布'}",
+            )
+        )
     failed = sum(result.state is MapBatchState.FAILED for result in state.results)
     print(f"完成：{len(state.results) - failed}/{len(state.results)}，失败：{failed}")
     return int(failed > 0)

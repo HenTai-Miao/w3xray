@@ -8,7 +8,12 @@ import pytest
 
 import main as entrypoint
 import w3xtool.batch_cli as batch_cli
-from w3xtool.batch_models import BatchState, MapBatchResult, MapBatchState, SourceFingerprint
+from w3xtool.batch_models import (
+    BatchState,
+    MapBatchResult,
+    MapBatchState,
+    SourceFingerprint,
+)
 from w3xtool.batch_runner import DEFAULT_BATCH_OUTPUT
 
 
@@ -79,7 +84,9 @@ def test_run_batch_cli_returns_one_only_when_a_map_failed(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     # Given
-    state = BatchState(1, (_result(MapBatchState.COMPLETE), _result(MapBatchState.FAILED)))
+    state = BatchState(
+        1, (_result(MapBatchState.COMPLETE), _result(MapBatchState.FAILED))
+    )
     monkeypatch.setattr(batch_cli, "run_batch", lambda _options: state)
 
     # When
@@ -97,7 +104,9 @@ def test_main_dispatches_batch_without_starting_the_gui(
 ) -> None:
     # Given
     received: list[batch_cli.BatchCliOptions] = []
-    monkeypatch.setattr(batch_cli, "run_batch_cli", lambda options: received.append(options) or 7)
+    monkeypatch.setattr(
+        batch_cli, "run_batch_cli", lambda options: received.append(options) or 7
+    )
     monkeypatch.setattr(sys, "argv", ["main.py", "batch", "Maps", "--output", "out"])
 
     # When / Then

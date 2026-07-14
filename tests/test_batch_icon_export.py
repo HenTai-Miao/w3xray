@@ -15,7 +15,9 @@ from w3xtool.extraction_ledger import BlockSource, BlockState
 from w3xtool.icon_resources import AnonymousIconResource, NamedIconResource
 
 
-def _anonymous_resource(payload: bytes, *, block_index: int = 9) -> AnonymousIconResource:
+def _anonymous_resource(
+    payload: bytes, *, block_index: int = 9
+) -> AnonymousIconResource:
     digest = hashlib.sha256(payload).hexdigest()
     return AnonymousIconResource(
         block_index=block_index,
@@ -76,8 +78,14 @@ def test_named_export_writes_original_and_viewable_png(tmp_path: Path) -> None:
     record = export_named_icon(str(tmp_path), resource)
 
     # Then
-    assert (tmp_path / "图标/原始/具名/Icons/BTNHero.blp").read_bytes() == resource.payload
-    assert (tmp_path / "图标/PNG/具名/Icons/BTNHero.png").read_bytes().startswith(b"\x89PNG")
+    assert (
+        tmp_path / "图标/原始/具名/Icons/BTNHero.blp"
+    ).read_bytes() == resource.payload
+    assert (
+        (tmp_path / "图标/PNG/具名/Icons/BTNHero.png")
+        .read_bytes()
+        .startswith(b"\x89PNG")
+    )
     assert record.state is IconExportState.COMPLETE
     assert record.original_written and record.png_written
 
@@ -94,7 +102,9 @@ def test_named_export_cannot_escape_the_output_root(tmp_path: Path) -> None:
     assert not (tmp_path.parent / "outside.blp").exists()
 
 
-def test_named_export_rejects_unc_paths_instead_of_normalizing_them(tmp_path: Path) -> None:
+def test_named_export_rejects_unc_paths_instead_of_normalizing_them(
+    tmp_path: Path,
+) -> None:
     # Given
     resource = _named_resource(r"\\server\share\outside.blp", b"BLP1broken")
 
@@ -106,7 +116,9 @@ def test_named_export_rejects_unc_paths_instead_of_normalizing_them(tmp_path: Pa
     assert not (tmp_path / "server/share/outside.blp").exists()
 
 
-def test_named_export_hash_suffixes_a_different_existing_payload(tmp_path: Path) -> None:
+def test_named_export_hash_suffixes_a_different_existing_payload(
+    tmp_path: Path,
+) -> None:
     # Given
     first = _named_resource("Icons/BTN.blp", b"BLP1first")
     second = _named_resource("Icons/BTN.blp", b"BLP1second")

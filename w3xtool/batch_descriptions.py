@@ -64,7 +64,9 @@ _TIP_FALLBACKS: Final = ("display:tip",)
 _DESCRIPTION_FALLBACKS: Final = ("display:description",)
 
 
-def audit_object_descriptions(objects: Iterable[GameObject]) -> tuple[DescriptionRecord, ...]:
+def audit_object_descriptions(
+    objects: Iterable[GameObject],
+) -> tuple[DescriptionRecord, ...]:
     """Return deterministic raw/readable description evidence for every object."""
     records = tuple(record for item in objects for record in _records_for_object(item))
     return tuple(sorted(records, key=_record_sort_key))

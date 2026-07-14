@@ -48,7 +48,12 @@ def test_audit_preserves_raw_levels_and_cleans_markup() -> None:
 
     # Then
     assert [
-        (record.level, record.raw_description, record.readable_description, record.state)
+        (
+            record.level,
+            record.raw_description,
+            record.readable_description,
+            record.state,
+        )
         for record in records
     ] == [
         (1, "|cffffcc00伤害|r|n100", "伤害\n100", DescriptionState.MAP_VALUE),
@@ -117,7 +122,10 @@ def test_audit_uses_category_specific_tip_and_description_fields(
 
     # Then
     assert (record.raw_tip, record.raw_description) == ("短提示", "完整说明")
-    assert (record.tip_source, record.description_source) == ("war3map.bin", "war3map.bin")
+    assert (record.tip_source, record.description_source) == (
+        "war3map.bin",
+        "war3map.bin",
+    )
 
 
 def test_item_description_falls_back_to_ides() -> None:
@@ -138,8 +146,14 @@ def test_item_description_falls_back_to_ides() -> None:
 
 def test_records_have_deterministic_category_object_and_level_order() -> None:
     # Given
-    later = _game_object(obj_id="A002", field_values={"aub1": "later"}, field_sources={"aub1": "map"})
-    earlier = _game_object(obj_id="A001", field_values={"aub1:2": "two", "aub1:1": "one"}, field_sources={"aub1:2": "map", "aub1:1": "map"})
+    later = _game_object(
+        obj_id="A002", field_values={"aub1": "later"}, field_sources={"aub1": "map"}
+    )
+    earlier = _game_object(
+        obj_id="A001",
+        field_values={"aub1:2": "two", "aub1:1": "one"},
+        field_sources={"aub1:2": "map", "aub1:1": "map"},
+    )
 
     # When
     records = audit_object_descriptions((later, earlier))

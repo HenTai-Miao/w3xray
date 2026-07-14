@@ -61,21 +61,23 @@ def format_description_tsv(records: Iterable[DescriptionRecord]) -> str:
     """Render raw and readable object descriptions without losing markup."""
     rows: list[tuple[str, ...]] = [_DESCRIPTION_HEADER]
     for record in sorted(records, key=_description_key):
-        rows.append((
-            record.category,
-            record.object_id,
-            record.base_id,
-            record.object_name,
-            _yes_no(record.is_custom),
-            "" if record.level is None else str(record.level),
-            record.raw_tip,
-            record.readable_tip,
-            record.tip_source,
-            record.raw_description,
-            record.readable_description,
-            record.description_source,
-            record.state.value,
-        ))
+        rows.append(
+            (
+                record.category,
+                record.object_id,
+                record.base_id,
+                record.object_name,
+                _yes_no(record.is_custom),
+                "" if record.level is None else str(record.level),
+                record.raw_tip,
+                record.readable_tip,
+                record.tip_source,
+                record.raw_description,
+                record.readable_description,
+                record.description_source,
+                record.state.value,
+            )
+        )
     return _format_rows(rows)
 
 
@@ -84,23 +86,26 @@ def format_icon_index_tsv(records: Iterable[IconExportRecord]) -> str:
     rows: list[tuple[str, ...]] = [_ICON_HEADER]
     for record in sorted(records, key=_icon_key):
         references = ";".join(
-            f"{item.category}:{item.object_id}:{item.object_name}" for item in record.objects
+            f"{item.category}:{item.object_id}:{item.object_name}"
+            for item in record.objects
         )
-        rows.append((
-            record.kind.value,
-            record.requested_path,
-            record.resolved_path,
-            record.source_path,
-            "" if record.block_index is None else str(record.block_index),
-            record.sha256,
-            record.original_relative_path,
-            record.png_relative_path,
-            _yes_no(record.original_written),
-            _yes_no(record.png_written),
-            record.state.value,
-            record.error,
-            references,
-        ))
+        rows.append(
+            (
+                record.kind.value,
+                record.requested_path,
+                record.resolved_path,
+                record.source_path,
+                "" if record.block_index is None else str(record.block_index),
+                record.sha256,
+                record.original_relative_path,
+                record.png_relative_path,
+                _yes_no(record.original_written),
+                _yes_no(record.png_written),
+                record.state.value,
+                record.error,
+                references,
+            )
+        )
     return _format_rows(rows)
 
 
@@ -125,7 +130,9 @@ def derive_map_state(
         return MapBatchState.FAILED
     if restricted_block_count:
         return MapBatchState.RESTRICTED
-    icon_incomplete = any(record.state is not IconExportState.COMPLETE for record in icons)
+    icon_incomplete = any(
+        record.state is not IconExportState.COMPLETE for record in icons
+    )
     description_missing = any(
         record.state is DescriptionState.SOURCE_MISSING for record in descriptions
     )
@@ -159,40 +166,77 @@ def format_icon_completeness(
 ) -> str:
     """Summarize icon writes and unresolved static boundaries."""
     items = tuple(records)
-    return "\n".join((
-        f"已识别：{len(items)}",
-        f"原始写出：{sum(item.original_written for item in items)}",
-        f"PNG 成功：{sum(item.png_written for item in items)}",
-        f"失败：{sum(item.state is not IconExportState.COMPLETE for item in items)}",
-        f"具名未解析：{unresolved_named_count}",
-        f"受限块：{restricted_block_count}",
-        "",
-    ))
+    return "\n".join(
+        (
+            f"已识别：{len(items)}",
+            f"原始写出：{sum(item.original_written for item in items)}",
+            f"PNG 成功：{sum(item.png_written for item in items)}",
+            f"失败：{sum(item.state is not IconExportState.COMPLETE for item in items)}",
+            f"具名未解析：{unresolved_named_count}",
+            f"受限块：{restricted_block_count}",
+            "",
+        )
+    )
 
 
 def format_description_completeness(records: Iterable[DescriptionRecord]) -> str:
     """Summarize all four source/completeness states."""
-    return "\n".join((*(f"{label}：{count}" for label, count in description_state_counts(records)), ""))
+    return "\n".join(
+        (
+            *(
+                f"{label}：{count}"
+                for label, count in description_state_counts(records)
+            ),
+            "",
+        )
+    )
 
 
 def format_batch_summary_tsv(state: BatchState) -> str:
     """Render stable global result rows sorted by source path."""
     header = (
-        "源路径", "地图名", "SHA256", "输出目录", "阶段", "状态", "对象数",
-        "描述状态计数", "具名图标", "匿名图标", "原始写出", "PNG成功",
-        "图标失败", "受限块", "耗时毫秒", "首个错误",
+        "源路径",
+        "地图名",
+        "SHA256",
+        "输出目录",
+        "阶段",
+        "状态",
+        "对象数",
+        "描述状态计数",
+        "具名图标",
+        "匿名图标",
+        "原始写出",
+        "PNG成功",
+        "图标失败",
+        "受限块",
+        "耗时毫秒",
+        "首个错误",
     )
     rows: list[tuple[str, ...]] = [header]
     for result in sorted(state.results, key=_result_key):
-        counts = ";".join(f"{label}={count}" for label, count in result.description_counts)
-        rows.append((
-            result.source.path, result.display_name, result.source.sha256,
-            result.output_directory, result.stage, result.state.value,
-            str(result.object_count), counts, str(result.named_icon_count),
-            str(result.anonymous_icon_count), str(result.original_written_count),
-            str(result.png_written_count), str(result.icon_failure_count),
-            str(result.restricted_block_count), str(result.elapsed_ms), result.first_error,
-        ))
+        counts = ";".join(
+            f"{label}={count}" for label, count in result.description_counts
+        )
+        rows.append(
+            (
+                result.source.path,
+                result.display_name,
+                result.source.sha256,
+                result.output_directory,
+                result.stage,
+                result.state.value,
+                str(result.object_count),
+                counts,
+                str(result.named_icon_count),
+                str(result.anonymous_icon_count),
+                str(result.original_written_count),
+                str(result.png_written_count),
+                str(result.icon_failure_count),
+                str(result.restricted_block_count),
+                str(result.elapsed_ms),
+                result.first_error,
+            )
+        )
     return _format_rows(rows)
 
 
@@ -212,7 +256,12 @@ def _format_rows(rows: Iterable[tuple[str, ...]]) -> str:
 
 
 def _cell(value: str) -> str:
-    return value.replace("\r\n", "\n").replace("\r", "\n").replace("\t", " ").replace("\n", "\\n")
+    return (
+        value.replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .replace("\t", " ")
+        .replace("\n", "\\n")
+    )
 
 
 def _yes_no(value: bool) -> str:
@@ -220,11 +269,19 @@ def _yes_no(value: bool) -> str:
 
 
 def _description_key(record: DescriptionRecord) -> tuple[str, str, int]:
-    return record.category.casefold(), record.object_id, -1 if record.level is None else record.level
+    return (
+        record.category.casefold(),
+        record.object_id,
+        -1 if record.level is None else record.level,
+    )
 
 
 def _icon_key(record: IconExportRecord) -> tuple[int, str, int]:
-    return int(record.kind.value != "具名"), record.requested_path.casefold(), record.block_index or -1
+    return (
+        int(record.kind.value != "具名"),
+        record.requested_path.casefold(),
+        record.block_index or -1,
+    )
 
 
 def _result_key(result: MapBatchResult) -> tuple[str, str]:
