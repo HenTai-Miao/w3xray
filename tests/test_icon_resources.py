@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterable
 from dataclasses import dataclass
 
 from w3xtool.extraction_ledger import (
@@ -12,6 +13,7 @@ from w3xtool.extraction_ledger import (
     build_extraction_ledger,
 )
 from w3xtool.icon_resources import (
+    AnonymousIconBlock,
     collect_icon_references,
     iter_anonymous_blps,
     resolve_named_icon,
@@ -79,12 +81,12 @@ class _FakeAnonymousArchive:
         self._blocks = blocks
         self.read_indexes: list[int] = []
 
-    def iter_blocks(self) -> tuple[tuple[int, _Block], ...]:
+    def iter_blocks(self) -> Iterable[tuple[int, AnonymousIconBlock]]:
         return tuple(
             (index, _Block(len(payload))) for index, payload in self._blocks.items()
         )
 
-    def read_block_anon(self, block: _Block) -> bytes | None:
+    def read_block_anon(self, block: AnonymousIconBlock) -> bytes | None:
         for index, payload in self._blocks.items():
             if len(payload) == block.file_size and index not in self.read_indexes:
                 self.read_indexes.append(index)

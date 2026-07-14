@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import struct
+from collections.abc import Iterable
 from contextlib import nullcontext
 from pathlib import Path
+from typing import ContextManager
 
 import pytest
 
@@ -19,7 +21,9 @@ from w3xtool.extraction_ledger import (
     ExtractionEntry,
     build_extraction_ledger,
 )
+from w3xtool.icon_resources import AnonymousIconBlock
 from w3xtool.load_context import MapLoadContext
+from w3xtool.map_archive_reader import MapArchiveReader
 from w3xtool.map_data import GameObject, MapData
 
 
@@ -45,6 +49,7 @@ class _Archive:
     path = "fixture.w3x"
 
     def __init__(self, named: dict[str, bytes], anonymous: dict[int, bytes]) -> None:
+        self._data = b""
         self._named = {name.casefold(): payload for name, payload in named.items()}
         self._anonymous = anonymous
         self._blocks = {
@@ -57,10 +62,16 @@ class _Archive:
     def read_file(self, name: str) -> bytes:
         return self._named[name.casefold()]
 
-    def iter_blocks(self) -> tuple[tuple[int, _Block], ...]:
+    def list_files(self) -> list[str]:
+        return list(self._named)
+
+    def close(self) -> None:
+        """The in-memory fake owns no external resource."""
+
+    def iter_blocks(self) -> Iterable[tuple[int, AnonymousIconBlock]]:
         return tuple(self._blocks.items())
 
-    def read_block_anon(self, block: _Block) -> bytes | None:
+    def read_block_anon(self, block: AnonymousIconBlock) -> bytes | None:
         return next(
             (
                 self._anonymous[index]
@@ -77,14 +88,14 @@ class _ArchiveSource:
         self.archive = archive
         self.closed = False
 
-    def open(self):
+    def open(self) -> ContextManager[MapArchiveReader]:
         return nullcontext(self.archive)
 
     def close(self) -> None:
         self.closed = True
 
 
-def _loaded_map(source_path: str, icon_path: str) -> MapData:
+def _loaded_map(source_path: str, icon_path: str) -> tuple[MapData, _ArchiveSource]:
     payload = _one_pixel_blp()
     archive = _Archive({r"Icons\BTNHero.blp": payload}, {7: payload})
     source = _ArchiveSource(archive)
@@ -112,12 +123,15 @@ def _loaded_map(source_path: str, icon_path: str) -> MapData:
         error_code="",
         detail="",
     )
-    return MapData(
-        path=source_path,
-        name="集成测试图",
-        objects={"技能": [item]},
-        archive_source=source,
-        extraction_ledger=build_extraction_ledger(source_path, "a" * 64, (entry,)),
+    return (
+        MapData(
+            path=source_path,
+            name="集成测试图",
+            objects={"技能": [item]},
+            archive_source=source,
+            extraction_ledger=build_extraction_ledger(source_path, "a" * 64, (entry,)),
+        ),
+        source,
     )
 
 
@@ -128,7 +142,7 @@ def test_process_one_map_publishes_named_anonymous_and_description_artifacts(
     # Given
     source_path = tmp_path / "sample.w3x"
     source_path.write_bytes(b"map source stays read only")
-    loaded = _loaded_map(str(source_path), r"Icons\BTNHero.blp")
+    loaded, archive_source = _loaded_map(str(source_path), r"Icons\BTNHero.blp")
     monkeypatch.setattr(
         batch_map_processing, "load_map", lambda *_args, **_kwargs: loaded
     )
@@ -152,8 +166,7 @@ def test_process_one_map_publishes_named_anonymous_and_description_artifacts(
         encoding="utf-8"
     )
     assert "说明\\n第二行" in (output / "对象描述.tsv").read_text(encoding="utf-8")
-    assert loaded.archive_source is not None
-    assert loaded.archive_source.closed
+    assert archive_source.closed
 
 
 def test_process_one_map_publishes_partial_result_for_an_unresolved_named_icon(
@@ -163,7 +176,7 @@ def test_process_one_map_publishes_partial_result_for_an_unresolved_named_icon(
     # Given
     source_path = tmp_path / "sample.w3x"
     source_path.write_bytes(b"map")
-    loaded = _loaded_map(str(source_path), r"Icons\Missing.blp")
+    loaded, _archive_source = _loaded_map(str(source_path), r"Icons\Missing.blp")
     monkeypatch.setattr(
         batch_map_processing, "load_map", lambda *_args, **_kwargs: loaded
     )
@@ -193,7 +206,7 @@ def test_process_one_map_closes_loaded_map_when_client_source_open_fails(
     # Given
     source_path = tmp_path / "sample.w3x"
     source_path.write_bytes(b"map")
-    loaded = _loaded_map(str(source_path), r"Icons\BTNHero.blp")
+    loaded, archive_source = _loaded_map(str(source_path), r"Icons\BTNHero.blp")
     monkeypatch.setattr(
         batch_map_processing, "load_map", lambda *_args, **_kwargs: loaded
     )
@@ -211,5 +224,4 @@ def test_process_one_map_closes_loaded_map_when_client_source_open_fails(
             BatchOptions(str(tmp_path), str(tmp_path / "output")),
             MapLoadContext(),
         )
-    assert loaded.archive_source is not None
-    assert loaded.archive_source.closed
+    assert archive_source.closed

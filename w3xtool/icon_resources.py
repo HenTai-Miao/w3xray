@@ -26,7 +26,8 @@ class NamedIconArchive(Protocol):
 class AnonymousIconBlock(Protocol):
     """Opaque archive block metadata accepted by anonymous reads."""
 
-    file_size: int
+    @property
+    def file_size(self) -> int: ...
 
 
 @runtime_checkable
