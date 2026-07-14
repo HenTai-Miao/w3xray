@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -20,6 +22,11 @@ from w3xtool.supplemental_evidence import (
 
 
 _SHA = "a" * 64
+
+
+@contextmanager
+def _exception_tunnel() -> Iterator[None]:
+    yield
 
 
 def _file(name: str, source: BlockSource) -> SupplementalFile:
@@ -97,3 +104,10 @@ def test_author_bundle_normalizes_to_verified_supplemental_file(tmp_path: Path) 
     # Then: its provenance and identity-preserving read remain explicit.
     assert normalized.files[0].source is BlockSource.AUTHOR_PLAINTEXT
     assert normalized.files[0].read() == b"x"
+
+
+def test_supplemental_error_survives_generator_context_unwind() -> None:
+    # Given / When / Then: contextlib may attach traceback state to the exception.
+    with pytest.raises(SupplementalEvidenceError, match="original reason"):
+        with _exception_tunnel():
+            raise SupplementalEvidenceError("original reason")

@@ -18,11 +18,12 @@ if TYPE_CHECKING:
 _SHA256_RE: Final = re.compile(r"[0-9a-f]{64}")
 
 
-@dataclass(frozen=True, slots=True)
 class SupplementalEvidenceError(OSError):
     """Reject unsafe, changed, or conflicting supplemental evidence."""
 
-    reason: str
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
 
     @override
     def __str__(self) -> str:
