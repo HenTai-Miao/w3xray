@@ -2,6 +2,13 @@
 
 from __future__ import annotations
 
+from .object_detail_presentation import (
+    format_complete_text_section,
+    format_object_fields,
+    format_object_relation_sections,
+    format_object_summary,
+    object_detail_title,
+)
 from .object_gallery import render_object_gallery
 
 
@@ -35,19 +42,25 @@ class ObjectDetailMixin:
         self._show_detail(results[index])
 
     def _show_detail(self, obj) -> None:
-        self.detail_icon_image = self._get_photo(getattr(obj, "icon", "")) or self.detail_blank_icon
+        self.detail_icon_image = (
+            self._get_photo(getattr(obj, "icon", "")) or self.detail_blank_icon
+        )
         self.detail_icon.configure(image=self.detail_icon_image, text="")
-        self.detail_title.configure(text=obj.name)
-        self.detail_sub.configure(text=f"{obj.category}  ·  ID {obj.obj_id}  ·  基础 {obj.base_id}"
-                                  + ("  ·  自定义" if obj.is_custom else "  ·  原始"))
+        self.detail_title.configure(text=object_detail_title(obj))
+        self.detail_sub.configure(
+            text=f"{obj.category}  ·  ID {obj.obj_id}  ·  基础 {obj.base_id}"
+            + ("  ·  自定义" if obj.is_custom else "  ·  原始")
+        )
         self.detail.configure(state="normal")
         self.detail.delete("1.0", "end")
-        self.detail.insert("end", f"ID：{obj.obj_id}\n10进制：{obj.decimal}\n名字：{obj.name}\n\n")
-        if not obj.fields:
-            self.detail.insert("end", "（无修改字段）")
-        for label, value in obj.fields:
-            self.detail.insert("end", f"{label}: {value}\n")
+        self.detail.insert("end", format_object_summary(obj))
+        md = self.map_data
+        if md is not None:
+            self.detail.insert("end", format_complete_text_section(md, obj))
+        self.detail.insert("end", format_object_fields(obj))
         self._insert_references(obj)
+        if md is not None:
+            self.detail.insert("end", format_object_relation_sections(md, obj))
         self.detail.configure(state="disabled")
 
     def _insert_references(self, obj) -> None:
@@ -69,7 +82,9 @@ class ObjectDetailMixin:
                 if key in seen:
                     continue
                 seen.add(key)
-                self.detail.insert("end", f"{_format_ref(ref_id, ref_name)}  ·  {label}\n")
+                self.detail.insert(
+                    "end", f"{_format_ref(ref_id, ref_name)}  ·  {label}\n"
+                )
 
 
 def _format_ref(code, name) -> str:
