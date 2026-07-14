@@ -7,9 +7,11 @@ from collections.abc import Iterable
 from typing import Final
 
 from .batch_descriptions import DescriptionRecord, DescriptionState
+from .batch_global_reports import format_batch_summary_tsv, format_retry_tsv
 from .batch_icon_export import IconExportRecord, IconExportState
-from .batch_models import BatchState, MapBatchResult, MapBatchState
+from .batch_models import MapBatchResult, MapBatchState
 from .batch_state_io import format_batch_state_json, parse_batch_state_json
+from .batch_tsv import format_tsv_rows
 
 __all__ = (
     "derive_map_state",
@@ -78,7 +80,7 @@ def format_description_tsv(records: Iterable[DescriptionRecord]) -> str:
                 record.state.value,
             )
         )
-    return _format_rows(rows)
+    return format_tsv_rows(rows)
 
 
 def format_icon_index_tsv(records: Iterable[IconExportRecord]) -> str:
@@ -106,7 +108,7 @@ def format_icon_index_tsv(records: Iterable[IconExportRecord]) -> str:
                 references,
             )
         )
-    return _format_rows(rows)
+    return format_tsv_rows(rows)
 
 
 def description_state_counts(
@@ -192,78 +194,6 @@ def format_description_completeness(records: Iterable[DescriptionRecord]) -> str
     )
 
 
-def format_batch_summary_tsv(state: BatchState) -> str:
-    """Render stable global result rows sorted by source path."""
-    header = (
-        "源路径",
-        "地图名",
-        "SHA256",
-        "输出目录",
-        "阶段",
-        "状态",
-        "对象数",
-        "描述状态计数",
-        "具名图标",
-        "匿名图标",
-        "原始写出",
-        "PNG成功",
-        "图标失败",
-        "受限块",
-        "耗时毫秒",
-        "首个错误",
-    )
-    rows: list[tuple[str, ...]] = [header]
-    for result in sorted(state.results, key=_result_key):
-        counts = ";".join(
-            f"{label}={count}" for label, count in result.description_counts
-        )
-        rows.append(
-            (
-                result.source.path,
-                result.display_name,
-                result.source.sha256,
-                result.output_directory,
-                result.stage,
-                result.state.value,
-                str(result.object_count),
-                counts,
-                str(result.named_icon_count),
-                str(result.anonymous_icon_count),
-                str(result.original_written_count),
-                str(result.png_written_count),
-                str(result.icon_failure_count),
-                str(result.restricted_block_count),
-                str(result.elapsed_ms),
-                result.first_error,
-            )
-        )
-    return _format_rows(rows)
-
-
-def format_retry_tsv(state: BatchState) -> str:
-    """List only results that a later run may need to retry."""
-    rows = [("源路径", "状态", "阶段", "首个错误")]
-    rows.extend(
-        (result.source.path, result.state.value, result.stage, result.first_error)
-        for result in sorted(state.results, key=_result_key)
-        if result.state is not MapBatchState.COMPLETE
-    )
-    return _format_rows(rows)
-
-
-def _format_rows(rows: Iterable[tuple[str, ...]]) -> str:
-    return "".join("\t".join(_cell(value) for value in row) + "\n" for row in rows)
-
-
-def _cell(value: str) -> str:
-    return (
-        value.replace("\r\n", "\n")
-        .replace("\r", "\n")
-        .replace("\t", " ")
-        .replace("\n", "\\n")
-    )
-
-
 def _yes_no(value: bool) -> str:
     return "是" if value else "否"
 
@@ -282,7 +212,3 @@ def _icon_key(record: IconExportRecord) -> tuple[int, str, int]:
         record.requested_path.casefold(),
         record.block_index or -1,
     )
-
-
-def _result_key(result: MapBatchResult) -> tuple[str, str]:
-    return result.source.path.casefold(), result.source.path

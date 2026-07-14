@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 
 import pytest
@@ -104,6 +105,24 @@ def test_description_tsv_keeps_raw_and_readable_columns_separate() -> None:
     # Then
     assert "原始说明\t可读说明\t说明来源\t完整性状态" in report
     assert "|cffff0000说明|r|n第二行\t说明\\n第二行\twar3map.w3a\t地图原值" in report
+
+
+def test_description_tsv_preserves_a_leading_quote_without_merging_columns() -> None:
+    # Given
+    text = '"烧伤附近的敌人。'
+    record = _description_record(
+        raw_description=text,
+        readable_description=text,
+    )
+
+    # When
+    report = format_description_tsv((record,))
+    row = next(csv.DictReader(report.splitlines(), delimiter="\t"))
+
+    # Then
+    assert row["原始说明"] == text
+    assert row["可读说明"] == text
+    assert row["完整性状态"] == DescriptionState.MAP_VALUE.value
 
 
 def test_icon_index_includes_true_source_and_all_object_references() -> None:
