@@ -21,14 +21,15 @@ The output root contains `批量提取汇总.tsv`, `批量提取状态.json`, `�
 
 ## Real-map acceptance on 2026-07-14
 
-- Source root: `/Volumes/zhongerbing/Program Files (x86)/Warcraft III/Warcraft III Frozen Throne/Maps/`.
-- Current inventory: 38 maps, 4,216,980,827 source bytes.
+- Current source root: `/Users/zhongerbing/Desktop/Maps/`.
+- Current inventory: 39 maps, 4,227,067,802 source bytes.
 - Published output: `/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output/`, about 5.6 GiB.
-- Result states: 1 `完整`, 37 `部分完成`, 0 `受限`, 0 `失败`.
-- Objects: 133,232 unique objects and 136,787 description rows.
-- Description rows: 77,427 map values, 23,895 client fills, 61 explicit empty values, and 35,404 source-missing values.
-- Icon records: 32,397 named plus 46,137 anonymous; all 78,534 logical exports wrote an original and PNG with zero decode/write failures.
-- Physical files: 78,372 unique originals and 78,372 unique PNGs. The 162-record difference is `.tga`/`.blp` references resolving to the same proven `.blp` and intentionally reusing one file.
-- Unresolved named references: 9,679. These are recorded static-evidence gaps, not failures of already exported files.
-- Corrected full rerun: 503.25 seconds wall time, 1,002,749,952-byte maximum resident set size.
-- Before/after source fingerprint manifests were byte-identical with SHA-256 `a81ab91345f94efb951d561d36a29e2d7e0cc75d204b200aa28355100df8e927`.
+- Result states: 1 `完整`, 38 `部分完成`, 0 `受限`, 0 `失败`.
+- Objects: 135,001 unique objects and 139,440 description rows.
+- Description rows: 78,744 map values, 23,895 client fills, 71 explicit empty values, and 36,730 source-missing values.
+- Icon records: 32,690 named plus 46,388 anonymous; all 79,078 logical exports wrote an original and PNG with zero decode/write failures.
+- Physical files: 78,916 unique originals and 78,916 unique PNGs. The 162-record difference is `.tga`/`.blp` references resolving to the same proven `.blp` and intentionally reusing one file.
+- Unresolved named references: 9,682. These are recorded static-evidence gaps, not failures of already exported files.
+- The original 38-map corrected run took 503.25 seconds with a 1,002,749,952-byte maximum resident set size; map 039 was published incrementally in 5.456 seconds.
+- All 39 current sources match the persisted SHA-256 and byte-size set. The 38 copied legacy maps have new paths and `mtime_ns`; map 039 retains its exact current path and metadata.
+- A complete classic MPQ set is no longer present locally. Map 039 used the existing verified icon output as a read-only icon cache, so its client description-fill count is zero and its result remains explicitly `部分完成`.
