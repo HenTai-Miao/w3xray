@@ -22,11 +22,12 @@ from .gui_loader import (
     load_path_payload,
     switch_map_payload,
 )
+from .gui_loader_host import BackgroundLoaderHost, CampaignEntry
 
 LOAD_POLL_MS: Final = 35
 
 
-class BackgroundLoaderMixin:
+class BackgroundLoaderMixin(BackgroundLoaderHost):
     """Queue worker-thread results so Tk is only touched from the main thread."""
 
     def _init_background_loader(self) -> None:
@@ -34,7 +35,7 @@ class BackgroundLoaderMixin:
         self._load_token = 0
         self._load_pending: set[int] = set()
         self._load_poll_id: str | None = None
-        self._load_workers: dict[int, threading.Thread] = {}
+        self._load_workers = {}
 
     def _shutdown_background_loader(self) -> None:
         self._load_token += 1
@@ -60,6 +61,7 @@ class BackgroundLoaderMixin:
         options = dict(self.load_options)
         game_data_path = self.game_data_path
         author_bundle_path = self.author_bundle_path
+        description_cache_path = getattr(self, "description_cache_path", None)
         external_names = read_external_listfile(self.external_listfile_path)
         self._start_loader_job(
             status=f"正在解析 {os.path.basename(path)} …",
@@ -69,6 +71,7 @@ class BackgroundLoaderMixin:
                 game_data_path=game_data_path,
                 external_names=external_names,
                 author_bundle_path=author_bundle_path,
+                description_cache_path=description_cache_path,
             ),
             error_status="解析失败",
             source_path=path,
@@ -79,7 +82,9 @@ class BackgroundLoaderMixin:
         game_data_path = self.game_data_path
         self._start_loader_job(
             status="正在切换 …",
-            build_payload=lambda: switch_map_payload(md, campaign_path, load_options=options, game_data_path=game_data_path),
+            build_payload=lambda: switch_map_payload(
+                md, campaign_path, load_options=options, game_data_path=game_data_path
+            ),
             error_status="切换失败",
             source_path=None,
         )
@@ -91,6 +96,7 @@ class BackgroundLoaderMixin:
         path = camp["path"]
         game_data_path = self.game_data_path
         author_bundle_path = self.author_bundle_path
+        description_cache_path = getattr(self, "description_cache_path", None)
         external_names = read_external_listfile(self.external_listfile_path)
         self._start_loader_job(
             status=f"正在解析战役 {camp['name']} …",
@@ -100,6 +106,7 @@ class BackgroundLoaderMixin:
                 game_data_path=game_data_path,
                 external_names=external_names,
                 author_bundle_path=author_bundle_path,
+                description_cache_path=description_cache_path,
             ),
             error_status="战役解析失败",
             source_path=path,
@@ -170,10 +177,20 @@ class BackgroundLoaderMixin:
 
     def _handle_loader_payload(self, payload: LoaderPayload) -> None:
         match payload:
-            case LoadedMap(active=active, commands=commands, recipes=recipes,
-                           resolver=resolver, views=views, campaign_path=campaign_path):
-                self._on_loaded(active, commands, recipes, resolver, views, campaign_path)
-            case LoadedCampaign(index=index, path=path, views=views, sub_map_count=count):
+            case LoadedMap(
+                active=active,
+                commands=commands,
+                recipes=recipes,
+                resolver=resolver,
+                views=views,
+                campaign_path=campaign_path,
+            ):
+                self._on_loaded(
+                    active, commands, recipes, resolver, views, campaign_path
+                )
+            case LoadedCampaign(
+                index=index, path=path, views=views, sub_map_count=count
+            ):
                 self._apply_campaign_payload(index, path, views, count)
             case LoaderError(title=title, message=message, status=status):
                 messagebox.showerror(title, message)
@@ -196,16 +213,25 @@ class BackgroundLoaderMixin:
         self._refresh_campaign_tree()
         self.status.configure(text=f"战役 {camp['name']}：{sub_map_count} 张子图")
 
-    def _campaign_by_index_or_path(self, index: int, path: str):
-        if 0 <= index < len(self._dir_campaigns) and self._dir_campaigns[index]["path"] == path:
+    def _campaign_by_index_or_path(
+        self,
+        index: int,
+        path: str,
+    ) -> CampaignEntry | None:
+        if (
+            0 <= index < len(self._dir_campaigns)
+            and self._dir_campaigns[index]["path"] == path
+        ):
             return self._dir_campaigns[index]
-        return next((camp for camp in self._dir_campaigns if camp["path"] == path), None)
+        return next(
+            (camp for camp in self._dir_campaigns if camp["path"] == path), None
+        )
 
 
 def _discard_loader_payload(payload: LoaderPayload) -> None:
     match payload:
         case LoadedMap(resolver=resolver):
-            if resolver is not None and hasattr(resolver, "close"):
+            if resolver is not None:
                 try:
                     resolver.close()
                 except Exception:  # noqa: BLE001  # noqa: BROAD_EXCEPT_OK - third-party resolver close is best effort.

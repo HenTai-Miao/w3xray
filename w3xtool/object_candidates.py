@@ -8,16 +8,19 @@ from dataclasses import dataclass
 from enum import IntEnum
 from typing import TYPE_CHECKING, Final, assert_never
 
-from .base_names import BASE_NAMES
+from .object_candidate_values import (
+    expand_codes as _expand_codes,
+    resolved_value as _resolved_value,
+    retain_field as _retain_field,
+    wts_value_source as _wts_value_source,
+)
 from .fields import field_type, is_concat_type, label_for
 from .extraction_diagnostics import read_component, record_component_parse_issue
 from .map_archive_reader import MapArchiveReader
 from .object_text_sources import TextObjectSourceKind, collect_text_object_records
 from .references import extract_refs_by_column, extract_refs_by_type
 from .slk_objects import SLK_CATEGORY_FILES, is_noise_col, parse_category_objects, slk_col_label
-from .textobj import _sub_westring
 from .w3obj import EXT_CATEGORY, parse_object_data, parse_object_data_report
-from .wts import resolve
 
 if TYPE_CHECKING:
     from .map_data import MapData
@@ -25,6 +28,7 @@ if TYPE_CHECKING:
 
 class ObjectSourceKind(IntEnum):
     BASE = 10
+    TEXT_ANONYMOUS = 15
     SLK = 20
     TEXT_FUNC = 30
     BINARY = 40
@@ -38,6 +42,7 @@ class ObjectFieldValue:
     value: str
     source: str
     source_kind: ObjectSourceKind
+    value_source: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,11 +66,6 @@ ICON_FIELDS: Final[Mapping[str, str]] = {
     "w3b": "bgsc",
     "w3d": "dfil",
 }
-_DISPLAY_TEXT_FIELDS: Final[frozenset[str]] = frozenset(
-    {"name", "propernames", "tip", "ubertip", "description", "art", "icon", "ico"}
-)
-
-
 def collect_object_candidates(
     archive: MapArchiveReader,
     wts: Mapping[int, str],
@@ -130,7 +130,16 @@ def collect_binary_object_candidates(
             value = _resolved_value(mod.value, wts)
             if is_concat_type(mod.field_id):
                 value = _expand_codes(value)
-            values.append(ObjectFieldValue(key, label, value, filename, ObjectSourceKind.BINARY))
+            values.append(
+                ObjectFieldValue(
+                    key,
+                    label,
+                    value,
+                    filename,
+                    ObjectSourceKind.BINARY,
+                    _wts_value_source(mod.value, wts, prefix),
+                ),
+            )
         refs = _refs_tuple(extract_refs_by_type(item.mods, field_type))
         result.append(
             ObjectCandidate(category, obj_id, item.old_id, item.is_custom, ext, tuple(values), refs)
@@ -153,9 +162,10 @@ def _collect_text_candidates(
                 value,
                 record.field_sources.get(key, record.source_name),
                 _text_source_kind(record.source_kind, key),
+                _wts_value_source(record.fields[key], wts, "war3map"),
             )
             for key, value in sorted(resolved.items(), key=lambda item: (item[0].casefold(), item[0]))
-            if value
+            if _retain_field(record.category, key, slk_col_label(key), value)
         )
         result.append(
             ObjectCandidate(
@@ -182,9 +192,17 @@ def _collect_slk_candidates(
         for code, row in sorted(parse_category_objects(archive, category, md=md).items()):
             resolved = {key: _resolved_value(value, wts) for key, value in row.items()}
             fields = tuple(
-                ObjectFieldValue(key, slk_col_label(key), value, source, ObjectSourceKind.SLK)
+                ObjectFieldValue(
+                    key,
+                    slk_col_label(key),
+                    value,
+                    source,
+                    ObjectSourceKind.SLK,
+                    _wts_value_source(row[key], wts, "war3map"),
+                )
                 for key, value in sorted(resolved.items(), key=lambda item: (item[0].casefold(), item[0]))
-                if value and not is_noise_col(key, category)
+                if not is_noise_col(key, category)
+                and _retain_field(category, key, slk_col_label(key), value)
             )
             result.append(
                 ObjectCandidate(
@@ -207,29 +225,9 @@ def _text_source_kind(kind: TextObjectSourceKind, field_name: str) -> ObjectSour
         case TextObjectSourceKind.STRINGS:
             return ObjectSourceKind.TEXT_STRINGS
         case TextObjectSourceKind.ANONYMOUS:
-            return (
-                ObjectSourceKind.TEXT_STRINGS
-                if field_name.casefold() in _DISPLAY_TEXT_FIELDS
-                else ObjectSourceKind.TEXT_FUNC
-            )
+            return ObjectSourceKind.TEXT_ANONYMOUS
         case unreachable:
             assert_never(unreachable)
-
-
-def _resolved_value(value: int | float | str, wts: Mapping[int, str]) -> str:
-    resolved = resolve(value, wts)
-    if isinstance(resolved, float):
-        formatted = str(int(resolved)) if resolved.is_integer() else f"{resolved:.4g}"
-    else:
-        formatted = str(resolved)
-    return _sub_westring(formatted)
-
-
-def _expand_codes(value: str) -> str:
-    if "," not in value:
-        return value
-    parts = tuple(part.strip() for part in value.split(","))
-    return ", ".join(f"{BASE_NAMES[part]}({part})" if part in BASE_NAMES else part for part in parts)
 
 
 def _refs_tuple(refs: list[tuple[str, list[str]]]) -> tuple[tuple[str, tuple[str, ...]], ...]:
@@ -244,7 +242,7 @@ def _candidate_sort_key(
     str,
     str,
     int,
-    tuple[tuple[str, str, str, str, int], ...],
+    tuple[tuple[str, str, str, str, int, str], ...],
     tuple[tuple[str, tuple[str, ...]], ...],
 ]:
     """Return a fully primitive sort key for deterministic collection."""
@@ -255,7 +253,14 @@ def _candidate_sort_key(
         candidate.base_id,
         int(candidate.is_custom),
         tuple(
-            (field.key, field.label, field.value, field.source, int(field.source_kind))
+            (
+                field.key,
+                field.label,
+                field.value,
+                field.source,
+                int(field.source_kind),
+                field.value_source,
+            )
             for field in candidate.fields
         ),
         candidate.refs,

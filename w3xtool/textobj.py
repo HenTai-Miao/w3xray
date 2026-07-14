@@ -10,6 +10,7 @@
 这些文件名不固定，靠"内容"识别：以 [4字符码] 开头、含 Name= 字段。
 按段代码首字母粗分类型：A=技能 R=科技 I=物品 其余=单位。
 """
+
 from __future__ import annotations
 
 import re
@@ -22,7 +23,7 @@ _SECTION_HEAD = re.compile(rb"^\[[A-Za-z0-9]{3,4}\]")
 _WESTRING = re.compile(r"WESTRING_[A-Za-z0-9_]+")
 try:
     from .westrings import WESTRINGS as _westrings
-except ImportError:        # 仅当数据文件缺失时兜底；语法/导入错误等真实 bug 不再被静默吞掉
+except ImportError:  # 仅当数据文件缺失时兜底；语法/导入错误等真实 bug 不再被静默吞掉
     _westrings = {}
 
 WESTRINGS: Final[Mapping[str, str]] = _westrings
@@ -43,7 +44,7 @@ def clean_text(s: str) -> str:
 
 def looks_like_text_object(head: bytes) -> bool:
     """根据头部字节判断是否是文本对象档。"""
-    h = head.lstrip(b"\xef\xbb\xbf")        # 去 BOM
+    h = head.lstrip(b"\xef\xbb\xbf")  # 去 BOM
     return bool(_SECTION_HEAD.match(h))
 
 
@@ -63,28 +64,73 @@ def parse_text_objects(text: str) -> list[tuple[str, dict[str, str]]]:
                 code = inner
                 fields = {}
                 continue
-        if code is not None and "=" in s and not s.startswith("//"):
-            k, _, v = s.partition("=")
+        if code is not None and "=" in line and not line.lstrip().startswith("//"):
+            k, _, v = line.partition("=")
             k = k.strip()
             if k and k not in fields:
-                fields[k] = v.strip()
+                fields[k] = v
     if code is not None:
         objs.append((code, fields))
     return objs
 
 
 # 各类型的"特征字段"（通用字段 Art/Name/Tip/Ubertip/Requires 不算，会重叠）
-_UNIT_MARKERS = {"propernames", "awakentip", "revivetip", "scorescreenicon",
-                 "buildingsoundlabel", "attachmentanimprops", "animprops", "trains",
-                 "builds", "researches", "upgrade", "sellunits", "sellitems", "movetp",
-                 "spd", "def", "deftype", "regenhp", "sight", "fmade", "fused", "isbldg",
-                 "dmgplus1", "loopingsoundfadein", "propwindow", "weapson"}
-_ABILITY_MARKERS = {"order", "targetart", "casterart", "specialart", "efctid", "buffs",
-                    "animnames", "targetattach", "marker", "casterattach", "areaeffectart",
-                    "lightningeffect", "dataa1", "datab1", "targs"}
+_UNIT_MARKERS = {
+    "propernames",
+    "awakentip",
+    "revivetip",
+    "scorescreenicon",
+    "buildingsoundlabel",
+    "attachmentanimprops",
+    "animprops",
+    "trains",
+    "builds",
+    "researches",
+    "upgrade",
+    "sellunits",
+    "sellitems",
+    "movetp",
+    "spd",
+    "def",
+    "deftype",
+    "regenhp",
+    "sight",
+    "fmade",
+    "fused",
+    "isbldg",
+    "dmgplus1",
+    "loopingsoundfadein",
+    "propwindow",
+    "weapson",
+}
+_ABILITY_MARKERS = {
+    "order",
+    "targetart",
+    "casterart",
+    "specialart",
+    "efctid",
+    "buffs",
+    "animnames",
+    "targetattach",
+    "marker",
+    "casterattach",
+    "areaeffectart",
+    "lightningeffect",
+    "dataa1",
+    "datab1",
+    "targs",
+}
 # 科技强字段（升级特有；Requires* 物品/单位也有，不能当标志）
-_UPGRADE_MARKERS = {"effect", "goldbase", "goldmod", "lumberbase", "lumbermod",
-                    "benefit1", "base1", "mod1"}
+_UPGRADE_MARKERS = {
+    "effect",
+    "goldbase",
+    "goldmod",
+    "lumberbase",
+    "lumbermod",
+    "benefit1",
+    "base1",
+    "mod1",
+}
 
 
 def classify(codes: Iterable[str], field_keys: Iterable[str] | None = None) -> str:
@@ -116,5 +162,5 @@ def classify(codes: Iterable[str], field_keys: Iterable[str] | None = None) -> s
     scores = {"单位": su, "技能": sa, "科技": sg}
     best = max(scores, key=lambda k: scores[k])
     if scores[best] <= 0:
-        return "物品"        # 无单位/技能/科技 信号 → 默认物品
+        return "物品"  # 无单位/技能/科技 信号 → 默认物品
     return best

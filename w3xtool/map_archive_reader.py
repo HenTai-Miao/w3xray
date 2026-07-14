@@ -8,8 +8,11 @@ from typing import Protocol, runtime_checkable
 
 
 class MapArchiveReader(Protocol):
-    path: str
-    _data: bytes | mmap.mmap
+    @property
+    def path(self) -> str: ...
+
+    @property
+    def _data(self) -> bytes | mmap.mmap: ...
 
     def has_file(self, name: str) -> bool: ...
 

@@ -7,7 +7,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Final
 
-from .api import MapData
+from .map_data import MapData
 from .presentation_safety import tsv_cell as _tsv
 from .script_call_catalog import ScriptCall, build_script_call_catalog
 from .script_sources import analysis_script_texts

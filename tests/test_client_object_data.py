@@ -11,6 +11,7 @@ from w3xtool.load_context import build_map_load_context
 from w3xtool.map_data import MapData
 from w3xtool.map_loader import _load_map_impl
 from w3xtool.object_pipeline import load_object_pipeline
+from w3xtool.object_text_models import ObjectTextState
 
 
 class FakeClientSource:
@@ -34,7 +35,9 @@ class FakeMapArchive:
     def __init__(self, files: dict[str, bytes]) -> None:
         self.path = "fixture.w3x"
         self._data = b""
-        self._files = {_normalize(name): (name, payload) for name, payload in files.items()}
+        self._files = {
+            _normalize(name): (name, payload) for name, payload in files.items()
+        }
 
     def has_file(self, name: str) -> bool:
         return _normalize(name) in self._files
@@ -71,7 +74,9 @@ def test_load_context_snapshots_client_bases_before_closing_source(
 ) -> None:
     # Given: the shared source must not survive beyond context construction.
     source = _client_source()
-    monkeypatch.setattr("w3xtool.game_data_source.open_game_data_source", lambda _path: source)
+    monkeypatch.setattr(
+        "w3xtool.game_data_source.open_game_data_source", lambda _path: source
+    )
 
     # When: context construction reads client data and closes its source.
     context = build_map_load_context(game_data_path="client-data")
@@ -79,10 +84,20 @@ def test_load_context_snapshots_client_bases_before_closing_source(
     # Then: immutable client objects remain usable by the later map load.
     assert source.closed
     assert tuple(item.obj_id for item in context.client_base_objects) == ("hX01",)
+    assert context.client_text_available is True
     archive = FakeMapArchive({"war3map.w3u": _custom_unit("hX01", "H001")})
     md = _load_map_impl(archive, archive.path, 0, None, context)
     assert md.obj_index["H001"].name == "Client Base"
     assert md.obj_index["H001"].icon.endswith("BTNClient.blp")
+    name_row = next(
+        row
+        for row in md.object_texts.for_object("单位", "H001")
+        if row.role == "名称" and row.raw_value
+    )
+    assert (name_row.raw_value, name_row.state) == (
+        "Client Base",
+        ObjectTextState.CLIENT_FILL,
+    )
 
 
 def test_client_snapshot_retains_all_text_evidence_after_source_close() -> None:
@@ -106,7 +121,9 @@ def test_client_snapshot_retains_all_text_evidence_after_source_close() -> None:
         "First",
         "Second",
     }
-    assert {field.source for field in evidence if field.key.casefold() == "ubertip"} == {
+    assert {
+        field.source for field in evidence if field.key.casefold() == "ubertip"
+    } == {
         "Units\\HumanUnitFunc.txt",
         "Units\\HumanUnitStrings.txt",
     }
@@ -134,7 +151,9 @@ def _client_source() -> FakeClientSource:
 
 
 def _custom_unit(base_id: str, object_id: str) -> bytes:
-    custom = base_id.encode("latin-1") + object_id.encode("latin-1") + struct.pack("<i", 0)
+    custom = (
+        base_id.encode("latin-1") + object_id.encode("latin-1") + struct.pack("<i", 0)
+    )
     return struct.pack("<ii", 2, 0) + struct.pack("<i", 1) + custom
 
 

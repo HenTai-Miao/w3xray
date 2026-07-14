@@ -5,15 +5,25 @@ from __future__ import annotations
 import struct
 
 from w3xtool.map_data import MapData
-from w3xtool.object_candidates import ObjectCandidate, collect_object_candidates
-from w3xtool.object_pipeline import build_object_index, load_object_pipeline, merge_object_candidates
+from w3xtool.object_candidates import (
+    ObjectCandidate,
+    ObjectSourceKind,
+    collect_object_candidates,
+)
+from w3xtool.object_pipeline import (
+    build_object_index,
+    load_object_pipeline,
+    merge_object_candidates,
+)
 
 
 class FakeArchive:
     def __init__(self, files: dict[str, bytes]) -> None:
         self.path = "fixture.w3x"
         self._data = b""
-        self._files = {self._normalize(name): (name, value) for name, value in files.items()}
+        self._files = {
+            self._normalize(name): (name, value) for name, value in files.items()
+        }
 
     def has_file(self, name: str) -> bool:
         return self._normalize(name) in self._files
@@ -32,7 +42,9 @@ class FakeArchive:
         return name.replace("/", "\\").casefold()
 
 
-def _slk(columns: tuple[str, ...], rows: tuple[tuple[str, dict[str, str]], ...]) -> bytes:
+def _slk(
+    columns: tuple[str, ...], rows: tuple[tuple[str, dict[str, str]], ...]
+) -> bytes:
     lines = ["ID;P", f"B;X{len(columns)};Y{len(rows) + 1}"]
     for x, column in enumerate(columns, 1):
         lines.append(f'C;X{x};Y1;K"{column}"')
@@ -45,7 +57,9 @@ def _slk(columns: tuple[str, ...], rows: tuple[tuple[str, dict[str, str]], ...])
     return "\n".join(lines).encode("latin-1")
 
 
-def _binary_object(old_id: str, new_id: str, values: tuple[tuple[str, str], ...]) -> bytes:
+def _binary_object(
+    old_id: str, new_id: str, values: tuple[tuple[str, str], ...]
+) -> bytes:
     mods = b"".join(
         field_id.encode("latin-1")
         + struct.pack("<i", 3)
@@ -54,7 +68,12 @@ def _binary_object(old_id: str, new_id: str, values: tuple[tuple[str, str], ...]
         + struct.pack("<I", 0)
         for field_id, value in values
     )
-    obj = old_id.encode("latin-1") + new_id.encode("latin-1") + struct.pack("<i", len(values)) + mods
+    obj = (
+        old_id.encode("latin-1")
+        + new_id.encode("latin-1")
+        + struct.pack("<i", len(values))
+        + mods
+    )
     return struct.pack("<ii", 2, 0) + struct.pack("<i", 1) + obj
 
 
@@ -63,7 +82,9 @@ def test_text_and_slk_values_resolve_wts_and_westring_before_storage() -> None:
     archive = FakeArchive(
         {
             "Units\\HumanUnitStrings.txt": b"[H001]\nName=TRIGSTR_1\nTip=WESTRING_ABILITY\n",
-            "Units\\UnitData.slk": _slk(("unitID", "Name"), (("H002", {"Name": "TRIGSTR_2"}),)),
+            "Units\\UnitData.slk": _slk(
+                ("unitID", "Name"), (("H002", {"Name": "TRIGSTR_2"}),)
+            ),
         }
     )
     md = MapData(path="fixture.w3x", name="fixture")
@@ -83,7 +104,9 @@ def test_map_and_campaign_prefixes_keep_distinct_wts_and_no_base_aliases() -> No
     archive = FakeArchive(
         {
             "war3map.w3u": _binary_object("hfoo", "H001", (("unam", "TRIGSTR_1"),)),
-            "war3campaign.w3u": _binary_object("hfoo", "H002", (("unam", "TRIGSTR_1"),)),
+            "war3campaign.w3u": _binary_object(
+                "hfoo", "H002", (("unam", "TRIGSTR_1"),)
+            ),
         }
     )
 
@@ -96,7 +119,10 @@ def test_map_and_campaign_prefixes_keep_distinct_wts_and_no_base_aliases() -> No
     index = build_object_index(merged)
 
     # Then: both rawcodes survive with the correct namespace and no base-id alias.
-    assert [(item.obj_id, item.name) for item in merged] == [("H001", "地图单位"), ("H002", "战役单位")]
+    assert [(item.obj_id, item.name) for item in merged] == [
+        ("H001", "地图单位"),
+        ("H002", "战役单位"),
+    ]
     assert set(index) == {"H001", "H002"}
 
 
@@ -106,7 +132,9 @@ def test_corrupt_binary_does_not_discard_valid_text_or_slk_candidates() -> None:
         {
             "war3map.w3u": b"corrupt",
             "Units\\HumanUnitStrings.txt": b"[H001]\nName=Text survives\n",
-            "Units\\UnitData.slk": _slk(("unitID", "Name"), (("H002", {"Name": "SLK survives"}),)),
+            "Units\\UnitData.slk": _slk(
+                ("unitID", "Name"), (("H002", {"Name": "SLK survives"}),)
+            ),
         }
     )
     md = MapData(path="fixture.w3x", name="fixture")
@@ -116,6 +144,24 @@ def test_corrupt_binary_does_not_discard_valid_text_or_slk_candidates() -> None:
 
     # Then: valid independent sources still materialize.
     assert {item.obj_id for item in md.obj_index.values()} == {"H001", "H002"}
+
+
+def test_wts_resolved_field_retains_value_source_and_full_raw_body() -> None:
+    # Given: a binary object field points at a WTS string with lossless whitespace.
+    raw = '  "正文\t\r\n第二行  '
+    archive = FakeArchive(
+        {"war3map.w3t": _binary_object("ratf", "I001", (("utub", "TRIGSTR_9"),))},
+    )
+
+    # When: object candidates are collected.
+    candidate = collect_object_candidates(archive, {9: raw})[0]
+    field = next(value for value in candidate.fields if value.key == "utub")
+
+    # Then: the full WTS body and both evidence locations are retained.
+    assert field.value == raw
+    assert field.source == "war3map.w3t"
+    assert field.value_source == "war3map.wts#STRING 9"
+    assert field.source_kind is ObjectSourceKind.BINARY
 
 
 def test_same_text_object_from_func_and_strings_collects_deterministically() -> None:
@@ -133,7 +179,10 @@ def test_same_text_object_from_func_and_strings_collects_deterministically() -> 
 
     # Then: collection succeeds and has the same primitive normalized output.
     assert _candidate_normalized(forward) == _candidate_normalized(reverse)
-    assert [(item.obj_id, item.ext) for item in forward] == [("H001", "txt"), ("H001", "txt")]
+    assert [(item.obj_id, item.ext) for item in forward] == [
+        ("H001", "txt"),
+        ("H001", "txt"),
+    ]
 
 
 def _candidate_normalized(
@@ -146,7 +195,13 @@ def _candidate_normalized(
             item.base_id,
             item.ext,
             tuple(
-                (value.key, value.label, value.value, value.source, int(value.source_kind))
+                (
+                    value.key,
+                    value.label,
+                    value.value,
+                    value.source,
+                    int(value.source_kind),
+                )
                 for value in item.fields
             ),
         )

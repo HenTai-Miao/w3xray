@@ -8,6 +8,8 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Final, Protocol
 
+from PIL import Image
+
 from .api import MapData, commands_from_map, load_map, recipes_from_map
 from .icons import IconResolver
 from .load_context import MapLoadContext, build_map_load_context
@@ -18,6 +20,7 @@ from .load_options import (
     default_load_options,
     normalize_load_options,
 )
+from .script_scan import ChatCommand, Recipe
 
 PREP_WORKERS: Final = 3
 
@@ -42,12 +45,18 @@ class PrepareMapFunc(Protocol):
     ) -> LoadedMap: ...
 
 
+class PreparedIconResolver(Protocol):
+    def get_image(self, path: str) -> Image.Image | None: ...
+
+    def close(self) -> None: ...
+
+
 @dataclass(frozen=True, slots=True)
 class LoadedMap:
     active: MapData
-    commands: list
-    recipes: list
-    resolver: IconResolver | None
+    commands: list[ChatCommand]
+    recipes: list[Recipe]
+    resolver: PreparedIconResolver | None
     views: list[tuple[str, MapData]] | None
     campaign_path: str | None
 
@@ -79,12 +88,14 @@ def load_path_payload(
     game_data_path: str | None = None,
     external_names: Sequence[str] = (),
     author_bundle_path: str | None = None,
+    description_cache_path: str | None = None,
 ) -> LoadedMap:
     """Load a map path and prepare the initial visible view."""
     context = build_map_load_context(
         external_names=external_names,
         game_data_path=game_data_path,
         author_bundle_path=author_bundle_path,
+        description_cache_path=description_cache_path,
     )
     md = _load_with_context(load, path, context)
     if md.sub_maps:
@@ -96,7 +107,13 @@ def load_path_payload(
     active = views[0][1] if views else md
     if prepare is not None:
         return prepare(active, campaign_path, views, load_options=load_options)
-    return prepare_map_view(active, campaign_path, views, load_options=load_options, game_data_path=game_data_path)
+    return prepare_map_view(
+        active,
+        campaign_path,
+        views,
+        load_options=load_options,
+        game_data_path=game_data_path,
+    )
 
 
 def switch_map_payload(
@@ -110,7 +127,13 @@ def switch_map_payload(
     """Prepare an already-loaded campaign sub-map."""
     if prepare is not None:
         return prepare(md, campaign_path, None, load_options=load_options)
-    return prepare_map_view(md, campaign_path, None, load_options=load_options, game_data_path=game_data_path)
+    return prepare_map_view(
+        md,
+        campaign_path,
+        None,
+        load_options=load_options,
+        game_data_path=game_data_path,
+    )
 
 
 def load_campaign_payload(
@@ -121,16 +144,20 @@ def load_campaign_payload(
     game_data_path: str | None = None,
     external_names: Sequence[str] = (),
     author_bundle_path: str | None = None,
+    description_cache_path: str | None = None,
 ) -> LoadedCampaign:
     """Load a campaign node enough to populate its child maps."""
     context = build_map_load_context(
         external_names=external_names,
         game_data_path=game_data_path,
         author_bundle_path=author_bundle_path,
+        description_cache_path=description_cache_path,
     )
     md = _load_with_context(load, path, context)
     views = [("★ 战役共享对象", md)] + [(sub.name, sub) for sub in md.sub_maps]
-    return LoadedCampaign(index=index, path=path, views=views, sub_map_count=len(md.sub_maps))
+    return LoadedCampaign(
+        index=index, path=path, views=views, sub_map_count=len(md.sub_maps)
+    )
 
 
 def _load_with_context(
@@ -143,6 +170,9 @@ def _load_with_context(
         and context.trigger_schema is None
         and context.author_bundle_path is None
         and not context.client_base_objects
+        and not context.client_text_available
+        and not context.description_cache.entries
+        and not context.description_cache.diagnostics
     ):
         return load(path)
     return load(path, load_context=context)
@@ -154,29 +184,44 @@ def prepare_map_view(
     views: list[tuple[str, MapData]] | None = None,
     *,
     load_options: dict[str, bool] | None = None,
-    command_loader: Callable[[MapData], list] = commands_from_map,
-    recipe_loader: Callable[[MapData], list] = recipes_from_map,
-    resolver_loader: Callable[[MapData, str | None], IconResolver | None] | None = None,
+    command_loader: Callable[[MapData], list[ChatCommand]] = commands_from_map,
+    recipe_loader: Callable[[MapData], list[Recipe]] = recipes_from_map,
+    resolver_loader: Callable[[MapData, str | None], PreparedIconResolver | None]
+    | None = None,
     max_workers: int = PREP_WORKERS,
     game_data_path: str | None = None,
 ) -> LoadedMap:
     """Prepare independent reports and icon resolver in parallel."""
     options = normalize_load_options(load_options or default_load_options())
-    with ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="w3xray-prep") as pool:
+    with ThreadPoolExecutor(
+        max_workers=max_workers, thread_name_prefix="w3xray-prep"
+    ) as pool:
         command_future = (
             pool.submit(_safe_list_loader, command_loader, md)
-            if options[COMMANDS_KEY] else None
+            if options[COMMANDS_KEY]
+            else None
         )
         recipe_future = (
             pool.submit(_safe_list_loader, recipe_loader, md)
-            if options[RECIPES_KEY] else None
+            if options[RECIPES_KEY]
+            else None
         )
-        if options[OBJECT_BROWSER_KEY] and resolver_loader is None:
-            resolver_future = pool.submit(_safe_default_resolver_loader, md, campaign_path, game_data_path)
-        elif options[OBJECT_BROWSER_KEY]:
-            resolver_future = pool.submit(_safe_resolver_loader, resolver_loader, md, campaign_path)
-        else:
+        if not options[OBJECT_BROWSER_KEY]:
             resolver_future = None
+        elif resolver_loader is None:
+            resolver_future = pool.submit(
+                _safe_default_resolver_loader,
+                md,
+                campaign_path,
+                game_data_path,
+            )
+        else:
+            resolver_future = pool.submit(
+                _safe_resolver_loader,
+                resolver_loader,
+                md,
+                campaign_path,
+            )
         commands = command_future.result() if command_future is not None else []
         recipes = recipe_future.result() if recipe_future is not None else []
         resolver = resolver_future.result() if resolver_future is not None else None
@@ -193,7 +238,10 @@ def build_icon_resolver(
     return IconResolver(md.path, extra_paths=extra, game_data_path=game_data_path)
 
 
-def _safe_list_loader(loader: Callable[[MapData], list], md: MapData) -> list:
+def _safe_list_loader[T](
+    loader: Callable[[MapData], list[T]],
+    md: MapData,
+) -> list[T]:
     try:
         return loader(md)
     except Exception:  # noqa: BROAD_EXCEPT_OK - GUI preparation logs and isolates optional report failure.
@@ -202,10 +250,10 @@ def _safe_list_loader(loader: Callable[[MapData], list], md: MapData) -> list:
 
 
 def _safe_resolver_loader(
-    loader: Callable[[MapData, str | None], IconResolver | None],
+    loader: Callable[[MapData, str | None], PreparedIconResolver | None],
     md: MapData,
     campaign_path: str | None,
-) -> IconResolver | None:
+) -> PreparedIconResolver | None:
     try:
         return loader(md, campaign_path)
     except Exception:  # noqa: BROAD_EXCEPT_OK - GUI preparation logs and isolates optional resolver failure.

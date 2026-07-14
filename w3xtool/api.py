@@ -1,4 +1,5 @@
 """Public compatibility facade for map extraction and script analysis."""
+
 from __future__ import annotations
 
 import os
@@ -52,10 +53,10 @@ if TYPE_CHECKING:
 class _ApiModule(ModuleType):
     """Keep the historical MPQArchive monkeypatch seam routed to the loader."""
 
-    def __setattr__(self, name: str, value: object) -> None:
+    def __setattr__[ValueT](self, name: str, value: ValueT) -> None:
         super().__setattr__(name, value)
         if name == "MPQArchive":
-            map_loader.MPQArchive = value
+            setattr(map_loader, "MPQArchive", value)
 
 
 sys.modules[__name__].__class__ = _ApiModule
@@ -105,7 +106,7 @@ def quick_map_name(path: str) -> str:
             name = head[8:end].decode("utf-8", "replace").strip()
             if name and not name.startswith("TRIGSTR"):
                 return name
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return os.path.basename(path)
     return os.path.basename(path)
 
@@ -132,11 +133,13 @@ def commands_from_map(md: MapData) -> list[ChatCommand]:
                 continue
             seen.add(key)
             commands.append(command)
-    commands.sort(key=lambda command: (
-        len(command.command) == 0,
-        not command.command.startswith("-"),
-        command.command,
-    ))
+    commands.sort(
+        key=lambda command: (
+            len(command.command) == 0,
+            not command.command.startswith("-"),
+            command.command,
+        )
+    )
     wts = _map_wts(md)
     if wts:
         for command in commands:
@@ -147,7 +150,27 @@ def commands_from_map(md: MapData) -> list[ChatCommand]:
 
 def recipes_from_map(md: MapData) -> list[Recipe]:
     """从已解析的 MapData 识别物品合成配方（复用 md.scripts，不重开 MPQ）。"""
-    from .script_scan import scan_recipes as scan_recipes_from_text
+    from .item_relation_models import ItemRelationKind
+    from .script_scan import Recipe, scan_recipes as scan_recipes_from_text
+
+    indexed = md.item_relations.for_kind(ItemRelationKind.RECIPE)
+    if indexed:
+        return [
+            Recipe(
+                ingredients=[
+                    ingredient.item.object_id
+                    for ingredient in row.ingredients
+                    for _ in range(ingredient.count)
+                ],
+                result=row.item.object_id,
+                func=row.evidence.function,
+                source=row.evidence.source,
+                line=row.evidence.line,
+                confidence=row.confidence.value,
+                evidence=row.evidence.raw,
+            )
+            for row in indexed
+        ]
 
     recipes = []
     seen = set()
@@ -174,7 +197,7 @@ def scan_commands(path: str) -> list[ChatCommand]:
     if collection.wts_raw is not None:
         try:
             ui_strings = parse_wts(collection.wts_raw)
-        except (UnicodeError, ValueError):
+        except UnicodeError, ValueError:
             ui_strings = {}
     md = MapData(
         path=path,

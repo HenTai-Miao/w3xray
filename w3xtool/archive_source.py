@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 import os
 from pathlib import Path
@@ -18,7 +18,8 @@ from .mpq import MPQArchive
 class ArchiveSource(Protocol):
     """Open a fresh reader for a map archive and release source-owned state."""
 
-    path: str
+    @property
+    def path(self) -> str: ...
 
     def open(self) -> ContextManager[MapArchiveReader]: ...
 
@@ -50,7 +51,7 @@ class PathArchiveSource:
         """Release no state because path-backed sources own no open archive."""
 
 
-@dataclass(slots=True)
+@dataclass(slots=True)  # noqa: MUTABLE_OK - close intentionally releases owned bytes.
 class BytesArchiveSource:
     """Own immutable payload bytes until close releases them permanently.
 
@@ -90,10 +91,8 @@ class BytesArchiveSource:
             finally:
                 archive.close()
         finally:
-            try:
+            with suppress(FileNotFoundError):
                 os.remove(temp_path)
-            except FileNotFoundError:
-                pass
 
     def close(self) -> None:
         """Release the owned bytes and reject all future opens."""

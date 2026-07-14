@@ -8,7 +8,11 @@ from typing import TYPE_CHECKING, assert_never
 from .base_objects import BASE_OBJECTS
 from .map_archive_reader import MapArchiveReader
 from .map_data import GameObject, MapData
-from .object_candidates import ObjectCandidate, ObjectSourceKind, collect_object_candidates
+from .object_candidates import (
+    ObjectCandidate,
+    ObjectSourceKind,
+    collect_object_candidates,
+)
 from .object_materialization import (
     BaseObjectTable,
     build_object_index,
@@ -17,7 +21,10 @@ from .object_materialization import (
 )
 
 if TYPE_CHECKING:
+    from .client_object_data import ClientBaseObject
+    from .description_cache import DescriptionCache
     from .game_data_source import GameDataSource
+    from .load_context import MapLoadContext
 
 
 def populate_object_pipeline(
@@ -26,6 +33,9 @@ def populate_object_pipeline(
     base_objects: BaseObjectTable = BASE_OBJECTS,
     *,
     include_named_bases: bool = True,
+    client_objects: tuple[ClientBaseObject, ...] = (),
+    description_cache: DescriptionCache | None = None,
+    client_text_available: bool = False,
 ) -> None:
     """Replace object buckets and index from one final candidate merge."""
     source_candidates = tuple(candidates)
@@ -39,6 +49,33 @@ def populate_object_pipeline(
         buckets.setdefault(item.category, []).append(item)
     md.objects = buckets
     md.obj_index = build_object_index(objects)
+    from .description_cache import EMPTY_DESCRIPTION_CACHE
+    from .object_text_index import build_object_text_index
+
+    md.object_texts = build_object_text_index(
+        objects,
+        source_candidates,
+        client_objects,
+        description_cache or EMPTY_DESCRIPTION_CACHE,
+        client_text_available=client_text_available,
+    )
+
+
+def populate_object_pipeline_from_context(
+    md: MapData,
+    candidates: Iterable[ObjectCandidate],
+    base_objects: BaseObjectTable,
+    context: MapLoadContext,
+) -> None:
+    """Populate objects and complete text using one immutable load context."""
+    populate_object_pipeline(
+        md,
+        candidates,
+        base_objects,
+        client_objects=context.client_base_objects,
+        description_cache=context.description_cache,
+        client_text_available=context.client_text_available,
+    )
 
 
 def _object_source_counts(candidates: tuple[ObjectCandidate, ...]) -> dict[str, int]:
@@ -69,6 +106,8 @@ def _source_label(kind: ObjectSourceKind) -> str:
     match kind:
         case ObjectSourceKind.BASE:
             return "base"
+        case ObjectSourceKind.TEXT_ANONYMOUS:
+            return "anonymous-text"
         case ObjectSourceKind.SLK:
             return "slk"
         case ObjectSourceKind.TEXT_FUNC | ObjectSourceKind.TEXT_STRINGS:
@@ -90,12 +129,25 @@ def load_object_pipeline(
 ) -> None:
     """Collect and materialize one object-source prefix through the unified pipeline."""
     if game_data_source is not None:
-        from .client_object_data import collect_client_base_objects, merge_client_base_objects
+        from .client_object_data import (
+            merge_client_base_objects,
+            snapshot_client_base_objects,
+        )
 
-        client_objects = collect_client_base_objects(game_data_source)
-        base_objects = merge_client_base_objects(base_objects, client_objects)
+        client_snapshot = snapshot_client_base_objects(game_data_source)
+        base_objects = merge_client_base_objects(base_objects, client_snapshot.objects)
+    else:
+        from .client_object_data import ClientObjectSnapshot
+
+        client_snapshot = ClientObjectSnapshot((), False)
     candidates = collect_object_candidates(archive, wts, prefix=prefix)
-    populate_object_pipeline(md, candidates, base_objects)
+    populate_object_pipeline(
+        md,
+        candidates,
+        base_objects,
+        client_objects=client_snapshot.objects,
+        client_text_available=client_snapshot.text_available,
+    )
 
 
 def add_base_objects(
@@ -103,8 +155,12 @@ def add_base_objects(
     base_objects: BaseObjectTable = BASE_OBJECTS,
 ) -> None:
     """Compatibility path that adds named bases without creating duplicates."""
-    existing = build_object_index(item for values in md.objects.values() for item in values)
-    additions = merge_object_candidates(named_base_candidates(base_objects), base_objects)
+    existing = build_object_index(
+        item for values in md.objects.values() for item in values
+    )
+    additions = merge_object_candidates(
+        named_base_candidates(base_objects), base_objects
+    )
     for item in additions:
         if item.obj_id in existing:
             continue

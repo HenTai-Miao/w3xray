@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 from .extraction_diagnostics import (
@@ -11,12 +12,16 @@ from .extraction_diagnostics import (
 )
 
 if TYPE_CHECKING:
-    from .api import MapData
     from .load_context import MapLoadContext
     from .map_archive_reader import MapArchiveReader
+    from .map_data import MapData
 
 
-def add_world_metadata(md: "MapData", archive: "MapArchiveReader", wts: dict) -> None:
+def add_world_metadata(
+    md: "MapData",
+    archive: "MapArchiveReader",
+    wts: Mapping[int, str],
+) -> None:
     """Load regions, cameras and sounds from World Editor metadata files."""
     from .w3world import parse_cameras, parse_regions, parse_sounds
 
@@ -28,17 +33,19 @@ def add_world_metadata(md: "MapData", archive: "MapArchiveReader", wts: dict) ->
             lambda: archive.read_file("war3map.w3r"),
             stage="read",
         )
-        parsed = (
-            read_component(
+        parsed = None
+        if payload is not None:
+            region_payload = payload
+            parsed = read_component(
                 md,
                 "world",
                 "war3map.w3r",
-                lambda: parse_regions(_require_world_header(payload, {5}, "W3R"), wts),
+                lambda: parse_regions(
+                    _require_world_header(region_payload, {5}, "W3R"),
+                    dict(wts),
+                ),
                 stage="parse",
             )
-            if payload is not None
-            else None
-        )
         md.regions = parsed or []
         _record_world_count_issue(md, "war3map.w3r", payload, len(md.regions))
     if archive.has_file("war3map.w3c"):
@@ -49,17 +56,18 @@ def add_world_metadata(md: "MapData", archive: "MapArchiveReader", wts: dict) ->
             lambda: archive.read_file("war3map.w3c"),
             stage="read",
         )
-        parsed = (
-            read_component(
+        parsed = None
+        if payload is not None:
+            camera_payload = payload
+            parsed = read_component(
                 md,
                 "world",
                 "war3map.w3c",
-                lambda: parse_cameras(_require_world_header(payload, {0}, "W3C")),
+                lambda: parse_cameras(
+                    _require_world_header(camera_payload, {0}, "W3C")
+                ),
                 stage="parse",
             )
-            if payload is not None
-            else None
-        )
         md.cameras = parsed or []
         _record_world_count_issue(md, "war3map.w3c", payload, len(md.cameras))
     if archive.has_file("war3map.w3s"):
@@ -70,17 +78,18 @@ def add_world_metadata(md: "MapData", archive: "MapArchiveReader", wts: dict) ->
             lambda: archive.read_file("war3map.w3s"),
             stage="read",
         )
-        parsed = (
-            read_component(
+        parsed = None
+        if payload is not None:
+            sound_payload = payload
+            parsed = read_component(
                 md,
                 "world",
                 "war3map.w3s",
-                lambda: parse_sounds(_require_world_header(payload, {1, 3}, "W3S")),
+                lambda: parse_sounds(
+                    _require_world_header(sound_payload, {1, 3}, "W3S")
+                ),
                 stage="parse",
             )
-            if payload is not None
-            else None
-        )
         md.sounds = parsed or []
         _record_world_count_issue(md, "war3map.w3s", payload, len(md.sounds))
 
@@ -94,7 +103,9 @@ def add_game_configs(md: "MapData", archive: "MapArchiveReader") -> None:
     )
 
     names = list(archive.list_files())
-    names.extend(name for name in ("war3map.wgc", "testconfig.wgc") if archive.has_file(name))
+    names.extend(
+        name for name in ("war3map.wgc", "testconfig.wgc") if archive.has_file(name)
+    )
     configs = []
     for name in find_internal_game_config_names(names):
         parsed = read_component(
@@ -108,7 +119,11 @@ def add_game_configs(md: "MapData", archive: "MapArchiveReader") -> None:
     md.game_configs = configs
 
 
-def add_trigger_summary(md: "MapData", archive: "MapArchiveReader", load_context: "MapLoadContext | None" = None) -> None:
+def add_trigger_summary(
+    md: "MapData",
+    archive: "MapArchiveReader",
+    load_context: "MapLoadContext | None" = None,
+) -> None:
     """Load a trigger tree summary from war3map.wtg when present."""
     if not archive.has_file("war3map.wtg"):
         return
@@ -160,7 +175,9 @@ def add_import_summary(md: "MapData", archive: "MapArchiveReader") -> None:
     for entry in entries:
         actual = _resolve_import_path(archive, entry)
         if actual is None:
-            missing.append(entry.candidate_paths[0] if entry.candidate_paths else entry.path)
+            missing.append(
+                entry.candidate_paths[0] if entry.candidate_paths else entry.path
+            )
         else:
             resolved.append(actual)
     md.import_summary = ImportSummary(

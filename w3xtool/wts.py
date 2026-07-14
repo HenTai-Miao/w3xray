@@ -6,27 +6,31 @@
     多行文本
     }
 """
+
 from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from typing import Final
-from typing import TYPE_CHECKING
+from typing import Final, Protocol
 
-from .war3_encoding import decode_warcraft_string
 from .extraction_diagnostics import ComponentParseError
+from .war3_encoding import decode_warcraft_string
 
-if TYPE_CHECKING:
-    from .map_data import MapData
+
+class _MapWtsSource(Protocol):
+    @property
+    def ui_strings(self) -> dict[int, str] | None: ...
+
+    @property
+    def scripts(self) -> dict[str, str]: ...
+
 
 _HEADER: Final[re.Pattern[bytes]] = re.compile(rb"STRING\s+(\d+)", re.IGNORECASE)
+
+
 # 开/闭括号都要求**独占一行**(行首 {/} + 仅尾随空白)：
 # - 闭合独占行：避免误伤 GBK 尾字节 0x7D，也避免正文里 "} else {" 这类被当成闭合提前截断。
 # - 开括号独占行：避免 STRING 头与正文之间的注释行(如 "// 备注 {x}")里的 { 被当成正文起点。
-_OPEN: Final[re.Pattern[bytes]] = re.compile(rb"(?m)^\{[ \t]*$")
-_CLOSE: Final[re.Pattern[bytes]] = re.compile(rb"(?m)^\}[ \t]*$")
-
-
 def _decode_str(b: bytes) -> str:
     """单条字符串解码：UTF-8 后按系统 ACP/GBK 兼容老中文图。"""
     return decode_warcraft_string(b)
@@ -35,9 +39,8 @@ def _decode_str(b: bytes) -> str:
 def parse_wts(data: bytes) -> dict[int, str]:
     # 在字节层解析，按 STRING 块逐条解码：整文件统一解码会让个别 GBK 片段污染成乱码，
     # 且无法再按条恢复；逐条 UTF-8→GBK 回退可兼容 UTF-8 为主、个别 GBK 的混合编码图。
-    if data.startswith(b"\xef\xbb\xbf"):          # 去 UTF-8 BOM
+    if data.startswith(b"\xef\xbb\xbf"):  # 去 UTF-8 BOM
         data = data[3:]
-    data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
     table: dict[int, str] = {}
     i = 0
     n = len(data)
@@ -46,20 +49,66 @@ def parse_wts(data: bytes) -> dict[int, str]:
         if not m:
             break
         sid = int(m.group(1))
-        m_open = _OPEN.search(data, m.end())     # 独占一行的 '{'，跳过注释行里的 {
-        if m_open:
-            brace = m_open.start()
-        else:                                     # 兜底：找不到独占行 { 时退回首个 {（不回归旧行为）
+        opening = _find_structural_line(data, m.end(), b"{")
+        if opening is None:  # 兜底：找不到独占行 { 时退回首个 {
             brace = data.find(b"{", m.end())
-        if brace < 0:
+            if brace < 0:
+                break
+            body_start = _skip_one_line_ending(data, brace + 1)
+        else:
+            _opening_start, body_start = opening
+        closing = _find_structural_line(data, body_start, b"}")
+        if closing is None:
             break
-        m2 = _CLOSE.search(data, brace + 1)      # 行首的 '}'，而非字节流里第一个 '}'
-        if not m2:
-            break
-        body = data[brace + 1:m2.start()].strip(b"\n")
+        closing_start, closing_end = closing
+        body_end = _remove_one_line_ending(data, body_start, closing_start)
+        body = data[body_start:body_end]
         table[sid] = _decode_str(body)
-        i = m2.end()
+        i = closing_end
     return table
+
+
+def _find_structural_line(
+    data: bytes,
+    start: int,
+    token: bytes,
+) -> tuple[int, int] | None:
+    position = start
+    while position < len(data):
+        content_end, line_end = _line_end(data, position)
+        content = data[position:content_end]
+        if content.startswith(token) and not content[len(token) :].strip(b" \t"):
+            return position, line_end
+        position = line_end
+    return None
+
+
+def _line_end(data: bytes, start: int) -> tuple[int, int]:
+    position = start
+    while position < len(data) and data[position] not in {10, 13}:
+        position += 1
+    content_end = position
+    if data[position : position + 2] == b"\r\n":
+        return content_end, position + 2
+    if position < len(data):
+        return content_end, position + 1
+    return content_end, content_end
+
+
+def _skip_one_line_ending(data: bytes, position: int) -> int:
+    if data[position : position + 2] == b"\r\n":
+        return position + 2
+    if data[position : position + 1] in {b"\r", b"\n"}:
+        return position + 1
+    return position
+
+
+def _remove_one_line_ending(data: bytes, lower_bound: int, position: int) -> int:
+    if position - 2 >= lower_bound and data[position - 2 : position] == b"\r\n":
+        return position - 2
+    if position - 1 >= lower_bound and data[position - 1 : position] in {b"\r", b"\n"}:
+        return position - 1
+    return position
 
 
 def parse_wts_component(data: bytes) -> dict[int, str]:
@@ -70,7 +119,9 @@ def parse_wts_component(data: bytes) -> dict[int, str]:
 def validate_wts_component(data: bytes, table: dict[int, str]) -> dict[int, str]:
     """Reject a tolerant WTS result that omitted declared string blocks."""
     expected = {int(match.group(1)) for match in _HEADER.finditer(data)}
-    normalized = data.removeprefix(b"\xef\xbb\xbf").replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    normalized = (
+        data.removeprefix(b"\xef\xbb\xbf").replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+    )
     if not expected and any(
         line.strip() and not line.lstrip().startswith(b"//")
         for line in normalized.split(b"\n")
@@ -83,7 +134,7 @@ def validate_wts_component(data: bytes, table: dict[int, str]) -> dict[int, str]
     return table
 
 
-def map_wts_table(md: MapData) -> dict[int, str]:
+def map_wts_table(md: _MapWtsSource) -> dict[int, str]:
     """Return retained byte-parsed WTS values with text as legacy fallback."""
     if md.ui_strings is not None:
         return dict(md.ui_strings)
@@ -92,7 +143,7 @@ def map_wts_table(md: MapData) -> dict[int, str]:
         return {}
     try:
         return parse_wts(raw.encode("utf-8", "replace"))
-    except (UnicodeError, ValueError):
+    except UnicodeError, ValueError:
         return {}
 
 
@@ -100,7 +151,7 @@ def resolve(value: int | float | str, wts: Mapping[int, str]) -> int | float | s
     """把 'TRIGSTR_390' 这类引用换成实际文本；其它原样返回。"""
     if isinstance(value, str) and value.startswith("TRIGSTR_"):
         try:
-            sid = int(value[len("TRIGSTR_"):])
+            sid = int(value[len("TRIGSTR_") :])
         except ValueError:
             return value
         return wts.get(sid, value)

@@ -1,14 +1,13 @@
 """Map archive lifecycle and recursive extraction orchestration."""
+
 from __future__ import annotations
 
 import os
-import struct
-from dataclasses import replace
 from typing import Final
 
-from .archive_source import BytesArchiveSource, PathArchiveSource
+from .archive_source import PathArchiveSource
 from .base_objects import BASE_OBJECTS
-from .campaign_budget import CampaignByteBudget, record_campaign_budget_issue
+from .campaign_child_loader import load_campaign_children
 from .campaign_sources import campaign_inner_maps
 from .client_object_data import merge_client_base_objects
 from .external_listfile import validate_external_names
@@ -17,11 +16,11 @@ from .extraction_diagnostics import (
     ExtractionDiagnostic,
     read_component,
     record_component_failure,
-    record_component_parse_issue,
     record_diagnostic,
 )
+from .item_relation_builder import build_item_relation_index
 from .load_context import MapLoadContext
-from .map_archive_reader import DeclaredSizeArchive, MapArchiveReader
+from .map_archive_reader import MapArchiveReader
 from .map_components import (
     _add_preplaced,
     _add_script_refs,
@@ -29,11 +28,11 @@ from .map_components import (
     _add_w3i,
     _map_name,
 )
-from .map_data import MapData
+from .map_data import GameObject, MapData
 from .mpq import MPQArchive
 from .mpq_files import list_archive_files
 from .object_candidates import OBJECT_EXTS, collect_object_candidates
-from .object_pipeline import populate_object_pipeline
+from .object_pipeline import populate_object_pipeline_from_context
 from .references import build_reference_graph
 from .script_sources import analysis_script_texts, collect_readable_scripts
 from .wts import parse_wts, validate_wts_component
@@ -41,13 +40,12 @@ from .wts import parse_wts, validate_wts_component
 _MAX_CAMPAIGN_CHILDREN: Final = 256
 _MAX_CAMPAIGN_CHILD_BYTES: Final = 512 * 1024 * 1024
 _MAX_CAMPAIGN_READ_BYTES: Final = 512 * 1024 * 1024
-_CAMPAIGN_CHILD_ERRORS: Final = (KeyError, OSError, ValueError, IndexError, struct.error)
 
 
 def load_map(
     path: str,
     _depth: int = 0,
-    shared_index: dict | None = None,
+    shared_index: dict[str, GameObject] | None = None,
     load_context: MapLoadContext | None = None,
 ) -> MapData:
     path = os.fspath(path)
@@ -67,12 +65,13 @@ def load_map(
         if bundle is None:
             raise
         base_archive = None
-    archive: MapArchiveReader = (
-        PlaintextOverlayArchive(path, bundle, base_archive)
-        if bundle is not None
-        else base_archive
-    )
-    if archive is None:
+    if bundle is not None:
+        archive: MapArchiveReader = PlaintextOverlayArchive(
+            path, bundle, base_archive
+        )
+    elif base_archive is not None:
+        archive = base_archive
+    else:
         raise FileNotFoundError(path)
     try:
         return _load_map_impl(archive, path, _depth, shared_index, load_context)
@@ -84,20 +83,23 @@ def _load_map_impl(
     archive: MapArchiveReader,
     path: str,
     _depth: int,
-    shared_index: dict | None,
+    shared_index: dict[str, GameObject] | None,
     load_context: MapLoadContext,
 ) -> MapData:
-    md = MapData(path=path, name=_map_name(archive), archive_source=PathArchiveSource(path))
+    md = MapData(
+        path=path, name=_map_name(archive), archive_source=PathArchiveSource(path)
+    )
     script_collection = collect_readable_scripts(archive, md=md)
     wts = {}
-    if script_collection.wts_raw is not None:
+    wts_raw = script_collection.wts_raw
+    if wts_raw is not None:
         parsed_wts = read_component(
             md,
             "wts",
             "war3map.wts",
             lambda: validate_wts_component(
-                script_collection.wts_raw,
-                parse_wts(script_collection.wts_raw),
+                wts_raw,
+                parse_wts(wts_raw),
             ),
             stage="parse",
         )
@@ -137,8 +139,10 @@ def _load_map_impl(
         candidates.extend(
             collect_object_candidates(archive, cwts, prefix="war3campaign", md=md),
         )
-    base_objects = merge_client_base_objects(BASE_OBJECTS, load_context.client_base_objects)
-    populate_object_pipeline(md, candidates, base_objects)
+    base_objects = merge_client_base_objects(
+        BASE_OBJECTS, load_context.client_base_objects
+    )
+    populate_object_pipeline_from_context(md, candidates, base_objects, load_context)
 
     md.scripts.update(script_collection.texts)
     script_sources = analysis_script_texts(md)
@@ -178,77 +182,30 @@ def _load_map_impl(
     except Exception as exc:  # noqa: BROAD_EXCEPT_OK - optional reference analysis cannot abort extraction.
         md.ref_low_coverage = True
         record_component_failure(
-            md, "reference-graph", "objects/scripts/preplaced", exc, stage="analyze",
+            md,
+            "reference-graph",
+            "objects/scripts/preplaced",
+            exc,
+            stage="analyze",
         )
+
+    md.item_relations = build_item_relation_index(md)
 
     md.all_files = list_archive_files(archive, external_names=external_report.confirmed)
 
     if _depth == 0 and path.lower().endswith(".w3n"):
         inner_maps = _campaign_inner_maps(archive, md.all_files, md.w3f)
-        if len(inner_maps) > _MAX_CAMPAIGN_CHILDREN:
-            record_component_parse_issue(
-                md,
-                "campaign-child",
-                path,
-                f"campaign child count {len(inner_maps)} exceeds {_MAX_CAMPAIGN_CHILDREN}",
-                stage="enumerate",
-            )
-        budget = CampaignByteBudget(_MAX_CAMPAIGN_CHILD_BYTES, _MAX_CAMPAIGN_READ_BYTES)
-        for inner in inner_maps[:_MAX_CAMPAIGN_CHILDREN]:
-            source = None
-            try:
-                remaining_bytes = budget.remaining
-                declared_size = None
-                if isinstance(archive, DeclaredSizeArchive):
-                    declared_size = archive.declared_file_size(inner)
-                reserved_bytes = budget.reserve_read(declared_size)
-                if reserved_bytes is None:
-                    record_campaign_budget_issue(md, inner)
-                    continue
-                data = read_component(
-                    md,
-                    "campaign-child",
-                    inner,
-                    lambda child_name=inner: archive.read_file(child_name),
-                    stage="read",
-                )
-                if data is None:
-                    continue
-                budget.reconcile_read(reserved_bytes, len(data))
-                if len(data) > remaining_bytes:
-                    record_campaign_budget_issue(md, inner)
-                    continue
-                source = BytesArchiveSource(inner, data)
-                child_context = replace(load_context, author_bundle_path=None)
-                with source.open() as child_archive:
-                    sub = _load_map_impl(
-                        child_archive,
-                        inner,
-                        _depth + 1,
-                        md.obj_index,
-                        child_context,
-                    )
-                sub.archive_source = source
-                sub.name = inner
-                sub.path = inner
-                md.sub_maps.append(sub)
-                budget.charge_retained(len(data))
-            except _CAMPAIGN_CHILD_ERRORS as exc:
-                if source is not None:
-                    source.close()
-                record_diagnostic(
-                    md,
-                    ExtractionDiagnostic(
-                        component="campaign-child",
-                        source=inner,
-                        stage="open/parse",
-                        severity=DiagnosticSeverity.WARNING,
-                        message=f"{type(exc).__name__}: {exc}".rstrip(),
-                        recoverable=True,
-                        exception_type=type(exc).__name__,
-                    ),
-                )
-                continue
+        load_campaign_children(
+            md,
+            archive,
+            inner_maps,
+            _depth,
+            load_context,
+            _load_map_impl,
+            max_children=_MAX_CAMPAIGN_CHILDREN,
+            max_retained_bytes=_MAX_CAMPAIGN_CHILD_BYTES,
+            max_read_bytes=_MAX_CAMPAIGN_READ_BYTES,
+        )
 
     return md
 

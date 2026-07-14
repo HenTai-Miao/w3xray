@@ -3,22 +3,33 @@
 commands_from_map / recipes_from_map 直接吃 md.scripts，
 结果应与把同一段脚本喂给底层扫描器一致；无脚本时返回空。
 """
+
 import unittest
 
 from w3xtool.api import MapData, commands_from_map, recipes_from_map
+from w3xtool.item_relation_models import (
+    ItemRelation,
+    ItemRelationIndex,
+    ItemRelationKind,
+    RelationCompleteness,
+    RelationConfidence,
+    RelationEvidence,
+    RelationIngredient,
+    RelationObject,
+)
 from w3xtool.script_scan import scan_chat_commands
 from w3xtool.script_scan import scan_recipes as _scan_recipes_text
 
 
 # 一段含聊天指令的 JASS 片段（足够触发 scan_chat_commands）
-SAMPLE_JASS = '''
+SAMPLE_JASS = """
 function Trig_cmd takes nothing returns boolean
     if SubStringBJ(GetEventPlayerChatString(), 1, 4) == "-kill" then
         call BJDebugMsg("killed")
     endif
     return false
 endfunction
-'''
+"""
 
 
 class TestMapReuse(unittest.TestCase):
@@ -37,6 +48,36 @@ class TestMapReuse(unittest.TestCase):
         md = MapData(path="x", name="x", scripts={})
         self.assertEqual(commands_from_map(md), [])
         self.assertEqual(recipes_from_map(md), [])
+
+    def test_recipes_from_map_reuses_indexed_recipe_evidence(self):
+        # Given: a loaded map already owns a source-aware recipe relation.
+        material = RelationObject("物品", "I001", "材料")
+        result = RelationObject("物品", "I999", "成品")
+        relation = ItemRelation(
+            kind=ItemRelationKind.RECIPE,
+            item=result,
+            ingredients=(RelationIngredient(material, 2),),
+            evidence=RelationEvidence(
+                source="war3map.j",
+                function="Forge",
+                line=9,
+                raw="call UnitAddItemById(u, 'I999')",
+            ),
+            confidence=RelationConfidence.CONFIRMED,
+            completeness=RelationCompleteness.COMPLETE,
+        )
+        md = MapData(path="x", name="x", scripts={"war3map.j": ""})
+        md.item_relations = ItemRelationIndex.build((relation,))
+
+        # When: the compatibility recipe API is requested.
+        (recipe,) = recipes_from_map(md)
+
+        # Then: it derives the legacy view without rescanning or losing evidence.
+        self.assertEqual(recipe.ingredients, ["I001", "I001"])
+        self.assertEqual(
+            (recipe.result, recipe.func, recipe.source, recipe.line),
+            ("I999", "Forge", "war3map.j", 9),
+        )
 
 
 if __name__ == "__main__":

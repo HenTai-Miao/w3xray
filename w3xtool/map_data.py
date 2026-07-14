@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from .external_listfile import ExternalListfileReport
+from .item_relation_models import ItemRelationIndex, empty_item_relation_index
+from .object_text_models import ObjectTextIndex, empty_object_text_index
 
 if TYPE_CHECKING:
     from .archive_source import ArchiveSource
@@ -71,7 +73,9 @@ class MapData:
     import_summary: ImportSummary | None = None
     w3i: W3iInfo | None = None
     w3f: W3fInfo | None = None
-    references: dict[str, list[tuple[str, list[tuple[str, str | None]]]]] = field(default_factory=dict)
+    references: dict[str, list[tuple[str, list[tuple[str, str | None]]]]] = field(
+        default_factory=dict
+    )
     referenced_by: dict[str, list[tuple[str, str, str]]] = field(default_factory=dict)
     orphans: list[GameObject] = field(default_factory=list)
     ref_low_coverage: bool = False
@@ -79,9 +83,13 @@ class MapData:
     author_bundle_files: tuple[str, ...] = ()
     archive_source: ArchiveSource | None = None
     diagnostics: list[ExtractionDiagnostic] = field(default_factory=list)
-    diagnostic_keys: set[ExtractionDiagnostic] = field(default_factory=set, init=False, repr=False)
+    diagnostic_keys: set[ExtractionDiagnostic] = field(
+        default_factory=set, init=False, repr=False
+    )
     ui_strings: dict[int, str] | None = None
     object_source_counts: dict[str, int] = field(default_factory=dict)
+    object_texts: ObjectTextIndex = field(default_factory=empty_object_text_index)
+    item_relations: ItemRelationIndex = field(default_factory=empty_item_relation_index)
     _closed: bool = field(default=False, init=False, repr=False)
 
     def category_counts(self) -> dict[str, int]:
