@@ -21,7 +21,19 @@ def _i(v):
     return struct.pack("<i", v)
 
 
-def _doodad(tid, var, pos, angle_rad, scale, vis, life, drops, serial, skin=None):
+def _doodad(
+    tid,
+    var,
+    pos,
+    angle_rad,
+    scale,
+    vis,
+    life,
+    drops,
+    serial,
+    skin=None,
+    drop_sets=None,
+):
     b = tid.encode("latin-1") + _i(var)
     b += _f(pos[0]) + _f(pos[1]) + _f(pos[2]) + _f(angle_rad)
     b += _f(scale[0]) + _f(scale[1]) + _f(scale[2])
@@ -29,12 +41,14 @@ def _doodad(tid, var, pos, angle_rad, scale, vis, life, drops, serial, skin=None
         b += skin.encode("latin-1")
     b += bytes([vis]) + bytes([life])
     b += _i(-1)                          # 掉落列表指针
-    # 掉落表是嵌套的（集合→物品），与单位 doo 一致；这里把传入的扁平 drops 编成一个集合
-    if drops:
-        b += _i(1)                       # 集合数 = 1
-        b += _i(len(drops))              # 该集合内物品数
-        for did, chance in drops:
-            b += did.encode("latin-1") + _i(chance)
+    # 掉落表是嵌套的（集合→物品）；旧调用的扁平值继续编码为一个集合。
+    encoded_sets = drop_sets if drop_sets is not None else ([drops] if drops else [])
+    if encoded_sets:
+        b += _i(len(encoded_sets))
+        for entries in encoded_sets:
+            b += _i(len(entries))
+            for did, chance in entries:
+                b += did.encode("latin-1") + _i(chance)
     else:
         b += _i(0)                       # 无掉落集合
     b += _i(serial)
@@ -114,6 +128,43 @@ class TestParseDoodads(unittest.TestCase):
         objs = parse_doodads(_build_doo([d]))
         self.assertEqual(objs[0].drops, [("ratf", 100), ("rde1", 50)])
 
+    def test_doodad_preserves_nested_drop_sets_and_entry_offsets(self):
+        # Given: one destructable has two random groups with stable entry order.
+        d = _doodad(
+            "YOl0",
+            0,
+            (0.0, 0.0, 0.0),
+            0.0,
+            (1, 1, 1),
+            2,
+            100,
+            [],
+            7,
+            drop_sets=[[("ratf", 70), ("rde1", 30)], [("rde2", 100)]],
+        )
+
+        # When: the binary placement record is parsed.
+        doodad = parse_doodads(_build_doo([d]))[0]
+
+        # Then: nested semantics and the old flat view are both complete.
+        self.assertEqual(
+            [[(row.item_id, row.chance) for row in group.entries] for group in doodad.drop_sets],
+            [[("ratf", 70), ("rde1", 30)], [("rde2", 100)]],
+        )
+        self.assertEqual([group.group_index for group in doodad.drop_sets], [0, 1])
+        self.assertEqual(
+            [[row.entry_index for row in group.entries] for group in doodad.drop_sets],
+            [[0, 1], [0]],
+        )
+        self.assertTrue(
+            all(
+                row.source_offset > doodad.source_offset
+                for group in doodad.drop_sets
+                for row in group.entries
+            ),
+        )
+        self.assertEqual(doodad.drops, [("ratf", 70), ("rde1", 30), ("rde2", 100)])
+
     def test_multiple_doodads(self):
         ds = [_doodad("LTlt", i, (float(i), 0.0, 0.0), 0.0, (1, 1, 1),
                       2, 100, [], i) for i in range(3)]
@@ -170,6 +221,45 @@ class TestParseUnits(unittest.TestCase):
         self.assertEqual(units[0].items, [(0, "ratf"), (1, "rde1")])
         self.assertEqual(units[0].abilities, [("AHbz", 1, 2)])
         self.assertEqual(units[0].hero_level, 3)
+
+    def test_unit_retains_drop_sets_that_were_previously_discarded(self):
+        # Given: one unit placement has two binary dropped-item sets.
+        u = _unit(
+            "n001",
+            0,
+            (1.0, 2.0, 0.0),
+            0.0,
+            (1, 1, 1),
+            2,
+            12,
+            -1,
+            -1,
+            0,
+            -1.0,
+            1,
+            [],
+            [],
+            77,
+            dropsets=[[('ratf', 50)], [('rde1', 25), ('rde2', 75)]],
+        )
+
+        # When: the unit table is parsed.
+        unit = parse_units(_build_units([u]))[0]
+
+        # Then: all groups, indexes, probabilities, offsets, and flat compatibility survive.
+        self.assertEqual(unit.drops, [("ratf", 50), ("rde1", 25), ("rde2", 75)])
+        self.assertEqual([group.group_index for group in unit.drop_sets], [0, 1])
+        self.assertEqual(
+            [[row.entry_index for row in group.entries] for group in unit.drop_sets],
+            [[0], [0, 1]],
+        )
+        self.assertTrue(
+            all(
+                row.source_offset > unit.source_offset
+                for group in unit.drop_sets
+                for row in group.entries
+            ),
+        )
 
     def test_multiple_units_stay_in_sync(self):
         us = [_unit("hpea", 0, (float(i), 0.0, 0.0), 0.0, (1, 1, 1),

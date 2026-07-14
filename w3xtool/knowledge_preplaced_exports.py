@@ -5,12 +5,13 @@ from __future__ import annotations
 from .api import MapData
 from .base_names import BASE_NAMES
 from .doo import Doodad, Unit
+from .doo_drops import DropSet
 from .knowledge_io import tsv
 
 
 def format_preplaced_units_tsv(md: MapData) -> str:
     """Return parsed war3mapUnits.doo placements as TSV."""
-    rows = ["序号\t类型ID\t名称\t玩家\tX\tY\tZ\t角度\t生命\t魔法\t金矿\t英雄等级\t物品栏\t技能"]
+    rows = ["序号\t类型ID\t名称\t玩家\tX\tY\tZ\t角度\t生命\t魔法\t金矿\t英雄等级\t物品栏\t技能\t掉落"]
     for unit in md.units:
         rows.append("\t".join((
             str(unit.serial),
@@ -27,6 +28,7 @@ def format_preplaced_units_tsv(md: MapData) -> str:
             str(unit.hero_level),
             tsv(_format_unit_items(md, unit)),
             tsv(_format_unit_abilities(md, unit)),
+            tsv(_format_drop_sets(md, unit.drop_sets)),
         )))
     return "\n".join(rows) + "\n"
 
@@ -69,7 +71,21 @@ def _format_unit_abilities(md: MapData, unit: Unit) -> str:
 
 
 def _format_drops(md: MapData, doodad: Doodad) -> str:
+    if doodad.drop_sets:
+        return _format_drop_sets(md, doodad.drop_sets)
     return "; ".join(f"{_code_label(md, item_id)}:{chance}%" for item_id, chance in doodad.drops)
+
+
+def _format_drop_sets(md: MapData, drop_sets: tuple[DropSet, ...]) -> str:
+    return "；".join(
+        f"组{group.group_index + 1}["
+        + "; ".join(
+            f"{_code_label(md, entry.item_id)}:{entry.chance}%"
+            for entry in group.entries
+        )
+        + "]"
+        for group in drop_sets
+    )
 
 
 def _format_scale(doodad: Doodad) -> str:

@@ -16,6 +16,8 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass, field
 
+from .doo_drops import DropSet, flatten_drop_sets, read_drop_sets
+
 
 class _Reader:
     def __init__(self, data: bytes):
@@ -55,11 +57,13 @@ class Doodad:
     y: float
     z: float
     angle: float                                  # 角度（度）
-    scale: tuple = (1.0, 1.0, 1.0)
+    scale: tuple[float, float, float] = (1.0, 1.0, 1.0)
     flags: int = 0
     life: int = 100
-    drops: list = field(default_factory=list)     # [(item_id, chance)]
+    drops: list[tuple[str, int]] = field(default_factory=list)  # [(item_id, chance)]
     serial: int = 0
+    drop_sets: tuple[DropSet, ...] = ()
+    source_offset: int = 0
 
 
 @dataclass
@@ -75,9 +79,16 @@ class Unit:
     mana: int = -1
     gold: int = 0
     hero_level: int = 1
-    items: list = field(default_factory=list)     # [(slot, item_id)]
-    abilities: list = field(default_factory=list)  # [(ability_id, active, level)]
+    items: list[tuple[int, str]] = field(default_factory=list)  # [(slot, item_id)]
+    abilities: list[tuple[str, int, int]] = field(default_factory=list)
     serial: int = 0
+    drop_sets: tuple[DropSet, ...] = ()
+    source_offset: int = 0
+
+    @property
+    def drops(self) -> list[tuple[str, int]]:
+        """Return the historical flat dropped-item compatibility view."""
+        return flatten_drop_sets(self.drop_sets)
 
 
 
@@ -88,6 +99,7 @@ def _read_doodad(r: _Reader, skin: bool) -> Doodad:
     掉落数异常(>256 或 <0)判为布局错位 → 抛 ValueError，供上层换布局重试。
     """
     import math
+    record_offset = r.p
     tid = r.tag()
     var = r.i32()
     x, y, z = r.f32(), r.f32(), r.f32()
@@ -101,19 +113,12 @@ def _read_doodad(r: _Reader, skin: bool) -> Doodad:
     # 掉落表是嵌套的：先 集合数，每个集合内再列若干 (物品码, 概率)。
     # 旧实现把它当成扁平的物品列表，遇到任何带掉落的装饰物就会错位 4 字节并连锁解崩
     # （真实地图里多数装饰物无掉落，故 bug 常被掩盖，直到某条带掉落才暴露）。
-    nsets = r.i32()
-    if nsets < 0 or nsets > 256:                   # 不合理 → 布局错位（如把 skin 当成了别的字段）
-        raise ValueError("掉落集合数 %d 不合理" % nsets)
-    drops = []
-    for _ in range(nsets):
-        nitems = r.i32()
-        if nitems < 0 or nitems > 256:
-            raise ValueError("掉落物品数 %d 不合理" % nitems)
-        for _ in range(nitems):
-            drops.append((r.tag(), r.i32()))       # 物品码 + 概率(%)
+    drop_sets = read_drop_sets(r)
+    drops = flatten_drop_sets(drop_sets)
     serial = r.i32()
     return Doodad(type_id=tid, variation=var, x=x, y=y, z=z, angle=angle,
-                  scale=scale, flags=vis, life=life, drops=drops, serial=serial)
+                  scale=scale, flags=vis, life=life, drops=drops, serial=serial,
+                  drop_sets=drop_sets, source_offset=record_offset)
 
 
 def _attempt_doodads(data: bytes, count: int, skin: bool):
@@ -129,7 +134,7 @@ def _attempt_doodads(data: bytes, count: int, skin: bool):
     return result, True
 
 
-def parse_doodads(data: bytes) -> list:
+def parse_doodads(data: bytes) -> list[Doodad]:
     """解析 war3map.doo，返回 Doodad 列表（仅装饰物主表，忽略特殊物）。
 
     经典与重制版同为 version 8/sub 11，但重制版每条多一个 4 字节皮肤码，无法靠版本区分。
@@ -168,33 +173,31 @@ def _read_unit(r: _Reader, skin: bool, v7: bool = False) -> Unit:
     各 count 超 _CAP 判为布局错位 → 抛 ValueError，供上层换布局重试。
     """
     import math
+    record_offset = r.p
     tid = r.tag()
     var = r.i32()
     x, y, z = r.f32(), r.f32(), r.f32()
     angle = math.degrees(r.f32())
-    r.f32(); r.f32(); r.f32()                      # scale x/y/z
+    r.f32()                                        # scale x
+    r.f32()                                        # scale y
+    r.f32()                                        # scale z
     if skin:
         r.tag()                                    # 重制版皮肤码 4 字节
     r.u8()                                          # flags
     player = r.i32()
-    r.u8(); r.u8()                                  # unknown ×2
+    r.u8()                                          # unknown
+    r.u8()                                          # unknown
     hp = r.i32()
     mana = r.i32()
     r.i32()                                         # dropped-item-set 指针
-    nsets = r.i32()
-    if nsets < 0 or nsets > _CAP:
-        raise ValueError("dropset 数不合理")
-    for _ in range(nsets):
-        nitems = r.i32()
-        if nitems < 0 or nitems > _CAP:
-            raise ValueError("dropset 物品数不合理")
-        for _ in range(nitems):
-            r.tag(); r.i32()                        # item id + chance
+    drop_sets = read_drop_sets(r, maximum_count=_CAP)
     gold = r.i32()
     r.f32()                                         # 目标获取范围
     hlev = r.i32()
     if not v7:
-        r.i32(); r.i32(); r.i32()                  # 英雄 力量/敏捷/智力（仅 TFT 版本 8）
+        r.i32()                                     # 英雄力量（仅 TFT 版本 8）
+        r.i32()                                     # 英雄敏捷（仅 TFT 版本 8）
+        r.i32()                                     # 英雄智力（仅 TFT 版本 8）
     nitems = r.i32()
     if nitems < 0 or nitems > _CAP:
         raise ValueError("背包物品数不合理")
@@ -215,13 +218,15 @@ def _read_unit(r: _Reader, skin: bool, v7: bool = False) -> Unit:
     if rflag == 0:
         r.i32()
     elif rflag == 1:
-        r.i32(); r.i32()
+        r.i32()
+        r.i32()
     elif rflag == 2:
         n = r.i32()
         if n < 0 or n > _CAP:
             raise ValueError("随机组数不合理")
         for _ in range(n):
-            r.tag(); r.i32()
+            r.tag()
+            r.i32()
     else:
         raise ValueError("未知 randomFlag %d" % rflag)
     if not v7:
@@ -230,7 +235,8 @@ def _read_unit(r: _Reader, skin: bool, v7: bool = False) -> Unit:
     serial = r.i32()
     return Unit(type_id=tid, variation=var, x=x, y=y, z=z, angle=angle,
                 player=player, hp=hp, mana=mana, gold=gold, hero_level=hlev,
-                items=items, abilities=abilities, serial=serial)
+                items=items, abilities=abilities, serial=serial,
+                drop_sets=drop_sets, source_offset=record_offset)
 
 
 def _attempt_units(data: bytes, count: int, skin: bool, v7: bool = False):
@@ -246,7 +252,7 @@ def _attempt_units(data: bytes, count: int, skin: bool, v7: bool = False):
     return result, True
 
 
-def parse_units(data: bytes) -> list:
+def parse_units(data: bytes) -> list[Unit]:
     """解析 war3mapUnits.doo，返回 Unit 列表。
 
     经典与重制版同为 version 8/sub 11，但重制版每条多一个 4 字节皮肤码（无法靠版本区分）。

@@ -6,10 +6,66 @@ import unittest
 
 from w3xtool.api import GameObject, MapData
 from w3xtool.doo import Doodad, Unit
+from w3xtool.doo_drops import DropEntry, DropSet
 from w3xtool.knowledge_pack import write_knowledge_pack
+from w3xtool.knowledge_preplaced_exports import (
+    format_preplaced_doodads_tsv,
+    format_preplaced_units_tsv,
+)
 
 
 class KnowledgePackPreplacedTest(unittest.TestCase):
+    def test_preplaced_unit_export_keeps_nested_drop_groups(self):
+        # Given: a unit placement with two distinct random drop groups.
+        md = MapData(path="x.w3x", name="单位掉落图")
+        md.units = [
+            Unit(
+                "n001",
+                0,
+                1.0,
+                2.0,
+                0.0,
+                0.0,
+                serial=9,
+                drop_sets=(
+                    DropSet(0, (DropEntry("I001", 70, 0, 0, 40),)),
+                    DropSet(1, (DropEntry("I002", 100, 1, 0, 52),)),
+                ),
+            ),
+        ]
+
+        # When: the user exports preplaced units.
+        rendered = format_preplaced_units_tsv(md)
+
+        # Then: both groups remain visible instead of being flattened or omitted.
+        self.assertIn("\t技能\t掉落\n", rendered)
+        self.assertIn("组1[I001(I001):70%]；组2[I002(I002):100%]", rendered)
+
+    def test_preplaced_doodad_export_keeps_nested_drop_groups(self):
+        # Given: a destructable placement with two distinct random drop groups.
+        md = MapData(path="x.w3x", name="可破坏物掉落图")
+        md.doodads = [
+            Doodad(
+                "D001",
+                0,
+                1.0,
+                2.0,
+                0.0,
+                0.0,
+                serial=7,
+                drop_sets=(
+                    DropSet(0, (DropEntry("I001", 70, 0, 0, 40),)),
+                    DropSet(1, (DropEntry("I002", 100, 1, 0, 52),)),
+                ),
+            ),
+        ]
+
+        # When: the user exports preplaced destructables.
+        rendered = format_preplaced_doodads_tsv(md)
+
+        # Then: both groups and their probabilities remain visible.
+        self.assertIn("组1[I001(I001):70%]；组2[I002(I002):100%]", rendered)
+
     def test_pack_exports_preplaced_units_doodads_and_drops(self):
         # Given: a map with parsed preplaced units and doodads.
         md = MapData(path="x.w3x", name="预放置图")

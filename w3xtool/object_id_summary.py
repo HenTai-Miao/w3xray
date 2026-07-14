@@ -55,6 +55,8 @@ def preplaced_code_uses(md: MapData) -> Iterable[PreplacedCodeUse]:
     """Yield object IDs referenced by parsed preplaced units and doodads."""
     for unit in md.units:
         yield PreplacedCodeUse(unit.type_id, "单位类型")
+        for item_id, _chance in unit.drops:
+            yield PreplacedCodeUse(item_id, "单位掉落")
         for slot, item_id in unit.items:
             yield PreplacedCodeUse(item_id, f"单位物品栏:{slot}")
         for ability_id, _active, _level in unit.abilities:
