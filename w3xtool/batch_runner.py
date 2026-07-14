@@ -79,7 +79,12 @@ def run_batch(options: BatchOptions) -> BatchState:
         except (OSError, ValueError) as exc:
             result = _failed_without_fingerprint(path, exc)
         else:
-            reusable = _reusable_result(previous, fingerprint, normalized.output_root)
+            reusable = _reusable_result(
+                previous,
+                fingerprint,
+                normalized.output_root,
+                retry_failed=normalized.retry_failed,
+            )
             if reusable is not None:
                 result = reusable
             else:
@@ -169,16 +174,19 @@ def _reusable_result(
     previous: BatchState | None,
     fingerprint: SourceFingerprint,
     output_root: str,
+    *,
+    retry_failed: bool,
 ) -> MapBatchResult | None:
     if previous is None:
         return None
     for result in previous.results:
-        if (
-            result.source == fingerprint
-            and result.state is MapBatchState.COMPLETE
-            and result.stage == "published"
-            and _published_result_exists(output_root, result)
-        ):
+        if result.source != fingerprint:
+            continue
+        if result.state is MapBatchState.COMPLETE:
+            if result.stage == "published" and _published_result_exists(output_root, result):
+                return result
+            continue
+        if result.state is MapBatchState.FAILED and not retry_failed:
             return result
     return None
 

@@ -196,3 +196,39 @@ def test_batch_rejects_an_output_nested_in_the_source_tree(tmp_path: Path) -> No
     # When / Then
     with pytest.raises(BatchConfigurationError, match="overlap"):
         run_batch(options)
+
+
+def test_no_retry_failed_reuses_an_unchanged_failed_result(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given
+    source_root = tmp_path / "Maps"
+    _write_map(source_root / "broken.w3x")
+    calls = 0
+    monkeypatch.setattr(batch_runner, "build_map_load_context", lambda **_kwargs: MapLoadContext())
+
+    def fail(
+        _index: int,
+        fingerprint: SourceFingerprint,
+        _options: BatchOptions,
+        _context: MapLoadContext,
+    ) -> MapBatchResult:
+        nonlocal calls
+        calls += 1
+        return _result(fingerprint, output_directory="", state=MapBatchState.FAILED)
+
+    monkeypatch.setattr(batch_runner, "process_one_map", fail)
+    options = BatchOptions(
+        str(source_root),
+        str(tmp_path / "output"),
+        retry_failed=False,
+    )
+    first = run_batch(options)
+
+    # When
+    second = run_batch(options)
+
+    # Then
+    assert second == first
+    assert calls == 1

@@ -15,6 +15,19 @@ __all__ = ("iter_cli_summary_lines", "iter_game_config_summary_lines", "main")
 def main() -> None:
     """Dispatch legacy game-config, map CLI, or GUI startup modes."""
     configure_cli_output()
+    if len(sys.argv) >= 2 and sys.argv[1] == "batch":
+        from w3xtool.batch_cli import (
+            BatchCliOptionError,
+            parse_batch_cli_options,
+            run_batch_cli,
+        )
+
+        try:
+            options = parse_batch_cli_options(tuple(sys.argv[2:]))
+        except BatchCliOptionError as exc:
+            print(f"批量参数错误：{exc}", file=sys.stderr)
+            raise SystemExit(2) from None
+        raise SystemExit(run_batch_cli(options))
     if len(sys.argv) >= 2 and sys.argv[1] == "acceptance":
         from w3xtool.acceptance_cli import run_acceptance_cli
 
