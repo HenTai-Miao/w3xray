@@ -6,7 +6,18 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import Final
+
+from .script_mechanics import (
+    BJ_CODE_CONSTANTS as BJ_CODE_CONSTANTS,
+    BJ_FEATURES as BJ_FEATURES,
+    BJ_FUNC_CODES as BJ_FUNC_CODES,
+    merge_implicit_object_refs,
+    scan_script_features,
+)
+from .script_tokens import iter_native_call_chunks, script_code_text
 
 _CHAT = re.compile(
     r'TriggerRegisterPlayerChatEvent\s*\(\s*([A-Za-z0-9_]+)\s*,[^,]+,\s*"((?:[^"\\]|\\.)*)"\s*,\s*(true|false)')
@@ -31,9 +42,9 @@ class ChatCommand:
     hint: str = ""
 
 
-def scan_chat_commands(script: str) -> list:
-    cmds = []
-    seen = set()
+def scan_chat_commands(script: str) -> list[ChatCommand]:
+    cmds: list[ChatCommand] = []
+    seen: set[tuple[str, bool]] = set()
     for pat in (_CHAT, _CHAT_BJ):
         for m in pat.finditer(script):
             trig, cmd, exact = m.group(1), m.group(2), m.group(3) == "true"
@@ -68,9 +79,13 @@ def _find_hint(script: str, trigger: str) -> str:
 
 @dataclass
 class Recipe:
-    ingredients: list      # 材料物品码
-    result: str            # 成品物品码
+    ingredients: list[str]      # 材料物品码
+    result: str                  # 成品物品码
     func: str = ""
+    source: str = ""
+    line: int = 0
+    confidence: str = "已确认"
+    evidence: str = ""
 
 
 _FOURCC = re.compile(r"'([A-Za-z0-9]{4})'")
@@ -83,7 +98,7 @@ _DECINT = re.compile(r"(?<![\w.])(\d{10})(?![\w.])")
 _CODE_MIN = 0x41303030          # 'A000'：阈值以下当普通数字（伤害/金钱），不当码
 
 
-def _int_to_code(v: int):
+def _int_to_code(v: int) -> str | None:
     """整数 → 4 字符码：须 ≥'A000' 且 4 字节全可打印 ASCII，否则不是码。"""
     if v < _CODE_MIN or v > 0xFFFFFFFF:
         return None
@@ -93,7 +108,7 @@ def _int_to_code(v: int):
     return None
 
 
-def _codes_in(s: str):
+def _codes_in(s: str) -> list[str]:
     """取所有对象码：'xxxx' 文本码 + $XX/0xXX 十六进制 + FourCC("xxxx") + 十进制整数码。"""
     out = list(_FOURCC.findall(s))
     out += _FOURCC_FN.findall(s)
@@ -116,36 +131,58 @@ def _codes_in(s: str):
     return out
 _REMOVE = re.compile(r"RemoveItem|GetItemOfType|UnitRemoveItem|YDWEGetItemOfType")
 _ADD = re.compile(r"UnitAddItemById|CreateItemLoc|CreateItem\b|UnitAddItemByIdSwapped")
+_FUNCTION_START = re.compile(r"^\s*(?:local\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)\b")
+_FUNCTION_END = re.compile(r"^\s*endfunction\b")
 
 
-def scan_recipes(script: str) -> list:
+def scan_recipes(script: str, *, source: str = "") -> list[Recipe]:
     """识别脚本里的物品合成：函数内被移除的物品=材料，被添加的物品=成品。
 
     覆盖常见 YDWE/JASS 写法（RemoveItem 材料 + UnitAddItemById 成品）。
     """
-    recipes = []
-    seen = set()
-    # 按函数切分（避免在超大脚本上做灾难性回溯）
-    parts = script.split("\nfunction ")
-    for part in parts:
-        if "AddItemById" not in part and "CreateItem" not in part:
+    recipes: list[Recipe] = []
+    seen: set[tuple[str, int, tuple[str, ...], str]] = set()
+    current_function = ""
+    ingredients: list[str] = []
+    code_lines = script_code_text(script).split("\n")
+    source_lines = script.split("\n")
+    for line_number, (code_line, source_line) in enumerate(
+        zip(code_lines, source_lines, strict=True),
+        start=1,
+    ):
+        function = _FUNCTION_START.match(code_line)
+        if function is not None:
+            current_function = function.group(1)
+            ingredients = []
             continue
-        name = part[:part.find("\n")].split("(")[0].strip() if "\n" in part else ""
-        buffer = []                      # 以"添加成品"为锚点，前面积累的移除物=材料
-        for line in part.split("\n"):
-            if _REMOVE.search(line):
-                buffer.extend(_codes_in(line))
-            elif _ADD.search(line):
-                for res in _codes_in(line):
-                    ing = [i for i in buffer if i != res]
-                    if len(ing) < 2:
-                        continue
-                    key = (tuple(sorted(ing)), res)
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    recipes.append(Recipe(ing, res, name))
-                buffer = []              # 结算后清空，下一配方重新积累
+        if _FUNCTION_END.match(code_line) is not None:
+            current_function = ""
+            ingredients = []
+            continue
+        if _REMOVE.search(code_line) is not None:
+            ingredients.extend(_codes_in(code_line))
+            continue
+        if _ADD.search(code_line) is None:
+            continue
+        for result in _codes_in(code_line):
+            materials = [item for item in ingredients if item != result]
+            if len(materials) < 2:
+                continue
+            key = (source, line_number, tuple(sorted(materials)), result)
+            if key in seen:
+                continue
+            seen.add(key)
+            recipes.append(
+                Recipe(
+                    ingredients=materials,
+                    result=result,
+                    func=current_function,
+                    source=source,
+                    line=line_number,
+                    evidence=source_line,
+                ),
+            )
+        ingredients = []                  # 结算后清空，下一配方重新积累
     return recipes
 
 
@@ -153,18 +190,10 @@ def scan_recipes(script: str) -> list:
 # 知道每个 native 的对象码参数属于哪类，脚本提码就能覆盖全分类(技能/科技/可破坏物…)，
 # 而不只是早期手列的 物品/单位 两类。生成数据缺失时退化为空表（scan 退回只认下方少量回退名）。
 try:
-    from .jass_natives import NATIVE_OBJ_FUNCS
-except Exception:                       # 生成数据缺失：表置空，scan_* 仍可跑(覆盖变窄)
-    NATIVE_OBJ_FUNCS = {}
-from .script_mechanics import (
-    BJ_CODE_CONSTANTS,
-    BJ_FEATURES,
-    BJ_FUNC_CODES,
-    merge_implicit_object_refs,
-    scan_script_features,
-)
-from .script_tokens import iter_native_call_chunks, script_code_text
-
+    from .jass_natives import NATIVE_OBJ_FUNCS as _native_obj_funcs
+except ImportError:                     # 生成数据缺失：表置空，scan_* 仍可跑(覆盖变窄)
+    _native_obj_funcs = {}
+NATIVE_OBJ_FUNCS: Final[Mapping[str, str | None]] = _native_obj_funcs
 _CATS = ("单位", "物品", "技能", "科技", "可破坏物", "增益")
 
 # 把所有"带对象码参数"的 native 名编成一个词边界正则，一次扫一行。
@@ -180,18 +209,18 @@ _FALLBACK_CAT = {
 }
 
 
-def _native_cat(name: str):
+def _native_cat(name: str) -> str | None:
     return NATIVE_OBJ_FUNCS.get(name, _FALLBACK_CAT.get(name))
 
 
-def scan_object_refs(script: str) -> dict:
+def scan_object_refs(script: str) -> dict[str, set[str]]:
     """从脚本按调用的 native 类型提取被引用的对象码，按分类归并。
 
     返回 {"单位"/"物品"/"技能"/"科技"/"可破坏物"/"增益": set(codes)}。
     依据 common.j 里每个 native 的对象码参数类别（如 UnitAddAbility 的参数是技能码、
     CreateDestructable 是可破坏物码）。一行里若出现多类 native，则该行的码归入各命中类。
     """
-    out = {c: set() for c in _CATS}
+    out: dict[str, set[str]] = {category: set() for category in _CATS}
     names_re = _NATIVE_RE
     if names_re is None:                # 无生成表：用最小回退名集
         names_re = re.compile(r"\b(" + "|".join(_FALLBACK_CAT) + r")\b")
@@ -214,7 +243,7 @@ def scan_object_refs(script: str) -> dict:
     return out
 
 
-def scan_all_referenced_codes(script: str) -> set:
+def scan_all_referenced_codes(script: str) -> set[str]:
     """脚本里"可能是对象引用"的全部 4cc 码（用于孤立判定的根集合，宁滥勿缺）。
 
     = 所有 'xxxx' 文本码 + 各 native 行提到的码 + BJ 隐式码。order/数值已被 _codes_in 之外

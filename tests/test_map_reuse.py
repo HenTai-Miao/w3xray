@@ -28,7 +28,10 @@ class TestMapReuse(unittest.TestCase):
 
     def test_recipes_from_map_matches_direct_scan(self):
         md = MapData(path="x", name="x", scripts={"war3map.j": SAMPLE_JASS})
-        self.assertEqual(recipes_from_map(md), _scan_recipes_text(SAMPLE_JASS))
+        self.assertEqual(
+            recipes_from_map(md),
+            _scan_recipes_text(SAMPLE_JASS, source="war3map.j"),
+        )
 
     def test_no_script_returns_empty(self):
         md = MapData(path="x", name="x", scripts={})
