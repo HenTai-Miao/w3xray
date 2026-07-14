@@ -8,21 +8,41 @@ from .presentation_safety import tsv_cell as _tsv
 
 _ROWS: Final = (
     ("总览", "资料包审计.txt", "各调查面的计数和源文件状态"),
-    ("总览", "需求覆盖.tsv", "用户原始需求到资料包产物的覆盖矩阵，含 WTG/listfile/CASC/运行时边界"),
+    (
+        "总览",
+        "需求覆盖.tsv",
+        "用户原始需求到资料包产物的覆盖矩阵，含 WTG/listfile/CASC/运行时边界",
+    ),
     ("总览", "组件诊断.tsv", "存在但读取或解析失败的地图组件诊断"),
     ("总览", "资料包写入结果.tsv", "每个资料包文件的最终写入状态、字节数和错误"),
     ("地图信息", "地图信息.txt", "地图名、作者、玩家、队伍、触发器摘要和导入摘要"),
     ("UI文本", "UI文本_TRIGSTR.tsv", "TRIGSTR 字符串表"),
     ("UI文本", "UI文本引用.tsv", "脚本、对象字段和 UI 文本引用位置"),
     ("资源/图标", "资源/资源资产索引.tsv", "图标、模型、音频、UI/文本资源清单"),
-    ("资源/图标", "资源/资源内容引用.tsv", "从 FDF/TOC/INI/SLK/SKIN 等文本本体继续发现资源路径"),
+    (
+        "资源/图标",
+        "资源/资源内容引用.tsv",
+        "从 FDF/TOC/INI/SLK/SKIN 等文本本体继续发现资源路径",
+    ),
     ("资源/图标", "资源/素材文件_manifest.tsv", "可读取素材和配置本体的导出状态"),
     ("配置格式", "配置格式索引.txt", "地图、对象、触发器、AI 和文本配置格式说明"),
-    ("存档/ID", "存档读写线索.tsv", "GameCache、Hashtable、Preload、同步和平台存档线索"),
+    (
+        "存档/ID",
+        "存档读写线索.tsv",
+        "GameCache、Hashtable、Preload、同步和平台存档线索",
+    ),
     ("地图/对象ID", "地图与对象ID索引.tsv", "地图身份、对象 ID、脚本引用和未知 4cc"),
-    ("地图/对象ID", "对象ID使用摘要.tsv", "按 ID 汇总脚本、存档、对象字段和预放置引用次数"),
+    (
+        "地图/对象ID",
+        "对象ID使用摘要.tsv",
+        "按 ID 汇总脚本、存档、对象字段和预放置引用次数",
+    ),
     ("触发器", "触发器树.tsv", "WTG 分类、触发器头和启用状态（无需游戏数据）"),
-    ("触发器", "触发器ECA.tsv", "ECA 展开需匹配 TriggerData，语义本地化需 TriggerStrings"),
+    (
+        "触发器",
+        "触发器ECA.tsv",
+        "ECA 展开需匹配 TriggerData，语义本地化需 TriggerStrings",
+    ),
     ("触发器", "触发变量.tsv", "WTG 全局变量类型、数组和初始值"),
     ("世界编辑器", "世界区域.tsv", "W3R 区域名称、范围、天气和环境声音"),
     ("世界编辑器", "世界镜头.tsv", "W3C 镜头位置、角度、视野和裁剪距离"),
@@ -50,14 +70,37 @@ _ROWS: Final = (
     ("脚本", "脚本机制线索.txt", "BJ 隐式对象引用和随机池机制"),
     ("对象", "对象ID/", "按分类导出的对象 ID、名称和说明"),
     ("对象", "对象文本与图标.tsv", "对象名称、提示、说明和图标字段"),
-    ("提取完整性", "提取完整性.txt", "命名文件覆盖率和无名块提示；保护图仅静态诊断和原始负载保留"),
-    ("提取完整性", "未知文件/Unknown_manifest.tsv", "匿名 MPQ 块的 Unknown/UnknownRaw 导出清单"),
-    ("内部文件", "内部文件清单.txt", "三层枚举与已验证外部 listfile 合并后的地图内部路径"),
+    ("对象", "对象完整描述.tsv", "逐对象、文本角色、等级和证据变体的原始及可读全文"),
+    (
+        "装备关系",
+        "掉落与获取关系.tsv",
+        "怪物、可破坏物、商店、合成、预放置及脚本奖励证据",
+    ),
+    ("装备关系", "装备技能关系.tsv", "装备技能和共享冷却技能的双向关系"),
+    ("装备关系", "关系完整性.txt", "按关系类型、可信度、完整性和未解析原因统计"),
+    (
+        "提取完整性",
+        "提取完整性.txt",
+        "命名文件覆盖率和无名块提示；保护图仅静态诊断和原始负载保留",
+    ),
+    (
+        "提取完整性",
+        "未知文件/Unknown_manifest.tsv",
+        "匿名 MPQ 块的 Unknown/UnknownRaw 导出清单",
+    ),
+    (
+        "内部文件",
+        "内部文件清单.txt",
+        "三层枚举与已验证外部 listfile 合并后的地图内部路径",
+    ),
 )
 
 
 def format_knowledge_manifest() -> str:
     """Return the knowledge-pack artifact directory as TSV."""
     rows = ["主题\t文件\t用途"]
-    rows.extend("\t".join((_tsv(topic), _tsv(path), _tsv(detail))) for topic, path, detail in _ROWS)
+    rows.extend(
+        "\t".join((_tsv(topic), _tsv(path), _tsv(detail)))
+        for topic, path, detail in _ROWS
+    )
     return "\n".join(rows) + "\n"

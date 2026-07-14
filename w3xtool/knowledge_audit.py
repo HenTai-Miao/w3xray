@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from typing import TYPE_CHECKING
 
 from .extraction_completeness import build_extraction_completeness_report
 from .investigation_exports import config_format_entries
+from .item_relation_models import RelationConfidence
 from .map_identity import MapIdentity, build_map_identity
 from .presentation_safety import tsv_cell as _tsv
+from .object_text_models import ObjectTextState
 from .resource_inventory import build_resource_inventory
 from .save_analysis import build_save_report
 from .ui_texts import build_ui_text_report
@@ -25,6 +28,10 @@ def format_knowledge_audit(md: MapData) -> str:
     identity = build_map_identity(md)
     object_count = sum(len(objects) for objects in md.objects.values())
     category_count = sum(1 for objects in md.objects.values() if objects)
+    text_counts = Counter(record.state for record in md.object_texts.records)
+    confidence_counts = Counter(
+        relation.confidence for relation in md.item_relations.records
+    )
     lines = [
         "资料包审计",
         f"地图\t{_tsv(md.name)}",
@@ -45,6 +52,15 @@ def format_knowledge_audit(md: MapData) -> str:
             f"地图/对象ID\t对象 {object_count}\t分类 {category_count}"
             f"\t内部文件 {len({name.lower() for name in md.all_files})}"
         ),
+        "对象完整文本\t总数 "
+        f"{len(md.object_texts.records)}"
+        + "".join(f"\t{state.value} {text_counts[state]}" for state in ObjectTextState),
+        "装备关系\t总数 "
+        f"{len(md.item_relations.records)}"
+        + "".join(
+            f"\t{confidence.value} {confidence_counts[confidence]}"
+            for confidence in RelationConfidence
+        ),
         _identity_line(identity),
         (
             "提取完整性\t"
@@ -53,6 +69,8 @@ def format_knowledge_audit(md: MapData) -> str:
         ),
     ]
     return "\n".join(lines) + "\n"
+
+
 def _identity_line(identity: MapIdentity) -> str:
     if not identity.readable:
         return "地图身份\t源文件不可读"

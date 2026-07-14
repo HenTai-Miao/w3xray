@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Final
 
 from .extraction_completeness import build_extraction_completeness_report
+from .knowledge_item_requirement_rows import ITEM_INTELLIGENCE_REQUIREMENTS
 from .knowledge_requirement_models import ExtractionCapabilities, RequirementCoverage
 from .presentation_safety import tsv_cell as _tsv
 
@@ -24,7 +25,13 @@ _ROWS: Final[tuple[RequirementCoverage, ...]] = (
         "提取/整理图标和资源",
         "已覆盖（静态）",
         ("资源/资源资产索引.tsv",),
-        ("脚本字符串索引.tsv", "资源/资源引用.tsv", "资源/资源内容引用.tsv", "资源/素材文件_manifest.tsv", "对象文本与图标.tsv"),
+        (
+            "脚本字符串索引.tsv",
+            "资源/资源引用.tsv",
+            "资源/资源内容引用.tsv",
+            "资源/素材文件_manifest.tsv",
+            "对象文本与图标.tsv",
+        ),
         "按图像、模型、音频、UI/文本和配置分类，能复制可读本体，并从文本配置本体继续扫描二级资源路径。",
     ),
     RequirementCoverage(
@@ -87,6 +94,7 @@ _ROWS: Final[tuple[RequirementCoverage, ...]] = (
         ),
         "列对象表 ID、十进制值、名称、基础 ID、脚本行号和未知 4cc。",
     ),
+    *ITEM_INTELLIGENCE_REQUIREMENTS,
     RequirementCoverage(
         "分析脚本对象码出现位置",
         "已覆盖（静态）",
@@ -112,14 +120,24 @@ _ROWS: Final[tuple[RequirementCoverage, ...]] = (
         "分析脚本循环",
         "已覆盖（静态）",
         ("脚本循环索引.tsv",),
-        ("脚本函数索引.tsv", "脚本条件分支索引.tsv", "脚本变量使用索引.tsv", "脚本对象码出现索引.tsv"),
+        (
+            "脚本函数索引.tsv",
+            "脚本条件分支索引.tsv",
+            "脚本变量使用索引.tsv",
+            "脚本对象码出现索引.tsv",
+        ),
         "列出 loop/exitwhen/for/while/repeat/until 循环和退出条件里的存档、变量与对象码。",
     ),
     RequirementCoverage(
         "分析脚本返回值",
         "已覆盖（静态）",
         ("脚本返回值索引.tsv",),
-        ("脚本函数索引.tsv", "脚本调用清单.tsv", "脚本变量使用索引.tsv", "脚本对象码出现索引.tsv"),
+        (
+            "脚本函数索引.tsv",
+            "脚本调用清单.tsv",
+            "脚本变量使用索引.tsv",
+            "脚本对象码出现索引.tsv",
+        ),
         "列出 return 表达式里的存档调用、状态变量、字符串和对象码。",
     ),
     RequirementCoverage(
@@ -133,7 +151,12 @@ _ROWS: Final[tuple[RequirementCoverage, ...]] = (
         "分析脚本调用参数",
         "已覆盖（静态）",
         ("脚本调用参数索引.tsv",),
-        ("脚本调用清单.tsv", "脚本函数索引.tsv", "存档读写线索.tsv", "脚本对象码出现索引.tsv"),
+        (
+            "脚本调用清单.tsv",
+            "脚本函数索引.tsv",
+            "存档读写线索.tsv",
+            "脚本对象码出现索引.tsv",
+        ),
         "逐次列出函数调用每个参数里的存档键、资源路径、字符串和对象码。",
     ),
     RequirementCoverage(
@@ -146,7 +169,13 @@ _ROWS: Final[tuple[RequirementCoverage, ...]] = (
     RequirementCoverage(
         "分析触发器和全局变量",
         "已覆盖（静态）",
-        ("触发器树.tsv", "触发器ECA.tsv", "触发变量.tsv", "脚本触发注册索引.tsv", "脚本全局变量索引.tsv"),
+        (
+            "触发器树.tsv",
+            "触发器ECA.tsv",
+            "触发变量.tsv",
+            "脚本触发注册索引.tsv",
+            "脚本全局变量索引.tsv",
+        ),
         ("脚本赋值索引.tsv", "脚本变量使用索引.tsv", "脚本可读文本/", "脚本清单.txt"),
         "导出 WTG 目录、ECA 函数/参数原始值、变量清单、JASS globals、脚本变量读写和事件/动作注册入口。",
     ),
@@ -154,7 +183,13 @@ _ROWS: Final[tuple[RequirementCoverage, ...]] = (
         "分析脚本全局变量读写",
         "已覆盖（静态）",
         ("脚本变量使用索引.tsv", "脚本赋值索引.tsv", "脚本全局变量索引.tsv"),
-        ("脚本条件分支索引.tsv", "脚本循环索引.tsv", "脚本返回值索引.tsv", "脚本可读文本/", "脚本清单.txt"),
+        (
+            "脚本条件分支索引.tsv",
+            "脚本循环索引.tsv",
+            "脚本返回值索引.tsv",
+            "脚本可读文本/",
+            "脚本清单.txt",
+        ),
         "按函数和行号列出 udg_/gg_/bj_ 全局变量读取、写入、分支条件、返回值和类别。",
     ),
     RequirementCoverage(
@@ -195,9 +230,7 @@ def format_requirement_coverage(
     if capabilities is None:
         resolved = ExtractionCapabilities(
             archive_diagnosis_kind=(
-                completeness.archive_diagnosis_kind
-                if completeness is not None
-                else ""
+                completeness.archive_diagnosis_kind if completeness is not None else ""
             ),
         )
     else:
@@ -205,17 +238,18 @@ def format_requirement_coverage(
     rows = ["需求\t状态\t主要产物\t辅助产物\t说明"]
     rows.extend(_format_row(row) for row in build_dynamic_rows(md, resolved))
     rows.extend(
-        _format_row(row)
-        for row in evaluate_requirement_rows(_ROWS, md, completeness)
+        _format_row(row) for row in evaluate_requirement_rows(_ROWS, md, completeness)
     )
     return "\n".join(rows) + "\n"
 
 
 def _format_row(row: RequirementCoverage) -> str:
-    return "\t".join((
-        _tsv(row.request),
-        _tsv(row.status),
-        _tsv("; ".join(row.primary)),
-        _tsv("; ".join(row.secondary)),
-        _tsv(row.note),
-    ))
+    return "\t".join(
+        (
+            _tsv(row.request),
+            _tsv(row.status),
+            _tsv("; ".join(row.primary)),
+            _tsv("; ".join(row.secondary)),
+            _tsv(row.note),
+        )
+    )
