@@ -2,6 +2,7 @@
 
 返回 PIL.Image（RGBA）。JPEG 内容借助 Pillow 解码。
 """
+
 from __future__ import annotations
 
 import struct
@@ -19,14 +20,14 @@ def _palette_rgba(Image, pal, idx, alpha_data, width, height):
     索引被截断等异常情形回退逐像素，保留旧的 (0,0,0,0) 填充语义。
     """
     n = width * height
-    pal = bytes(pal).ljust(1024, b"\x00")        # 补齐 256 个 BGRA 条目，防越界
+    pal = bytes(pal).ljust(1024, b"\x00")  # 补齐 256 个 BGRA 条目，防越界
     if n > 0 and len(idx) >= n:
         # 256 项调色板转 RGB（小循环，非热点），交给 Pillow 批量展开 n 个像素
         rgb_pal = bytearray(768)
         for i in range(256):
-            rgb_pal[i * 3] = pal[i * 4 + 2]      # R
+            rgb_pal[i * 3] = pal[i * 4 + 2]  # R
             rgb_pal[i * 3 + 1] = pal[i * 4 + 1]  # G
-            rgb_pal[i * 3 + 2] = pal[i * 4]      # B
+            rgb_pal[i * 3 + 2] = pal[i * 4]  # B
         pimg = Image.frombytes("P", (width, height), bytes(idx[:n]))
         pimg.putpalette(bytes(rgb_pal))
         img = pimg.convert("RGB")
@@ -61,14 +62,16 @@ def decode_blp(data: bytes):
     # 也许就是普通图片(png/tga/jpg) — 交给 Pillow 试
     try:
         return Image.open(BytesIO(data)).convert("RGBA")
-    except Exception:
+    except NotImplementedError, OSError, ValueError, struct.error:
         return None
 
 
 def _decode_blp1(data, Image):
-    if len(data) < 28 + 128 + 4:        # 头(24)+mip偏移表(64)+mip大小表(64)+jpeg头长(4)
+    if len(data) < 28 + 128 + 4:  # 头(24)+mip偏移表(64)+mip大小表(64)+jpeg头长(4)
         return None
-    (compression, flags, width, height, pic_type, pic_subtype) = struct.unpack_from("<IIIIII", data, 4)
+    (compression, flags, width, height, pic_type, pic_subtype) = struct.unpack_from(
+        "<IIIIII", data, 4
+    )
     if not (0 < width <= _MAX_DIM and 0 < height <= _MAX_DIM):
         return None
     mip_offsets = struct.unpack_from("<16I", data, 28)
@@ -78,48 +81,61 @@ def _decode_blp1(data, Image):
         # JPEG 内容：共享头 + 第0级数据 拼成完整 JPEG
         jpeg_hdr_size = struct.unpack_from("<I", data, 28 + 128)[0]
         hdr_start = 28 + 128 + 4
-        shared = data[hdr_start:hdr_start + jpeg_hdr_size]
+        shared = data[hdr_start : hdr_start + jpeg_hdr_size]
         off, size = mip_offsets[0], mip_sizes[0]
-        jpeg = shared + data[off:off + size]
+        jpeg = shared + data[off : off + size]
         try:
             img = Image.open(BytesIO(jpeg))
             img.load()
-        except Exception:
+        except NotImplementedError, OSError, ValueError, struct.error:
             return None
         # BLP 的 JPEG 是反相存储的 BGRA(被读成 CMYK)：各通道取反 + 调成 RGB
         if img.mode == "CMYK":
             from PIL import ImageChops
+
             ch = [ImageChops.invert(c) for c in img.split()]
-            img = Image.merge("RGBA", (ch[2], ch[1], ch[0],
-                                       Image.new("L", img.size, 255)))
+            img = Image.merge(
+                "RGBA", (ch[2], ch[1], ch[0], Image.new("L", img.size, 255))
+            )
         else:
             img = img.convert("RGBA")
         return img
 
     # compression == 1：调色板
-    pal = data[28 + 128 + 0: 28 + 128 + 1024]  # 256*4 BGRA
+    pal = data[28 + 128 + 0 : 28 + 128 + 1024]  # 256*4 BGRA
     off = mip_offsets[0]
     n = width * height
-    idx = data[off:off + n]
-    alpha_data = data[off + n:off + n + n] if flags == 8 else None
+    idx = data[off : off + n]
+    alpha_data = data[off + n : off + n + n] if flags == 8 else None
     return _palette_rgba(Image, pal, idx, alpha_data, width, height)
 
 
 def _decode_blp2(data, Image):
-    # BLP2: type(1=JPEG,?) ; encoding(1=palette,2=DXT)
-    if len(data) < 20 + 128 + 1024:     # 头(16)+mip偏移表(64)+mip大小表(64)+调色板(1024)
+    # BLP2 stores a uint32 compression at offset 4, followed by four byte fields.
+    # Pillow's bundled BLP decoder supports palette plus DXT1/3/5 and is the
+    # authoritative implementation for these variants.
+    if len(data) < 20:
         return None
-    typ, encoding, alpha_depth, alpha_enc, has_mips = struct.unpack_from("<BBBBB", data, 4)
     width, height = struct.unpack_from("<II", data, 12)
     if not (0 < width <= _MAX_DIM and 0 < height <= _MAX_DIM):
         return None
-    mip_offsets = struct.unpack_from("<16I", data, 20)
-    mip_sizes = struct.unpack_from("<16I", data, 20 + 64)
-    pal = data[20 + 128: 20 + 128 + 1024]
-    if encoding == 1:  # 调色板
-        off = mip_offsets[0]
-        n = width * height
-        idx = data[off:off + n]
-        alpha_data = data[off + n: off + n + n] if alpha_depth == 8 else None
-        return _palette_rgba(Image, pal, idx, alpha_data, width, height)
-    return None  # DXT 暂不支持
+    encoding, alpha_depth = struct.unpack_from("<BB", data, 8)
+    if encoding == 1:
+        if len(data) < 20 + 128 + 1024:
+            return None
+        (offset,) = struct.unpack_from("<I", data, 20)
+        pixel_count = width * height
+        palette = data[20 + 128 : 20 + 128 + 1024]
+        indices = data[offset : offset + pixel_count]
+        alpha = (
+            data[offset + pixel_count : offset + pixel_count * 2]
+            if alpha_depth == 8
+            else None
+        )
+        return _palette_rgba(Image, palette, indices, alpha, width, height)
+    try:
+        image = Image.open(BytesIO(data))
+        image.load()
+        return image.convert("RGBA")
+    except NotImplementedError, OSError, ValueError, struct.error:
+        return None

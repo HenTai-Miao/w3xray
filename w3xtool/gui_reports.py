@@ -1,4 +1,5 @@
 """GUI 工作台总览与分析报告格式化。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -23,7 +24,11 @@ def build_overview_blocks(
     """构建编辑器首页的短摘要。"""
     counts = md.category_counts()
     object_lines = tuple(_format_counts(counts))
-    script_lines = [f"脚本文件 {len(md.scripts)}", f"聊天指令 {command_count}", f"合成配方 {recipe_count}"]
+    script_lines = [
+        f"脚本文件 {len(md.scripts)}",
+        f"聊天指令 {command_count}",
+        f"合成配方 {recipe_count}",
+    ]
     trigger_summary = getattr(md, "trigger_summary", None)
     if trigger_summary is not None:
         script_lines.append(f"触发器树 {trigger_summary.trigger_count}")
@@ -42,7 +47,11 @@ def build_overview_blocks(
         scene_lines.append(f"地图尺寸 {width}×{height}")
         scene_lines.append(f"脚本语言 {script_type}")
     warning_count = sum(block.warning_count for block in build_analysis_blocks(md))
-    risk_line = "未发现高优先级风险" if warning_count == 0 else f"发现 {warning_count} 项风险/警告"
+    risk_line = (
+        "未发现高优先级风险"
+        if warning_count == 0
+        else f"发现 {warning_count} 项风险/警告"
+    )
     return (
         GuiReportBlock("地图", (f"地图: {md.name}", f"路径: {md.path}")),
         GuiReportBlock("对象编辑器", object_lines or ("无对象数据",)),
@@ -104,7 +113,10 @@ def _audit_block(md: MapData) -> GuiReportBlock:
     from .audit import AuditSeverity, build_audit_report
 
     report = build_audit_report(md)
-    lines = tuple(f"[{_severity_label(item.severity)}] {item.title}: {item.detail}" for item in report.items)
+    lines = tuple(
+        f"[{_severity_label(item.severity)}] {item.title}: {item.detail}"
+        for item in report.items
+    )
     warnings = sum(1 for item in report.items if item.severity is AuditSeverity.WARNING)
     return GuiReportBlock("审计", lines, warnings)
 
@@ -134,7 +146,9 @@ def _cheat_block(md: MapData) -> GuiReportBlock:
     from .cheats import build_cheat_report
 
     report = build_cheat_report(md)
-    lines = tuple(f"[警告] {item.phrase}: {item.source} · {item.script}" for item in report.items)
+    lines = tuple(
+        f"[警告] {item.phrase}: {item.source} · {item.script}" for item in report.items
+    )
     return GuiReportBlock("秘籍/调试口令", lines, len(report.items))
 
 
@@ -146,7 +160,7 @@ def _order_block(md: MapData) -> GuiReportBlock:
     if report.uses:
         lines.append(f"命令引用 {len(report.uses)}")
     for collision in report.collisions:
-        sources = "、".join(use.source for use in collision.uses[:4])
+        sources = "、".join(use.source for use in collision.uses)
         lines.append(f"[警告] 冲突 {collision.order}: {sources}")
     return GuiReportBlock("命令", tuple(lines), len(report.collisions))
 
@@ -162,7 +176,7 @@ def _resource_block(md: MapData) -> GuiReportBlock:
         f"内部素材 {len(report.archive_assets)}",
         f"未引用素材 {len(report.unreferenced_assets)}",
     ]
-    lines.extend(f"[警告] 未引用素材: {path}" for path in report.unreferenced_assets[:10])
+    lines.extend(f"[警告] 未引用素材: {path}" for path in report.unreferenced_assets)
     return GuiReportBlock("资源", tuple(lines), len(report.unreferenced_assets))
 
 
@@ -172,13 +186,13 @@ def _save_id_block(md: MapData) -> GuiReportBlock:
     report = build_save_report(md)
     if report.total == 0:
         return GuiReportBlock("存档/ID线索", ())
-    counts = "、".join(f"{name} {count}" for name, count in sorted(report.mechanism_counts.items()))
+    counts = "、".join(
+        f"{name} {count}" for name, count in sorted(report.mechanism_counts.items())
+    )
     lines = [f"线索 {report.total}", f"机制 {counts}"]
     if report.object_codes:
-        lines.append("对象码 " + "、".join(report.object_codes[:12]))
-    lines.extend(row.summary for row in report.rows[:8])
-    if report.total > 8:
-        lines.append(f"另有 {report.total - 8} 条，导出资料包查看 TSV。")
+        lines.append("对象码 " + "、".join(report.object_codes))
+    lines.extend(row.summary for row in report.rows)
     return GuiReportBlock("存档/ID线索", tuple(lines))
 
 
@@ -187,7 +201,7 @@ def _game_config_block(md: MapData) -> GuiReportBlock:
     if not configs:
         return GuiReportBlock("游戏配置", ())
     lines: list[str] = []
-    for entry in configs[:6]:
+    for entry in configs:
         cfg = entry.config
         lines.append(
             f"{entry.source}: {cfg.map_path or '(未指定地图)'} · "
@@ -201,10 +215,8 @@ def _game_config_block(md: MapData) -> GuiReportBlock:
         if rule_tags:
             lines.append("规则: " + "、".join(rule_tags))
         custom_ai = [p for p in cfg.players if p.load_custom_ai and p.custom_ai_path]
-        for player in custom_ai[:3]:
+        for player in custom_ai:
             lines.append(f"自定义AI: P{player.slot_id + 1} {player.custom_ai_path}")
-    if len(configs) > 6:
-        lines.append(f"另有 {len(configs) - 6} 个配置")
     return GuiReportBlock("游戏配置", tuple(lines))
 
 
@@ -218,12 +230,14 @@ def _trigger_tree_block(md: MapData) -> GuiReportBlock:
         f"触发器 {summary.trigger_count} · 变量 {summary.variable_count} · 分类 {summary.category_count}",
     ]
     if summary.comment_count or summary.script_count:
-        lines.append(f"注释 {summary.comment_count} · 自定义脚本块 {summary.script_count}")
+        lines.append(
+            f"注释 {summary.comment_count} · 自定义脚本块 {summary.script_count}"
+        )
     if summary.categories:
         lines.append("分类 " + _join_names(cat.name for cat in summary.categories))
     if summary.variables:
         lines.append("变量 " + _join_names(var.name for var in summary.variables))
-    for trigger in summary.triggers[:8]:
+    for trigger in summary.triggers:
         tags = _trigger_tags(trigger)
         suffix = f" · {'/'.join(tags)}" if tags else ""
         lines.append(f"{trigger.name or '(未命名触发器)'}{suffix}")
@@ -242,10 +256,8 @@ def _preview_icon_block(md: MapData) -> GuiReportBlock:
             f" · 中立建筑 {summary.neutral_building_count}"
         ),
     ]
-    for icon in summary.icons[:8]:
+    for icon in summary.icons:
         lines.append(f"{icon.type_label} ({icon.x}, {icon.y})")
-    if len(summary.icons) > 8:
-        lines.append(f"另有 {len(summary.icons) - 8} 个标记")
     return GuiReportBlock("小地图标记", tuple(lines))
 
 
@@ -253,8 +265,13 @@ def _compat_block(md: MapData) -> GuiReportBlock:
     from .compat import CompatSeverity, build_compat_report
 
     report = build_compat_report(md)
-    lines = tuple(f"[{_severity_label(item.severity)}] {item.title}: {item.detail}" for item in report.items)
-    warnings = sum(1 for item in report.items if item.severity is CompatSeverity.WARNING)
+    lines = tuple(
+        f"[{_severity_label(item.severity)}] {item.title}: {item.detail}"
+        for item in report.items
+    )
+    warnings = sum(
+        1 for item in report.items if item.severity is CompatSeverity.WARNING
+    )
     return GuiReportBlock("兼容", lines, warnings)
 
 
@@ -264,8 +281,7 @@ def _severity_label(severity) -> str:
 
 def _join_names(names) -> str:
     values = [name for name in names if name]
-    suffix = f" ……另 {len(values) - 8} 个" if len(values) > 8 else ""
-    return "、".join(values[:8]) + suffix
+    return "、".join(values)
 
 
 def _trigger_tags(trigger) -> list[str]:

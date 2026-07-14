@@ -39,6 +39,7 @@ class GameObject:
     ref_fields: list[tuple[str, list[str]]] = field(default_factory=list)
     field_values: dict[str, str] = field(default_factory=dict)
     field_sources: dict[str, str] = field(default_factory=dict)
+    field_labels: dict[str, str] = field(default_factory=dict)
 
     @property
     def decimal(self) -> int:

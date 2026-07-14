@@ -8,48 +8,14 @@ from typing import Final
 from .base_names import BASE_NAMES
 from .map_data import GameObject
 from .object_candidates import ObjectCandidate, ObjectFieldValue, ObjectSourceKind
+from .object_field_selection import (
+    public_object_field_key,
+    select_object_field,
+    selected_display_value,
+)
 
 BaseObjectTable = Mapping[str, tuple[str, Sequence[tuple[str, str]]]]
 
-_DISPLAY_ALIASES: Final[Mapping[str, str]] = {
-    "name": "display:name",
-    "unam": "display:name",
-    "anam": "display:name",
-    "gnam": "display:name",
-    "bnam": "display:name",
-    "dnam": "display:name",
-    "fnam": "display:name",
-    "propernames": "display:propernames",
-    "tip": "display:tip",
-    "ubertip": "display:description",
-    "description": "display:description",
-    "icon": "display:icon",
-    "art": "display:icon",
-    "ico": "display:icon",
-    "uico": "display:icon",
-    "iico": "display:icon",
-    "aart": "display:icon",
-    "aical": "display:icon",
-    "gico": "display:icon",
-    "gar1": "display:icon",
-    "fart": "display:icon",
-    "bgsc": "display:icon",
-    "dfil": "display:icon",
-}
-_NON_DISPLAY_ALIASES: Final[Mapping[str, str]] = {
-    "hp": "field:unit:hit-points",
-    "hitpoints": "field:unit:hit-points",
-    "uhpm": "field:unit:hit-points",
-}
-_BASE_LABEL_ALIASES: Final[Mapping[str, str]] = {
-    "名称": "display:name",
-    "名字": "display:propernames",
-    "提示": "display:tip",
-    "说明": "display:description",
-    "图标": "display:icon",
-    "生命": "field:unit:hit-points",
-    "生命上限": "field:unit:hit-points",
-}
 _EXT_RANK: Final[Mapping[str, int]] = {
     "base": 0,
     "slk": 10,
@@ -80,7 +46,10 @@ def merge_object_candidates(
     grouped: dict[tuple[str, str], list[ObjectCandidate]] = {}
     for candidate in candidates:
         grouped.setdefault((candidate.category, candidate.obj_id), []).append(candidate)
-    keys = sorted(grouped, key=lambda item: (item[0].casefold(), item[1].encode("latin-1", "replace")))
+    keys = sorted(
+        grouped,
+        key=lambda item: (item[0].casefold(), item[1].encode("latin-1", "replace")),
+    )
     return tuple(_materialize(key, tuple(grouped[key]), base_objects) for key in keys)
 
 
@@ -91,12 +60,24 @@ def named_base_candidates(base_objects: BaseObjectTable) -> tuple[ObjectCandidat
         name = BASE_NAMES.get(code)
         if not name:
             continue
-        values = [ObjectFieldValue("display:name", "名称", name, "base names", ObjectSourceKind.BASE)]
+        values = [
+            ObjectFieldValue(
+                "display:name", "名称", name, "base names", ObjectSourceKind.BASE
+            )
+        ]
         values.extend(
-            ObjectFieldValue(f"base:{label}", label, str(value), f"base:{code}", ObjectSourceKind.BASE)
+            ObjectFieldValue(
+                f"base:{label}",
+                label,
+                str(value),
+                f"base:{code}",
+                ObjectSourceKind.BASE,
+            )
             for label, value in fields
         )
-        result.append(ObjectCandidate(category, code, code, False, "base", tuple(values), ()))
+        result.append(
+            ObjectCandidate(category, code, code, False, "base", tuple(values), ())
+        )
     return tuple(result)
 
 
@@ -112,24 +93,45 @@ def _materialize(
     if inherited is not None and inherited[0] == category:
         for label, value in inherited[1]:
             base_field = ObjectFieldValue(
-                f"base:{label}", label, str(value), f"base:{representative.base_id}", ObjectSourceKind.BASE
+                f"base:{label}",
+                label,
+                str(value),
+                f"base:{representative.base_id}",
+                ObjectSourceKind.BASE,
             )
-            _select_field(selected, base_field)
+            select_object_field(selected, base_field)
     for candidate in candidates:
         for value in candidate.fields:
-            if value.value:
-                _select_field(selected, value)
-    ordered = tuple(sorted(selected.items(), key=lambda item: (item[1].label.casefold(), item[0])))
+            select_object_field(selected, value)
+    ordered = tuple(
+        sorted(selected.items(), key=lambda item: (item[1].label.casefold(), item[0]))
+    )
     fields = [(value.label, value.value) for _identity, value in ordered]
-    field_values = {_public_field_key(identity, value): value.value for identity, value in ordered}
-    field_sources = {_public_field_key(identity, value): value.source for identity, value in ordered}
-    name = _display_value(selected, "display:name") or _display_value(selected, "display:propernames")
+    field_values = {
+        public_object_field_key(identity, value): value.value
+        for identity, value in ordered
+    }
+    field_labels = {
+        public_object_field_key(identity, value): value.label
+        for identity, value in ordered
+    }
+    field_sources = {
+        public_object_field_key(identity, value): value.source
+        for identity, value in ordered
+    }
+    name = selected_display_value(selected, "display:name") or selected_display_value(
+        selected, "display:propernames"
+    )
     if not name:
-        name = BASE_NAMES.get(representative.base_id) or BASE_NAMES.get(obj_id) or obj_id
+        name = (
+            BASE_NAMES.get(representative.base_id) or BASE_NAMES.get(obj_id) or obj_id
+        )
     name = name.split("\n", 1)[0][:60]
-    icon = _display_value(selected, "display:icon").split(",", 1)[0].strip()
+    icon = selected_display_value(selected, "display:icon").split(",", 1)[0].strip()
     refs = _merge_refs(candidates)
-    search_text = " ".join((obj_id, representative.base_id, name, *(value for _label, value in fields)))
+    search_text = " ".join(
+        (obj_id, representative.base_id, name, *(value for _label, value in fields))
+    )
     return GameObject(
         category=category,
         ext=representative.ext,
@@ -142,71 +144,14 @@ def _materialize(
         icon=icon,
         ref_fields=refs,
         field_values=field_values,
+        field_labels=field_labels,
         field_sources=field_sources,
     )
 
 
-def _select_field(selected: dict[str, ObjectFieldValue], value: ObjectFieldValue) -> None:
-    identity = _field_identity(value)
-    if not identity.startswith("display:"):
-        label = value.label.casefold()
-        if value.source_kind is ObjectSourceKind.BASE:
-            if any(
-                existing.source_kind is not ObjectSourceKind.BASE
-                and existing.label.casefold() == label
-                for existing in selected.values()
-            ):
-                return
-        else:
-            for existing_identity, existing in tuple(selected.items()):
-                if existing.source_kind is ObjectSourceKind.BASE and existing.label.casefold() == label:
-                    del selected[existing_identity]
-    previous = selected.get(identity)
-    if previous is None or _field_rank(value, identity) > _field_rank(previous, identity):
-        selected[identity] = value
-
-
-def _field_identity(value: ObjectFieldValue) -> str:
-    key = value.key.casefold()
-    alias = _DISPLAY_ALIASES.get(key)
-    if alias is None and key.startswith("display:"):
-        alias = key
-    non_display_key = key.removeprefix("binary:")
-    if alias is not None:
-        return alias
-    if value.source_kind is ObjectSourceKind.BASE:
-        return _BASE_LABEL_ALIASES.get(value.label.casefold(), f"base:{value.label.casefold()}")
-    semantic_alias = _NON_DISPLAY_ALIASES.get(non_display_key)
-    raw_key = value.key[len("binary:"):] if key.startswith("binary:") else value.key
-    return semantic_alias or f"field:{raw_key}"
-
-
-def _public_field_key(identity: str, value: ObjectFieldValue) -> str:
-    return identity if identity.startswith("display:") else value.key
-
-
-def _field_rank(
-    value: ObjectFieldValue,
-    identity: str,
-) -> tuple[int, str, str, str, str, str, str, str, str]:
-    priority = int(value.source_kind)
-    if value.source_kind is ObjectSourceKind.TEXT_STRINGS and not identity.startswith("display:"):
-        priority = 15
-    normalized_source = value.source.replace("/", "\\")
-    return (
-        priority,
-        normalized_source.casefold(),
-        normalized_source,
-        value.source,
-        value.key.casefold(),
-        value.key,
-        value.label.casefold(),
-        value.label,
-        value.value,
-    )
-
-
-def _candidate_identity_rank(candidate: ObjectCandidate) -> tuple[int, int, bool, str, str]:
+def _candidate_identity_rank(
+    candidate: ObjectCandidate,
+) -> tuple[int, int, bool, str, str]:
     source_rank = max((int(value.source_kind) for value in candidate.fields), default=0)
     return (
         _EXT_RANK.get(candidate.ext, 20),
@@ -215,11 +160,6 @@ def _candidate_identity_rank(candidate: ObjectCandidate) -> tuple[int, int, bool
         candidate.base_id,
         candidate.ext,
     )
-
-
-def _display_value(selected: Mapping[str, ObjectFieldValue], identity: str) -> str:
-    value = selected.get(identity)
-    return "" if value is None else value.value
 
 
 def _merge_refs(candidates: tuple[ObjectCandidate, ...]) -> list[tuple[str, list[str]]]:
@@ -231,6 +171,8 @@ def _merge_refs(candidates: tuple[ObjectCandidate, ...]) -> list[tuple[str, list
         if code
     }
     grouped: dict[str, list[str]] = {}
-    for label, code in sorted(edges, key=lambda item: (item[0].casefold(), item[0], item[1])):
+    for label, code in sorted(
+        edges, key=lambda item: (item[0].casefold(), item[0], item[1])
+    ):
         grouped.setdefault(label, []).append(code)
     return [(label, grouped[label]) for label in grouped]
