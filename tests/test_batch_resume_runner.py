@@ -9,6 +9,7 @@ import pytest
 
 from tests.batch_publication_fixture import empty_result, write_empty_publication
 import w3xtool.batch_checkpoint_publication as checkpoint_publication
+import w3xtool.batch_map_attempt as batch_map_attempt
 import w3xtool.batch_runner as batch_runner
 from w3xtool.batch_global_publication import load_current_batch_state
 from w3xtool.batch_models import (
@@ -35,10 +36,9 @@ def test_runner_reuses_manifest_verified_partial_result(
     calls = 0
     _patch_context(monkeypatch)
     monkeypatch.setattr(
-        batch_runner,
+        batch_map_attempt,
         "fingerprint_dependencies",
         lambda *_args: dependency,
-        raising=False,
     )
 
     def process(
@@ -106,10 +106,9 @@ def test_interrupted_checkpoint_keeps_unvisited_previous_tail(
         raising=False,
     )
     monkeypatch.setattr(
-        batch_runner,
+        batch_map_attempt,
         "fingerprint_dependencies",
         lambda *_args: "d" * 64,
-        raising=False,
     )
     monkeypatch.setattr(
         batch_runner,

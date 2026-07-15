@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from tests.batch_publication_fixture import publish_empty_result
+import w3xtool.batch_map_attempt as batch_map_attempt
 import w3xtool.batch_runner as batch_runner
 from w3xtool.batch_models import (
     MapBatchResult,
@@ -146,7 +147,7 @@ def test_resume_skips_only_an_unchanged_published_success(
         batch_runner, "build_map_load_context", lambda **_kwargs: MapLoadContext()
     )
     monkeypatch.setattr(
-        batch_runner,
+        batch_map_attempt,
         "fingerprint_dependencies",
         lambda source, *_args: source.sha256,
     )

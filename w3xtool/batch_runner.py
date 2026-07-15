@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import struct
+from collections.abc import Callable
 from dataclasses import replace
 import hashlib
 from pathlib import Path
+from time import monotonic_ns
 
 from .batch_checkpoint_publication import publish_batch_checkpoint
 from .batch_configuration import (
@@ -16,20 +17,25 @@ from .batch_configuration import (
     normalize_batch_options,
     validate_batch_roots,
 )
-from .batch_dependencies import fingerprint_dependencies
 from .batch_description_cache import build_and_publish_description_cache
+from .batch_execution import CancellationSignal
 from .batch_manifest_models import (
     OWNERSHIP_MARKER_NAME as OWNERSHIP_MARKER,
     REQUIRED_MAP_REPORTS,
 )
 from .batch_map_publication import recover_map_publications
-from .batch_models import BatchState, MapBatchResult, MapBatchState, SourceFingerprint
+from .batch_map_attempt import attempt_map, failed_unfingerprinted
+from .batch_models import BatchState, MapBatchResult, SourceFingerprint
+from .batch_observability import observe_attempt, startup_diagnostics
 from .batch_resume import (
-    ResumeDiagnostic,
     checkpoint_state,
-    find_reusable_result,
-    format_resume_diagnostics_jsonl,
     load_previous_state,
+)
+from .batch_runtime import (
+    BatchAction,
+    BatchProgress,
+    build_batch_progress,
+    format_batch_diagnostics_jsonl,
 )
 from .bounded_file import BoundedFileError, sha256_regular_file
 from .description_cache import format_description_cache_tsv
@@ -49,8 +55,14 @@ __all__ = (
 )
 
 
-def run_batch(options: BatchOptions) -> BatchState:
+def run_batch(
+    options: BatchOptions,
+    *,
+    cancellation: CancellationSignal | None = None,
+    on_progress: Callable[[BatchProgress], None] | None = None,
+) -> BatchState:
     """Process sources sequentially and persist progress after every map."""
+    started_ns = monotonic_ns()
     normalized = normalize_batch_options(options)
     validate_batch_roots(normalized)
     recovery = recover_map_publications(normalized.output_root)
@@ -64,77 +76,54 @@ def run_batch(options: BatchOptions) -> BatchState:
     )
     paths = tuple(scan_map_sources(normalized.source_directory))
     results: list[MapBatchResult] = []
-    diagnostics = list(previous.diagnostics)
-    diagnostics.extend(
-        ResumeDiagnostic(
-            f"recovery_{item.code}",
-            item.detail,
-            item.transaction_id,
+    diagnostics = list(startup_diagnostics(previous.diagnostics, recovery, len(paths)))
+    if on_progress is not None:
+        on_progress(
+            build_batch_progress(
+                completed=0,
+                total=len(paths),
+                source_path="",
+                action=BatchAction.STARTING,
+                started_ns=started_ns,
+                now_ns=monotonic_ns(),
+                peak_rss_bytes=0,
+                published_bytes=0,
+                diagnostic_code="started",
+            )
         )
-        for item in recovery
-    )
     for offset, path in enumerate(paths):
         index = offset + 1
         try:
             fingerprint = fingerprint_source(path)
         except (OSError, ValueError) as exc:
-            result = _failed_without_fingerprint(path, exc)
-            diagnostics.append(
-                ResumeDiagnostic("source_fingerprint_failed", str(exc), path)
+            attempt = failed_unfingerprinted(
+                path,
+                f"{type(exc).__name__}: {exc}",
             )
         else:
-            decision = find_reusable_result(
-                previous,
+            attempt = attempt_map(
+                index,
                 fingerprint,
-                "",
-                normalized.output_root,
-                retry_failed=normalized.retry_failed,
+                normalized,
+                context,
+                previous,
+                cache_sha256,
+                cancellation,
+                process_one_map,
             )
-            if decision.result is not None:
-                result = decision.result
-            else:
-                try:
-                    dependency = fingerprint_dependencies(
-                        fingerprint,
-                        normalized,
-                        cache_sha256,
-                    )
-                except (OSError, ValueError, KeyError, IndexError, struct.error) as exc:
-                    result = _failed_result(fingerprint, exc)
-                else:
-                    decision = find_reusable_result(
-                        previous,
-                        fingerprint,
-                        dependency,
-                        normalized.output_root,
-                        retry_failed=normalized.retry_failed,
-                    )
-                    if decision.result is not None:
-                        result = decision.result
-                    else:
-                        try:
-                            result = process_one_map(
-                                index,
-                                fingerprint,
-                                normalized,
-                                context,
-                            )
-                        except (
-                            OSError,
-                            ValueError,
-                            KeyError,
-                            IndexError,
-                            struct.error,
-                        ) as exc:
-                            result = _failed_result(fingerprint, exc)
-            diagnostics.append(
-                ResumeDiagnostic(
-                    decision.code,
-                    decision.detail,
-                    fingerprint.path,
-                )
-            )
-        results.append(result)
+        result = attempt.result
+        results.append(attempt.result)
+        progress, diagnostic = observe_attempt(
+            attempt,
+            result,
+            sequence=len(diagnostics) + 1,
+            completed=index,
+            total=len(paths),
+            source_path=path,
+            started_ns=started_ns,
+            now_ns=monotonic_ns(),
+        )
+        diagnostics.append(diagnostic)
         state = checkpoint_state(
             tuple(results),
             previous,
@@ -144,15 +133,19 @@ def run_batch(options: BatchOptions) -> BatchState:
             normalized.output_root,
             state,
             cache_text,
-            format_resume_diagnostics_jsonl(tuple(diagnostics)),
+            format_batch_diagnostics_jsonl(tuple(diagnostics)),
         )
+        if on_progress is not None:
+            on_progress(progress)
+        if attempt.stop_batch:
+            return state
     state = checkpoint_state(tuple(results), previous, ())
     if not results:
         publish_batch_checkpoint(
             normalized.output_root,
             state,
             cache_text,
-            format_resume_diagnostics_jsonl(tuple(diagnostics)),
+            format_batch_diagnostics_jsonl(tuple(diagnostics)),
         )
     return state
 
@@ -182,30 +175,3 @@ def fingerprint_source(path: str) -> SourceFingerprint:
     ) or before.st_mtime_ns != after.st_mtime_ns:
         raise BoundedFileError(source, "file identity changed while hashing")
     return SourceFingerprint(str(source), identity.size, after.st_mtime_ns, digest)
-
-
-def _failed_result(
-    fingerprint: SourceFingerprint, exc: BaseException
-) -> MapBatchResult:
-    return MapBatchResult(
-        source=fingerprint,
-        display_name=Path(fingerprint.path).stem,
-        output_directory="",
-        stage="load/process",
-        state=MapBatchState.FAILED,
-        first_error=f"{type(exc).__name__}: {exc}".replace("\n", " "),
-        object_count=0,
-        description_counts=(),
-        named_icon_count=0,
-        anonymous_icon_count=0,
-        original_written_count=0,
-        png_written_count=0,
-        icon_failure_count=0,
-        restricted_block_count=0,
-        elapsed_ms=0,
-    )
-
-
-def _failed_without_fingerprint(path: str, exc: BaseException) -> MapBatchResult:
-    fingerprint = SourceFingerprint(path, 0, 0, "0" * 64)
-    return _failed_result(fingerprint, exc)

@@ -11,6 +11,8 @@ from typing import Final, override
 DEFAULT_BATCH_OUTPUT: Final = (
     "/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output"
 )
+DEFAULT_MAP_TIMEOUT_SECONDS: Final = 900.0
+DEFAULT_MINIMUM_FREE_BYTES: Final = 512 * 1024 * 1024
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,6 +23,9 @@ class BatchOptions:
     output_root: str = DEFAULT_BATCH_OUTPUT
     game_data_path: str | None = None
     retry_failed: bool = True
+    map_timeout_seconds: float | None = None
+    max_memory_bytes: int | None = None
+    minimum_free_bytes: int = DEFAULT_MINIMUM_FREE_BYTES
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,11 +56,25 @@ def normalize_batch_options(options: BatchOptions) -> BatchOptions:
     source = os.path.abspath(os.path.expanduser(options.source_directory))
     output = os.path.abspath(os.path.expanduser(options.output_root))
     game_data = options.game_data_path or _find_classic_root(source)
-    return BatchOptions(source, output, game_data, options.retry_failed)
+    return BatchOptions(
+        source_directory=source,
+        output_root=output,
+        game_data_path=game_data,
+        retry_failed=options.retry_failed,
+        map_timeout_seconds=options.map_timeout_seconds,
+        max_memory_bytes=options.max_memory_bytes,
+        minimum_free_bytes=options.minimum_free_bytes,
+    )
 
 
 def validate_batch_roots(options: BatchOptions) -> None:
     """Reject missing, symlinked, or overlapping source/output roots."""
+    if options.map_timeout_seconds is not None and options.map_timeout_seconds <= 0:
+        raise BatchConfigurationError("map timeout must be positive")
+    if options.max_memory_bytes is not None and options.max_memory_bytes <= 0:
+        raise BatchConfigurationError("map memory limit must be positive")
+    if options.minimum_free_bytes < 0:
+        raise BatchConfigurationError("minimum free bytes must be nonnegative")
     if not os.path.isdir(options.source_directory):
         raise BatchConfigurationError("source directory does not exist")
     if os.path.islink(options.output_root):
@@ -85,6 +104,8 @@ def _find_classic_root(source_directory: str) -> str | None:
 
 __all__ = (
     "DEFAULT_BATCH_OUTPUT",
+    "DEFAULT_MAP_TIMEOUT_SECONDS",
+    "DEFAULT_MINIMUM_FREE_BYTES",
     "BatchConfigurationError",
     "BatchOptions",
     "BatchOutputError",
