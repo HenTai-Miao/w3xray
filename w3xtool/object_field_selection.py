@@ -64,7 +64,8 @@ def select_object_field(
         else:
             for existing_identity, existing in tuple(selected.items()):
                 if (
-                    existing.source_kind is ObjectSourceKind.BASE
+                    existing_identity != "display:icon"
+                    and existing.source_kind is ObjectSourceKind.BASE
                     and existing.label.casefold() == label
                 ):
                     del selected[existing_identity]

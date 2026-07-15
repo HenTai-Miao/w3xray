@@ -200,6 +200,12 @@ def _materialized_evidence(
                 row.value,
                 row.label.casefold(),
                 row.label,
+                row.value_type.casefold(),
+                row.value_type,
+                row.raw_value is not None,
+                "" if row.raw_value is None else row.raw_value,
+                row.value_source.casefold(),
+                row.value_source,
             ),
         )
     )

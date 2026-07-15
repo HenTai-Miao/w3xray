@@ -2,6 +2,12 @@
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+import subprocess
+import sys
+import textwrap
+
 from w3xtool.fields import label_for
 from w3xtool.object_candidates import (
     ObjectCandidate,
@@ -164,3 +170,59 @@ def test_field_evidence_priority_matches_non_display_selection() -> None:
     # Then: evidence priority selects the same winning tier as the public field.
     assert merged.field_values["Sellitems"] == "I002"
     assert priorities["I002"] > priorities["I001"]
+
+
+def test_field_evidence_order_covers_every_equality_field_across_hash_seeds() -> None:
+    # Given: three tied pairs differ only by type, raw value, or WTS source.
+    script = textwrap.dedent(
+        """\
+        from w3xtool.object_candidates import ObjectCandidate, ObjectFieldValue, ObjectSourceKind
+        from w3xtool.object_pipeline import merge_object_candidates
+
+        def field(value, value_type, raw_value, value_source):
+            return ObjectFieldValue(
+                "Sellitems", "售出物品", value, "war3map.w3u",
+                ObjectSourceKind.BINARY, value_source, value_type, raw_value,
+            )
+
+        fields = (
+            field("I001", "beta", "TRIGSTR_1", "war3map.wts#STRING 1"),
+            field("I001", "alpha", "TRIGSTR_1", "war3map.wts#STRING 1"),
+            field("I002", "string", "TRIGSTR_2", "war3map.wts#STRING 2"),
+            field("I002", "string", "TRIGSTR_1", "war3map.wts#STRING 2"),
+            field("I003", "string", "TRIGSTR_3", "war3map.wts#STRING 2"),
+            field("I003", "string", "TRIGSTR_3", "war3map.wts#STRING 1"),
+        )
+        candidate = ObjectCandidate("单位", "H001", "hfoo", True, "w3u", fields, ())
+        rows = merge_object_candidates((candidate,), {})[0].field_evidence
+        print(tuple(
+            (row.value, row.value_type, row.raw_value, row.value_source)
+            for row in rows
+        ))
+        """
+    )
+    expected = (
+        "(('I001', 'alpha', 'TRIGSTR_1', 'war3map.wts#STRING 1'), "
+        "('I001', 'beta', 'TRIGSTR_1', 'war3map.wts#STRING 1'), "
+        "('I002', 'string', 'TRIGSTR_1', 'war3map.wts#STRING 2'), "
+        "('I002', 'string', 'TRIGSTR_2', 'war3map.wts#STRING 2'), "
+        "('I003', 'string', 'TRIGSTR_3', 'war3map.wts#STRING 1'), "
+        "('I003', 'string', 'TRIGSTR_3', 'war3map.wts#STRING 2'))\n"
+    )
+
+    # When: identical materialization runs under two distinct hash seeds.
+    outputs = tuple(
+        subprocess.run(
+            [sys.executable, "-c", script],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd=Path(__file__).parent.parent,
+            env=os.environ | {"PYTHONHASHSEED": seed},
+        ).stdout
+        for seed in ("1", "3")
+    )
+
+    # Then: every equality field participates in one seed-independent order.
+    assert outputs == (expected, expected)

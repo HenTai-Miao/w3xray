@@ -171,6 +171,44 @@ def test_base_icon_identity_is_reserved_for_bundled_base_fields(
     assert merged.icon == expected
 
 
+@pytest.mark.parametrize(
+    ("category", "false_alias"),
+    (("技能", "aical"), ("科技", "gico")),
+)
+def test_filtered_false_alias_does_not_evict_inherited_base_icon(
+    category: str,
+    false_alias: str,
+) -> None:
+    # Given: a valid inherited icon and a filtered map field share the icon label.
+    candidate = ObjectCandidate(
+        category=category,
+        obj_id="A001",
+        base_id="BASE",
+        is_custom=True,
+        ext="w3a",
+        fields=(
+            ObjectFieldValue(
+                key=false_alias,
+                label="图标",
+                value="false.blp",
+                source="war3map.w3a",
+                source_kind=ObjectSourceKind.BINARY,
+                value_type="icon",
+            ),
+        ),
+        refs=(),
+    )
+
+    # When: both fields enter normal materialization.
+    merged = merge_object_candidates(
+        (candidate,),
+        {"BASE": (category, (("图标", "base.blp"),))},
+    )[0]
+
+    # Then: the ineligible map field cannot evict the selected base icon.
+    assert merged.icon == "base.blp"
+
+
 def test_materialization_retains_selected_icon_and_wts_location() -> None:
     # Given: one binary ability icon resolved through a WTS string.
     candidate = ObjectCandidate(
