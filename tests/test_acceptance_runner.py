@@ -41,6 +41,7 @@ def test_core_acceptance_executes_map_campaign_export_and_repeat_load(
     assert statuses["map_load"] == "pass"
     assert statuses["campaign_switch"] == "pass"
     assert statuses["knowledge_pack_export"] == "pass"
+    assert statuses["batch_publication"] == "pass"
     assert statuses["repeat_load"] == "pass"
     assert statuses["real_windows_casc"] == "skip"
     assert report.overall_status.value == "pass"
@@ -128,6 +129,7 @@ def test_main_acceptance_mode_writes_machine_readable_report(tmp_path: Path) -> 
         "map_load",
         "campaign_switch",
         "knowledge_pack_export",
+        "batch_publication",
         "repeat_load",
     }
 

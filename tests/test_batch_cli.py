@@ -257,3 +257,28 @@ def test_main_dispatches_batch_without_starting_the_gui(
         entrypoint.main()
     assert caught.value.code == 7
     assert received == [batch_cli.BatchCliOptions("Maps", "out")]
+
+
+def test_main_enables_frozen_multiprocessing_before_batch_dispatch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given
+    events: list[str] = []
+    monkeypatch.setattr(
+        entrypoint.multiprocessing,
+        "freeze_support",
+        lambda: events.append("freeze-support"),
+    )
+    monkeypatch.setattr(
+        batch_cli,
+        "run_batch_cli",
+        lambda _options: events.append("batch") or 0,
+    )
+    monkeypatch.setattr(sys, "argv", ["main.py", "batch", "Maps"])
+
+    # When
+    with pytest.raises(SystemExit):
+        entrypoint.main()
+
+    # Then
+    assert events == ["freeze-support", "batch"]

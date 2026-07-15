@@ -25,7 +25,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
-      - name: Build, test, package, and execute against real CASC
+      - name: Build, quality-gate, test, package, and execute against real CASC
         shell: powershell
         env:
           W3XRAY_ACCEPTANCE_WAR3_DIR: ${{ inputs.war3_dir }}

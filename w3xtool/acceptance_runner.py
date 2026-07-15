@@ -13,6 +13,7 @@ import sys
 from time import perf_counter
 from typing import override
 
+from .acceptance_batch import check_batch_publication
 from .api import load_map
 from .casclib_api import CtypesCascLibApi, MAX_CASC_FILE_SIZE, default_dll_path
 from .casclib_enumeration import CascNameType
@@ -100,14 +101,24 @@ def run_acceptance(config: AcceptanceConfig) -> AcceptanceReport:
     checks.append(_bundled_casclib_check(config.require_windows))
     checks.append(_run_check("map_load", lambda: _check_map(config.map_path)))
     checks.append(_campaign_check(config.campaign_path))
-    checks.append(_run_check(
-        "knowledge_pack_export",
-        lambda: _check_knowledge_pack(config.map_path, config.output_dir),
-    ))
-    checks.append(_run_check(
-        "repeat_load",
-        lambda: _check_repeat_load(config.map_path, config.repeat_count),
-    ))
+    checks.append(
+        _run_check(
+            "knowledge_pack_export",
+            lambda: _check_knowledge_pack(config.map_path, config.output_dir),
+        )
+    )
+    checks.append(
+        _run_check(
+            "batch_publication",
+            lambda: check_batch_publication(config.map_path, config.output_dir),
+        )
+    )
+    checks.append(
+        _run_check(
+            "repeat_load",
+            lambda: _check_repeat_load(config.map_path, config.repeat_count),
+        )
+    )
     checks.append(_casc_check(config.war3_dir))
     checks.append(_gui_check(config))
     return AcceptanceReport(
@@ -129,22 +140,35 @@ def _run_check(name: str, action: Callable[[], str]) -> AcceptanceCheck:
     started = perf_counter()
     try:
         detail = action()
-    except Exception as exc:  # noqa: BROAD_EXCEPT_OK - acceptance boundary records each lane.
-        return AcceptanceCheck(name, AcceptanceStatus.FAIL, f"{type(exc).__name__}: {exc}", _elapsed(started))
+    except Exception as exc:  # noqa: BLE001  # noqa: BROAD_EXCEPT_OK - acceptance boundary records each lane.
+        return AcceptanceCheck(
+            name,
+            AcceptanceStatus.FAIL,
+            f"{type(exc).__name__}: {exc}",
+            _elapsed(started),
+        )
     return AcceptanceCheck(name, AcceptanceStatus.PASS, detail, _elapsed(started))
 
 
 def _platform_check(require_windows: bool) -> AcceptanceCheck:
     if not require_windows:
-        return AcceptanceCheck("windows_runtime", AcceptanceStatus.SKIP, "未要求 Windows", 0)
+        return AcceptanceCheck(
+            "windows_runtime", AcceptanceStatus.SKIP, "未要求 Windows", 0
+        )
     if sys.platform != "win32":
-        return AcceptanceCheck("windows_runtime", AcceptanceStatus.FAIL, f"当前平台：{sys.platform}", 0)
-    return AcceptanceCheck("windows_runtime", AcceptanceStatus.PASS, platform.platform(), 0)
+        return AcceptanceCheck(
+            "windows_runtime", AcceptanceStatus.FAIL, f"当前平台：{sys.platform}", 0
+        )
+    return AcceptanceCheck(
+        "windows_runtime", AcceptanceStatus.PASS, platform.platform(), 0
+    )
 
 
 def _bundled_casclib_check(require_windows: bool) -> AcceptanceCheck:
     if not require_windows:
-        return AcceptanceCheck("bundled_casclib", AcceptanceStatus.SKIP, "未要求 Windows", 0)
+        return AcceptanceCheck(
+            "bundled_casclib", AcceptanceStatus.SKIP, "未要求 Windows", 0
+        )
     return _run_check("bundled_casclib", _check_bundled_casclib)
 
 
@@ -163,7 +187,9 @@ def _check_map(path: Path) -> str:
 
 def _campaign_check(path: Path | None) -> AcceptanceCheck:
     if path is None:
-        return AcceptanceCheck("campaign_switch", AcceptanceStatus.SKIP, "未提供战役样本", 0)
+        return AcceptanceCheck(
+            "campaign_switch", AcceptanceStatus.SKIP, "未提供战役样本", 0
+        )
     return _run_check("campaign_switch", lambda: _check_campaign(path))
 
 
@@ -203,7 +229,9 @@ def _check_repeat_load(map_path: Path, repeat_count: int) -> str:
 
 def _casc_check(war3_dir: Path | None) -> AcceptanceCheck:
     if war3_dir is None:
-        return AcceptanceCheck("real_windows_casc", AcceptanceStatus.SKIP, "未提供 W3XRAY_WAR3_DIR", 0)
+        return AcceptanceCheck(
+            "real_windows_casc", AcceptanceStatus.SKIP, "未提供 W3XRAY_WAR3_DIR", 0
+        )
     return _run_check("real_windows_casc", lambda: _check_casc(war3_dir))
 
 

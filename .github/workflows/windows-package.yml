@@ -17,6 +17,8 @@ jobs:
           enable-cache: true
       - name: Install Python dependencies
         run: uv sync --dev
+      - name: Run changed-path quality gate
+        run: uv run w3xray-quality
       - name: Build pinned x64 CascLib
         shell: powershell
         run: powershell -ExecutionPolicy Bypass -File tools/build_casclib.ps1

@@ -43,6 +43,9 @@ if ($LASTEXITCODE -ne 0) { throw "build_casclib.ps1 failed" }
 & uv sync --dev
 if ($LASTEXITCODE -ne 0) { throw "uv sync failed" }
 
+& uv run w3xray-quality
+if ($LASTEXITCODE -ne 0) { throw "uv run w3xray-quality failed" }
+
 & uv run w3xray-test
 if ($LASTEXITCODE -ne 0) { throw "uv run w3xray-test failed" }
 

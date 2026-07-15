@@ -12,6 +12,7 @@ dependencies = [
 
 [project.scripts]
 w3xray-dist = "w3xtool.dist_build:main"
+w3xray-quality = "w3xtool.quality_gate:main"
 w3xray-test = "w3xtool.dev_test:main"
 
 [build-system]
@@ -23,6 +24,46 @@ packages = ["w3xtool"]
 
 [dependency-groups]
 dev = [
+    "basedpyright>=1.39.9,<2",
     "pyinstaller>=6.20.0",
     "pytest>=9.0.3",
+    "ruff>=0.15.21,<0.16",
 ]
+
+[tool.basedpyright]
+typeCheckingMode = "recommended"
+pythonVersion = "3.14"
+pythonPlatform = "All"
+exclude = ["**/__pycache__", "**/.venv", "**/build", "**/dist"]
+ignore = [
+    "tests/test_batch_runtime.py",
+    "tests/test_external_listfile_gui.py",
+    "tests/test_gui_casc_browser.py",
+    "tests/test_gui_casc_worker.py",
+    "tests/test_gui_export_worker.py",
+    "tests/test_gui_object_filter_runner.py",
+    "w3xtool/gui.py",
+    "w3xtool/gui_casc_browser.py",
+    "w3xtool/gui_export_actions.py",
+    "w3xtool/gui_external_data.py",
+    "w3xtool/gui_lifecycle.py",
+    "w3xtool/gui_source_browser.py",
+]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 88
+extend-exclude = [".venv", "build", "dist", "third_party"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+ignore = ["COM812", "ISC001"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["ARG", "D", "PLR2004", "S101", "SLF001"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"

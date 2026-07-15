@@ -65,6 +65,7 @@ jobs:
         shell: bash
         run: |
           uv sync --dev
+          uv run w3xray-quality
           uv run python -c 'import tkinter; print(tkinter.TkVersion)'
       - name: Run full test suite on macOS
         if: runner.os == 'macOS'

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import multiprocessing
 import sys
 
 from w3xtool.cli_options import CliOptionError, parse_cli_options, run_cli
@@ -14,6 +15,7 @@ __all__ = ("iter_cli_summary_lines", "iter_game_config_summary_lines", "main")
 
 def main() -> None:
     """Dispatch legacy game-config, map CLI, or GUI startup modes."""
+    multiprocessing.freeze_support()
     configure_cli_output()
     if len(sys.argv) >= 2 and sys.argv[1] == "batch":
         from w3xtool.batch_cli import (
