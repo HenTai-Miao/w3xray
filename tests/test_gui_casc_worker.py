@@ -49,14 +49,20 @@ class _CascHost(CascBrowserMixin, GuiWorkerHostMixin):
     def __init__(self) -> None:
         self.game_data_path = "/game-data"
         self.status = _Status()
-        self.scheduled: list[Callable[[], None]] = []
+        self.scheduled: dict[str, Callable[[], None]] = {}
         self.shown: list[_InventorySource] = []
+        self._next_after = 1
         self._init_gui_worker_host()
 
     def after(self, delay_ms: int, callback: Callable[[], None]) -> str:
-        assert delay_ms == 0
-        self.scheduled.append(callback)
-        return f"after-{len(self.scheduled)}"
+        assert delay_ms >= 0
+        after_id = f"after-{self._next_after}"
+        self._next_after += 1
+        self.scheduled[after_id] = callback
+        return after_id
+
+    def after_cancel(self, after_id: str) -> None:
+        self.scheduled.pop(after_id, None)
 
     def _show_casc_browser(self, source: _InventorySource) -> None:
         self.shown.append(source)
@@ -90,6 +96,6 @@ def test_casc_source_arriving_after_shutdown_is_closed(
     # Then
     assert lingering == ("casc-open",)
     assert source.closed.wait(1)
-    assert host.scheduled == []
+    assert host.scheduled == {}
     assert host.shown == []
     assert host._shutdown_gui_worker_host(1) == ()

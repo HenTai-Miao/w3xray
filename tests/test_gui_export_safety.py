@@ -40,7 +40,7 @@ class GuiExportSafetyTest(GuiTestCase):
                         "w3xtool.gui_export_actions.messagebox.showerror"
                     ) as show_error:
                         self.app.on_export_scripts()
-                        self.app.update()
+                        self.pump_events_until(lambda: show_error.called)
 
         message = show_error.call_args.args[1]
         self.assertIn("PermissionError", message)
@@ -67,9 +67,11 @@ class GuiExportSafetyTest(GuiTestCase):
                 "_gui_workers",
                 GuiWorkerRegistry(thread_factory=InlineGuiThread),
             ):
-                with patch("w3xtool.gui_export_actions.messagebox.showinfo"):
+                with patch(
+                    "w3xtool.gui_export_actions.messagebox.showinfo"
+                ) as show_info:
                     self.app.on_export_scripts()
-                    self.app.update()
+                    self.pump_events_until(lambda: show_info.called)
 
         self.assertEqual(outside.read_text(encoding="utf-8"), "before")
 
@@ -93,9 +95,11 @@ class GuiExportSafetyTest(GuiTestCase):
                 "_gui_workers",
                 GuiWorkerRegistry(thread_factory=InlineGuiThread),
             ):
-                with patch("w3xtool.gui_export_actions.messagebox.showinfo"):
+                with patch(
+                    "w3xtool.gui_export_actions.messagebox.showinfo"
+                ) as show_info:
                     self.app.on_export_ids()
-                    self.app.update()
+                    self.pump_events_until(lambda: show_info.called)
 
         self.assertEqual(outside.read_text(encoding="utf-8"), "before")
 

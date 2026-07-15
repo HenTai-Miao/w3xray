@@ -26,14 +26,20 @@ class _Exporter(ExportActionsMixin, GuiWorkerHostMixin):
         self.map_data = MapData(path="map.w3x", name="map")
         self.map_data.scripts = {"war3map.j": "script"}
         self.status = _Status()
-        self.scheduled: list[Callable[[], None]] = []
+        self.scheduled: dict[str, Callable[[], None]] = {}
         self.opened: list[tuple[str, int, str]] = []
+        self._next_after = 1
         self._init_gui_worker_host()
 
     def after(self, delay_ms: int, callback: Callable[[], None]) -> str:
-        assert delay_ms == 0
-        self.scheduled.append(callback)
-        return f"after-{len(self.scheduled)}"
+        assert delay_ms >= 0
+        after_id = f"after-{self._next_after}"
+        self._next_after += 1
+        self.scheduled[after_id] = callback
+        return after_id
+
+    def after_cancel(self, after_id: str) -> None:
+        self.scheduled.pop(after_id, None)
 
     def _open_dir(self, output: str, count: int, kind: str) -> None:
         self.opened.append((output, count, kind))
@@ -68,7 +74,7 @@ def test_script_export_finishing_after_shutdown_never_opens_output(
 
     # Then
     assert lingering == ("export-scripts",)
-    assert exporter.scheduled == []
+    assert exporter.scheduled == {}
     assert exporter.opened == []
     assert exporter.status.values == ["正在导出脚本 …"]
     assert exporter._shutdown_gui_worker_host(1) == ()

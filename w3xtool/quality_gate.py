@@ -51,6 +51,7 @@ tests/test_map_relation_loading.py
 tests/test_object_text_index.py
 tests/test_quality_gate.py
 tests/test_real_map_item_relation_acceptance.py
+tests/test_reference_id_reports.py
 w3xtool/acceptance_batch.py
 w3xtool/acceptance_runner.py
 w3xtool/batch_checkpoint_publication.py

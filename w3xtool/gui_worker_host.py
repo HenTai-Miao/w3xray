@@ -6,13 +6,15 @@ from collections.abc import Callable
 from dataclasses import dataclass
 import threading
 from tkinter import TclError
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from .gui_worker_registry import (
     GuiWorkerRegistry,
     GuiWorkerTarget,
     GuiWorkerTicket,
 )
+
+_GUI_POST_POLL_MS: Final = 20
 
 if TYPE_CHECKING:
 
@@ -21,8 +23,12 @@ if TYPE_CHECKING:
         _gui_post_lock: threading.Lock = threading.Lock()
         _gui_post_next: int = 0
         _gui_posts: dict[int, _PendingGuiPost] = {}
+        _gui_post_poll_id: str | None = None
+        _gui_post_stopped: bool = False
 
         def after(self, delay_ms: int, callback: Callable[[], None]) -> str: ...
+
+        def after_cancel(self, after_id: str) -> None: ...
 
 else:
     _TkAfterHost = object
@@ -43,6 +49,11 @@ class GuiWorkerHostMixin(_TkAfterHost):
         self._gui_post_lock = threading.Lock()
         self._gui_post_next = 1
         self._gui_posts = {}
+        self._gui_post_stopped = False
+        self._gui_post_poll_id = self.after(
+            _GUI_POST_POLL_MS,
+            self._poll_gui_posts,
+        )
 
     def _start_gui_worker(
         self,
@@ -61,11 +72,8 @@ class GuiWorkerHostMixin(_TkAfterHost):
         cleanup: Callable[[], None] | None = None,
     ) -> bool:
         """Queue one guarded Tk callback or reclaim its stale payload."""
-        if not self._gui_workers.accepts(ticket):
-            _run_cleanup(cleanup)
-            return False
         with self._gui_post_lock:
-            if not self._gui_workers.accepts(ticket):
+            if self._gui_post_stopped or not self._gui_workers.accepts(ticket):
                 post_id = 0
             else:
                 post_id = self._gui_post_next
@@ -78,17 +86,19 @@ class GuiWorkerHostMixin(_TkAfterHost):
         if post_id == 0:
             _run_cleanup(cleanup)
             return False
-        try:
-            _ = self.after(0, lambda: self._deliver_gui_post(post_id))
-        except TclError:
-            pending = self._take_gui_post(post_id)
-            if pending is not None:
-                _run_cleanup(pending.cleanup)
-            return False
         return True
 
     def _shutdown_gui_worker_host(self, timeout_seconds: float) -> tuple[str, ...]:
         """Stop workers and reclaim callbacks Tk will never deliver."""
+        with self._gui_post_lock:
+            self._gui_post_stopped = True
+            poll_id = self._gui_post_poll_id
+            self._gui_post_poll_id = None
+        if poll_id is not None:
+            try:
+                self.after_cancel(poll_id)
+            except TclError:
+                self._gui_post_poll_id = None
         lingering = self._gui_workers.shutdown(timeout_seconds)
         self._cleanup_gui_posts(None)
         return lingering
@@ -97,6 +107,26 @@ class GuiWorkerHostMixin(_TkAfterHost):
         """Invalidate one subsystem and reclaim its queued Tk payloads."""
         self._gui_workers.cancel_group(group)
         self._cleanup_gui_posts(group)
+
+    def _poll_gui_posts(self) -> None:
+        with self._gui_post_lock:
+            self._gui_post_poll_id = None
+            post_ids = tuple(sorted(self._gui_posts))
+        for post_id in post_ids:
+            self._deliver_gui_post(post_id)
+        with self._gui_post_lock:
+            stopped = self._gui_post_stopped
+        if stopped:
+            return
+        try:
+            poll_id = self.after(_GUI_POST_POLL_MS, self._poll_gui_posts)
+        except TclError:
+            with self._gui_post_lock:
+                self._gui_post_stopped = True
+            self._cleanup_gui_posts(None)
+            return
+        with self._gui_post_lock:
+            self._gui_post_poll_id = poll_id
 
     def _deliver_gui_post(self, post_id: int) -> None:
         pending = self._take_gui_post(post_id)

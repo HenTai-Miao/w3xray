@@ -33,7 +33,8 @@ class _Harness(CurrentMapGuiMixin, GuiWorkerHostMixin):
         self._cur_dir = {"battle": None, "campaign": None}
         self.current_map_button = _Widget()
         self.status = _Widget()
-        self.scheduled: list[Callable[[], None]] = []
+        self.scheduled: dict[str, Callable[[], None]] = {}
+        self._next_after = 1
         self._init_gui_worker_host()
         self._init_current_map_gui()
 
@@ -42,12 +43,13 @@ class _Harness(CurrentMapGuiMixin, GuiWorkerHostMixin):
 
     def after(self, delay_ms: int, callback: Callable[[], None]) -> str:
         _ = delay_ms
-        self.scheduled.append(callback)
-        return f"after-{len(self.scheduled)}"
+        after_id = f"after-{self._next_after}"
+        self._next_after += 1
+        self.scheduled[after_id] = callback
+        return after_id
 
-    def after_cancel(self, poll_id: str) -> None:
-        _ = poll_id
-        return
+    def after_cancel(self, after_id: str) -> None:
+        self.scheduled.pop(after_id, None)
 
 
 def _snapshot(path: Path) -> CurrentMapSnapshot:
@@ -164,9 +166,9 @@ def test_duplicate_click_is_ignored_while_worker_is_pending(
     harness.on_open_current_map()
     harness.on_open_current_map()
 
-    # Then: only one daemon worker and one polling loop exist.
+    # Then: one daemon worker plus one domain poll and one shared delivery poll exist.
     assert workers == [True]
-    assert len(harness.scheduled) == 1
+    assert len(harness.scheduled) == 2
 
 
 def test_shutdown_cleans_session_owned_snapshot_once(

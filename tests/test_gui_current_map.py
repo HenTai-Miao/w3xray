@@ -61,8 +61,8 @@ class _Harness(CurrentMapGuiMixin, GuiWorkerHostMixin):
         self.scheduled.append(callback)
         return f"after-{len(self.scheduled)}"
 
-    def after_cancel(self, poll_id: str) -> None:
-        self.cancelled.append(poll_id)
+    def after_cancel(self, after_id: str) -> None:
+        self.cancelled.append(after_id)
 
     def set_campaign_root(self, path: str) -> None:
         self._root_values["campaign"] = path

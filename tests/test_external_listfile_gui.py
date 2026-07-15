@@ -162,22 +162,30 @@ class ExternalListfileGuiTest(GuiTestCase):
             self.app.map_data = MapData(path="map.w3x", name="导出图")
             self.app._campaign_path = None
             self.app.external_listfile_path = listfile_path
+            completions: list[tuple[str, int, str]] = []
 
             # When: the user clicks export all.
             with patch(
                 "w3xtool.gui_export_actions.export_all_files", side_effect=fake_export
             ):
-                with patch("w3xtool.gui_export_actions.messagebox.showinfo"):
+                with patch.object(
+                    self.app,
+                    "_open_dir",
+                    side_effect=lambda path, count, kind: completions.append(
+                        (path, count, kind)
+                    ),
+                ):
                     with patch.object(
                         self.app,
                         "_gui_workers",
                         GuiWorkerRegistry(thread_factory=InlineGuiThread),
                     ):
                         self.app.on_export_all()
-                    self.pump_events_until(lambda: bool(calls))
+                        self.pump_events_until(lambda: bool(completions))
 
             # Then: the worker receives the selected listfile path.
             self.assertEqual(calls, [("map.w3x", listfile_path)])
+            self.assertEqual(completions, [(out, 0, "文件")])
 
         os.remove(listfile_path)
 

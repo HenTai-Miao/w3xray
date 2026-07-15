@@ -166,9 +166,15 @@ def test_tsv_and_box_writers_share_sorted_deduped_order() -> None:
     md = MapData(path="x.w3x", name="ID图")
     md.objects = {
         "技能": [
-            game_object("A010", "后", {"display:description": "后说明"}, category="技能"),
-            game_object("A001", "前", {"display:description": "前说明"}, category="技能"),
-            game_object("A001", "重复", {"display:description": "重复说明"}, category="技能"),
+            game_object(
+                "A010", "后", {"display:description": "后说明"}, category="技能"
+            ),
+            game_object(
+                "A001", "前", {"display:description": "前说明"}, category="技能"
+            ),
+            game_object(
+                "A001", "重复", {"display:description": "重复说明"}, category="技能"
+            ),
         ]
     }
 
@@ -211,12 +217,17 @@ class GuiReferenceIdReportTest(GuiTestCase):
         }
         self.app.map_data = md
 
-        # When: the GUI ID export runs synchronously in the test thread.
-        with patch("w3xtool.gui_export_actions.tmp_extract_dir", return_value=str(output)):
-            with patch("w3xtool.gui_export_actions.threading.Thread", _InlineThread):
-                with patch("w3xtool.gui_export_actions.messagebox.showinfo"):
-                    self.app.on_export_ids()
-                    self.app.update()
+        # When: the GUI ID export completes through the shared worker registry.
+        with (
+            patch(
+                "w3xtool.gui_export_actions.tmp_extract_dir",
+                return_value=str(output),
+            ),
+            patch("w3xtool.gui_export_actions.os.startfile", create=True),
+            patch("w3xtool.gui_export_actions.messagebox.showinfo") as showinfo,
+        ):
+            self.app.on_export_ids()
+            self.pump_events_until(lambda: showinfo.called)
         text = (output / "单位ID.txt").read_text(encoding="utf-8")
 
         # Then: GUI output matches the shared reference-compatible formatter.
@@ -231,11 +242,3 @@ class GuiReferenceIdReportTest(GuiTestCase):
 
     def _remove_tree(self, path: str) -> None:
         shutil.rmtree(path, ignore_errors=True)
-
-
-class _InlineThread:
-    def __init__(self, target, daemon: bool) -> None:
-        self._target = target
-
-    def start(self) -> None:
-        self._target()

@@ -14,6 +14,7 @@ from w3xtool.api import MapData
 from w3xtool.gui_loader import LoadedMap
 from w3xtool.gui_loader_runner import BackgroundLoaderMixin
 from w3xtool.gui_worker_host import GuiWorkerHostMixin
+from w3xtool.gui_worker_registry import GuiWorkerTicket
 
 
 class _Status:
@@ -27,23 +28,38 @@ class _Status:
 class _LoaderRunner(BackgroundLoaderMixin, GuiWorkerHostMixin):
     def __init__(self) -> None:
         self.status = _Status()
-        self.scheduled: list[Callable[[], None]] = []
+        self.scheduled: dict[str, Callable[[], None]] = {}
         self.posted = threading.Event()
         self.cancelled: list[str] = []
+        self._next_after = 1
         self._init_gui_worker_host()
         self._init_background_loader()
 
     def after(self, delay_ms: int, callback: Callable[[], None]) -> str:
         _ = delay_ms
-        self.scheduled.append(callback)
-        self.posted.set()
-        return f"after-{len(self.scheduled)}"
+        after_id = f"after-{self._next_after}"
+        self._next_after += 1
+        self.scheduled[after_id] = callback
+        return after_id
 
-    def after_cancel(self, poll_id: str) -> None:
-        self.cancelled.append(poll_id)
+    def after_cancel(self, after_id: str) -> None:
+        self.cancelled.append(after_id)
+        self.scheduled.pop(after_id, None)
+
+    def _post_gui_worker(
+        self,
+        ticket: GuiWorkerTicket,
+        callback: Callable[[], None],
+        *,
+        cleanup: Callable[[], None] | None = None,
+    ) -> bool:
+        accepted = super()._post_gui_worker(ticket, callback, cleanup=cleanup)
+        if accepted:
+            self.posted.set()
+        return accepted
 
     def run_scheduled(self) -> None:
-        callbacks = tuple(self.scheduled)
+        callbacks = tuple(self.scheduled.values())
         self.scheduled.clear()
         for callback in callbacks:
             callback()

@@ -24,17 +24,23 @@ class _SourceBrowser(SourceBrowserMixin, GuiWorkerHostMixin):
     def __init__(self) -> None:
         self._cur_dir = {"battle": None, "campaign": None}
         self.status = _Status()
-        self.scheduled: list[Callable[[], None]] = []
+        self.scheduled: dict[str, Callable[[], None]] = {}
         self.filled: list[tuple[tuple[str, str], ...]] = []
+        self._next_after = 1
         self._init_gui_worker_host()
 
     def update_idletasks(self) -> None:
         return
 
     def after(self, delay_ms: int, callback: Callable[[], None]) -> str:
-        assert delay_ms == 0
-        self.scheduled.append(callback)
-        return f"after-{len(self.scheduled)}"
+        assert delay_ms >= 0
+        after_id = f"after-{self._next_after}"
+        self._next_after += 1
+        self.scheduled[after_id] = callback
+        return after_id
+
+    def after_cancel(self, after_id: str) -> None:
+        self.scheduled.pop(after_id, None)
 
     def _fill_battle(self, items: list[tuple[str, str]]) -> None:
         self.filled.append(tuple(items))
@@ -66,6 +72,6 @@ def test_scan_finishing_after_shutdown_never_updates_source_panel(
 
     # Then
     assert lingering == ("source-scan",)
-    assert browser.scheduled == []
+    assert browser.scheduled == {}
     assert browser.filled == []
     assert browser._shutdown_gui_worker_host(1) == ()
