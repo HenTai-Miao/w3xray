@@ -11,8 +11,9 @@ from .description_cache import (
     DescriptionCache,
     build_description_cache_from_batch,
     format_description_cache_tsv,
-    load_description_cache,
+    load_description_cache_text,
 )
+from .batch_global_publication import load_current_generation
 from .safe_output import write_text_safely
 from .safe_output_models import SafeWriteStatus
 
@@ -34,11 +35,14 @@ class BatchDescriptionCacheError(OSError):
 def build_and_publish_description_cache(output_root: str) -> DescriptionCache:
     """Freeze trusted owned evidence before any source map is processed."""
     root = Path(output_root)
-    report = root / DESCRIPTION_CACHE_REPORT
+    generation = load_current_generation(root)
     previous = (
-        load_description_cache(str(report))
-        if report.is_file()
-        else EMPTY_DESCRIPTION_CACHE
+        EMPTY_DESCRIPTION_CACHE
+        if generation is None
+        else load_description_cache_text(
+            generation.cache_text,
+            str(generation.directory / DESCRIPTION_CACHE_REPORT),
+        )
     )
     cache = build_description_cache_from_batch(root, previous)
     result = write_text_safely(

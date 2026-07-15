@@ -43,6 +43,8 @@ def test_process_one_map_publishes_named_anonymous_and_description_artifacts(
     assert result.state is MapBatchState.COMPLETE
     assert (result.named_icon_count, result.anonymous_icon_count) == (1, 1)
     assert (result.original_written_count, result.png_written_count) == (2, 2)
+    assert result.dependency_fingerprint != fingerprint.sha256
+    assert len(result.dependency_fingerprint) == 64
     assert tuple(output.glob("图标/原始/具名/Icons/*.blp"))
     assert tuple(output.glob("图标/原始/匿名/*.blp"))
     description_text = (output / "对象描述.tsv").read_text(encoding="utf-8")

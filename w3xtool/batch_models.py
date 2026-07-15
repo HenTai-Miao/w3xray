@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Final, override
+from typing import Final
 
 
-BATCH_SCHEMA_VERSION: Final = 2
+BATCH_SCHEMA_VERSION: Final = 3
 
 
 class MapBatchState(StrEnum):
@@ -15,15 +15,20 @@ class MapBatchState(StrEnum):
     PARTIAL = "部分完成"
     RESTRICTED = "受限"
     FAILED = "失败"
+    CANCELLED = "已取消"
 
 
-@dataclass(frozen=True, slots=True)
 class BatchStateFormatError(ValueError):
     """Reject malformed or incompatible persisted batch state."""
 
+    __slots__ = ("detail",)
+
     detail: str
 
-    @override
+    def __init__(self, detail: str) -> None:
+        super().__init__(detail)
+        self.detail = detail
+
     def __str__(self) -> str:
         return self.detail
 

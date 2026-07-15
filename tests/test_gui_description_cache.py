@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import tkinter as tk
 from unittest.mock import patch
 
 from tests.gui_base import GuiTestCase
+from w3xtool.gui import App
 from w3xtool.description_cache import (
     DescriptionCache,
     DescriptionCacheEntry,
@@ -39,9 +41,7 @@ class DescriptionCacheGuiTest(GuiTestCase):
             "description_cache_path"
         ] == str(cache_path)
         reload_source.assert_called_once_with()
-        assert (
-            self.app.data_tools_menu.entrycget("清除可信描述缓存", "state") == "normal"
-        )
+        assert _cache_menu_state(self.app) == "normal"
 
     def test_invalid_cache_schema_is_rejected(self) -> None:
         # Given: a regular TSV file that is not a tool-generated cache.
@@ -106,10 +106,7 @@ class DescriptionCacheGuiTest(GuiTestCase):
             is None
         )
         reload_source.assert_called_once_with()
-        assert (
-            self.app.data_tools_menu.entrycget("清除可信描述缓存", "state")
-            == "disabled"
-        )
+        assert _cache_menu_state(self.app) == "disabled"
 
     def test_restore_accepts_only_a_valid_regular_cache(self) -> None:
         # Given: persisted configuration points at a valid trusted cache.
@@ -138,6 +135,7 @@ def _write_cache(path: Path) -> Path:
         raw_value="原始说明",
         readable_value="可读说明",
         source_map_sha256="a" * 64,
+        source_manifest_sha256="b" * 64,
         source_path="对象完整描述.tsv",
     )
     path.write_text(
@@ -145,3 +143,9 @@ def _write_cache(path: Path) -> Path:
         encoding="utf-8",
     )
     return path
+
+
+def _cache_menu_state(app: App) -> str:
+    menu = app.__dict__.get("data_tools_menu")
+    assert isinstance(menu, tk.Menu)
+    return str(menu.entrycget("清除可信描述缓存", "state"))

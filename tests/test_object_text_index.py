@@ -150,6 +150,7 @@ def test_client_cache_undefined_and_unavailable_states_are_distinct() -> None:
                 "缓存说明",
                 "缓存说明",
                 "f" * 64,
+                "a" * 64,
                 "owned.tsv",
             ),
         ),
@@ -249,7 +250,15 @@ def _cache(tip: str, description: str) -> DescriptionCache:
     return DescriptionCache.build(
         (
             DescriptionCacheEntry(
-                "物品", "ratf", "基础提示", None, tip, tip, "e" * 64, "owned.tsv"
+                "物品",
+                "ratf",
+                "基础提示",
+                None,
+                tip,
+                tip,
+                "e" * 64,
+                "a" * 64,
+                "owned.tsv",
             ),
             DescriptionCacheEntry(
                 "物品",
@@ -259,6 +268,7 @@ def _cache(tip: str, description: str) -> DescriptionCache:
                 description,
                 description,
                 "e" * 64,
+                "a" * 64,
                 "owned.tsv",
             ),
         ),

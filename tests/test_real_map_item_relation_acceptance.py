@@ -132,7 +132,7 @@ def test_v2_batch_covers_all_sources_and_required_artifacts(
     }
 
     # Then: every one of the 39 sources has one complete artifact set.
-    assert BATCH_SCHEMA_VERSION == 2
+    assert BATCH_SCHEMA_VERSION == 3
     assert len(context.maps) == len(context.results) == 39
     assert source_paths == published_paths
     assert set(context.old_by_digest) == set(context.new_by_digest)

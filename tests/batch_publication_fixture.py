@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import csv
+from dataclasses import replace
 from pathlib import Path
 
+from w3xtool.batch_manifest_models import CONTENT_MANIFEST_NAME, OWNERSHIP_MARKER_NAME
 from w3xtool.batch_map_manifest import finalize_map_manifest
 from w3xtool.batch_models import MapBatchResult, MapBatchState, SourceFingerprint
 from w3xtool.batch_reports import (
@@ -20,6 +23,7 @@ from w3xtool.item_relation_exports import (
 )
 from w3xtool.item_relation_models import ItemRelationIndex
 from w3xtool.object_text_exports import format_object_text_tsv
+from w3xtool.object_text_exports import OBJECT_TEXT_REPORT_HEADER
 from w3xtool.object_text_models import ObjectTextIndex
 
 
@@ -87,3 +91,55 @@ def empty_result(
         elapsed_ms=1,
         dependency_fingerprint=fingerprint.sha256,
     )
+
+
+def publish_client_fill_result(
+    index: int,
+    fingerprint: SourceFingerprint,
+    output_root: str,
+    *,
+    values: tuple[tuple[str, str], ...] = (("扩展提示", "完整说明"),),
+) -> MapBatchResult:
+    """Publish a manifest-valid fixture containing trusted complete-text rows."""
+    relative = f"地图/{index:03d}_{fingerprint.sha256[:8]}"
+    destination = Path(output_root, relative)
+    destination.mkdir(parents=True, exist_ok=True)
+    result = empty_result(fingerprint, relative)
+    transaction_id = f"{index:032x}"
+    _ = write_empty_publication(destination, result, transaction_id)
+    (destination / CONTENT_MANIFEST_NAME).unlink()
+    (destination / OWNERSHIP_MARKER_NAME).unlink()
+    with (destination / "对象完整描述.tsv").open(
+        "w",
+        encoding="utf-8",
+        newline="",
+    ) as handle:
+        writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
+        writer.writerow(OBJECT_TEXT_REPORT_HEADER)
+        for evidence_index, (role, raw_value) in enumerate(values, start=1):
+            writer.writerow(
+                (
+                    "物品",
+                    "ratf",
+                    "ratf",
+                    "戒指",
+                    "否",
+                    role,
+                    "utip" if role == "基础提示" else "utub",
+                    "提示文本",
+                    "",
+                    raw_value,
+                    raw_value,
+                    "客户端",
+                    "Units\\ItemStrings.txt",
+                    "客户端补全",
+                    "否",
+                    "",
+                    str(evidence_index),
+                )
+            )
+    finalized = replace(
+        result,
+        description_counts=(("客户端补全", len(values)),),
+    )
+    return finalize_map_manifest(destination, finalized, transaction_id)

@@ -72,6 +72,7 @@ def test_description_cache_path_reaches_gui_map_load_context(tmp_path: Path) -> 
                 "缓存全文",
                 "缓存全文",
                 "a" * 64,
+                "b" * 64,
                 "owned.tsv",
             ),
         )
@@ -122,6 +123,7 @@ def test_cache_only_base_identity_is_materialized_without_client_data() -> None:
                 "召唤守望者",
                 "召唤守望者",
                 "a" * 64,
+                "b" * 64,
                 "owned.tsv",
             ),
         )

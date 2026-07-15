@@ -22,6 +22,7 @@ class DescriptionCacheEntry:
     raw_value: str
     readable_value: str
     source_map_sha256: str
+    source_manifest_sha256: str
     source_path: str
 
     @property
