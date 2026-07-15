@@ -24,15 +24,6 @@ if TYPE_CHECKING:
 
 
 OBJECT_EXTS: Final[tuple[str, ...]] = ("w3u", "w3t", "w3a", "w3q", "w3b", "w3d", "w3h")
-ICON_FIELDS: Final[Mapping[str, str]] = {
-    "w3u": "uico",
-    "w3t": "iico",
-    "w3a": "aart",
-    "w3q": "gar1",
-    "w3h": "fart",
-    "w3b": "bgsc",
-    "w3d": "dfil",
-}
 
 
 def collect_object_candidates(

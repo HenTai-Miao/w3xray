@@ -21,8 +21,16 @@ def field(
     value: str,
     source_kind: ObjectSourceKind,
     source: str = "fixture",
+    value_type: str = "",
 ) -> ObjectFieldValue:
-    return ObjectFieldValue(key, label, value, source, source_kind)
+    return ObjectFieldValue(
+        key,
+        label,
+        value,
+        source,
+        source_kind,
+        value_type=value_type,
+    )
 
 
 def candidate(
@@ -248,6 +256,7 @@ def test_derived_state_is_rebuilt_only_from_final_fields() -> None:
                     "new.blp,replaceable",
                     ObjectSourceKind.TEXT_STRINGS,
                     "strings.txt",
+                    "icon",
                 ),
             ),
         ),
@@ -276,7 +285,13 @@ def test_final_display_values_and_provenance_use_canonical_keys() -> None:
                 field("Name", "名称", "步兵", ObjectSourceKind.TEXT_STRINGS),
                 field("Propernames", "名字", "阿尔法", ObjectSourceKind.TEXT_STRINGS),
                 field("Ubertip", "说明", "单位说明", ObjectSourceKind.TEXT_STRINGS),
-                field("Art", "图标", "footman.blp", ObjectSourceKind.TEXT_STRINGS),
+                field(
+                    "Art",
+                    "图标",
+                    "footman.blp",
+                    ObjectSourceKind.TEXT_STRINGS,
+                    value_type="icon",
+                ),
                 field("uhpm", "生命上限", "420", ObjectSourceKind.TEXT_STRINGS),
             ),
         ),

@@ -112,11 +112,11 @@ def _materialize(
                 ObjectSourceKind.BASE,
             )
             evidence_values.append(base_field)
-            select_object_field(selected, base_field)
+            select_object_field(selected, base_field, category)
     for candidate in candidates:
         for value in candidate.fields:
             evidence_values.append(value)
-            select_object_field(selected, value)
+            select_object_field(selected, value, category)
     ordered = tuple(
         sorted(selected.items(), key=lambda item: (item[1].label.casefold(), item[0]))
     )
@@ -141,7 +141,13 @@ def _materialize(
             BASE_NAMES.get(representative.base_id) or BASE_NAMES.get(obj_id) or obj_id
         )
     name = name.split("\n", 1)[0][:60]
-    icon = selected_display_value(selected, "display:icon").split(",", 1)[0].strip()
+    selected_icon = selected.get("display:icon")
+    icon = "" if selected_icon is None else selected_icon.value.split(",", 1)[0].strip()
+    icon_evidence = (
+        None
+        if selected_icon is None
+        else _materialized_evidence((selected_icon,), category)[0]
+    )
     refs = _merge_refs(candidates)
     search_text = " ".join(
         (obj_id, representative.base_id, name, *(value for _label, value in fields))
@@ -160,12 +166,14 @@ def _materialize(
         field_values=field_values,
         field_labels=field_labels,
         field_sources=field_sources,
-        field_evidence=_materialized_evidence(evidence_values),
+        field_evidence=_materialized_evidence(evidence_values, category),
+        icon_field_evidence=icon_evidence,
     )
 
 
 def _materialized_evidence(
     values: Iterable[ObjectFieldValue],
+    category: str,
 ) -> tuple[GameObjectFieldEvidence, ...]:
     unique = {
         GameObjectFieldEvidence(
@@ -173,9 +181,10 @@ def _materialized_evidence(
             label=value.label,
             value=value.value,
             source=value.source,
-            source_priority=object_field_source_priority(value),
+            source_priority=object_field_source_priority(value, category),
             value_type=value.value_type,
             raw_value=value.raw_value,
+            value_source=value.value_source,
         )
         for value in values
     }

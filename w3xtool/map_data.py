@@ -34,6 +34,7 @@ class GameObjectFieldEvidence:
     source_priority: int
     value_type: str = ""
     raw_value: str | None = None
+    value_source: str = ""
 
     @property
     def source_value(self) -> str:
@@ -59,6 +60,7 @@ class GameObject:
     field_sources: dict[str, str] = field(default_factory=dict)
     field_labels: dict[str, str] = field(default_factory=dict)
     field_evidence: tuple[GameObjectFieldEvidence, ...] = ()
+    icon_field_evidence: GameObjectFieldEvidence | None = None
 
     @property
     def decimal(self) -> int:

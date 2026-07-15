@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Final
+from typing import Final, assert_never
 
+from .icon_field_evidence import IconFieldDisposition, classify_icon_field
 from .object_candidates import ObjectFieldValue, ObjectSourceKind
 
 _DISPLAY_ALIASES: Final[Mapping[str, str]] = {
@@ -25,12 +26,8 @@ _DISPLAY_ALIASES: Final[Mapping[str, str]] = {
     "uico": "display:icon",
     "iico": "display:icon",
     "aart": "display:icon",
-    "aical": "display:icon",
-    "gico": "display:icon",
     "gar1": "display:icon",
     "fart": "display:icon",
-    "bgsc": "display:icon",
-    "dfil": "display:icon",
 }
 _NON_DISPLAY_ALIASES: Final[Mapping[str, str]] = {
     "hp": "field:unit:hit-points",
@@ -49,10 +46,12 @@ _BASE_LABEL_ALIASES: Final[Mapping[str, str]] = {
 
 
 def select_object_field(
-    selected: dict[str, ObjectFieldValue], value: ObjectFieldValue
+    selected: dict[str, ObjectFieldValue],
+    value: ObjectFieldValue,
+    category: str,
 ) -> None:
     """Mutate the materialization accumulator with the winning field value."""
-    identity = _field_identity(value)
+    identity = _field_identity(value, category)
     if not identity.startswith("display:"):
         label = value.label.casefold()
         if value.source_kind is ObjectSourceKind.BASE:
@@ -70,8 +69,10 @@ def select_object_field(
                 ):
                     del selected[existing_identity]
     previous = selected.get(identity)
-    if previous is None or _field_rank(value, identity) > _field_rank(
-        previous, identity
+    if previous is None or _field_rank(value, identity, category) > _field_rank(
+        previous,
+        identity,
+        category,
     ):
         selected[identity] = value
 
@@ -89,9 +90,9 @@ def selected_display_value(
     return "" if value is None else value.value
 
 
-def object_field_source_priority(value: ObjectFieldValue) -> int:
+def object_field_source_priority(value: ObjectFieldValue, category: str) -> int:
     """Return the effective priority used by public-field selection."""
-    identity = _field_identity(value)
+    identity = _field_identity(value, category)
     if value.source_kind is ObjectSourceKind.TEXT_STRINGS and not identity.startswith(
         "display:"
     ):
@@ -99,18 +100,38 @@ def object_field_source_priority(value: ObjectFieldValue) -> int:
     return int(value.source_kind)
 
 
-def _field_identity(value: ObjectFieldValue) -> str:
+def _field_identity(value: ObjectFieldValue, category: str) -> str:
     key = value.key.casefold()
+    decision = classify_icon_field(
+        category,
+        value.key,
+        value.label,
+        value.value_type,
+        value.source_kind,
+    )
+    match decision.disposition:
+        case IconFieldDisposition.ELIGIBLE:
+            return "display:icon"
+        case (
+            IconFieldDisposition.FILTERED_NON_ICON
+            | IconFieldDisposition.NOT_AN_ICON_FIELD
+        ):
+            pass
+        case unreachable:
+            assert_never(unreachable)
     alias = _DISPLAY_ALIASES.get(key)
-    if alias is None and key.startswith("display:"):
+    if alias == "display:icon":
+        alias = None
+    if alias is None and key.startswith("display:") and key != "display:icon":
         alias = key
     non_display_key = key.removeprefix("binary:")
     if alias is not None:
         return alias
     if value.source_kind is ObjectSourceKind.BASE:
-        return _BASE_LABEL_ALIASES.get(
-            value.label.casefold(), f"base:{value.label.casefold()}"
-        )
+        base_alias = _BASE_LABEL_ALIASES.get(value.label.casefold())
+        if base_alias == "display:icon":
+            base_alias = None
+        return base_alias or f"base:{value.label.casefold()}"
     semantic_alias = _NON_DISPLAY_ALIASES.get(non_display_key)
     raw_key = value.key[len("binary:") :] if key.startswith("binary:") else value.key
     return semantic_alias or f"field:{raw_key}"
@@ -119,10 +140,11 @@ def _field_identity(value: ObjectFieldValue) -> str:
 def _field_rank(
     value: ObjectFieldValue,
     identity: str,
+    category: str,
 ) -> tuple[int, str, str, str, str, str, str, str, str]:
     normalized_source = value.source.replace("/", "\\")
     return (
-        object_field_source_priority(value),
+        object_field_source_priority(value, category),
         normalized_source.casefold(),
         normalized_source,
         value.source,
