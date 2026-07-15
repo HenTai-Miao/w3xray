@@ -7,7 +7,15 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.compat_bundle import COMPAT_MANIFEST_NAME, CompatBundleError, load_compat_bundle
+from w3xtool.api import load_map
+from w3xtool.compat_bundle import (
+    COMPAT_MANIFEST_NAME,
+    CompatBundleError,
+    load_compat_bundle,
+)
+from w3xtool.extraction_ledger import BlockSource
+from w3xtool.load_context import MapLoadContext
+from w3xtool.supplemented_source import SupplementedPathArchiveSource
 
 
 def _sha(payload: bytes) -> str:
@@ -139,3 +147,40 @@ def test_bundle_rejects_symlinked_payload_root(tmp_path: Path) -> None:
     # When/Then: the redirected payload root is never traversed.
     with pytest.raises(CompatBundleError, match="symlink"):
         _ = load_compat_bundle(root, source)
+
+
+def test_map_loading_and_reopening_share_verified_compatibility_plaintext(
+    tmp_path: Path,
+) -> None:
+    # Given: one valid map plus source-bound replacement script plaintext.
+    fixture = Path("tests/fixtures/maps/war3net-map-script-builder.w3x")
+    source = tmp_path / "source.w3x"
+    source.write_bytes(fixture.read_bytes())
+    script = b"function main takes nothing returns nothing\nendfunction\n"
+    root = tmp_path / "bundle"
+    _write_manifest(root, source, (f"file\twar3map.j\t{_sha(script)}",))
+    payload = root / "files" / "war3map.j"
+    payload.parent.mkdir()
+    payload.write_bytes(script)
+
+    # When: normal map loading consumes and retains that compatibility source.
+    loaded = load_map(
+        str(source),
+        load_context=MapLoadContext(compat_bundle_path=str(root)),
+    )
+
+    # Then: analysis, evidence, and later source reopening use the same plaintext.
+    try:
+        assert loaded.scripts["war3map.j"].startswith("function main")
+        assert isinstance(loaded.archive_source, SupplementedPathArchiveSource)
+        assert loaded.extraction_ledger is not None
+        script_entry = next(
+            entry
+            for entry in loaded.extraction_ledger.entries
+            if entry.internal_path.casefold() == "war3map.j"
+        )
+        assert script_entry.source is BlockSource.COMPAT_PLAINTEXT
+        with loaded.archive_source.open() as archive:
+            assert archive.read_file("war3map.j") == script
+    finally:
+        loaded.close()

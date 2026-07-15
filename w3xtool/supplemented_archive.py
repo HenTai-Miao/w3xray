@@ -8,29 +8,21 @@ from collections.abc import Iterable, Sequence
 from typing import Protocol
 
 from .extraction_ledger import BlockSource
+from .map_archive_reader import MapArchiveReader
 from .mpq_layout import _Block
 from .supplemental_evidence import SupplementalEvidence, SupplementalEvidenceError
 
 
-class SupplementBase(Protocol):
+class SupplementBase(MapArchiveReader, Protocol):
     """MPQ capabilities needed by the static evidence overlay."""
 
-    path: str
     archive_offset: int
     sector_size: int
-    @property
-    def _data(self) -> bytes | mmap.mmap: ...
 
     @property
     def block_table(self) -> Sequence[_Block]: ...
 
-    def has_file(self, name: str) -> bool: ...
-
-    def read_file(self, name: str) -> bytes: ...
-
     def declared_file_size(self, name: str) -> int | None: ...
-
-    def list_files(self) -> list[str]: ...
 
     def block_index_of(self, name: str) -> int | None: ...
 
@@ -43,8 +35,6 @@ class SupplementBase(Protocol):
     def recover_block_key(self, block: _Block, /) -> int | None: ...
 
     def peek_block(self, block: _Block, n: int = 64, /) -> bytes: ...
-
-    def close(self) -> None: ...
 
 
 class SupplementedArchive:
@@ -71,6 +61,11 @@ class SupplementedArchive:
         self.warnings = self._override_warnings()
 
     @property
+    def container_readable(self) -> bool:
+        """Whether the base MPQ tables were successfully inventoried."""
+        return self._base is not None
+
+    @property
     def author_bundle_files(self) -> tuple[str, ...]:
         """Keep the legacy author-file list available to map loading."""
         if self._evidence is None:
@@ -94,7 +89,7 @@ class SupplementedArchive:
             raise FileNotFoundError(name)
         try:
             return self._base.read_file(name)
-        except (KeyError, OSError, ValueError):
+        except KeyError, OSError, ValueError:
             block_index = self._base.block_index_of(name)
             if block_index is None or block_index not in self._key_payloads:
                 raise
@@ -182,7 +177,7 @@ class SupplementedArchive:
             if block_index is not None and block_index in self._key_payloads:
                 try:
                     _ = self._base.read_file(name)
-                except (KeyError, OSError, ValueError):
+                except KeyError, OSError, ValueError:
                     return BlockSource.COMPAT_KEY
         return BlockSource.ARCHIVE_NAMED
 
@@ -230,7 +225,7 @@ class SupplementedArchive:
                 continue
             try:
                 archived = self._base.read_file(item.name)
-            except (KeyError, OSError, ValueError):
+            except KeyError, OSError, ValueError:
                 continue
             if hashlib.sha256(archived).hexdigest() != item.sha256:
                 return ("plaintext_override_conflict",)
@@ -242,4 +237,6 @@ def _name_key(name: str) -> str:
 
 
 def _block_index(blocks: Sequence[_Block], selected: _Block) -> int | None:
-    return next((index for index, block in enumerate(blocks) if block is selected), None)
+    return next(
+        (index for index, block in enumerate(blocks) if block is selected), None
+    )

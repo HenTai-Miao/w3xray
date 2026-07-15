@@ -14,16 +14,22 @@ def write_object_ids(md: MapData, out_dir: str) -> int:
     for category, objects in sorted(md.objects.items()):
         rows = ["分类\tID\t10进制\t基础ID\t名称\t自定义\t说明"]
         for obj in sorted_unique_objects(objects):
-            rows.append("\t".join((
-                tsv(category),
-                tsv(obj.obj_id),
-                str(obj.decimal),
-                tsv(obj.base_id),
-                tsv(obj.name),
-                "是" if obj.is_custom else "否",
-                tsv(_object_description(obj)),
-            )))
-        count += write_text(out_dir, f"{safe_filename(category)}.tsv", "\n".join(rows) + "\n")
+            rows.append(
+                "\t".join(
+                    (
+                        tsv(category),
+                        tsv(obj.obj_id),
+                        str(obj.decimal),
+                        tsv(obj.base_id),
+                        tsv(obj.name),
+                        "是" if obj.is_custom else "否",
+                        tsv(_object_description(obj)),
+                    )
+                )
+            )
+        count += write_text(
+            out_dir, f"{safe_filename(category)}.tsv", "\n".join(rows) + "\n"
+        )
     return count
 
 
@@ -78,23 +84,76 @@ def format_object_text_icons(md: MapData) -> str:
     for obj in _all_objects(md):
         text_fields = _text_fields(obj)
         if not text_fields and obj.icon:
-            rows.append("\t".join((
-                tsv(obj.category),
-                tsv(obj.obj_id),
-                tsv(obj.name),
-                tsv(obj.icon),
-                "",
-                "",
-            )))
+            rows.append(
+                "\t".join(
+                    (
+                        tsv(obj.category),
+                        tsv(obj.obj_id),
+                        tsv(obj.name),
+                        tsv(obj.icon),
+                        "",
+                        "",
+                    )
+                )
+            )
         for label, value in text_fields:
-            rows.append("\t".join((
-                tsv(obj.category),
-                tsv(obj.obj_id),
-                tsv(obj.name),
-                tsv(obj.icon),
-                tsv(label),
-                tsv(value),
-            )))
+            rows.append(
+                "\t".join(
+                    (
+                        tsv(obj.category),
+                        tsv(obj.obj_id),
+                        tsv(obj.name),
+                        tsv(obj.icon),
+                        tsv(label),
+                        tsv(value),
+                    )
+                )
+            )
+    return "\n".join(rows) + "\n"
+
+
+def format_object_fields(md: MapData) -> str:
+    """Return every materialized object field and its winning source as TSV."""
+    rows = ["分类\tID\t名称\t字段键\t字段名\t值\t来源"]
+    for obj in _all_objects(md):
+        if obj.field_values:
+            legacy_fields = tuple(obj.fields)
+            for index, (key, value) in enumerate(obj.field_values.items()):
+                label = obj.field_labels.get(key)
+                if (
+                    label is None
+                    and index < len(legacy_fields)
+                    and legacy_fields[index][1] == value
+                ):
+                    label = legacy_fields[index][0]
+                rows.append(
+                    "\t".join(
+                        (
+                            tsv(obj.category),
+                            tsv(obj.obj_id),
+                            tsv(obj.name),
+                            tsv(key),
+                            tsv(label or key),
+                            tsv(value),
+                            tsv(obj.field_sources.get(key, "")),
+                        )
+                    )
+                )
+            continue
+        for label, value in obj.fields:
+            rows.append(
+                "\t".join(
+                    (
+                        tsv(obj.category),
+                        tsv(obj.obj_id),
+                        tsv(obj.name),
+                        "",
+                        tsv(label),
+                        tsv(value),
+                        "",
+                    )
+                )
+            )
     return "\n".join(rows) + "\n"
 
 

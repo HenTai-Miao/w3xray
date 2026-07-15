@@ -37,7 +37,9 @@ _LEARN_TIP_KEYS: Final = frozenset({"aret", "researchtip"})
 _LEARN_EXTENDED_KEYS: Final = frozenset({"arut", "researchubertip"})
 _CLOSE_TIP_KEYS: Final = frozenset({"aut1", "untip"})
 _CLOSE_EXTENDED_KEYS: Final = frozenset({"auu1", "unubertip"})
-_EDITOR_DESCRIPTION_KEYS: Final = frozenset({"ides", "description", "editordescription"})
+_EDITOR_DESCRIPTION_KEYS: Final = frozenset(
+    {"ides", "description", "editordescription"}
+)
 
 
 def classify_text_field(category: str, key: str, label: str) -> TextRoleMatch | None:
@@ -112,7 +114,9 @@ def _is_learn_tip(label: str) -> bool:
 
 
 def _is_close_extended(label: str) -> bool:
-    return ("关闭" in label or "close" in label or "off" in label) and _is_extended(label)
+    return ("关闭" in label or "close" in label or "off" in label) and _is_extended(
+        label
+    )
 
 
 def _is_close_tip(label: str) -> bool:

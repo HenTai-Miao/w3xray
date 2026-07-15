@@ -22,8 +22,8 @@ def build_script_mechanics_block(md: MapData) -> GuiReportBlock:
         f"运行时默认池 {len(marks)}",
     ]
     if features:
-        lines.append("特征 " + "、".join(features[:8]))
+        lines.append("特征 " + "、".join(features))
     if implicit:
-        lines.append("对象码 " + "、".join(sorted(implicit)[:12]))
-    lines.extend(f"{mark.label}: {mark.detail}" for mark in marks[:8])
+        lines.append("对象码 " + "、".join(sorted(implicit)))
+    lines.extend(f"{mark.label}: {mark.detail}" for mark in marks)
     return GuiReportBlock("脚本机制", tuple(lines))

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Never
 
 import pytest
 
@@ -44,6 +45,8 @@ def test_legacy_models_keep_decimal_category_counts_and_default_fields() -> None
     assert defaults.ref_low_coverage is False
     assert defaults.script_features == []
     assert defaults.author_bundle_files == ()
+    assert defaults.extraction_ledger is None
+    assert defaults.item_relations.records == ()
 
 
 def test_api_reexports_map_models() -> None:
@@ -71,6 +74,8 @@ def test_load_map_initializes_a_path_archive_source() -> None:
     # Then: later extraction can reopen the original path through a source.
     try:
         assert md.archive_source == PathArchiveSource(fixture)
+        assert md.extraction_ledger is not None
+        assert md.extraction_ledger.entries
     finally:
         md.close()
 
@@ -91,14 +96,22 @@ def test_campaign_child_archive_source_reopens_after_load_returns() -> None:
 
         # Then: the logical child remains backed by readable archive bytes.
         assert child.path == "Maps\\Chapter1.w3x"
-        assert script.startswith(b"//===========================================================================")
+        assert script.startswith(
+            b"//==========================================================================="
+        )
     finally:
         campaign.close()
 
 
-def test_archive_sources_open_real_mpq_bytes_repeatedly_then_reject_after_close() -> None:
+def test_archive_sources_open_real_mpq_bytes_repeatedly_then_reject_after_close() -> (
+    None
+):
     # Given: immutable bytes from a pinned valid MPQ fixture.
-    from w3xtool.archive_source import ArchiveSourceClosedError, BytesArchiveSource, PathArchiveSource
+    from w3xtool.archive_source import (
+        ArchiveSourceClosedError,
+        BytesArchiveSource,
+        PathArchiveSource,
+    )
 
     fixture = Path("tests/fixtures/maps/war3net-map-script-builder.w3x")
     expected = b"//=============================================================="
@@ -132,9 +145,19 @@ def test_bytes_archive_source_removes_temp_file_when_mpq_open_fails(
     created_paths: list[Path] = []
     original_mkstemp = archive_source.tempfile.mkstemp
 
-    def tracked_mkstemp(*args: object, **kwargs: object) -> tuple[int, str]:
-        kwargs["dir"] = str(tmp_path)
-        descriptor, path = original_mkstemp(*args, **kwargs)
+    def tracked_mkstemp(
+        suffix: str | None = None,
+        prefix: str | None = None,
+        dir: str | None = None,
+        text: bool = False,
+    ) -> tuple[int, str]:
+        _ = dir
+        descriptor, path = original_mkstemp(
+            suffix=suffix,
+            prefix=prefix,
+            dir=str(tmp_path),
+            text=text,
+        )
         created_paths.append(Path(path))
         return descriptor, path
 
@@ -162,9 +185,19 @@ def test_bytes_archive_source_removes_temp_file_after_successful_context_exit(
     created_paths: list[Path] = []
     original_mkstemp = archive_source.tempfile.mkstemp
 
-    def tracked_mkstemp(*args: object, **kwargs: object) -> tuple[int, str]:
-        kwargs["dir"] = str(tmp_path)
-        descriptor, path = original_mkstemp(*args, **kwargs)
+    def tracked_mkstemp(
+        suffix: str | None = None,
+        prefix: str | None = None,
+        dir: str | None = None,
+        text: bool = False,
+    ) -> tuple[int, str]:
+        _ = dir
+        descriptor, path = original_mkstemp(
+            suffix=suffix,
+            prefix=prefix,
+            dir=str(tmp_path),
+            text=text,
+        )
         created_paths.append(Path(path))
         return descriptor, path
 
@@ -186,8 +219,13 @@ def test_map_data_close_closes_source_and_sub_maps_idempotently() -> None:
     from w3xtool.map_data import MapData as SplitMap
 
     class CloseRecorder:
+        path = "recorder.w3x"
+
         def __init__(self) -> None:
             self.close_calls = 0
+
+        def open(self) -> Never:
+            raise AssertionError("test does not reopen recorder")
 
         def close(self) -> None:
             self.close_calls += 1
@@ -195,7 +233,9 @@ def test_map_data_close_closes_source_and_sub_maps_idempotently() -> None:
     parent_source = CloseRecorder()
     child_source = CloseRecorder()
     child = SplitMap("child.w3x", "Child", archive_source=child_source)
-    parent = SplitMap("parent.w3n", "Parent", archive_source=parent_source, sub_maps=[child])
+    parent = SplitMap(
+        "parent.w3n", "Parent", archive_source=parent_source, sub_maps=[child]
+    )
 
     # When: closing is requested twice.
     parent.close()

@@ -79,7 +79,9 @@ class ExtractionEntry:
             raise ExtractionLedgerError("entry SHA-256 must be lowercase hexadecimal")
         if self.state in _VERIFIED_STATES and not self.sha256:
             raise ExtractionLedgerError("verified entry requires a SHA-256 digest")
-        if self.state in _UNWRITTEN_STATES and self.written_size != 0:
+        if self.written_size and not self.sha256:
+            raise ExtractionLedgerError("written entry requires a SHA-256 digest")
+        if self.state is BlockState.DAMAGED and self.written_size != 0:
             raise ExtractionLedgerError("unwritten entry must have written size zero")
 
 
@@ -115,9 +117,6 @@ class ExtractionLedger:
 
 _VERIFIED_STATES: Final = frozenset(
     (BlockState.DECODED, BlockState.SUPPLEMENTED, BlockState.RAW_ONLY),
-)
-_UNWRITTEN_STATES: Final = frozenset(
-    (BlockState.ENCRYPTED_BLOCKED, BlockState.DAMAGED),
 )
 _INCOMPLETE_STATES: Final = frozenset(
     (BlockState.RAW_ONLY, BlockState.ENCRYPTED_BLOCKED, BlockState.DAMAGED),

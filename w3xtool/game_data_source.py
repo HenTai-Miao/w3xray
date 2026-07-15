@@ -178,6 +178,37 @@ def open_game_data_source(path: str | None) -> GameDataSource | None:
         return None
 
 
+def discover_game_data_path() -> str | None:
+    """Return the first readable Warcraft client-data root from bounded defaults."""
+    candidates: list[str] = []
+    configured = os.environ.get("W3XRAY_WAR3_DIR")
+    if configured:
+        candidates.append(configured)
+    for variable in ("ProgramFiles(x86)", "ProgramFiles", "ProgramW6432"):
+        root = os.environ.get(variable)
+        if root:
+            candidates.append(os.path.join(root, "Warcraft III"))
+    candidates.extend(
+        (
+            "/Applications/Warcraft III",
+            os.path.expanduser("~/Applications/Warcraft III"),
+        )
+    )
+    expanded: list[str] = []
+    for candidate in candidates:
+        root = os.path.abspath(os.path.expandvars(os.path.expanduser(candidate)))
+        expanded.extend((root, os.path.join(root, "_retail_")))
+    seen: set[str] = set()
+    for candidate in expanded:
+        key = os.path.normcase(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        if probe_game_data_path(candidate).is_readable:
+            return candidate
+    return None
+
+
 def _norm(name: str) -> str:
     return name.replace("\\", "/").lstrip("/").lower()
 

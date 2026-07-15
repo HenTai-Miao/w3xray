@@ -10,6 +10,7 @@ from unittest.mock import patch
 import pytest
 from PIL import Image
 
+import w3xtool.game_data_source as game_data_source
 from w3xtool.casclib_source import CascLibProbe
 from w3xtool.game_data_source import (
     DirectoryDataSource,
@@ -20,6 +21,21 @@ from w3xtool.icons import IconResolver
 
 
 class GameDataSourceTest(unittest.TestCase):
+    def test_discovery_uses_configured_warcraft_directory(self) -> None:
+        # Given: the supported environment variable points at readable client data.
+        with tempfile.TemporaryDirectory() as root:
+            ui_dir = os.path.join(root, "war3.w3mod", "UI")
+            os.makedirs(ui_dir)
+            with open(os.path.join(ui_dir, "TriggerData.txt"), "wb") as handle:
+                handle.write(b"data")
+
+            # When: no GUI preference has been saved yet.
+            with patch.dict(os.environ, {"W3XRAY_WAR3_DIR": root}, clear=False):
+                found = game_data_source.discover_game_data_path()
+
+            # Then: base object metadata and icons can be connected automatically.
+            self.assertEqual(found, root)
+
     def test_directory_source_resolves_reforged_w3mod_prefix(self) -> None:
         # Given: Reforged client data was exported with the war3.w3mod namespace.
         with tempfile.TemporaryDirectory() as root:
@@ -38,7 +54,9 @@ class GameDataSourceTest(unittest.TestCase):
             source = DirectoryDataSource(root)
 
             # Then: namespace prefixes, slash style and case differences do not matter.
-            self.assertTrue(source.has_file("ReplaceableTextures\\CommandButtons\\BTNHero.blp"))
+            self.assertTrue(
+                source.has_file("ReplaceableTextures\\CommandButtons\\BTNHero.blp")
+            )
             self.assertEqual(
                 source.read_file("replaceabletextures/commandbuttons/btnhero.blp"),
                 b"BLP1hero",
@@ -48,11 +66,15 @@ class GameDataSourceTest(unittest.TestCase):
         # Given: a raw Reforged install uses CASC indexes rather than plain files.
         with tempfile.TemporaryDirectory() as root:
             os.makedirs(os.path.join(root, "Data", "data"))
-            with open(os.path.join(root, ".build.info"), "w", encoding="utf-8") as handle:
+            with open(
+                os.path.join(root, ".build.info"), "w", encoding="utf-8"
+            ) as handle:
                 handle.write("BuildKey\n")
             with open(os.path.join(root, "Data", "data", "data.000"), "wb") as handle:
                 handle.write(b"casc")
-            with open(os.path.join(root, "Data", "data", "0000000000000000.idx"), "wb") as handle:
+            with open(
+                os.path.join(root, "Data", "data", "0000000000000000.idx"), "wb"
+            ) as handle:
                 handle.write(b"idx")
 
             # When: the path is probed.
@@ -65,8 +87,13 @@ class GameDataSourceTest(unittest.TestCase):
 
     def test_icon_resolver_reads_blp_from_reforged_exported_data_dir(self) -> None:
         # Given: an exported Reforged data directory contains a base-game icon.
-        with tempfile.TemporaryDirectory() as root, tempfile.NamedTemporaryFile(suffix=".w3x") as map_file:
-            texture_dir = os.path.join(root, "war3.w3mod", "ReplaceableTextures", "CommandButtons")
+        with (
+            tempfile.TemporaryDirectory() as root,
+            tempfile.NamedTemporaryFile(suffix=".w3x") as map_file,
+        ):
+            texture_dir = os.path.join(
+                root, "war3.w3mod", "ReplaceableTextures", "CommandButtons"
+            )
             os.makedirs(texture_dir)
             with open(os.path.join(texture_dir, "BTNHero.blp"), "wb") as handle:
                 handle.write(b"BLP1hero")
@@ -76,7 +103,9 @@ class GameDataSourceTest(unittest.TestCase):
             # When: the resolver is configured with that data directory.
             with patch("w3xtool.icons.decode_blp", return_value=decoded) as decode:
                 resolver = IconResolver(map_file.name, game_data_path=root)
-                image = resolver.get_image("ReplaceableTextures\\CommandButtons\\BTNHero.blp")
+                image = resolver.get_image(
+                    "ReplaceableTextures\\CommandButtons\\BTNHero.blp"
+                )
                 resolver.close()
 
             # Then: map objects can display icons from Reforged extracted data.
@@ -90,7 +119,9 @@ def _native_install(root: str) -> None:
         handle.write("BuildKey\n")
     with open(os.path.join(root, "Data", "data", "data.000"), "wb") as handle:
         handle.write(b"casc")
-    with open(os.path.join(root, "Data", "data", "0000000000000000.idx"), "wb") as handle:
+    with open(
+        os.path.join(root, "Data", "data", "0000000000000000.idx"), "wb"
+    ) as handle:
         handle.write(b"idx")
 
 
@@ -102,7 +133,9 @@ def test_native_probe_prefers_casclib_without_path_map(
     _native_install(str(tmp_path))
     monkeypatch.setattr(
         "w3xtool.game_data_source.probe_casclib",
-        lambda _root: CascLibProbe(is_available=True, reason="CascLib storage readable"),
+        lambda _root: CascLibProbe(
+            is_available=True, reason="CascLib storage readable"
+        ),
     )
 
     # When: the install is probed.
@@ -122,7 +155,9 @@ def test_native_probe_falls_back_to_path_map_with_casclib_reason(
     (tmp_path / "w3xray-casc-paths.tsv").write_text("UI/Test.txt\t001122334455667788\n")
     monkeypatch.setattr(
         "w3xtool.game_data_source.probe_casclib",
-        lambda _root: CascLibProbe(is_available=False, reason="CascLib.dll 架构错误 (193)"),
+        lambda _root: CascLibProbe(
+            is_available=False, reason="CascLib.dll 架构错误 (193)"
+        ),
     )
 
     # When: the install is probed.
@@ -170,7 +205,9 @@ def test_open_native_source_uses_casclib_backend(
         "w3xtool.game_data_source.probe_casclib",
         lambda _root: CascLibProbe(is_available=True, reason="readable"),
     )
-    monkeypatch.setattr("w3xtool.game_data_source.CascLibDataSource", lambda _root: sentinel)
+    monkeypatch.setattr(
+        "w3xtool.game_data_source.CascLibDataSource", lambda _root: sentinel
+    )
 
     # When: the unified source factory opens the install.
     source = open_game_data_source(str(tmp_path))

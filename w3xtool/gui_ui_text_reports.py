@@ -18,9 +18,7 @@ def build_ui_text_block(md: MapData) -> GuiReportBlock:
     ]
     if report.unresolved_count:
         lines.append(f"[警告] 未解析 {report.unresolved_count}")
-    for ref in report.references[:8]:
+    for ref in report.references:
         text = ref.text or "(未解析)"
         lines.append(f"{ref.source}:{ref.line} {ref.trigstr} -> {text}")
-    if report.reference_count > 8:
-        lines.append(f"另有 {report.reference_count - 8} 条引用，导出资料包查看 TSV。")
     return GuiReportBlock("UI文本", tuple(lines), report.unresolved_count)

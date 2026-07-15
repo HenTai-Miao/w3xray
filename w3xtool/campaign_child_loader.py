@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import struct
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from typing import Final
 
+from .archive_inventory import InventoryArchive, build_archive_inventory
 from .archive_source import BytesArchiveSource
 from .campaign_budget import CampaignByteBudget, record_campaign_budget_issue
 from .extraction_diagnostics import (
@@ -83,7 +85,11 @@ def load_campaign_children(
                 record_campaign_budget_issue(parent, inner)
                 continue
             source = BytesArchiveSource(inner, data)
-            child_context = replace(load_context, author_bundle_path=None)
+            child_context = replace(
+                load_context,
+                author_bundle_path=None,
+                compat_bundle_path=None,
+            )
             with source.open() as child_archive:
                 sub = load_child(
                     child_archive,
@@ -92,6 +98,11 @@ def load_campaign_children(
                     parent.obj_index,
                     child_context,
                 )
+                if isinstance(child_archive, InventoryArchive):
+                    sub.extraction_ledger = build_archive_inventory(
+                        child_archive,
+                        hashlib.sha256(data).hexdigest(),
+                    )
             sub.archive_source = source
             sub.name = inner
             sub.path = inner

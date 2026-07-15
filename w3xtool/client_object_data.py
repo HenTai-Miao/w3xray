@@ -10,13 +10,32 @@ from .game_data_source import GameDataSource
 from .object_candidates import ObjectFieldValue, collect_object_candidates
 from .object_materialization import BaseObjectTable, merge_object_candidates
 
-_RACES: Final[tuple[str, ...]] = ("Human", "Orc", "NightElf", "Undead", "Neutral", "Campaign")
+_RACES: Final[tuple[str, ...]] = (
+    "Human",
+    "Orc",
+    "NightElf",
+    "Undead",
+    "Neutral",
+    "Campaign",
+)
 _CLIENT_TEXT_NAMES: Final[tuple[str, ...]] = tuple(
     sorted(
         {
-            *(f"Units\\{race}Unit{kind}.txt" for race in _RACES for kind in ("Func", "Strings")),
-            *(f"Units\\{race}Ability{kind}.txt" for race in (*_RACES, "Common", "Item") for kind in ("Func", "Strings")),
-            *(f"Units\\{race}Upgrade{kind}.txt" for race in _RACES for kind in ("Func", "Strings")),
+            *(
+                f"Units\\{race}Unit{kind}.txt"
+                for race in _RACES
+                for kind in ("Func", "Strings")
+            ),
+            *(
+                f"Units\\{race}Ability{kind}.txt"
+                for race in (*_RACES, "Common", "Item")
+                for kind in ("Func", "Strings")
+            ),
+            *(
+                f"Units\\{race}Upgrade{kind}.txt"
+                for race in _RACES
+                for kind in ("Func", "Strings")
+            ),
             "Units\\ItemFunc.txt",
             "Units\\ItemStrings.txt",
         },
@@ -67,7 +86,9 @@ class _ClientObjectArchive:
         """The load-context owner closes the wrapped client source."""
 
 
-def collect_client_base_objects(source: GameDataSource | None) -> tuple[ClientBaseObject, ...]:
+def collect_client_base_objects(
+    source: GameDataSource | None,
+) -> tuple[ClientBaseObject, ...]:
     """Parse bounded object tables without retaining the source handle."""
     return snapshot_client_base_objects(source).objects
 
@@ -80,12 +101,14 @@ def snapshot_client_base_objects(source: GameDataSource | None) -> ClientObjectS
     text_available = any(source.has_file(name) for name in _CLIENT_TEXT_NAMES)
     try:
         candidates = collect_object_candidates(archive, {})
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return ClientObjectSnapshot((), text_available)
     objects = merge_object_candidates(candidates, {})
     evidence_by_object: dict[tuple[str, str], list[ObjectFieldValue]] = {}
     for candidate in candidates:
-        evidence_by_object.setdefault((candidate.category, candidate.obj_id), []).extend(
+        evidence_by_object.setdefault(
+            (candidate.category, candidate.obj_id), []
+        ).extend(
             candidate.fields,
         )
     snapshot = tuple(
@@ -101,7 +124,8 @@ def snapshot_client_base_objects(source: GameDataSource | None) -> ClientObjectS
             ),
         )
         for item in objects
-        if len(item.obj_id) == 4 and (item.fields or evidence_by_object.get((item.category, item.obj_id)))
+        if len(item.obj_id) == 4
+        and (item.fields or evidence_by_object.get((item.category, item.obj_id)))
     )
     return ClientObjectSnapshot(snapshot, text_available)
 

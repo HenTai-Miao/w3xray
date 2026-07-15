@@ -2,7 +2,7 @@
 
 只用合成数据，不读真实游戏文件，因此在经典 1.27（甚至无游戏）环境下也能跑。
 """
-import os
+
 import types
 
 import pytest
@@ -23,11 +23,12 @@ def test_parse_strings_name_priority():
         "[Bbsk]\nBufftip=狂战士\nBuffubertip=略\n"
         "[BOsh]\nEditorName=震荡波(施法者)\n"
         "[Amix]\nName=技能名\nBufftip=不该用这个\n",
-        out)
+        out,
+    )
     assert out["hfoo"] == "步兵"
-    assert out["Bbsk"] == "狂战士"          # Bufftip 作 buff 名
-    assert out["BOsh"] == "震荡波(施法者)"   # 只有 EditorName 时用它
-    assert out["Amix"] == "技能名"          # 有 Name 时 Name 优先，不被 Bufftip 覆盖
+    assert out["Bbsk"] == "狂战士"  # Bufftip 作 buff 名
+    assert out["BOsh"] == "震荡波(施法者)"  # 只有 EditorName 时用它
+    assert out["Amix"] == "技能名"  # 有 Name 时 Name 优先，不被 Bufftip 覆盖
 
 
 def test_dirsource_case_and_sep_insensitive(tmp_path):
@@ -103,16 +104,17 @@ def test_folder_mode_end_to_end(tmp_path):
     # 合成一个最小的「游戏数据文件夹」
     units = tmp_path / "src" / "Units"
     units.mkdir(parents=True)
-    (units / "HumanUnitStrings.txt").write_text(
-        "[hfoo]\nName=步兵\n", encoding="utf-8")
+    (units / "HumanUnitStrings.txt").write_text("[hfoo]\nName=步兵\n", encoding="utf-8")
     (units / "ItemData.slk").write_text(
         'ID;PWIDTH\nB;Y2;X2\nC;Y1;X1;K"code"\nC;Y1;X2;K"goldcost"\nC;Y2;X1;K"ratf"\nC;Y2;X2;K"200"\nE\n',
-        encoding="utf-8")
+        encoding="utf-8",
+    )
 
     out = tmp_path / "out"
     out.mkdir()
     args = types.SimpleNamespace(
-        from_dir=str(tmp_path / "src"), game=None, out_dir=str(out))
+        from_dir=str(tmp_path / "src"), game=None, out_dir=str(out)
+    )
     bbn.main(args)
 
     names_py = (out / "base_names.py").read_text(encoding="utf-8")
@@ -120,6 +122,46 @@ def test_folder_mode_end_to_end(tmp_path):
     # 三个产物都应生成
     assert (out / "base_objects.py").exists()
     assert (out / "westrings.py").exists()
+
+
+def test_base_object_generator_preserves_display_fields_after_many_data_fields(
+    tmp_path,
+):
+    # Given: display metadata appears after more than 24 ordinary SLK columns.
+    units = tmp_path / "src" / "Units"
+    units.mkdir(parents=True)
+    columns = [
+        "code",
+        *(f"Data{index}" for index in range(25)),
+        "Art",
+        "Tip",
+        "Ubertip",
+    ]
+    values = [
+        "ratf",
+        *(str(index) for index in range(25)),
+        "BTNItem.blp",
+        "Short",
+        "Long",
+    ]
+    lines = ["ID;P", f"B;Y2;X{len(columns)}"]
+    lines.extend(
+        f'C;Y1;X{index};K"{column}"' for index, column in enumerate(columns, 1)
+    )
+    lines.extend(f'C;Y2;X{index};K"{value}"' for index, value in enumerate(values, 1))
+    lines.append("E")
+    (units / "ItemData.slk").write_text("\n".join(lines), encoding="utf-8")
+    output = tmp_path / "out"
+    output.mkdir()
+
+    # When: the generated base-object snapshot is written.
+    bbn.build_base_objects([bbn.DirSource(str(tmp_path / "src"))], str(output))
+    generated = (output / "base_objects.py").read_text(encoding="utf-8")
+
+    # Then: icon and user-facing text survive both noise filtering and field limits.
+    assert "(\"\u56fe\u6807\", 'BTNItem.blp')" in generated
+    assert "(\"\u63d0\u793a\", 'Short')" in generated
+    assert "(\"\u8bf4\u660e\", 'Long')" in generated
 
 
 def test_report_dir_coverage_runs(tmp_path, capsys):

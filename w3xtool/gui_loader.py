@@ -170,6 +170,7 @@ def _load_with_context(
         and context.trigger_schema is None
         and context.author_bundle_path is None
         and not context.client_base_objects
+        and context.compat_bundle_path is None
         and not context.client_text_available
         and not context.description_cache.entries
         and not context.description_cache.diagnostics

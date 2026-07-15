@@ -22,18 +22,19 @@ def build_extraction_completeness_block(md: MapData) -> GuiReportBlock:
             if percent is None
             else f"{report.named_block_count}/{report.block_count} ({percent:.1f}%)"
         )
-        lines.extend((
-            f"命名覆盖 {coverage}",
-            f"无名块 {report.anonymous_block_count or 0}",
-            f"Unknown {report.recoverable_anonymous_count or 0}",
-            f"UnknownRaw {report.raw_fallback_count or 0}",
-        ))
-    lines.extend(f"[警告] {warning}" for warning in report.warnings[:3])
+        lines.extend(
+            (
+                f"命名覆盖 {coverage}",
+                f"无名块 {report.anonymous_block_count or 0}",
+                f"Unknown {report.recoverable_anonymous_count or 0}",
+                f"UnknownRaw {report.raw_fallback_count or 0}",
+            )
+        )
+    lines.extend(f"[警告] {warning}" for warning in report.warnings)
     if md.diagnostics:
         lines.append(f"组件诊断 {len(md.diagnostics)}")
         lines.extend(
-            f"[警告] {format_component_diagnostic(item)}"
-            for item in md.diagnostics[:5]
+            f"[警告] {format_component_diagnostic(item)}" for item in md.diagnostics
         )
     component_warnings = sum(
         item.severity in {DiagnosticSeverity.WARNING, DiagnosticSeverity.ERROR}

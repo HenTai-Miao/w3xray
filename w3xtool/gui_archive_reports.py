@@ -47,7 +47,9 @@ def _slk_block(md: MapData) -> GuiReportBlock:
     if not report.has_data:
         return GuiReportBlock("SLK", ())
     lines = [f"表文件 {len(report.files)}"]
-    lines.extend(f"{item.path}: {item.rows} 行 · {item.columns} 列" for item in report.files[:10])
+    lines.extend(
+        f"{item.path}: {item.rows} 行 · {item.columns} 列" for item in report.files
+    )
     return GuiReportBlock("SLK", tuple(lines))
 
 
@@ -58,5 +60,8 @@ def _gameplay_block(md: MapData) -> GuiReportBlock:
     if not constants:
         return GuiReportBlock("游戏常数", ())
     lines = [f"覆盖项 {len(constants)}"]
-    lines.extend(f"{item.section + '.' if item.section else ''}{item.key}={item.value}" for item in constants[:10])
+    lines.extend(
+        f"{item.section + '.' if item.section else ''}{item.key}={item.value}"
+        for item in constants
+    )
     return GuiReportBlock("游戏常数", tuple(lines))

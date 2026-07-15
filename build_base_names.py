@@ -8,6 +8,7 @@
     匹配大小写/斜杠不敏感、容忍 war3.w3mod\\ 前缀；--from-dir 会打印找到/未找到清单。
 重装/换语言/升级后可重跑本脚本刷新。
 """
+
 import os
 import re
 import sys
@@ -31,8 +32,8 @@ class DirSource:
         if not os.path.isdir(root):
             raise FileNotFoundError(f"--from-dir 目录不存在: {root}")
         self.root = root
-        self._by_rel = {}        # 规范化相对路径 -> 实际磁盘绝对路径
-        self._by_base = {}       # 文件名(小写) -> [规范化相对路径, ...]
+        self._by_rel = {}  # 规范化相对路径 -> 实际磁盘绝对路径
+        self._by_base = {}  # 文件名(小写) -> [规范化相对路径, ...]
         for dirpath, _dirs, files in os.walk(root):
             for fn in files:
                 full = os.path.join(dirpath, fn)
@@ -63,7 +64,9 @@ class DirSource:
         if bcands:
             best = min(bcands, key=len)
             if len(bcands) > 1:
-                print(f"  [warning] {name} 按文件名有 {len(bcands)} 个候选，取最短: {best}")
+                print(
+                    f"  [warning] {name} 按文件名有 {len(bcands)} 个候选，取最短: {best}"
+                )
             return self._by_rel[best]
         return None
 
@@ -107,18 +110,22 @@ def parse_strings(text: str, out: dict, fill_only=False):
     text = text.lstrip("﻿")
     section = None
     cur_name = None
-    cur_buff = None        # 魔法效果(buff)用 Bufftip 当游戏内名(如"狂战士")
-    cur_editor = None      # 部分 buff 只有 EditorName(如 BOsh="震荡波(施法者)")
+    cur_buff = None  # 魔法效果(buff)用 Bufftip 当游戏内名(如"狂战士")
+    cur_editor = None  # 部分 buff 只有 EditorName(如 BOsh="震荡波(施法者)")
     cur_suffix = None
 
     def flush(sec):
         if not sec:
             return
         if fill_only and sec in out:
-            return                               # 只补缺，不覆盖已有(中文)名
+            return  # 只补缺，不覆盖已有(中文)名
         # 优先级：普通名(Name) > buff 名(Bufftip) > 编辑器名(EditorName) > 后缀
-        v = (cur_name or cur_buff or cur_editor
-             or (cur_suffix.strip(" ()（）") if cur_suffix else None))
+        v = (
+            cur_name
+            or cur_buff
+            or cur_editor
+            or (cur_suffix.strip(" ()（）") if cur_suffix else None)
+        )
         if v:
             out[sec] = v
 
@@ -150,8 +157,11 @@ WESTRING_FILES = [r"UI\WorldEditStrings.txt", r"UI\WorldEditGameStrings.txt"]
 def report_dir_coverage(src):
     """文件夹模式：打印关键文件找到/未找到清单，便于排查重制版布局差异。"""
     slk = ["Units\\" + f for fs in SLK_GROUPS.values() for f in fs]
-    groups = [("名称(Strings/Func)", FILES), ("基础字段(SLK)", slk),
-              ("编辑器字符串", WESTRING_FILES)]
+    groups = [
+        ("名称(Strings/Func)", FILES),
+        ("基础字段(SLK)", slk),
+        ("编辑器字符串", WESTRING_FILES),
+    ]
     print("\n[--from-dir 覆盖报告]")
     for label, files in groups:
         missing = [f for f in files if not src.has_file(f)]
@@ -179,8 +189,12 @@ def build_sources(args):
 
 
 def _write_base_names(names: dict, out_dir: str):
-    lines = ["# 自动生成：游戏原版对象 码→中文名。由 build_base_names.py 提取。",
-             "# 重跑该脚本可刷新。请勿手改。", "", "BASE_NAMES = {"]
+    lines = [
+        "# 自动生成：游戏原版对象 码→中文名。由 build_base_names.py 提取。",
+        "# 重跑该脚本可刷新。请勿手改。",
+        "",
+        "BASE_NAMES = {",
+    ]
     for code in sorted(names):
         nm = names[code].replace("\\", "\\\\").replace('"', '\\"')
         lines.append(f'    {code!r}: "{nm}",')
@@ -208,8 +222,11 @@ def merge_names_from_dir(src_dir: str, out_dir: str):
         for fn in [f for f in FILES if kind in f]:
             if src.has_file(fn):
                 try:
-                    parse_strings(src.read_file(fn).decode("utf-8", "replace"),
-                                  names, fill_only=True)
+                    parse_strings(
+                        src.read_file(fn).decode("utf-8", "replace"),
+                        names,
+                        fill_only=True,
+                    )
                 except Exception as e:
                     print("  读取失败", fn, e)
     _write_base_names(names, out_dir)
@@ -221,7 +238,9 @@ def merge_names_from_dir(src_dir: str, out_dir: str):
 
 def main(args):
     if getattr(args, "merge_from_dir", None):
-        merge_names_from_dir(args.merge_from_dir, getattr(args, "out_dir", None) or "w3xtool")
+        merge_names_from_dir(
+            args.merge_from_dir, getattr(args, "out_dir", None) or "w3xtool"
+        )
         return
     out_dir = getattr(args, "out_dir", None) or "w3xtool"
     names = {}
@@ -245,14 +264,22 @@ def main(args):
         for fn in func_files:
             if a.has_file(fn):
                 try:
-                    parse_strings(a.read_file(fn).decode("utf-8", "replace"), names, fill_only=True)
+                    parse_strings(
+                        a.read_file(fn).decode("utf-8", "replace"),
+                        names,
+                        fill_only=True,
+                    )
                     total_files += 1
                 except Exception as e:
                     print("  读取失败", fn, e)
     print(f"解析 {total_files} 个文件，共 {len(names)} 个名称")
     # 写出 base_names.py
-    lines = ["# 自动生成：游戏原版对象 码→中文名。由 build_base_names.py 提取。",
-             "# 重跑该脚本可刷新。请勿手改。", "", "BASE_NAMES = {"]
+    lines = [
+        "# 自动生成：游戏原版对象 码→中文名。由 build_base_names.py 提取。",
+        "# 重跑该脚本可刷新。请勿手改。",
+        "",
+        "BASE_NAMES = {",
+    ]
     for code in sorted(names):
         nm = names[code].replace("\\", "\\\\").replace('"', '\\"')
         lines.append(f'    {code!r}: "{nm}",')
@@ -267,7 +294,7 @@ def main(args):
     # ---- 同时提取 WESTRING_ 编辑器字符串（地图对象常引用，如可破坏物名）----
     west = {}
     we_re = re.compile(r"^(WESTRING_\w+)\s*=\s*(.*)$")
-    for a in archives:                      # 后面的(补丁/本地化)覆盖前面的
+    for a in archives:  # 后面的(补丁/本地化)覆盖前面的
         for fn in WESTRING_FILES:
             if not a.has_file(fn):
                 continue
@@ -278,8 +305,12 @@ def main(args):
                     v = clean(m.group(2))
                     if v:
                         west[m.group(1)] = v
-    wl = ["# 自动生成：游戏编辑器字符串 WESTRING_xxx→文本。由 build_base_names.py 提取。",
-          "# 请勿手改。", "", "WESTRINGS = {"]
+    wl = [
+        "# 自动生成：游戏编辑器字符串 WESTRING_xxx→文本。由 build_base_names.py 提取。",
+        "# 请勿手改。",
+        "",
+        "WESTRINGS = {",
+    ]
     for k in sorted(west):
         v = west[k].replace("\\", "\\\\").replace('"', '\\"')
         wl.append(f'    "{k}": "{v}",')
@@ -292,25 +323,83 @@ def main(args):
 
 
 # ---- 基础对象字段库（解析游戏 *Data.slk，jass.slk 同款数据层）----
-SLK_NOISE = {"comment", "comments", "comment(s)", "sort", "version", "prio", "threat",
-             "valid", "useineditor", "inbeta", "code", "scriptname", "editorsuffix",
-             "editorname", "dependencyequivalents", "tilesets", "names", "ubertip",
-             "tip", "untip", "unubertip", "art", "missileart", "buttonpos"}
+SLK_NOISE = {
+    "comment",
+    "comments",
+    "comment(s)",
+    "sort",
+    "version",
+    "prio",
+    "threat",
+    "valid",
+    "useineditor",
+    "inbeta",
+    "code",
+    "scriptname",
+    "editorsuffix",
+    "editorname",
+    "dependencyequivalents",
+    "tilesets",
+    "names",
+    "untip",
+    "unubertip",
+    "missileart",
+    "buttonpos",
+}
 SLK_LABEL = {
-    "race": "种族", "def": "护甲", "deftype": "护甲类型", "hp": "生命", "realhp": "生命",
-    "mann": "魔法", "manan": "魔法", "regenhp": "生命回复", "regenmana": "魔法回复",
-    "goldcost": "金币", "lumbercost": "木材", "fmade": "提供人口", "fused": "占用人口",
-    "level": "等级", "spd": "移动速度", "sight": "白天视野", "nsight": "夜晚视野",
-    "movetp": "移动类型", "bountydice": "赏金骰子", "bountyplus": "赏金基础",
-    "dmgplus1": "攻击力", "dice1": "攻击骰子", "sides1": "骰面", "cool1": "攻击间隔",
-    "rangen1": "攻击距离", "atktype1": "攻击类型", "targs1": "可攻击目标",
-    "class": "分类", "cooldownid": "冷却组", "stockmax": "库存上限", "uses": "使用次数",
-    "abillist": "技能", "hero": "英雄技能", "item": "物品技能", "levels": "等级数",
-    "maxlevel": "最大等级", "goldbase": "基础金", "goldmod": "金增量",
-    "lumberbase": "基础木", "lumbermod": "木增量", "global": "全局",
+    "race": "种族",
+    "def": "护甲",
+    "deftype": "护甲类型",
+    "hp": "生命",
+    "realhp": "生命",
+    "mann": "魔法",
+    "manan": "魔法",
+    "regenhp": "生命回复",
+    "regenmana": "魔法回复",
+    "goldcost": "金币",
+    "lumbercost": "木材",
+    "fmade": "提供人口",
+    "fused": "占用人口",
+    "level": "等级",
+    "spd": "移动速度",
+    "sight": "白天视野",
+    "nsight": "夜晚视野",
+    "movetp": "移动类型",
+    "bountydice": "赏金骰子",
+    "bountyplus": "赏金基础",
+    "dmgplus1": "攻击力",
+    "dice1": "攻击骰子",
+    "sides1": "骰面",
+    "cool1": "攻击间隔",
+    "rangen1": "攻击距离",
+    "atktype1": "攻击类型",
+    "targs1": "可攻击目标",
+    "class": "分类",
+    "cooldownid": "冷却组",
+    "stockmax": "库存上限",
+    "uses": "使用次数",
+    "abillist": "技能",
+    "hero": "英雄技能",
+    "item": "物品技能",
+    "levels": "等级数",
+    "maxlevel": "最大等级",
+    "goldbase": "基础金",
+    "goldmod": "金增量",
+    "lumberbase": "基础木",
+    "lumbermod": "木增量",
+    "global": "全局",
+    "art": "图标",
+    "tip": "提示",
+    "ubertip": "说明",
 }
 SLK_GROUPS = {
-    "单位": ["UnitData.slk", "UnitBalance.slk", "UnitUI.slk", "UnitWeapons.slk", "UnitAbilities.slk"],
+    "单位": [
+        "UnitData.slk",
+        "UnitBalance.slk",
+        "UnitUI.slk",
+        "UnitWeapons.slk",
+        "UnitAbilities.slk",
+    ],
     "物品": ["ItemData.slk"],
     "技能": ["AbilityData.slk"],
     "科技": ["UpgradeData.slk"],
@@ -344,13 +433,17 @@ def build_base_objects(archives, out_dir):
                 if k.lower() in SLK_NOISE or not str(v).strip() or str(v) == "0":
                     continue
                 fields.append((SLK_LABEL.get(k.lower(), k), str(v)))
-            out[code] = (cat, fields[:24])
-    lines = ["# 自动生成：游戏基础对象默认字段(来自 *Data.slk)。由 build_base_names.py 提取。",
-             "# 请勿手改。", "", "BASE_OBJECTS = {"]
+            out[code] = (cat, fields)
+    lines = [
+        "# 自动生成：游戏基础对象默认字段(来自 *Data.slk)。由 build_base_names.py 提取。",
+        "# 请勿手改。",
+        "",
+        "BASE_OBJECTS = {",
+    ]
     for code in sorted(out):
         cat, fields = out[code]
         fl = ", ".join(f'("{lab}", {val!r})' for lab, val in fields)
-        lines.append(f'    {code!r}: ({cat!r}, [{fl}]),')
+        lines.append(f"    {code!r}: ({cat!r}, [{fl}]),")
     lines.append("}")
     with open(os.path.join(out_dir, "base_objects.py"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
@@ -361,14 +454,25 @@ if __name__ == "__main__":
     import argparse
 
     p = argparse.ArgumentParser(
-        description="从游戏数据生成原版对象内置数据（base_names/base_objects/westrings）")
-    p.add_argument("--from-dir", dest="from_dir",
-                   help="从已提取的散文件夹读（CASC/重制版：先用 CascView 或 "
-                        "casc-extract 导出，再指向该文件夹）")
-    p.add_argument("--merge-from-dir", dest="merge_from_dir",
-                   help="只补缺地把散文件夹里的名字并入现有 BASE_NAMES（只重写 base_names.py，"
-                        "不碰 westrings/base_objects）；用于补 buff 等漏掉的名字")
+        description="从游戏数据生成原版对象内置数据（base_names/base_objects/westrings）"
+    )
+    p.add_argument(
+        "--from-dir",
+        dest="from_dir",
+        help="从已提取的散文件夹读（CASC/重制版：先用 CascView 或 "
+        "casc-extract 导出，再指向该文件夹）",
+    )
+    p.add_argument(
+        "--merge-from-dir",
+        dest="merge_from_dir",
+        help="只补缺地把散文件夹里的名字并入现有 BASE_NAMES（只重写 base_names.py，"
+        "不碰 westrings/base_objects）；用于补 buff 等漏掉的名字",
+    )
     p.add_argument("--game", help="经典 MPQ 安装目录（默认硬编码 GAME 路径）")
-    p.add_argument("--out-dir", dest="out_dir", default="w3xtool",
-                   help="生成的 .py 写到哪个目录（默认 w3xtool）")
+    p.add_argument(
+        "--out-dir",
+        dest="out_dir",
+        default="w3xtool",
+        help="生成的 .py 写到哪个目录（默认 w3xtool）",
+    )
     main(p.parse_args())

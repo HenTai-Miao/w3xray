@@ -26,6 +26,7 @@ from .knowledge_io import format_lines, write_text
 from .knowledge_manifest import format_knowledge_manifest
 from .knowledge_object_exports import (
     format_box_id_text as format_box_id_text,
+    format_object_fields,
     format_object_text_icons,
     write_box_ids,
     write_object_ids,
@@ -57,6 +58,7 @@ from .trigger_exports import (
 )
 from .triggerdata import TriggerDataTable, load_trigger_data_from_source
 from .game_data_source import (
+    discover_game_data_path,
     open_game_data_source,
     probe_game_data_path,
 )
@@ -76,8 +78,9 @@ def write_knowledge_pack_contents(
     game_data_path: str | None,
 ) -> tuple[int, ExtractionCapabilities]:
     _ = external_names
-    trigger_data, inventory_view = _load_trigger_data(game_data_path)
-    probe = probe_game_data_path(game_data_path)
+    effective_game_data_path = game_data_path or discover_game_data_path()
+    trigger_data, inventory_view = _load_trigger_data(effective_game_data_path)
+    probe = probe_game_data_path(effective_game_data_path)
     completeness = build_extraction_completeness_report(md)
     capabilities = ExtractionCapabilities(
         game_data_kind=probe.kind if probe.is_readable else "missing",
@@ -108,6 +111,7 @@ def write_knowledge_pack_contents(
     count += write_text(out_dir, "组件诊断.tsv", format_component_diagnostics_tsv(md))
     count += write_object_ids(md, os.path.join(out_dir, "对象ID"))
     count += write_box_ids(md, os.path.join(out_dir, "盒子兼容ID"))
+    count += write_text(out_dir, "对象字段.tsv", format_object_fields(md))
     count += write_text(out_dir, "对象文本与图标.tsv", format_object_text_icons(md))
     count += write_text(
         out_dir, "对象完整描述.tsv", format_object_text_tsv(md.object_texts)
@@ -139,7 +143,7 @@ def write_knowledge_pack_contents(
         out_dir, "UI文本引用.tsv", format_ui_text_references_tsv(ui_report)
     )
     count += write_resources(
-        md, os.path.join(out_dir, "资源"), game_data_path
+        md, os.path.join(out_dir, "资源"), effective_game_data_path
     )
     count += write_terrain_exports(md, out_dir)
     count += write_unknown_files(md, os.path.join(out_dir, "未知文件"))

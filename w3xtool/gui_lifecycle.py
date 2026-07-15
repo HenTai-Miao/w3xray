@@ -8,7 +8,11 @@ import os
 from tkinter import filedialog
 
 from .game_data_inventory import supports_inventory
-from .game_data_source import open_game_data_source, probe_game_data_path
+from .game_data_source import (
+    discover_game_data_path,
+    open_game_data_source,
+    probe_game_data_path,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -24,7 +28,7 @@ class GuiLifecycleMixin:
         try:
             with open(self._config_path(), "r", encoding="utf-8") as file:
                 cfg = json.load(file)
-        except (OSError, json.JSONDecodeError):
+        except OSError, json.JSONDecodeError:
             cfg = {}
         cfg.update(values)
         try:
@@ -37,7 +41,7 @@ class GuiLifecycleMixin:
         try:
             with open(self._config_path(), "r", encoding="utf-8") as file:
                 return json.load(file)
-        except (OSError, json.JSONDecodeError):
+        except OSError, json.JSONDecodeError:
             return {}
 
     def _restore_last_dir(self) -> None:
@@ -60,7 +64,11 @@ class GuiLifecycleMixin:
             self.external_listfile_path = listfile
         if game_data and os.path.isdir(game_data):
             self.game_data_path = game_data
-        if author_bundle and os.path.isfile(os.path.join(author_bundle, "w3xray-author-bundle.tsv")):
+        elif discovered := discover_game_data_path():
+            self.game_data_path = discovered
+        if author_bundle and os.path.isfile(
+            os.path.join(author_bundle, "w3xray-author-bundle.tsv")
+        ):
             self.author_bundle_path = author_bundle
         self._refresh_external_source_labels()
 
@@ -83,7 +91,9 @@ class GuiLifecycleMixin:
         self._reload_active_source()
 
     def on_pick_game_data_dir(self) -> None:
-        path = filedialog.askdirectory(title="选择已导出的魔兽重制版数据目录")
+        path = filedialog.askdirectory(
+            title="选择 Warcraft III 安装目录或已导出数据目录"
+        )
         if not path:
             return
         self.game_data_path = path
@@ -98,7 +108,9 @@ class GuiLifecycleMixin:
 
     def _refresh_external_source_labels(self) -> None:
         if hasattr(self, "external_listfile_label"):
-            self.external_listfile_label.configure(text=_source_label("listfile", self.external_listfile_path))
+            self.external_listfile_label.configure(
+                text=_source_label("listfile", self.external_listfile_path)
+            )
         if hasattr(self, "external_listfile_clear"):
             self.external_listfile_clear.configure(
                 state="normal" if self.external_listfile_path else "disabled",
@@ -137,19 +149,24 @@ class GuiLifecycleMixin:
             try:
                 self.icons.close()
             except OSError:
-                _LOGGER.debug("failed to close icon resolver during shutdown", exc_info=True)
+                _LOGGER.debug(
+                    "failed to close icon resolver during shutdown", exc_info=True
+                )
         self._shutdown_current_map_gui()
         self.destroy()
 
     def on_open(self) -> None:
         path = filedialog.askopenfilename(
             title="选择魔兽地图或战役",
-            filetypes=[("魔兽地图/战役", "*.w3x *.w3m *.w3n"), ("所有文件", "*.*")])
+            filetypes=[("魔兽地图/战役", "*.w3x *.w3m *.w3n"), ("所有文件", "*.*")],
+        )
         if not path:
             return
         self._start_path_load(path)
 
-    def _on_loaded(self, md, cmds, recipes=None, resolver=None, views=None, campaign_path=None) -> None:
+    def _on_loaded(
+        self, md, cmds, recipes=None, resolver=None, views=None, campaign_path=None
+    ) -> None:
         if views:
             self._set_campaign_views(views, campaign_path)
         else:
@@ -177,10 +194,12 @@ class GuiLifecycleMixin:
         self._refresh_trigger_eca()
         counts = md.category_counts()
         total = sum(counts.values())
-        self.status.configure(text=f"已加载 {md.name} · {total} 对象 · "
-                              f"{len(cmds)} 指令 · "
-                              f"{len(self.recipes)} 合成 · "
-                              + "  ".join(f"{category}{count}" for category, count in counts.items()))
+        self.status.configure(
+            text=f"已加载 {md.name} · {total} 对象 · "
+            f"{len(cmds)} 指令 · "
+            f"{len(self.recipes)} 合成 · "
+            + "  ".join(f"{category}{count}" for category, count in counts.items())
+        )
 
 
 def _source_label(prefix: str, path: str | None) -> str:

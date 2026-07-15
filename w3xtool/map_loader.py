@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from typing import Final
 
+from .archive_inventory import InventoryArchive, build_archive_inventory
 from .archive_source import PathArchiveSource
 from .base_objects import BASE_OBJECTS
 from .campaign_child_loader import load_campaign_children
@@ -20,6 +21,7 @@ from .extraction_diagnostics import (
 )
 from .item_relation_builder import build_item_relation_index
 from .load_context import MapLoadContext
+from .map_archive_open import open_map_archive, source_sha256
 from .map_archive_reader import MapArchiveReader
 from .map_components import (
     _add_preplaced,
@@ -35,6 +37,7 @@ from .object_candidates import OBJECT_EXTS, collect_object_candidates
 from .object_pipeline import populate_object_pipeline_from_context
 from .references import build_reference_graph
 from .script_sources import analysis_script_texts, collect_readable_scripts
+from .supplemented_source import SupplementedPathArchiveSource
 from .wts import parse_wts, validate_wts_component
 
 _MAX_CAMPAIGN_CHILDREN: Final = 256
@@ -51,32 +54,17 @@ def load_map(
     path = os.fspath(path)
     if load_context is None:
         load_context = MapLoadContext()
-    from .author_plaintext_bundle import (
-        PlaintextOverlayArchive,
-        load_author_plaintext_bundle,
-    )
-
-    bundle = None
-    if _depth == 0 and load_context.author_bundle_path is not None:
-        bundle = load_author_plaintext_bundle(load_context.author_bundle_path, path)
-    try:
-        base_archive = MPQArchive(path)
-    except (OSError, ValueError):
-        if bundle is None:
-            raise
-        base_archive = None
-    if bundle is not None:
-        archive: MapArchiveReader = PlaintextOverlayArchive(
-            path, bundle, base_archive
-        )
-    elif base_archive is not None:
-        archive = base_archive
-    else:
-        raise FileNotFoundError(path)
-    try:
-        return _load_map_impl(archive, path, _depth, shared_index, load_context)
-    finally:
-        archive.close()
+    with open_map_archive(
+        path,
+        author_bundle_path=load_context.author_bundle_path if _depth == 0 else None,
+        compat_bundle_path=load_context.compat_bundle_path if _depth == 0 else None,
+        archive_factory=MPQArchive,
+    ) as archive:
+        md = _load_map_impl(archive, path, _depth, shared_index, load_context)
+        md.archive_source = _root_archive_source(path, load_context)
+        if isinstance(archive, InventoryArchive):
+            md.extraction_ledger = build_archive_inventory(archive, source_sha256(path))
+        return md
 
 
 def _load_map_impl(
@@ -208,6 +196,19 @@ def _load_map_impl(
         )
 
     return md
+
+
+def _root_archive_source(
+    path: str,
+    context: MapLoadContext,
+) -> PathArchiveSource | SupplementedPathArchiveSource:
+    if context.author_bundle_path is None and context.compat_bundle_path is None:
+        return PathArchiveSource(path)
+    return SupplementedPathArchiveSource(
+        path,
+        context.author_bundle_path,
+        context.compat_bundle_path,
+    )
 
 
 def _campaign_inner_maps(archive: MapArchiveReader, known_names=(), w3f=None):
