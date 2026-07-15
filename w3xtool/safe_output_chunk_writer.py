@@ -6,6 +6,8 @@ from collections.abc import Iterable
 import errno
 import os
 
+from .durable_io import sync_file_descriptor
+
 
 def write_chunks_to_descriptor(descriptor: int, chunks: Iterable[bytes]) -> int:
     """Write every chunk, handling partial raw writes without buffering all data."""
@@ -18,4 +20,5 @@ def write_chunks_to_descriptor(descriptor: int, chunks: Iterable[bytes]) -> int:
                 raise BlockingIOError(errno.EIO, "staged output write made no progress")
             total += written
             remaining = remaining[written:]
+    sync_file_descriptor(descriptor)
     return total

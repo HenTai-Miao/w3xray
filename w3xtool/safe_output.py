@@ -16,6 +16,7 @@ from w3xtool.safe_output_anchored import write_bytes_anchored
 from w3xtool.safe_output_anchored import write_chunks_anchored
 from w3xtool.safe_output_chunk_writer import write_chunks_to_descriptor
 from w3xtool.safe_output_models import SafeWriteResult, SafeWriteStatus
+from w3xtool.safe_output_path_publication import publish_staged_path
 
 _UNSAFE_OPEN_ERRNOS: Final = frozenset((errno.EISDIR, errno.ELOOP, errno.ENOTDIR))
 
@@ -27,9 +28,7 @@ def safe_relative_path(name: str) -> PurePosixPath | None:
     if PureWindowsPath(name).drive:
         return None
     parts = tuple(
-        part
-        for part in name.replace("\\", "/").split("/")
-        if part not in ("", ".")
+        part for part in name.replace("\\", "/").split("/") if part not in ("", ".")
     )
     if not parts or ".." in parts:
         return None
@@ -134,7 +133,7 @@ def _write_chunks_by_path(
         if stage_error is not None:
             return SafeWriteResult(SafeWriteStatus.UNSAFE, destination, 0, stage_error)
         try:
-            os.replace(staged_path, destination)
+            publish_staged_path(staged_path, destination)
         except OSError as exc:
             return SafeWriteResult(_open_failure_status(exc), destination, 0, str(exc))
         return SafeWriteResult(SafeWriteStatus.WRITTEN, destination, size)

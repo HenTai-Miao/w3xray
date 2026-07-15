@@ -14,6 +14,7 @@ import secrets
 import stat
 from typing import Final
 
+from w3xtool.durable_io import sync_directory_descriptor
 from w3xtool.safe_output_models import SafeWriteResult, SafeWriteStatus
 from w3xtool.safe_output_staging import discard_file
 
@@ -92,6 +93,12 @@ def _backup_destination(parent_descriptor: int, name: str) -> str | None:
             continue
         except FileNotFoundError:
             return None
+        try:
+            sync_directory_descriptor(parent_descriptor)
+        except OSError:
+            _ = _unlink_error(parent_descriptor, backup_name)
+            sync_directory_descriptor(parent_descriptor)
+            raise
         return backup_name
     raise FileExistsError(errno.EEXIST, "could not allocate destination backup")
 
@@ -129,9 +136,23 @@ def _publish_new_destination(
             SafeWriteStatus.UNSAFE,
             containment_error,
         )
+    try:
+        sync_directory_descriptor(parent_descriptor)
+    except OSError as exc:
+        return _discard_files(
+            parent_descriptor,
+            (destination_name, staged_name),
+            destination,
+            SafeWriteStatus.FAILED,
+            str(exc),
+        )
     cleanup_error = _unlink_error(parent_descriptor, staged_name)
     if cleanup_error is not None:
         return SafeWriteResult(SafeWriteStatus.FAILED, destination, 0, cleanup_error)
+    try:
+        sync_directory_descriptor(parent_descriptor)
+    except OSError as exc:
+        return SafeWriteResult(SafeWriteStatus.FAILED, destination, 0, str(exc))
     return None
 
 
@@ -176,9 +197,28 @@ def _replace_with_backup(
             0,
             containment_error,
         )
+    try:
+        sync_directory_descriptor(parent_descriptor)
+    except OSError as exc:
+        reason = str(exc)
+        try:
+            os.rename(
+                backup_name,
+                destination_name,
+                src_dir_fd=parent_descriptor,
+                dst_dir_fd=parent_descriptor,
+            )
+            sync_directory_descriptor(parent_descriptor)
+        except OSError as restore_exc:
+            reason = f"{reason}; restore failed: {restore_exc}"
+        return SafeWriteResult(SafeWriteStatus.FAILED, destination, 0, reason)
     cleanup_error = _unlink_error(parent_descriptor, backup_name)
     if cleanup_error is not None:
         return SafeWriteResult(SafeWriteStatus.FAILED, destination, 0, cleanup_error)
+    try:
+        sync_directory_descriptor(parent_descriptor)
+    except OSError as exc:
+        return SafeWriteResult(SafeWriteStatus.FAILED, destination, 0, str(exc))
     return None
 
 
@@ -193,6 +233,10 @@ def _discard_files(
         cleanup_error = _unlink_error(parent_descriptor, name)
         if cleanup_error is not None:
             reason = f"{reason}; cleanup failed: {cleanup_error}"
+    try:
+        sync_directory_descriptor(parent_descriptor)
+    except OSError as exc:
+        reason = f"{reason}; cleanup sync failed: {exc}"
     return SafeWriteResult(status, destination, 0, reason)
 
 
