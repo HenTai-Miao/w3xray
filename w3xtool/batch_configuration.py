@@ -39,12 +39,18 @@ class BatchConfigurationError(ValueError):
         return self.detail
 
 
-@dataclass(frozen=True, slots=True)
 class BatchOutputError(OSError):
     """One authoritative batch checkpoint could not be published."""
 
-    path: str
+    __slots__ = ("detail", "path")
+
     detail: str
+    path: str
+
+    def __init__(self, path: str, detail: str) -> None:
+        super().__init__(detail)
+        self.path = path
+        self.detail = detail
 
     @override
     def __str__(self) -> str:

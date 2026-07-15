@@ -1,4 +1,4 @@
-"""Strict semantic parser for authoritative schema-3 batch state."""
+"""Strict semantic parser for authoritative schema-4 batch state."""
 
 from __future__ import annotations
 

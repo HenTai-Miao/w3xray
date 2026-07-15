@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from typing import Final
 
 from .archive_inventory import InventoryArchive, build_archive_inventory
@@ -48,7 +49,7 @@ _MAX_CAMPAIGN_READ_BYTES: Final = 512 * 1024 * 1024
 def load_map(
     path: str,
     _depth: int = 0,
-    shared_index: dict[str, GameObject] | None = None,
+    shared_index: Mapping[tuple[str, str], GameObject] | None = None,
     load_context: MapLoadContext | None = None,
 ) -> MapData:
     path = os.fspath(path)
@@ -71,7 +72,7 @@ def _load_map_impl(
     archive: MapArchiveReader,
     path: str,
     _depth: int,
-    shared_index: dict[str, GameObject] | None,
+    shared_index: Mapping[tuple[str, str], GameObject] | None,
     load_context: MapLoadContext,
 ) -> MapData:
     md = MapData(

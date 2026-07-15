@@ -204,6 +204,23 @@ def test_item_skill_relations_keep_unknown_skill_as_unresolved_evidence() -> Non
     assert unresolved.unresolved_reason
 
 
+def test_item_skill_relation_does_not_misclassify_equipment_as_a_source() -> None:
+    # Given: one item provides indexed ability and shared-cooldown relations.
+    md = _map_with_structural_sources()
+
+    # When: object fields are converted into the unified relation index.
+    skill_rows = tuple(
+        row
+        for row in build_structural_item_relations(md)
+        if row.kind
+        in {ItemRelationKind.ITEM_ABILITY, ItemRelationKind.COOLDOWN_ABILITY}
+    )
+
+    # Then: the item remains the equipment endpoint, not an acquisition source.
+    assert skill_rows
+    assert all(row.source is None for row in skill_rows)
+
+
 def test_shop_without_placement_remains_as_partial_type_level_evidence() -> None:
     # Given: a defined shop has no preplaced instance.
     shop = _object("单位", "nshp", "动态商店", fields={"Sellitems": "I001"})

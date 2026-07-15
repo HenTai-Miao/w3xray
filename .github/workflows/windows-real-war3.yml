@@ -6,6 +6,9 @@ permissions:
 on:
   workflow_dispatch:
     inputs:
+      source_sha:
+        description: Full 40-character reviewed commit SHA for the protected runner
+        required: true
       war3_dir:
         description: Warcraft III installation directory on the self-hosted runner
         required: true
@@ -13,14 +16,13 @@ on:
 
 jobs:
   real-install:
-    if: github.ref == 'refs/heads/local'
     runs-on: [self-hosted, Windows, X64, w3xray-war3]
     environment: w3xray-real-war3
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: local
+          ref: ${{ inputs.source_sha }}
           persist-credentials: false
       - uses: astral-sh/setup-uv@v6
         with:
@@ -28,9 +30,23 @@ jobs:
       - name: Build, quality-gate, test, package, and execute against real CASC
         shell: powershell
         env:
+          SOURCE_SHA_INPUT: ${{ inputs.source_sha }}
           W3XRAY_ACCEPTANCE_WAR3_DIR: ${{ inputs.war3_dir }}
           W3XRAY_ACCEPTANCE_EVIDENCE_DIR: ${{ github.workspace }}\artifacts\windows-real-war3
         run: |
+          $expectedSha = $env:SOURCE_SHA_INPUT.Trim()
+          if ($expectedSha -notmatch '^[0-9a-fA-F]{40}$') {
+            throw "source_sha must be a full 40-character commit SHA"
+          }
+          $expectedSha = $expectedSha.ToLowerInvariant()
+          $actualSha = (git rev-parse HEAD).Trim().ToLowerInvariant()
+          if ($LASTEXITCODE -ne 0) {
+            throw "Unable to resolve checked-out HEAD"
+          }
+          if ($actualSha -ne $expectedSha) {
+            throw "Checked-out HEAD $actualSha does not match reviewed SHA $expectedSha"
+          }
+          Write-Output "SOURCE_SHA=$actualSha"
           powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
             -War3Dir $env:W3XRAY_ACCEPTANCE_WAR3_DIR `
             -EvidenceDir $env:W3XRAY_ACCEPTANCE_EVIDENCE_DIR

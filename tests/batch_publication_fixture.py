@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import csv
 from dataclasses import replace
 from pathlib import Path
 
+from w3xtool.batch_tsv import format_tsv_rows
 from w3xtool.batch_manifest_models import CONTENT_MANIFEST_NAME, OWNERSHIP_MARKER_NAME
 from w3xtool.batch_map_manifest import finalize_map_manifest
 from w3xtool.batch_models import MapBatchResult, MapBatchState, SourceFingerprint
@@ -109,35 +109,34 @@ def publish_client_fill_result(
     _ = write_empty_publication(destination, result, transaction_id)
     (destination / CONTENT_MANIFEST_NAME).unlink()
     (destination / OWNERSHIP_MARKER_NAME).unlink()
-    with (destination / "对象完整描述.tsv").open(
-        "w",
+    rows: list[tuple[str, ...]] = [OBJECT_TEXT_REPORT_HEADER]
+    for evidence_index, (role, raw_value) in enumerate(values, start=1):
+        rows.append(
+            (
+                "物品",
+                "ratf",
+                "ratf",
+                "戒指",
+                "否",
+                role,
+                "utip" if role == "基础提示" else "utub",
+                "提示文本",
+                "",
+                raw_value,
+                raw_value,
+                "客户端",
+                "Units\\ItemStrings.txt",
+                "客户端补全",
+                "否",
+                "",
+                str(evidence_index),
+            )
+        )
+    (destination / "对象完整描述.tsv").write_text(
+        format_tsv_rows(rows),
         encoding="utf-8",
         newline="",
-    ) as handle:
-        writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
-        writer.writerow(OBJECT_TEXT_REPORT_HEADER)
-        for evidence_index, (role, raw_value) in enumerate(values, start=1):
-            writer.writerow(
-                (
-                    "物品",
-                    "ratf",
-                    "ratf",
-                    "戒指",
-                    "否",
-                    role,
-                    "utip" if role == "基础提示" else "utub",
-                    "提示文本",
-                    "",
-                    raw_value,
-                    raw_value,
-                    "客户端",
-                    "Units\\ItemStrings.txt",
-                    "客户端补全",
-                    "否",
-                    "",
-                    str(evidence_index),
-                )
-            )
+    )
     finalized = replace(
         result,
         description_counts=(("客户端补全", len(values)),),

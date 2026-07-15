@@ -2,16 +2,24 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 import shutil
-from typing import assert_never, override
+from typing import Final, assert_never, override
 
 from .batch_configuration import BatchOptions
 from .batch_global_publication import load_current_generation
+from .batch_global_models import GlobalGeneration
 from .batch_manifest_validation import verify_map_publication
-from .batch_models import MapBatchResult, MapBatchState
+from .batch_models import BatchState, MapBatchResult, MapBatchState
+from .batch_reports import parse_batch_state_json
 from .batch_runner import fingerprint_source, run_batch
 from .batch_runtime import BatchAction, BatchProgress
+from .bounded_file import read_bounded_regular_file
+from .safe_output import safe_relative_path
+
+
+_MAX_STATE_BYTES: Final = 512 * 1024 * 1024
 
 
 class BatchAcceptanceError(RuntimeError):
@@ -28,6 +36,87 @@ class BatchAcceptanceError(RuntimeError):
     @override
     def __str__(self) -> str:
         return self.detail
+
+
+@dataclass(frozen=True, slots=True)
+class AuthoritativeBatch:
+    """One validated pointer, compatibility mirror, and exact map directory set."""
+
+    generation: GlobalGeneration
+    publications: tuple[tuple[MapBatchResult, Path], ...]
+
+
+def require_authoritative_batch(
+    output_root: str | Path,
+    expected_state: BatchState | None = None,
+) -> AuthoritativeBatch:
+    """Require exact agreement between pointer, mirrors, directories, and manifests."""
+    output = Path(output_root)
+    generation = load_current_generation(output)
+    if generation is None:
+        raise BatchAcceptanceError("current global generation is invalid")
+    if expected_state is not None and generation.state != expected_state:
+        raise BatchAcceptanceError("current global generation changed")
+    try:
+        payload, _identity = read_bounded_regular_file(
+            output / "批量提取状态.json",
+            _MAX_STATE_BYTES,
+        )
+        mirror = parse_batch_state_json(payload.decode("utf-8"))
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise BatchAcceptanceError("compatibility mirror is invalid") from exc
+    if mirror != generation.state:
+        raise BatchAcceptanceError(
+            "compatibility mirror disagrees with current pointer"
+        )
+    maps_root = output / "地图"
+    if output.is_symlink() or maps_root.is_symlink() or not maps_root.is_dir():
+        raise BatchAcceptanceError("authoritative map root is unsafe")
+    publications = _authoritative_publications(maps_root, generation.state)
+    expected_names = {directory.name for _result, directory in publications}
+    children = tuple(maps_root.iterdir())
+    if (
+        len(children) != len(expected_names)
+        or {child.name for child in children} != expected_names
+        or any(child.is_symlink() or not child.is_dir() for child in children)
+    ):
+        raise BatchAcceptanceError("authoritative map directory set is not exact")
+    for result, directory in publications:
+        validation = verify_map_publication(directory, result)
+        if not validation.valid:
+            raise BatchAcceptanceError(
+                f"map publication validation failed: {validation.code}"
+            )
+    return AuthoritativeBatch(generation, publications)
+
+
+def _authoritative_publications(
+    maps_root: Path,
+    state: BatchState,
+) -> tuple[tuple[MapBatchResult, Path], ...]:
+    publications: list[tuple[MapBatchResult, Path]] = []
+    names: set[str] = set()
+    for result in state.results:
+        match result.state:
+            case (
+                MapBatchState.COMPLETE
+                | MapBatchState.PARTIAL
+                | MapBatchState.RESTRICTED
+            ):
+                pass
+            case MapBatchState.FAILED | MapBatchState.CANCELLED:
+                raise BatchAcceptanceError("authority contains an unpublished result")
+            case unreachable:
+                assert_never(unreachable)
+        relative = safe_relative_path(result.output_directory)
+        if relative is None or len(relative.parts) != 2 or relative.parts[0] != "地图":
+            raise BatchAcceptanceError("authority contains an unsafe map directory")
+        identity = relative.name.casefold()
+        if identity in names:
+            raise BatchAcceptanceError("authority contains duplicate map directories")
+        names.add(identity)
+        publications.append((result, maps_root / relative.name))
+    return tuple(publications)
 
 
 def check_batch_publication(map_path: Path, evidence_root: Path) -> str:
@@ -56,17 +145,7 @@ def check_batch_publication(map_path: Path, evidence_root: Path) -> str:
     _require_action(second_progress, BatchAction.REUSED, "second")
     if second_result != first_result:
         raise BatchAcceptanceError("reused result changed persisted map evidence")
-    generation = load_current_generation(output_root)
-    if generation is None or generation.state != second:
-        raise BatchAcceptanceError("current global generation is invalid")
-    validation = verify_map_publication(
-        output_root / second_result.output_directory,
-        second_result,
-    )
-    if not validation.valid:
-        raise BatchAcceptanceError(
-            f"map publication validation failed: {validation.code}"
-        )
+    authority = require_authoritative_batch(output_root, second)
     leftovers = _publication_leftovers(output_root)
     if leftovers:
         raise BatchAcceptanceError(f"private transaction leftovers: {leftovers[0]}")
@@ -76,8 +155,8 @@ def check_batch_publication(map_path: Path, evidence_root: Path) -> str:
         raise BatchAcceptanceError("acceptance fixture changed during batch acceptance")
     return (
         f"source_sha256={original_before.sha256}; "
-        f"manifest_sha256={validation.manifest_sha256}; "
-        f"generation={generation.generation_id}; "
+        f"manifest_sha256={second_result.manifest_sha256}; "
+        f"generation={authority.generation.generation_id}; "
         f"state={second_result.state.value}; first=processed; second=reused; leftovers=0"
     )
 
@@ -149,4 +228,9 @@ def _publication_leftovers(output_root: Path) -> tuple[Path, ...]:
     )
 
 
-__all__ = ("BatchAcceptanceError", "check_batch_publication")
+__all__ = (
+    "AuthoritativeBatch",
+    "BatchAcceptanceError",
+    "check_batch_publication",
+    "require_authoritative_batch",
+)

@@ -1,4 +1,4 @@
-"""Read-only acceptance checks for the 39-map schema-v2 publication."""
+"""Read-only acceptance checks for the 39-map schema-4 publication."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ from typing import Final
 
 import pytest
 
+from w3xtool.acceptance_batch import require_authoritative_batch
 from w3xtool.batch_models import BATCH_SCHEMA_VERSION, MapBatchResult
-from w3xtool.batch_state_io import parse_batch_state_json
 from w3xtool.item_relation_exports import (
     format_equipment_skills_tsv,
     format_item_acquisition_tsv,
@@ -109,20 +109,18 @@ def acceptance_context() -> AcceptanceContext:
         )
     )
     old_by_digest = _output_directories(old_root)
-    state = parse_batch_state_json(
-        (new_root / "批量提取状态.json").read_text(encoding="utf-8")
-    )
+    authority = require_authoritative_batch(new_root)
+    state = authority.generation.state
     new_by_digest = {
-        result.source.sha256: new_root / result.output_directory
-        for result in state.results
+        result.source.sha256: directory for result, directory in authority.publications
     }
     return AcceptanceContext(maps, old_by_digest, new_by_digest, state.results)
 
 
-def test_v2_batch_covers_all_sources_and_required_artifacts(
+def test_v4_batch_covers_all_sources_and_required_artifacts(
     acceptance_context: AcceptanceContext,
 ) -> None:
-    # Given: schema-v2 state and the read-only source directory.
+    # Given: schema-4 state and the read-only source directory.
     context = acceptance_context
 
     # When: publication identities and per-map files are enumerated.
@@ -132,7 +130,7 @@ def test_v2_batch_covers_all_sources_and_required_artifacts(
     }
 
     # Then: every one of the 39 sources has one complete artifact set.
-    assert BATCH_SCHEMA_VERSION == 3
+    assert BATCH_SCHEMA_VERSION == 4
     assert len(context.maps) == len(context.results) == 39
     assert source_paths == published_paths
     assert set(context.old_by_digest) == set(context.new_by_digest)
@@ -140,10 +138,10 @@ def test_v2_batch_covers_all_sources_and_required_artifacts(
         assert _REQUIRED_ARTIFACTS <= {path.name for path in output.iterdir()}
 
 
-def test_every_old_non_placeholder_raw_text_remains_v2_evidence(
+def test_every_old_non_placeholder_raw_text_remains_v4_evidence(
     acceptance_context: AcceptanceContext,
 ) -> None:
-    # Given: legacy reports and matching v2 outputs are joined by source digest.
+    # Given: legacy reports and matching v4 outputs are joined by source digest.
     context = acceptance_context
 
     # When: every legacy raw tip and description is compared with v2 raw evidence.

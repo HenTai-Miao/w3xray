@@ -95,6 +95,35 @@ class ItemRelationGuiTest(GuiTestCase):
         assert self.app.tabs.get() == "对象编辑器"
         assert self.app.detail_title.cget("text") == "掉落怪"
 
+    def test_equipment_skill_target_opens_skill_object_detail(self) -> None:
+        # Given: an equipment-skill row links one item to one extracted skill.
+        self.app._render_map(_map_with_relations(), [], [], None)
+        iid = _iid_for_kind(self.app, ItemRelationKind.ITEM_ABILITY)
+        self.app.item_relation_tree.selection_set(iid)
+        self.app._show_relation_evidence()
+
+        # When: the default target navigation action runs.
+        self.app._open_relation_target()
+
+        # Then: the skill, not the owning equipment, opens in object details.
+        assert self.app.tabs.get() == "对象编辑器"
+        assert self.app.detail_title.cget("text") == "烈焰技能"
+
+    def test_equipment_skill_row_displays_skill_target_and_item_source(self) -> None:
+        # Given: an equipment-skill row is visible in the relationship table.
+        self.app._render_map(_map_with_relations(), [], [], None)
+        iid = _iid_for_kind(self.app, ItemRelationKind.ITEM_ABILITY)
+
+        # When: the row is selected for navigation.
+        self.app.item_relation_tree.selection_set(iid)
+        self.app._show_relation_evidence()
+        values = self.app.item_relation_tree.item(iid, "values")
+
+        # Then: target/source columns and button labels describe the same direction.
+        assert values[1:3] == ("烈焰技能(A001)", "烈焰剑(I001)")
+        assert self.app.item_relation_target_button.cget("text") == "打开技能"
+        assert self.app.item_relation_source_button.cget("text") == "打开装备"
+
     def test_unresolved_endpoints_disable_navigation_buttons(self) -> None:
         # Given: static evidence names an item that the object index cannot resolve.
         relation = ItemRelation(
@@ -115,6 +144,36 @@ class ItemRelationGuiTest(GuiTestCase):
         self.app._show_relation_evidence()
 
         # Then: neither action offers a dead navigation path.
+        assert self.app.item_relation_target_button.cget("state") == "disabled"
+        assert self.app.item_relation_source_button.cget("state") == "disabled"
+
+    def test_indexed_script_placeholder_still_disables_navigation(self) -> None:
+        # Given: script scanning indexed a reference-only item placeholder.
+        placeholder = GameObject("物品", "script", "I404", "I404", "I404", True)
+        relation = ItemRelation(
+            kind=ItemRelationKind.SCRIPT_REWARD,
+            item=RelationObject("物品", "I404", "未解析"),
+            evidence=RelationEvidence(source="war3map.j", line=18),
+            confidence=RelationConfidence.CLUE,
+            completeness=RelationCompleteness.UNRESOLVED,
+            unresolved_reason="物品 I404 未解析",
+        )
+        md = MapData(
+            "fixture.w3x",
+            "fixture",
+            objects={"物品": [placeholder]},
+        )
+        md.obj_index = {"I404": placeholder}
+        md.obj_identity_index = {("物品", "I404"): placeholder}
+        md.item_relations = ItemRelationIndex.build((relation,))
+        self.app._render_map(md, [], [], None)
+
+        # When: the unresolved row is selected.
+        iid = self.app.item_relation_tree.get_children()[0]
+        self.app.item_relation_tree.selection_set(iid)
+        self.app._show_relation_evidence()
+
+        # Then: an index hit cannot promote reference-only evidence to navigation.
         assert self.app.item_relation_target_button.cget("state") == "disabled"
         assert self.app.item_relation_source_button.cget("state") == "disabled"
 

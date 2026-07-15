@@ -13,7 +13,7 @@ def test_posix_workflow_targets_release_tag_on_supported_runners() -> None:
     workflow = _WORKFLOW.read_text(encoding="utf-8")
 
     assert "workflow_dispatch:" in workflow
-    assert "default: v0.1.2" in workflow
+    assert "default: v0.1.3" in workflow
     assert "ref: ${{ inputs.source_ref }}" in workflow
     assert "persist-credentials: false" in workflow
     assert "SOURCE_REF_INPUT: ${{ inputs.source_ref }}" in workflow
@@ -47,14 +47,14 @@ def test_posix_workflow_tests_accepts_and_archives_onedir_package() -> None:
         'test -f "$PythonLibDir/libtcl9.0.so"',
         'test -f "$PythonLibDir/libtcl9tk9.0.so"',
         'export LD_LIBRARY_PATH="$PythonLibDir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"',
-        'hook-PIL.ImageTk.py',
+        "hook-PIL.ImageTk.py",
         'hiddenimports = ["PIL._tkinter_finder"]',
         "uv run w3xray-dist",
         'Executable="dist/魔兽地图提取器/魔兽地图提取器"',
         "AcceptanceArgs=(acceptance",
         '"$Executable" "${AcceptanceArgs[@]}"',
         'xvfb-run -a "$Executable" "${AcceptanceArgs[@]}"',
-        "overall_status == \"pass\"",
+        'overall_status == "pass"',
         "ditto -c -k --keepParent",
         "tar -C dist -czf",
         "unzip -t",
@@ -76,9 +76,9 @@ def test_readme_lists_macos_and_linux_release_assets() -> None:
     release_section = readme.split("## 开发运行（uv）", maxsplit=1)[0]
 
     for asset in (
-        "w3xray-v0.1.2-macos-arm64.zip",
-        "w3xray-v0.1.2-macos-x64.zip",
-        "w3xray-v0.1.2-linux-x64.tar.gz",
+        "w3xray-v0.1.3-macos-arm64.zip",
+        "w3xray-v0.1.3-macos-x64.zip",
+        "w3xray-v0.1.3-linux-x64.tar.gz",
     ):
         assert asset in release_section
     assert "Apple Silicon" in release_section

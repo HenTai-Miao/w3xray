@@ -19,6 +19,7 @@ from w3xtool.batch_models import (
     MapBatchState,
     SourceFingerprint,
 )
+from w3xtool.batch_output_lock import BatchOutputLease
 from w3xtool.batch_resume import PreviousBatchState
 from w3xtool.batch_runner import BatchOptions, BatchOutputError, run_batch
 from w3xtool.load_context import MapLoadContext
@@ -121,6 +122,7 @@ def test_interrupted_checkpoint_keeps_unvisited_previous_tail(
         state: BatchState,
         _cache_text: str,
         _diagnostics_text: str,
+        _lease: BatchOutputLease,
     ) -> None:
         observed.append(state)
         raise KeyboardInterrupt

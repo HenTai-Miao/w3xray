@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import struct
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from typing import Final
 
@@ -27,7 +27,7 @@ type ChildMapLoader = Callable[
         MapArchiveReader,
         str,
         int,
-        dict[str, GameObject] | None,
+        Mapping[tuple[str, str], GameObject] | None,
         MapLoadContext,
     ],
     MapData,
@@ -95,7 +95,7 @@ def load_campaign_children(
                     child_archive,
                     inner,
                     depth + 1,
-                    parent.obj_index,
+                    parent.obj_identity_index,
                     child_context,
                 )
                 if isinstance(child_archive, InventoryArchive):

@@ -44,8 +44,8 @@ def test_relation_id_is_stable_but_distinct_per_drop_group() -> None:
     assert first.relation_id == same.relation_id
     assert first.relation_id != other_group.relation_id
     assert index.records == (first, other_group)
-    assert index.for_item("I001") == (first, other_group)
-    assert index.for_source("n001") == (first, other_group)
+    assert index.for_item("物品", "I001") == (first, other_group)
+    assert index.for_source("单位", "n001") == (first, other_group)
     assert index.for_kind(ItemRelationKind.UNIT_DROP) == (first, other_group)
 
 
@@ -58,3 +58,25 @@ def test_relation_records_and_indexes_are_immutable() -> None:
     with pytest.raises(FrozenInstanceError):
         setattr(relation, "chance", 100)
     assert isinstance(index.by_item, MappingProxyType)
+
+
+def test_reverse_indexes_distinguish_equal_rawcodes_by_category() -> None:
+    # Given: a unit and an item share a rawcode while emitting distinct relations.
+    unit_source = _drop_relation(group_index=0)
+    item_source = ItemRelation(
+        kind=ItemRelationKind.RECIPE,
+        item=RelationObject("物品", "I002", "合成装备"),
+        source=RelationObject("物品", "n001", "同码材料"),
+        evidence=RelationEvidence(source="war3map.j", line=9),
+        confidence=RelationConfidence.CONFIRMED,
+        completeness=RelationCompleteness.COMPLETE,
+    )
+
+    # When: both records enter the immutable reverse indexes.
+    index = ItemRelationIndex.build((unit_source, item_source))
+
+    # Then: every lookup requires and preserves the endpoint category.
+    assert index.for_source("单位", "n001") == (unit_source,)
+    assert index.for_source("物品", "n001") == (item_source,)
+    assert index.for_item("物品", "I001") == (unit_source,)
+    assert set(index.by_source) == {("单位", "n001"), ("物品", "n001")}

@@ -1,10 +1,12 @@
 """Cohesive map-load parsing helpers shared by the loader and API facade."""
+
 from __future__ import annotations
 
 import os
 import struct
 from collections.abc import Mapping
 
+from .base_names import BASE_NAMES
 from .extraction_diagnostics import (
     read_component,
     record_component_parse_issue,
@@ -13,11 +15,6 @@ from .extraction_diagnostics import (
 from .map_archive_reader import MapArchiveReader
 from .map_data import GameObject, MapData
 from .script_sources import WCT_TEXT_NAME, collect_readable_scripts
-
-try:
-    from .base_names import BASE_NAMES
-except ImportError:
-    BASE_NAMES = {}
 
 
 def _best_script_text(scripts: Mapping[str, str]) -> str | None:
@@ -29,7 +26,11 @@ def _best_script_text(scripts: Mapping[str, str]) -> str | None:
     return None
 
 
-def _add_script_refs(md: MapData, script_text: str, shared_index: dict | None = None):
+def _add_script_refs(
+    md: MapData,
+    script_text: str,
+    shared_index: Mapping[tuple[str, str], GameObject] | None = None,
+) -> None:
     """把脚本里引用、但对象数据缺失的 物品/单位 代码补进分类。
 
     战役子地图：若该码在战役共享对象(shared_index)里有定义，用其真名/分类/字段
@@ -40,26 +41,37 @@ def _add_script_refs(md: MapData, script_text: str, shared_index: dict | None = 
     refs = scan_object_refs(script_text)
     for cat, codes in refs.items():
         for code in sorted(codes):
-            if code in md.obj_index:
+            if (cat, code) in md.obj_identity_index:
                 continue
-            shared = shared_index.get(code) if shared_index else None
+            shared = shared_index.get((cat, code)) if shared_index else None
             if shared is not None:
                 obj = GameObject(
-                    category=shared.category, ext="campaign",
-                    obj_id=code, base_id=shared.base_id, name=shared.name,
+                    category=shared.category,
+                    ext="campaign",
+                    obj_id=code,
+                    base_id=shared.base_id,
+                    name=shared.name,
                     is_custom=shared.is_custom,
                     fields=[("来源", "战役共享对象")] + list(shared.fields),
-                    search_text=shared.search_text, icon=shared.icon)
+                    search_text=shared.search_text,
+                    icon=shared.icon,
+                )
                 md.objects.setdefault(shared.category, []).append(obj)
             else:
                 name = BASE_NAMES.get(code) or code
                 obj = GameObject(
-                    category=cat, ext="script", obj_id=code, base_id=code,
-                    name=name, is_custom=(code not in BASE_NAMES),
+                    category=cat,
+                    ext="script",
+                    obj_id=code,
+                    base_id=code,
+                    name=name,
+                    is_custom=(code not in BASE_NAMES),
                     fields=[("来源", "脚本引用（无对象数据，可能缺属性/名称）")],
-                    search_text=f"{code} {name}")
+                    search_text=f"{code} {name}",
+                )
                 md.objects.setdefault(cat, []).append(obj)
-            md.obj_index[code] = obj
+            _ = md.obj_index.setdefault(code, obj)
+            md.obj_identity_index[(obj.category, code)] = obj
 
 
 def _map_name(archive: MapArchiveReader) -> str:
@@ -67,14 +79,15 @@ def _map_name(archive: MapArchiveReader) -> str:
     try:
         data = archive._data
         if data[:4] == b"HM3W":
-            end = data.index(b"\x00", 8)
-            return data[8:end].decode("utf-8", "replace")
-    except (AttributeError, TypeError, ValueError):
+            end = data.find(b"\x00", 8)
+            if end >= 0:
+                return data[8:end].decode("utf-8", "replace")
+    except AttributeError, TypeError, ValueError:
         return os.path.basename(archive.path)
     return os.path.basename(archive.path)
 
 
-def _add_w3i(md: MapData, archive: MapArchiveReader, wts: dict):
+def _add_w3i(md: MapData, archive: MapArchiveReader, wts: dict[int, str]) -> None:
     """解析 war3map.w3i 地图信息并存入 md.w3i；地图名优先取 w3i（比 HM3W 头权威）。
 
     HM3W 头里的名常是占位/旧名甚至 TRIGSTR；编辑器里设的真实名在 w3i（经 wts 还原）。
@@ -102,7 +115,7 @@ def _add_w3i(md: MapData, archive: MapArchiveReader, wts: dict):
         md.name = nm
 
 
-def _add_w3f(md: MapData, archive: MapArchiveReader, wts: dict):
+def _add_w3f(md: MapData, archive: MapArchiveReader, wts: dict[int, str]) -> None:
     """解析战役信息 war3campaign.w3f（仅 .w3n 顶层有）并存入 md.w3f。"""
     if not archive.has_file("war3campaign.w3f"):
         return
@@ -128,18 +141,22 @@ def _add_w3f(md: MapData, archive: MapArchiveReader, wts: dict):
             f"W3F parse diagnostic: {info.diagnostic.value}",
         )
     nm = (info.name or "").strip()
-    if nm and not nm.startswith("TRIGSTR_") and (not md.name or md.name == os.path.basename(md.path)):
+    if (
+        nm
+        and not nm.startswith("TRIGSTR_")
+        and (not md.name or md.name == os.path.basename(md.path))
+    ):
         md.name = nm
 
 
-def _add_wct(md: MapData, archive: MapArchiveReader):
+def _add_wct(md: MapData, archive: MapArchiveReader) -> None:
     """Compatibility wrapper that publishes only collector-decoded WCT text."""
     readable = collect_readable_scripts(archive, md=md).texts.get(WCT_TEXT_NAME)
     if readable is not None:
         md.scripts[WCT_TEXT_NAME] = readable
 
 
-def _add_preplaced(md: MapData, archive: MapArchiveReader):
+def _add_preplaced(md: MapData, archive: MapArchiveReader) -> None:
     """解析预放置实例：war3map.doo（装饰物/可破坏物）+ war3mapUnits.doo（单位）并并入 md。
 
     对象定义（w3u/w3t…）只说"有哪些"，.doo 才说"摆在哪、归谁、初始多少血/金"。

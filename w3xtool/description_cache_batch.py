@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .batch_manifest_validation import verify_map_publication
+from .batch_tsv import decode_tsv_cell
 from .description_cache_models import (
     EMPTY_DESCRIPTION_CACHE,
     DescriptionCache,
@@ -42,7 +43,10 @@ def build_description_cache_from_batch(
         report = directory / _COMPLETE_REPORT
         try:
             with report.open("r", encoding="utf-8", newline="") as handle:
-                rows = tuple(csv.reader(handle, delimiter="\t"))
+                rows = tuple(
+                    tuple(decode_tsv_cell(cell) for cell in row)
+                    for row in csv.reader(handle, delimiter="\t")
+                )
         except (OSError, UnicodeError, csv.Error) as exc:
             diagnostics.append(f"缓存文件不可读：{report}：{type(exc).__name__}")
             continue

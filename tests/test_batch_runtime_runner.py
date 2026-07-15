@@ -9,7 +9,9 @@ import threading
 import pytest
 
 from tests.batch_publication_fixture import publish_empty_result
+import w3xtool.batch_output_lock as batch_output_lock
 import w3xtool.batch_runner as batch_runner
+from w3xtool.batch_configuration import BatchOutputError
 from w3xtool.batch_global_publication import load_current_generation
 from w3xtool.batch_models import MapBatchResult, MapBatchState, SourceFingerprint
 from w3xtool.batch_runner import BatchOptions, run_batch
@@ -125,6 +127,93 @@ def test_processed_progress_matches_structured_global_diagnostic(
     assert diagnostic["completed"] == 1
     assert diagnostic["total"] == 1
     assert diagnostic["published_bytes"] == state.results[0].published_bytes
+
+
+def test_concurrent_batches_cannot_share_one_output_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: one batch owns the output root while its map processor is active.
+    source_root = _source_root(tmp_path)
+    output = tmp_path / "output"
+    options = BatchOptions(str(source_root), str(output))
+    entered = threading.Event()
+    release = threading.Event()
+    calls_lock = threading.Lock()
+    calls = 0
+    failures: list[BaseException] = []
+    _patch_context(monkeypatch)
+
+    def process(
+        index: int,
+        fingerprint: SourceFingerprint,
+        current: BatchOptions,
+        _context: MapLoadContext,
+    ) -> MapBatchResult:
+        nonlocal calls
+        with calls_lock:
+            calls += 1
+            call_number = calls
+        if call_number == 1:
+            entered.set()
+            if not release.wait(timeout=5):
+                raise AssertionError("test did not release the first batch")
+        return publish_empty_result(index, fingerprint, current.output_root)
+
+    def first_run() -> None:
+        try:
+            _ = run_batch(options)
+        except BaseException as exc:  # noqa: BLE001  # noqa: BROAD_EXCEPT_OK - thread outcome is asserted below.
+            failures.append(exc)
+
+    monkeypatch.setattr(batch_runner, "process_one_map", process)
+    worker = threading.Thread(target=first_run, name="batch-output-lock-test")
+    worker.start()
+    assert entered.wait(timeout=5)
+
+    # When/Then: a second writer fails before processing or publishing anything.
+    try:
+        with pytest.raises(BatchOutputError, match="in use"):
+            _ = run_batch(options)
+    finally:
+        release.set()
+        worker.join(timeout=5)
+    assert not worker.is_alive()
+    assert failures == []
+    assert calls == 1
+
+
+def test_output_lock_closes_descriptors_when_unlock_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: unlocking fails after one output-root lease was acquired.
+    descriptors: tuple[int, int] | None = None
+    closed: list[int] = []
+    real_close = batch_output_lock.os.close
+
+    def fail_unlock(_descriptor: int) -> None:
+        raise OSError("unlock failed")
+
+    def record_close(descriptor: int) -> None:
+        closed.append(descriptor)
+        real_close(descriptor)
+
+    monkeypatch.setattr(batch_output_lock, "_unlock_descriptor", fail_unlock)
+    monkeypatch.setattr(batch_output_lock.os, "close", record_close)
+
+    # When: the lease exits through the cleanup failure.
+    with pytest.raises(OSError, match="unlock failed"):
+        with batch_output_lock.hold_batch_output_lock(tmp_path / "output") as lease:
+            descriptors = (lease.lock_descriptor, lease.root_descriptor)
+    assert descriptors is not None
+    observed = set(closed)
+    for descriptor in descriptors:
+        if descriptor not in observed:
+            real_close(descriptor)
+
+    # Then: both acquired lease descriptors were still closed.
+    assert set(descriptors).issubset(observed)
 
 
 def _source_root(tmp_path: Path) -> Path:

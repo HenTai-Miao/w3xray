@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from w3xtool.fields import label_for
-from w3xtool.object_candidates import ObjectCandidate, ObjectFieldValue, ObjectSourceKind
+from w3xtool.object_candidates import (
+    ObjectCandidate,
+    ObjectFieldValue,
+    ObjectSourceKind,
+)
 from w3xtool.object_pipeline import merge_object_candidates
 from w3xtool.slk_objects import slk_col_label
 
@@ -29,8 +33,12 @@ def _candidate(
 def test_real_slk_hp_and_binary_uhpm_compete_as_one_field() -> None:
     # Given: real source keys whose presentation labels differ.
     candidates = (
-        _candidate("HP", slk_col_label("HP"), "1000", "UnitBalance.slk", ObjectSourceKind.SLK),
-        _candidate("uhpm", label_for("uhpm"), "2500", "war3map.w3u", ObjectSourceKind.BINARY),
+        _candidate(
+            "HP", slk_col_label("HP"), "1000", "UnitBalance.slk", ObjectSourceKind.SLK
+        ),
+        _candidate(
+            "uhpm", label_for("uhpm"), "2500", "war3map.w3u", ObjectSourceKind.BINARY
+        ),
     )
 
     # When: the cross-format candidates are merged.
@@ -45,7 +53,11 @@ def test_real_slk_hp_and_binary_uhpm_compete_as_one_field() -> None:
 def test_equal_priority_source_case_ties_are_order_independent() -> None:
     # Given: semantically identical fields whose source paths differ only by case.
     upper = _candidate(
-        "uhpm", label_for("uhpm"), "2500", "Units\\UnitData.slk", ObjectSourceKind.BINARY
+        "uhpm",
+        label_for("uhpm"),
+        "2500",
+        "Units\\UnitData.slk",
+        ObjectSourceKind.BINARY,
     )
     lower = _candidate(
         "uhpm", label_for("uhpm"), "2500", "units/unitdata.slk", ObjectSourceKind.BINARY
@@ -63,7 +75,9 @@ def test_equal_priority_source_case_ties_are_order_independent() -> None:
 
 def test_strings_non_display_does_not_override_slk() -> None:
     # Given: Strings and SLK collide on the same non-display field.
-    strings = _candidate("HP", "生命", "1800", "UnitStrings.txt", ObjectSourceKind.TEXT_STRINGS)
+    strings = _candidate(
+        "HP", "生命", "1800", "UnitStrings.txt", ObjectSourceKind.TEXT_STRINGS
+    )
     slk = _candidate("HP", "生命", "1000", "UnitBalance.slk", ObjectSourceKind.SLK)
 
     # When: source priority is applied.
@@ -108,3 +122,45 @@ def test_explicit_field_still_replaces_matching_inherited_base_label() -> None:
     # Then: the explicit value replaces, rather than duplicates, the base value.
     assert merged.fields == [("生命上限", "2500")]
     assert merged.field_values == {"uhpm": "2500"}
+
+
+def test_materialization_retains_equal_priority_field_conflicts() -> None:
+    # Given: two binary sources disagree on the same relation-bearing field.
+    first = _candidate(
+        "Sellitems", "售出物品", "I001", "first.w3u", ObjectSourceKind.BINARY
+    )
+    second = _candidate(
+        "Sellitems", "售出物品", "I002", "second.w3u", ObjectSourceKind.BINARY
+    )
+
+    # When: the public object is materialized.
+    merged = merge_object_candidates((first, second), {})[0]
+
+    # Then: both same-tier variants remain available as immutable evidence.
+    assert {row.value for row in merged.field_evidence} == {"I001", "I002"}
+
+
+def test_field_evidence_priority_matches_non_display_selection() -> None:
+    # Given: Strings and SLK disagree on a non-display shop field.
+    strings = _candidate(
+        "Sellitems",
+        "售出物品",
+        "I001",
+        "UnitStrings.txt",
+        ObjectSourceKind.TEXT_STRINGS,
+    )
+    slk = _candidate(
+        "Sellitems",
+        "售出物品",
+        "I002",
+        "UnitData.slk",
+        ObjectSourceKind.SLK,
+    )
+
+    # When: public selection and retained evidence are materialized together.
+    merged = merge_object_candidates((strings, slk), {})[0]
+    priorities = {row.value: row.source_priority for row in merged.field_evidence}
+
+    # Then: evidence priority selects the same winning tier as the public field.
+    assert merged.field_values["Sellitems"] == "I002"
+    assert priorities["I002"] > priorities["I001"]

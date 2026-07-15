@@ -48,21 +48,25 @@ class _CallGroup:
     def at(self, position: int | None) -> ScriptCallArgument | None:
         if position is None:
             return None
-        return next((item for item in self.arguments if item.position == position), None)
+        return next(
+            (item for item in self.arguments if item.position == position), None
+        )
 
 
-_SIGNATURES: Final[Mapping[str, _CallSignature]] = MappingProxyType({
-    "CreateItem": _CallSignature(1, x_position=2, y_position=3),
-    "CreateItemLoc": _CallSignature(1, location_position=2),
-    "UnitAddItemById": _CallSignature(2, subject_position=1),
-    "UnitAddItemByIdSwapped": _CallSignature(1, subject_position=2),
-    "UnitAddItemToSlotById": _CallSignature(2, subject_position=1, slot_position=3),
-    "AddItemToStock": _CallSignature(2, subject_position=1),
-    "AddItemToAllStock": _CallSignature(1),
-})
+_SIGNATURES: Final[Mapping[str, _CallSignature]] = MappingProxyType(
+    {
+        "CreateItem": _CallSignature(1, x_position=2, y_position=3),
+        "CreateItemLoc": _CallSignature(1, location_position=2),
+        "UnitAddItemById": _CallSignature(2, subject_position=1),
+        "UnitAddItemByIdSwapped": _CallSignature(1, subject_position=2),
+        "UnitAddItemToSlotById": _CallSignature(2, subject_position=1, slot_position=3),
+        "AddItemToStock": _CallSignature(2, subject_position=1),
+        "AddItemToAllStock": _CallSignature(1),
+    }
+)
 _DIRECT_PATTERNS: Final = (
     re.compile(r"^'[A-Za-z0-9]{4}'$"),
-    re.compile(r'''^FourCC\s*\(\s*["'][A-Za-z0-9]{4}["']\s*\)$''', re.IGNORECASE),
+    re.compile(r"""^FourCC\s*\(\s*["'][A-Za-z0-9]{4}["']\s*\)$""", re.IGNORECASE),
     re.compile(r"^(?:\$|0[xX])[0-9A-Fa-f]{8}$"),
     re.compile(r"^\d{10}$"),
 )
@@ -70,9 +74,14 @@ _DIRECT_PATTERNS: Final = (
 
 def build_script_item_relations(md: MapData) -> tuple[ItemRelation, ...]:
     """Return fixed or explicitly clue-level script calls plus WTG item actions."""
-    rows = list(_script_call_relations(md))
+    rows = list(build_script_call_item_relations(md))
     rows.extend(build_wtg_item_relations(md))
     return tuple(rows)
+
+
+def build_script_call_item_relations(md: MapData) -> tuple[ItemRelation, ...]:
+    """Return script-call evidence without coupling it to WTG parsing."""
+    return _script_call_relations(md)
 
 
 def _script_call_relations(md: MapData) -> tuple[ItemRelation, ...]:
@@ -129,7 +138,9 @@ def _call_groups(arguments: tuple[ScriptCallArgument, ...]) -> tuple[_CallGroup,
         positions = [row.position for row in rows]
         if len(set(positions)) != len(positions):
             continue
-        result.append(_CallGroup(*key, tuple(sorted(rows, key=lambda row: row.position))))
+        result.append(
+            _CallGroup(*key, tuple(sorted(rows, key=lambda row: row.position)))
+        )
     return tuple(result)
 
 
@@ -147,7 +158,9 @@ def _death_contexts(md: MapData) -> Mapping[tuple[str, str], tuple[str, ...]]:
         values = events_by_handle.get((row.source, row.handle), ())
         if values:
             contexts.setdefault((row.source, row.target), []).extend(values)
-    return MappingProxyType({key: tuple(dict.fromkeys(values)) for key, values in contexts.items()})
+    return MappingProxyType(
+        {key: tuple(dict.fromkeys(values)) for key, values in contexts.items()}
+    )
 
 
 def _is_nested_call(call: _CallGroup) -> bool:
@@ -160,7 +173,9 @@ def _is_nested_call(call: _CallGroup) -> bool:
 
 def _is_direct_argument(argument: str) -> bool:
     normalized = "".join(argument.split())
-    return any(pattern.fullmatch(normalized) is not None for pattern in _DIRECT_PATTERNS)
+    return any(
+        pattern.fullmatch(normalized) is not None for pattern in _DIRECT_PATTERNS
+    )
 
 
 def _script_completeness(

@@ -11,8 +11,8 @@ from .textobj import _sub_westring
 from .wts import resolve
 
 
-def resolved_value(value: int | float | str, wts: Mapping[int, str]) -> str:
-    """Resolve WTS/WESTRING references without shortening numeric precision."""
+def resolved_source_value(value: int | float | str, wts: Mapping[int, str]) -> str:
+    """Resolve a WTS container while retaining the original WESTRING token."""
     resolved = resolve(value, wts)
     match resolved:
         case float() as number:
@@ -23,7 +23,12 @@ def resolved_value(value: int | float | str, wts: Mapping[int, str]) -> str:
             formatted = text
         case unreachable:
             assert_never(unreachable)
-    return _sub_westring(formatted)
+    return formatted
+
+
+def resolved_value(value: int | float | str, wts: Mapping[int, str]) -> str:
+    """Resolve WTS/WESTRING references without shortening numeric precision."""
+    return _sub_westring(resolved_source_value(value, wts))
 
 
 def wts_value_source(
@@ -46,9 +51,17 @@ def wts_value_source(
             assert_never(unreachable)
 
 
-def retain_field(category: str, key: str, label: str, value: str) -> bool:
+def retain_field(
+    category: str,
+    key: str,
+    label: str,
+    value: str,
+    value_type: str = "",
+) -> bool:
     """Retain nonempty data and explicitly present empty text fields."""
-    return bool(value) or classify_text_field(category, key, label) is not None
+    return (
+        bool(value) or classify_text_field(category, key, label, value_type) is not None
+    )
 
 
 def expand_codes(value: str) -> str:

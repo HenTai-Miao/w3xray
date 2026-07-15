@@ -23,6 +23,7 @@ _SHA256: Final = re.compile(r"[0-9a-f]{64}")
 _MAX_IDENTITY_FILE_BYTES: Final = 256 * 1024 * 1024
 _TRUSTED_MANIFEST: Final = "可信图标缓存.tsv"
 _TRUSTED_EVIDENCE_DIRECTORY: Final = "地图图标证据"
+BATCH_EXTRACTION_REVISION: Final = 4
 
 type EvidenceField = str | int
 type EvidenceRecord = tuple[EvidenceField, ...]
@@ -77,6 +78,7 @@ def fingerprint_dependencies(
         )
     )
     payload = {
+        "batch_extraction_revision": BATCH_EXTRACTION_REVISION,
         "batch_schema_version": BATCH_SCHEMA_VERSION,
         "cache_sha256": cache_sha256,
         "client": {
@@ -219,6 +221,7 @@ def _require_digest(value: str, label: str) -> None:
 
 
 __all__ = (
+    "BATCH_EXTRACTION_REVISION",
     "BatchOptionsView",
     "DependencyEvidence",
     "DependencyFingerprintError",

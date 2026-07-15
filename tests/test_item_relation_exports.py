@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import io
 
+from w3xtool.batch_tsv import decode_tsv_cell
 from w3xtool.item_relation_exports import (
     format_equipment_skills_tsv,
     format_item_acquisition_tsv,
@@ -141,7 +142,10 @@ def test_acquisition_export_keeps_coordinates_groups_materials_and_evidence() ->
     assert rows[0]["合成材料ID"] == "I001"
     assert rows[0]["合成材料名称与数量"] == "材料×2"
     assert rows[0]["X"] == "1.25"
-    assert rows[0]["Y"] == "-0.0"
+    encoded_y = rows[0]["Y"]
+    assert encoded_y is not None
+    assert encoded_y.startswith("'\u2060-")
+    assert decode_tsv_cell(encoded_y) == "-0.0"
     assert rows[0]["证据函数/触发"] == "Forge / 锻造触发"
     assert rows[0]["证据行号/偏移"] == "行 9 / 偏移 27"
     assert rows[0]["原始证据"] == 'call AddItem("I999")\n第二行\t证据'

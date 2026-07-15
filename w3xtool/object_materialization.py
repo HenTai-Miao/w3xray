@@ -6,9 +6,10 @@ from collections.abc import Iterable, Mapping, Sequence
 from typing import Final
 
 from .base_names import BASE_NAMES
-from .map_data import GameObject
+from .map_data import GameObject, GameObjectFieldEvidence
 from .object_candidates import ObjectCandidate, ObjectFieldValue, ObjectSourceKind
 from .object_field_selection import (
+    object_field_source_priority,
     public_object_field_key,
     select_object_field,
     selected_display_value,
@@ -35,6 +36,16 @@ def build_object_index(objects: Iterable[GameObject]) -> dict[str, GameObject]:
     index: dict[str, GameObject] = {}
     for item in objects:
         _ = index.setdefault(item.obj_id, item)
+    return index
+
+
+def build_object_identity_index(
+    objects: Iterable[GameObject],
+) -> dict[tuple[str, str], GameObject]:
+    """Index final objects by exact category and rawcode identity."""
+    index: dict[tuple[str, str], GameObject] = {}
+    for item in objects:
+        _ = index.setdefault((item.category, item.obj_id), item)
     return index
 
 
@@ -89,6 +100,7 @@ def _materialize(
     category, obj_id = identity
     representative = max(candidates, key=_candidate_identity_rank)
     selected: dict[str, ObjectFieldValue] = {}
+    evidence_values: list[ObjectFieldValue] = []
     inherited = base_objects.get(representative.base_id)
     if inherited is not None and inherited[0] == category:
         for label, value in inherited[1]:
@@ -99,9 +111,11 @@ def _materialize(
                 f"base:{representative.base_id}",
                 ObjectSourceKind.BASE,
             )
+            evidence_values.append(base_field)
             select_object_field(selected, base_field)
     for candidate in candidates:
         for value in candidate.fields:
+            evidence_values.append(value)
             select_object_field(selected, value)
     ordered = tuple(
         sorted(selected.items(), key=lambda item: (item[1].label.casefold(), item[0]))
@@ -146,6 +160,39 @@ def _materialize(
         field_values=field_values,
         field_labels=field_labels,
         field_sources=field_sources,
+        field_evidence=_materialized_evidence(evidence_values),
+    )
+
+
+def _materialized_evidence(
+    values: Iterable[ObjectFieldValue],
+) -> tuple[GameObjectFieldEvidence, ...]:
+    unique = {
+        GameObjectFieldEvidence(
+            key=value.key,
+            label=value.label,
+            value=value.value,
+            source=value.source,
+            source_priority=object_field_source_priority(value),
+            value_type=value.value_type,
+            raw_value=value.raw_value,
+        )
+        for value in values
+    }
+    return tuple(
+        sorted(
+            unique,
+            key=lambda row: (
+                row.key.casefold(),
+                row.key,
+                -row.source_priority,
+                row.source.casefold(),
+                row.source,
+                row.value,
+                row.label.casefold(),
+                row.label,
+            ),
+        )
     )
 
 

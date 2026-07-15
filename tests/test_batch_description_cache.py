@@ -82,7 +82,7 @@ def test_batch_builds_and_publishes_cache_before_processing_maps(
     state = run_batch(BatchOptions(str(source_root), str(output)))
 
     # Then
-    assert state.schema_version == BATCH_SCHEMA_VERSION == 3
+    assert state.schema_version == BATCH_SCHEMA_VERSION == 4
     assert seen_cache_sizes == [2]
     with (output / "可信描述缓存.tsv").open(
         "r",

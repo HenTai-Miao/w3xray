@@ -9,12 +9,22 @@ import shutil
 import threading
 import tracemalloc
 
-from w3xtool.acceptance_batch import check_batch_publication
+import pytest
+
+from tests.batch_publication_fixture import publish_empty_result
+import w3xtool.acceptance_batch as acceptance_batch
+from w3xtool.acceptance_batch import BatchAcceptanceError, check_batch_publication
 from w3xtool.batch_configuration import BatchOptions
-from w3xtool.batch_global_publication import load_current_generation
+from w3xtool.batch_global_publication import (
+    load_current_generation,
+    publish_global_generation,
+)
 from w3xtool.batch_manifest_validation import verify_map_publication
+from w3xtool.batch_models import BATCH_SCHEMA_VERSION, BatchState, SourceFingerprint
 from w3xtool.batch_runner import fingerprint_source, run_batch
 from w3xtool.batch_runtime import BatchAction, BatchProgress
+from w3xtool.description_cache import format_description_cache_tsv
+from w3xtool.description_cache_models import EMPTY_DESCRIPTION_CACHE
 
 
 _FIXTURE = (
@@ -89,6 +99,45 @@ def test_five_run_soak_has_bounded_memory_and_no_worker_leaks(tmp_path: Path) ->
     result = generation.state.results[0]
     assert verify_map_publication(output / result.output_directory, result).valid
     assert not _publication_leftovers(output)
+
+
+def test_authority_validation_rejects_an_extra_map_directory(tmp_path: Path) -> None:
+    # Given: a valid pointed generation has an unreferenced fortieth directory.
+    output = _published_output(tmp_path)
+    (output / "地图" / "extra-map").mkdir()
+
+    # When/Then: exact authority validation rejects the directory drift.
+    with pytest.raises(BatchAcceptanceError, match="directory set"):
+        _ = acceptance_batch.require_authoritative_batch(output)
+
+
+def test_authority_validation_rejects_a_stale_compatibility_mirror(
+    tmp_path: Path,
+) -> None:
+    # Given: current.json remains valid while the root compatibility state drifts.
+    output = _published_output(tmp_path)
+    (output / "批量提取状态.json").write_text("{}\n", encoding="utf-8")
+
+    # When/Then: acceptance refuses to hide mirror/pointer disagreement.
+    with pytest.raises(BatchAcceptanceError, match="compatibility mirror"):
+        _ = acceptance_batch.require_authoritative_batch(output)
+
+
+def _published_output(tmp_path: Path) -> Path:
+    output = tmp_path / "output"
+    result = publish_empty_result(
+        1,
+        SourceFingerprint("/maps/sample.w3x", 3, 4, "a" * 64),
+        str(output),
+    )
+    state = BatchState(BATCH_SCHEMA_VERSION, (result,))
+    _ = publish_global_generation(
+        output,
+        state,
+        format_description_cache_tsv(EMPTY_DESCRIPTION_CACHE),
+        "",
+    )
+    return output
 
 
 def _active_child_pids() -> frozenset[int]:

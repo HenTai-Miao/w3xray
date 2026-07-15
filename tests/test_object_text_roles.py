@@ -79,6 +79,14 @@ def test_non_text_field_is_not_classified_from_an_unrelated_label() -> None:
     assert actual is None
 
 
+def test_metadata_confirmed_unknown_string_uses_raw_field_role() -> None:
+    # Given / When: metadata marks an otherwise unknown upgrade field as text.
+    actual = classify_text_field("科技", "gco1", "效果 1 - %s", "string")
+
+    # Then: the stable raw field key becomes the lossless text role.
+    assert actual == TextRoleMatch("gco1", None)
+
+
 def test_text_index_is_immutable_sorted_and_queryable() -> None:
     # Given: records arrive out of order for two objects.
     later = _record("I002", "第二件", 2)

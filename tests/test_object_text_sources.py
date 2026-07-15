@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import FrozenInstanceError, dataclass
 from types import MappingProxyType
 
@@ -23,9 +24,19 @@ class FakeArchive:
         reverse_listing: bool = False,
         expose_listing: bool = True,
     ) -> None:
-        self._files = {self._normalize(name): (name, payload) for name, payload in files.items()}
+        self._files = {
+            self._normalize(name): (name, payload) for name, payload in files.items()
+        }
         self._reverse_listing = reverse_listing
         self._expose_listing = expose_listing
+
+    @property
+    def path(self) -> str:
+        return "fixture.w3x"
+
+    @property
+    def _data(self) -> bytes:
+        return b""
 
     def has_file(self, name: str) -> bool:
         return self._normalize(name) in self._files
@@ -38,6 +49,9 @@ class FakeArchive:
             return []
         names = [name for name, _payload in self._files.values()]
         return list(reversed(names)) if self._reverse_listing else names
+
+    def close(self) -> None:
+        return
 
     @staticmethod
     def _normalize(name: str) -> str:
@@ -83,7 +97,9 @@ def test_named_gbk_strings_file_is_decoded_below_anonymous_threshold() -> None:
     records = collect_text_object_records(archive)
 
     # Then: its single GBK object is retained without anonymous thresholding.
-    assert [(record.obj_id, record.fields["Name"]) for record in records] == [("H001", "圣骑士")]
+    assert [(record.obj_id, record.fields["Name"]) for record in records] == [
+        ("H001", "圣骑士")
+    ]
 
 
 def test_known_trusted_name_is_checked_without_archive_listing() -> None:
@@ -94,10 +110,14 @@ def test_known_trusted_name_is_checked_without_archive_listing() -> None:
     )
 
     # When: the caller supplies that candidate name.
-    records = collect_text_object_records(archive, known_names=("Custom\\BonusUnitFunc.txt",))
+    records = collect_text_object_records(
+        archive, known_names=("Custom\\BonusUnitFunc.txt",)
+    )
 
     # Then: direct has_file lookup finds the source.
-    assert [(record.obj_id, record.fields["HP"]) for record in records] == [("H001", "1000")]
+    assert [(record.obj_id, record.fields["HP"]) for record in records] == [
+        ("H001", "1000")
+    ]
 
 
 def test_func_and_strings_merge_by_field_role_not_archive_order() -> None:
@@ -114,7 +134,11 @@ def test_func_and_strings_merge_by_field_role_not_archive_order() -> None:
     record = merge_text_object_records(collect_text_object_records(archive))[0]
 
     # Then: Strings wins display fields and Func wins non-display fields.
-    assert dict(record.fields) == {"Name": "Localized", "Ubertip": "Readable", "HP": "1000"}
+    assert dict(record.fields) == {
+        "Name": "Localized",
+        "Ubertip": "Readable",
+        "HP": "1000",
+    }
 
 
 def test_empty_func_value_does_not_replace_nonempty_value() -> None:
@@ -165,7 +189,7 @@ def test_collected_records_are_frozen_with_immutable_mappings() -> None:
     assert isinstance(record.field_sources, MappingProxyType)
 
 
-def test_direct_records_copy_caller_mappings_and_reject_mapping_assignment() -> None:
+def test_direct_records_copy_caller_mappings_and_expose_immutable_mappings() -> None:
     # Given: mutable mappings supplied to the public record constructor.
     fields = {"Name": "Footman"}
     field_sources = {"Name": "Units\\HumanUnitStrings.txt"}
@@ -182,18 +206,19 @@ def test_direct_records_copy_caller_mappings_and_reject_mapping_assignment() -> 
     fields["Name"] = "Knight"
     field_sources["Name"] = "changed"
 
-    # Then: the record keeps the original values and rejects mapping writes.
+    # Then: the record keeps the original values behind read-only mappings.
     assert record.fields["Name"] == "Footman"
     assert record.field_sources["Name"] == "Units\\HumanUnitStrings.txt"
-    with pytest.raises(TypeError):
-        record.fields["Name"] = "Knight"
-    with pytest.raises(TypeError):
-        record.field_sources["Name"] = "changed"
+    assert isinstance(record.fields, Mapping)
+    assert isinstance(record.fields, MappingProxyType)
+    assert isinstance(record.field_sources, MappingProxyType)
 
 
 def test_anonymous_blocks_require_at_least_eight_objects() -> None:
     # Given: an anonymous block with seven object sections.
-    payload = b"".join(f"[I{index:03d}]\nName=Item {index}\n".encode() for index in range(7))
+    payload = b"".join(
+        f"[I{index:03d}]\nName=Item {index}\n".encode() for index in range(7)
+    )
     archive = FakeAnonymousArchive((FakeBlock(payload),))
 
     # When: anonymous sources are collected.
@@ -205,7 +230,9 @@ def test_anonymous_blocks_require_at_least_eight_objects() -> None:
 
 def test_anonymous_blocks_at_threshold_are_collected() -> None:
     # Given: an anonymous block with eight object sections.
-    payload = b"".join(f"[I{index:03d}]\nName=Item {index}\n".encode() for index in range(8))
+    payload = b"".join(
+        f"[I{index:03d}]\nName=Item {index}\n".encode() for index in range(8)
+    )
     archive = FakeAnonymousArchive((FakeBlock(payload),))
 
     # When: anonymous sources are collected.
@@ -213,7 +240,9 @@ def test_anonymous_blocks_at_threshold_are_collected() -> None:
 
     # Then: all threshold-qualified records are retained as anonymous.
     assert len(records) == 8
-    assert {record.source_kind for record in records} == {TextObjectSourceKind.ANONYMOUS}
+    assert {record.source_kind for record in records} == {
+        TextObjectSourceKind.ANONYMOUS
+    }
 
 
 def test_malformed_or_oversized_trusted_sources_are_ignored() -> None:
@@ -221,7 +250,8 @@ def test_malformed_or_oversized_trusted_sources_are_ignored() -> None:
     archive = FakeArchive(
         {
             "Units\\HumanUnitFunc.txt": b"not an object table",
-            "Units\\OrcUnitStrings.txt": b"[O001]\nName=Grunt\n" + (b"x" * (5 * 1024 * 1024)),
+            "Units\\OrcUnitStrings.txt": b"[O001]\nName=Grunt\n"
+            + (b"x" * (5 * 1024 * 1024)),
         },
     )
 
@@ -230,3 +260,24 @@ def test_malformed_or_oversized_trusted_sources_are_ignored() -> None:
 
     # Then: malformed and oversized content does not become a record.
     assert records == ()
+
+
+def test_mixed_ability_strings_classifies_buff_section_separately() -> None:
+    # Given: one trusted AbilityStrings file contains both an ability and its buff.
+    archive = FakeArchive(
+        {
+            "Units\\HumanAbilityStrings.txt": (
+                b"[A001]\nName=Flame\nOrder=flame\nTip=Cast flame\n"
+                b"[B001]\nName=Burning\nTip=Burning\nUbertip=Damage over time\n"
+            )
+        }
+    )
+
+    # When: the mixed file is collected.
+    records = collect_text_object_records(archive)
+
+    # Then: category is selected per section, not once for the whole file.
+    assert {(row.obj_id, row.category) for row in records} == {
+        ("A001", "技能"),
+        ("B001", "增益"),
+    }

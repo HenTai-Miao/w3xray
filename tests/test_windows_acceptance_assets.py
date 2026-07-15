@@ -11,7 +11,9 @@ _ROOT = Path(__file__).resolve().parents[1]
 
 
 def _onefile_acceptance_sources() -> tuple[tuple[str, str], ...]:
-    script = (_ROOT / "tools" / "run_windows_acceptance.ps1").read_text(encoding="utf-8")
+    script = (_ROOT / "tools" / "run_windows_acceptance.ps1").read_text(
+        encoding="utf-8"
+    )
 
     workflow = (_ROOT / ".github" / "workflows" / "windows-package.yml").read_text(
         encoding="utf-8",
@@ -25,7 +27,9 @@ def _onefile_acceptance_sources() -> tuple[tuple[str, str], ...]:
 
 def test_windows_acceptance_script_builds_tests_packages_and_runs_exe() -> None:
     # Given: the repository's one-command real-machine acceptance script.
-    script = (_ROOT / "tools" / "run_windows_acceptance.ps1").read_text(encoding="utf-8")
+    script = (_ROOT / "tools" / "run_windows_acceptance.ps1").read_text(
+        encoding="utf-8"
+    )
 
     # When/Then: every required gate executes in order through the packaged EXE.
     required = (
@@ -52,7 +56,9 @@ def test_windows_acceptance_script_builds_tests_packages_and_runs_exe() -> None:
 
 def test_hosted_windows_workflow_packages_and_executes_artifact() -> None:
     # Given: the hosted Windows build workflow.
-    workflow = (_ROOT / ".github" / "workflows" / "windows-package.yml").read_text(encoding="utf-8")
+    workflow = (_ROOT / ".github" / "workflows" / "windows-package.yml").read_text(
+        encoding="utf-8"
+    )
 
     # When: the named steps are isolated so evidence cannot leak across step boundaries.
     onedir_acceptance = workflow.split(
@@ -72,14 +78,19 @@ def test_hosted_windows_workflow_packages_and_executes_artifact() -> None:
     # Then: triggers, exact builds, per-format acceptance, and release assets are complete.
     for trigger in ("branches: [main]", "  pull_request:\n", "  workflow_dispatch:\n"):
         assert trigger in workflow
-    assert workflow.count(
-        "      - name: Build onedir executable\n"
-        "        run: uv run w3xray-dist\n"
-    ) == 1
-    assert workflow.count(
-        "      - name: Build onefile executable\n"
-        "        run: uv run w3xray-dist --onefile\n"
-    ) == 1
+    assert (
+        workflow.count(
+            "      - name: Build onedir executable\n        run: uv run w3xray-dist\n"
+        )
+        == 1
+    )
+    assert (
+        workflow.count(
+            "      - name: Build onefile executable\n"
+            "        run: uv run w3xray-dist --onefile\n"
+        )
+        == 1
+    )
     assert '--report ".\\artifacts/windows-onedir/acceptance.json"' in onedir_acceptance
     assert "--repeat 5 --require-windows" in onedir_acceptance
     assert '"--report", $OnefileReport' in onefile_acceptance
@@ -105,7 +116,9 @@ def test_hosted_windows_workflow_packages_and_executes_artifact() -> None:
 
 def test_real_machine_onedir_discovery_ignores_stale_direct_exe() -> None:
     # Given: an onedir phase that can inherit a direct EXE from an earlier run.
-    script = (_ROOT / "tools" / "run_windows_acceptance.ps1").read_text(encoding="utf-8")
+    script = (_ROOT / "tools" / "run_windows_acceptance.ps1").read_text(
+        encoding="utf-8"
+    )
     onedir_phase = script.split("\n& uv run w3xray-dist\n", maxsplit=1)[1].split(
         "\n& uv run w3xray-dist --onefile\n",
         maxsplit=1,
@@ -120,7 +133,10 @@ def test_real_machine_onedir_discovery_ignores_stale_direct_exe() -> None:
     assert [onedir_phase.index(value) for value in required] == sorted(
         onedir_phase.index(value) for value in required
     )
-    assert 'Get-ChildItem -LiteralPath $DistDir -Filter "*.exe" -File -Recurse' not in onedir_phase
+    assert (
+        'Get-ChildItem -LiteralPath $DistDir -Filter "*.exe" -File -Recurse'
+        not in onedir_phase
+    )
 
 
 def test_hosted_onedir_discovery_ignores_stale_direct_exe() -> None:
@@ -142,7 +158,10 @@ def test_hosted_onedir_discovery_ignores_stale_direct_exe() -> None:
     assert [onedir_phase.index(value) for value in required] == sorted(
         onedir_phase.index(value) for value in required
     )
-    assert 'Get-ChildItem -LiteralPath ".\\dist" -Filter "*.exe" -File -Recurse' not in onedir_phase
+    assert (
+        'Get-ChildItem -LiteralPath ".\\dist" -Filter "*.exe" -File -Recurse'
+        not in onedir_phase
+    )
 
 
 @pytest.mark.parametrize(("surface", "source"), _onefile_acceptance_sources())
@@ -175,7 +194,9 @@ def test_onefile_acceptance_uses_absolute_paths_and_working_directory(
 
     # When/Then: the direct process receives only absolute paths and an explicit working directory.
     missing = [value for value in required if value not in source]
-    assert not missing, f"{surface} onefile acceptance lacks absolute path setup: {missing}"
+    assert not missing, (
+        f"{surface} onefile acceptance lacks absolute path setup: {missing}"
+    )
     assert '".\\tests\\fixtures' not in source
     assert '".\\artifacts/windows-onefile' not in source
 
@@ -199,7 +220,9 @@ def test_onefile_acceptance_waits_and_validates_fresh_report(
 
     # When/Then: launch, wait/exit, fresh-file, and JSON gates execute in that order.
     missing = [value for value in required if value not in source]
-    assert not missing, f"{surface} onefile acceptance lacks completion gates: {missing}"
+    assert not missing, (
+        f"{surface} onefile acceptance lacks completion gates: {missing}"
+    )
     positions = [source.index(value) for value in required]
     assert positions == sorted(positions)
 
@@ -212,7 +235,9 @@ def test_onefile_acceptance_rejects_unsafe_direct_invocation(
     # Given: `&` plus LASTEXITCODE did not wait for the windowed onefile process tree.
     # When/Then: both surfaces use the shared encoder and reject that launch pattern.
     assert "ConvertTo-WindowsCommandLine $OnefileAcceptanceArgs" in source, surface
-    assert not any(line.lstrip().startswith("& $OnefileExe") for line in source.splitlines()), surface
+    assert not any(
+        line.lstrip().startswith("& $OnefileExe") for line in source.splitlines()
+    ), surface
 
 
 def test_windows_process_helper_quotes_powershell_51_argument_lists() -> None:
@@ -237,7 +262,9 @@ def test_windows_process_helper_quotes_powershell_51_argument_lists() -> None:
 
 def test_real_machine_powershell_51_script_has_no_utf8_source_tokens() -> None:
     # Windows PowerShell 5.1 reads BOM-less scripts through the legacy code page.
-    script = (_ROOT / "tools" / "run_windows_acceptance.ps1").read_text(encoding="utf-8")
+    script = (_ROOT / "tools" / "run_windows_acceptance.ps1").read_text(
+        encoding="utf-8"
+    )
 
     assert script.isascii()
 
@@ -246,8 +273,12 @@ def test_hosted_powershell_51_acceptance_step_has_no_utf8_source_tokens() -> Non
     workflow = (_ROOT / ".github" / "workflows" / "windows-package.yml").read_text(
         encoding="utf-8",
     )
-    acceptance_step = workflow.split("- name: Execute packaged onedir acceptance", maxsplit=1)[1]
-    acceptance_step = acceptance_step.split("- name: Upload release assets", maxsplit=1)[0]
+    acceptance_step = workflow.split(
+        "- name: Execute packaged onedir acceptance", maxsplit=1
+    )[1]
+    acceptance_step = acceptance_step.split(
+        "- name: Upload release assets", maxsplit=1
+    )[0]
 
     assert acceptance_step.isascii()
 
@@ -258,37 +289,3 @@ def test_casclib_build_preserves_dotted_cmake_policy_version() -> None:
 
     # When/Then: the dotted policy value is one quoted native argument.
     assert '"-DCMAKE_POLICY_VERSION_MINIMUM=3.5"' in script
-
-
-def test_real_install_workflow_requires_dedicated_self_hosted_machine() -> None:
-    # Given: a manually triggered workflow that can access a real installed client.
-    workflow = (_ROOT / ".github" / "workflows" / "windows-real-war3.yml").read_text(encoding="utf-8")
-
-    # When/Then: it cannot accidentally claim hosted synthetic coverage as real-install evidence.
-    assert "workflow_dispatch" in workflow
-    assert "self-hosted" in workflow
-    assert "w3xray-war3" in workflow
-    assert "run_windows_acceptance.ps1" in workflow
-    assert "war3_dir" in workflow
-
-
-def test_real_install_input_reaches_powershell_through_environment() -> None:
-    # Given: a manually supplied path that may contain PowerShell metacharacters.
-    workflow = (_ROOT / ".github" / "workflows" / "windows-real-war3.yml").read_text(encoding="utf-8")
-
-    # When/Then: the expression is data in env, never source text in the run block.
-    assert "W3XRAY_ACCEPTANCE_WAR3_DIR: ${{ inputs.war3_dir }}" in workflow
-    assert "-War3Dir $env:W3XRAY_ACCEPTANCE_WAR3_DIR" in workflow
-    assert "-War3Dir '${{ inputs.war3_dir }}'" not in workflow
-
-
-def test_real_install_runner_executes_only_protected_local_ref() -> None:
-    # Given: a persistent runner with access to a real Warcraft installation.
-    workflow = (_ROOT / ".github" / "workflows" / "windows-real-war3.yml").read_text(encoding="utf-8")
-
-    # When/Then: arbitrary dispatch refs cannot supply code or persisted credentials.
-    assert "permissions:\n  contents: read" in workflow
-    assert "if: github.ref == 'refs/heads/local'" in workflow
-    assert "environment: w3xray-real-war3" in workflow
-    assert "ref: local" in workflow
-    assert "persist-credentials: false" in workflow

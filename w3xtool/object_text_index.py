@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, assert_never
 
 from .description_cache import DescriptionCache
 from .object_candidates import ObjectCandidate
@@ -157,15 +157,20 @@ def _resolve_evidence(
         selected = (synthetic_text_evidence(identity),)
     placeholders = tuple(row for row in map_values if row.placeholder and row.raw_value)
     retained = unique_text_evidence((*selected, *placeholders))
+    selected_usable = tuple(row for row in selected if not row.placeholder)
+    selected_conflict = len({row.raw_value for row in selected_usable}) > 1
+    selected_states = tuple(
+        _selected_evidence_state(state, row, selected_conflict) for row in selected
+    )
     conflict_group = (
-        _conflict_group(identity, selected)
-        if state is ObjectTextState.SOURCE_CONFLICT
+        _conflict_group(identity, selected_usable)
+        if ObjectTextState.SOURCE_CONFLICT in selected_states
         else ""
     )
     return tuple(
         _ResolvedEvidence(
             row,
-            state,
+            _selected_evidence_state(state, row, selected_conflict),
             "" if row.placeholder else conflict_group,
         )
         for row in retained
@@ -177,8 +182,41 @@ def _select_map_tier(
 ) -> tuple[ObjectTextState | None, tuple[TextEvidence, ...]]:
     explicit_empty = tuple(row for row in values if row.raw_value == "")
     if explicit_empty:
-        return ObjectTextState.MAP_EXPLICIT_EMPTY, explicit_empty
+        usable = tuple(row for row in values if not row.placeholder)
+        return ObjectTextState.MAP_EXPLICIT_EMPTY, unique_text_evidence(
+            (*explicit_empty, *usable)
+        )
     return _select_value_tier(values, ObjectTextState.MAP_VALUE)
+
+
+def _selected_evidence_state(
+    tier_state: ObjectTextState,
+    row: TextEvidence,
+    conflict: bool,
+) -> ObjectTextState:
+    """Assign explicit-empty and usable peer evidence their exact states."""
+    if row.placeholder and row.raw_value:
+        return ObjectTextState.AUTHOR_UNDEFINED
+    match tier_state:
+        case ObjectTextState.MAP_EXPLICIT_EMPTY:
+            if row.raw_value == "":
+                return ObjectTextState.MAP_EXPLICIT_EMPTY
+            return (
+                ObjectTextState.SOURCE_CONFLICT
+                if conflict
+                else ObjectTextState.MAP_VALUE
+            )
+        case (
+            ObjectTextState.MAP_VALUE
+            | ObjectTextState.CLIENT_FILL
+            | ObjectTextState.CACHE_FILL
+            | ObjectTextState.AUTHOR_UNDEFINED
+            | ObjectTextState.SOURCE_UNAVAILABLE
+            | ObjectTextState.SOURCE_CONFLICT
+        ):
+            return tier_state
+        case unreachable:
+            assert_never(unreachable)
 
 
 def _select_value_tier(

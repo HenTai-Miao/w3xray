@@ -23,10 +23,12 @@ from .batch_manifest_models import (
     OWNERSHIP_MARKER_NAME as OWNERSHIP_MARKER,
     REQUIRED_MAP_REPORTS,
 )
+from .batch_map_retirement import retire_superseded_map_publications
 from .batch_map_publication import recover_map_publications
 from .batch_map_attempt import attempt_map, failed_unfingerprinted
 from .batch_models import BatchState, MapBatchResult, SourceFingerprint
 from .batch_observability import observe_attempt, startup_diagnostics
+from .batch_output_lock import BatchOutputLease, hold_batch_output_lock
 from .batch_resume import (
     checkpoint_state,
     load_previous_state,
@@ -62,9 +64,26 @@ def run_batch(
     on_progress: Callable[[BatchProgress], None] | None = None,
 ) -> BatchState:
     """Process sources sequentially and persist progress after every map."""
-    started_ns = monotonic_ns()
     normalized = normalize_batch_options(options)
     validate_batch_roots(normalized)
+    with hold_batch_output_lock(normalized.output_root) as lease:
+        return _run_batch_locked(
+            normalized,
+            lease,
+            cancellation=cancellation,
+            on_progress=on_progress,
+        )
+
+
+def _run_batch_locked(
+    normalized: BatchOptions,
+    lease: BatchOutputLease,
+    *,
+    cancellation: CancellationSignal | None,
+    on_progress: Callable[[BatchProgress], None] | None,
+) -> BatchState:
+    """Run every mutable batch phase while one output lease remains held."""
+    started_ns = monotonic_ns()
     recovery = recover_map_publications(normalized.output_root)
     previous = load_previous_state(normalized.output_root)
     cache = build_and_publish_description_cache(normalized.output_root)
@@ -134,6 +153,7 @@ def run_batch(
             state,
             cache_text,
             format_batch_diagnostics_jsonl(tuple(diagnostics)),
+            lease,
         )
         if on_progress is not None:
             on_progress(progress)
@@ -146,7 +166,9 @@ def run_batch(
             state,
             cache_text,
             format_batch_diagnostics_jsonl(tuple(diagnostics)),
+            lease,
         )
+    _ = retire_superseded_map_publications(normalized.output_root, state, lease)
     return state
 
 

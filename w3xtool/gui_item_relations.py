@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .gui_item_relation_layout import ItemRelationLayoutMixin
-from .item_relation_models import ItemRelation, RelationObject
+from .item_relation_models import ItemRelation, ItemRelationKind, RelationObject
 from .item_relation_presentation import format_relation_evidence
 from .item_relation_query import filter_item_relations
 from .map_data import GameObject
@@ -51,22 +51,23 @@ class ItemRelationGuiMixin(ItemRelationLayoutMixin):
         self._set_relation_detail(
             "" if relation is None else format_relation_evidence(relation)
         )
-        target = (
-            None if relation is None else self._resolve_relation_object(relation.item)
-        )
+        target_endpoint = None if relation is None else _target_endpoint(relation)
+        target = self._resolve_relation_object(target_endpoint)
         source_endpoint = None if relation is None else _source_endpoint(relation)
         source = self._resolve_relation_object(source_endpoint)
         self.item_relation_target_button.configure(
-            state="normal" if target is not None else "disabled"
+            state="normal" if target is not None else "disabled",
+            text=_open_button_label(target_endpoint, target=True),
         )
         self.item_relation_source_button.configure(
-            state="normal" if source is not None else "disabled"
+            state="normal" if source is not None else "disabled",
+            text=_open_button_label(source_endpoint, target=False),
         )
 
     def _open_relation_target(self) -> None:
         relation = self._selected_item_relation()
         if relation is not None:
-            self._open_relation_endpoint(relation.item)
+            self._open_relation_endpoint(_target_endpoint(relation))
 
     def _open_relation_source(self) -> None:
         relation = self._selected_item_relation()
@@ -84,16 +85,22 @@ class ItemRelationGuiMixin(ItemRelationLayoutMixin):
         md = self.map_data
         if md is None or endpoint is None:
             return None
-        indexed = md.obj_index.get(endpoint.object_id)
-        if indexed is not None and indexed.category == endpoint.category:
-            return indexed
-        return next(
-            (
-                obj
-                for obj in md.objects.get(endpoint.category, ())
-                if obj.obj_id == endpoint.object_id
-            ),
-            None,
+        candidate = md.obj_identity_index.get((endpoint.category, endpoint.object_id))
+        if candidate is None:
+            indexed = md.obj_index.get(endpoint.object_id)
+            if indexed is not None and indexed.category == endpoint.category:
+                candidate = indexed
+        if candidate is None:
+            candidate = next(
+                (
+                    obj
+                    for obj in md.objects.get(endpoint.category, ())
+                    if obj.obj_id == endpoint.object_id
+                ),
+                None,
+            )
+        return (
+            candidate if candidate is not None and candidate.ext != "script" else None
         )
 
     def _open_relation_endpoint(self, endpoint: RelationObject | None) -> None:
@@ -113,10 +120,17 @@ class ItemRelationGuiMixin(ItemRelationLayoutMixin):
 
 
 def _source_endpoint(relation: ItemRelation) -> RelationObject | None:
-    return relation.source if relation.source is not None else relation.skill
+    return relation.item if _is_skill_relation(relation) else relation.source
+
+
+def _target_endpoint(relation: ItemRelation) -> RelationObject:
+    if _is_skill_relation(relation) and relation.skill is not None:
+        return relation.skill
+    return relation.item
 
 
 def _relation_values(relation: ItemRelation) -> tuple[str, ...]:
+    target = _target_endpoint(relation)
     source = _source_endpoint(relation)
     context = " · ".join(
         value
@@ -132,7 +146,7 @@ def _relation_values(relation: ItemRelation) -> tuple[str, ...]:
     evidence = relation.evidence.source or relation.evidence.location
     return (
         relation.kind.value,
-        _endpoint_label(relation.item),
+        _endpoint_label(target),
         "" if source is None else _endpoint_label(source),
         context,
         relation.confidence.value,
@@ -147,3 +161,24 @@ def _endpoint_label(endpoint: RelationObject) -> str:
         if endpoint.name
         else endpoint.object_id
     )
+
+
+def _is_skill_relation(relation: ItemRelation) -> bool:
+    return relation.kind in {
+        ItemRelationKind.ITEM_ABILITY,
+        ItemRelationKind.COOLDOWN_ABILITY,
+    }
+
+
+def _open_button_label(
+    endpoint: RelationObject | None,
+    *,
+    target: bool,
+) -> str:
+    if endpoint is None:
+        return "打开目标" if target else "打开来源"
+    if endpoint.category == "技能":
+        return "打开技能"
+    if endpoint.category == "物品":
+        return "打开装备"
+    return "打开目标" if target else "打开来源"

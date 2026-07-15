@@ -43,6 +43,65 @@ def test_quality_gate_paths_are_one_unique_immutable_set() -> None:
     assert paths == tuple(sorted(paths))
 
 
+def test_quality_gate_covers_audit_gap_core_modules() -> None:
+    # Given
+    expected_paths = {
+        "tests/test_gui_item_relations.py",
+        "tests/test_item_relation_resilience.py",
+        "tests/test_item_relation_models.py",
+        "tests/test_batch_map_retirement.py",
+        "tests/test_batch_map_retirement_safety.py",
+        "tests/test_campaign_shared_object_identity.py",
+        "tests/test_object_candidate_collection.py",
+        "tests/test_object_candidate_merge.py",
+        "tests/test_object_pipeline.py",
+        "tests/test_object_pipeline_priority.py",
+        "tests/test_object_text_pipeline.py",
+        "tests/test_object_text_roles.py",
+        "tests/test_object_text_sources.py",
+        "tests/test_posix_package_assets.py",
+        "tests/test_release_metadata.py",
+        "tests/test_windows_acceptance_assets.py",
+        "tests/test_windows_real_install_workflow.py",
+        "w3xtool/__init__.py",
+        "w3xtool/gui_item_relation_layout.py",
+        "w3xtool/gui_item_relations.py",
+        "w3xtool/item_relation_builder.py",
+        "w3xtool/item_relation_endpoints.py",
+        "w3xtool/item_relation_fields.py",
+        "w3xtool/item_relation_field_variants.py",
+        "w3xtool/item_relation_models.py",
+        "w3xtool/item_relation_presentation.py",
+        "w3xtool/item_relation_scripts.py",
+        "w3xtool/map_components.py",
+        "w3xtool/map_data.py",
+        "w3xtool/object_candidate_values.py",
+        "w3xtool/object_candidates.py",
+        "w3xtool/object_candidate_models.py",
+        "w3xtool/object_candidate_text_tables.py",
+        "w3xtool/object_field_selection.py",
+        "w3xtool/object_materialization.py",
+        "w3xtool/object_pipeline.py",
+        "w3xtool/object_text_categories.py",
+        "w3xtool/object_text_evidence.py",
+        "w3xtool/object_text_index.py",
+        "w3xtool/object_text_roles.py",
+        "w3xtool/object_text_sources.py",
+        "w3xtool/object_text_records.py",
+        "w3xtool/batch_map_retirement.py",
+        "w3xtool/batch_output_lock.py",
+        "w3xtool/batch_retirement_quarantine.py",
+        "w3xtool/campaign_child_loader.py",
+        "w3xtool/map_loader.py",
+    }
+
+    # When
+    commands = quality_gate.build_quality_commands(python_executable="python")
+
+    # Then
+    assert all(expected_paths.issubset(command.argv) for command in commands)
+
+
 def test_quality_gate_stops_on_first_nonzero_command(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

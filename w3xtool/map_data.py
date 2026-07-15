@@ -23,6 +23,24 @@ if TYPE_CHECKING:
     from .wtg_models import TriggerTreeSummary
 
 
+@dataclass(frozen=True, slots=True)
+class GameObjectFieldEvidence:
+    """One immutable source value retained before public-field selection."""
+
+    key: str
+    label: str
+    value: str
+    source: str
+    source_priority: int
+    value_type: str = ""
+    raw_value: str | None = None
+
+    @property
+    def source_value(self) -> str:
+        """Return the unexpanded source value when collection retained it."""
+        return self.value if self.raw_value is None else self.raw_value
+
+
 @dataclass(slots=True)  # noqa: MUTABLE_OK
 class GameObject:
     """Mutable object builder populated by the extraction pipeline."""
@@ -40,6 +58,7 @@ class GameObject:
     field_values: dict[str, str] = field(default_factory=dict)
     field_sources: dict[str, str] = field(default_factory=dict)
     field_labels: dict[str, str] = field(default_factory=dict)
+    field_evidence: tuple[GameObjectFieldEvidence, ...] = ()
 
     @property
     def decimal(self) -> int:
@@ -93,6 +112,7 @@ class MapData:
     extraction_ledger: ExtractionLedger | None = None
     object_texts: ObjectTextIndex = field(default_factory=empty_object_text_index)
     item_relations: ItemRelationIndex = field(default_factory=empty_item_relation_index)
+    obj_identity_index: dict[tuple[str, str], GameObject] = field(default_factory=dict)
     _closed: bool = field(default=False, init=False, repr=False)
 
     def category_counts(self) -> dict[str, int]:

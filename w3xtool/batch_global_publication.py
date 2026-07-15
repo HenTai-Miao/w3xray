@@ -29,6 +29,11 @@ from .batch_global_models import (
 )
 from .batch_global_validation import validate_global_generation
 from .batch_models import BATCH_SCHEMA_VERSION, BatchState
+from .batch_output_lock import (
+    BatchOutputLease,
+    hold_batch_output_lock,
+    lease_is_current,
+)
 from .batch_reports import (
     format_batch_state_json,
     format_batch_summary_tsv,
@@ -49,8 +54,37 @@ def publish_global_generation(
     state: BatchState,
     cache_text: str,
     diagnostics_text: str,
+    lease: BatchOutputLease | None = None,
 ) -> GlobalGeneration:
     """Commit all global payloads, select them, then update compatibility mirrors."""
+    if lease is None:
+        with hold_batch_output_lock(output_root) as owned:
+            return _publish_global_generation_locked(
+                output_root,
+                state,
+                cache_text,
+                diagnostics_text,
+                owned,
+            )
+    return _publish_global_generation_locked(
+        output_root,
+        state,
+        cache_text,
+        diagnostics_text,
+        lease,
+    )
+
+
+def _publish_global_generation_locked(
+    output_root: str | Path,
+    state: BatchState,
+    cache_text: str,
+    diagnostics_text: str,
+    lease: BatchOutputLease,
+) -> GlobalGeneration:
+    """Publish one generation only while its exact output lease remains current."""
+    if not lease_is_current(lease, output_root):
+        raise GlobalPublicationError("batch output lease is not current")
     output, global_root, generations = _prepare_roots(Path(output_root))
     generation_id = uuid4().hex
     stage = global_root / f".w3xray-global-stage-{generation_id}"

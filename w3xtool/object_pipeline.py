@@ -17,6 +17,7 @@ from .object_candidates import (
 )
 from .object_materialization import (
     BaseObjectTable,
+    build_object_identity_index,
     build_object_index,
     merge_object_candidates,
     named_base_candidates,
@@ -55,6 +56,7 @@ def populate_object_pipeline(
         buckets.setdefault(item.category, []).append(item)
     md.objects = buckets
     md.obj_index = build_object_index(objects)
+    md.obj_identity_index = build_object_identity_index(objects)
     from .object_text_index import build_object_text_index
 
     md.object_texts = build_object_text_index(
@@ -201,3 +203,6 @@ def add_base_objects(
         md.objects.setdefault(item.category, []).append(item)
         existing[item.obj_id] = item
     md.obj_index = existing
+    md.obj_identity_index = build_object_identity_index(
+        item for values in md.objects.values() for item in values
+    )

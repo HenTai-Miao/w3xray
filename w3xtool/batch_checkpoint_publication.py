@@ -5,6 +5,7 @@ from __future__ import annotations
 from .batch_configuration import BatchOutputError
 from .batch_global_publication import publish_global_generation
 from .batch_models import BatchState
+from .batch_output_lock import BatchOutputLease
 
 
 def publish_batch_checkpoint(
@@ -12,6 +13,7 @@ def publish_batch_checkpoint(
     state: BatchState,
     cache_text: str,
     diagnostics_text: str,
+    lease: BatchOutputLease | None = None,
 ) -> None:
     """Publish one generation or expose a stable batch-output failure."""
     try:
@@ -20,6 +22,7 @@ def publish_batch_checkpoint(
             state,
             cache_text,
             diagnostics_text,
+            lease,
         )
     except OSError as exc:
         raise BatchOutputError(

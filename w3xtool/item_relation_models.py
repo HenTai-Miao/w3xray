@@ -115,9 +115,9 @@ class ItemRelationIndex:
     """Stable relations with immutable target, source, skill, and kind lookups."""
 
     records: tuple[ItemRelation, ...]
-    by_item: Mapping[str, tuple[ItemRelation, ...]]
-    by_source: Mapping[str, tuple[ItemRelation, ...]]
-    by_skill: Mapping[str, tuple[ItemRelation, ...]]
+    by_item: Mapping[tuple[str, str], tuple[ItemRelation, ...]]
+    by_source: Mapping[tuple[str, str], tuple[ItemRelation, ...]]
+    by_skill: Mapping[tuple[str, str], tuple[ItemRelation, ...]]
     by_kind: Mapping[ItemRelationKind, tuple[ItemRelation, ...]]
 
     @classmethod
@@ -129,23 +129,23 @@ class ItemRelationIndex:
         ordered = tuple(sorted(unique.values(), key=item_relation_sort_key))
         return cls(
             records=ordered,
-            by_item=_group_by_text(ordered, "item"),
-            by_source=_group_by_text(ordered, "source"),
-            by_skill=_group_by_text(ordered, "skill"),
+            by_item=_group_by_endpoint(ordered, "item"),
+            by_source=_group_by_endpoint(ordered, "source"),
+            by_skill=_group_by_endpoint(ordered, "skill"),
             by_kind=_group_by_kind(ordered),
         )
 
-    def for_item(self, object_id: str) -> tuple[ItemRelation, ...]:
+    def for_item(self, category: str, object_id: str) -> tuple[ItemRelation, ...]:
         """Return all acquisition and skill rows for one item."""
-        return self.by_item.get(object_id, ())
+        return self.by_item.get((category, object_id), ())
 
-    def for_source(self, object_id: str) -> tuple[ItemRelation, ...]:
+    def for_source(self, category: str, object_id: str) -> tuple[ItemRelation, ...]:
         """Return all rows emitted by one monster, shop, or source item."""
-        return self.by_source.get(object_id, ())
+        return self.by_source.get((category, object_id), ())
 
-    def for_skill(self, object_id: str) -> tuple[ItemRelation, ...]:
+    def for_skill(self, category: str, object_id: str) -> tuple[ItemRelation, ...]:
         """Return every item that provides one skill."""
-        return self.by_skill.get(object_id, ())
+        return self.by_skill.get((category, object_id), ())
 
     def for_kind(self, kind: ItemRelationKind) -> tuple[ItemRelation, ...]:
         """Return all rows of one relation kind."""
@@ -212,23 +212,24 @@ def _float_identity(value: float | None) -> str | None:
     return None if value is None else value.hex()
 
 
-def _group_by_text(
+def _group_by_endpoint(
     records: tuple[ItemRelation, ...],
     endpoint: Literal["item", "source", "skill"],
-) -> Mapping[str, tuple[ItemRelation, ...]]:
-    grouped: dict[str, list[ItemRelation]] = {}
+) -> Mapping[tuple[str, str], tuple[ItemRelation, ...]]:
+    grouped: dict[tuple[str, str], list[ItemRelation]] = {}
     for row in records:
         match endpoint:
             case "item":
-                object_id = row.item.object_id
+                relation_object = row.item
             case "source":
-                object_id = "" if row.source is None else row.source.object_id
+                relation_object = row.source
             case "skill":
-                object_id = "" if row.skill is None else row.skill.object_id
+                relation_object = row.skill
             case unreachable:
                 assert_never(unreachable)
-        if object_id:
-            grouped.setdefault(object_id, []).append(row)
+        if relation_object is not None:
+            key = (relation_object.category, relation_object.object_id)
+            grouped.setdefault(key, []).append(row)
     return MappingProxyType({key: tuple(values) for key, values in grouped.items()})
 
 

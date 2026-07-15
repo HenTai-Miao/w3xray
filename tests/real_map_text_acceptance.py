@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+from w3xtool.batch_tsv import decode_tsv_cell
+
 _PLACEHOLDERS: Final = frozenset(("", "-", "_", ",", '""', "''"))
 
 
@@ -37,14 +39,20 @@ def read_tsv(path: Path) -> TsvTable:
     """Read a UTF-8 TSV using standard quoting and newline semantics."""
     with path.open("r", encoding="utf-8", newline="") as handle:
         return _table_from_rows(
-            tuple(tuple(row) for row in csv.reader(handle, delimiter="\t"))
+            tuple(
+                tuple(decode_tsv_cell(cell) for cell in row)
+                for row in csv.reader(handle, delimiter="\t")
+            )
         )
 
 
 def read_tsv_text(text: str) -> TsvTable:
     """Parse one in-memory TSV export without normalizing physical newlines."""
     return _table_from_rows(
-        tuple(tuple(row) for row in csv.reader(io.StringIO(text), delimiter="\t"))
+        tuple(
+            tuple(decode_tsv_cell(cell) for cell in row)
+            for row in csv.reader(io.StringIO(text), delimiter="\t")
+        )
     )
 
 

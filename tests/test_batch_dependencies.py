@@ -32,6 +32,34 @@ def test_dependency_fingerprint_is_stable_and_binds_source_and_cache(
     assert changed_cache != first
 
 
+def test_dependency_fingerprint_binds_extraction_logic_revision(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: one stable source and the current output-producing logic revision.
+    options = BatchOptions(str(tmp_path / "maps"), str(tmp_path / "out"))
+    current = batch_dependencies.fingerprint_dependencies(_source(), options, "b" * 64)
+
+    # When: output semantics advance without changing the report schema.
+    monkeypatch.setattr(
+        batch_dependencies,
+        "BATCH_EXTRACTION_REVISION",
+        batch_dependencies.BATCH_EXTRACTION_REVISION + 1,
+    )
+    changed = batch_dependencies.fingerprint_dependencies(_source(), options, "b" * 64)
+
+    # Then: old publications cannot be silently reused by the new extractor.
+    assert changed != current
+
+
+def test_current_extraction_revision_invalidates_pre_category_safe_outputs() -> None:
+    # Given: revision 3 could resolve campaign-shared rawcodes through the wrong category.
+    category_unsafe_revision = 3
+
+    # When / Then: the current extractor cannot reuse that semantic revision.
+    assert batch_dependencies.BATCH_EXTRACTION_REVISION == category_unsafe_revision + 1
+
+
 def test_classic_dependency_changes_with_archive_identity(tmp_path: Path) -> None:
     # Given: a classic base MPQ represented by stable size and mtime evidence.
     client = tmp_path / "client"

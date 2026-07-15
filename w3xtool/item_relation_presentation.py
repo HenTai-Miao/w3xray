@@ -15,7 +15,7 @@ _SKILL_KINDS: Final = frozenset(
 def format_object_relation_sections(md: MapData, obj: GameObject) -> str:
     """Render item, source, and skill reverse relations for one object."""
     sections: list[str] = []
-    item_rows = md.item_relations.for_item(obj.obj_id)
+    item_rows = md.item_relations.for_item(obj.category, obj.obj_id)
     acquisitions = tuple(row for row in item_rows if row.kind not in _SKILL_KINDS)
     skills = tuple(row for row in item_rows if row.kind in _SKILL_KINDS)
     _append_section(sections, "获取方式", acquisitions)
@@ -23,12 +23,12 @@ def format_object_relation_sections(md: MapData, obj: GameObject) -> str:
     _append_section(
         sections,
         "掉落/可获取装备",
-        md.item_relations.for_source(obj.obj_id),
+        md.item_relations.for_source(obj.category, obj.obj_id),
     )
     _append_section(
         sections,
         "由哪些装备提供",
-        md.item_relations.for_skill(obj.obj_id),
+        md.item_relations.for_skill(obj.category, obj.obj_id),
     )
     return "" if not sections else "\n" + "\n\n".join(sections) + "\n"
 

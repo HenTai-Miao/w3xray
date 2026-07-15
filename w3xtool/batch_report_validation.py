@@ -9,6 +9,7 @@ import sys
 
 from .batch_manifest_models import ManifestResultSummary
 from .batch_reports import DESCRIPTION_REPORT_HEADER, ICON_REPORT_HEADER
+from .batch_tsv import decode_tsv_cell
 from .item_relation_exports import (
     ACQUISITION_REPORT_HEADER,
     EQUIPMENT_SKILL_REPORT_HEADER,
@@ -86,11 +87,16 @@ def _read_rows(path: Path, header: tuple[str, ...]) -> tuple[tuple[str, ...], ..
         with path.open("r", encoding="utf-8", newline="") as handle:
             reader = csv.reader(handle, delimiter="\t")
             first = next(reader, None)
-            if first is None or tuple(first) != header:
+            decoded_header = (
+                None
+                if first is None
+                else tuple(decode_tsv_cell(cell) for cell in first)
+            )
+            if decoded_header != header:
                 raise BatchReportValidationError(
                     f"unexpected report header: {path.name}"
                 )
-            rows = tuple(tuple(row) for row in reader)
+            rows = tuple(tuple(decode_tsv_cell(cell) for cell in row) for row in reader)
     finally:
         csv.field_size_limit(previous_limit)
     if any(len(row) != len(header) for row in rows):

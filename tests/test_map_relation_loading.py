@@ -57,7 +57,7 @@ def test_map_loader_publishes_text_and_relation_indexes_before_return() -> None:
 
     # Then: both immutable indexes are already available to every consumer.
     assert md.object_texts.for_object("物品", "I001")
-    assert md.item_relations.for_item("I001")
+    assert md.item_relations.for_item("物品", "I001")
 
 
 def test_description_cache_path_reaches_gui_map_load_context(tmp_path: Path) -> None:

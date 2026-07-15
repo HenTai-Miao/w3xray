@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import io
 from pathlib import Path
 
 from tests.batch_publication_fixture import publish_client_fill_result
@@ -68,8 +70,8 @@ def test_batch_cache_removes_a_key_when_valid_generations_disagree(
 def test_formatted_cache_round_trips_all_text_and_both_source_hashes(
     tmp_path: Path,
 ) -> None:
-    # Given: raw text contains TSV controls, quotes, newlines, and edge spaces.
-    raw = '  "开头\t正文\r\n第二行  '
+    # Given: raw text contains a formula, TSV controls, newlines, and edge spaces.
+    raw = ' \u200e=HYPERLINK("https://example.invalid")\t正文\r\n第二行  '
     published = publish_client_fill_result(
         1,
         _fingerprint("d"),
@@ -78,12 +80,16 @@ def test_formatted_cache_round_trips_all_text_and_both_source_hashes(
     )
     cache = build_description_cache_from_batch(tmp_path)
     path = tmp_path / "可信描述缓存.tsv"
-    path.write_text(format_description_cache_tsv(cache), encoding="utf-8", newline="")
+    report = format_description_cache_tsv(cache)
+    physical = tuple(csv.reader(io.StringIO(report), delimiter="\t"))[1][4]
+    path.write_text(report, encoding="utf-8", newline="")
 
     # When
     loaded = load_description_cache(str(path))
 
-    # Then
+    # Then: the physical report is safe while the trusted loader is byte-exact.
+    assert physical != raw
+    assert not physical.lstrip().startswith(("=", "+", "-", "@"))
     entry = loaded.lookup("物品", "ratf", "扩展提示", None)[0]
     assert entry.raw_value == raw
     assert entry.source_map_sha256 == published.source.sha256

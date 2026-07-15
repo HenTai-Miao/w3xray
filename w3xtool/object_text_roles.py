@@ -42,7 +42,12 @@ _EDITOR_DESCRIPTION_KEYS: Final = frozenset(
 )
 
 
-def classify_text_field(category: str, key: str, label: str) -> TextRoleMatch | None:
+def classify_text_field(
+    category: str,
+    key: str,
+    label: str,
+    value_type: str = "",
+) -> TextRoleMatch | None:
     """Return the requested semantic role for one known text-bearing field."""
     normalized_key, level = _key_and_level(key, label)
     normalized_label = _normalize_label(label)
@@ -76,6 +81,8 @@ def classify_text_field(category: str, key: str, label: str) -> TextRoleMatch | 
         return TextRoleMatch("扩展提示", level)
     if normalized_key.startswith("gtp") or normalized_key in _BASE_TIP_KEYS:
         return TextRoleMatch("基础提示", level)
+    if value_type.casefold() == "string":
+        return TextRoleMatch(normalized_key, level)
     return None
 
 

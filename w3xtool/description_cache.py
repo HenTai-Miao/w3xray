@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from io import StringIO
 from pathlib import Path
 
+from .batch_tsv import decode_tsv_cell, format_tsv_rows
 from .description_cache_batch import build_description_cache_from_batch
 from .description_cache_models import (
     EMPTY_DESCRIPTION_CACHE,
@@ -43,7 +44,10 @@ def load_description_cache_text(text: str, source: str) -> DescriptionCache:
     """Parse strict cache text already protected by an outer trust boundary."""
     try:
         with StringIO(text, newline="") as handle:
-            rows = tuple(csv.reader(handle, delimiter="\t"))
+            rows = tuple(
+                tuple(decode_tsv_cell(cell) for cell in row)
+                for row in csv.reader(handle, delimiter="\t")
+            )
     except csv.Error as exc:
         return DescriptionCache.build(
             (),
@@ -62,24 +66,24 @@ def load_description_cache_text(text: str, source: str) -> DescriptionCache:
 
 def format_description_cache_tsv(cache: DescriptionCache) -> str:
     """Serialize cache entries without truncating or normalizing source text."""
-    with StringIO(newline="") as output:
-        writer = csv.writer(output, delimiter="\t", lineterminator="\n")
-        writer.writerow(CACHE_HEADER)
-        for entry in cache.entries:
-            writer.writerow(
-                (
-                    entry.category,
-                    entry.base_id,
-                    entry.role,
-                    "" if entry.level is None else str(entry.level),
-                    entry.raw_value,
-                    entry.readable_value,
-                    entry.source_map_sha256,
-                    entry.source_manifest_sha256,
-                    entry.source_path,
-                )
+    rows = (
+        CACHE_HEADER,
+        *(
+            (
+                entry.category,
+                entry.base_id,
+                entry.role,
+                "" if entry.level is None else str(entry.level),
+                entry.raw_value,
+                entry.readable_value,
+                entry.source_map_sha256,
+                entry.source_manifest_sha256,
+                entry.source_path,
             )
-        return output.getvalue()
+            for entry in cache.entries
+        ),
+    )
+    return format_tsv_rows(rows)
 
 
 def _standalone_entry(

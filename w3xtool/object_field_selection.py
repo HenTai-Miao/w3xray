@@ -89,6 +89,16 @@ def selected_display_value(
     return "" if value is None else value.value
 
 
+def object_field_source_priority(value: ObjectFieldValue) -> int:
+    """Return the effective priority used by public-field selection."""
+    identity = _field_identity(value)
+    if value.source_kind is ObjectSourceKind.TEXT_STRINGS and not identity.startswith(
+        "display:"
+    ):
+        return 15
+    return int(value.source_kind)
+
+
 def _field_identity(value: ObjectFieldValue) -> str:
     key = value.key.casefold()
     alias = _DISPLAY_ALIASES.get(key)
@@ -110,14 +120,9 @@ def _field_rank(
     value: ObjectFieldValue,
     identity: str,
 ) -> tuple[int, str, str, str, str, str, str, str, str]:
-    priority = int(value.source_kind)
-    if value.source_kind is ObjectSourceKind.TEXT_STRINGS and not identity.startswith(
-        "display:"
-    ):
-        priority = 15
     normalized_source = value.source.replace("/", "\\")
     return (
-        priority,
+        object_field_source_priority(value),
         normalized_source.casefold(),
         normalized_source,
         value.source,

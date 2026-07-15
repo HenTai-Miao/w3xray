@@ -7,6 +7,7 @@ import io
 
 import pytest
 
+import w3xtool.batch_tsv as batch_tsv
 from w3xtool.batch_descriptions import DescriptionRecord, DescriptionState
 from w3xtool.batch_icon_export import (
     IconExportRecord,
@@ -116,6 +117,30 @@ def test_description_tsv_round_trips_tabs_and_physical_newlines() -> None:
     # Then: quoted TSV restores both versions exactly.
     assert row["原始说明"] == text
     assert row["可读说明"] == "开头\t字段\n第二行\n第三行"
+
+
+@pytest.mark.parametrize(
+    "payload",
+    (
+        '=HYPERLINK("https://example.invalid")',
+        " \t@SUM(1,2)",
+        "\u200e+1+1",
+        "\n-cmd|calc",
+    ),
+)
+def test_batch_tsv_neutralizes_formulas_with_reversible_lossless_encoding(
+    payload: str,
+) -> None:
+    # Given: a map-controlled cell starts a spreadsheet formula after ignorable text.
+
+    # When: the shared batch serializer emits the spreadsheet-facing TSV cell.
+    report = batch_tsv.format_tsv_rows(((payload,),))
+    encoded = next(csv.reader(io.StringIO(report), delimiter="\t"))[0]
+
+    # Then: spreadsheet software sees text while trusted readers recover exact bytes.
+    assert encoded != payload
+    assert not encoded.lstrip().startswith(("=", "+", "-", "@"))
+    assert batch_tsv.decode_tsv_cell(encoded) == payload
 
 
 def test_icon_index_includes_true_source_and_all_object_references() -> None:

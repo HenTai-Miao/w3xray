@@ -43,20 +43,26 @@ def collect_map_text_evidence(
     grouped: dict[TextIdentity, list[TextEvidence]] = {}
     for candidate in candidates:
         for field in candidate.fields:
-            role = classify_text_field(candidate.category, field.key, field.label)
+            role = classify_text_field(
+                candidate.category,
+                field.key,
+                field.label,
+                field.value_type,
+            )
             if role is None:
                 continue
             key = (candidate.category, candidate.obj_id, role.role, role.level)
+            raw_value = field.value if field.raw_value is None else field.raw_value
             grouped.setdefault(key, []).append(
                 TextEvidence(
                     role.role,
                     role.level,
                     field.key,
                     field.label,
-                    field.value,
+                    raw_value,
                     map_source_label(field.source_kind),
                     source_path(field),
-                    is_placeholder(field.value),
+                    is_placeholder(raw_value),
                 ),
             )
     return {key: unique_text_evidence(values) for key, values in grouped.items()}
@@ -69,20 +75,26 @@ def collect_client_text_evidence(
     grouped: dict[TextIdentity, list[TextEvidence]] = {}
     for item in client_objects:
         for field in item.evidence_fields:
-            role = classify_text_field(item.category, field.key, field.label)
+            role = classify_text_field(
+                item.category,
+                field.key,
+                field.label,
+                field.value_type,
+            )
             if role is None:
                 continue
             key = (item.category, item.obj_id, role.role, role.level)
+            raw_value = field.value if field.raw_value is None else field.raw_value
             grouped.setdefault(key, []).append(
                 TextEvidence(
                     role.role,
                     role.level,
                     field.key,
                     field.label,
-                    field.value,
+                    raw_value,
                     "Warcraft客户端",
                     source_path(field),
-                    is_placeholder(field.value),
+                    is_placeholder(raw_value),
                 ),
             )
     return {key: unique_text_evidence(values) for key, values in grouped.items()}

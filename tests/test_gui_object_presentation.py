@@ -105,6 +105,7 @@ class ObjectPresentationTest(GuiTestCase):
         assert "概率：75%" in text
         assert "【装备技能】" in text
         assert "烈焰技能(A001)" in text
+        assert "【掉落/可获取装备】" not in text
         assert "可信度：已确认" in text
         assert "war3mapUnits.doo" in text
         assert "偏移 128" in text

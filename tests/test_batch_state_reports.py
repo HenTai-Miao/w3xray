@@ -1,4 +1,4 @@
-"""Batch schema-v2 persistence and global summary tests."""
+"""Batch schema-4 persistence and global summary tests."""
 
 from __future__ import annotations
 
@@ -34,8 +34,8 @@ def test_batch_state_json_round_trips_source_fingerprint() -> None:
     assert restored == state
 
 
-def test_batch_schema_is_three_for_transactional_global_state() -> None:
-    assert BATCH_SCHEMA_VERSION == 3
+def test_batch_schema_is_four_for_category_safe_relation_state() -> None:
+    assert BATCH_SCHEMA_VERSION == 4
 
 
 def test_batch_state_json_rejects_an_unknown_schema() -> None:

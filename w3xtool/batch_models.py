@@ -7,7 +7,7 @@ from enum import StrEnum
 from typing import Final
 
 
-BATCH_SCHEMA_VERSION: Final = 3
+BATCH_SCHEMA_VERSION: Final = 4
 
 
 class MapBatchState(StrEnum):

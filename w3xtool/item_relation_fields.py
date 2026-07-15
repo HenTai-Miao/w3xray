@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from types import MappingProxyType
-from typing import Final, assert_never
+from typing import assert_never
 
 from .doo import Unit
-from .item_relation_endpoints import object_field_evidence, resolve_relation_object
+from .item_relation_endpoints import (
+    object_field_evidence,
+    placement_resolution,
+    resolve_relation_object,
+)
+from .item_relation_field_variants import (
+    relation_field_variants,
+    relation_objects,
+    split_relation_codes,
+)
 from .item_relation_models import (
     ItemRelation,
     ItemRelationKind,
@@ -15,19 +23,7 @@ from .item_relation_models import (
     RelationConfidence,
     RelationObject,
 )
-from .map_data import GameObject, MapData
-
-_FIELD_ROLES: Final[Mapping[str, ItemRelationKind]] = MappingProxyType({
-    "sellitems": ItemRelationKind.SHOP_SELL,
-    "usei": ItemRelationKind.SHOP_SELL,
-    "makeitems": ItemRelationKind.SHOP_MAKE,
-    "umki": ItemRelationKind.SHOP_MAKE,
-    "abillist": ItemRelationKind.ITEM_ABILITY,
-    "iabi": ItemRelationKind.ITEM_ABILITY,
-    "cooldownid": ItemRelationKind.COOLDOWN_ABILITY,
-    "icid": ItemRelationKind.COOLDOWN_ABILITY,
-})
-_PLACEHOLDER_CODES: Final = frozenset(("____", "----", "0000"))
+from .map_data import GameObject, GameObjectFieldEvidence, MapData
 
 
 def object_field_relations(md: MapData) -> Iterable[ItemRelation]:
@@ -35,28 +31,34 @@ def object_field_relations(md: MapData) -> Iterable[ItemRelation]:
     units_by_type: dict[str, list[Unit]] = {}
     for unit in md.units:
         units_by_type.setdefault(unit.type_id, []).append(unit)
-    for obj in md.obj_index.values():
-        for key, raw in obj.field_values.items():
-            kind = _FIELD_ROLES.get(key.casefold())
-            if kind is None:
-                continue
-            codes = _split_codes(raw)
+    for obj in relation_objects(md):
+        for variant in relation_field_variants(obj):
+            kind = variant.kind
+            field = variant.field
+            codes = split_relation_codes(field.source_value)
             match kind:
                 case ItemRelationKind.SHOP_SELL | ItemRelationKind.SHOP_MAKE:
                     for code in codes:
                         yield from _shop_relations(
                             md,
                             obj,
-                            key,
-                            raw,
+                            field,
                             code,
                             kind,
                             units_by_type,
+                            variant.conflict,
                         )
                 case ItemRelationKind.ITEM_ABILITY | ItemRelationKind.COOLDOWN_ABILITY:
                     if obj.category == "物品":
                         for code in codes:
-                            yield _skill_relation(md, obj, key, raw, code, kind)
+                            yield _skill_relation(
+                                md,
+                                obj,
+                                field,
+                                code,
+                                kind,
+                                variant.conflict,
+                            )
                 case (
                     ItemRelationKind.UNIT_DROP
                     | ItemRelationKind.DESTRUCTABLE_DROP
@@ -73,36 +75,62 @@ def object_field_relations(md: MapData) -> Iterable[ItemRelation]:
 def _shop_relations(
     md: MapData,
     shop: GameObject,
-    key: str,
-    raw: str,
+    field: GameObjectFieldEvidence,
     item_id: str,
     kind: ItemRelationKind,
     units_by_type: Mapping[str, list[Unit]],
+    conflict: bool,
 ) -> Iterable[ItemRelation]:
     item, item_resolved = resolve_relation_object(md, item_id, "物品")
     source = RelationObject(shop.category, shop.obj_id, shop.name)
     instances = units_by_type.get(shop.obj_id, [])
-    evidence = object_field_evidence(shop, key, raw)
+    evidence = object_field_evidence(
+        shop,
+        field.key,
+        field.source_value,
+        source=field.source,
+    )
     if not instances:
         reason = "未预放置；商店可能由脚本创建"
         if not item_resolved:
             reason = f"物品 {item_id} 未解析；{reason}"
+        completeness = (
+            RelationCompleteness.PARTIAL
+            if item_resolved
+            else RelationCompleteness.UNRESOLVED
+        )
+        completeness, reason = placement_resolution(
+            md,
+            "war3mapUnits.doo",
+            completeness,
+            reason,
+        )
+        completeness, reason = _conflict_resolution(completeness, reason, conflict)
         yield ItemRelation(
             kind=kind,
             item=item,
             source=source,
             evidence=evidence,
             confidence=RelationConfidence.CONFIRMED,
-            completeness=(
-                RelationCompleteness.PARTIAL
-                if item_resolved
-                else RelationCompleteness.UNRESOLVED
-            ),
+            completeness=completeness,
             unresolved_reason=reason,
             map_name=md.name,
         )
         return
     for unit in instances:
+        completeness = (
+            RelationCompleteness.COMPLETE
+            if item_resolved
+            else RelationCompleteness.UNRESOLVED
+        )
+        reason = "" if item_resolved else f"物品 {item_id} 未解析"
+        completeness, reason = placement_resolution(
+            md,
+            "war3mapUnits.doo",
+            completeness,
+            reason,
+        )
+        completeness, reason = _conflict_resolution(completeness, reason, conflict)
         yield ItemRelation(
             kind=kind,
             item=item,
@@ -114,12 +142,8 @@ def _shop_relations(
             z=unit.z,
             evidence=evidence,
             confidence=RelationConfidence.CONFIRMED,
-            completeness=(
-                RelationCompleteness.COMPLETE
-                if item_resolved
-                else RelationCompleteness.UNRESOLVED
-            ),
-            unresolved_reason="" if item_resolved else f"物品 {item_id} 未解析",
+            completeness=completeness,
+            unresolved_reason=reason,
             map_name=md.name,
         )
 
@@ -127,34 +151,43 @@ def _shop_relations(
 def _skill_relation(
     md: MapData,
     item_obj: GameObject,
-    key: str,
-    raw: str,
+    field: GameObjectFieldEvidence,
     skill_id: str,
     kind: ItemRelationKind,
+    conflict: bool,
 ) -> ItemRelation:
     item = RelationObject("物品", item_obj.obj_id, item_obj.name)
     skill, resolved = resolve_relation_object(md, skill_id, "技能")
+    completeness = (
+        RelationCompleteness.COMPLETE if resolved else RelationCompleteness.UNRESOLVED
+    )
+    reason = "" if resolved else f"技能 {skill_id} 未解析"
+    completeness, reason = _conflict_resolution(completeness, reason, conflict)
     return ItemRelation(
         kind=kind,
         item=item,
-        source=item,
         skill=skill,
-        evidence=object_field_evidence(item_obj, key, raw),
-        confidence=RelationConfidence.CONFIRMED,
-        completeness=(
-            RelationCompleteness.COMPLETE if resolved else RelationCompleteness.UNRESOLVED
+        evidence=object_field_evidence(
+            item_obj,
+            field.key,
+            field.source_value,
+            source=field.source,
         ),
-        unresolved_reason="" if resolved else f"技能 {skill_id} 未解析",
+        confidence=RelationConfidence.CONFIRMED,
+        completeness=completeness,
+        unresolved_reason=reason,
         map_name=md.name,
     )
 
 
-def _split_codes(raw: str) -> tuple[str, ...]:
-    codes: list[str] = []
-    for token in raw.replace("|", ",").split(","):
-        code = token.strip().strip("\x00")
-        if len(code) != 4 or code in _PLACEHOLDER_CODES or code.isdigit():
-            continue
-        if code not in codes:
-            codes.append(code)
-    return tuple(codes)
+def _conflict_resolution(
+    completeness: RelationCompleteness,
+    reason: str,
+    conflict: bool,
+) -> tuple[RelationCompleteness, str]:
+    if not conflict:
+        return completeness, reason
+    detail = "同优先级对象字段值冲突"
+    return RelationCompleteness.CONFLICT, "；".join(
+        value for value in (reason, detail) if value
+    )
