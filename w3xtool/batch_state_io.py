@@ -40,6 +40,10 @@ class _ResultJson(TypedDict):
     elapsed_ms: int
     relation_counts: list[tuple[str, int]]
     relation_incomplete_count: int
+    dependency_fingerprint: str
+    manifest_sha256: str
+    published_bytes: int
+    peak_rss_bytes: int
 
 
 class _StateJson(TypedDict):
@@ -103,6 +107,10 @@ def _result_json(result: MapBatchResult) -> _ResultJson:
         elapsed_ms=result.elapsed_ms,
         relation_counts=list(result.relation_counts),
         relation_incomplete_count=result.relation_incomplete_count,
+        dependency_fingerprint=result.dependency_fingerprint,
+        manifest_sha256=result.manifest_sha256,
+        published_bytes=result.published_bytes,
+        peak_rss_bytes=result.peak_rss_bytes,
     )
 
 
@@ -134,6 +142,10 @@ def _parse_result(raw) -> MapBatchResult:
             (str(item[0]), int(item[1])) for item in raw["relation_counts"]
         ),
         relation_incomplete_count=int(raw["relation_incomplete_count"]),
+        dependency_fingerprint=str(raw["dependency_fingerprint"]),
+        manifest_sha256=str(raw["manifest_sha256"]),
+        published_bytes=int(raw["published_bytes"]),
+        peak_rss_bytes=int(raw["peak_rss_bytes"]),
     )
 
 

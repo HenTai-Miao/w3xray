@@ -8,7 +8,7 @@ from typing import Final
 from .batch_tsv import format_tsv_rows
 from .object_text_models import ObjectTextIndex, ObjectTextState
 
-_HEADER: Final = (
+OBJECT_TEXT_REPORT_HEADER: Final = (
     "分类",
     "对象ID",
     "基础ID",
@@ -31,7 +31,7 @@ _HEADER: Final = (
 
 def format_object_text_tsv(index: ObjectTextIndex) -> str:
     """Render every complete-text evidence row without altering its values."""
-    rows: list[tuple[str, ...]] = [_HEADER]
+    rows: list[tuple[str, ...]] = [OBJECT_TEXT_REPORT_HEADER]
     rows.extend(
         (
             record.category,

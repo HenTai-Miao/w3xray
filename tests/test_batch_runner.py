@@ -8,13 +8,13 @@ from pathlib import Path
 
 import pytest
 
+from tests.batch_publication_fixture import publish_empty_result
 import w3xtool.batch_runner as batch_runner
 from w3xtool.batch_models import MapBatchResult, MapBatchState, SourceFingerprint
 from w3xtool.batch_runner import (
     BatchConfigurationError,
     BatchOptions,
     OWNERSHIP_MARKER,
-    REQUIRED_MAP_REPORTS,
     run_batch,
 )
 from w3xtool.load_context import MapLoadContext
@@ -49,6 +49,7 @@ def _result(
         icon_failure_count=0,
         restricted_block_count=0,
         elapsed_ms=1,
+        dependency_fingerprint=fingerprint.sha256,
     )
 
 
@@ -58,13 +59,7 @@ def _publish_fake_result(
     options: BatchOptions,
     _context: MapLoadContext,
 ) -> MapBatchResult:
-    relative = f"地图/{index:03d}_{fingerprint.sha256[:8]}"
-    destination = Path(options.output_root, relative)
-    destination.mkdir(parents=True)
-    for name in REQUIRED_MAP_REPORTS:
-        (destination / name).write_text("ok\n", encoding="utf-8")
-    (destination / OWNERSHIP_MARKER).write_text(fingerprint.sha256, encoding="ascii")
-    return _result(fingerprint, output_directory=relative)
+    return publish_empty_result(index, fingerprint, options.output_root)
 
 
 def test_scan_map_sources_includes_campaigns_in_stable_path_order(

@@ -17,7 +17,7 @@ from .item_relation_models import (
 _SKILL_KINDS: Final = frozenset(
     (ItemRelationKind.ITEM_ABILITY, ItemRelationKind.COOLDOWN_ABILITY)
 )
-_ACQUISITION_HEADER: Final = (
+ACQUISITION_REPORT_HEADER: Final = (
     "关系ID",
     "地图子图",
     "关系类型",
@@ -45,7 +45,7 @@ _ACQUISITION_HEADER: Final = (
     "完整性",
     "未解析原因",
 )
-_SKILL_HEADER: Final = (
+EQUIPMENT_SKILL_REPORT_HEADER: Final = (
     "关系ID",
     "装备ID",
     "装备名称",
@@ -62,7 +62,7 @@ _SKILL_HEADER: Final = (
 
 def format_item_acquisition_tsv(index: ItemRelationIndex) -> str:
     """Render all non-skill item acquisition relations in stable index order."""
-    rows: list[tuple[str, ...]] = [_ACQUISITION_HEADER]
+    rows: list[tuple[str, ...]] = [ACQUISITION_REPORT_HEADER]
     rows.extend(
         _acquisition_row(relation)
         for relation in index.records
@@ -73,7 +73,7 @@ def format_item_acquisition_tsv(index: ItemRelationIndex) -> str:
 
 def format_equipment_skills_tsv(index: ItemRelationIndex) -> str:
     """Render item ability and shared-cooldown relations only."""
-    rows: list[tuple[str, ...]] = [_SKILL_HEADER]
+    rows: list[tuple[str, ...]] = [EQUIPMENT_SKILL_REPORT_HEADER]
     rows.extend(
         _skill_row(relation)
         for relation in index.records

@@ -9,6 +9,11 @@ from pathlib import Path
 from typing import Final, override
 
 from .batch_description_cache import build_and_publish_description_cache
+from .batch_manifest_models import (
+    OWNERSHIP_MARKER_NAME as OWNERSHIP_MARKER,
+)
+from .batch_manifest_models import REQUIRED_MAP_REPORTS
+from .batch_manifest_validation import verify_map_publication
 from .batch_models import (
     BATCH_SCHEMA_VERSION,
     BatchState,
@@ -29,20 +34,19 @@ from .map_directory import scan_map_sources
 from .safe_output import safe_destination, write_text_safely
 from .safe_output_models import SafeWriteStatus
 
+__all__ = (
+    "OWNERSHIP_MARKER",
+    "REQUIRED_MAP_REPORTS",
+    "BatchConfigurationError",
+    "BatchOptions",
+    "BatchOutputError",
+    "fingerprint_source",
+    "process_one_map",
+    "run_batch",
+)
+
 DEFAULT_BATCH_OUTPUT: Final = (
     "/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output"
-)
-OWNERSHIP_MARKER: Final = ".w3xray-batch-owned"
-REQUIRED_MAP_REPORTS: Final = (
-    "地图摘要.txt",
-    "图标索引.tsv",
-    "对象描述.tsv",
-    "图标完整性.txt",
-    "描述完整性.txt",
-    "对象完整描述.tsv",
-    "掉落与获取关系.tsv",
-    "装备技能关系.tsv",
-    "关系完整性.txt",
 )
 _STATE_FILE: Final = "批量提取状态.json"
 
@@ -215,19 +219,7 @@ def _published_result_exists(output_root: str, result: MapBatchResult) -> bool:
     directory = safe_destination(output_root, result.output_directory)
     if directory is None or os.path.islink(directory) or not os.path.isdir(directory):
         return False
-    marker = Path(directory, OWNERSHIP_MARKER)
-    try:
-        if (
-            marker.is_symlink()
-            or marker.read_text(encoding="ascii") != result.source.sha256
-        ):
-            return False
-    except OSError:
-        return False
-    return all(
-        not Path(directory, name).is_symlink() and Path(directory, name).is_file()
-        for name in REQUIRED_MAP_REPORTS
-    )
+    return verify_map_publication(Path(directory), result).valid
 
 
 def _failed_result(

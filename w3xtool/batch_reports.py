@@ -27,7 +27,7 @@ __all__ = (
     "parse_batch_state_json",
 )
 
-_DESCRIPTION_HEADER: Final = (
+DESCRIPTION_REPORT_HEADER: Final = (
     "分类",
     "对象ID",
     "基础ID",
@@ -42,7 +42,7 @@ _DESCRIPTION_HEADER: Final = (
     "说明来源",
     "完整性状态",
 )
-_ICON_HEADER: Final = (
+ICON_REPORT_HEADER: Final = (
     "类型",
     "原始路径",
     "解析路径",
@@ -61,7 +61,7 @@ _ICON_HEADER: Final = (
 
 def format_description_tsv(records: Iterable[DescriptionRecord]) -> str:
     """Render raw and readable object descriptions without losing markup."""
-    rows: list[tuple[str, ...]] = [_DESCRIPTION_HEADER]
+    rows: list[tuple[str, ...]] = [DESCRIPTION_REPORT_HEADER]
     for record in sorted(records, key=_description_key):
         rows.append(
             (
@@ -85,7 +85,7 @@ def format_description_tsv(records: Iterable[DescriptionRecord]) -> str:
 
 def format_icon_index_tsv(records: Iterable[IconExportRecord]) -> str:
     """Render icon evidence, publication status, and object references."""
-    rows: list[tuple[str, ...]] = [_ICON_HEADER]
+    rows: list[tuple[str, ...]] = [ICON_REPORT_HEADER]
     for record in sorted(records, key=_icon_key):
         references = ";".join(
             f"{item.category}:{item.object_id}:{item.object_name}"

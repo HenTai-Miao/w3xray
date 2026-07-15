@@ -55,6 +55,10 @@ class MapBatchResult:
     elapsed_ms: int
     relation_counts: tuple[tuple[str, int], ...] = ()
     relation_incomplete_count: int = 0
+    dependency_fingerprint: str = ""
+    manifest_sha256: str = ""
+    published_bytes: int = 0
+    peak_rss_bytes: int = 0
 
 
 @dataclass(frozen=True, slots=True)

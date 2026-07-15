@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic_ns
 from typing import Protocol, override
+from uuid import uuid4
 
 from .batch_descriptions import (
     DescriptionRecord,
@@ -19,6 +20,7 @@ from .batch_icon_export import (
 )
 from .batch_map_icons import export_map_icons
 from .batch_item_reports import BatchItemReports, build_batch_item_reports
+from .batch_map_manifest import finalize_map_manifest
 from .batch_map_publication import (
     create_map_stage,
     discard_map_stage,
@@ -73,7 +75,9 @@ def process_one_map(
     game_source: GameDataSource | None = None
     try:
         game_source = open_game_data_source(options.game_data_path)
-        stage = create_map_stage(options.output_root)
+        relative = map_output_relative(index, root.name, fingerprint.sha256)
+        transaction_id = uuid4().hex
+        stage = create_map_stage(options.output_root, transaction_id)
         item_reports = build_batch_item_reports(root)
         maps = item_reports.maps
         descriptions = audit_object_descriptions(item_reports.objects)
@@ -104,7 +108,6 @@ def process_one_map(
             icons=icons,
             descriptions=descriptions,
         )
-        relative = map_output_relative(index, root.name, fingerprint.sha256)
         elapsed_ms = max(0, (monotonic_ns() - started) // 1_000_000)
         result = _map_result(
             fingerprint,
@@ -126,9 +129,9 @@ def process_one_map(
             descriptions,
             unresolved,
             restricted,
-            fingerprint.sha256,
             item_reports,
         )
+        result = finalize_map_manifest(stage, result, transaction_id)
         _ = publish_map_stage(stage, options.output_root, relative, fingerprint.sha256)
         stage = None
         return result
@@ -184,6 +187,7 @@ def _map_result(
         elapsed_ms=elapsed_ms,
         relation_counts=item_reports.relation_counts,
         relation_incomplete_count=item_reports.relation_incomplete_count,
+        dependency_fingerprint=fingerprint.sha256,
     )
 
 
@@ -194,7 +198,6 @@ def _write_reports(
     descriptions: tuple[DescriptionRecord, ...],
     unresolved: int,
     restricted: int,
-    digest: str,
     item_reports: BatchItemReports,
 ) -> None:
     reports = (
@@ -211,7 +214,6 @@ def _write_reports(
         ),
         ("描述完整性.txt", format_description_completeness(descriptions)),
         *item_reports.artifacts(),
-        (".w3xray-batch-owned", digest),
     )
     for name, text in reports:
         write = write_text_safely(str(stage), name, text)
