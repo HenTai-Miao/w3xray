@@ -8,16 +8,19 @@ import shutil
 
 import pytest
 
-from tests.batch_publication_fixture import publish_client_fill_result
+from tests.batch_publication_fixture import (
+    publish_client_fill_result,
+    publish_empty_result,
+)
 import w3xtool.batch_runner as batch_runner
 from w3xtool.batch_description_cache import build_and_publish_description_cache
 from w3xtool.batch_models import (
     BATCH_SCHEMA_VERSION,
     MapBatchResult,
-    MapBatchState,
     SourceFingerprint,
 )
 from w3xtool.batch_runner import BatchOptions, run_batch
+from w3xtool.batch_resume import load_previous_state
 from w3xtool.load_context import MapLoadContext
 
 
@@ -28,8 +31,14 @@ def test_schema_one_root_state_is_not_reused(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    # When / Then
-    assert batch_runner._read_previous_state(str(tmp_path)) is None
+    # When
+    previous = load_previous_state(str(tmp_path))
+
+    # Then
+    assert previous.state is None
+    assert tuple(item.code for item in previous.diagnostics) == (
+        "legacy_state_ignored",
+    )
 
 
 def test_batch_builds_and_publishes_cache_before_processing_maps(
@@ -61,22 +70,10 @@ def test_batch_builds_and_publishes_cache_before_processing_maps(
         context: MapLoadContext,
     ) -> MapBatchResult:
         seen_cache_sizes.append(len(context.description_cache.entries))
-        return MapBatchResult(
-            source=fingerprint,
-            display_name="sample",
-            output_directory="地图/001_sample",
-            stage="published",
-            state=MapBatchState.COMPLETE,
-            first_error="",
-            object_count=0,
-            description_counts=(),
-            named_icon_count=0,
-            anonymous_icon_count=0,
-            original_written_count=0,
-            png_written_count=0,
-            icon_failure_count=0,
-            restricted_block_count=0,
-            elapsed_ms=0,
+        return publish_empty_result(
+            1,
+            fingerprint,
+            _options.output_root,
         )
 
     monkeypatch.setattr(batch_runner, "process_one_map", process)

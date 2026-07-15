@@ -2,40 +2,42 @@
 
 from __future__ import annotations
 
-import os
 import struct
-from dataclasses import dataclass, replace
+from dataclasses import replace
+import hashlib
 from pathlib import Path
-from typing import Final, override
 
+from .batch_checkpoint_publication import publish_batch_checkpoint
+from .batch_configuration import (
+    DEFAULT_BATCH_OUTPUT as DEFAULT_BATCH_OUTPUT,
+    BatchConfigurationError,
+    BatchOptions,
+    BatchOutputError,
+    normalize_batch_options,
+    validate_batch_roots,
+)
+from .batch_dependencies import fingerprint_dependencies
 from .batch_description_cache import build_and_publish_description_cache
 from .batch_manifest_models import (
     OWNERSHIP_MARKER_NAME as OWNERSHIP_MARKER,
+    REQUIRED_MAP_REPORTS,
 )
-from .batch_manifest_models import REQUIRED_MAP_REPORTS
-from .batch_manifest_validation import verify_map_publication
 from .batch_map_publication import recover_map_publications
-from .batch_models import (
-    BATCH_SCHEMA_VERSION,
-    BatchState,
-    BatchStateFormatError,
-    MapBatchResult,
-    MapBatchState,
-    SourceFingerprint,
-)
-from .batch_reports import (
-    format_batch_state_json,
-    format_batch_summary_tsv,
-    format_retry_tsv,
-    parse_batch_state_json,
+from .batch_models import BatchState, MapBatchResult, MapBatchState, SourceFingerprint
+from .batch_resume import (
+    ResumeDiagnostic,
+    checkpoint_state,
+    find_reusable_result,
+    format_resume_diagnostics_jsonl,
+    load_previous_state,
 )
 from .bounded_file import BoundedFileError, sha256_regular_file
+from .description_cache import format_description_cache_tsv
 from .load_context import MapLoadContext, build_map_load_context
 from .map_directory import scan_map_sources
-from .safe_output import safe_destination, write_text_safely
-from .safe_output_models import SafeWriteStatus
 
 __all__ = (
+    "DEFAULT_BATCH_OUTPUT",
     "OWNERSHIP_MARKER",
     "REQUIRED_MAP_REPORTS",
     "BatchConfigurationError",
@@ -46,79 +48,112 @@ __all__ = (
     "run_batch",
 )
 
-DEFAULT_BATCH_OUTPUT: Final = (
-    "/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output"
-)
-_STATE_FILE: Final = "批量提取状态.json"
-
-
-@dataclass(frozen=True, slots=True)
-class BatchOptions:
-    source_directory: str
-    output_root: str = DEFAULT_BATCH_OUTPUT
-    game_data_path: str | None = None
-    retry_failed: bool = True
-
-
-@dataclass(frozen=True, slots=True)
-class BatchConfigurationError(ValueError):
-    detail: str
-
-    @override
-    def __str__(self) -> str:
-        return self.detail
-
-
-@dataclass(frozen=True, slots=True)
-class BatchOutputError(OSError):
-    path: str
-    detail: str
-
-    @override
-    def __str__(self) -> str:
-        return f"cannot publish {self.path}: {self.detail}"
-
 
 def run_batch(options: BatchOptions) -> BatchState:
     """Process sources sequentially and persist progress after every map."""
-    normalized = _normalized_options(options)
-    _validate_roots(normalized)
-    _ = recover_map_publications(normalized.output_root)
-    previous = _read_previous_state(normalized.output_root)
+    normalized = normalize_batch_options(options)
+    validate_batch_roots(normalized)
+    recovery = recover_map_publications(normalized.output_root)
+    previous = load_previous_state(normalized.output_root)
+    cache = build_and_publish_description_cache(normalized.output_root)
+    cache_text = format_description_cache_tsv(cache)
+    cache_sha256 = hashlib.sha256(cache_text.encode("utf-8")).hexdigest()
     context = replace(
         build_map_load_context(game_data_path=normalized.game_data_path),
-        description_cache=build_and_publish_description_cache(normalized.output_root),
+        description_cache=cache,
     )
+    paths = tuple(scan_map_sources(normalized.source_directory))
     results: list[MapBatchResult] = []
-    for index, path in enumerate(
-        scan_map_sources(normalized.source_directory), start=1
-    ):
+    diagnostics = list(previous.diagnostics)
+    diagnostics.extend(
+        ResumeDiagnostic(
+            f"recovery_{item.code}",
+            item.detail,
+            item.transaction_id,
+        )
+        for item in recovery
+    )
+    for offset, path in enumerate(paths):
+        index = offset + 1
         try:
             fingerprint = fingerprint_source(path)
         except (OSError, ValueError) as exc:
             result = _failed_without_fingerprint(path, exc)
+            diagnostics.append(
+                ResumeDiagnostic("source_fingerprint_failed", str(exc), path)
+            )
         else:
-            reusable = _reusable_result(
+            decision = find_reusable_result(
                 previous,
                 fingerprint,
+                "",
                 normalized.output_root,
                 retry_failed=normalized.retry_failed,
             )
-            if reusable is not None:
-                result = reusable
+            if decision.result is not None:
+                result = decision.result
             else:
                 try:
-                    result = process_one_map(index, fingerprint, normalized, context)
+                    dependency = fingerprint_dependencies(
+                        fingerprint,
+                        normalized,
+                        cache_sha256,
+                    )
                 except (OSError, ValueError, KeyError, IndexError, struct.error) as exc:
                     result = _failed_result(fingerprint, exc)
+                else:
+                    decision = find_reusable_result(
+                        previous,
+                        fingerprint,
+                        dependency,
+                        normalized.output_root,
+                        retry_failed=normalized.retry_failed,
+                    )
+                    if decision.result is not None:
+                        result = decision.result
+                    else:
+                        try:
+                            result = process_one_map(
+                                index,
+                                fingerprint,
+                                normalized,
+                                context,
+                            )
+                        except (
+                            OSError,
+                            ValueError,
+                            KeyError,
+                            IndexError,
+                            struct.error,
+                        ) as exc:
+                            result = _failed_result(fingerprint, exc)
+            diagnostics.append(
+                ResumeDiagnostic(
+                    decision.code,
+                    decision.detail,
+                    fingerprint.path,
+                )
+            )
         results.append(result)
-        _publish_global_reports(
-            normalized.output_root,
-            BatchState(BATCH_SCHEMA_VERSION, tuple(results)),
+        state = checkpoint_state(
+            tuple(results),
+            previous,
+            paths[offset + 1 :],
         )
-    state = BatchState(BATCH_SCHEMA_VERSION, tuple(results))
+        publish_batch_checkpoint(
+            normalized.output_root,
+            state,
+            cache_text,
+            format_resume_diagnostics_jsonl(tuple(diagnostics)),
+        )
+    state = checkpoint_state(tuple(results), previous, ())
     if not results:
-        _publish_global_reports(normalized.output_root, state)
+        publish_batch_checkpoint(
+            normalized.output_root,
+            state,
+            cache_text,
+            format_resume_diagnostics_jsonl(tuple(diagnostics)),
+        )
     return state
 
 
@@ -149,81 +184,6 @@ def fingerprint_source(path: str) -> SourceFingerprint:
     return SourceFingerprint(str(source), identity.size, after.st_mtime_ns, digest)
 
 
-def _normalized_options(options: BatchOptions) -> BatchOptions:
-    source = os.path.abspath(os.path.expanduser(options.source_directory))
-    output = os.path.abspath(os.path.expanduser(options.output_root))
-    game_data = options.game_data_path or _find_classic_root(source)
-    return BatchOptions(source, output, game_data, options.retry_failed)
-
-
-def _validate_roots(options: BatchOptions) -> None:
-    if not os.path.isdir(options.source_directory):
-        raise BatchConfigurationError("source directory does not exist")
-    if os.path.islink(options.output_root):
-        raise BatchConfigurationError("output root is a symlink")
-    source = os.path.realpath(options.source_directory)
-    output = os.path.realpath(options.output_root)
-    try:
-        common = os.path.commonpath((source, output))
-    except ValueError as exc:
-        raise BatchConfigurationError(
-            "source and output roots cannot be compared"
-        ) from exc
-    if common in {source, output}:
-        raise BatchConfigurationError("source and output roots overlap")
-
-
-def _find_classic_root(source_directory: str) -> str | None:
-    current = Path(source_directory)
-    for _ in range(8):
-        if (current / "war3.mpq").is_file():
-            return str(current)
-        if current.parent == current:
-            return None
-        current = current.parent
-    return None
-
-
-def _read_previous_state(output_root: str) -> BatchState | None:
-    path = Path(output_root, _STATE_FILE)
-    if path.is_symlink() or not path.is_file():
-        return None
-    try:
-        return parse_batch_state_json(path.read_text(encoding="utf-8"))
-    except OSError, UnicodeError, BatchStateFormatError:
-        return None
-
-
-def _reusable_result(
-    previous: BatchState | None,
-    fingerprint: SourceFingerprint,
-    output_root: str,
-    *,
-    retry_failed: bool,
-) -> MapBatchResult | None:
-    if previous is None:
-        return None
-    for result in previous.results:
-        if result.source != fingerprint:
-            continue
-        if result.state is MapBatchState.COMPLETE:
-            if result.stage == "published" and _published_result_exists(
-                output_root, result
-            ):
-                return result
-            continue
-        if result.state is MapBatchState.FAILED and not retry_failed:
-            return result
-    return None
-
-
-def _published_result_exists(output_root: str, result: MapBatchResult) -> bool:
-    directory = safe_destination(output_root, result.output_directory)
-    if directory is None or os.path.islink(directory) or not os.path.isdir(directory):
-        return False
-    return verify_map_publication(Path(directory), result).valid
-
-
 def _failed_result(
     fingerprint: SourceFingerprint, exc: BaseException
 ) -> MapBatchResult:
@@ -249,15 +209,3 @@ def _failed_result(
 def _failed_without_fingerprint(path: str, exc: BaseException) -> MapBatchResult:
     fingerprint = SourceFingerprint(path, 0, 0, "0" * 64)
     return _failed_result(fingerprint, exc)
-
-
-def _publish_global_reports(output_root: str, state: BatchState) -> None:
-    reports = (
-        ("批量提取汇总.tsv", format_batch_summary_tsv(state)),
-        (_STATE_FILE, format_batch_state_json(state)),
-        ("失败与重试.tsv", format_retry_tsv(state)),
-    )
-    for name, text in reports:
-        result = write_text_safely(output_root, name, text)
-        if result.status is not SafeWriteStatus.WRITTEN:
-            raise BatchOutputError(name, result.error or result.status.value)

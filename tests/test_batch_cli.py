@@ -9,6 +9,7 @@ import pytest
 import main as entrypoint
 import w3xtool.batch_cli as batch_cli
 from w3xtool.batch_models import (
+    BATCH_SCHEMA_VERSION,
     BatchState,
     MapBatchResult,
     MapBatchState,
@@ -85,7 +86,8 @@ def test_run_batch_cli_returns_one_only_when_a_map_failed(
 ) -> None:
     # Given
     state = BatchState(
-        2, (_result(MapBatchState.COMPLETE), _result(MapBatchState.FAILED))
+        BATCH_SCHEMA_VERSION,
+        (_result(MapBatchState.COMPLETE), _result(MapBatchState.FAILED)),
     )
     monkeypatch.setattr(batch_cli, "run_batch", lambda _options: state)
 

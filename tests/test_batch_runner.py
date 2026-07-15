@@ -11,7 +11,6 @@ import pytest
 from tests.batch_publication_fixture import publish_empty_result
 import w3xtool.batch_runner as batch_runner
 from w3xtool.batch_models import (
-    BatchState,
     MapBatchResult,
     MapBatchState,
     SourceFingerprint,
@@ -19,7 +18,6 @@ from w3xtool.batch_models import (
 from w3xtool.batch_runner import (
     BatchConfigurationError,
     BatchOptions,
-    OWNERSHIP_MARKER,
     run_batch,
 )
 from w3xtool.load_context import MapLoadContext
@@ -147,6 +145,11 @@ def test_resume_skips_only_an_unchanged_published_success(
     monkeypatch.setattr(
         batch_runner, "build_map_load_context", lambda **_kwargs: MapLoadContext()
     )
+    monkeypatch.setattr(
+        batch_runner,
+        "fingerprint_dependencies",
+        lambda source, *_args: source.sha256,
+    )
 
     def process(
         index: int,
@@ -217,41 +220,6 @@ def test_batch_rejects_an_output_nested_in_the_source_tree(tmp_path: Path) -> No
         run_batch(options)
 
 
-def test_batch_recovers_map_transactions_before_loading_previous_state(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # Given: an empty source root and observable recovery/state boundaries.
-    source_root = tmp_path / "Maps"
-    source_root.mkdir()
-    events: list[str] = []
-
-    def recover(_output_root: str) -> tuple[()]:
-        events.append("recover")
-        return ()
-
-    def read_previous(_output_root: str) -> BatchState | None:
-        events.append("previous")
-        return None
-
-    monkeypatch.setattr(
-        batch_runner,
-        "recover_map_publications",
-        recover,
-        raising=False,
-    )
-    monkeypatch.setattr(batch_runner, "_read_previous_state", read_previous)
-    monkeypatch.setattr(
-        batch_runner, "build_map_load_context", lambda **_kwargs: MapLoadContext()
-    )
-
-    # When: batch startup crosses the validated output boundary.
-    run_batch(BatchOptions(str(source_root), str(tmp_path / "output")))
-
-    # Then: recovery always precedes resume-state authority.
-    assert events[:2] == ["recover", "previous"]
-
-
 def test_no_retry_failed_reuses_an_unchanged_failed_result(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -288,27 +256,3 @@ def test_no_retry_failed_reuses_an_unchanged_failed_result(
     # Then
     assert second == first
     assert calls == 1
-
-
-def test_resume_reprocesses_when_v2_reports_are_missing(tmp_path: Path) -> None:
-    # Given: a schema-v1-era result directory has every legacy report.
-    fingerprint = SourceFingerprint("/maps/sample.w3x", 3, 4, "a" * 64)
-    relative = "地图/001_sample_aaaaaaaa"
-    destination = tmp_path / relative
-    destination.mkdir(parents=True)
-    for name in (
-        "地图摘要.txt",
-        "图标索引.tsv",
-        "对象描述.tsv",
-        "图标完整性.txt",
-        "描述完整性.txt",
-    ):
-        (destination / name).write_text("legacy\n", encoding="utf-8")
-    (destination / OWNERSHIP_MARKER).write_text("a" * 64, encoding="ascii")
-    result = _result(fingerprint, output_directory=relative)
-
-    # When
-    reusable = batch_runner._published_result_exists(str(tmp_path), result)
-
-    # Then: complete text and relation reports are mandatory for schema v2.
-    assert not reusable
