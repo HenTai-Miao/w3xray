@@ -15,16 +15,8 @@ from w3xtool.current_map_models import (
     ResolutionStatus,
 )
 from w3xtool.current_map_snapshot import CurrentMapSnapshot
-
-
-type _ThreadArg = (
-    int
-    | Path
-    | tuple[Path, ...]
-    | Callable[..., None]
-    | Callable[..., CurrentMapResolution]
-    | Callable[..., CurrentMapSnapshot]
-)
+from w3xtool.gui_worker_host import GuiWorkerHostMixin
+from w3xtool.gui_worker_registry import GuiWorkerRegistry
 
 
 class _Widget:
@@ -38,7 +30,7 @@ class _Widget:
         return self.values.get(key, "")
 
 
-class _Harness(CurrentMapGuiMixin):
+class _Harness(CurrentMapGuiMixin, GuiWorkerHostMixin):
     def __init__(self) -> None:
         self._root_values: dict[str, str | Path | None] = {
             "battle": "/current/battle",
@@ -53,6 +45,8 @@ class _Harness(CurrentMapGuiMixin):
         self.loaded: list[str] = []
         self.scheduled: list[Callable[[], None]] = []
         self.cancelled: list[str] = []
+        self._init_gui_worker_host()
+        self._gui_workers = GuiWorkerRegistry(thread_factory=_InlineThread)
         self._init_current_map_gui()
 
     def _load_config(self) -> Mapping[str, str | None]:
@@ -98,18 +92,22 @@ class _InlineThread:
     def __init__(
         self,
         *,
-        target: Callable[..., None],
-        args: tuple[_ThreadArg, ...],
+        target: Callable[[], None],
         daemon: bool,
         name: str,
     ) -> None:
         self._target = target
-        self._args = args
         self.daemon = daemon
         self.name = name
 
     def start(self) -> None:
-        self._target(*self._args)
+        self._target()
+
+    def join(self, timeout: float | None = None) -> None:
+        _ = timeout
+
+    def is_alive(self) -> bool:
+        return False
 
 
 def _candidate(path: Path, kind: EvidenceKind) -> MapCandidate:
@@ -120,7 +118,6 @@ def _harness(monkeypatch: pytest.MonkeyPatch) -> _Harness:
     monkeypatch.setattr(
         current_gui, "cleanup_stale_current_map_snapshots", lambda: None
     )
-    monkeypatch.setattr(current_gui.threading, "Thread", _InlineThread)
     return _Harness()
 
 

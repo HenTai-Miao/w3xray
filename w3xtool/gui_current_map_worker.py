@@ -28,6 +28,8 @@ if TYPE_CHECKING:
     import queue
     from typing import Protocol
 
+    from .gui_worker_registry import GuiWorkerTarget, GuiWorkerTicket
+
     class _Configurable(Protocol):
         def configure(self, **values: str) -> None: ...
 
@@ -60,6 +62,16 @@ if TYPE_CHECKING:
         def after(self, delay_ms: int, callback: Callable[[], None]) -> str: ...
 
         def after_cancel(self, poll_id: str) -> None: ...
+
+        def _start_gui_worker(
+            self,
+            group: str,
+            target: GuiWorkerTarget,
+            *,
+            replace: bool,
+        ) -> GuiWorkerTicket: ...
+
+        def _cancel_gui_worker_group(self, group: str) -> None: ...
 else:
     CurrentMapHost = object
 

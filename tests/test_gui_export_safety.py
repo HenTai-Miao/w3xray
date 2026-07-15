@@ -9,15 +9,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from tests.gui_base import GuiTestCase
+from tests.gui_worker_fakes import InlineGuiThread
 from w3xtool.api import GameObject, MapData
-
-
-class _InlineThread:
-    def __init__(self, target, daemon: bool) -> None:
-        self._target = target
-
-    def start(self) -> None:
-        self._target()
+from w3xtool.gui_worker_registry import GuiWorkerRegistry
 
 
 class GuiExportSafetyTest(GuiTestCase):
@@ -25,16 +19,26 @@ class GuiExportSafetyTest(GuiTestCase):
         output = Path(self.create_temp_dir()) / "scripts"
         secret = output.parent / "private" / "source.w3x"
         md = MapData(path="x.w3x", name="错误路径安全图")
-        md.scripts = {"war3map.j": "function main takes nothing returns nothing\nendfunction\n"}
+        md.scripts = {
+            "war3map.j": "function main takes nothing returns nothing\nendfunction\n"
+        }
         self.app.map_data = md
 
-        with patch("w3xtool.gui_export_actions.tmp_extract_dir", return_value=str(output)):
-            with patch("w3xtool.gui_export_actions.threading.Thread", _InlineThread):
+        with patch(
+            "w3xtool.gui_export_actions.tmp_extract_dir", return_value=str(output)
+        ):
+            with patch.object(
+                self.app,
+                "_gui_workers",
+                GuiWorkerRegistry(thread_factory=InlineGuiThread),
+            ):
                 with patch(
                     "w3xtool.gui_export_actions.write_script_exports",
                     side_effect=OSError(errno.EACCES, "denied", str(secret)),
                 ):
-                    with patch("w3xtool.gui_export_actions.messagebox.showerror") as show_error:
+                    with patch(
+                        "w3xtool.gui_export_actions.messagebox.showerror"
+                    ) as show_error:
                         self.app.on_export_scripts()
                         self.app.update()
 
@@ -55,8 +59,14 @@ class GuiExportSafetyTest(GuiTestCase):
         }
         self.app.map_data = md
 
-        with patch("w3xtool.gui_export_actions.tmp_extract_dir", return_value=str(output)):
-            with patch("w3xtool.gui_export_actions.threading.Thread", _InlineThread):
+        with patch(
+            "w3xtool.gui_export_actions.tmp_extract_dir", return_value=str(output)
+        ):
+            with patch.object(
+                self.app,
+                "_gui_workers",
+                GuiWorkerRegistry(thread_factory=InlineGuiThread),
+            ):
                 with patch("w3xtool.gui_export_actions.messagebox.showinfo"):
                     self.app.on_export_scripts()
                     self.app.update()
@@ -75,8 +85,14 @@ class GuiExportSafetyTest(GuiTestCase):
         }
         self.app.map_data = md
 
-        with patch("w3xtool.gui_export_actions.tmp_extract_dir", return_value=str(output)):
-            with patch("w3xtool.gui_export_actions.threading.Thread", _InlineThread):
+        with patch(
+            "w3xtool.gui_export_actions.tmp_extract_dir", return_value=str(output)
+        ):
+            with patch.object(
+                self.app,
+                "_gui_workers",
+                GuiWorkerRegistry(thread_factory=InlineGuiThread),
+            ):
                 with patch("w3xtool.gui_export_actions.messagebox.showinfo"):
                     self.app.on_export_ids()
                     self.app.update()

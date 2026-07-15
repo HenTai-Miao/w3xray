@@ -27,6 +27,7 @@ from .gui_report_tabs import ReportTabsMixin
 from .gui_shell import ShellLayoutMixin
 from .gui_source_browser import SourceBrowserMixin
 from .gui_trigger_eca import TriggerEcaViewMixin
+from .gui_worker_host import GuiWorkerHostMixin
 from .theme import BG
 
 ctk.set_appearance_mode("light")
@@ -34,6 +35,7 @@ ctk.set_default_color_theme("green")
 
 
 class App(
+    GuiWorkerHostMixin,
     CascBrowserMixin,
     ExternalDataToolsMixin,
     ItemRelationGuiMixin,
@@ -60,6 +62,7 @@ class App(
 
     def __init__(self) -> None:
         super().__init__()
+        self._init_gui_worker_host()
         self.title("W3XRAY 魔兽地图提取器")
         self.geometry("1440x860")
         self.minsize(1040, 640)
@@ -110,7 +113,7 @@ class App(
         try:
             self.geometry(geometry)
         except tk.TclError:
-            pass
+            return
 
 
 def main() -> None:

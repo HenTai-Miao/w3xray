@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import os
-import queue
-import threading
 import traceback
 from collections.abc import Callable
-from typing import Final, assert_never
+from typing import assert_never
 from tkinter import messagebox
 
 from .api import MapData
@@ -23,39 +21,17 @@ from .gui_loader import (
     switch_map_payload,
 )
 from .gui_loader_host import BackgroundLoaderHost, CampaignEntry
-
-LOAD_POLL_MS: Final = 35
+from .gui_worker_registry import GuiWorkerTicket
 
 
 class BackgroundLoaderMixin(BackgroundLoaderHost):
     """Queue worker-thread results so Tk is only touched from the main thread."""
 
     def _init_background_loader(self) -> None:
-        self._load_results: queue.Queue[tuple[int, LoaderPayload]] = queue.Queue()
-        self._load_token = 0
-        self._load_pending: set[int] = set()
-        self._load_poll_id: str | None = None
-        self._load_workers = {}
+        """Retain the explicit subsystem initialization hook."""
 
     def _shutdown_background_loader(self) -> None:
-        self._load_token += 1
-        self._load_pending.clear()
-        poll_id = getattr(self, "_load_poll_id", None)
-        if poll_id:
-            try:
-                self.after_cancel(poll_id)
-            except Exception:  # noqa: BLE001  # noqa: BROAD_EXCEPT_OK - Tk may raise TclError during shutdown.
-                self._load_poll_id = None
-        self._load_poll_id = None
-        for worker in self._load_workers.values():
-            worker.join()
-        self._load_workers.clear()
-        while True:
-            try:
-                _token, payload = self._load_results.get_nowait()
-            except queue.Empty:
-                break
-            _discard_loader_payload(payload)
+        self._cancel_gui_worker_group("loader")
 
     def _start_path_load(self, path: str) -> None:
         options = dict(self.load_options)
@@ -120,23 +96,21 @@ class BackgroundLoaderMixin(BackgroundLoaderHost):
         error_status: str,
         source_path: str | None,
     ) -> None:
-        self._load_token += 1
-        token = self._load_token
-        self._load_pending.add(token)
         self.status.configure(text=status)
-        worker = threading.Thread(
-            target=self._run_loader_job,
-            args=(token, build_payload, error_status, source_path),
-            daemon=True,
-            name=f"w3xray-loader-{token}",
+        _ = self._start_gui_worker(
+            "loader",
+            lambda ticket: self._run_loader_job(
+                ticket,
+                build_payload,
+                error_status,
+                source_path,
+            ),
+            replace=True,
         )
-        self._load_workers[token] = worker
-        worker.start()
-        self._schedule_load_poll()
 
     def _run_loader_job(
         self,
-        token: int,
+        ticket: GuiWorkerTicket,
         build_payload: Callable[[], LoaderPayload],
         error_status: str,
         source_path: str | None,
@@ -151,29 +125,11 @@ class BackgroundLoaderMixin(BackgroundLoaderHost):
                 else str(exc)
             )
             payload = LoaderError("解析失败", message, error_status)
-        self._load_results.put((token, payload))
-
-    def _schedule_load_poll(self) -> None:
-        if self._load_poll_id is None:
-            self._load_poll_id = self.after(LOAD_POLL_MS, self._poll_loader_results)
-
-    def _poll_loader_results(self) -> None:
-        self._load_poll_id = None
-        while True:
-            try:
-                token, payload = self._load_results.get_nowait()
-            except queue.Empty:
-                break
-            self._load_pending.discard(token)
-            worker = self._load_workers.pop(token, None)
-            if worker is not None:
-                worker.join()
-            if token != self._load_token:
-                _discard_loader_payload(payload)
-                continue
-            self._handle_loader_payload(payload)
-        if self._load_pending:
-            self._schedule_load_poll()
+        _ = self._post_gui_worker(
+            ticket,
+            lambda: self._handle_loader_payload(payload),
+            cleanup=lambda: _discard_loader_payload(payload),
+        )
 
     def _handle_loader_payload(self, payload: LoaderPayload) -> None:
         match payload:

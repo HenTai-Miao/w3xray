@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from pathlib import Path
@@ -11,8 +10,13 @@ import customtkinter as ctk
 
 from .casc_browser import CascBrowserModel, CascInventoryPage
 from .casclib_enumeration import CascEntry, CascNameType
-from .game_data_inventory import GameDataInventorySource, GameDataInventoryView, supports_inventory
+from .game_data_inventory import (
+    GameDataInventorySource,
+    GameDataInventoryView,
+    supports_inventory,
+)
 from .game_data_source import open_game_data_source
+from .gui_worker_registry import GuiWorkerTicket
 from .theme import FONT, SUBTLE, TEXT, primary_button_style, secondary_button_style
 
 
@@ -26,21 +30,31 @@ class CascBrowserMixin:
             return
         self.status.configure(text="正在打开客户端 CASC Root …")
 
-        def open_source() -> None:
+        def open_source(ticket: GuiWorkerTicket) -> None:
             try:
                 source = open_game_data_source(path)
             except OSError as exc:
                 message = str(exc)
-                self.after(0, lambda: self.status.configure(text=f"CASC 打开失败：{message}"))
+                _ = self._post_gui_worker(
+                    ticket,
+                    lambda: self.status.configure(text=f"CASC 打开失败：{message}"),
+                )
                 return
             if not supports_inventory(source):
                 if source is not None:
                     source.close()
-                self.after(0, lambda: self.status.configure(text="所选客户端数据不支持资源枚举"))
+                _ = self._post_gui_worker(
+                    ticket,
+                    lambda: self.status.configure(text="所选客户端数据不支持资源枚举"),
+                )
                 return
-            self.after(0, lambda: self._show_casc_browser(source))
+            _ = self._post_gui_worker(
+                ticket,
+                lambda: self._show_casc_browser(source),
+                cleanup=source.close,
+            )
 
-        threading.Thread(target=open_source, daemon=True).start()
+        _ = self._start_gui_worker("casc-open", open_source, replace=True)
 
     def _show_casc_browser(self, source: GameDataInventorySource) -> None:
         current = self._casc_browser_dialog
@@ -86,7 +100,9 @@ class CascBrowserDialog(ctk.CTkToplevel):
     def _build_controls(self) -> None:
         toolbar = ctk.CTkFrame(self, fg_color="transparent")
         toolbar.pack(fill="x", padx=12, pady=(12, 8))
-        ctk.CTkLabel(toolbar, text="路径掩码", font=(FONT, 12), text_color=TEXT).pack(side="left")
+        ctk.CTkLabel(toolbar, text="路径掩码", font=(FONT, 12), text_color=TEXT).pack(
+            side="left"
+        )
         entry = ctk.CTkEntry(toolbar, textvariable=self._mask, width=360, height=32)
         entry.pack(side="left", padx=8)
         entry.bind("<Return>", lambda _event: self._restart())
@@ -118,7 +134,9 @@ class CascBrowserDialog(ctk.CTkToplevel):
         self.status = ctk.CTkLabel(toolbar, text="", font=(FONT, 11), text_color=SUBTLE)
         self.status.pack(side="right")
         columns = ("type", "id", "size", "local", "ckey")
-        self.tree = ttk.Treeview(self, columns=columns, show="tree headings", selectmode="browse")
+        self.tree = ttk.Treeview(
+            self, columns=columns, show="tree headings", selectmode="browse"
+        )
         self.tree.heading("#0", text="路径 / 稳定标识")
         self.tree.heading("type", text="名称类型")
         self.tree.heading("id", text="FileDataID")
@@ -171,7 +189,9 @@ class CascBrowserDialog(ctk.CTkToplevel):
             )
         self.next_button.configure(state="disabled" if page.is_complete else "normal")
         suffix = " · 已到末尾" if page.is_complete else ""
-        self.status.configure(text=f"第 {self._page_number} 页 · {len(page.entries)} 条{suffix}")
+        self.status.configure(
+            text=f"第 {self._page_number} 页 · {len(page.entries)} 条{suffix}"
+        )
 
     def _export_selected(self) -> None:
         selected = self.tree.selection()

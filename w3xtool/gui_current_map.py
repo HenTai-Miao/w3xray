@@ -67,9 +67,9 @@ class CurrentMapGuiMixin(CurrentMapHost):
         roots = collect_extra_roots(self._cur_dir, self._load_config())
         self.current_map_button.configure(state="disabled")
         self.status.configure(text="正在获取当前地图 …")
-        worker = threading.Thread(
-            target=run_discovery,
-            args=(
+        _ = self._start_gui_worker(
+            "current-map",
+            lambda _ticket: run_discovery(
                 generation,
                 roots,
                 locate_current_map,
@@ -77,10 +77,8 @@ class CurrentMapGuiMixin(CurrentMapHost):
                 self._put_current_map_event,
                 self._put_current_map_snapshot,
             ),
-            daemon=True,
-            name=f"w3xray-current-map-{generation}",
+            replace=False,
         )
-        worker.start()
         self._schedule_current_map_poll()
 
     def _shutdown_current_map_gui(self) -> None:
@@ -93,6 +91,7 @@ class CurrentMapGuiMixin(CurrentMapHost):
             self._current_map_pending = False
             snapshots = tuple(self._current_map_snapshots)
             self._current_map_snapshots.clear()
+        self._cancel_gui_worker_group("current-map")
         poll_id = self._current_map_poll_id
         self._current_map_poll_id = None
         if poll_id is not None:
@@ -179,19 +178,17 @@ class CurrentMapGuiMixin(CurrentMapHost):
                 pass
             case unreachable:
                 assert_never(unreachable)
-        worker = threading.Thread(
-            target=run_snapshot,
-            args=(
+        _ = self._start_gui_worker(
+            "current-map",
+            lambda _ticket: run_snapshot(
                 generation,
                 path,
                 create_current_map_snapshot,
                 self._put_current_map_event,
                 self._put_current_map_snapshot,
             ),
-            daemon=True,
-            name=f"w3xray-current-map-snapshot-{generation}",
+            replace=False,
         )
-        worker.start()
 
     def _put_current_map_snapshot(
         self,

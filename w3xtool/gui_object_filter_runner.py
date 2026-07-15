@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-import queue
-import threading
+from collections.abc import Callable
 import traceback
 from dataclasses import dataclass
-from typing import Final, assert_never
+from typing import TYPE_CHECKING, Final, Protocol, assert_never
 
 from .api import GameObject, MapData
+from .gui_worker_registry import GuiWorkerTicket
 from .object_filter import ObjectFilterResult, filter_objects_by_query
 from .theme import CARD, PARALLEL_CATS, ROW_ALT
 
-OBJECT_FILTER_POLL_MS: Final = 35
 OBJECT_TREE_LIMIT: Final = 32
 
 
@@ -26,72 +25,111 @@ class ObjectFilterError:
 ObjectFilterPayload = ObjectFilterResult | ObjectFilterError
 
 
-class ObjectFilterRunnerMixin:
+if TYPE_CHECKING:
+    from .gui_worker_registry import GuiWorkerTarget
+
+    class _SearchVariable(Protocol):
+        def get(self) -> str: ...
+
+    class _Configurable(Protocol):
+        def configure(self, *, text: str) -> None: ...
+
+    class _TypingSearchVariable:
+        def get(self) -> str:
+            return ""
+
+    class _TypingConfigurable:
+        def configure(self, *, text: str) -> None:
+            _ = text
+
+    class _ObjectTree(Protocol):
+        def delete(self, *items: str) -> None: ...
+
+        def get_children(self) -> tuple[str, ...]: ...
+
+        def insert(
+            self,
+            parent: str,
+            index: str,
+            *,
+            iid: str,
+            image: str,
+            text: str,
+            tags: tuple[str, ...],
+        ) -> str: ...
+
+        def tag_configure(self, tag: str, *, background: str) -> None: ...
+
+    class _ObjectFilterHost:
+        map_data: MapData | None = None
+        search_var: _SearchVariable = _TypingSearchVariable()
+        status: _Configurable = _TypingConfigurable()
+        col_results: dict[str, list[GameObject]] = {}
+        col_headers: dict[str, _Configurable] = {}
+        col_trees: dict[str, _ObjectTree] = {}
+
+        def _start_gui_worker(
+            self,
+            group: str,
+            target: GuiWorkerTarget,
+            *,
+            replace: bool,
+        ) -> GuiWorkerTicket: ...
+
+        def _post_gui_worker(
+            self,
+            ticket: GuiWorkerTicket,
+            callback: Callable[[], None],
+            *,
+            cleanup: Callable[[], None] | None = None,
+        ) -> bool: ...
+
+        def _cancel_gui_worker_group(self, group: str) -> None: ...
+
+        def _render_object_cards(self) -> None: ...
+
+        def _autosize_tree(self, tree: _ObjectTree) -> None: ...
+
+else:
+    _ObjectFilterHost = object
+
+
+class ObjectFilterRunnerMixin(_ObjectFilterHost):
     """Run expensive object filtering away from the Tk main thread."""
 
     def _init_object_filter_runner(self) -> None:
-        self._object_filter_results: queue.Queue[tuple[int, ObjectFilterPayload]] = queue.Queue()
-        self._object_filter_token = 0
-        self._object_filter_pending: set[int] = set()
-        self._object_filter_poll_id: str | None = None
+        """Retain the explicit subsystem initialization hook."""
 
     def _shutdown_object_filter_runner(self) -> None:
-        self._object_filter_token += 1
-        self._object_filter_pending.clear()
-        poll_id = getattr(self, "_object_filter_poll_id", None)
-        if poll_id:
-            try:
-                self.after_cancel(poll_id)
-            except Exception:
-                pass
-        self._object_filter_poll_id = None
+        self._cancel_gui_worker_group("object-filter")
 
     def _refresh_list(self) -> None:
         if not self.map_data:
             return
-        self._object_filter_token += 1
-        token = self._object_filter_token
         query = self.search_var.get()
         md = self.map_data
-        self._object_filter_pending.add(token)
         self.status.configure(text="正在筛选对象 …")
-        worker = threading.Thread(
-            target=self._run_object_filter_job,
-            args=(token, md, query),
-            daemon=True,
-            name=f"w3xray-object-filter-{token}",
+        _ = self._start_gui_worker(
+            "object-filter",
+            lambda ticket: self._run_object_filter_job(ticket, md, query),
+            replace=True,
         )
-        worker.start()
-        self._schedule_object_filter_poll()
 
-    def _run_object_filter_job(self, token: int, md: MapData, query: str) -> None:
+    def _run_object_filter_job(
+        self,
+        ticket: GuiWorkerTicket,
+        md: MapData,
+        query: str,
+    ) -> None:
         try:
             payload: ObjectFilterPayload = filter_objects_by_query(md, query)
         except Exception as exc:  # noqa: BROAD_EXCEPT_OK
             traceback.print_exc()
             payload = ObjectFilterError(f"对象筛选失败：{exc}")
-        self._object_filter_results.put((token, payload))
-
-    def _schedule_object_filter_poll(self) -> None:
-        if self._object_filter_poll_id is None:
-            self._object_filter_poll_id = self.after(
-                OBJECT_FILTER_POLL_MS,
-                self._poll_object_filter_results,
-            )
-
-    def _poll_object_filter_results(self) -> None:
-        self._object_filter_poll_id = None
-        while True:
-            try:
-                token, payload = self._object_filter_results.get_nowait()
-            except queue.Empty:
-                break
-            self._object_filter_pending.discard(token)
-            if token != self._object_filter_token:
-                continue
-            self._handle_object_filter_payload(payload)
-        if self._object_filter_pending:
-            self._schedule_object_filter_poll()
+        _ = self._post_gui_worker(
+            ticket,
+            lambda: self._handle_object_filter_payload(payload),
+        )
 
     def _handle_object_filter_payload(self, payload: ObjectFilterPayload) -> None:
         match payload:
@@ -103,7 +141,6 @@ class ObjectFilterRunnerMixin:
                 assert_never(unreachable)
 
     def _apply_object_filter_result(self, result: ObjectFilterResult) -> None:
-        self._row_imgs = []
         for category in PARALLEL_CATS:
             objects = result.results_by_category.get(category, [])
             self.col_results[category] = objects
@@ -117,7 +154,11 @@ class ObjectFilterRunnerMixin:
         tree.delete(*tree.get_children())
         for index, obj in enumerate(objects[:OBJECT_TREE_LIMIT]):
             ext = getattr(obj, "ext", "")
-            mark = " 〔脚本〕" if ext == "script" else (" 〔原版〕" if ext == "base" else "")
+            mark = (
+                " 〔脚本〕"
+                if ext == "script"
+                else (" 〔原版〕" if ext == "base" else "")
+            )
             tree.insert(
                 "",
                 "end",

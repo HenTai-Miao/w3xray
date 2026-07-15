@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import os
-import threading
 from dataclasses import dataclass
 from tkinter import messagebox
 from typing import assert_never
 
 from .api import export_all_files, export_loaded_map_files, tmp_extract_dir
+from .gui_worker_registry import GuiWorkerTicket
 from .knowledge_io import safe_filename, write_text
 from .knowledge_pack import format_box_id_text, write_knowledge_pack_report
 from .knowledge_results import KnowledgeWriteReport, KnowledgeWriteStatus
@@ -73,7 +73,7 @@ class ExportActionsMixin:
         message = f"已导出 {n} 个{kind}到临时目录：\n{out}\n（临时文件，可随时清理）"
         try:
             os.startfile(out)
-        except (AttributeError, OSError):
+        except AttributeError, OSError:
             messagebox.showinfo("完成", message)
             return
         messagebox.showinfo("完成", message)
@@ -86,7 +86,7 @@ class ExportActionsMixin:
             return
         try:
             os.startfile(out)
-        except (AttributeError, OSError):
+        except AttributeError, OSError:
             messagebox.showinfo(presentation.title, presentation.message)
             return
         messagebox.showinfo(presentation.title, presentation.message)
@@ -101,7 +101,7 @@ class ExportActionsMixin:
         self.status.configure(text="正在解包全部文件到临时目录 …")
         self.update_idletasks()
 
-        def work():
+        def work(ticket: GuiWorkerTicket) -> None:
             try:
                 if is_campaign_child:
                     out = export_loaded_map_files(
@@ -114,12 +114,20 @@ class ExportActionsMixin:
                         external_listfile_path=self.external_listfile_path,
                     )
                 n = sum(len(fs) for _, _, fs in os.walk(out))
-                self.after(0, lambda: self._open_dir(out, n, "文件"))
+                _ = self._post_gui_worker(
+                    ticket,
+                    lambda: self._open_dir(out, n, "文件"),
+                )
             except Exception as exc:  # noqa: BROAD_EXCEPT_OK - GUI worker boundary reports export failures.
                 error_text = format_user_exception(exc, paths=(path, md.path))
-                self.after(0, lambda message=error_text: messagebox.showerror("导出失败", message))
+                _ = self._post_gui_worker(
+                    ticket,
+                    lambda message=error_text: messagebox.showerror(
+                        "导出失败", message
+                    ),
+                )
 
-        threading.Thread(target=work, daemon=True).start()
+        _ = self._start_gui_worker("export-all", work, replace=True)
 
     def on_export_scripts(self):
         if not self._need_map():
@@ -129,15 +137,23 @@ class ExportActionsMixin:
         scripts = build_readable_script_exports(md)
         self.status.configure(text="正在导出脚本 …")
 
-        def work():
+        def work(ticket: GuiWorkerTicket) -> None:
             try:
                 n = write_script_exports(scripts, out)
-                self.after(0, lambda: self._open_dir(out, n, "脚本"))
+                _ = self._post_gui_worker(
+                    ticket,
+                    lambda: self._open_dir(out, n, "脚本"),
+                )
             except Exception as exc:  # noqa: BROAD_EXCEPT_OK - GUI worker boundary reports export failures.
                 error_text = format_user_exception(exc, paths=(out, md.path))
-                self.after(0, lambda message=error_text: messagebox.showerror("导出失败", message))
+                _ = self._post_gui_worker(
+                    ticket,
+                    lambda message=error_text: messagebox.showerror(
+                        "导出失败", message
+                    ),
+                )
 
-        threading.Thread(target=work, daemon=True).start()
+        _ = self._start_gui_worker("export-scripts", work, replace=True)
 
     def on_export_ids(self):
         if not self._need_map():
@@ -147,18 +163,28 @@ class ExportActionsMixin:
         objects = {c: list(v) for c, v in md.objects.items()}
         self.status.configure(text="正在导出ID列表 …")
 
-        def work():
+        def work(ticket: GuiWorkerTicket) -> None:
             try:
                 n = 0
                 for cat, objs in objects.items():
+                    if ticket.cancellation.is_set():
+                        return
                     name = f"{safe_filename(cat)}ID.txt"
                     n += write_text(out, name, format_box_id_text(objs, category=cat))
-                self.after(0, lambda: self._open_dir(out, n, "分类的ID列表"))
+                _ = self._post_gui_worker(
+                    ticket,
+                    lambda: self._open_dir(out, n, "分类的ID列表"),
+                )
             except Exception as exc:  # noqa: BROAD_EXCEPT_OK - GUI worker boundary reports export failures.
                 error_text = format_user_exception(exc, paths=(out, md.path))
-                self.after(0, lambda message=error_text: messagebox.showerror("导出失败", message))
+                _ = self._post_gui_worker(
+                    ticket,
+                    lambda message=error_text: messagebox.showerror(
+                        "导出失败", message
+                    ),
+                )
 
-        threading.Thread(target=work, daemon=True).start()
+        _ = self._start_gui_worker("export-ids", work, replace=True)
 
     def on_export_pack(self):
         if not self._need_map():
@@ -167,16 +193,24 @@ class ExportActionsMixin:
         md = self.map_data
         self.status.configure(text="正在整理地图资料包 …")
 
-        def work():
+        def work(ticket: GuiWorkerTicket) -> None:
             try:
                 report = write_knowledge_pack_report(
                     md,
                     out,
                     game_data_path=self.game_data_path,
                 )
-                self.after(0, lambda: self._show_pack_result(out, report))
+                _ = self._post_gui_worker(
+                    ticket,
+                    lambda: self._show_pack_result(out, report),
+                )
             except Exception as exc:  # noqa: BROAD_EXCEPT_OK - GUI worker boundary reports export failures.
                 error_text = format_user_exception(exc, paths=(out, md.path))
-                self.after(0, lambda message=error_text: messagebox.showerror("导出失败", message))
+                _ = self._post_gui_worker(
+                    ticket,
+                    lambda message=error_text: messagebox.showerror(
+                        "导出失败", message
+                    ),
+                )
 
-        threading.Thread(target=work, daemon=True).start()
+        _ = self._start_gui_worker("export-pack", work, replace=True)

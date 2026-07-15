@@ -5,9 +5,11 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from tests.gui_base import GuiTestCase
+from tests.gui_worker_fakes import InlineGuiThread
 from w3xtool.casclib_enumeration import CascEntry, CascNameType
 from w3xtool.game_data_inventory import GameDataInventoryView
 from w3xtool.game_data_source import GameDataProbe
+from w3xtool.gui_worker_registry import GuiWorkerRegistry
 
 
 class _InventorySource:
@@ -23,7 +25,9 @@ class _InventorySource:
         return b"data"
 
     def iter_entries(self, _mask: str = "*", _listfile: str | None = None):
-        yield CascEntry("UI\\Test.txt", CascNameType.FULL, None, "", "", 4, True, None, None)
+        yield CascEntry(
+            "UI\\Test.txt", CascNameType.FULL, None, "", "", 4, True, None, None
+        )
 
     def close(self) -> None:
         self.closed = True
@@ -38,7 +42,9 @@ class CascBrowserEntryTest(GuiTestCase):
         self.app._refresh_external_source_labels()
 
         # Then: browsing cannot open a non-existent native storage.
-        self.assertEqual(self.app.data_tools_menu.entrycget("浏览 CASC Root", "state"), "disabled")
+        self.assertEqual(
+            self.app.data_tools_menu.entrycget("浏览 CASC Root", "state"), "disabled"
+        )
 
     def test_browser_is_enabled_for_readable_casclib_backend(self) -> None:
         # Given: the selected directory probes as a real CascLib source.
@@ -49,11 +55,15 @@ class CascBrowserEntryTest(GuiTestCase):
 
         # When: source controls refresh after selection.
         with patch("w3xtool.gui_lifecycle.probe_game_data_path", return_value=probe):
-            with patch("w3xtool.gui_lifecycle.open_game_data_source", return_value=source):
+            with patch(
+                "w3xtool.gui_lifecycle.open_game_data_source", return_value=source
+            ):
                 self.app._refresh_external_source_labels()
 
         # Then: the full-root browser command is available.
-        self.assertEqual(self.app.data_tools_menu.entrycget("浏览 CASC Root", "state"), "normal")
+        self.assertEqual(
+            self.app.data_tools_menu.entrycget("浏览 CASC Root", "state"), "normal"
+        )
         self.assertTrue(source.closed)
 
     def test_browser_is_enabled_for_readable_inventory_fallback(self) -> None:
@@ -64,11 +74,17 @@ class CascBrowserEntryTest(GuiTestCase):
 
         # When: source controls refresh after selection.
         with patch("w3xtool.gui_lifecycle.probe_game_data_path", return_value=probe):
-            with patch("w3xtool.gui_lifecycle.open_game_data_source", return_value=source, create=True):
+            with patch(
+                "w3xtool.gui_lifecycle.open_game_data_source",
+                return_value=source,
+                create=True,
+            ):
                 self.app._refresh_external_source_labels()
 
         # Then: capability, not native backend identity, enables browsing.
-        self.assertEqual(self.app.data_tools_menu.entrycget("浏览 CASC Root", "state"), "normal")
+        self.assertEqual(
+            self.app.data_tools_menu.entrycget("浏览 CASC Root", "state"), "normal"
+        )
         self.assertTrue(source.closed)
 
     def test_browser_action_opens_source_through_common_factory(self) -> None:
@@ -76,13 +92,6 @@ class CascBrowserEntryTest(GuiTestCase):
         self.app.game_data_path = "/game-data"
         source = _InventorySource()
         shown: list[_InventorySource] = []
-
-        class InlineThread:
-            def __init__(self, target, daemon: bool) -> None:
-                self._target = target
-
-            def start(self) -> None:
-                self._target()
 
         # When: the browser action opens in its worker.
         with patch(
@@ -95,8 +104,14 @@ class CascBrowserEntryTest(GuiTestCase):
                 side_effect=AssertionError("native constructor bypass"),
                 create=True,
             ):
-                with patch("w3xtool.gui_casc_browser.threading.Thread", InlineThread):
-                    with patch.object(self.app, "_show_casc_browser", side_effect=shown.append):
+                with patch.object(
+                    self.app,
+                    "_gui_workers",
+                    GuiWorkerRegistry(thread_factory=InlineGuiThread),
+                ):
+                    with patch.object(
+                        self.app, "_show_casc_browser", side_effect=shown.append
+                    ):
                         self.app.on_browse_game_data()
                         self.pump_events_until(lambda: bool(shown))
 

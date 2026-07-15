@@ -8,16 +8,20 @@ import unittest
 from unittest.mock import patch
 
 from tests.gui_base import GuiTestCase
+from tests.gui_worker_fakes import InlineGuiThread
 from w3xtool.api import MapData, _export_all_impl
 from w3xtool.archive_source import BytesArchiveSource
 from w3xtool.external_listfile import read_external_listfile
+from w3xtool.gui_worker_registry import GuiWorkerRegistry
 
 
 class ExternalListfileCoreTest(unittest.TestCase):
     def test_read_external_listfile_normalizes_lines_and_ignores_comments(self) -> None:
         # Given: a user-provided listfile copied from an MPQ tool.
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:
-            handle.write("# comment\n// comment\n//comment\nwar3mapImported\\Hero.mdx\r\nWar3Map.J\n")
+            handle.write(
+                "# comment\n// comment\n//comment\nwar3mapImported\\Hero.mdx\r\nWar3Map.J\n"
+            )
             path = handle.name
 
         try:
@@ -81,12 +85,16 @@ class ExternalListfileGuiTest(GuiTestCase):
 
         try:
             # When: the selector callback runs.
-            with patch("w3xtool.gui_lifecycle.filedialog.askopenfilename", return_value=path):
+            with patch(
+                "w3xtool.gui_lifecycle.filedialog.askopenfilename", return_value=path
+            ):
                 self.app.on_pick_external_listfile()
 
             # Then: the app stores it and exposes the active path in the top bar.
             self.assertEqual(self.app.external_listfile_path, path)
-            self.assertIn(os.path.basename(path), self.app.external_listfile_label.cget("text"))
+            self.assertIn(
+                os.path.basename(path), self.app.external_listfile_label.cget("text")
+            )
         finally:
             os.remove(path)
 
@@ -101,8 +109,12 @@ class ExternalListfileGuiTest(GuiTestCase):
             handle.write("hidden/config.json\n")
             path = handle.name
         try:
-            with patch("w3xtool.gui_lifecycle.filedialog.askopenfilename", return_value=path):
-                with patch.object(self.app, "_start_path_load", side_effect=calls.append):
+            with patch(
+                "w3xtool.gui_lifecycle.filedialog.askopenfilename", return_value=path
+            ):
+                with patch.object(
+                    self.app, "_start_path_load", side_effect=calls.append
+                ):
                     self.app.on_pick_external_listfile()
         finally:
             os.remove(path)
@@ -128,35 +140,39 @@ class ExternalListfileGuiTest(GuiTestCase):
 
     def test_export_all_passes_selected_external_listfile_to_worker(self) -> None:
         # Given: a loaded map and a selected external listfile.
-        with tempfile.TemporaryDirectory() as out, tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
-            delete=False,
-        ) as handle:
+        with (
+            tempfile.TemporaryDirectory() as out,
+            tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                delete=False,
+            ) as handle,
+        ):
             handle.write("war3mapImported\\Hero.mdx\n")
             listfile_path = handle.name
 
             calls: list[tuple[str, str | None]] = []
 
-            def fake_export(path: str, *, external_listfile_path: str | None = None) -> str:
+            def fake_export(
+                path: str, *, external_listfile_path: str | None = None
+            ) -> str:
                 calls.append((path, external_listfile_path))
                 return out
-
-            class InlineThread:
-                def __init__(self, target, daemon: bool) -> None:
-                    self._target = target
-
-                def start(self) -> None:
-                    self._target()
 
             self.app.map_data = MapData(path="map.w3x", name="导出图")
             self.app._campaign_path = None
             self.app.external_listfile_path = listfile_path
 
             # When: the user clicks export all.
-            with patch("w3xtool.gui_export_actions.export_all_files", side_effect=fake_export):
+            with patch(
+                "w3xtool.gui_export_actions.export_all_files", side_effect=fake_export
+            ):
                 with patch("w3xtool.gui_export_actions.messagebox.showinfo"):
-                    with patch("w3xtool.gui_export_actions.threading.Thread", InlineThread):
+                    with patch.object(
+                        self.app,
+                        "_gui_workers",
+                        GuiWorkerRegistry(thread_factory=InlineGuiThread),
+                    ):
                         self.app.on_export_all()
                     self.pump_events_until(lambda: bool(calls))
 
@@ -182,15 +198,9 @@ class ExternalListfileGuiTest(GuiTestCase):
         errors: list[str] = []
         completions: list[tuple[str, int, str]] = []
 
-        class InlineThread:
-            def __init__(self, target, daemon: bool) -> None:
-                self._target = target
-
-            def start(self) -> None:
-                self._target()
-
         # When: the selected view is exported.
         with tempfile.TemporaryDirectory() as out:
+
             def fake_source_export(
                 md: MapData,
                 *,
@@ -218,11 +228,15 @@ class ExternalListfileGuiTest(GuiTestCase):
                             "w3xtool.gui_export_actions.messagebox.showerror",
                             side_effect=lambda _title, message: errors.append(message),
                         ):
-                            with patch("w3xtool.gui_export_actions.threading.Thread", InlineThread):
+                            with patch.object(
+                                self.app,
+                                "_gui_workers",
+                                GuiWorkerRegistry(thread_factory=InlineGuiThread),
+                            ):
                                 self.app.on_export_all()
-                            self.pump_events_until(
-                                lambda: bool(completions) or bool(errors),
-                            )
+                                self.pump_events_until(
+                                    lambda: bool(completions) or bool(errors),
+                                )
 
         # Then: the child source and listfile reach the worker; the parent path is unused.
         self.assertEqual(source_calls, [(child, "/tmp/child-listfile.txt")])
@@ -233,12 +247,16 @@ class ExternalListfileGuiTest(GuiTestCase):
     def test_gui_selector_persists_game_data_directory(self) -> None:
         # Given: a Reforged data directory selected through the GUI.
         with tempfile.TemporaryDirectory() as data_dir:
-            with patch("w3xtool.gui_lifecycle.filedialog.askdirectory", return_value=data_dir):
+            with patch(
+                "w3xtool.gui_lifecycle.filedialog.askdirectory", return_value=data_dir
+            ):
                 self.app.on_pick_game_data_dir()
 
             # Then: the app stores it and shows the directory basename in the top bar.
             self.assertEqual(self.app.game_data_path, data_dir)
-            self.assertIn(os.path.basename(data_dir), self.app.game_data_label.cget("text"))
+            self.assertIn(
+                os.path.basename(data_dir), self.app.game_data_label.cget("text")
+            )
 
 
 if __name__ == "__main__":

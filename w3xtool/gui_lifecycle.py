@@ -144,6 +144,12 @@ class GuiLifecycleMixin:
             dialog.close()
         self._shutdown_background_loader()
         self._shutdown_object_filter_runner()
+        lingering = self._shutdown_gui_worker_host(timeout_seconds=1.5)
+        if lingering:
+            _LOGGER.warning(
+                "GUI workers exceeded shutdown deadline: %s",
+                ", ".join(lingering),
+            )
         self._save_layout_state(geometry=self.geometry())
         if self.icons is not None and hasattr(self.icons, "close"):
             try:

@@ -10,8 +10,11 @@ from tests.gui_base import GuiTestCase
 from w3xtool import gui_current_map as current_gui
 from w3xtool.gui_current_map import CurrentMapGuiMixin
 from w3xtool.gui_current_map_presenter import SnapshotReady
+from w3xtool.current_map_models import CurrentMapResolution, ResolutionStatus
 from w3xtool.current_map_snapshot import CurrentMapSnapshot
 from w3xtool.gui_lifecycle import GuiLifecycleMixin
+from w3xtool.gui_worker_host import GuiWorkerHostMixin
+from w3xtool.gui_worker_registry import GuiWorkerRegistry
 
 
 class _Widget:
@@ -25,12 +28,13 @@ class _Widget:
         return self.values.get(key, "")
 
 
-class _Harness(CurrentMapGuiMixin):
+class _Harness(CurrentMapGuiMixin, GuiWorkerHostMixin):
     def __init__(self) -> None:
         self._cur_dir = {"battle": None, "campaign": None}
         self.current_map_button = _Widget()
         self.status = _Widget()
         self.scheduled: list[Callable[[], None]] = []
+        self._init_gui_worker_host()
         self._init_current_map_gui()
 
     def _load_config(self) -> Mapping[str, str | None]:
@@ -75,6 +79,11 @@ class _LifecycleHarness(GuiLifecycleMixin):
     def _shutdown_object_filter_runner(self) -> None:
         return
 
+    def _shutdown_gui_worker_host(self, timeout_seconds: float) -> tuple[str, ...]:
+        assert timeout_seconds == 1.5
+        self._events.append("workers")
+        return ()
+
     def _save_layout_state(self, **_values: str) -> None:
         return
 
@@ -93,6 +102,11 @@ class CurrentMapAppInitializationTest(GuiTestCase):
         # Given/When: App has completed its normal constructor.
         # Then: current-map lifecycle state is ready before interaction.
         self.assertIs(self.app._current_map_initialized, True)
+
+    def test_app_initializes_shared_worker_registry(self) -> None:
+        # Given/When: App has completed its normal constructor.
+        # Then: every worker-producing mixin shares one live registry.
+        self.assertIsInstance(self.app._gui_workers, GuiWorkerRegistry)
 
 
 def test_initialization_cleans_stale_snapshots_once(
@@ -125,13 +139,26 @@ def test_duplicate_click_is_ignored_while_worker_is_pending(
     workers: list[bool] = []
 
     class _DeferredThread:
-        def __init__(self, *, daemon: bool, **_values) -> None:
+        def __init__(
+            self,
+            *,
+            target: Callable[[], None],
+            daemon: bool,
+            name: str,
+        ) -> None:
+            _ = target, name
             workers.append(daemon)
 
         def start(self) -> None:
             return
 
-    monkeypatch.setattr(current_gui.threading, "Thread", _DeferredThread)
+        def join(self, timeout: float | None = None) -> None:
+            _ = timeout
+
+        def is_alive(self) -> bool:
+            return True
+
+    harness._gui_workers = GuiWorkerRegistry(thread_factory=_DeferredThread)
 
     # When: the user clicks twice before the first result arrives.
     harness.on_open_current_map()
@@ -173,7 +200,7 @@ def test_app_close_releases_snapshots_after_resolver_before_destroy() -> None:
     harness._on_close()
 
     # Then: delayed resolver reads end before snapshots are removed.
-    assert events == ["loader", "resolver", "snapshots", "destroy"]
+    assert events == ["loader", "workers", "resolver", "snapshots", "destroy"]
 
 
 def test_worker_finishing_after_shutdown_cleans_new_snapshot(
@@ -220,6 +247,40 @@ def test_worker_finishing_after_shutdown_cleans_new_snapshot(
     assert cleaned == [snapshot]
     assert harness._current_map_snapshots == []
     assert harness._current_map_results.empty()
+
+
+def test_blocked_discovery_is_tracked_and_late_resolution_is_ignored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given
+    monkeypatch.setattr(
+        current_gui, "cleanup_stale_current_map_snapshots", lambda: None
+    )
+    harness = _Harness()
+    started = Event()
+    release = Event()
+    finished = Event()
+
+    def locate(_roots: tuple[Path, ...]) -> CurrentMapResolution:
+        started.set()
+        assert release.wait(2)
+        finished.set()
+        return CurrentMapResolution(ResolutionStatus.NOT_FOUND, ())
+
+    monkeypatch.setattr(current_gui, "locate_current_map", locate)
+    harness.on_open_current_map()
+    assert started.wait(1)
+
+    # When
+    harness._shutdown_current_map_gui()
+    lingering = harness._shutdown_gui_worker_host(0)
+    release.set()
+    assert finished.wait(1)
+
+    # Then
+    assert lingering == ("current-map",)
+    assert harness._current_map_results.empty()
+    assert harness._shutdown_gui_worker_host(1) == ()
 
 
 def test_stale_snapshot_event_is_removed_and_cleaned(
