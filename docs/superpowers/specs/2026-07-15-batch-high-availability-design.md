@@ -123,7 +123,7 @@ Before each map, disk preflight requires configurable reserve bytes plus a conse
 
 One `GuiWorkerRegistry` owns all application-level daemon workers: map/campaign loading, object filtering, current-map discovery/snapshot work, source-directory scans, external-save analysis, exports, and game-data browser opening.
 
-Each worker receives an immutable ticket with a group, generation, and cancellation event. Replaceable jobs cancel older tickets in the same group. A worker may schedule a Tk callback only through a registry guard that checks the ticket both before scheduling and again on the main thread. Resource-bearing late results execute their cleanup callback instead of touching Tk.
+Each worker receives an immutable ticket with a group, generation, and cancellation event. Replaceable jobs cancel older tickets in the same group. A worker never calls Tk: it can only append a guarded result to a lock-protected host queue. One Tk-main-thread `after` poll drains that queue every 20 milliseconds and checks the ticket again before delivery. Resource-bearing stale or late results execute their cleanup callback instead of touching Tk.
 
 Shutdown proceeds in this order:
 

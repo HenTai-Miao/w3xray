@@ -32,7 +32,19 @@ Repository test gate:
 uv run w3xray-test
 ```
 
-Verified result on 2026-07-15: 1,384 passed, 11 skipped, and 1 subtest passed.
+Verified result on 2026-07-15: 1,498 passed, 11 skipped, and 1 subtest passed.
+
+Maintained high-availability quality gate:
+
+```bash
+uv run w3xray-quality
+```
+
+Verified result on 2026-07-15: Ruff check passed, all 103 maintained paths were formatted, and basedpyright reported 0 errors, 0 warnings, and 0 notes.
+
+GUI worker regression after Tk-main-thread marshalling: 58 passed. The exact object-filter/reference-ID scenarios passed 12 tests with no `main thread is not in main loop` exception or thread-exception warning.
+
+Pure-LOC audit of the 103 high-availability Python paths: 0 files exceeded 250 code lines. Sixteen files are in the 200–250 warning band (`test_batch_cli`, `test_batch_runner`, `test_external_listfile_gui`, `test_gui_current_map_lifecycle`, `test_object_text_index`, `test_real_map_item_relation_acceptance`, `acceptance_runner`, `batch_manifest_io`, `batch_map_attempt`, `batch_map_publication`, `batch_publication_record`, `batch_state_parser`, `gui_casc_browser`, `gui_source_browser`, `safe_output`, and `safe_output_publication`); split their owning responsibility before adding substantial logic.
 
 Changed-file static gates:
 
@@ -42,11 +54,24 @@ uv run --with ruff ruff format --check PATHS...
 uv run --with basedpyright basedpyright --level error PATHS...
 ```
 
-The full-repository Ruff and basedpyright commands also expose historical baseline findings outside the batch feature. Do not silently broaden a batch change to repair that baseline; require all batch-changed Python paths to pass their focused gates.
+The full-repository Ruff and basedpyright commands may expose historical findings outside the maintained high-availability path set. Do not silently broaden a batch change to repair that baseline; require all batch-changed Python paths to pass `w3xray-quality`.
 
-Run static gates on the reviewed task path list, not every unrelated dirty-worktree path. The current shared worktree contains preserved user changes with independent Ruff/type/no-excuse findings; do not broaden this feature to rewrite those paths. New task modules and tests must still pass all four focused gates.
+Run static gates on the reviewed task path list, not every unrelated dirty-worktree path. Preserve any user changes and do not broaden a feature to rewrite paths with independent Ruff/type/no-excuse findings. New task modules and tests must still pass all four focused gates.
 
 ## Real-map acceptance
+
+High-availability source/packaged acceptance command:
+
+```bash
+uv run main.py acceptance \
+  --map tests/fixtures/maps/war3net-map-script-builder.w3x \
+  --campaign tests/fixtures/reference/stormlib-campaign.w3n \
+  --output /tmp/w3xray-ha-acceptance/output \
+  --report /tmp/w3xray-ha-acceptance/acceptance.json \
+  --repeat 5 --no-gui
+```
+
+Verified on 2026-07-15: overall `pass`; map/campaign/knowledge-pack checks passed, `batch_publication` reported `processed` then `reused` with zero leftovers, and five repeated loads were stable. Windows/CASC and GUI-only lanes were explicitly skipped on this non-Windows `--no-gui` run.
 
 1. Capture every source path, size, mtime-ns, and SHA-256 with `w3xtool.batch_runner.fingerprint_source` before processing. If sources were copied to a new root, match persisted results by SHA-256 and size and report path/mtime changes separately.
 2. Copy the smallest and largest maps to private temporary directories. Final symlinks are intentionally rejected by the no-follow regular-file boundary.
@@ -63,5 +88,5 @@ Verified schema-v2 output on 2026-07-15:
 - 766,396 complete-text rows and 13,047 relation rows; all state/type counts reconcile exactly and no malformed TSV rows remain.
 - Every ownership marker and required report matched its summary row.
 - No temporary publication directories remained.
-- Real relation acceptance: 7 passed; identity-rule unit tests: 9 passed; focused feature suite: 103 passed; full suite: 1,384 passed, 11 skipped, 1 subtest passed.
-- All 39 desktop source paths and SHA-256 values exactly match the before-run manifest.
+- Real relation acceptance: 7 passed; identity-rule unit tests: 9 passed; focused content suite: 103 passed; current full suite: 1,498 passed, 11 skipped, 1 subtest passed.
+- All 39 desktop source paths, sizes, mtime-ns values, and SHA-256 values exactly match the before-run manifest; the exact JSON manifest remained 8,212 bytes for 4,227,067,802 source bytes.

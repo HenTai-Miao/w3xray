@@ -81,7 +81,7 @@
 - Produces: `sync_directory_descriptor(descriptor: int) -> None` and `sync_directory(path: Path) -> None`; Windows unsupported-directory sync is an explicit no-op, while all other errors propagate.
 - Changes: safe staged writes call file `fsync` before close and synchronize the parent after publication/rollback/cleanup.
 
-- [ ] **Step 1: Write failing file and directory synchronization tests**
+- [x] **Step 1: Write failing file and directory synchronization tests**
 
 ```python
 def test_chunk_writer_syncs_complete_stage_before_return(
@@ -112,13 +112,13 @@ def test_existing_destination_is_restored_when_directory_sync_fails(
     assert destination.read_bytes() == b"old"
 ```
 
-- [ ] **Step 2: Run RED tests**
+- [x] **Step 2: Run RED tests**
 
 Run: `uv run python -m pytest -q tests/test_durable_io.py tests/test_safe_output.py -k 'sync or restore'`
 
 Expected: FAIL because `durable_io` and synchronization calls do not exist.
 
-- [ ] **Step 3: Implement minimal durability primitives and rollback ordering**
+- [x] **Step 3: Implement minimal durability primitives and rollback ordering**
 
 ```python
 def sync_file_descriptor(descriptor: int) -> None:
@@ -138,13 +138,13 @@ def sync_directory_descriptor(descriptor: int) -> None:
 
 Call `sync_file_descriptor` once after all chunks. For an existing destination, retain the hard-link backup until the replacement rename and parent sync both succeed; on sync failure restore the backup, sync again, and return `FAILED`. For a new destination, delete it on sync failure. Apply the equivalent path-based ordering to the Windows fallback.
 
-- [ ] **Step 4: Run focused and existing safe-output tests**
+- [x] **Step 4: Run focused and existing safe-output tests**
 
 Run: `uv run python -m pytest -q tests/test_durable_io.py tests/test_safe_output.py`
 
 Expected: PASS with zero leftover `.w3xray-stage-*` or `.w3xray-backup-*` files.
 
-- [ ] **Step 5: Run static gates and commit**
+- [x] **Step 5: Run static gates and commit**
 
 Run:
 
@@ -176,7 +176,7 @@ Commit: `fix: make staged writes durable`
 - Produces: `verify_map_publication(directory: Path, expected: MapBatchResult | None = None) -> PublicationValidation`.
 - Extends `MapBatchResult` with `dependency_fingerprint`, `manifest_sha256`, `published_bytes`, and `peak_rss_bytes` defaulted for source compatibility.
 
-- [ ] **Step 1: Write failing manifest round-trip, tamper, path, and count tests**
+- [x] **Step 1: Write failing manifest round-trip, tamper, path, and count tests**
 
 ```python
 def test_manifest_round_trip_binds_every_regular_artifact(tmp_path: Path) -> None:
@@ -205,13 +205,13 @@ def test_publication_validation_rejects_same_size_tampering(tmp_path: Path) -> N
 
 Also test duplicate normalized paths, invalid/lowercase SHA, symlink artifacts, unlisted files, malformed TSV widths, and reconciliation of icon/text/relation counts.
 
-- [ ] **Step 2: Run RED tests**
+- [x] **Step 2: Run RED tests**
 
 Run: `uv run python -m pytest -q tests/test_batch_manifest.py tests/test_batch_map_processing.py`
 
 Expected: FAIL on missing manifest APIs and missing result fields.
 
-- [ ] **Step 3: Implement frozen models and deterministic strict I/O**
+- [x] **Step 3: Implement frozen models and deterministic strict I/O**
 
 ```python
 class ArtifactKind(StrEnum):
@@ -239,11 +239,11 @@ class OwnershipRecord:
 
 Walk stage files in stable normalized order, hash with 1 MiB chunks, and reject unsafe/duplicate paths. Format JSON with `ensure_ascii=False`, `sort_keys=True`, and a trailing newline. Parse every integer/string/list field explicitly and reject extra or missing keys.
 
-- [ ] **Step 4: Integrate manifest finalization into one-map processing**
+- [x] **Step 4: Integrate manifest finalization into one-map processing**
 
 Write all reports first, build/write `内容清单.json`, hash it, write the JSON ownership marker, synchronize the completed stage, publish, then return `replace(result, manifest_sha256=..., published_bytes=...)`. Do not include the manifest or marker in the artifact list.
 
-- [ ] **Step 5: Run focused tests and static gates**
+- [x] **Step 5: Run focused tests and static gates**
 
 Run:
 
@@ -272,7 +272,7 @@ Commit: `feat: bind map output to content manifests`
 - Changes: `publish_map_stage(publication, output_root, manifest_sha256) -> Path`.
 - Produces: `recover_map_publications(output_root: str) -> tuple[RecoveryDiagnostic, ...]`.
 
-- [ ] **Step 1: Write failing transition and recovery tests**
+- [x] **Step 1: Write failing transition and recovery tests**
 
 ```python
 @pytest.mark.parametrize("failure_phase", ("backup", "destination", "sync", "cleanup"))
@@ -296,13 +296,13 @@ def test_recovery_keeps_exactly_one_valid_generation(
 
 Add an idempotence test, a test that leaves an unowned similarly named directory untouched, and a test that a prepared stage completes when the destination is absent.
 
-- [ ] **Step 2: Run RED tests**
+- [x] **Step 2: Run RED tests**
 
 Run: `uv run python -m pytest -q tests/test_batch_publication_recovery.py`
 
 Expected: FAIL because transaction stages and recovery do not exist.
 
-- [ ] **Step 3: Implement strict transaction records and durable phases**
+- [x] **Step 3: Implement strict transaction records and durable phases**
 
 ```python
 class PublicationPhase(StrEnum):
@@ -326,11 +326,11 @@ class PublicationTransaction:
 
 Persist every phase with the safe durable writer. Derive all private names from the transaction ID; parse them with exact regexes; require immediate children of `地图/`. Recovery uses `verify_map_publication` before choosing stage/destination/backup and never deletes an unproven path.
 
-- [ ] **Step 4: Integrate startup recovery and stage cleanup**
+- [x] **Step 4: Integrate startup recovery and stage cleanup**
 
 Call recovery after root validation and before previous-state loading. `discard_map_stage` removes a building stage only when its transaction record matches; otherwise it returns a diagnostic and leaves the path.
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 Run:
 
@@ -368,7 +368,7 @@ Commit: `feat: recover interrupted map publications`
 - Produces: `fingerprint_dependencies(source, options, cache_sha256) -> str`.
 - Extends `DescriptionCacheEntry` with `source_manifest_sha256`.
 
-- [ ] **Step 1: Write failing state-semantic and generation-atomicity tests**
+- [x] **Step 1: Write failing state-semantic and generation-atomicity tests**
 
 ```python
 @pytest.mark.parametrize(
@@ -403,21 +403,21 @@ def test_current_pointer_never_selects_partial_generation(
 
 Add report-hash tamper, pointer traversal, duplicate count label, impossible state/stage, and compatibility-mirror failure tests.
 
-- [ ] **Step 2: Write failing cache-manifest binding tests**
+- [x] **Step 2: Write failing cache-manifest binding tests**
 
 Publish a valid map manifest fixture, prove its client-fill row enters the cache with `source_manifest_sha256`, mutate the report, and prove a rebuild ignores it with `manifest_validation_failed`. Prove an automatic seed is accepted only through a validated global generation.
 
-- [ ] **Step 3: Run RED tests**
+- [x] **Step 3: Run RED tests**
 
 Run: `uv run python -m pytest -q tests/test_batch_global_publication.py tests/test_batch_dependencies.py tests/test_batch_state_reports.py tests/test_description_cache.py tests/test_batch_description_cache.py`
 
 Expected: FAIL on schema 3, generation, dependency, and manifest-bound cache APIs.
 
-- [ ] **Step 4: Implement global generation commit and strict state parsing**
+- [x] **Step 4: Implement global generation commit and strict state parsing**
 
 Stage all five global payloads, write a deterministic `全局清单.json`, sync the directory tree, atomically rename it into `generations/`, validate it, and atomically update `current.json`. Only then mirror root reports. Parse state with exact key sets and validate every invariant before returning `BatchState`.
 
-- [ ] **Step 5: Implement bounded dependency fingerprint**
+- [x] **Step 5: Implement bounded dependency fingerprint**
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -444,7 +444,7 @@ def fingerprint_dependencies(
 
 For classic MPQs use normalized name/size/mtime; for CASC hash `.build.info` and record data/index stats; for trusted icon cache hash marker/manifests; for extracted directories record sorted relative path/size/mtime without following symlinks.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Run:
 
@@ -472,7 +472,7 @@ Commit: `feat: publish validated global generations`
 - Produces: `find_reusable_result(previous, fingerprint, dependency_fingerprint, output_root, retry_failed) -> ReuseDecision`.
 - Produces: `checkpoint_state(current_results, previous, remaining_paths) -> BatchState`.
 
-- [ ] **Step 1: Write failing reusable-partial and checkpoint-tail tests**
+- [x] **Step 1: Write failing reusable-partial and checkpoint-tail tests**
 
 ```python
 @pytest.mark.parametrize("state", (MapBatchState.COMPLETE, MapBatchState.PARTIAL, MapBatchState.RESTRICTED))
@@ -499,17 +499,17 @@ def test_checkpoint_preserves_unvisited_previous_results() -> None:
 
 Add tests for dependency changes, hash tampering, missing files, invalid global pointer/state, `--no-retry-failed`, deleted sources, and duplicate previous paths.
 
-- [ ] **Step 2: Run RED tests**
+- [x] **Step 2: Run RED tests**
 
 Run: `uv run python -m pytest -q tests/test_batch_resume.py tests/test_batch_runner.py`
 
 Expected: FAIL because reusable partials and tail merge are absent.
 
-- [ ] **Step 3: Implement resume module and shrink `batch_runner.py`**
+- [x] **Step 3: Implement resume module and shrink `batch_runner.py`**
 
 Move previous-state loading, publication validation, and reuse selection out of `batch_runner.py`. Materialize the stable source path tuple once. At each checkpoint merge processed results with prior entries whose normalized paths are still unvisited. Publish through `publish_global_generation` only.
 
-- [ ] **Step 4: Run focused regression and static gates**
+- [x] **Step 4: Run focused regression and static gates**
 
 Run:
 
@@ -543,7 +543,7 @@ Commit: `feat: resume verified partial map results`
 - Produces: `BatchProgress` and `BatchDiagnostic` frozen models.
 - Changes: `run_batch(options, *, cancellation=None, on_progress=None) -> BatchState`.
 
-- [ ] **Step 1: Write failing timeout, cancellation, child-crash, OOM, and reap tests**
+- [x] **Step 1: Write failing timeout, cancellation, child-crash, OOM, and reap tests**
 
 ```python
 def test_timeout_terminates_and_reaps_child(tmp_path: Path) -> None:
@@ -570,17 +570,17 @@ def test_cancellation_returns_explicit_cancelled_outcome() -> None:
 
 Use module-level spawn-picklable test workers. Add a hard `os._exit(7)` child, a `MemoryError` child, a success child, and assert every process and queue is closed/reaped.
 
-- [ ] **Step 2: Write failing disk/progress/ETA/JSONL tests**
+- [x] **Step 2: Write failing disk/progress/ETA/JSONL tests**
 
 Patch `shutil.disk_usage` below the reserve and prove processing is not called. Feed deterministic monotonic times into progress calculation and assert bounded nonnegative ETA. Parse every emitted JSONL line and assert required fields.
 
-- [ ] **Step 3: Run RED tests**
+- [x] **Step 3: Run RED tests**
 
 Run: `uv run python -m pytest -q tests/test_batch_execution.py tests/test_batch_runtime.py tests/test_batch_cli.py tests/test_batch_runner.py`
 
 Expected: FAIL on missing execution/runtime APIs and CLI options.
 
-- [ ] **Step 4: Implement spawn child protocol and resource limits**
+- [x] **Step 4: Implement spawn child protocol and resource limits**
 
 ```python
 class CancellationSignal(Protocol):
@@ -606,11 +606,11 @@ def execute_map_isolated(..., timeout_seconds: float, cancellation: Cancellation
 
 Set `RLIMIT_AS` only when configured and supported. Poll the pipe with a bounded interval. Never continue in the parent after catching child `MemoryError`.
 
-- [ ] **Step 5: Integrate disk preflight, graceful SIGINT, progress, and diagnostics**
+- [x] **Step 5: Integrate disk preflight, graceful SIGINT, progress, and diagnostics**
 
 The first SIGINT sets an event; the second raises `KeyboardInterrupt`. Convert cancellation into a `MapBatchState.CANCELLED` result, checkpoint it, and stop. CLI defaults to a positive timeout and prints `完成/总数`, action, elapsed, RSS, and ETA. Direct tests explicitly set timeout to `None` when monkeypatching in-process processing.
 
-- [ ] **Step 6: Verify and commit**
+- [x] **Step 6: Verify and commit**
 
 Run:
 
@@ -649,7 +649,7 @@ Commit: `feat: bound and observe batch map workers`
 - Produces: `cancel_group`, `accepts`, `finish`, and `shutdown(timeout_seconds) -> tuple[str, ...]`.
 - Produces host helpers `_start_gui_worker(...)` and `_post_gui_worker(...)`.
 
-- [ ] **Step 1: Write failing registry lifecycle tests**
+- [x] **Step 1: Write failing registry lifecycle tests**
 
 ```python
 def test_shutdown_is_bounded_when_worker_ignores_cancellation() -> None:
@@ -674,13 +674,13 @@ def test_replaced_ticket_cannot_deliver_callback() -> None:
 
 Add cleanup-on-late-result, shared-deadline, idempotent shutdown, and worker-finish race tests.
 
-- [ ] **Step 2: Run RED registry tests**
+- [x] **Step 2: Run RED registry tests**
 
 Run: `uv run python -m pytest -q tests/test_gui_worker_registry.py`
 
 Expected: FAIL because registry APIs do not exist.
 
-- [ ] **Step 3: Implement registry under 200 pure lines**
+- [x] **Step 3: Implement registry under 200 pure lines**
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -697,21 +697,21 @@ class GuiWorkerRegistry:  # noqa: MUTABLE_OK - lifecycle registry owns changing 
         # Signal all tickets, then join each only for the shared remaining budget.
 ```
 
-Guard callbacks before `after(0, ...)` and again inside the Tk callback. Cleanup callbacks run when a ticket is stale or the registry stopped.
+Guard callbacks before adding them to a lock-protected host queue and again when the Tk-main-thread 20-millisecond poll delivers them. Background workers never call Tk. Cleanup callbacks run when a ticket is stale or the registry stopped.
 
-- [ ] **Step 4: Migrate loader and filter first**
+- [x] **Step 4: Migrate loader and filter first**
 
 Write loader/filter RED tests that blocked jobs do not block shutdown, stale payloads are discarded, object-filter workers are reaped, and no late status callback runs. Remove loader-local worker maps and filter untracked threads only after tests fail for the expected old behavior.
 
-- [ ] **Step 5: Migrate current-map, source scan, external analysis, exports, and CASC open**
+- [x] **Step 5: Migrate current-map, source scan, external analysis, exports, and CASC open**
 
 For each subsystem add one failing late-result test before replacing `threading.Thread(...).start()` with `_start_gui_worker`. Current-map snapshot cleanup and loader resolver cleanup remain the resource-specific cleanup callbacks.
 
-- [ ] **Step 6: Integrate bounded app shutdown**
+- [x] **Step 6: Integrate bounded app shutdown**
 
 Initialize the registry before all worker-producing mixins. In `_on_close`, invalidate subsystem polls, call `shutdown(timeout_seconds=1.5)`, log lingering daemon names, then destroy Tk. No subsystem calls an unbounded `join()`.
 
-- [ ] **Step 7: Verify and commit**
+- [x] **Step 7: Verify and commit**
 
 Run:
 
@@ -747,7 +747,7 @@ Commit: `fix: bound GUI background worker shutdown`
 - Produces one immutable strict path tuple and executes Ruff check, Ruff format check, and basedpyright with the current Python executable/environment.
 - Adds acceptance check `batch_publication`.
 
-- [ ] **Step 1: Write failing quality command-construction tests**
+- [x] **Step 1: Write failing quality command-construction tests**
 
 ```python
 def test_quality_gate_builds_all_three_cross_platform_commands() -> None:
@@ -761,25 +761,25 @@ def test_quality_gate_builds_all_three_cross_platform_commands() -> None:
     assert all("shell=True" not in command.argv for command in commands)
 ```
 
-- [ ] **Step 2: Write failing packaged batch acceptance and soak tests**
+- [x] **Step 2: Write failing packaged batch acceptance and soak tests**
 
 Copy the real MPQ fixture to a private input directory, run the batch twice, require the second action to be `reused`, validate the current global generation and map manifest, assert no stage/backup/transaction leftovers, and compare the fixture SHA before/after. The soak test repeats five runs and uses `tracemalloc` plus worker/process enumeration to prove bounded growth and no leaked child processes.
 
-- [ ] **Step 3: Run RED tests**
+- [x] **Step 3: Run RED tests**
 
 Run: `uv run python -m pytest -q tests/test_quality_gate.py tests/test_batch_soak.py tests/test_acceptance_runner.py`
 
 Expected: FAIL on missing quality and batch-acceptance modules/check.
 
-- [ ] **Step 4: Configure tools and implement the cross-platform quality entry point**
+- [x] **Step 4: Configure tools and implement the cross-platform quality entry point**
 
 Add Ruff and basedpyright to the dev group. Configure Python 3.14, project excludes, formatter compatibility ignores, and test-specific ignores. Run subprocess argument tuples with `shell=False`, echo each command, stop on the first nonzero result, and return its exit code.
 
-- [ ] **Step 5: Add CI and acceptance gates**
+- [x] **Step 5: Add CI and acceptance gates**
 
 Run `uv run w3xray-quality` immediately after `uv sync --dev` in POSIX, Windows packaging, and real-Windows scripts. Add `batch_publication` to source and packaged acceptance and require its manifest/resume/source-hash detail.
 
-- [ ] **Step 6: Run focused quality, acceptance, and soak verification**
+- [x] **Step 6: Run focused quality, acceptance, and soak verification**
 
 Run:
 
@@ -791,7 +791,7 @@ uv run python -m pytest -q tests/test_quality_gate.py tests/test_batch_soak.py t
 
 Expected: all commands exit 0; Windows/CASC checks may skip only on non-Windows hosts.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Commit: `ci: gate resilient batch publication`
 
@@ -808,11 +808,11 @@ Commit: `ci: gate resilient batch publication`
 **Interfaces:**
 - Documents schema 3, manifests, global pointer, partial reuse, timeout/cancellation, quality command, acceptance command, and migration behavior.
 
-- [ ] **Step 1: Update durable project knowledge**
+- [x] **Step 1: Update durable project knowledge**
 
 Record exact commands, new output layout, recovery behavior, CLI defaults, and verified counts. Do not put conversation notes or machine secrets into AGENTS files.
 
-- [ ] **Step 2: Measure every changed Python file**
+- [x] **Step 2: Measure every changed Python file**
 
 Run:
 
@@ -825,7 +825,7 @@ done
 
 Expected: every new/substantively changed file is at or below 250 pure lines; files in 200–250 warning band are explicitly reported.
 
-- [ ] **Step 3: Run full static and test gates fresh**
+- [x] **Step 3: Run full static and test gates fresh**
 
 Run:
 
@@ -837,7 +837,7 @@ git diff --check
 
 Expected: quality exit 0; pytest has zero failures; diff check is empty.
 
-- [ ] **Step 4: Run local packaged/source acceptance where supported**
+- [x] **Step 4: Run local packaged/source acceptance where supported**
 
 Run:
 
@@ -852,7 +852,7 @@ uv run main.py acceptance \
 
 Expected: `overall_status` is `pass`, including `batch_publication`.
 
-- [ ] **Step 5: Verify real source inventory remains unchanged**
+- [x] **Step 5: Verify real source inventory remains unchanged**
 
 When `/Users/zhongerbing/Desktop/Maps` is present, compute path/size/mtime/SHA-256 before and after read-only acceptance and compare exact manifests. Do not run the new batch against `map-extract-output-v2`; use a new temporary output root.
 
