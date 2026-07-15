@@ -14,7 +14,11 @@ import w3xtool.batch_map_processing as batch_map_processing
 from w3xtool.batch_map_processing import process_one_map
 from w3xtool.batch_models import MapBatchState
 from w3xtool.batch_runner import BatchOptions, fingerprint_source
-from w3xtool.icon_resources import IconObjectReference, NamedIconResource
+from w3xtool.icon_resources import (
+    HistoricalIconEvidenceSet,
+    IconObjectReference,
+    NamedIconResource,
+)
 from w3xtool.load_context import MapLoadContext
 
 
@@ -132,19 +136,24 @@ def test_process_one_map_merges_map_bound_trusted_icon_evidence(
         def read_file(self, name: str) -> bytes:
             raise FileNotFoundError(name)
 
-        def cached_icons_for(self, source_digest: str) -> tuple[NamedIconResource, ...]:
+        def has_exact_file(self, name: str) -> bool:
+            return self.has_file(name)
+
+        def read_exact_file(self, name: str) -> bytes:
+            return self.read_file(name)
+
+        def historical_icons_for(self, source_digest: str) -> HistoricalIconEvidenceSet:
             assert source_digest == fingerprint.sha256
-            return (
-                NamedIconResource(
-                    requested_path=r"Icons\Missing.blp",
-                    normalized_path=r"Icons\Missing.blp",
-                    resolved_path=r"Icons\BTNHero.blp",
-                    source_path="可信图标缓存:war3.mpq",
-                    payload=payload,
-                    sha256=hashlib.sha256(payload).hexdigest(),
-                    objects=(IconObjectReference("技能", "A001", "暴风雪"),),
-                ),
+            resource = NamedIconResource(
+                requested_path=r"Icons\Missing.blp",
+                normalized_path=r"Icons\Missing.blp",
+                resolved_path=r"Icons\BTNHero.blp",
+                source_path="可信图标缓存:war3.mpq",
+                payload=payload,
+                sha256=hashlib.sha256(payload).hexdigest(),
+                objects=(IconObjectReference("技能", "A001", "暴风雪"),),
             )
+            return HistoricalIconEvidenceSet(available=True, resources=(resource,))
 
         def close(self) -> None:
             self.closed = True

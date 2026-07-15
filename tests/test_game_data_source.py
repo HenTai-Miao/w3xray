@@ -20,6 +20,20 @@ from w3xtool.game_data_source import (
 from w3xtool.icons import IconResolver
 
 
+def test_directory_exact_lookup_does_not_use_suffix_or_basename(tmp_path) -> None:
+    # Given
+    icon = tmp_path / "deep" / "Icons" / "BTNHero.blp"
+    icon.parent.mkdir(parents=True)
+    icon.write_bytes(b"BLP1")
+    source = DirectoryDataSource(str(tmp_path))
+
+    # When / Then
+    assert source.has_file("BTNHero.blp")
+    assert not source.has_exact_file("BTNHero.blp")
+    assert source.has_exact_file(r"deep\Icons\BTNHero.blp")
+    assert source.read_exact_file(r"deep\Icons\BTNHero.blp") == b"BLP1"
+
+
 class GameDataSourceTest(unittest.TestCase):
     def test_discovery_uses_configured_warcraft_directory(self) -> None:
         # Given: the supported environment variable points at readable client data.

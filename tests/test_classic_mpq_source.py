@@ -75,6 +75,21 @@ def test_classic_source_reports_the_archive_that_supplied_a_member(
     source.close()
 
 
+def test_classic_exact_lookup_uses_the_member_path(tmp_path: Path) -> None:
+    # Given
+    archives = {
+        "war3.mpq": _FakeArchive({"Icons\\BTN.blp": b"base"}),
+    }
+    (tmp_path / "war3.mpq").touch()
+    source = ClassicMpqDataSource(str(tmp_path), archive_factory=_factory(archives))
+
+    # When / Then
+    assert source.has_exact_file("Icons/BTN.blp")
+    assert not source.has_exact_file("BTN.blp")
+    assert source.read_exact_file("Icons/BTN.blp") == b"base"
+    source.close()
+
+
 def test_classic_paths_follow_documented_priority(tmp_path: Path) -> None:
     # Given
     for name in ("war3.mpq", "War3x.mpq", "War3xLocal.mpq", "War3Patch.mpq"):

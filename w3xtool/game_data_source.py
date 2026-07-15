@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import os
 from collections.abc import Generator
-from typing import Protocol, final
+from typing import Protocol, final, runtime_checkable
 
 from .casclib_api import CascLibLoadError, CascNativeError
 from .casclib_source import CascLibDataSource, probe_casclib
@@ -20,12 +20,17 @@ from .game_data_inventory import (
 from .trusted_icon_cache import TrustedIconCacheDataSource, is_trusted_icon_cache
 
 
+@runtime_checkable
 class GameDataSource(Protocol):
     """Common read interface for extracted and native game-data sources."""
 
     def has_file(self, name: str) -> bool: ...
 
     def read_file(self, name: str) -> bytes: ...
+
+    def has_exact_file(self, name: str) -> bool: ...
+
+    def read_exact_file(self, name: str) -> bytes: ...
 
     def close(self) -> None: ...
 
@@ -69,6 +74,16 @@ class DirectoryDataSource:
 
     def read_file(self, name: str) -> bytes:
         path = self._resolve(name)
+        if path is None:
+            raise FileNotFoundError(name)
+        with open(path, "rb") as handle:
+            return handle.read()
+
+    def has_exact_file(self, name: str) -> bool:
+        return _norm(name) in self._by_rel
+
+    def read_exact_file(self, name: str) -> bytes:
+        path = self._by_rel.get(_norm(name))
         if path is None:
             raise FileNotFoundError(name)
         with open(path, "rb") as handle:

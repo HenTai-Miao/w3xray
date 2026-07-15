@@ -15,7 +15,11 @@ from .game_data_inventory import (
     known_path_entry,
 )
 
-_PATH_MAP_NAMES = ("w3xray-casc-paths.tsv", ".w3xray-casc-paths.tsv", "Data/w3xray-casc-paths.tsv")
+_PATH_MAP_NAMES = (
+    "w3xray-casc-paths.tsv",
+    ".w3xray-casc-paths.tsv",
+    "Data/w3xray-casc-paths.tsv",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +67,19 @@ class CascDataSource:
             raise FileNotFoundError(name)
         return _read_data_block(self.data_dir, entry)
 
+    def has_exact_file(self, name: str) -> bool:
+        key = self._path_to_key.get(_norm(name))
+        return key is not None and key[:9] in self._index
+
+    def read_exact_file(self, name: str) -> bytes:
+        key = self._path_to_key.get(_norm(name))
+        if key is None:
+            raise FileNotFoundError(name)
+        entry = self._index.get(key[:9])
+        if entry is None:
+            raise FileNotFoundError(name)
+        return _read_data_block(self.data_dir, entry)
+
     def iter_entries(
         self,
         mask: str = "*",
@@ -103,8 +120,8 @@ def decode_blte(data: bytes) -> bytes:
     payload_pos = header_size
     for index in range(count):
         entry_pos = table_pos + index * 24
-        comp_size = int.from_bytes(data[entry_pos:entry_pos + 4], "big")
-        chunk = data[payload_pos:payload_pos + comp_size]
+        comp_size = int.from_bytes(data[entry_pos : entry_pos + 4], "big")
+        chunk = data[payload_pos : payload_pos + comp_size]
         if len(chunk) != comp_size:
             raise CascUnsupportedError("truncated BLTE chunk")
         chunks.append(_decode_chunk(chunk))
@@ -162,7 +179,7 @@ def _parse_idx_entries(data: bytes) -> dict[bytes, CascIndexEntry]:
     result: dict[bytes, CascIndexEntry] = {}
     start = _idx_rows_start(data)
     for pos in range(start, len(data) - 17, 18):
-        row = data[pos:pos + 18]
+        row = data[pos : pos + 18]
         key = row[:9]
         if key == b"\0" * 9:
             continue

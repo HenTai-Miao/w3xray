@@ -8,7 +8,23 @@ from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 from .extraction_ledger import BlockSource, BlockState, ExtractionLedger
-from .map_data import GameObject
+from .icon_path_evidence import plan_icon_path
+
+
+class IconBearingObject(Protocol):
+    """Object fields required by legacy path grouping."""
+
+    @property
+    def category(self) -> str: ...
+
+    @property
+    def obj_id(self) -> str: ...
+
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def icon(self) -> str: ...
 
 
 class NamedIconArchive(Protocol):
@@ -28,6 +44,10 @@ class NamedIconDataSource(Protocol):
     def has_file(self, name: str) -> bool: ...
 
     def read_file(self, name: str) -> bytes: ...
+
+    def has_exact_file(self, name: str) -> bool: ...
+
+    def read_exact_file(self, name: str) -> bytes: ...
 
 
 class AnonymousIconBlock(Protocol):
@@ -57,7 +77,7 @@ class SourcedGameDataSource(Protocol):
 class TrustedIconEvidenceSource(Protocol):
     """Optional source capability for exact-map cached icon evidence."""
 
-    def cached_icons_for(self, source_digest: str) -> tuple[NamedIconResource, ...]: ...
+    def historical_icons_for(self, source_digest: str) -> HistoricalIconEvidenceSet: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +85,17 @@ class IconObjectReference:
     category: str
     object_id: str
     object_name: str
+    base_id: str = ""
+    map_path: str = ""
+    map_sha256: str = ""
+    map_scope: str = ""
+    field_key: str = ""
+    field_label: str = ""
+    field_type: str = ""
+    field_source: str = ""
+    wts_source: str = ""
+    requested_path: str = ""
+    normalized_path: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -86,6 +117,14 @@ class NamedIconResource:
 
 
 @dataclass(frozen=True, slots=True)
+class HistoricalIconEvidenceSet:
+    """Availability and rows from one exact-map historical evidence file."""
+
+    available: bool
+    resources: tuple[NamedIconResource, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class AnonymousIconResource:
     block_index: int
     payload: bytes
@@ -97,7 +136,9 @@ class AnonymousIconResource:
     original_path: None = None
 
 
-def collect_icon_references(objects: Iterable[GameObject]) -> tuple[IconReference, ...]:
+def collect_icon_references(
+    objects: Iterable[IconBearingObject],
+) -> tuple[IconReference, ...]:
     """Deduplicate icon paths while preserving every referring object."""
     grouped: dict[str, tuple[str, set[IconObjectReference]]] = {}
     for item in objects:
@@ -182,19 +223,11 @@ def iter_anonymous_blps(
 
 
 def _normalize_icon_path(path: str) -> str:
-    return path.strip().strip('"').replace("/", "\\")
+    return plan_icon_path(path).normalized
 
 
 def _path_candidates(path: str) -> tuple[str, ...]:
-    leaf = path.rsplit("\\", 1)[-1]
-    base = path.rsplit(".", 1)[0] if "." in leaf else path
-    ordered = (path, f"{base}.blp", f"{base}.tga", f"{base}.dds")
-    seen: set[str] = set()
-    return tuple(
-        item
-        for item in ordered
-        if not (item.casefold() in seen or seen.add(item.casefold()))
-    )
+    return plan_icon_path(path).candidates
 
 
 def _read_named(source: NamedIconArchive, name: str) -> bytes | None:
@@ -206,11 +239,11 @@ def _read_named(source: NamedIconArchive, name: str) -> bytes | None:
 
 def _read_client(source: NamedIconDataSource, name: str) -> tuple[bytes, str] | None:
     try:
-        if not source.has_file(name):
+        if not source.has_exact_file(name):
             return None
         if isinstance(source, SourcedGameDataSource):
             return source.read_file_with_source(name)
-        return source.read_file(name), "client-data"
+        return source.read_exact_file(name), "client-data"
     except KeyError, OSError, ValueError:
         return None
 

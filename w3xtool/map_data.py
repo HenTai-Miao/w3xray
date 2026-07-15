@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from .external_listfile import ExternalListfileReport
+from .icon_evidence_models import IconEvidenceIndex, empty_icon_evidence_index
 from .item_relation_models import ItemRelationIndex, empty_item_relation_index
 from .object_text_models import ObjectTextIndex, empty_object_text_index
 
@@ -115,6 +116,7 @@ class MapData:
     object_texts: ObjectTextIndex = field(default_factory=empty_object_text_index)
     item_relations: ItemRelationIndex = field(default_factory=empty_item_relation_index)
     obj_identity_index: dict[tuple[str, str], GameObject] = field(default_factory=dict)
+    icon_evidence: IconEvidenceIndex = field(default_factory=empty_icon_evidence_index)
     _closed: bool = field(default=False, init=False, repr=False)
 
     def category_counts(self) -> dict[str, int]:

@@ -12,6 +12,7 @@ from types import MappingProxyType
 from typing import Final, Mapping, final, override
 
 from .icon_resources import (
+    HistoricalIconEvidenceSet,
     IconObjectReference,
     NamedIconResource,
 )
@@ -110,13 +111,19 @@ class TrustedIconCacheDataSource:
             raise TrustedIconCacheError(entry.payload_path, "payload hash mismatch")
         return payload
 
+    def has_exact_file(self, name: str) -> bool:
+        return self.has_file(name)
+
+    def read_exact_file(self, name: str) -> bytes:
+        return self.read_file(name)
+
     def read_file_with_source(self, name: str) -> tuple[bytes, str]:
         entry = self._payloads.get(_path_key(name))
         if entry is None:
             raise FileNotFoundError(name)
         return self.read_file(name), f"可信图标缓存:{entry.source_archive}"
 
-    def cached_icons_for(self, source_digest: str) -> tuple[NamedIconResource, ...]:
+    def historical_icons_for(self, source_digest: str) -> HistoricalIconEvidenceSet:
         _parse_digest(source_digest, self.root)
         evidence_path = safe_destination(
             self.root,
@@ -126,7 +133,7 @@ class TrustedIconCacheDataSource:
             raise TrustedIconCacheError(self.root, "unsafe evidence path")
         evidence = Path(evidence_path)
         if not evidence.exists():
-            return ()
+            return HistoricalIconEvidenceSet(available=False, resources=())
         records: list[NamedIconResource] = []
         for row in _read_tsv(evidence, _EVIDENCE_HEADER):
             requested, resolved, digest, source_archive, encoded_objects = row
@@ -157,7 +164,7 @@ class TrustedIconCacheDataSource:
                     objects=_parse_objects(encoded_objects, str(evidence)),
                 )
             )
-        return tuple(records)
+        return HistoricalIconEvidenceSet(available=True, resources=tuple(records))
 
     def close(self) -> None:
         """Release no resources because every payload read owns its handle."""

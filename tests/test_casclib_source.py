@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Never
 
 import pytest
 
@@ -34,7 +35,9 @@ class FakeCascLibApi:
     def open_storage(self, path: str) -> int:
         self.events.append(f"open_storage:{path}")
         if self.storage_error is not None:
-            raise CascNativeError(operation="CascOpenStorage", native_error_code=self.storage_error)
+            raise CascNativeError(
+                operation="CascOpenStorage", native_error_code=self.storage_error
+            )
         return self._open_handle()
 
     def close_storage(self, handle: int) -> None:
@@ -51,12 +54,16 @@ class FakeCascLibApi:
 
     def file_size(self, handle: int) -> int:
         if self.size_error is not None:
-            raise CascNativeError(operation="CascGetFileSize64", native_error_code=self.size_error)
+            raise CascNativeError(
+                operation="CascGetFileSize64", native_error_code=self.size_error
+            )
         return len(self.files[self._file_by_handle[handle]])
 
     def read_file(self, handle: int, size: int) -> bytes:
         if self.read_error is not None:
-            raise CascNativeError(operation="CascReadFile", native_error_code=self.read_error)
+            raise CascNativeError(
+                operation="CascReadFile", native_error_code=self.read_error
+            )
         return self.files[self._file_by_handle[handle]][:size]
 
     def close_file(self, handle: int) -> None:
@@ -85,7 +92,10 @@ def test_source_reads_internal_file_and_closes_handles() -> None:
     with CascLibDataSource("C:/Warcraft III", api=api) as source:
         assert source.has_file("UI/TriggerData.txt")
         assert source.read_file("UI\\TriggerStrings.txt").startswith(b"WESTRING")
-        assert source.read_file("ReplaceableTextures/CommandButtons/BTNHero.blp") == b"BLP1hero"
+        assert (
+            source.read_file("ReplaceableTextures/CommandButtons/BTNHero.blp")
+            == b"BLP1hero"
+        )
 
     # Then: all native file and storage handles are closed.
     assert api.open_handles == set()
@@ -103,6 +113,17 @@ def test_missing_file_is_false_for_has_and_raises_for_read() -> None:
         assert caught.value.native_error_code == 2
 
     assert api.open_handles == set()
+
+
+def test_exact_lookup_uses_the_full_internal_casclib_path() -> None:
+    # Given
+    api = FakeCascLibApi({"Icons\\BTNHero.blp": b"BLP1hero"})
+
+    # When / Then
+    with CascLibDataSource("C:/Warcraft III", api=api) as source:
+        assert source.has_exact_file("Icons/BTNHero.blp")
+        assert not source.has_exact_file("BTNHero.blp")
+        assert source.read_exact_file("Icons/BTNHero.blp") == b"BLP1hero"
 
 
 @pytest.mark.parametrize("failure", ["size", "read"])
@@ -177,15 +198,20 @@ def test_wrong_architecture_load_error_preserves_win32_code(
     assert caught.value.native_error_code == 193
 
 
-def test_probe_reports_missing_required_dll_export(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_probe_reports_missing_required_dll_export(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Given: a loadable DLL facade that is missing one required CascLib export.
-    class MissingExportLibrary:
-        pass
+    class MissingExportLibrary(casclib_api.ctypes.CDLL):
+        def __getattr__(self, name: str) -> Never:
+            raise AttributeError(name)
+
+    missing_library = object.__new__(MissingExportLibrary)
 
     monkeypatch.setattr(
         casclib_source,
         "CtypesCascLibApi",
-        lambda: CtypesCascLibApi(library=MissingExportLibrary()),
+        lambda: CtypesCascLibApi(library=missing_library),
     )
 
     # When: the concrete probe tries to bind the incompatible DLL.
@@ -197,7 +223,9 @@ def test_probe_reports_missing_required_dll_export(monkeypatch: pytest.MonkeyPat
     assert "CascOpenStorage" in result.reason
 
 
-def test_probe_reports_open_storage_native_error(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_probe_reports_open_storage_native_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Given: the DLL loads but its storage open fails.
     api = FakeCascLibApi({}, storage_error=1006)
     monkeypatch.setattr(casclib_source, "CtypesCascLibApi", lambda: api)

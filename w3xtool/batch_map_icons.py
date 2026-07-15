@@ -65,7 +65,7 @@ def export_map_icons(
                 exported += 1
             anonymous_failures += max(0, expected - exported)
         if isinstance(game_source, TrustedIconEvidenceSource):
-            for resource in game_source.cached_icons_for(source_digest):
+            for resource in game_source.historical_icons_for(source_digest).resources:
                 unresolved.discard(resource.normalized_path.casefold())
                 _merge_named_icon(records, named_indexes, stage, resource)
     return (

@@ -78,6 +78,12 @@ class CascLibDataSource:
             if file_handle is not None:
                 self._api.close_file(file_handle)
 
+    def has_exact_file(self, name: str) -> bool:
+        return self.has_file(name)
+
+    def read_exact_file(self, name: str) -> bytes:
+        return self.read_file(name)
+
     def iter_entries(
         self,
         mask: str = "*",

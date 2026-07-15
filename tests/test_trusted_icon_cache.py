@@ -36,9 +36,11 @@ def test_trusted_icon_cache_opens_payload_and_map_bound_evidence(
     assert isinstance(source, TrustedIconEvidenceSource)
     try:
         assert source.read_file(_ICON_PATH) == _ICON_PAYLOAD
-        (resource,) = source.cached_icons_for(_MAP_DIGEST)
+        history = source.historical_icons_for(_MAP_DIGEST)
     finally:
         source.close()
+    assert history.available
+    (resource,) = history.resources
     assert resource.requested_path == _ICON_PATH
     assert resource.resolved_path == _ICON_PATH
     assert resource.sha256 == hashlib.sha256(_ICON_PAYLOAD).hexdigest()
@@ -46,6 +48,30 @@ def test_trusted_icon_cache_opens_payload_and_map_bound_evidence(
     assert tuple(
         (item.category, item.object_id, item.object_name) for item in resource.objects
     ) == (("技能", "A001", "暴风雪"),)
+
+
+def test_trusted_cache_exact_lookup_requires_the_virtual_path(tmp_path: Path) -> None:
+    # Given
+    source = TrustedIconCacheDataSource(str(_write_cache(tmp_path)))
+
+    # When / Then
+    assert source.has_exact_file(_ICON_PATH)
+    assert not source.has_exact_file("BTNHero.blp")
+    assert source.read_exact_file(_ICON_PATH) == _ICON_PAYLOAD
+
+
+def test_missing_same_map_evidence_is_unavailable_not_a_verified_miss(
+    tmp_path: Path,
+) -> None:
+    # Given
+    source = TrustedIconCacheDataSource(str(_write_cache(tmp_path)))
+
+    # When
+    history = source.historical_icons_for("b" * 64)
+
+    # Then
+    assert not history.available
+    assert history.resources == ()
 
 
 def test_trusted_icon_cache_rejects_conflicting_normalized_payloads(
@@ -78,7 +104,7 @@ def test_trusted_icon_cache_rejects_evidence_path_traversal(
 
     # When/Then: evidence parsing rejects the row before any payload is returned.
     with pytest.raises(TrustedIconCacheError, match="unsafe icon path"):
-        source.cached_icons_for(_MAP_DIGEST)
+        source.historical_icons_for(_MAP_DIGEST)
 
 
 def test_trusted_icon_cache_rejects_evidence_archive_mismatch(
@@ -104,7 +130,7 @@ def test_trusted_icon_cache_rejects_evidence_archive_mismatch(
 
     # When/Then: provenance must match the payload manifest exactly.
     with pytest.raises(TrustedIconCacheError, match="archive mismatch"):
-        source.cached_icons_for(_MAP_DIGEST)
+        source.historical_icons_for(_MAP_DIGEST)
 
 
 def test_trusted_icon_cache_rejects_symlinked_evidence_parent(
@@ -123,7 +149,7 @@ def test_trusted_icon_cache_rejects_symlinked_evidence_parent(
 
     # When/Then: the cache boundary rejects the parent link before reading TSV.
     with pytest.raises(TrustedIconCacheError, match="unsafe evidence path"):
-        source.cached_icons_for(_MAP_DIGEST)
+        source.historical_icons_for(_MAP_DIGEST)
 
 
 def _write_cache(

@@ -88,6 +88,14 @@ class ClassicMpqDataSource:
         payload, _source_path = self.read_file_with_source(name)
         return payload
 
+    def has_exact_file(self, name: str) -> bool:
+        """Return whether the exact normalized member exists in any layer."""
+        return self.has_file(name)
+
+    def read_exact_file(self, name: str) -> bytes:
+        """Read the exact normalized member from the highest-priority layer."""
+        return self.read_file(name)
+
     def read_file_with_source(self, name: str) -> tuple[bytes, str]:
         """Read a member and identify the exact MPQ layer that supplied it."""
         member = _member_name(name)

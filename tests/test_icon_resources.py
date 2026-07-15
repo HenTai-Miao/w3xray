@@ -64,11 +64,28 @@ class _FakeClientSource:
     def read_file(self, name: str) -> bytes:
         return self._files[name.casefold()]
 
+    def has_exact_file(self, name: str) -> bool:
+        return self.has_file(name)
+
+    def read_exact_file(self, name: str) -> bytes:
+        return self.read_file(name)
+
     def read_file_with_source(self, name: str) -> tuple[bytes, str]:
         return self.read_file(name), self.source_path
 
     def close(self) -> None:
         """The fake owns no external resource."""
+
+
+class _FuzzyOnlyClientSource(_FakeClientSource):
+    def has_file(self, name: str) -> bool:
+        return True
+
+    def read_file(self, name: str) -> bytes:
+        return b"BLP1fuzzy"
+
+    def has_exact_file(self, name: str) -> bool:
+        return False
 
 
 @dataclass(frozen=True, slots=True)
@@ -173,6 +190,34 @@ def test_named_icon_resolution_uses_client_archive_provenance() -> None:
     assert resource is not None
     assert resource.source_path == "War3x.mpq"
     assert resource.sha256 == hashlib.sha256(b"BLP1client").hexdigest()
+
+
+def test_named_icon_resolution_never_promotes_a_fuzzy_client_match() -> None:
+    # Given
+    (reference,) = collect_icon_references(
+        (_game_object(category="技能", obj_id="A001", icon=r"Custom\BTN.blp"),)
+    )
+    source = _FuzzyOnlyClientSource("client", {"BTN.blp": b"BLP1fuzzy"})
+
+    # When
+    resource = resolve_named_icon(reference, (), source)
+
+    # Then
+    assert resource is None
+
+
+def test_named_icon_resolution_rejects_an_invalid_archive_reference() -> None:
+    # Given
+    (reference,) = collect_icon_references(
+        (_game_object(category="技能", obj_id="A001", icon=r"..\Icons\BTN.blp"),)
+    )
+    archive = _FakeNamedSource("map.w3x", {r"..\Icons\BTN.blp": b"BLP1unsafe"})
+
+    # When
+    resource = resolve_named_icon(reference, (archive,), None)
+
+    # Then
+    assert resource is None
 
 
 def test_anonymous_blp_name_uses_block_and_payload_digest() -> None:
