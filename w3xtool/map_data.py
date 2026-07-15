@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from .external_listfile import ExternalListfileReport
-from .icon_evidence_models import IconEvidenceIndex, empty_icon_evidence_index
+from .icon_evidence_index import IconEvidenceIndex, empty_icon_evidence_index
 from .item_relation_models import ItemRelationIndex, empty_item_relation_index
 from .object_text_models import ObjectTextIndex, empty_object_text_index
 

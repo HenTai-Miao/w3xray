@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable
 from typing import Final, assert_never
 
 from .extraction_ledger import ExtractionLedger
@@ -25,21 +26,33 @@ from .icon_resources import (
 )
 
 _READ_ERRORS: Final = (KeyError, OSError, ValueError)
+_UNAVAILABLE_HISTORY: Final = HistoricalIconEvidenceSet(
+    available=False,
+    resources=(),
+)
 
 
 def resolve_icon_reference(
     reference: IconObjectReference,
     archives: tuple[IconArchiveLayer, ...],
     game_source: GameDataSource | None,
-    history: HistoricalIconEvidenceSet,
+    load_history: Callable[[], HistoricalIconEvidenceSet],
     ledger: ExtractionLedger | None,
 ) -> ResolvedIconEvidence | UnresolvedIconEvidence:
     """Return one resolved or gap row after exact ordered attempts."""
     plan = plan_icon_path(reference.requested_path)
     attempts: list[IconLookupAttempt] = []
+    history = _UNAVAILABLE_HISTORY
+    history_checked = False
     if not plan.candidates:
         return unresolved_icon_evidence(
-            reference, attempts, game_source, history, ledger, invalid=True
+            reference,
+            attempts,
+            game_source,
+            history,
+            ledger,
+            history_checked=history_checked,
+            invalid=True,
         )
     for archive_layer in archives:
         for candidate in plan.candidates:
@@ -65,6 +78,8 @@ def resolve_icon_reference(
         case None:
             pass
         case TrustedIconEvidenceSource() as source:
+            history = load_history()
+            history_checked = True
             historical = _matching_history(reference, history)
             attempts.append(_history_attempt(reference, historical))
             if historical is not None:
@@ -97,7 +112,14 @@ def resolve_icon_reference(
                 return client
         case unreachable:
             assert_never(unreachable)
-    return unresolved_icon_evidence(reference, attempts, game_source, history, ledger)
+    return unresolved_icon_evidence(
+        reference,
+        attempts,
+        game_source,
+        history,
+        ledger,
+        history_checked=history_checked,
+    )
 
 
 def _resolve_client_candidates(

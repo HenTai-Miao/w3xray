@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Final, assert_never
+from dataclasses import dataclass
+from typing import Final, assert_never, override
 
 from .game_data_source import GameDataSource
+from .icon_evidence_index import IconEvidenceIndex
 from .icon_evidence_models import (
     FilteredIconEvidence,
     IconArchiveLayer,
-    IconEvidenceIndex,
     IconResolutionLayer,
     ResolvedIconEvidence,
     UnresolvedIconEvidence,
@@ -36,6 +37,17 @@ _LAYER_ORDER: Final = (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class IconEvidenceBuildError(ValueError):
+    """An evidence-bearing map lacks its required extraction identity."""
+
+    map_path: str
+
+    @override
+    def __str__(self) -> str:
+        return f"cannot build icon evidence for {self.map_path}: ledger is missing"
+
+
 def build_icon_evidence_index(
     md: MapData,
     archives: tuple[IconArchiveLayer, ...],
@@ -43,7 +55,14 @@ def build_icon_evidence_index(
 ) -> IconEvidenceIndex:
     """Resolve exact icon references once in strict layer order."""
     references, filtered = collect_icon_field_references(md)
-    history = _history_for(md, game_source)
+    history_cache: HistoricalIconEvidenceSet | None = None
+
+    def load_history() -> HistoricalIconEvidenceSet:
+        nonlocal history_cache
+        if history_cache is None:
+            history_cache = _history_for(md, game_source)
+        return history_cache
+
     ordered_archives = tuple(
         sorted(
             archives,
@@ -61,7 +80,7 @@ def build_icon_evidence_index(
             reference,
             ordered_archives,
             game_source,
-            history,
+            load_history,
             md.extraction_ledger,
         )
         match outcome:
@@ -154,14 +173,15 @@ def _reference(
 ) -> IconObjectReference:
     plan = plan_icon_path(evidence.value)
     ledger = md.extraction_ledger
-    digest = "" if ledger is None else ledger.source_sha256
+    if ledger is None:
+        raise IconEvidenceBuildError(md.path)
     return IconObjectReference(
         obj.category,
         obj.obj_id,
         obj.name,
         obj.base_id,
         md.path,
-        digest,
+        ledger.source_sha256,
         md.path,
         evidence.key,
         evidence.label,

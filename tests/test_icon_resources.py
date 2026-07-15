@@ -6,6 +6,8 @@ import hashlib
 from collections.abc import Iterable
 from dataclasses import dataclass
 
+import pytest
+
 from w3xtool.extraction_ledger import (
     BlockSource,
     BlockState,
@@ -14,6 +16,9 @@ from w3xtool.extraction_ledger import (
 )
 from w3xtool.icon_resources import (
     AnonymousIconBlock,
+    HistoricalIconEvidenceSet,
+    HistoricalIconEvidenceSetError,
+    NamedIconResource,
     collect_icon_references,
     iter_anonymous_blps,
     resolve_named_icon,
@@ -150,6 +155,23 @@ def test_named_icon_collection_deduplicates_paths_and_keeps_all_references() -> 
         ("单位", "H001"),
         ("技能", "A001"),
     }
+
+
+def test_unavailable_history_rejects_resources() -> None:
+    # Given
+    resource = NamedIconResource(
+        r"Icons\BTNHero.blp",
+        r"Icons\BTNHero.blp",
+        r"Icons\BTNHero.blp",
+        "war3.mpq",
+        b"BLP1history",
+        "a" * 64,
+        (),
+    )
+
+    # When / Then
+    with pytest.raises(HistoricalIconEvidenceSetError, match="unavailable"):
+        HistoricalIconEvidenceSet(available=False, resources=(resource,))
 
 
 def test_named_icon_resolution_prefers_map_and_records_the_true_source() -> None:

@@ -5,17 +5,19 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
+
 from w3xtool.extraction_ledger import build_extraction_ledger
 from w3xtool.game_data_source import DirectoryDataSource
-from w3xtool.icon_evidence_builder import build_icon_evidence_index
+from w3xtool.icon_evidence_builder import (
+    IconEvidenceBuildError,
+    build_icon_evidence_index,
+)
+from w3xtool.icon_evidence_index import merge_icon_evidence_indexes
 from w3xtool.icon_evidence_models import (
     IconArchiveLayer,
-    IconCandidateEvidence,
-    IconCandidateKind,
-    IconEvidenceIndex,
     IconGapReason,
     IconResolutionLayer,
-    merge_icon_evidence_indexes,
 )
 from w3xtool.icon_resources import (
     HistoricalIconEvidenceSet,
@@ -48,12 +50,14 @@ class _TrustedSource:
         files: dict[str, bytes] | None = None,
     ) -> None:
         self._history = history
+        self.history_calls = 0
         self._files = {
             name.casefold(): payload for name, payload in (files or {}).items()
         }
 
     def historical_icons_for(self, source_digest: str) -> HistoricalIconEvidenceSet:
         assert source_digest == _DIGEST
+        self.history_calls += 1
         return self._history
 
     def has_exact_file(self, name: str) -> bool:
@@ -70,6 +74,13 @@ class _TrustedSource:
 
     def close(self) -> None:
         """The fake owns no resources."""
+
+
+class _FailingHistorySource(_TrustedSource):
+    def historical_icons_for(self, source_digest: str) -> HistoricalIconEvidenceSet:
+        assert source_digest == _DIGEST
+        self.history_calls += 1
+        raise AssertionError("history must not load before an archive hit")
 
 
 def test_resolution_uses_current_map_before_later_layers() -> None:
@@ -120,6 +131,41 @@ def test_resolution_layer_order_is_independent_of_archive_input_order() -> None:
     # Then
     assert row.layer is IconResolutionLayer.CURRENT_MAP
     assert row.payload == _PAYLOAD
+
+
+def test_current_map_hit_does_not_load_unusable_history() -> None:
+    # Given
+    source = _FailingHistorySource(
+        HistoricalIconEvidenceSet(available=False, resources=())
+    )
+    archives = (
+        IconArchiveLayer(
+            IconResolutionLayer.CURRENT_MAP,
+            _Archive("current", {_PATH: _PAYLOAD}),
+            "logical-map.w3x",
+        ),
+    )
+
+    # When
+    row = build_icon_evidence_index(_map_data(_PATH), archives, source).resolved[0]
+
+    # Then
+    assert row.layer is IconResolutionLayer.CURRENT_MAP
+    assert source.history_calls == 0
+
+
+def test_history_is_loaded_once_for_multiple_references_in_one_build() -> None:
+    # Given
+    md = _map_data(_PATH)
+    md.objects["技能"].append(replace(md.objects["技能"][0], obj_id="A002"))
+    source = _TrustedSource(HistoricalIconEvidenceSet(available=True, resources=()))
+
+    # When
+    index = build_icon_evidence_index(md, (), source)
+
+    # Then
+    assert len(index.unresolved) == 2
+    assert source.history_calls == 1
 
 
 def test_same_map_history_replaces_old_object_labels_on_exact_path_match() -> None:
@@ -226,31 +272,28 @@ def test_merged_indexes_are_stably_sorted_and_map_data_defaults_empty() -> None:
     assert MapData("empty.w3x", "empty").icon_evidence.unresolved == ()
 
 
-def test_reference_sort_is_independent_of_equal_primary_key_input_order() -> None:
+@pytest.mark.parametrize("filtered", (False, True), ids=("eligible", "filtered"))
+def test_build_rejects_evidence_rows_without_ledger_identity(filtered: bool) -> None:
     # Given
-    row = build_icon_evidence_index(_map_data(_PATH), (), None).unresolved[0]
-    first = replace(row, reference=replace(row.reference, field_label="A"))
-    second = replace(row, reference=replace(row.reference, field_label="Z"))
+    md = _map_data("" if filtered else _PATH, filtered=filtered)
+    md.extraction_ledger = None
+
+    # When / Then
+    with pytest.raises(IconEvidenceBuildError, match="logical-map.w3x"):
+        build_icon_evidence_index(md, (), None)
+
+
+def test_build_allows_an_empty_map_without_a_ledger() -> None:
+    # Given
+    md = MapData("empty.w3x", "empty")
 
     # When
-    forward = IconEvidenceIndex.build(unresolved=(second, first)).unresolved
-    reverse = IconEvidenceIndex.build(unresolved=(first, second)).unresolved
+    index = build_icon_evidence_index(md, (), None)
 
     # Then
-    assert forward == reverse == (first, second)
-
-
-def test_candidate_sort_is_independent_of_anonymous_map_input_order() -> None:
-    # Given
-    first = _candidate("a" * 64)
-    second = _candidate("b" * 64)
-
-    # When
-    forward = IconEvidenceIndex.build(candidates=(second, first)).candidates
-    reverse = IconEvidenceIndex.build(candidates=(first, second)).candidates
-
-    # Then
-    assert forward == reverse == (first, second)
+    assert not index.resolved
+    assert not index.unresolved
+    assert not index.filtered
 
 
 def _map_data(
@@ -298,17 +341,4 @@ def _historical_resource(
         payload=b"BLP1history",
         sha256="f" * 64,
         objects=(IconObjectReference("技能", "OLD1", object_name),),
-    )
-
-
-def _candidate(anonymous_map_sha256: str) -> IconCandidateEvidence:
-    return IconCandidateEvidence(
-        IconCandidateKind.ANONYMOUS_HASH_MATCH,
-        _DIGEST,
-        _PATH,
-        anonymous_map_sha256,
-        7,
-        "c" * 64,
-        _PATH,
-        "d" * 64,
     )

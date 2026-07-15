@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Protocol, override, runtime_checkable
 
 from .extraction_ledger import BlockSource, BlockState, ExtractionLedger
 from .icon_path_evidence import plan_icon_path
@@ -117,11 +117,26 @@ class NamedIconResource:
 
 
 @dataclass(frozen=True, slots=True)
+class HistoricalIconEvidenceSetError(ValueError):
+    """Unavailable historical evidence carried impossible resource rows."""
+
+    resource_count: int
+
+    @override
+    def __str__(self) -> str:
+        return f"unavailable historical evidence contains {self.resource_count} rows"
+
+
+@dataclass(frozen=True, slots=True)
 class HistoricalIconEvidenceSet:
     """Availability and rows from one exact-map historical evidence file."""
 
     available: bool
     resources: tuple[NamedIconResource, ...]
+
+    def __post_init__(self) -> None:
+        if not self.available and self.resources:
+            raise HistoricalIconEvidenceSetError(len(self.resources))
 
 
 @dataclass(frozen=True, slots=True)

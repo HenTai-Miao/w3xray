@@ -36,10 +36,11 @@ def unresolved_icon_evidence(
     history: HistoricalIconEvidenceSet,
     ledger: ExtractionLedger | None,
     *,
+    history_checked: bool,
     invalid: bool = False,
 ) -> UnresolvedIconEvidence:
     """Select the fixed-priority reason while retaining every diagnostic."""
-    diagnostics = _diagnostics(ledger, game_source)
+    diagnostics = _diagnostics(ledger, game_source, history_checked=history_checked)
     reasons = {IconGapReason.NAMED_RESOURCE_MISSING}
     if invalid:
         reasons.add(IconGapReason.INVALID_REFERENCE)
@@ -68,11 +69,13 @@ def unresolved_icon_evidence(
 def _diagnostics(
     ledger: ExtractionLedger | None,
     game_source: GameDataSource | None,
+    *,
+    history_checked: bool,
 ) -> set[IconDiagnosticFlag]:
     flags: set[IconDiagnosticFlag] = set()
     if game_source is None or isinstance(game_source, TrustedIconEvidenceSource):
         flags.add(IconDiagnosticFlag.CLIENT_NOT_PROVIDED)
-    if isinstance(game_source, TrustedIconEvidenceSource):
+    if history_checked:
         flags.add(IconDiagnosticFlag.HISTORICAL_EVIDENCE_CHECKED)
     if ledger is None:
         return flags
