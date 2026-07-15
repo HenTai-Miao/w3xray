@@ -33,6 +33,19 @@ def publish_empty_result(
     destination = Path(output_root, relative)
     destination.mkdir(parents=True, exist_ok=True)
     result = empty_result(fingerprint, relative)
+    return write_empty_publication(
+        destination,
+        result,
+        fingerprint.sha256[:32],
+    )
+
+
+def write_empty_publication(
+    destination: Path,
+    result: MapBatchResult,
+    transaction_id: str,
+) -> MapBatchResult:
+    """Write one manifest-valid empty publication into an existing directory."""
     empty_text = ObjectTextIndex.build(())
     empty_relations = ItemRelationIndex.build(())
     reports = (
@@ -48,7 +61,7 @@ def publish_empty_result(
     )
     for name, text in reports:
         (destination / name).write_text(text, encoding="utf-8")
-    return finalize_map_manifest(destination, result, fingerprint.sha256[:32])
+    return finalize_map_manifest(destination, result, transaction_id)
 
 
 def empty_result(

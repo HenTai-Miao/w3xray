@@ -16,6 +16,21 @@ from .item_relation_exports import (
 from .object_text_exports import OBJECT_TEXT_REPORT_HEADER
 
 
+class BatchReportValidationError(ValueError):
+    """A required publication report has an invalid tabular schema."""
+
+    __slots__ = ("detail",)
+
+    detail: str
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(detail)
+        self.detail = detail
+
+    def __str__(self) -> str:
+        return self.detail
+
+
 def validate_report_summaries(
     directory: Path,
     summary: ManifestResultSummary,
@@ -31,9 +46,9 @@ def validate_report_summaries(
         return "named_icon_count"
     if sum(row[0] == "匿名" for row in icon_rows) != summary.anonymous_icon_count:
         return "anonymous_icon_count"
-    if sum(_yes(row[7]) for row in icon_rows) != summary.original_written_count:
+    if sum(_yes(row[8]) for row in icon_rows) != summary.original_written_count:
         return "original_written_count"
-    if sum(_yes(row[8]) for row in icon_rows) != summary.png_written_count:
+    if sum(_yes(row[9]) for row in icon_rows) != summary.png_written_count:
         return "png_written_count"
 
     text_rows = _read_rows(
@@ -72,12 +87,14 @@ def _read_rows(path: Path, header: tuple[str, ...]) -> tuple[tuple[str, ...], ..
             reader = csv.reader(handle, delimiter="\t")
             first = next(reader, None)
             if first is None or tuple(first) != header:
-                raise ValueError(f"unexpected report header: {path.name}")
+                raise BatchReportValidationError(
+                    f"unexpected report header: {path.name}"
+                )
             rows = tuple(tuple(row) for row in reader)
     finally:
         csv.field_size_limit(previous_limit)
     if any(len(row) != len(header) for row in rows):
-        raise ValueError(f"malformed report row: {path.name}")
+        raise BatchReportValidationError(f"malformed report row: {path.name}")
     return rows
 
 

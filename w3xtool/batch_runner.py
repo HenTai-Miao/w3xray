@@ -14,6 +14,7 @@ from .batch_manifest_models import (
 )
 from .batch_manifest_models import REQUIRED_MAP_REPORTS
 from .batch_manifest_validation import verify_map_publication
+from .batch_map_publication import recover_map_publications
 from .batch_models import (
     BATCH_SCHEMA_VERSION,
     BatchState,
@@ -82,6 +83,7 @@ def run_batch(options: BatchOptions) -> BatchState:
     """Process sources sequentially and persist progress after every map."""
     normalized = _normalized_options(options)
     _validate_roots(normalized)
+    _ = recover_map_publications(normalized.output_root)
     previous = _read_previous_state(normalized.output_root)
     context = replace(
         build_map_load_context(game_data_path=normalized.game_data_path),

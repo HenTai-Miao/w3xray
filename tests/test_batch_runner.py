@@ -10,7 +10,12 @@ import pytest
 
 from tests.batch_publication_fixture import publish_empty_result
 import w3xtool.batch_runner as batch_runner
-from w3xtool.batch_models import MapBatchResult, MapBatchState, SourceFingerprint
+from w3xtool.batch_models import (
+    BatchState,
+    MapBatchResult,
+    MapBatchState,
+    SourceFingerprint,
+)
 from w3xtool.batch_runner import (
     BatchConfigurationError,
     BatchOptions,
@@ -210,6 +215,41 @@ def test_batch_rejects_an_output_nested_in_the_source_tree(tmp_path: Path) -> No
     # When / Then
     with pytest.raises(BatchConfigurationError, match="overlap"):
         run_batch(options)
+
+
+def test_batch_recovers_map_transactions_before_loading_previous_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: an empty source root and observable recovery/state boundaries.
+    source_root = tmp_path / "Maps"
+    source_root.mkdir()
+    events: list[str] = []
+
+    def recover(_output_root: str) -> tuple[()]:
+        events.append("recover")
+        return ()
+
+    def read_previous(_output_root: str) -> BatchState | None:
+        events.append("previous")
+        return None
+
+    monkeypatch.setattr(
+        batch_runner,
+        "recover_map_publications",
+        recover,
+        raising=False,
+    )
+    monkeypatch.setattr(batch_runner, "_read_previous_state", read_previous)
+    monkeypatch.setattr(
+        batch_runner, "build_map_load_context", lambda **_kwargs: MapLoadContext()
+    )
+
+    # When: batch startup crosses the validated output boundary.
+    run_batch(BatchOptions(str(source_root), str(tmp_path / "output")))
+
+    # Then: recovery always precedes resume-state authority.
+    assert events[:2] == ["recover", "previous"]
 
 
 def test_no_retry_failed_reuses_an_unchanged_failed_result(

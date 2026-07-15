@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic_ns
 from typing import Protocol, override
-from uuid import uuid4
 
 from .batch_descriptions import (
     DescriptionRecord,
@@ -22,6 +21,7 @@ from .batch_map_icons import export_map_icons
 from .batch_item_reports import BatchItemReports, build_batch_item_reports
 from .batch_map_manifest import finalize_map_manifest
 from .batch_map_publication import (
+    MapPublicationStage,
     create_map_stage,
     discard_map_stage,
     map_output_relative,
@@ -71,13 +71,17 @@ def process_one_map(
     """Load, stream-export, report, and atomically publish one source."""
     started = monotonic_ns()
     root = load_map(fingerprint.path, load_context=context)
-    stage: Path | None = None
+    publication: MapPublicationStage | None = None
     game_source: GameDataSource | None = None
     try:
         game_source = open_game_data_source(options.game_data_path)
         relative = map_output_relative(index, root.name, fingerprint.sha256)
-        transaction_id = uuid4().hex
-        stage = create_map_stage(options.output_root, transaction_id)
+        publication = create_map_stage(
+            options.output_root,
+            relative,
+            fingerprint.sha256,
+        )
+        stage = publication.stage
         item_reports = build_batch_item_reports(root)
         maps = item_reports.maps
         descriptions = audit_object_descriptions(item_reports.objects)
@@ -131,12 +135,12 @@ def process_one_map(
             restricted,
             item_reports,
         )
-        result = finalize_map_manifest(stage, result, transaction_id)
-        _ = publish_map_stage(stage, options.output_root, relative, fingerprint.sha256)
-        stage = None
+        result = finalize_map_manifest(stage, result, publication.transaction_id)
+        _ = publish_map_stage(publication, options.output_root, result.manifest_sha256)
+        publication = None
         return result
     finally:
-        discard_map_stage(stage, options.output_root)
+        discard_map_stage(publication, options.output_root)
         if game_source is not None:
             game_source.close()
         root.close()
