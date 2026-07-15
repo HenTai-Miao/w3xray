@@ -856,7 +856,7 @@ Expected: `overall_status` is `pass`, including `batch_publication`.
 
 When `/Users/zhongerbing/Desktop/Maps` is present, compute path/size/mtime/SHA-256 before and after read-only acceptance and compare exact manifests. Do not run the new batch against `map-extract-output-v2`; use a new temporary output root.
 
-- [ ] **Step 6: Commit documentation and push the current branch**
+- [x] **Step 6: Commit documentation and push the current branch**
 
 ```bash
 git add -- AGENTS.md AGENTS.d/runtime.md AGENTS.d/testing.md docs/superpowers/specs/2026-07-15-batch-high-availability-design.md docs/superpowers/plans/2026-07-15-batch-high-availability.md
