@@ -9,6 +9,7 @@ from tests.description_cache_migration_fixture import (
     legacy_client_fill,
     write_legacy_inputs,
 )
+from w3xtool import atomic_rename
 from w3xtool.atomic_rename import rename_noreplace
 
 
@@ -40,6 +41,20 @@ def rename_in_parent(
     )
 
 
+def exchange_in_parent(
+    parent_descriptor: int,
+    source_name: str,
+    destination_name: str,
+) -> None:
+    """Apply the production exchange primitive within one held parent."""
+    atomic_rename.rename_exchange(
+        parent_descriptor,
+        source_name,
+        parent_descriptor,
+        destination_name,
+    )
+
+
 def private_publication_paths(output: Path) -> tuple[Path, ...]:
     """Return stage and backup paths still adjacent to one output."""
     patterns = (
@@ -49,4 +64,9 @@ def private_publication_paths(output: Path) -> tuple[Path, ...]:
     return tuple(path for pattern in patterns for path in output.parent.glob(pattern))
 
 
-__all__ = ("private_publication_paths", "rename_in_parent", "replacement_inputs")
+__all__ = (
+    "exchange_in_parent",
+    "private_publication_paths",
+    "rename_in_parent",
+    "replacement_inputs",
+)

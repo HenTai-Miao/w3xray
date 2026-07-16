@@ -5,24 +5,22 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from .description_cache_publication_errors import DescriptionCachePublicationError
+from .description_cache_publication_errors import (
+    PublicationCommitContextError,
+)
 from .description_cache_publication_fs import (
     DirectoryIdentity,
     directory_identity,
 )
+from .description_cache_publication_recovery import restore_previous_generation
 from .trusted_description_cache import VerifiedDescriptionCache
 
 
+type _Exchange = Callable[[int, str, str], None]
 type _Remove = Callable[[int, str, DirectoryIdentity], None]
 type _Rename = Callable[[int, str, str], None]
 type _Sync = Callable[[int], None]
 type _Validate = Callable[[Path], VerifiedDescriptionCache]
-
-
-class PublicationCommitContextError(DescriptionCachePublicationError):
-    """A post-publication state needs explicit recovery context."""
-
-    __slots__: tuple[str, ...] = ()
 
 
 def commit_replacement(
@@ -31,8 +29,10 @@ def commit_replacement(
     output_identity: DirectoryIdentity,
     backup: Path,
     backup_identity: DirectoryIdentity,
+    stage: Path,
     verified: VerifiedDescriptionCache,
     remove_directory: _Remove,
+    rename_exchange: _Exchange,
     rename_noreplace: _Rename,
     require_valid: _Validate,
     sync_parent: _Sync,
@@ -41,17 +41,19 @@ def commit_replacement(
     try:
         remove_directory(parent_descriptor, backup.name, backup_identity)
     except OSError as cleanup_error:
-        _rollback_cleanup_failure(
+        restore_previous_generation(
             parent_descriptor,
             output,
             output_identity,
             backup,
             backup_identity,
-            remove_directory,
+            stage,
+            rename_exchange,
             rename_noreplace,
             require_valid,
+            remove_directory,
             sync_parent,
-            cleanup_error,
+            f"backup cleanup failed: {cleanup_error}",
         )
         raise
 
@@ -69,32 +71,6 @@ def commit_replacement(
             )
             raise PublicationCommitContextError(detail) from validation_error
     return verified
-
-
-def _rollback_cleanup_failure(
-    parent_descriptor: int,
-    output: Path,
-    output_identity: DirectoryIdentity,
-    backup: Path,
-    backup_identity: DirectoryIdentity,
-    remove_directory: _Remove,
-    rename_noreplace: _Rename,
-    require_valid: _Validate,
-    sync_parent: _Sync,
-    cleanup_error: OSError,
-) -> None:
-    try:
-        _ = require_valid(backup)
-        _require_identity(parent_descriptor, backup.name, backup_identity)
-        remove_directory(parent_descriptor, output.name, output_identity)
-        rename_noreplace(parent_descriptor, backup.name, output.name)
-        sync_parent(parent_descriptor)
-    except OSError as recovery_error:
-        detail = (
-            "backup cleanup failed after recovery became unsafe; NEEDS_CONTEXT: "
-            + str(cleanup_error)
-        )
-        raise PublicationCommitContextError(detail) from recovery_error
 
 
 def _require_identity(

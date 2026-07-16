@@ -1,4 +1,4 @@
-"""Fail-closed descriptor-anchored rename without replacement."""
+"""Fail-closed descriptor-anchored atomic rename primitives."""
 
 from __future__ import annotations
 
@@ -10,6 +10,8 @@ from typing import ClassVar, Final, Protocol, override
 
 
 _DARWIN_RENAME_EXCL: Final = 0x00000004
+_DARWIN_RENAME_SWAP: Final = 0x00000002
+_LINUX_RENAME_EXCHANGE: Final = 2
 _LINUX_RENAME_NOREPLACE: Final = 1
 _UNAVAILABLE_ERRNOS: Final = frozenset(
     (errno.EINVAL, errno.ENOSYS, errno.ENOTSUP, errno.EOPNOTSUPP)
@@ -42,7 +44,7 @@ class _LibC(ctypes.CDLL):
 
 
 class AtomicRenameUnavailableError(OSError):
-    """The host cannot guarantee an atomic no-replace directory rename."""
+    """The host cannot guarantee the requested atomic directory rename."""
 
     __slots__: tuple[str, ...] = ("detail",)
 
@@ -107,6 +109,40 @@ def rename_noreplace(
     )
 
 
+def rename_exchange(
+    source_descriptor: int,
+    source_name: str,
+    destination_descriptor: int,
+    destination_name: str,
+) -> None:
+    """Atomically exchange two existing anchored leaves."""
+    _require_leaf(source_name)
+    _require_leaf(destination_name)
+    if sys.platform == "darwin":
+        _call(
+            "renameatx_np",
+            source_descriptor,
+            source_name,
+            destination_descriptor,
+            destination_name,
+            _DARWIN_RENAME_SWAP,
+        )
+        return
+    if sys.platform.startswith("linux"):
+        _call(
+            "renameat2",
+            source_descriptor,
+            source_name,
+            destination_descriptor,
+            destination_name,
+            _LINUX_RENAME_EXCHANGE,
+        )
+        return
+    raise AtomicRenameUnavailableError(
+        f"atomic exchange rename is unavailable on {sys.platform}"
+    )
+
+
 def _call(
     symbol: str,
     source_descriptor: int,
@@ -160,5 +196,6 @@ def _require_leaf(name: str) -> None:
 __all__ = (
     "AtomicRenamePathError",
     "AtomicRenameUnavailableError",
+    "rename_exchange",
     "rename_noreplace",
 )

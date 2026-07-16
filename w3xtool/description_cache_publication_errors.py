@@ -25,7 +25,14 @@ class DescriptionCacheConcurrentDestinationError(DescriptionCachePublicationErro
     """Another writer acquired the destination during this transaction."""
 
 
+class PublicationCommitContextError(DescriptionCachePublicationError):
+    """A publication state needs explicit operator recovery context."""
+
+    __slots__: tuple[str, ...] = ()
+
+
 __all__ = (
     "DescriptionCacheConcurrentDestinationError",
     "DescriptionCachePublicationError",
+    "PublicationCommitContextError",
 )

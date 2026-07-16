@@ -152,6 +152,40 @@ def test_description_cache_cli_returns_two_without_traceback_for_preflight_error
     assert captured.out == ""
 
 
+def test_description_cache_cli_returns_two_for_parent_leaf_output(
+    tmp_path: Path,
+    tmp_path_factory: pytest.TempPathFactory,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Given: valid inputs live outside a working directory whose output leaf is `..`.
+    input_root = tmp_path_factory.mktemp("description-cache-cli-input")
+    legacy_output, legacy_cache = write_legacy_inputs(input_root)
+    working = tmp_path / "working"
+    working.mkdir()
+    monkeypatch.chdir(working)
+
+    # When
+    code = cli.run_description_cache_cli(
+        (
+            "migrate",
+            "--legacy-output",
+            str(legacy_output),
+            "--legacy-cache",
+            str(legacy_cache),
+            "--output",
+            "..",
+        )
+    )
+
+    # Then: path validation remains inside the typed CLI error boundary.
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "迁移失败" in captured.err
+    assert "Traceback" not in captured.err
+    assert captured.out == ""
+
+
 def test_description_cache_cli_returns_two_for_unauthorized_schema1_result(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],

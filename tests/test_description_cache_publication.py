@@ -9,7 +9,6 @@ import pytest
 from tests.description_cache_migration_fixture import write_legacy_inputs
 from tests.description_cache_publication_fixture import (
     private_publication_paths,
-    rename_in_parent,
     replacement_inputs,
 )
 from tests.trusted_description_cache_fixture import published_cache
@@ -57,26 +56,25 @@ def test_failed_replacement_keeps_previous_owned_cache(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Given: a valid owned destination and a stage-to-destination rename failure.
+    # Given: a valid owned destination and an atomic exchange failure.
     root = published_cache(tmp_path / "first", raw="first")
     before = load_trusted_description_cache(root)
     legacy_output, legacy_cache = replacement_inputs(tmp_path, "second")
     calls: list[tuple[str, str]] = []
 
-    def fail_replace(
+    def fail_exchange(
         parent_descriptor: int,
         source_name: str,
         destination_name: str,
     ) -> None:
-        if "-stage-" in source_name:
-            calls.append((source_name, destination_name))
-            raise OSError("replace failed")
-        rename_in_parent(parent_descriptor, source_name, destination_name)
+        del parent_descriptor
+        calls.append((source_name, destination_name))
+        raise OSError("exchange failed")
 
-    monkeypatch.setattr(publication, "_rename_noreplace", fail_replace)
+    monkeypatch.setattr(publication, "_rename_exchange", fail_exchange, raising=False)
 
     # When / Then
-    with pytest.raises(DescriptionCachePublicationError, match="replace failed"):
+    with pytest.raises(DescriptionCachePublicationError, match="exchange failed"):
         _ = migrate_description_cache(
             DescriptionCacheMigrationOptions(legacy_output, legacy_cache, root)
         )
@@ -260,7 +258,7 @@ def test_failed_replacement_validation_restores_previous_owned_cache(
         nonlocal destination_validations
         if path == root:
             destination_validations += 1
-            if destination_validations == 1:
+            if destination_validations == 2:
                 raise DescriptionCachePublicationError("replacement validation failed")
         return load_trusted_description_cache(path)
 
@@ -295,4 +293,24 @@ def test_publication_refuses_unowned_existing_destination(tmp_path: Path) -> Non
             DescriptionCacheMigrationOptions(legacy_output, legacy_cache, output)
         )
     assert foreign.read_text(encoding="utf-8") == "foreign"
+    assert not private_publication_paths(output)
+
+
+def test_publication_refuses_regular_file_without_displacing_it(
+    tmp_path: Path,
+) -> None:
+    # Given: a foreign regular file owns the requested output leaf.
+    legacy_output, legacy_cache = write_legacy_inputs(tmp_path / "input")
+    output = tmp_path / "foreign-file"
+    _ = output.write_text("foreign", encoding="utf-8")
+    before = output.stat(follow_symlinks=False)
+
+    # When / Then
+    with pytest.raises(DescriptionCachePublicationError, match="not a directory"):
+        _ = migrate_description_cache(
+            DescriptionCacheMigrationOptions(legacy_output, legacy_cache, output)
+        )
+    after = output.stat(follow_symlinks=False)
+    assert (after.st_dev, after.st_ino) == (before.st_dev, before.st_ino)
+    assert output.read_text(encoding="utf-8") == "foreign"
     assert not private_publication_paths(output)

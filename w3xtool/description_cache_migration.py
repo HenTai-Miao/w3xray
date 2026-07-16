@@ -136,8 +136,11 @@ def _preflight_paths(
     legacy_root = _canonical_directory(options.legacy_output, "legacy output")
     cache_path = _canonical_file(options.legacy_cache, "legacy cache")
     output_parent = _canonical_directory(options.output.parent, "output parent")
-    output = output_parent / options.output.name
-    if not options.output.name or output.is_symlink():
+    output_name = options.output.name
+    if not output_name or output_name in {".", ".."}:
+        raise DescriptionCacheMigrationError("output path is unsafe")
+    output = output_parent / output_name
+    if output.is_symlink():
         raise DescriptionCacheMigrationError("output path is unsafe")
     if _overlaps(output, legacy_root) or _overlaps(output, cache_path):
         raise DescriptionCacheMigrationError("migration input and output overlap")
