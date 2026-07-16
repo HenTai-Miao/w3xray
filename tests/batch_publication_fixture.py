@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+from typing import assert_never
 
 from w3xtool.batch_tsv import format_tsv_rows
 from w3xtool.batch_manifest_models import CONTENT_MANIFEST_NAME, OWNERSHIP_MARKER_NAME
@@ -29,6 +30,10 @@ from w3xtool.item_relation_models import ItemRelationIndex
 from w3xtool.object_text_exports import format_object_text_tsv
 from w3xtool.object_text_exports import OBJECT_TEXT_REPORT_HEADER
 from w3xtool.object_text_models import ObjectTextIndex
+from w3xtool.object_text_roles import semantic_field_for_role
+
+
+type PublishedTextValue = tuple[str, str] | tuple[str, str, str]
 
 
 def publish_empty_result(
@@ -106,7 +111,10 @@ def publish_client_fill_result(
     fingerprint: SourceFingerprint,
     output_root: str,
     *,
-    values: tuple[tuple[str, str], ...] = (("扩展提示", "完整说明"),),
+    values: tuple[PublishedTextValue, ...] = (("扩展提示", "完整说明"),),
+    category: str = "物品",
+    base_id: str = "ratf",
+    object_name: str = "戒指",
 ) -> MapBatchResult:
     """Publish a manifest-valid fixture containing trusted complete-text rows."""
     relative = f"地图/{index:03d}_{fingerprint.sha256[:8]}"
@@ -118,17 +126,24 @@ def publish_client_fill_result(
     (destination / CONTENT_MANIFEST_NAME).unlink()
     (destination / OWNERSHIP_MARKER_NAME).unlink()
     rows: list[tuple[str, ...]] = [OBJECT_TEXT_REPORT_HEADER]
-    for evidence_index, (role, raw_value) in enumerate(values, start=1):
+    for evidence_index, value in enumerate(values, start=1):
+        match value:
+            case (role, raw_value):
+                semantic_field = semantic_field_for_role(role)
+            case (role, semantic_field, raw_value):
+                pass
+            case unreachable:
+                assert_never(unreachable)
         rows.append(
             (
-                "物品",
-                "ratf",
-                "ratf",
-                "戒指",
+                category,
+                base_id,
+                base_id,
+                object_name,
                 "否",
                 role,
-                "tip" if role == "基础提示" else "ubertip",
-                "utip" if role == "基础提示" else "utub",
+                semantic_field,
+                semantic_field,
                 "提示文本",
                 "",
                 raw_value,

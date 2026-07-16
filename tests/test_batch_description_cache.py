@@ -14,6 +14,8 @@ from tests.batch_publication_fixture import (
 )
 import w3xtool.batch_runner as batch_runner
 from w3xtool.batch_description_cache import build_and_publish_description_cache
+from w3xtool.description_cache import load_description_cache
+from w3xtool.map_data import GameObject
 from w3xtool.batch_models import (
     BATCH_SCHEMA_VERSION,
     MapBatchResult,
@@ -22,6 +24,8 @@ from w3xtool.batch_models import (
 from w3xtool.batch_runner import BatchOptions, run_batch
 from w3xtool.batch_resume import load_previous_state
 from w3xtool.load_context import MapLoadContext
+from w3xtool.object_text_index import build_object_text_index
+from w3xtool.object_text_models import ObjectTextState
 
 
 def test_schema_one_root_state_is_not_reused(tmp_path: Path) -> None:
@@ -137,3 +141,77 @@ def test_batch_removes_values_when_valid_publications_conflict(
     # Then
     assert cache.lookup("物品", "ratf", "扩展提示", None) == ()
     assert cache.conflict_count == 1
+
+
+def test_batch_cache_rejects_noncanonical_semantic_siblings(tmp_path: Path) -> None:
+    # Given: a valid unit publication contains only long revive and awaken fields.
+    output = tmp_path / "output"
+    _ = publish_client_fill_result(
+        1,
+        SourceFingerprint("/maps/old.w3x", 3, 4, "a" * 64),
+        str(output),
+        values=(
+            ("复活提示", "reviveubertip", "复活长提示"),
+            ("唤醒提示", "awakenubertip", "唤醒长提示"),
+        ),
+        category="单位",
+        base_id="Hpal",
+        object_name="圣骑士",
+    )
+
+    # When: the role-only cache is built, published, loaded, and used for fallback.
+    _ = build_and_publish_description_cache(str(output))
+    loaded = load_description_cache(str(output / "可信描述缓存.tsv"))
+    obj = GameObject("单位", "w3u", "H001", "Hpal", "自定义英雄", True)
+    index = build_object_text_index(
+        (obj,),
+        (),
+        (),
+        loaded,
+        client_text_available=True,
+    )
+
+    # Then: neither sibling enters the cache or backfills its canonical short field.
+    assert loaded.entries == ()
+    canonical = tuple(
+        row for row in index.records if row.semantic_field in {"revivetip", "awakentip"}
+    )
+    assert {row.semantic_field for row in canonical} == {"revivetip", "awakentip"}
+    assert all(row.state is ObjectTextState.AUTHOR_UNDEFINED for row in canonical)
+    assert all(not row.is_current for row in canonical)
+
+
+def test_batch_cache_keeps_canonical_rows_beside_semantic_siblings(
+    tmp_path: Path,
+) -> None:
+    # Given: canonical, sibling, and existing canonical fields coexist in one report.
+    output = tmp_path / "output"
+    _ = publish_client_fill_result(
+        1,
+        SourceFingerprint("/maps/old.w3x", 3, 4, "a" * 64),
+        str(output),
+        values=(
+            ("复活提示", "revivetip", "复活短提示"),
+            ("复活提示", "reviveubertip", "复活长提示"),
+            ("唤醒提示", "awakentip", "唤醒短提示"),
+            ("唤醒提示", "awakenubertip", "唤醒长提示"),
+            ("基础提示", "tip", "现有基础提示"),
+        ),
+        category="单位",
+        base_id="Hpal",
+        object_name="圣骑士",
+    )
+
+    # When: the batch cache is built and round-tripped through its standalone file.
+    built = build_and_publish_description_cache(str(output))
+    loaded = load_description_cache(str(output / "可信描述缓存.tsv"))
+
+    # Then: siblings cannot conflict away the three safely representable rows.
+    expected = {
+        "基础提示": "现有基础提示",
+        "复活提示": "复活短提示",
+        "唤醒提示": "唤醒短提示",
+    }
+    assert {entry.role: entry.raw_value for entry in built.entries} == expected
+    assert {entry.role: entry.raw_value for entry in loaded.entries} == expected
+    assert built.conflict_count == loaded.conflict_count == 0

@@ -15,6 +15,7 @@ from .description_cache_models import (
 )
 from .description_cache_schema import is_placeholder, is_yes, parse_level
 from .object_text_exports import OBJECT_TEXT_REPORT_HEADER
+from .object_text_roles import semantic_field_for_role
 
 
 _COMPLETE_REPORT = "对象完整描述.tsv"
@@ -82,6 +83,8 @@ def _parse_complete_rows(
                 row[columns["基础ID"]],
                 row[columns["自定义"]],
             )
+            or row[columns["规范字段身份"]]
+            != semantic_field_for_role(row[columns["文本角色"]])
             or row[columns["状态"]] != "客户端补全"
             or is_yes(row[columns["占位"]])
             or is_placeholder(row[columns["原始全文"]])
