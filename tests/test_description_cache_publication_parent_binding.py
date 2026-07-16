@@ -13,10 +13,12 @@ from tests.description_cache_publication_fixture import (
 )
 from tests.trusted_description_cache_fixture import published_cache
 from w3xtool import description_cache_publication as publication
+from w3xtool import description_cache_publication_parent as publication_parent
 from w3xtool.description_cache_migration import (
     DescriptionCacheMigrationOptions,
     migrate_description_cache,
 )
+from w3xtool.description_cache_publication import DescriptionCachePublicationError
 from w3xtool.description_cache_publication_commit import (
     PublicationCommitContextError,
 )
@@ -25,6 +27,90 @@ from w3xtool.trusted_description_cache import (
     VerifiedDescriptionCache,
     load_trusted_description_cache,
 )
+
+
+def test_transient_parent_aba_cannot_authorize_held_foreign_destination(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: every validation sees a valid substitute parent only between its checks.
+    parent = tmp_path / "publication"
+    parent.mkdir()
+    output = parent / "trusted"
+    output.mkdir()
+    sentinel = output / "keep.txt"
+    sentinel.write_text("foreign", encoding="utf-8")
+    before = output.stat(follow_symlinks=False)
+    held_parent = tmp_path / "held-publication"
+    substitute = published_cache(tmp_path / "validation-target", raw="other")
+    legacy_output, legacy_cache = replacement_inputs(tmp_path, "second")
+    original_parent_check = publication_parent.require_parent_identity
+    original_require_valid = publication_parent.ParentBoundValidator.require_valid
+    active_name: str | None = None
+    parent_is_swapped = False
+    swap_count = 0
+
+    def require_valid_during_aba(
+        validator: publication_parent.ParentBoundValidator,
+        path: Path,
+    ) -> VerifiedDescriptionCache:
+        nonlocal active_name, parent_is_swapped
+        active_name = path.name
+        try:
+            return original_require_valid(validator, path)
+        finally:
+            if parent_is_swapped:
+                (parent / path.name).rename(substitute)
+                parent.rmdir()
+                held_parent.rename(parent)
+                parent_is_swapped = False
+            active_name = None
+
+    def replace_parent_between_checks(
+        parent_descriptor: int,
+        named_parent: Path,
+        expected: tuple[int, int],
+    ) -> None:
+        nonlocal parent_is_swapped, swap_count
+        if active_name is None:
+            original_parent_check(parent_descriptor, named_parent, expected)
+            return
+        if not parent_is_swapped:
+            original_parent_check(parent_descriptor, named_parent, expected)
+            parent.rename(held_parent)
+            parent.mkdir()
+            substitute.rename(parent / active_name)
+            parent_is_swapped = True
+            swap_count += 1
+            return
+        (parent / active_name).rename(substitute)
+        parent.rmdir()
+        held_parent.rename(parent)
+        parent_is_swapped = False
+        original_parent_check(parent_descriptor, named_parent, expected)
+
+    monkeypatch.setattr(
+        publication_parent.ParentBoundValidator,
+        "require_valid",
+        require_valid_during_aba,
+    )
+    monkeypatch.setattr(
+        publication_parent,
+        "require_parent_identity",
+        replace_parent_between_checks,
+    )
+
+    # When: publication must validate the held foreign leaf, not substitute bytes.
+    with pytest.raises(DescriptionCachePublicationError):
+        _ = migrate_description_cache(
+            DescriptionCacheMigrationOptions(legacy_output, legacy_cache, output)
+        )
+
+    # Then: repeated ABA never authorizes exchange or removal of the sentinel.
+    assert swap_count >= 2
+    after = output.stat(follow_symlinks=False)
+    assert (after.st_dev, after.st_ino) == (before.st_dev, before.st_ino)
+    assert sentinel.read_text(encoding="utf-8") == "foreign"
 
 
 def test_parent_swap_during_validation_preserves_held_foreign_destination(
@@ -42,19 +128,26 @@ def test_parent_swap_during_validation_preserves_held_foreign_destination(
     held_parent = tmp_path / "held-publication"
     replacement = published_cache(tmp_path / "validation-target", raw="other")
     legacy_output, legacy_cache = replacement_inputs(tmp_path, "second")
-    require_valid = getattr(publication, "_require_valid")
+    require_valid_at = getattr(publication, "_require_valid_at")
     swapped = False
 
-    def swap_parent_during_validation(path: Path) -> VerifiedDescriptionCache:
+    def swap_parent_during_validation(
+        parent_descriptor: int,
+        path: Path,
+    ) -> VerifiedDescriptionCache:
         nonlocal swapped
         if path == output and not swapped:
             swapped = True
             parent.rename(held_parent)
             parent.mkdir()
             replacement.rename(output)
-        return require_valid(path)
+        return require_valid_at(parent_descriptor, path)
 
-    monkeypatch.setattr(publication, "_require_valid", swap_parent_during_validation)
+    monkeypatch.setattr(
+        publication,
+        "_require_valid_at",
+        swap_parent_during_validation,
+    )
 
     # When: pathname validation reopens a replacement parent during the transaction.
     with pytest.raises(PublicationCommitContextError, match="NEEDS_CONTEXT"):

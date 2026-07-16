@@ -13,7 +13,7 @@ from .description_cache_publication_fs import DirectoryIdentity
 from .trusted_description_cache import VerifiedDescriptionCache
 
 
-type Validate = Callable[[Path], VerifiedDescriptionCache]
+type ValidateAt = Callable[[int, Path], VerifiedDescriptionCache]
 type Remove = Callable[[int, str, DirectoryIdentity], None]
 
 
@@ -63,7 +63,7 @@ class ParentBoundValidator:
     parent_descriptor: int
     parent: Path
     parent_identity: DirectoryIdentity
-    validator: Validate
+    validator: ValidateAt
     remover: Remove
 
     def require_current_parent(self) -> None:
@@ -82,7 +82,7 @@ class ParentBoundValidator:
             )
         self.require_current_parent()
         try:
-            verified = self.validator(path)
+            verified = self.validator(self.parent_descriptor, path)
         except OSError as validation_error:
             try:
                 self.require_current_parent()

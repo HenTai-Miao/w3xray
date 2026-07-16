@@ -43,7 +43,7 @@ from .safe_output_models import SafeWriteStatus
 from .trusted_description_cache import (
     TrustedDescriptionCacheError,
     VerifiedDescriptionCache,
-    load_trusted_description_cache,
+    load_trusted_description_cache_from_parent,
 )
 
 
@@ -128,9 +128,16 @@ def _write(root: Path, name: str, text: str) -> None:
         )
 
 
-def _require_valid(root: Path) -> VerifiedDescriptionCache:
+def _require_valid_at(
+    parent_descriptor: int,
+    root: Path,
+) -> VerifiedDescriptionCache:
     try:
-        return load_trusted_description_cache(root)
+        return load_trusted_description_cache_from_parent(
+            parent_descriptor,
+            root.name,
+            root,
+        )
     except TrustedDescriptionCacheError as exc:
         raise DescriptionCachePublicationError(
             f"owned cache is not valid: {exc}"
@@ -150,7 +157,7 @@ def _publish_valid_stage(
         parent_identity,
         _rename_noreplace,
         _rename_exchange,
-        _require_valid,
+        _require_valid_at,
         _sync_parent,
     )
 

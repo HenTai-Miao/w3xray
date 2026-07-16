@@ -20,7 +20,7 @@ from tests.trusted_description_cache_fixture import (
     resign_source_evidence,
     rewrite_source_record,
 )
-from w3xtool import trusted_description_cache as trusted_cache
+from w3xtool import trusted_description_cache_path as trusted_cache_path
 from w3xtool.batch_tsv import format_tsv_rows
 from w3xtool.bounded_file import FileIdentity
 from w3xtool.description_cache_schema import LEGACY_DESCRIPTION_HEADER
@@ -209,7 +209,7 @@ def test_trusted_cache_rejects_owned_file_changing_between_reads(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Given: one owned file returns different bytes under a stable identity.
+    # Given: one public-path owned file returns different stable-read bytes.
     root = published_cache(tmp_path)
     identity = FileIdentity(1, 2, 5)
     payloads: Iterator[bytes] = iter((b"first", b"other"))
@@ -224,7 +224,11 @@ def test_trusted_cache_rejects_owned_file_changing_between_reads(
             assert expected == identity
         return next(payloads), identity
 
-    monkeypatch.setattr(trusted_cache, "read_bounded_regular_file", unstable_read)
+    monkeypatch.setattr(
+        trusted_cache_path,
+        "read_bounded_regular_file",
+        unstable_read,
+    )
 
     # When / Then
     with pytest.raises(TrustedDescriptionCacheError, match="changed while reading"):
@@ -240,6 +244,8 @@ def test_trusted_cache_rejects_source_file_changing_between_reads(
     report = tmp_path / "legacy-output" / LEGACY_RELATIVE / "对象描述.tsv"
     original = report.read_bytes()
     changed = b"X" + original[1:]
+    report_details = report.stat(follow_symlinks=False)
+    report_identity = report_details.st_dev, report_details.st_ino
     real_lseek = os.lseek
     rewinds = 0
 
@@ -249,7 +255,9 @@ def test_trusted_cache_rejects_source_file_changing_between_reads(
         how: int,
     ) -> int:
         nonlocal rewinds
-        if position == 0 and how == os.SEEK_SET:
+        details = os.fstat(descriptor)
+        identity = details.st_dev, details.st_ino
+        if identity == report_identity and position == 0 and how == os.SEEK_SET:
             rewinds += 1
             if rewinds == 2:
                 _ = report.write_bytes(changed)

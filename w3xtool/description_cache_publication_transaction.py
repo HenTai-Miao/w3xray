@@ -31,6 +31,7 @@ _DIRECTORY_FLAGS: Final = (
 type _Rename = Callable[[int, str, str], None]
 type _Exchange = Callable[[int, str, str], None]
 type _Remove = Callable[[int, str, DirectoryIdentity], None]
+type _ValidateAt = Callable[[int, Path], VerifiedDescriptionCache]
 type _Validate = Callable[[Path], VerifiedDescriptionCache]
 type _Sync = Callable[[int], None]
 
@@ -42,7 +43,7 @@ def publish_valid_stage(
     parent_identity: DirectoryIdentity,
     rename_noreplace: _Rename,
     rename_exchange: _Exchange,
-    require_valid: _Validate,
+    require_valid_at: _ValidateAt,
     sync_parent: _Sync,
 ) -> VerifiedDescriptionCache:
     """Publish a valid stage without consuming a concurrent destination."""
@@ -57,7 +58,7 @@ def publish_valid_stage(
             parent_descriptor,
             output.parent,
             parent_identity,
-            require_valid,
+            require_valid_at,
             _remove_directory,
         )
         binding.require_current_parent()

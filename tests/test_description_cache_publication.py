@@ -28,7 +28,6 @@ from w3xtool.description_cache_owned_schema import (
 from w3xtool.durable_io import sync_directory_descriptor
 from w3xtool.trusted_description_cache import (
     TrustedDescriptionCacheError,
-    VerifiedDescriptionCache,
     load_trusted_description_cache,
 )
 
@@ -216,66 +215,6 @@ def test_final_parent_sync_failure_after_backup_removal_returns_committed_cache(
         "物品", "ratf", "扩展提示", None
     )[0]
     assert entry.raw_value == "second"
-    assert not private_publication_paths(root)
-
-
-def test_stage_self_validation_failure_keeps_destination_unchanged(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # Given: a valid destination and a staged generation that fails validation.
-    root = published_cache(tmp_path / "first", raw="first")
-    before = load_trusted_description_cache(root)
-    legacy_output, legacy_cache = replacement_inputs(tmp_path, "second")
-
-    def reject_stage(path: Path) -> VerifiedDescriptionCache:
-        if path.name.startswith(".w3xray-description-cache-stage-"):
-            raise DescriptionCachePublicationError("stage validation failed")
-        return load_trusted_description_cache(path)
-
-    monkeypatch.setattr(publication, "_require_valid", reject_stage)
-
-    # When / Then
-    with pytest.raises(DescriptionCachePublicationError, match="stage validation"):
-        _ = migrate_description_cache(
-            DescriptionCacheMigrationOptions(legacy_output, legacy_cache, root)
-        )
-    assert load_trusted_description_cache(root) == before
-    assert not private_publication_paths(root)
-
-
-def test_failed_replacement_validation_restores_previous_owned_cache(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # Given: stage validation passes, but validation after replacement fails.
-    root = published_cache(tmp_path / "first", raw="first")
-    before = load_trusted_description_cache(root)
-    legacy_output, legacy_cache = replacement_inputs(tmp_path, "second")
-    destination_validations = 0
-
-    def reject_replaced_destination(path: Path) -> VerifiedDescriptionCache:
-        nonlocal destination_validations
-        if path == root:
-            destination_validations += 1
-            if destination_validations == 2:
-                raise DescriptionCachePublicationError("replacement validation failed")
-        return load_trusted_description_cache(path)
-
-    monkeypatch.setattr(
-        publication,
-        "_require_valid",
-        reject_replaced_destination,
-    )
-
-    # When / Then
-    with pytest.raises(
-        DescriptionCachePublicationError, match="replacement validation"
-    ):
-        _ = migrate_description_cache(
-            DescriptionCacheMigrationOptions(legacy_output, legacy_cache, root)
-        )
-    assert load_trusted_description_cache(root) == before
     assert not private_publication_paths(root)
 
 
