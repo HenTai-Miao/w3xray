@@ -135,6 +135,36 @@ def test_batch_state_parser_rejects_impossible_failed_publication() -> None:
         parse_batch_state_json(json.dumps(payload))
 
 
+def test_batch_state_parser_rejects_unreconciled_valid_icon_references() -> None:
+    # Given: the aggregate no longer equals its resolved and unresolved parts.
+    payload = json.loads(
+        format_batch_state_json(BatchState(BATCH_SCHEMA_VERSION, (_map_result(),)))
+    )
+    payload["results"][0]["valid_icon_reference_count"] = 8
+
+    # When / Then
+    with pytest.raises(
+        BatchStateFormatError,
+        match="valid icon reference count must equal resolved plus unresolved references",
+    ):
+        parse_batch_state_json(json.dumps(payload))
+
+
+def test_batch_state_parser_rejects_unreconciled_icon_failures() -> None:
+    # Given: the aggregate no longer equals its three physical failure parts.
+    payload = json.loads(
+        format_batch_state_json(BatchState(BATCH_SCHEMA_VERSION, (_map_result(),)))
+    )
+    payload["results"][0]["icon_failure_count"] = 7
+
+    # When / Then
+    with pytest.raises(
+        BatchStateFormatError,
+        match="icon failure count must equal anonymous read plus original write plus PNG failures",
+    ):
+        parse_batch_state_json(json.dumps(payload))
+
+
 def _map_result(*, source_path: str = "/maps/a.w3x") -> MapBatchResult:
     return MapBatchResult(
         source=SourceFingerprint(source_path, 100, 123456, "a" * 64),
@@ -149,7 +179,7 @@ def _map_result(*, source_path: str = "/maps/a.w3x") -> MapBatchResult:
         anonymous_icon_count=0,
         original_written_count=1,
         png_written_count=1,
-        icon_failure_count=0,
+        icon_failure_count=6,
         restricted_block_count=0,
         elapsed_ms=25,
         relation_counts=(("怪物直接掉落", 2),),

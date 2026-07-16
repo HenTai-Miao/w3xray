@@ -99,11 +99,13 @@ def test_process_one_map_publishes_partial_result_for_an_unresolved_named_icon(
     gaps = read_tsv(output / "图标未解析.tsv")
     assert result.state is MapBatchState.PARTIAL
     assert result.named_icon_count == 0
-    assert result.icon_failure_count == 1
+    assert result.icon_failure_count == 0
     assert len(gaps.rows) == result.unresolved_icon_count == 1
     assert result.unresolved_icon_reference_count == 1
+    assert result.anonymous_read_failure_count == 0
     assert result.original_write_failure_count == 0
     assert result.png_failure_count == 0
+    assert result.first_error == "unresolved named icons: 1"
     assert result.stage == "published"
 
 

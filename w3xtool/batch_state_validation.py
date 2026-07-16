@@ -4,12 +4,27 @@ from __future__ import annotations
 
 from typing import assert_never
 
-from .batch_models import MapBatchResult, MapBatchState, BatchStateFormatError
+from .batch_models import BatchStateFormatError, MapBatchResult, MapBatchState
+from .icon_evidence_counts import physical_icon_failure_count
 from .safe_output import safe_relative_path
 
 
 def validate_result_state(result: MapBatchResult) -> None:
     """Reject published and terminal results with contradictory state."""
+    if result.valid_icon_reference_count != (
+        result.resolved_icon_reference_count + result.unresolved_icon_reference_count
+    ):
+        raise BatchStateFormatError(
+            "valid icon reference count must equal resolved plus unresolved references"
+        )
+    if result.icon_failure_count != physical_icon_failure_count(
+        result.anonymous_read_failure_count,
+        result.original_write_failure_count,
+        result.png_failure_count,
+    ):
+        raise BatchStateFormatError(
+            "icon failure count must equal anonymous read plus original write plus PNG failures"
+        )
     match result.state:
         case MapBatchState.COMPLETE | MapBatchState.PARTIAL | MapBatchState.RESTRICTED:
             relative = safe_relative_path(result.output_directory)

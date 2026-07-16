@@ -134,14 +134,16 @@ def _icon_result(
     png_failures = sum(
         item.original_written and not item.png_written for item in exports
     )
+    anonymous_read_failures = index.anonymous_read_failure_count
     return replace(
         base,
         named_icon_count=len(exports),
-        icon_failure_count=gaps + original_failures + png_failures,
+        icon_failure_count=(anonymous_read_failures + original_failures + png_failures),
         valid_icon_reference_count=len(index.resolved) + len(index.unresolved),
         resolved_icon_reference_count=len(index.resolved),
         unresolved_icon_count=gaps,
         unresolved_icon_reference_count=len(index.unresolved),
+        anonymous_read_failure_count=anonymous_read_failures,
         original_write_failure_count=original_failures,
         png_failure_count=png_failures,
     )

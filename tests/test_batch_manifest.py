@@ -81,6 +81,7 @@ def test_manifest_round_trip_retains_every_split_icon_counter(
         filtered_icon_field_count=3,
         unresolved_icon_count=2,
         unresolved_icon_reference_count=5,
+        icon_failure_count=6,
         anonymous_read_failure_count=1,
         original_write_failure_count=2,
         png_failure_count=3,
@@ -97,6 +98,7 @@ def test_manifest_round_trip_retains_every_split_icon_counter(
     assert parsed.result.filtered_icon_field_count == 3
     assert parsed.result.unresolved_icon_count == 2
     assert parsed.result.unresolved_icon_reference_count == 5
+    assert parsed.result.icon_failure_count == 6
     assert parsed.result.anonymous_read_failure_count == 1
     assert parsed.result.original_write_failure_count == 2
     assert parsed.result.png_failure_count == 3

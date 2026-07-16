@@ -26,13 +26,23 @@ class IconIntegrityCounts:
 
     @property
     def failure_count(self) -> int:
-        """Count normalized gaps and actual read/write failures once."""
-        return (
-            self.normalized_gap_count
-            + self.anonymous_read_failure_count
-            + self.original_write_failure_count
-            + self.png_failure_count
+        """Count only physical read and write failures."""
+        return physical_icon_failure_count(
+            self.anonymous_read_failure_count,
+            self.original_write_failure_count,
+            self.png_failure_count,
         )
+
+
+def physical_icon_failure_count(
+    anonymous_read_failure_count: int,
+    original_write_failure_count: int,
+    png_failure_count: int,
+) -> int:
+    """Sum the three disjoint physical icon failure counters."""
+    return (
+        anonymous_read_failure_count + original_write_failure_count + png_failure_count
+    )
 
 
 def icon_integrity_counts(
