@@ -17,6 +17,10 @@ def main() -> None:
     """Dispatch legacy game-config, map CLI, or GUI startup modes."""
     multiprocessing.freeze_support()
     configure_cli_output()
+    if len(sys.argv) >= 2 and sys.argv[1] == "description-cache":
+        from w3xtool.description_cache_cli import run_description_cache_cli
+
+        raise SystemExit(run_description_cache_cli(tuple(sys.argv[2:])))
     if len(sys.argv) >= 2 and sys.argv[1] == "batch":
         from w3xtool.batch_cli import (
             BatchCliOptionError,
