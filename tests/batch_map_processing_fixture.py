@@ -25,7 +25,7 @@ from w3xtool.item_relation_models import (
     RelationObject,
 )
 from w3xtool.map_archive_reader import MapArchiveReader
-from w3xtool.map_data import GameObject, MapData
+from w3xtool.map_data import GameObject, GameObjectFieldEvidence, MapData
 from w3xtool.object_text_models import (
     ObjectTextIndex,
     ObjectTextRecord,
@@ -112,6 +112,14 @@ def loaded_map(
     payload = _one_pixel_blp()
     archive = _Archive({r"Icons\BTNHero.blp": payload}, {7: payload})
     source = ArchiveSource(archive)
+    icon_evidence = GameObjectFieldEvidence(
+        key="aart",
+        label="图标 - 普通",
+        value=icon_path,
+        source="war3map.w3a",
+        source_priority=40,
+        value_type="icon",
+    )
     ability_object = GameObject(
         category="技能",
         ext="w3a",
@@ -122,6 +130,8 @@ def loaded_map(
         icon=icon_path,
         field_values={"aub1": "|cffffcc00说明|r|n第二行"},
         field_sources={"aub1": "war3map.w3a"},
+        field_evidence=(icon_evidence,),
+        icon_field_evidence=icon_evidence,
     )
     digest = hashlib.sha256(payload).hexdigest()
     entry = ExtractionEntry(

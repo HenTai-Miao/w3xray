@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import ExitStack
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from unicodedata import normalize
 
@@ -13,18 +13,27 @@ from .batch_icon_export import (
     export_named_icon,
 )
 from .campaign_sources import open_map_source
-from .extraction_ledger import ExtractionLedger
 from .game_data_source import GameDataSource
-from .icon_resources import (
-    AnonymousIconArchive,
-    IconObjectReference,
-    NamedIconResource,
-    TrustedIconEvidenceSource,
-    collect_icon_references,
-    iter_anonymous_blps,
-    resolve_named_icon,
+from .icon_evidence_builder import build_icon_evidence_index
+from .icon_evidence_index import (
+    IconEvidenceIndex,
+    merge_icon_evidence_indexes,
 )
-from .map_data import GameObject, MapData
+from .icon_evidence_models import (
+    IconArchiveLayer,
+    IconResolutionLayer,
+    ResolvedIconEvidence,
+)
+from .icon_resources import IconObjectReference
+from .map_data import MapData
+
+
+@dataclass(frozen=True, slots=True)
+class BatchIconEvidence:
+    """Physical exports paired with their complete immutable evidence index."""
+
+    exports: tuple[IconExportRecord, ...]
+    index: IconEvidenceIndex
 
 
 def export_map_icons(
@@ -32,46 +41,44 @@ def export_map_icons(
     maps: tuple[MapData, ...],
     stage: Path,
     game_source: GameDataSource | None,
-    source_digest: str,
-) -> tuple[tuple[IconExportRecord, ...], int, int]:
+) -> BatchIconEvidence:
     """Discover and stream-export every provable icon from one map tree."""
     records: list[IconExportRecord] = []
     named_indexes: dict[tuple[str, str], int] = {}
-    unresolved: set[str] = set()
-    anonymous_failures = 0
+    indexes: list[IconEvidenceIndex] = []
     with ExitStack() as stack:
         opened = tuple(
             (item, stack.enter_context(open_map_source(item))) for item in maps
         )
         root_archive = opened[0][1]
         for item, archive in opened:
-            sources = (archive,) if item is root else (archive, root_archive)
-            for reference in collect_icon_references(_map_objects(item)):
-                resource = resolve_named_icon(reference, sources, game_source)
-                if resource is None:
-                    unresolved.add(reference.normalized_path.casefold())
-                    continue
-                _merge_named_icon(records, named_indexes, stage, resource)
-            ledger = item.extraction_ledger
-            if ledger is None:
-                continue
-            expected = _anonymous_blp_count(ledger)
-            if not isinstance(archive, AnonymousIconArchive):
-                anonymous_failures += expected
-                continue
-            exported = 0
-            for resource in iter_anonymous_blps(archive, ledger):
-                records.append(export_anonymous_icon(str(stage), resource))
-                exported += 1
-            anonymous_failures += max(0, expected - exported)
-        if isinstance(game_source, TrustedIconEvidenceSource):
-            for resource in game_source.historical_icons_for(source_digest).resources:
-                unresolved.discard(resource.normalized_path.casefold())
-                _merge_named_icon(records, named_indexes, stage, resource)
-    return (
+            layers = [
+                IconArchiveLayer(
+                    IconResolutionLayer.CURRENT_MAP,
+                    archive,
+                    item.path,
+                )
+            ]
+            if item is not root:
+                layers.append(
+                    IconArchiveLayer(
+                        IconResolutionLayer.CAMPAIGN_ROOT,
+                        root_archive,
+                        root.path,
+                    )
+                )
+            index = build_icon_evidence_index(item, tuple(layers), game_source)
+            item.icon_evidence = index
+            indexes.append(index)
+            for row in index.resolved:
+                _merge_resolved_icon(records, named_indexes, stage, row)
+            records.extend(
+                export_anonymous_icon(str(stage), resource)
+                for resource in index.anonymous
+            )
+    return BatchIconEvidence(
         canonicalize_icon_paths(stage, tuple(records)),
-        len(unresolved),
-        anonymous_failures,
+        merge_icon_evidence_indexes(tuple(indexes)),
     )
 
 
@@ -98,40 +105,41 @@ def canonicalize_icon_paths(
     )
 
 
-def _map_objects(item: MapData) -> tuple[GameObject, ...]:
-    return tuple(obj for values in item.objects.values() for obj in values)
-
-
-def _anonymous_blp_count(ledger: ExtractionLedger) -> int:
-    return sum(
-        entry.block_index is not None
-        and entry.internal_path.replace("\\", "/").casefold().startswith("unknown/")
-        and entry.internal_path.casefold().endswith(".blp")
-        for entry in ledger.entries
-    )
-
-
-def _reference_key(item: IconObjectReference) -> tuple[str, str, str]:
-    return item.category.casefold(), item.object_id, item.object_name
-
-
-def _merge_named_icon(
+def _merge_resolved_icon(
     records: list[IconExportRecord],
     named_indexes: dict[tuple[str, str], int],
     stage: Path,
-    resource: NamedIconResource,
+    row: ResolvedIconEvidence,
 ) -> None:
-    key = (resource.normalized_path.casefold(), resource.sha256)
+    key = (row.reference.normalized_path.casefold(), row.content_sha256)
     previous = named_indexes.get(key)
     if previous is None:
         named_indexes[key] = len(records)
-        records.append(export_named_icon(str(stage), resource))
+        records.append(export_named_icon(str(stage), row))
         return
     current = records[previous]
-    merged = tuple(
-        sorted(set((*current.objects, *resource.objects)), key=_reference_key)
-    )
+    merged = tuple(sorted(set((*current.objects, row.reference)), key=_reference_key))
     records[previous] = replace(current, objects=merged)
+
+
+def _reference_key(item: IconObjectReference) -> tuple[str, ...]:
+    values = (
+        item.map_sha256,
+        item.map_path,
+        item.map_scope,
+        item.category,
+        item.object_id,
+        item.object_name,
+        item.base_id,
+        item.field_key,
+        item.field_label,
+        item.field_type,
+        item.field_source,
+        item.wts_source,
+        item.normalized_path,
+        item.requested_path,
+    )
+    return tuple(part for value in values for part in (value.casefold(), value))
 
 
 def _canonical_path(name: str, actual_paths: dict[str, list[str]]) -> str:

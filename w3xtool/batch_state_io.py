@@ -41,6 +41,14 @@ class _ResultJson(TypedDict):
     manifest_sha256: str
     published_bytes: int
     peak_rss_bytes: int
+    valid_icon_reference_count: int
+    resolved_icon_reference_count: int
+    filtered_icon_field_count: int
+    unresolved_icon_count: int
+    unresolved_icon_reference_count: int
+    anonymous_read_failure_count: int
+    original_write_failure_count: int
+    png_failure_count: int
 
 
 class _StateJson(TypedDict):
@@ -92,6 +100,14 @@ def _result_json(result: MapBatchResult) -> _ResultJson:
         manifest_sha256=result.manifest_sha256,
         published_bytes=result.published_bytes,
         peak_rss_bytes=result.peak_rss_bytes,
+        valid_icon_reference_count=result.valid_icon_reference_count,
+        resolved_icon_reference_count=result.resolved_icon_reference_count,
+        filtered_icon_field_count=result.filtered_icon_field_count,
+        unresolved_icon_count=result.unresolved_icon_count,
+        unresolved_icon_reference_count=result.unresolved_icon_reference_count,
+        anonymous_read_failure_count=result.anonymous_read_failure_count,
+        original_write_failure_count=result.original_write_failure_count,
+        png_failure_count=result.png_failure_count,
     )
 
 

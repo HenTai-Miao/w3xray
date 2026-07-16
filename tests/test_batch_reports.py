@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+from dataclasses import replace
 import io
 
 import pytest
@@ -14,14 +15,11 @@ from w3xtool.batch_icon_export import (
     IconExportState,
     IconKind,
 )
-from w3xtool.batch_models import (
-    MapBatchState,
-)
 from w3xtool.batch_reports import (
-    derive_map_state,
     format_description_tsv,
     format_icon_index_tsv,
 )
+from w3xtool.icon_evidence_models import IconResolutionLayer
 from w3xtool.icon_resources import IconObjectReference
 
 
@@ -156,124 +154,17 @@ def test_icon_index_includes_true_source_and_all_object_references() -> None:
     assert "技能:A001:暴风雪" in report
 
 
-@pytest.mark.parametrize(
-    (
-        "structural_error",
-        "restricted",
-        "ledger_incomplete",
-        "text_incomplete",
-        "relation_incomplete",
-        "icon_state",
-        "description_state",
-        "expected",
-    ),
-    (
-        (
-            True,
-            0,
-            False,
-            False,
-            False,
-            IconExportState.COMPLETE,
-            DescriptionState.MAP_VALUE,
-            MapBatchState.FAILED,
-        ),
-        (
-            False,
-            1,
-            False,
-            False,
-            False,
-            IconExportState.COMPLETE,
-            DescriptionState.MAP_VALUE,
-            MapBatchState.RESTRICTED,
-        ),
-        (
-            False,
-            0,
-            True,
-            False,
-            False,
-            IconExportState.COMPLETE,
-            DescriptionState.MAP_VALUE,
-            MapBatchState.PARTIAL,
-        ),
-        (
-            False,
-            0,
-            False,
-            False,
-            False,
-            IconExportState.PNG_FAILED,
-            DescriptionState.MAP_VALUE,
-            MapBatchState.PARTIAL,
-        ),
-        (
-            False,
-            0,
-            False,
-            False,
-            False,
-            IconExportState.COMPLETE,
-            DescriptionState.SOURCE_MISSING,
-            MapBatchState.PARTIAL,
-        ),
-        (
-            False,
-            0,
-            False,
-            False,
-            False,
-            IconExportState.COMPLETE,
-            DescriptionState.MAP_EXPLICIT_EMPTY,
-            MapBatchState.COMPLETE,
-        ),
-        (
-            False,
-            0,
-            False,
-            True,
-            False,
-            IconExportState.COMPLETE,
-            DescriptionState.MAP_VALUE,
-            MapBatchState.PARTIAL,
-        ),
-        (
-            False,
-            0,
-            False,
-            False,
-            True,
-            IconExportState.COMPLETE,
-            DescriptionState.MAP_VALUE,
-            MapBatchState.PARTIAL,
-        ),
-    ),
-)
-def test_map_state_follows_completeness_precedence(
-    structural_error: bool,
-    restricted: int,
-    ledger_incomplete: bool,
-    text_incomplete: bool,
-    relation_incomplete: bool,
-    icon_state: IconExportState,
-    description_state: DescriptionState,
-    expected: MapBatchState,
-) -> None:
+def test_icon_index_reports_the_exact_resolution_layer() -> None:
     # Given
-    icons = (_icon_record(state=icon_state),)
-    descriptions = (_description_record(state=description_state),)
+    record = replace(
+        _icon_record(),
+        resolution_layer=IconResolutionLayer.CURRENT_MAP,
+    )
 
     # When
-    state = derive_map_state(
-        structural_error=structural_error,
-        restricted_block_count=restricted,
-        ledger_incomplete=ledger_incomplete,
-        text_incomplete=text_incomplete,
-        relation_incomplete=relation_incomplete,
-        icons=icons,
-        descriptions=descriptions,
+    row = next(
+        csv.DictReader(io.StringIO(format_icon_index_tsv((record,))), delimiter="\t")
     )
 
     # Then
-    assert state is expected
+    assert row["解析层"] == "current_map"

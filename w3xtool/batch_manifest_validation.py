@@ -62,6 +62,14 @@ def summary_from_result(result: MapBatchResult) -> ManifestResultSummary:
         result.restricted_block_count,
         result.relation_counts,
         result.relation_incomplete_count,
+        result.valid_icon_reference_count,
+        result.resolved_icon_reference_count,
+        result.filtered_icon_field_count,
+        result.unresolved_icon_count,
+        result.unresolved_icon_reference_count,
+        result.anonymous_read_failure_count,
+        result.original_write_failure_count,
+        result.png_failure_count,
     )
 
 

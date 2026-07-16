@@ -2,87 +2,69 @@
 
 from __future__ import annotations
 
-import hashlib
-import os
-import struct
-from io import BytesIO
-from dataclasses import dataclass
-from enum import StrEnum
-from pathlib import PurePosixPath
 from typing import assert_never
 
-from PIL import Image
-
-from .blp import decode_blp
+from .batch_icon_models import IconExportRecord, IconExportState, IconKind
+from .batch_icon_paths import collision_path, icon_path_suffix, without_leaf_suffix
+from .batch_icon_png import convert_icon_to_png
+from .icon_evidence_models import IconResolutionLayer, ResolvedIconEvidence
 from .icon_resources import (
     AnonymousIconResource,
     IconObjectReference,
     NamedIconResource,
 )
-from .safe_output import safe_destination, safe_relative_path, write_bytes_safely
+from .safe_output import safe_relative_path, write_bytes_safely
 from .safe_output_models import SafeWriteResult, SafeWriteStatus
 
 
-class IconKind(StrEnum):
-    NAMED = "具名"
-    ANONYMOUS = "匿名"
-
-
-class IconExportState(StrEnum):
-    COMPLETE = "complete"
-    ORIGINAL_FAILED = "original_failed"
-    PNG_FAILED = "png_failed"
-    UNSAFE_PATH = "unsafe_path"
-
-
-@dataclass(frozen=True, slots=True)
-class IconExportRecord:
-    kind: IconKind
-    requested_path: str
-    resolved_path: str
-    source_path: str
-    block_index: int | None
-    sha256: str
-    original_relative_path: str
-    png_relative_path: str
-    original_written: bool
-    png_written: bool
-    state: IconExportState
-    error: str
-    objects: tuple[IconObjectReference, ...]
-
-
-@dataclass(frozen=True, slots=True)
-class _PngResult:
-    payload: bytes | None
-    error: str = ""
-
-
-def export_named_icon(root: str, resource: NamedIconResource) -> IconExportRecord:
+def export_named_icon(
+    root: str,
+    resource: NamedIconResource | ResolvedIconEvidence,
+) -> IconExportRecord:
     """Write one named original and then its PNG convenience copy."""
-    if safe_relative_path(resource.normalized_path) is None:
+    match resource:
+        case NamedIconResource():
+            normalized_path = resource.normalized_path
+            requested_path = resource.requested_path
+            digest = resource.sha256
+            objects = resource.objects
+            resolution_layer = None
+        case ResolvedIconEvidence():
+            normalized_path = resource.reference.normalized_path
+            requested_path = resource.reference.requested_path
+            digest = resource.content_sha256
+            objects = (resource.reference,)
+            resolution_layer = resource.layer
+        case unreachable:
+            assert_never(unreachable)
+    if safe_relative_path(normalized_path) is None:
         return _failed_record(
-            IconKind.NAMED,
-            resource,
-            IconExportState.UNSAFE_PATH,
-            "unsafe named icon path",
+            requested_path=requested_path,
+            resolved_path=resource.resolved_path,
+            source_path=resource.source_path,
+            digest=digest,
+            objects=objects,
+            resolution_layer=resolution_layer,
+            state=IconExportState.UNSAFE_PATH,
+            error="unsafe named icon path",
         )
-    source_suffix = _path_suffix(resource.resolved_path)
-    base = _without_leaf_suffix(resource.normalized_path)
+    source_suffix = icon_path_suffix(resource.resolved_path)
+    base = without_leaf_suffix(normalized_path)
     original = f"图标/原始/具名/{base}{source_suffix}"
     png = f"图标/PNG/具名/{base}.png"
     return _export(
         root=root,
         kind=IconKind.NAMED,
-        requested_path=resource.requested_path,
+        requested_path=requested_path,
         resolved_path=resource.resolved_path,
         source_path=resource.source_path,
         block_index=None,
-        digest=resource.sha256,
+        digest=digest,
         payload=resource.payload,
         original_path=original,
         png_path=png,
-        objects=resource.objects,
+        objects=objects,
+        resolution_layer=resolution_layer,
     )
 
 
@@ -102,6 +84,7 @@ def export_anonymous_icon(
         original_path=f"图标/原始/匿名/{resource.basename}.blp",
         png_path=f"图标/PNG/匿名/{resource.basename}.png",
         objects=(),
+        resolution_layer=None,
     )
 
 
@@ -118,8 +101,9 @@ def _export(
     original_path: str,
     png_path: str,
     objects: tuple[IconObjectReference, ...],
+    resolution_layer: IconResolutionLayer | None,
 ) -> IconExportRecord:
-    original_path = _collision_path(root, original_path, payload)
+    original_path = collision_path(root, original_path, payload)
     original = write_bytes_safely(root, original_path, payload)
     original_failure = _write_failure_state(original)
     if original_failure is not None:
@@ -137,8 +121,9 @@ def _export(
             original_failure,
             original.error,
             objects,
+            resolution_layer,
         )
-    converted = _png_bytes(payload)
+    converted = convert_icon_to_png(payload)
     if converted.payload is None:
         return IconExportRecord(
             kind,
@@ -154,8 +139,9 @@ def _export(
             IconExportState.PNG_FAILED,
             converted.error,
             objects,
+            resolution_layer,
         )
-    png_path = _collision_path(root, png_path, converted.payload)
+    png_path = collision_path(root, png_path, converted.payload)
     png_result = write_bytes_safely(root, png_path, converted.payload)
     png_failure = _write_failure_state(png_result)
     return IconExportRecord(
@@ -172,24 +158,8 @@ def _export(
         IconExportState.COMPLETE if png_failure is None else png_failure,
         png_result.error,
         objects,
+        resolution_layer,
     )
-
-
-def _png_bytes(payload: bytes) -> _PngResult:
-    try:
-        image: Image.Image | None = decode_blp(payload)
-    except (OSError, ValueError, struct.error) as exc:
-        return _PngResult(None, f"{type(exc).__name__}: {exc}")
-    if image is None:
-        return _PngResult(None, "BLP decode failed")
-    try:
-        output = BytesIO()
-        image.save(output, format="PNG")
-        return _PngResult(output.getvalue())
-    except (OSError, ValueError) as exc:
-        return _PngResult(None, f"{type(exc).__name__}: {exc}")
-    finally:
-        image.close()
 
 
 def _write_failure_state(result: SafeWriteResult) -> IconExportState | None:
@@ -204,51 +174,30 @@ def _write_failure_state(result: SafeWriteResult) -> IconExportState | None:
             assert_never(unreachable)
 
 
-def _collision_path(root: str, name: str, payload: bytes) -> str:
-    digest = hashlib.sha256(payload).hexdigest()
-    destination = safe_destination(root, name)
-    if destination is None or not os.path.isfile(destination):
-        return name
-    try:
-        if os.path.getsize(destination) == len(payload):
-            with open(destination, "rb") as handle:
-                if hashlib.sha256(handle.read()).hexdigest() == digest:
-                    return name
-    except OSError:
-        return name
-    path = PurePosixPath(name.replace("\\", "/"))
-    return str(path.with_name(f"{path.stem}_{digest[:8]}{path.suffix}"))
-
-
-def _path_suffix(path: str) -> str:
-    leaf = path.replace("\\", "/").rsplit("/", 1)[-1]
-    return f".{leaf.rsplit('.', 1)[-1]}" if "." in leaf else ".blp"
-
-
-def _without_leaf_suffix(path: str) -> str:
-    normalized = path.replace("\\", "/")
-    leaf = normalized.rsplit("/", 1)[-1]
-    return normalized.rsplit(".", 1)[0] if "." in leaf else normalized
-
-
 def _failed_record(
-    kind: IconKind,
-    resource: NamedIconResource,
+    *,
+    requested_path: str,
+    resolved_path: str,
+    source_path: str,
+    digest: str,
+    objects: tuple[IconObjectReference, ...],
+    resolution_layer: IconResolutionLayer | None,
     state: IconExportState,
     error: str,
 ) -> IconExportRecord:
     return IconExportRecord(
-        kind=kind,
-        requested_path=resource.requested_path,
-        resolved_path=resource.resolved_path,
-        source_path=resource.source_path,
+        kind=IconKind.NAMED,
+        requested_path=requested_path,
+        resolved_path=resolved_path,
+        source_path=source_path,
         block_index=None,
-        sha256=resource.sha256,
+        sha256=digest,
         original_relative_path="",
         png_relative_path="",
         original_written=False,
         png_written=False,
         state=state,
         error=error,
-        objects=resource.objects,
+        objects=objects,
+        resolution_layer=resolution_layer,
     )

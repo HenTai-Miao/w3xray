@@ -32,13 +32,14 @@ from .batch_reports import (
     derive_map_state,
     format_description_completeness,
     format_description_tsv,
-    format_icon_completeness,
     format_icon_index_tsv,
     format_map_summary,
 )
 from .extraction_ledger import BlockState
 from .description_cache import format_description_cache_tsv
 from .game_data_source import GameDataSource, open_game_data_source
+from .icon_evidence_exports import format_icon_integrity, format_unresolved_icon_tsv
+from .icon_evidence_index import IconEvidenceIndex
 from .load_context import MapLoadContext
 from .map_loader import load_map
 from .safe_output import write_text_safely
@@ -86,9 +87,9 @@ def process_one_map(
         item_reports = build_batch_item_reports(root)
         maps = item_reports.maps
         descriptions = audit_object_descriptions(item_reports.objects)
-        icons, unresolved, anonymous_failures = export_map_icons(
-            root, maps, stage, game_source, fingerprint.sha256
-        )
+        icon_evidence = export_map_icons(root, maps, stage, game_source)
+        icons = icon_evidence.exports
+        icon_index = icon_evidence.index
         ledgers = tuple(
             item.extraction_ledger for item in maps if item.extraction_ledger
         )
@@ -106,8 +107,8 @@ def process_one_map(
             structural_error=False,
             restricted_block_count=restricted,
             ledger_incomplete=ledger_incomplete
-            or bool(unresolved)
-            or bool(anonymous_failures),
+            or bool(icon_index.unresolved)
+            or bool(icon_index.anonymous_read_failure_count),
             text_incomplete=bool(item_reports.text_incomplete_count),
             relation_incomplete=bool(item_reports.relation_incomplete_count),
             icons=icons,
@@ -127,8 +128,7 @@ def process_one_map(
             state,
             descriptions,
             icons,
-            unresolved,
-            anonymous_failures,
+            icon_index,
             restricted,
             elapsed_ms,
             item_reports,
@@ -139,8 +139,7 @@ def process_one_map(
             result,
             icons,
             descriptions,
-            unresolved,
-            restricted,
+            icon_index,
             item_reports,
         )
         result = finalize_map_manifest(stage, result, publication.transaction_id)
@@ -159,21 +158,17 @@ def _write_reports(
     result: MapBatchResult,
     icons: tuple[IconExportRecord, ...],
     descriptions: tuple[DescriptionRecord, ...],
-    unresolved: int,
-    restricted: int,
+    icon_index: IconEvidenceIndex,
     item_reports: BatchItemReports,
 ) -> None:
     reports = (
         ("地图摘要.txt", format_map_summary(result)),
         ("图标索引.tsv", format_icon_index_tsv(icons)),
+        ("图标未解析.tsv", format_unresolved_icon_tsv(icon_index)),
         ("对象描述.tsv", format_description_tsv(descriptions)),
         (
             "图标完整性.txt",
-            format_icon_completeness(
-                icons,
-                unresolved_named_count=unresolved,
-                restricted_block_count=restricted,
-            ),
+            format_icon_integrity(icon_index, icons),
         ),
         ("描述完整性.txt", format_description_completeness(descriptions)),
         *item_reports.artifacts(),

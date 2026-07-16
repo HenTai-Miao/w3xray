@@ -64,6 +64,14 @@ class MapBatchResult:
     manifest_sha256: str = ""
     published_bytes: int = 0
     peak_rss_bytes: int = 0
+    valid_icon_reference_count: int = 0
+    resolved_icon_reference_count: int = 0
+    filtered_icon_field_count: int = 0
+    unresolved_icon_count: int = 0
+    unresolved_icon_reference_count: int = 0
+    anonymous_read_failure_count: int = 0
+    original_write_failure_count: int = 0
+    png_failure_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)

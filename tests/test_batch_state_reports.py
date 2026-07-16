@@ -158,4 +158,12 @@ def _map_result(*, source_path: str = "/maps/a.w3x") -> MapBatchResult:
         manifest_sha256="c" * 64,
         published_bytes=100,
         peak_rss_bytes=10,
+        valid_icon_reference_count=7,
+        resolved_icon_reference_count=3,
+        filtered_icon_field_count=2,
+        unresolved_icon_count=2,
+        unresolved_icon_reference_count=4,
+        anonymous_read_failure_count=1,
+        original_write_failure_count=2,
+        png_failure_count=3,
     )

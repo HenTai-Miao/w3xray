@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Final
+from typing import Final, override
 
 from .batch_models import MapBatchState, SourceFingerprint
 
@@ -16,6 +16,7 @@ OWNERSHIP_SCHEMA_VERSION: Final = 1
 REQUIRED_MAP_REPORTS: Final = (
     "地图摘要.txt",
     "图标索引.tsv",
+    "图标未解析.tsv",
     "对象描述.tsv",
     "图标完整性.txt",
     "描述完整性.txt",
@@ -33,6 +34,17 @@ class ArtifactKind(StrEnum):
     ICON_ORIGINAL = "icon_original"
     ICON_PNG = "icon_png"
     OTHER = "other"
+
+
+@dataclass(frozen=True, slots=True)
+class BatchManifestFormatError(ValueError):
+    """Malformed or semantically contradictory publication metadata."""
+
+    detail: str
+
+    @override
+    def __str__(self) -> str:
+        return self.detail
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +73,14 @@ class ManifestResultSummary:
     restricted_block_count: int
     relation_counts: tuple[tuple[str, int], ...]
     relation_incomplete_count: int
+    valid_icon_reference_count: int
+    resolved_icon_reference_count: int
+    filtered_icon_field_count: int
+    unresolved_icon_count: int
+    unresolved_icon_reference_count: int
+    anonymous_read_failure_count: int
+    original_write_failure_count: int
+    png_failure_count: int
 
 
 @dataclass(frozen=True, slots=True)

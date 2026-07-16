@@ -9,6 +9,10 @@ from typing import Final
 from .batch_descriptions import DescriptionRecord, DescriptionState
 from .batch_global_reports import format_batch_summary_tsv, format_retry_tsv
 from .batch_icon_export import IconExportRecord, IconExportState
+from .batch_icon_reports import (
+    format_icon_completeness,
+    format_icon_index_tsv,
+)
 from .batch_models import MapBatchResult, MapBatchState
 from .batch_state_io import format_batch_state_json, parse_batch_state_json
 from .batch_tsv import format_tsv_rows
@@ -42,21 +46,6 @@ DESCRIPTION_REPORT_HEADER: Final = (
     "说明来源",
     "完整性状态",
 )
-ICON_REPORT_HEADER: Final = (
-    "类型",
-    "原始路径",
-    "解析路径",
-    "真实来源",
-    "块编号",
-    "SHA256",
-    "原始输出",
-    "PNG输出",
-    "原始已写出",
-    "PNG已写出",
-    "状态",
-    "错误",
-    "引用对象",
-)
 
 
 def format_description_tsv(records: Iterable[DescriptionRecord]) -> str:
@@ -78,34 +67,6 @@ def format_description_tsv(records: Iterable[DescriptionRecord]) -> str:
                 record.readable_description,
                 record.description_source,
                 record.state.value,
-            )
-        )
-    return format_tsv_rows(rows)
-
-
-def format_icon_index_tsv(records: Iterable[IconExportRecord]) -> str:
-    """Render icon evidence, publication status, and object references."""
-    rows: list[tuple[str, ...]] = [ICON_REPORT_HEADER]
-    for record in sorted(records, key=_icon_key):
-        references = ";".join(
-            f"{item.category}:{item.object_id}:{item.object_name}"
-            for item in record.objects
-        )
-        rows.append(
-            (
-                record.kind.value,
-                record.requested_path,
-                record.resolved_path,
-                record.source_path,
-                "" if record.block_index is None else str(record.block_index),
-                record.sha256,
-                record.original_relative_path,
-                record.png_relative_path,
-                _yes_no(record.original_written),
-                _yes_no(record.png_written),
-                record.state.value,
-                record.error,
-                references,
             )
         )
     return format_tsv_rows(rows)
@@ -170,27 +131,6 @@ def format_map_summary(result: MapBatchResult) -> str:
     return "\n".join(lines) + "\n"
 
 
-def format_icon_completeness(
-    records: Iterable[IconExportRecord],
-    *,
-    unresolved_named_count: int = 0,
-    restricted_block_count: int = 0,
-) -> str:
-    """Summarize icon writes and unresolved static boundaries."""
-    items = tuple(records)
-    return "\n".join(
-        (
-            f"已识别：{len(items)}",
-            f"原始写出：{sum(item.original_written for item in items)}",
-            f"PNG 成功：{sum(item.png_written for item in items)}",
-            f"失败：{sum(item.state is not IconExportState.COMPLETE for item in items)}",
-            f"具名未解析：{unresolved_named_count}",
-            f"受限块：{restricted_block_count}",
-            "",
-        )
-    )
-
-
 def format_description_completeness(records: Iterable[DescriptionRecord]) -> str:
     """Summarize all four source/completeness states."""
     return "\n".join(
@@ -213,12 +153,4 @@ def _description_key(record: DescriptionRecord) -> tuple[str, str, int]:
         record.category.casefold(),
         record.object_id,
         -1 if record.level is None else record.level,
-    )
-
-
-def _icon_key(record: IconExportRecord) -> tuple[int, str, int]:
-    return (
-        int(record.kind.value != "具名"),
-        record.requested_path.casefold(),
-        record.block_index or -1,
     )

@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from tests.batch_map_processing_fixture import loaded_map
+from tests.real_map_text_acceptance import read_tsv
 import w3xtool.batch_map_processing as batch_map_processing
 from w3xtool.batch_map_processing import process_one_map
 from w3xtool.batch_models import MapBatchState
@@ -47,6 +48,14 @@ def test_process_one_map_publishes_named_anonymous_and_description_artifacts(
     assert result.state is MapBatchState.COMPLETE
     assert (result.named_icon_count, result.anonymous_icon_count) == (1, 1)
     assert (result.original_written_count, result.png_written_count) == (2, 2)
+    assert result.valid_icon_reference_count == 1
+    assert result.resolved_icon_reference_count == 1
+    assert result.filtered_icon_field_count == 0
+    assert result.unresolved_icon_count == 0
+    assert result.unresolved_icon_reference_count == 0
+    assert result.anonymous_read_failure_count == 0
+    assert result.original_write_failure_count == 0
+    assert result.png_failure_count == 0
     assert result.dependency_fingerprint != fingerprint.sha256
     assert len(result.dependency_fingerprint) == 64
     assert tuple(output.glob("图标/原始/具名/Icons/*.blp"))
@@ -55,6 +64,10 @@ def test_process_one_map_publishes_named_anonymous_and_description_artifacts(
     description = next(csv.DictReader(io.StringIO(description_text), delimiter="\t"))
     assert description["原始说明"] == "|cffffcc00说明|r|n第二行"
     assert description["可读说明"] == "说明\n第二行"
+    integrity = (output / "图标完整性.txt").read_text(encoding="utf-8")
+    assert "具名未解析：0" in integrity
+    assert "原始写出失败：0" in integrity
+    assert "PNG失败：0" in integrity
     assert archive_source.closed
 
 
@@ -82,9 +95,15 @@ def test_process_one_map_publishes_partial_result_for_an_unresolved_named_icon(
     )
 
     # Then
+    output = tmp_path / "output" / result.output_directory
+    gaps = read_tsv(output / "图标未解析.tsv")
     assert result.state is MapBatchState.PARTIAL
     assert result.named_icon_count == 0
     assert result.icon_failure_count == 1
+    assert len(gaps.rows) == result.unresolved_icon_count == 1
+    assert result.unresolved_icon_reference_count == 1
+    assert result.original_write_failure_count == 0
+    assert result.png_failure_count == 0
     assert result.stage == "published"
 
 
@@ -126,6 +145,8 @@ def test_process_one_map_merges_map_bound_trusted_icon_evidence(
     loaded, archive_source = loaded_map(str(source_path), r"Icons\Missing.blp")
     payload = archive_source.archive.read_file(r"Icons\BTNHero.blp")
     fingerprint = fingerprint_source(str(source_path))
+    assert loaded.extraction_ledger is not None
+    ledger_digest = loaded.extraction_ledger.source_sha256
 
     class TrustedSource:
         closed = False
@@ -143,7 +164,7 @@ def test_process_one_map_merges_map_bound_trusted_icon_evidence(
             return self.read_file(name)
 
         def historical_icons_for(self, source_digest: str) -> HistoricalIconEvidenceSet:
-            assert source_digest == fingerprint.sha256
+            assert source_digest == ledger_digest
             resource = NamedIconResource(
                 requested_path=r"Icons\Missing.blp",
                 normalized_path=r"Icons\Missing.blp",

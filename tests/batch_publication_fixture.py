@@ -12,10 +12,14 @@ from w3xtool.batch_models import MapBatchResult, MapBatchState, SourceFingerprin
 from w3xtool.batch_reports import (
     format_description_completeness,
     format_description_tsv,
-    format_icon_completeness,
     format_icon_index_tsv,
     format_map_summary,
 )
+from w3xtool.icon_evidence_exports import (
+    format_icon_integrity,
+    format_unresolved_icon_tsv,
+)
+from w3xtool.icon_evidence_index import empty_icon_evidence_index
 from w3xtool.item_relation_exports import (
     format_equipment_skills_tsv,
     format_item_acquisition_tsv,
@@ -55,8 +59,12 @@ def write_empty_publication(
     reports = (
         ("地图摘要.txt", format_map_summary(result)),
         ("图标索引.tsv", format_icon_index_tsv(())),
+        ("图标未解析.tsv", format_unresolved_icon_tsv(empty_icon_evidence_index())),
         ("对象描述.tsv", format_description_tsv(())),
-        ("图标完整性.txt", format_icon_completeness(())),
+        (
+            "图标完整性.txt",
+            format_icon_integrity(empty_icon_evidence_index(), ()),
+        ),
         ("描述完整性.txt", format_description_completeness(())),
         ("对象完整描述.tsv", format_object_text_tsv(empty_text)),
         ("掉落与获取关系.tsv", format_item_acquisition_tsv(empty_relations)),

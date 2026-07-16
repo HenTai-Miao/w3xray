@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Final, assert_never
+from typing import Final
 
 from .batch_models import (
     BATCH_SCHEMA_VERSION,
@@ -14,7 +14,7 @@ from .batch_models import (
     MapBatchState,
     SourceFingerprint,
 )
-from .safe_output import safe_relative_path
+from .batch_state_validation import require_unique_results, validate_result_state
 
 
 _SHA256: Final = re.compile(r"[0-9a-f]{64}")
@@ -43,6 +43,14 @@ _RESULT_KEYS: Final = frozenset(
         "manifest_sha256",
         "published_bytes",
         "peak_rss_bytes",
+        "valid_icon_reference_count",
+        "resolved_icon_reference_count",
+        "filtered_icon_field_count",
+        "unresolved_icon_count",
+        "unresolved_icon_reference_count",
+        "anonymous_read_failure_count",
+        "original_write_failure_count",
+        "png_failure_count",
     )
 )
 
@@ -70,7 +78,7 @@ def parse_state_json(text: str) -> BatchState:
         if isinstance(exc, BatchStateFormatError):
             raise
         raise BatchStateFormatError(f"invalid batch state result: {exc}") from exc
-    _require_unique_results(results)
+    require_unique_results(results)
     return BatchState(BATCH_SCHEMA_VERSION, results)
 
 
@@ -113,8 +121,31 @@ def _parse_result(value: JsonValue) -> MapBatchResult:
         manifest_sha256=_text(raw["manifest_sha256"], "manifest SHA-256"),
         published_bytes=_nonnegative(raw["published_bytes"], "published bytes"),
         peak_rss_bytes=_nonnegative(raw["peak_rss_bytes"], "peak RSS bytes"),
+        valid_icon_reference_count=_nonnegative(
+            raw["valid_icon_reference_count"], "valid icon reference count"
+        ),
+        resolved_icon_reference_count=_nonnegative(
+            raw["resolved_icon_reference_count"], "resolved icon reference count"
+        ),
+        filtered_icon_field_count=_nonnegative(
+            raw["filtered_icon_field_count"], "filtered icon field count"
+        ),
+        unresolved_icon_count=_nonnegative(
+            raw["unresolved_icon_count"], "unresolved icon count"
+        ),
+        unresolved_icon_reference_count=_nonnegative(
+            raw["unresolved_icon_reference_count"],
+            "unresolved icon reference count",
+        ),
+        anonymous_read_failure_count=_nonnegative(
+            raw["anonymous_read_failure_count"], "anonymous read failure count"
+        ),
+        original_write_failure_count=_nonnegative(
+            raw["original_write_failure_count"], "original write failure count"
+        ),
+        png_failure_count=_nonnegative(raw["png_failure_count"], "PNG failure count"),
     )
-    _validate_result_state(result)
+    validate_result_state(result)
     return result
 
 
@@ -130,55 +161,6 @@ def _parse_source(value: JsonValue) -> SourceFingerprint:
         _nonnegative(raw["mtime_ns"], "source mtime"),
         _digest(raw["sha256"], "source SHA-256"),
     )
-
-
-def _validate_result_state(result: MapBatchResult) -> None:
-    match result.state:
-        case MapBatchState.COMPLETE | MapBatchState.PARTIAL | MapBatchState.RESTRICTED:
-            relative = safe_relative_path(result.output_directory)
-            if (
-                result.stage != "published"
-                or relative is None
-                or len(relative.parts) != 2
-                or relative.parts[0] != "地图"
-            ):
-                raise BatchStateFormatError("published state has an unsafe stage/path")
-            _require_digest(result.dependency_fingerprint, "dependency fingerprint")
-            _require_digest(result.manifest_sha256, "manifest SHA-256")
-        case MapBatchState.FAILED | MapBatchState.CANCELLED:
-            if (
-                not result.stage
-                or result.stage == "published"
-                or result.output_directory
-                or result.manifest_sha256
-                or result.published_bytes
-            ):
-                raise BatchStateFormatError("failed/cancelled state contradicts stage")
-            if result.dependency_fingerprint:
-                _require_digest(
-                    result.dependency_fingerprint,
-                    "dependency fingerprint",
-                )
-        case unreachable:
-            assert_never(unreachable)
-
-
-def _require_unique_results(results: tuple[MapBatchResult, ...]) -> None:
-    paths: set[str] = set()
-    identities: set[tuple[str, int]] = set()
-    outputs: set[str] = set()
-    for result in results:
-        path_key = result.source.path.casefold()
-        identity = result.source.sha256, result.source.size
-        if path_key in paths or identity in identities:
-            raise BatchStateFormatError("duplicate source result")
-        paths.add(path_key)
-        identities.add(identity)
-        if result.output_directory:
-            output_key = result.output_directory.casefold()
-            if output_key in outputs:
-                raise BatchStateFormatError("duplicate output directory")
-            outputs.add(output_key)
 
 
 def _counts(value: JsonValue, label: str) -> tuple[tuple[str, int], ...]:

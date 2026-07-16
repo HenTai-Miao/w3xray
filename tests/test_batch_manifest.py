@@ -26,10 +26,14 @@ from w3xtool.batch_models import MapBatchResult, MapBatchState, SourceFingerprin
 from w3xtool.batch_reports import (
     format_description_completeness,
     format_description_tsv,
-    format_icon_completeness,
     format_icon_index_tsv,
     format_map_summary,
 )
+from w3xtool.icon_evidence_exports import (
+    format_icon_integrity,
+    format_unresolved_icon_tsv,
+)
+from w3xtool.icon_evidence_index import empty_icon_evidence_index
 from w3xtool.item_relation_exports import (
     format_equipment_skills_tsv,
     format_item_acquisition_tsv,
@@ -59,10 +63,43 @@ def test_manifest_round_trip_binds_every_regular_artifact(tmp_path: Path) -> Non
     assert parsed == manifest
     paths = {item.relative_path for item in parsed.artifacts}
     assert "地图摘要.txt" in paths
+    assert "图标未解析.tsv" in paths
     assert "图标/PNG/匿名/x.png" in paths
     assert CONTENT_MANIFEST_NAME not in paths
     assert OWNERSHIP_MARKER_NAME not in paths
     assert parsed.total_size == sum(item.size for item in parsed.artifacts)
+
+
+def test_manifest_round_trip_retains_every_split_icon_counter(
+    tmp_path: Path,
+) -> None:
+    # Given
+    result = replace(
+        _write_empty_stage(tmp_path),
+        valid_icon_reference_count=9,
+        resolved_icon_reference_count=4,
+        filtered_icon_field_count=3,
+        unresolved_icon_count=2,
+        unresolved_icon_reference_count=5,
+        anonymous_read_failure_count=1,
+        original_write_failure_count=2,
+        png_failure_count=3,
+    )
+
+    # When
+    parsed = parse_map_manifest(
+        format_map_manifest(build_map_manifest(tmp_path, result, _TRANSACTION_ID))
+    )
+
+    # Then
+    assert parsed.result.valid_icon_reference_count == 9
+    assert parsed.result.resolved_icon_reference_count == 4
+    assert parsed.result.filtered_icon_field_count == 3
+    assert parsed.result.unresolved_icon_count == 2
+    assert parsed.result.unresolved_icon_reference_count == 5
+    assert parsed.result.anonymous_read_failure_count == 1
+    assert parsed.result.original_write_failure_count == 2
+    assert parsed.result.png_failure_count == 3
 
 
 def test_publication_validation_accepts_exact_manifest_fixture(tmp_path: Path) -> None:
@@ -175,8 +212,12 @@ def _write_empty_stage(root: Path) -> MapBatchResult:
     artifacts = (
         ("地图摘要.txt", format_map_summary(result)),
         ("图标索引.tsv", format_icon_index_tsv(())),
+        ("图标未解析.tsv", format_unresolved_icon_tsv(empty_icon_evidence_index())),
         ("对象描述.tsv", format_description_tsv(())),
-        ("图标完整性.txt", format_icon_completeness(())),
+        (
+            "图标完整性.txt",
+            format_icon_integrity(empty_icon_evidence_index(), ()),
+        ),
         ("描述完整性.txt", format_description_completeness(())),
         ("对象完整描述.tsv", format_object_text_tsv(empty_text)),
         ("掉落与获取关系.tsv", format_item_acquisition_tsv(empty_relations)),
