@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+import os
 from pathlib import Path
 from typing import Literal, assert_never
 
@@ -13,6 +14,7 @@ from tests.description_cache_migration_fixture import (
     LEGACY_RELATIVE,
     write_legacy_inputs,
 )
+from tests.source_parent_swap_fixture import swapping_open
 from w3xtool import description_cache_migration as migration
 from w3xtool.bounded_file import FileIdentity
 from w3xtool.description_cache_migration import (
@@ -176,6 +178,32 @@ def test_migration_rejects_bytes_changing_between_stable_reads(
         migrate_description_cache(
             DescriptionCacheMigrationOptions(legacy_output, legacy_cache, output)
         )
+    assert not output.exists()
+
+
+def test_migration_rejects_intermediate_source_parent_swapped_during_open(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: the report's real parent is swapped through a symlink at open time.
+    legacy_output, legacy_cache = write_legacy_inputs(tmp_path / "input")
+    report = legacy_output / LEGACY_RELATIVE / "对象描述.tsv"
+    source_parent = legacy_output / "地图"
+    moved_parent = tmp_path / "moved-map-parent"
+    events: list[str] = []
+    monkeypatch.setattr(
+        os,
+        "open",
+        swapping_open(os.open, source_parent, moved_parent, report, events),
+    )
+    output = tmp_path / "trusted"
+
+    # When / Then: no intermediate symlink may be followed from the source root.
+    with pytest.raises(DescriptionCacheMigrationError, match="source|symlink|stable"):
+        _ = migrate_description_cache(
+            DescriptionCacheMigrationOptions(legacy_output, legacy_cache, output)
+        )
+    assert events == ["parent swapped"]
     assert not output.exists()
 
 

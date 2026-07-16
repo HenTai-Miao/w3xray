@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import hashlib
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Final, assert_never
 
+from .anchored_source import (
+    AnchoredSourceError,
+    AnchoredSourceNotFoundError,
+    AnchoredSourceRoot,
+)
 from .bounded_file import read_bounded_regular_file
 from .description_cache_migration_models import (
     DescriptionCacheMigrationError,
@@ -24,7 +29,6 @@ from .description_cache_migration_rows import (
 )
 from .description_cache_migration_state import parse_legacy_state
 from .description_cache_publication import publish_description_cache
-from .safe_output import safe_destination
 
 
 _STATE_NAME: Final = "批量提取状态.json"
@@ -39,9 +43,27 @@ def migrate_description_cache(
 ) -> DescriptionCacheMigrationResult:
     """Migrate only evidence proven by exact historical state and reports."""
     legacy_root, cache_path, output = _preflight_paths(options)
-    state_payload = _read_stable(legacy_root / _STATE_NAME, _MAX_STATE_BYTES)
+    try:
+        with AnchoredSourceRoot.open(legacy_root) as source_root:
+            return _migrate_from_source(source_root, legacy_root, cache_path, output)
+    except AnchoredSourceError as exc:
+        raise DescriptionCacheMigrationError(
+            f"cannot read stable source input: {exc}"
+        ) from exc
+
+
+def _migrate_from_source(
+    source_root: AnchoredSourceRoot,
+    legacy_root: Path,
+    cache_path: Path,
+    output: Path,
+) -> DescriptionCacheMigrationResult:
+    state_payload = source_root.read(
+        PurePosixPath(_STATE_NAME),
+        _MAX_STATE_BYTES,
+    ).payload
     results = parse_legacy_state(state_payload)
-    reports = _load_reports(legacy_root, results)
+    reports = _load_reports(source_root, legacy_root, results)
     cache_payload = _read_stable(cache_path, _MAX_CACHE_BYTES)
     candidates = parse_legacy_cache(cache_payload, str(cache_path))
     accepted: list[ProvenDescriptionCandidate] = []
@@ -166,23 +188,29 @@ def _read_stable(path: Path, maximum: int) -> bytes:
 
 
 def _load_reports(
+    source_root: AnchoredSourceRoot,
     root: Path,
     results: tuple[LegacyStateResult, ...],
 ) -> tuple[LegacySourceReport, ...]:
     reports: list[LegacySourceReport] = []
+    report_identities: set[tuple[int, int]] = set()
     for state in results:
-        destination = safe_destination(
-            root.as_posix(), f"{state.output_directory}/{_REPORT_NAME}"
-        )
-        if destination is None:
-            raise DescriptionCacheMigrationError("legacy source report escaped root")
-        path = Path(destination)
-        if path.is_symlink():
-            raise DescriptionCacheMigrationError("legacy source report is a symlink")
-        if not path.exists():
+        relative = PurePosixPath(state.output_directory) / _REPORT_NAME
+        path = root.joinpath(*relative.parts)
+        try:
+            anchored = source_root.read(relative, _MAX_REPORT_BYTES)
+        except AnchoredSourceNotFoundError:
             reports.append(LegacySourceReport(state, path, None, ()))
             continue
-        payload = _read_stable(path, _MAX_REPORT_BYTES)
+        except AnchoredSourceError:
+            raise
+        identity = anchored.identity.device, anchored.identity.inode
+        if identity in report_identities:
+            raise DescriptionCacheMigrationError(
+                "duplicate legacy source report identity"
+            )
+        report_identities.add(identity)
+        payload = anchored.payload
         rows = parse_legacy_report(payload, str(path))
         reports.append(
             LegacySourceReport(

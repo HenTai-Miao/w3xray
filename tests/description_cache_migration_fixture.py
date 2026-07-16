@@ -79,6 +79,9 @@ def write_legacy_inputs(
     cache_rows: tuple[tuple[str, ...], ...] | None = None,
     report_rows: tuple[tuple[str, ...], ...] | None = None,
     source_paths: tuple[str, ...] | None = None,
+    state_output_directory: str = LEGACY_RELATIVE,
+    stage: str = "published",
+    state: str = "部分完成",
 ) -> tuple[Path, Path]:
     """Write exact legacy state, candidate cache, and source report files."""
     root.mkdir(parents=True, exist_ok=True)
@@ -93,7 +96,7 @@ def write_legacy_inputs(
         encoding="utf-8",
         newline="",
     )
-    state = {
+    state_payload = {
         "schema_version": 1,
         "results": [
             {
@@ -104,9 +107,9 @@ def write_legacy_inputs(
                     "sha256": SOURCE_DIGEST,
                 },
                 "display_name": "source",
-                "output_directory": LEGACY_RELATIVE,
-                "stage": "published",
-                "state": "部分完成",
+                "output_directory": state_output_directory,
+                "stage": stage,
+                "state": state,
                 "first_error": "",
                 "object_count": 1,
                 "description_counts": [["客户端补全", 1]],
@@ -121,7 +124,7 @@ def write_legacy_inputs(
         ],
     }
     (legacy_output / "批量提取状态.json").write_text(
-        json.dumps(state, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        json.dumps(state_payload, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
         encoding="utf-8",
     )
     paths = source_paths or tuple(f"{report}#base:{row[1]}" for row in candidates)

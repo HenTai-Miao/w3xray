@@ -47,6 +47,7 @@ _COUNT_KEYS: Final = tuple(
         "description_counts",
     }
 )
+_PUBLISHED_STATES: Final = frozenset(("完整", "部分完成", "受限"))
 
 type JsonValue = (
     str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
@@ -72,9 +73,9 @@ def parse_legacy_state(payload: bytes) -> tuple[LegacyStateResult, ...]:
     results = tuple(_parse_result(item) for item in raw_results)
     if len({item.source_sha256 for item in results}) != len(results):
         raise DescriptionCacheMigrationError("duplicate legacy state source digest")
-    if len({item.output_directory for item in results}) != len(results):
+    if len({item.output_directory.casefold() for item in results}) != len(results):
         raise DescriptionCacheMigrationError("duplicate legacy state output directory")
-    if len({item.source_path for item in results}) != len(results):
+    if len({item.source_path.casefold() for item in results}) != len(results):
         raise DescriptionCacheMigrationError("duplicate legacy state source path")
     return results
 
@@ -96,22 +97,37 @@ def _parse_result(value: JsonValue) -> LegacyStateResult:
     source_path = _text(source["path"], "source path")
     digest = _text(source["sha256"], "source SHA-256")
     output_directory = _text(raw["output_directory"], "output directory")
+    stage = _text(raw["stage"], "stage")
+    state = _text(raw["state"], "state")
     if not source_path or not is_digest(digest):
         raise DescriptionCacheMigrationError("invalid legacy source identity")
-    if safe_relative_path(output_directory) is None:
+    relative = safe_relative_path(output_directory)
+    if relative is None:
         raise DescriptionCacheMigrationError("legacy output directory escapes root")
+    if (
+        relative.as_posix() != output_directory
+        or len(relative.parts) != 2
+        or relative.parts[0] != "地图"
+    ):
+        raise DescriptionCacheMigrationError(
+            "legacy output directory is not canonical published output"
+        )
+    if stage != "published":
+        raise DescriptionCacheMigrationError("legacy result stage is not published")
+    if state not in _PUBLISHED_STATES:
+        raise DescriptionCacheMigrationError("legacy result state is not published")
     _ = _nonnegative(source["size"], "source size")
     _ = _nonnegative(source["mtime_ns"], "source mtime")
     for name in _COUNT_KEYS:
         _ = _nonnegative(raw[name], name)
     _validate_counts(raw["description_counts"])
-    for name in ("display_name", "stage", "state", "first_error"):
+    for name in ("display_name", "first_error"):
         _ = _text(raw[name], name)
     return LegacyStateResult(
         source_path,
         digest,
         output_directory,
-        _text(raw["stage"], "stage"),
+        stage,
     )
 
 

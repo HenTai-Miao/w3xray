@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 import hashlib
 import importlib.util
+import os
 from pathlib import Path
 
 import pytest
@@ -13,13 +14,13 @@ from tests.description_cache_migration_fixture import (
     LEGACY_RELATIVE,
     legacy_client_fill,
 )
+from tests.source_parent_swap_fixture import swapping_open
 from tests.trusted_description_cache_fixture import (
     published_cache,
     resign_source_evidence,
     rewrite_source_record,
 )
 from w3xtool import trusted_description_cache as trusted_cache
-from w3xtool import trusted_description_cache_sources as trusted_sources
 from w3xtool.batch_tsv import format_tsv_rows
 from w3xtool.bounded_file import FileIdentity
 from w3xtool.description_cache_schema import LEGACY_DESCRIPTION_HEADER
@@ -135,6 +136,28 @@ def test_trusted_cache_rejects_symlinked_source_report(tmp_path: Path) -> None:
         load_trusted_description_cache(root)
 
 
+def test_trusted_replay_rejects_intermediate_source_parent_swapped_during_open(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: an owned cache whose source parent becomes a symlink at open time.
+    root = published_cache(tmp_path)
+    report = tmp_path / "legacy-output" / LEGACY_RELATIVE / "对象描述.tsv"
+    source_parent = tmp_path / "legacy-output" / "地图"
+    moved_parent = tmp_path / "moved-map-parent"
+    events: list[str] = []
+    monkeypatch.setattr(
+        os,
+        "open",
+        swapping_open(os.open, source_parent, moved_parent, report, events),
+    )
+
+    # When / Then: replay must walk from its held root fd without following it.
+    with pytest.raises(TrustedDescriptionCacheError, match="source|symlink|regular"):
+        _ = load_trusted_description_cache(root)
+    assert events == ["parent swapped"]
+
+
 def test_trusted_cache_rejects_resigned_source_path_escape(tmp_path: Path) -> None:
     # Given: an attacker re-signs all owned metadata around an outside report path.
     root = published_cache(tmp_path)
@@ -214,21 +237,26 @@ def test_trusted_cache_rejects_source_file_changing_between_reads(
 ) -> None:
     # Given: a bound historical report changes during its stable double-read.
     root = published_cache(tmp_path)
-    identity = FileIdentity(1, 2, 5)
-    payloads: Iterator[bytes] = iter((b"first", b"other"))
+    report = tmp_path / "legacy-output" / LEGACY_RELATIVE / "对象描述.tsv"
+    original = report.read_bytes()
+    changed = b"X" + original[1:]
+    real_lseek = os.lseek
+    rewinds = 0
 
-    def unstable_read(
-        _path: Path,
-        _maximum: int,
-        *,
-        expected: FileIdentity | None = None,
-    ) -> tuple[bytes, FileIdentity]:
-        if expected is not None:
-            assert expected == identity
-        return next(payloads), identity
+    def change_before_second_read(
+        descriptor: int,
+        position: int,
+        how: int,
+    ) -> int:
+        nonlocal rewinds
+        if position == 0 and how == os.SEEK_SET:
+            rewinds += 1
+            if rewinds == 2:
+                _ = report.write_bytes(changed)
+        return real_lseek(descriptor, position, how)
 
-    monkeypatch.setattr(trusted_sources, "read_bounded_regular_file", unstable_read)
+    monkeypatch.setattr(os, "lseek", change_before_second_read)
 
     # When / Then
-    with pytest.raises(TrustedDescriptionCacheError, match="changed while reading"):
-        load_trusted_description_cache(root)
+    with pytest.raises(TrustedDescriptionCacheError, match="changed"):
+        _ = load_trusted_description_cache(root)

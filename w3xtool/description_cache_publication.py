@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 from uuid import uuid4
 
+from .atomic_rename import rename_noreplace
 from .description_cache_migration_models import (
     DescriptionCacheRejection,
     ProvenDescriptionCandidate,
@@ -24,7 +25,12 @@ from .description_cache_owned_schema import (
     format_trusted_cache_marker,
     trusted_content_sha256,
 )
-from .durable_io import sync_directory
+from .description_cache_publication_transaction import (
+    DescriptionCacheConcurrentDestinationError,
+    DescriptionCachePublicationError,
+    publish_valid_stage,
+)
+from .durable_io import sync_directory, sync_directory_descriptor
 from .safe_output import write_text_safely
 from .safe_output_models import SafeWriteStatus
 from .trusted_description_cache import (
@@ -32,21 +38,6 @@ from .trusted_description_cache import (
     VerifiedDescriptionCache,
     load_trusted_description_cache,
 )
-
-
-class DescriptionCachePublicationError(OSError):
-    """A trusted cache could not be published without partial evidence."""
-
-    __slots__ = ("detail",)
-
-    detail: str
-
-    def __init__(self, detail: str) -> None:
-        super().__init__(detail)
-        self.detail = detail
-
-    def __str__(self) -> str:
-        return self.detail
 
 
 def publish_description_cache(
@@ -97,9 +88,8 @@ def publish_description_cache(
             format_trusted_cache_marker(manifest_digest),
         )
         sync_directory(stage)
-        _require_valid(stage)
-        _publish_valid_stage(stage, output, backup)
-        return _require_valid(output).cache
+        _ = _require_valid(stage)
+        return _publish_valid_stage(stage, output, backup).cache
     finally:
         if stage.is_dir() and not stage.is_symlink():
             shutil.rmtree(stage)
@@ -123,39 +113,40 @@ def _require_valid(root: Path) -> VerifiedDescriptionCache:
         ) from exc
 
 
-def _publish_valid_stage(stage: Path, output: Path, backup: Path) -> None:
-    if output.exists() or output.is_symlink():
-        _ = _require_valid(output)
-        output.replace(backup)
-        try:
-            sync_directory(output.parent)
-            _replace_stage(stage, output)
-            sync_directory(output.parent)
-            _ = _require_valid(output)
-        except OSError as exc:
-            _restore_backup(output, backup)
-            if isinstance(exc, DescriptionCachePublicationError):
-                raise
-            raise DescriptionCachePublicationError(str(exc)) from exc
-        shutil.rmtree(backup)
-        sync_directory(output.parent)
-        return
-    try:
-        _replace_stage(stage, output)
-    except OSError as exc:
-        raise DescriptionCachePublicationError(str(exc)) from exc
-    sync_directory(output.parent)
+def _publish_valid_stage(
+    stage: Path,
+    output: Path,
+    backup: Path,
+) -> VerifiedDescriptionCache:
+    return publish_valid_stage(
+        stage,
+        output,
+        backup,
+        _rename_noreplace,
+        _require_valid,
+        _sync_parent,
+    )
 
 
-def _replace_stage(stage: Path, destination: Path) -> None:
-    stage.replace(destination)
+def _rename_noreplace(
+    parent_descriptor: int,
+    source_name: str,
+    destination_name: str,
+) -> None:
+    rename_noreplace(
+        parent_descriptor,
+        source_name,
+        parent_descriptor,
+        destination_name,
+    )
 
 
-def _restore_backup(output: Path, backup: Path) -> None:
-    if output.is_dir() and not output.is_symlink():
-        shutil.rmtree(output)
-    backup.replace(output)
-    sync_directory(output.parent)
+def _sync_parent(parent_descriptor: int) -> None:
+    sync_directory_descriptor(parent_descriptor)
 
 
-__all__ = ("DescriptionCachePublicationError", "publish_description_cache")
+__all__ = (
+    "DescriptionCacheConcurrentDestinationError",
+    "DescriptionCachePublicationError",
+    "publish_description_cache",
+)

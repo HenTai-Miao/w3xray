@@ -152,6 +152,39 @@ def test_description_cache_cli_returns_two_without_traceback_for_preflight_error
     assert captured.out == ""
 
 
+def test_description_cache_cli_returns_two_for_unauthorized_schema1_result(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    # Given: exact CLI paths lead to a parseable but unpublished legacy result.
+    legacy_output, legacy_cache = write_legacy_inputs(
+        tmp_path,
+        stage="failed-but-has-output",
+    )
+    output = tmp_path / "trusted"
+
+    # When
+    code = cli.run_description_cache_cli(
+        (
+            "migrate",
+            "--legacy-output",
+            str(legacy_output),
+            "--legacy-cache",
+            str(legacy_cache),
+            "--output",
+            str(output),
+        )
+    )
+
+    # Then
+    captured = capsys.readouterr()
+    assert code == 2
+    assert "迁移失败" in captured.err
+    assert "Traceback" not in captured.err
+    assert captured.out == ""
+    assert not output.exists()
+
+
 def test_description_cache_cli_returns_two_for_trust_error(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
