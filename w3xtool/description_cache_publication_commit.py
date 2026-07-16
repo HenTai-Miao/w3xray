@@ -78,7 +78,13 @@ def _require_identity(
     name: str,
     expected: DirectoryIdentity,
 ) -> None:
-    if directory_identity(parent_descriptor, name) != expected:
+    try:
+        actual = directory_identity(parent_descriptor, name)
+    except OSError as exc:
+        raise PublicationCommitContextError(
+            "publication identity cannot be proven during commit; NEEDS_CONTEXT"
+        ) from exc
+    if actual != expected:
         raise PublicationCommitContextError(
             "publication identity changed during commit; NEEDS_CONTEXT"
         )

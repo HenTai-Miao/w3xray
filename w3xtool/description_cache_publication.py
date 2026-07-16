@@ -32,7 +32,11 @@ from .description_cache_publication_transaction import (
     publish_valid_stage,
 )
 from .description_cache_publication_commit import PublicationCommitContextError
-from .description_cache_publication_fs import directory_identity, remove_directory
+from .description_cache_publication_fs import DirectoryIdentity
+from .description_cache_publication_stage import (
+    capture_stage_identity,
+    remove_stage,
+)
 from .durable_io import sync_directory, sync_directory_descriptor
 from .safe_output import write_text_safely
 from .safe_output_models import SafeWriteStatus
@@ -67,7 +71,7 @@ def publish_description_cache(
         )
     payloads = format_migration_payloads(accepted, rejections)
     stage.mkdir(mode=0o700)
-    stage_identity = _path_identity(stage)
+    parent_identity, stage_identity = capture_stage_identity(stage)
     preserve_stage = False
     try:
         sync_directory(output.parent)
@@ -101,15 +105,19 @@ def publish_description_cache(
             format_trusted_cache_marker(manifest_digest),
         )
         sync_directory(stage)
-        _ = _require_valid(stage)
         try:
-            return _publish_valid_stage(stage, output, backup).cache
+            return _publish_valid_stage(
+                stage,
+                output,
+                backup,
+                parent_identity,
+            ).cache
         except PublicationCommitContextError:
             preserve_stage = True
             raise
     finally:
         if not preserve_stage:
-            _remove_stage(stage, stage_identity)
+            remove_stage(stage, parent_identity, stage_identity, _sync_parent)
 
 
 def _write(root: Path, name: str, text: str) -> None:
@@ -133,11 +141,13 @@ def _publish_valid_stage(
     stage: Path,
     output: Path,
     backup: Path,
+    parent_identity: DirectoryIdentity,
 ) -> VerifiedDescriptionCache:
     return publish_valid_stage(
         stage,
         output,
         backup,
+        parent_identity,
         _rename_noreplace,
         _rename_exchange,
         _require_valid,
@@ -173,26 +183,6 @@ def _rename_exchange(
 
 def _sync_parent(parent_descriptor: int) -> None:
     sync_directory_descriptor(parent_descriptor)
-
-
-def _path_identity(path: Path) -> tuple[int, int]:
-    parent_descriptor = os.open(path.parent, _DIRECTORY_FLAGS)
-    try:
-        return directory_identity(parent_descriptor, path.name)
-    finally:
-        os.close(parent_descriptor)
-
-
-def _remove_stage(stage: Path, expected: tuple[int, int]) -> None:
-    parent_descriptor = os.open(stage.parent, _DIRECTORY_FLAGS)
-    try:
-        try:
-            remove_directory(parent_descriptor, stage.name, expected)
-        except FileNotFoundError:
-            return
-        _sync_parent(parent_descriptor)
-    finally:
-        os.close(parent_descriptor)
 
 
 __all__ = (

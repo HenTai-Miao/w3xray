@@ -11,12 +11,12 @@ from .description_cache_publication_errors import (
 from .description_cache_publication_fs import (
     DirectoryIdentity,
     object_identity,
-    remove_directory,
 )
 from .trusted_description_cache import VerifiedDescriptionCache
 
 
 type Rename = Callable[[int, str, str], None]
+type Remove = Callable[[int, str, DirectoryIdentity], None]
 type Validate = Callable[[Path], VerifiedDescriptionCache]
 type Sync = Callable[[int], None]
 
@@ -28,6 +28,7 @@ def publish_absent(
     stage_identity: DirectoryIdentity,
     rename_noreplace: Rename,
     require_valid: Validate,
+    remove_directory: Remove,
     sync_parent: Sync,
 ) -> VerifiedDescriptionCache:
     """Publish a stage only while the public destination remains absent."""

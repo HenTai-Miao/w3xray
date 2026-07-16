@@ -13,9 +13,11 @@ from .description_cache_publication_errors import (
     DescriptionCachePublicationError,
 )
 from .description_cache_publication_fs import (
+    DirectoryIdentity,
     directory_identity as _directory_identity,
     remove_directory as _remove_directory,
 )
+from .description_cache_publication_parent import ParentBoundValidator
 from .description_cache_publication_replacement import publish_replacement
 from .trusted_description_cache import VerifiedDescriptionCache
 
@@ -28,6 +30,7 @@ _DIRECTORY_FLAGS: Final = (
 )
 type _Rename = Callable[[int, str, str], None]
 type _Exchange = Callable[[int, str, str], None]
+type _Remove = Callable[[int, str, DirectoryIdentity], None]
 type _Validate = Callable[[Path], VerifiedDescriptionCache]
 type _Sync = Callable[[int], None]
 
@@ -36,6 +39,7 @@ def publish_valid_stage(
     stage: Path,
     output: Path,
     backup: Path,
+    parent_identity: DirectoryIdentity,
     rename_noreplace: _Rename,
     rename_exchange: _Exchange,
     require_valid: _Validate,
@@ -49,6 +53,14 @@ def publish_valid_stage(
     except OSError as exc:
         raise DescriptionCachePublicationError(str(exc)) from exc
     try:
+        binding = ParentBoundValidator(
+            parent_descriptor,
+            output.parent,
+            parent_identity,
+            require_valid,
+            _remove_directory,
+        )
+        binding.require_current_parent()
         return _publish_from_parent(
             parent_descriptor,
             stage,
@@ -56,7 +68,8 @@ def publish_valid_stage(
             backup,
             rename_noreplace,
             rename_exchange,
-            require_valid,
+            binding.require_valid,
+            binding.remove_directory,
             sync_parent,
         )
     except DescriptionCachePublicationError:
@@ -75,9 +88,12 @@ def _publish_from_parent(
     rename_noreplace: _Rename,
     rename_exchange: _Exchange,
     require_valid: _Validate,
+    remove_directory: _Remove,
     sync_parent: _Sync,
 ) -> VerifiedDescriptionCache:
     stage_identity = _directory_identity(parent_descriptor, stage.name)
+    _ = require_valid(stage)
+    _require_identity(parent_descriptor, stage.name, stage_identity)
     try:
         output_identity = _directory_identity(parent_descriptor, output.name)
     except FileNotFoundError:
@@ -88,6 +104,7 @@ def _publish_from_parent(
             stage_identity,
             rename_noreplace,
             require_valid,
+            remove_directory,
             sync_parent,
         )
     _ = require_valid(output)
@@ -102,7 +119,7 @@ def _publish_from_parent(
         rename_exchange,
         rename_noreplace,
         require_valid,
-        _remove_directory,
+        remove_directory,
         sync_parent,
     )
 
