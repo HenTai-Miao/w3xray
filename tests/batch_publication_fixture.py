@@ -127,6 +127,7 @@ def publish_client_fill_result(
                 "戒指",
                 "否",
                 role,
+                "tip" if role == "基础提示" else "ubertip",
                 "utip" if role == "基础提示" else "utub",
                 "提示文本",
                 "",
@@ -134,9 +135,12 @@ def publish_client_fill_result(
                 raw_value,
                 "客户端",
                 "Units\\ItemStrings.txt",
+                "200",
                 "客户端补全",
                 "否",
                 "",
+                "是",
+                "最高优先级唯一值",
                 str(evidence_index),
             )
         )

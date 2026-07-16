@@ -30,6 +30,8 @@ from w3xtool.object_text_models import (
     ObjectTextIndex,
     ObjectTextRecord,
     ObjectTextState,
+    TextSelectionReason,
+    TextSourcePriority,
 )
 
 COMPLETE_RAW = '|cffffcc00"完整\t正文\r\n第二行|r'
@@ -155,6 +157,7 @@ def loaded_map(
                 object_name="暴风雪",
                 is_custom=True,
                 role="扩展提示",
+                semantic_field="ubertip",
                 field_key="aub1",
                 field_label="提示工具 - 扩展",
                 level=1,
@@ -162,9 +165,12 @@ def loaded_map(
                 readable_value='"完整\t正文\n第二行',
                 source_kind="地图二进制",
                 source_path="war3map.w3a",
+                source_priority=int(TextSourcePriority.MAP_BINARY),
                 state=text_state,
                 placeholder=False,
                 conflict_group="",
+                is_current=True,
+                selection_reason=TextSelectionReason.HIGHEST_PRIORITY_VALUE,
                 evidence_ordinal=1,
             ),
         )

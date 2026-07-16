@@ -155,8 +155,8 @@ def test_explicit_empty_blocks_fills_without_discarding_same_tier_text() -> None
     }
 
 
-def test_fixed_placeholder_keeps_author_undefined_state_with_same_tier_text() -> None:
-    # Given: one map tier explicitly clears, leaves undefined, and supplies a role.
+def test_same_priority_distinct_values_conflict_while_placeholder_is_skipped() -> None:
+    # Given: one map priority explicitly clears, leaves undefined, and supplies a role.
     fields = tuple(
         ObjectFieldValue(
             "utub",
@@ -181,17 +181,18 @@ def test_fixed_placeholder_keeps_author_undefined_state_with_same_tier_text() ->
         client_text_available=False,
     )
 
-    # Then: each raw value retains its exact semantic state.
+    # Then: distinct usable values conflict while the placeholder stays undefined.
     rows = tuple(
         row
         for row in md.object_texts.for_object("物品", "I001")
         if row.role == "扩展提示"
     )
     assert {(row.raw_value, row.state) for row in rows} == {
-        ("", ObjectTextState.MAP_EXPLICIT_EMPTY),
+        ("", ObjectTextState.SOURCE_CONFLICT),
         ("-", ObjectTextState.AUTHOR_UNDEFINED),
-        ("地图文本完整说明", ObjectTextState.MAP_VALUE),
+        ("地图文本完整说明", ObjectTextState.SOURCE_CONFLICT),
     }
+    assert all(row.is_current for row in rows if not row.placeholder)
 
 
 def test_pipeline_preserves_pre_westring_raw_text_with_readable_translation() -> None:

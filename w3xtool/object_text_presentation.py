@@ -36,8 +36,11 @@ def _format_text_record(record: ObjectTextRecord, *, raw: bool) -> str:
     )
     lines = [
         f"── {record.role}｜{level}｜{record.state.value} ──",
+        f"规范字段：{record.semantic_field}",
         f"字段：{record.field_label or '未命名'}（{record.field_key or '无字段键'}）",
         f"来源：{source}",
+        f"证据优先级：{record.source_priority}｜当前值：{'是' if record.is_current else '否'}",
+        f"选择原因：{record.selection_reason.value}",
         f"证据序号：{record.evidence_ordinal}",
     ]
     if record.conflict_group:

@@ -121,10 +121,18 @@ def test_named_placeholder_allows_anonymous_fill_but_explicit_empty_blocks_all_f
         for row in base
     )
     extended = tuple(row for row in rows if row.role == "扩展提示")
-    assert len(extended) == 1
-    assert (extended[0].raw_value, extended[0].state) == (
+    assert {row.raw_value for row in extended} == {
+        "",
+        "匿名说明",
+        "客户端说明",
+        "缓存说明",
+    }
+    current = tuple(row for row in extended if row.is_current)
+    assert len(current) == 1
+    assert (current[0].raw_value, current[0].state, current[0].placeholder) == (
         "",
         ObjectTextState.MAP_EXPLICIT_EMPTY,
+        False,
     )
 
 

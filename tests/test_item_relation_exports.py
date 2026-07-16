@@ -29,6 +29,8 @@ from w3xtool.object_text_models import (
     ObjectTextIndex,
     ObjectTextRecord,
     ObjectTextState,
+    TextSelectionReason,
+    TextSourcePriority,
 )
 
 
@@ -48,6 +50,7 @@ def test_complete_text_tsv_round_trips_all_raw_characters_and_long_values() -> N
         "名称",
         "自定义",
         "文本角色",
+        "规范字段身份",
         "字段键",
         "字段标签",
         "等级/变体",
@@ -55,13 +58,16 @@ def test_complete_text_tsv_round_trips_all_raw_characters_and_long_values() -> N
         "可读全文",
         "来源类型",
         "来源路径",
+        "证据优先级",
         "状态",
         "占位",
         "冲突组",
+        "是否当前值",
+        "选择原因",
         "证据序号",
     ]
-    assert rows[1][9] == raw
-    assert rows[1][10] == "可读\n全文"
+    assert rows[1][10] == raw
+    assert rows[1][11] == "可读\n全文"
 
 
 def test_complete_text_summary_lists_all_seven_states_in_enum_order() -> None:
@@ -181,6 +187,7 @@ def _text_record(raw: str) -> ObjectTextRecord:
         object_name="戒指",
         is_custom=True,
         role="扩展提示",
+        semantic_field="ubertip",
         field_key="utub:2",
         field_label="提示文本 - 等级 2",
         level=2,
@@ -188,9 +195,12 @@ def _text_record(raw: str) -> ObjectTextRecord:
         readable_value="可读\n全文",
         source_kind="地图二进制",
         source_path="war3map.w3t",
+        source_priority=int(TextSourcePriority.MAP_BINARY),
         state=ObjectTextState.MAP_VALUE,
         placeholder=False,
         conflict_group="",
+        is_current=True,
+        selection_reason=TextSelectionReason.HIGHEST_PRIORITY_VALUE,
         evidence_ordinal=1,
     )
 

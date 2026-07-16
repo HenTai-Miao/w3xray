@@ -20,6 +20,8 @@ from w3xtool.object_text_models import (
     ObjectTextIndex,
     ObjectTextRecord,
     ObjectTextState,
+    TextSelectionReason,
+    TextSourcePriority,
 )
 
 
@@ -108,6 +110,7 @@ def _map_with_text_and_relations(raw: str) -> MapData:
                 object_name="装备",
                 is_custom=True,
                 role="扩展提示",
+                semantic_field="ubertip",
                 field_key="utub",
                 field_label="提示文本",
                 level=None,
@@ -115,9 +118,12 @@ def _map_with_text_and_relations(raw: str) -> MapData:
                 readable_value="完整说明\n第二行",
                 source_kind="地图二进制",
                 source_path="war3map.w3t",
+                source_priority=int(TextSourcePriority.MAP_BINARY),
                 state=ObjectTextState.MAP_VALUE,
                 placeholder=False,
                 conflict_group="",
+                is_current=True,
+                selection_reason=TextSelectionReason.HIGHEST_PRIORITY_VALUE,
                 evidence_ordinal=1,
             ),
         )

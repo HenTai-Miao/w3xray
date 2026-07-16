@@ -17,7 +17,12 @@ from w3xtool.batch_models import MapBatchResult, MapBatchState
 from w3xtool.batch_runner import BatchOptions, fingerprint_source
 from w3xtool.item_relation_models import ItemRelationIndex, RelationCompleteness
 from w3xtool.load_context import MapLoadContext
-from w3xtool.object_text_models import ObjectTextState
+from w3xtool.object_text_models import (
+    ObjectTextIndex,
+    ObjectTextState,
+    TextSelectionReason,
+    TextSourcePriority,
+)
 
 
 def test_process_one_map_publishes_lossless_text_and_relation_reports(
@@ -45,6 +50,10 @@ def test_process_one_map_publishes_lossless_text_and_relation_reports(
         )
     )
     assert complete_text["原始全文"] == COMPLETE_RAW
+    assert complete_text["规范字段身份"] == "ubertip"
+    assert complete_text["证据优先级"] == "600"
+    assert complete_text["是否当前值"] == "是"
+    assert complete_text["选择原因"] == "最高优先级唯一值"
     assert [row["关系类型"] for row in acquisition] == ["怪物直接掉落"]
     assert [row["关系角色"] for row in skills] == ["装备技能"]
     assert "关系总数：2" in (output / "关系完整性.txt").read_text(encoding="utf-8")
@@ -126,6 +135,32 @@ def test_batch_item_reports_aggregate_campaign_children_without_rescanning() -> 
     assert len(reports.item_relations.records) == 4
     root.close()
     assert root_source.closed and child_source.closed
+
+
+def test_description_counts_include_current_and_lower_priority_evidence() -> None:
+    # Given: one map retains a current binary row and a lower-priority SLK row.
+    root, source = loaded_map("root.w3x", r"Icons\BTNHero.blp")
+    current = root.object_texts.records[0]
+    lower = replace(
+        current,
+        raw_value="旧说明",
+        readable_value="旧说明",
+        source_kind="地图SLK",
+        source_path="AbilityData.slk",
+        source_priority=int(TextSourcePriority.MAP_SLK),
+        is_current=False,
+        selection_reason=TextSelectionReason.LOWER_PRIORITY,
+        evidence_ordinal=2,
+    )
+    root.object_texts = ObjectTextIndex.build((current, lower))
+
+    # When: batch summaries count complete-text evidence.
+    reports = build_batch_item_reports(root)
+
+    # Then: both retained rows contribute, independent of current selection.
+    assert dict(reports.description_counts)[ObjectTextState.MAP_VALUE.value] == 2
+    root.close()
+    assert source.closed
 
 
 def _process_loaded_map(

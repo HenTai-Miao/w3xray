@@ -72,28 +72,33 @@ def _parse_complete_rows(
         return (), f"缓存文件为空：{report}"
     if tuple(rows[0]) != OBJECT_TEXT_REPORT_HEADER:
         return (), f"缓存 schema 不匹配：{report}"
+    columns = {name: index for index, name in enumerate(OBJECT_TEXT_REPORT_HEADER)}
     entries: list[DescriptionCacheEntry] = []
     for row in rows[1:]:
         if (
             len(row) != len(OBJECT_TEXT_REPORT_HEADER)
-            or not _eligible_base_identity(row[1], row[2], row[4])
-            or row[13] != "客户端补全"
-            or is_yes(row[14])
-            or is_placeholder(row[9])
-            or "客户端" not in row[11]
+            or not _eligible_base_identity(
+                row[columns["对象ID"]],
+                row[columns["基础ID"]],
+                row[columns["自定义"]],
+            )
+            or row[columns["状态"]] != "客户端补全"
+            or is_yes(row[columns["占位"]])
+            or is_placeholder(row[columns["原始全文"]])
+            or "客户端" not in row[columns["来源类型"]]
         ):
             continue
         entries.append(
             DescriptionCacheEntry(
-                row[0],
-                row[2],
-                row[5],
-                parse_level(row[8]),
-                row[9],
-                row[10],
+                row[columns["分类"]],
+                row[columns["基础ID"]],
+                row[columns["文本角色"]],
+                parse_level(row[columns["等级/变体"]]),
+                row[columns["原始全文"]],
+                row[columns["可读全文"]],
                 source_digest,
                 manifest_digest,
-                f"{report}#{row[12]}",
+                f"{report}#{row[columns['来源路径']]}",
             )
         )
     return tuple(entries), ""

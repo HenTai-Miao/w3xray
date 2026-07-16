@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from pathlib import Path
+from typing import Final
 
 from .batch_icon_report_validation import validate_icon_report_summaries
 from .batch_manifest_models import ManifestResultSummary
@@ -14,6 +15,9 @@ from .item_relation_exports import (
     EQUIPMENT_SKILL_REPORT_HEADER,
 )
 from .object_text_exports import OBJECT_TEXT_REPORT_HEADER
+
+
+_TEXT_STATE_COLUMN: Final = OBJECT_TEXT_REPORT_HEADER.index("状态")
 
 
 def validate_report_summaries(
@@ -36,7 +40,7 @@ def validate_report_summaries(
         directory / "对象完整描述.tsv",
         OBJECT_TEXT_REPORT_HEADER,
     )
-    text_counts = Counter(row[13] for row in text_rows)
+    text_counts = Counter(row[_TEXT_STATE_COLUMN] for row in text_rows)
     if not _counts_match(summary.description_counts, text_counts):
         return "description_counts"
 

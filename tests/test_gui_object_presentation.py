@@ -18,6 +18,8 @@ from w3xtool.object_text_models import (
     ObjectTextIndex,
     ObjectTextRecord,
     ObjectTextState,
+    TextSelectionReason,
+    TextSourcePriority,
 )
 from w3xtool.wtg_models import TriggerHeader, TriggerTreeSummary
 
@@ -87,6 +89,9 @@ class ObjectPresentationTest(GuiTestCase):
         assert raw in text
         assert "扩展说明｜等级 2｜地图原值" in text
         assert "war3map.w3t" in text
+        assert "规范字段：ubertip" in text
+        assert "证据优先级：600｜当前值：是" in text
+        assert "选择原因：最高优先级唯一值" in text
         assert "……" not in text
 
     def test_item_detail_lists_acquisition_and_equipment_skills(self) -> None:
@@ -196,6 +201,7 @@ def _map_with_item_intelligence(
                 object_name="烈焰剑",
                 is_custom=True,
                 role="扩展说明",
+                semantic_field="ubertip",
                 field_key="utub:2",
                 field_label="扩展提示 - 等级 2",
                 level=2,
@@ -203,9 +209,12 @@ def _map_with_item_intelligence(
                 readable_value=readable,
                 source_kind="地图二进制",
                 source_path="war3map.w3t",
+                source_priority=int(TextSourcePriority.MAP_BINARY),
                 state=ObjectTextState.MAP_VALUE,
                 placeholder=False,
                 conflict_group="",
+                is_current=True,
+                selection_reason=TextSelectionReason.HIGHEST_PRIORITY_VALUE,
                 evidence_ordinal=1,
             ),
         )
