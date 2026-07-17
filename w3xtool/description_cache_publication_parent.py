@@ -1,70 +1,47 @@
-"""Bind publication validation and cleanup to one held parent directory."""
+"""Bind publication validation and retention to one held parent directory."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-import os
 from pathlib import Path
-import stat
 
-from .description_cache_publication_errors import PublicationCommitContextError
+from .description_cache_publication_errors import (
+    DescriptionCachePublicationError,
+    PublicationCommitContextError,
+    installed_context_error,
+    merge_failures,
+)
+from .description_cache_publication_evidence import finalize_error_evidence
 from .description_cache_publication_fs import DirectoryIdentity
-from .trusted_description_cache import VerifiedDescriptionCache
+from .description_cache_publication_models import (
+    RetainedCacheRecord,
+    RetainedCacheRole,
+)
+from .description_cache_publication_parent_identity import require_parent_identity
+from .trusted_description_cache_models import VerifiedDescriptionCache
 
 
 type ValidateAt = Callable[[int, Path], VerifiedDescriptionCache]
-type Remove = Callable[[int, str, DirectoryIdentity], None]
-
-
-def parent_descriptor_identity(parent_descriptor: int) -> DirectoryIdentity:
-    """Return the directory identity held by one open descriptor."""
-    try:
-        details = os.fstat(parent_descriptor)
-    except OSError as exc:
-        raise PublicationCommitContextError(
-            "publication parent descriptor is unreadable; NEEDS_CONTEXT"
-        ) from exc
-    if not stat.S_ISDIR(details.st_mode):
-        raise PublicationCommitContextError(
-            "publication parent descriptor is not a directory; NEEDS_CONTEXT"
-        )
-    return details.st_dev, details.st_ino
-
-
-def require_parent_identity(
-    parent_descriptor: int,
-    parent: Path,
-    expected: DirectoryIdentity,
-) -> None:
-    """Prove a pathname still resolves to the exact held parent directory."""
-    held = parent_descriptor_identity(parent_descriptor)
-    try:
-        named = os.stat(parent, follow_symlinks=False)
-    except OSError as exc:
-        raise PublicationCommitContextError(
-            "publication parent pathname is unavailable; NEEDS_CONTEXT"
-        ) from exc
-    named_identity = named.st_dev, named.st_ino
-    if (
-        not stat.S_ISDIR(named.st_mode)
-        or held != expected
-        or named_identity != expected
-    ):
-        raise PublicationCommitContextError(
-            "publication parent identity changed; NEEDS_CONTEXT"
-        )
+type RawRetain = Callable[
+    [int, Path, DirectoryIdentity, RetainedCacheRole],
+    RetainedCacheRecord,
+]
+type BoundRetain = Callable[
+    [Path, DirectoryIdentity, RetainedCacheRole],
+    RetainedCacheRecord,
+]
 
 
 @dataclass(frozen=True, slots=True)
 class ParentBoundValidator:
-    """Validate paths and remove owned objects only below one proven parent."""
+    """Validate and retain only below one continuously proven parent."""
 
     parent_descriptor: int
     parent: Path
     parent_identity: DirectoryIdentity
     validator: ValidateAt
-    remover: Remove
+    retainer: RawRetain
 
     def require_current_parent(self) -> None:
         """Require the public parent name to remain bound to the held directory."""
@@ -86,29 +63,48 @@ class ParentBoundValidator:
         except OSError as validation_error:
             try:
                 self.require_current_parent()
-            except PublicationCommitContextError as context_error:
-                raise context_error from validation_error
+            except PublicationCommitContextError as parent_error:
+                parent_error.replace_failures(
+                    merge_failures(
+                        (validation_error,),
+                        parent_error.failures,
+                    )
+                )
+                raise
             raise
         self.require_current_parent()
         return verified
 
-    def remove_directory(
+    def retain(
         self,
-        parent_descriptor: int,
-        name: str,
+        path: Path,
         expected: DirectoryIdentity,
-    ) -> None:
-        """Remove one exact owned object only after re-proving its parent."""
-        if parent_descriptor != self.parent_descriptor:
+        role: RetainedCacheRole,
+    ) -> RetainedCacheRecord:
+        """Retain one object while its public parent remains bound."""
+        if path.parent != self.parent:
             raise PublicationCommitContextError(
-                "cleanup escaped the held publication parent; NEEDS_CONTEXT"
+                "retention escaped the held publication parent; NEEDS_CONTEXT"
             )
         self.require_current_parent()
-        self.remover(parent_descriptor, name, expected)
+        retained = self.retainer(
+            self.parent_descriptor,
+            path,
+            expected,
+            role,
+        )
+        try:
+            self.require_current_parent()
+        except DescriptionCachePublicationError as context_error:
+            finalized = finalize_error_evidence(
+                self.parent_descriptor,
+                self.parent,
+                self.parent_identity,
+                context_error,
+                earlier_retained=(retained,),
+            )
+            raise installed_context_error(retained, finalized)
+        return retained
 
 
-__all__ = (
-    "ParentBoundValidator",
-    "parent_descriptor_identity",
-    "require_parent_identity",
-)
+__all__ = ("BoundRetain", "ParentBoundValidator")

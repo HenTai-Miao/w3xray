@@ -19,6 +19,16 @@ TRUSTED_DESCRIPTION_CACHE_FILES: Final = (
     "可信缓存迁移拒绝.tsv",
 )
 TRUSTED_DESCRIPTION_CACHE_MANIFEST: Final = "内容清单.json"
+TRUSTED_DESCRIPTION_CACHE_OWNED_INVENTORY: Final = tuple(
+    sorted(
+        (
+            *TRUSTED_DESCRIPTION_CACHE_FILES,
+            TRUSTED_DESCRIPTION_CACHE_MANIFEST,
+            TRUSTED_DESCRIPTION_CACHE_MARKER,
+        ),
+        key=lambda name: name.encode("utf-8"),
+    )
+)
 
 type JsonValue = (
     str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]

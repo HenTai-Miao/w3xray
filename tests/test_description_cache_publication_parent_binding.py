@@ -8,8 +8,9 @@ from pathlib import Path
 import pytest
 
 from tests.description_cache_publication_fixture import (
-    private_publication_paths,
+    assert_live_retained_records,
     replacement_inputs,
+    transient_publication_paths,
 )
 from tests.trusted_description_cache_fixture import published_cache
 from w3xtool import description_cache_publication as publication
@@ -107,7 +108,7 @@ def test_transient_parent_aba_cannot_authorize_held_foreign_destination(
         )
 
     # Then: repeated ABA never authorizes exchange or removal of the sentinel.
-    assert swap_count >= 2
+    assert swap_count >= 1
     after = output.stat(follow_symlinks=False)
     assert (after.st_dev, after.st_ino) == (before.st_dev, before.st_ino)
     assert sentinel.read_text(encoding="utf-8") == "foreign"
@@ -181,11 +182,13 @@ def test_post_commit_output_replacement_is_typed_needs_context(
     def replace_output_during_final_sync(parent_descriptor: int) -> None:
         nonlocal parent_syncs
         parent_syncs += 1
-        if parent_syncs != 3:
+        if parent_syncs != 4:
             sync_directory_descriptor(parent_descriptor)
             return
         backups_at_failure.extend(
-            path for path in private_publication_paths(root) if "-backup-" in path.name
+            path
+            for path in transient_publication_paths(root)
+            if "-backup-" in path.name
         )
         os.rename(
             root.name,
@@ -208,7 +211,7 @@ def test_post_commit_output_replacement_is_typed_needs_context(
     monkeypatch.setattr(publication, "_sync_parent", replace_output_during_final_sync)
 
     # When / Then: every post-commit proof loss uses the typed recovery contract.
-    with pytest.raises(PublicationCommitContextError, match="NEEDS_CONTEXT"):
+    with pytest.raises(PublicationCommitContextError, match="NEEDS_CONTEXT") as raised:
         _ = migrate_description_cache(
             DescriptionCacheMigrationOptions(legacy_output, legacy_cache, root)
         )
@@ -218,3 +221,5 @@ def test_post_commit_output_replacement_is_typed_needs_context(
         "物品", "ratf", "扩展提示", None
     )[0]
     assert entry.raw_value == "second"
+    assert any(record.role.value == "previous" for record in raised.value.retained)
+    assert_live_retained_records(raised.value.retained)

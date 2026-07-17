@@ -109,6 +109,19 @@ def rename_noreplace(
     )
 
 
+def require_atomic_rename_support() -> None:
+    """Fail before mutation unless both atomic rename modes are available."""
+    if sys.platform == "darwin":
+        _ = _load_function("renameatx_np")
+        return
+    if sys.platform.startswith("linux"):
+        _ = _load_function("renameat2")
+        return
+    raise AtomicRenameUnavailableError(
+        f"atomic rename is unavailable on {sys.platform}"
+    )
+
+
 def rename_exchange(
     source_descriptor: int,
     source_name: str,
@@ -151,23 +164,7 @@ def _call(
     destination_name: str,
     flags: int,
 ) -> None:
-    library = _LibC(None, use_errno=True)
-    try:
-        function = (
-            library.renameatx_np if symbol == "renameatx_np" else library.renameat2
-        )
-    except (AttributeError, OSError) as exc:
-        raise AtomicRenameUnavailableError(
-            f"atomic no-replace rename symbol is unavailable: {symbol}"
-        ) from exc
-    function.argtypes = (
-        ctypes.c_int,
-        ctypes.c_char_p,
-        ctypes.c_int,
-        ctypes.c_char_p,
-        ctypes.c_uint,
-    )
-    function.restype = ctypes.c_int
+    function = _load_function(symbol)
     _ = ctypes.set_errno(0)
     result = function(
         source_descriptor,
@@ -186,6 +183,27 @@ def _call(
     raise OSError(error, os.strerror(error), destination_name)
 
 
+def _load_function(symbol: str) -> _RenameAt:
+    library = _LibC(None, use_errno=True)
+    try:
+        function = (
+            library.renameatx_np if symbol == "renameatx_np" else library.renameat2
+        )
+    except (AttributeError, OSError) as exc:
+        raise AtomicRenameUnavailableError(
+            f"atomic no-replace rename symbol is unavailable: {symbol}"
+        ) from exc
+    function.argtypes = (
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_uint,
+    )
+    function.restype = ctypes.c_int
+    return function
+
+
 def _require_leaf(name: str) -> None:
     if not name or name in {".", ".."} or os.sep in name:
         raise AtomicRenamePathError("anchored rename requires one leaf name")
@@ -196,6 +214,7 @@ def _require_leaf(name: str) -> None:
 __all__ = (
     "AtomicRenamePathError",
     "AtomicRenameUnavailableError",
+    "require_atomic_rename_support",
     "rename_exchange",
     "rename_noreplace",
 )

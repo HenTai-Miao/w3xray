@@ -3,134 +3,180 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-import os
 from pathlib import Path
-from typing import Final
 
 from .description_cache_publication_absent import publish_absent
 from .description_cache_publication_errors import (
     DescriptionCacheConcurrentDestinationError,
     DescriptionCachePublicationError,
+    PublicationCommitContextError,
 )
 from .description_cache_publication_fs import (
     DirectoryIdentity,
-    directory_identity as _directory_identity,
-    remove_directory as _remove_directory,
+    directory_identity,
+)
+from .description_cache_publication_models import (
+    DescriptionCachePublicationProof,
+    RetainedCacheRecord,
+    RetainedCacheRole,
 )
 from .description_cache_publication_parent import ParentBoundValidator
-from .description_cache_publication_replacement import publish_replacement
-from .trusted_description_cache import VerifiedDescriptionCache
-
-
-_DIRECTORY_FLAGS: Final = (
-    os.O_RDONLY
-    | getattr(os, "O_DIRECTORY", 0)
-    | getattr(os, "O_CLOEXEC", 0)
-    | getattr(os, "O_NOFOLLOW", 0)
+from .description_cache_publication_parent_identity import (
+    parent_descriptor_identity,
+    require_parent_identity,
 )
-type _Rename = Callable[[int, str, str], None]
-type _Exchange = Callable[[int, str, str], None]
-type _Remove = Callable[[int, str, DirectoryIdentity], None]
-type _ValidateAt = Callable[[int, Path], VerifiedDescriptionCache]
-type _Validate = Callable[[Path], VerifiedDescriptionCache]
-type _Sync = Callable[[int], None]
+from .description_cache_publication_replacement import publish_replacement
+from .description_cache_publication_retention_durability import retain_durably
+from .description_cache_publication_retention_names import RetainedCacheNames
+from .description_cache_publication_stage_identity import descriptor_identity
+from .trusted_description_cache import (
+    load_trusted_description_cache_from_descriptor,
+)
+from .trusted_description_cache_models import (
+    VerifiedDescriptionCache,
+    VerifiedDescriptionCacheGeneration,
+)
+
+
+type Rename = Callable[[int, str, str], None]
+type Exchange = Callable[[int, str, str], None]
+type ValidateAt = Callable[[int, Path], VerifiedDescriptionCache]
+type Sync = Callable[[int], None]
 
 
 def publish_valid_stage(
+    parent_descriptor: int,
+    stage_descriptor: int,
     stage: Path,
+    stage_identity: DirectoryIdentity,
+    stage_generation: VerifiedDescriptionCacheGeneration,
     output: Path,
     backup: Path,
+    names: RetainedCacheNames,
     parent_identity: DirectoryIdentity,
-    rename_noreplace: _Rename,
-    rename_exchange: _Exchange,
-    require_valid_at: _ValidateAt,
-    sync_parent: _Sync,
-) -> VerifiedDescriptionCache:
-    """Publish a valid stage without consuming a concurrent destination."""
+    rename_noreplace: Rename,
+    rename_exchange: Exchange,
+    require_valid_at: ValidateAt,
+    sync_parent: Sync,
+) -> DescriptionCachePublicationProof:
+    """Publish a held and completely re-read stage without reopening it."""
     if stage.parent != output.parent or backup.parent != output.parent:
         raise DescriptionCachePublicationError("publication paths have mixed parents")
-    try:
-        parent_descriptor = os.open(output.parent, _DIRECTORY_FLAGS)
-    except OSError as exc:
-        raise DescriptionCachePublicationError(str(exc)) from exc
-    try:
-        binding = ParentBoundValidator(
-            parent_descriptor,
+    if parent_descriptor_identity(parent_descriptor) != parent_identity:
+        raise PublicationCommitContextError(
+            "publication parent descriptor identity changed; NEEDS_CONTEXT"
+        )
+    require_parent_identity(parent_descriptor, output.parent, parent_identity)
+
+    def raw_retain(
+        descriptor: int,
+        path: Path,
+        expected: DirectoryIdentity,
+        role: RetainedCacheRole,
+    ) -> RetainedCacheRecord:
+        return retain_durably(
+            descriptor,
             output.parent,
             parent_identity,
-            require_valid_at,
-            _remove_directory,
-        )
-        binding.require_current_parent()
-        return _publish_from_parent(
-            parent_descriptor,
-            stage,
-            output,
-            backup,
+            path,
+            expected,
+            names,
+            role,
             rename_noreplace,
-            rename_exchange,
-            binding.require_valid,
-            binding.remove_directory,
             sync_parent,
         )
-    except DescriptionCachePublicationError:
-        raise
-    except OSError as exc:
-        raise DescriptionCachePublicationError(str(exc)) from exc
-    finally:
-        os.close(parent_descriptor)
 
-
-def _publish_from_parent(
-    parent_descriptor: int,
-    stage: Path,
-    output: Path,
-    backup: Path,
-    rename_noreplace: _Rename,
-    rename_exchange: _Exchange,
-    require_valid: _Validate,
-    remove_directory: _Remove,
-    sync_parent: _Sync,
-) -> VerifiedDescriptionCache:
-    stage_identity = _directory_identity(parent_descriptor, stage.name)
-    _ = require_valid(stage)
-    _require_identity(parent_descriptor, stage.name, stage_identity)
+    binding = ParentBoundValidator(
+        parent_descriptor,
+        output.parent,
+        parent_identity,
+        require_valid_at,
+        raw_retain,
+    )
+    binding.require_current_parent()
     try:
-        output_identity = _directory_identity(parent_descriptor, output.name)
+        output_identity = directory_identity(parent_descriptor, output.name)
     except FileNotFoundError:
+        _require_exact_stage(
+            parent_descriptor,
+            stage_descriptor,
+            stage,
+            stage_identity,
+            stage_generation,
+            parent_identity,
+        )
         return publish_absent(
             parent_descriptor,
+            parent_identity,
             stage,
             output,
             stage_identity,
+            stage_generation.verified,
             rename_noreplace,
-            require_valid,
-            remove_directory,
+            binding.require_valid,
+            binding.retain,
             sync_parent,
         )
-    _ = require_valid(output)
+    previous_verified = binding.require_valid(output)
     _require_identity(parent_descriptor, output.name, output_identity)
-    return publish_replacement(
+    _require_exact_stage(
         parent_descriptor,
+        stage_descriptor,
         stage,
         stage_identity,
+        stage_generation,
+        parent_identity,
+    )
+    return publish_replacement(
+        parent_descriptor,
+        parent_identity,
+        stage,
+        stage_identity,
+        stage_generation.verified,
         output,
         output_identity,
+        previous_verified,
         backup,
+        names,
         rename_exchange,
         rename_noreplace,
-        require_valid,
-        remove_directory,
+        binding.require_valid,
+        binding.retain,
         sync_parent,
     )
+
+
+def _require_exact_stage(
+    parent_descriptor: int,
+    stage_descriptor: int,
+    stage: Path,
+    stage_identity: DirectoryIdentity,
+    stage_generation: VerifiedDescriptionCacheGeneration,
+    parent_identity: DirectoryIdentity,
+) -> None:
+    require_parent_identity(parent_descriptor, stage.parent, parent_identity)
+    if descriptor_identity(stage_descriptor) != stage_identity:
+        raise PublicationCommitContextError(
+            "held stage descriptor identity changed; NEEDS_CONTEXT"
+        )
+    _require_identity(parent_descriptor, stage.name, stage_identity)
+    reread = load_trusted_description_cache_from_descriptor(
+        stage_descriptor,
+        stage,
+        stage_generation.proof.leaves,
+    )
+    if reread != stage_generation:
+        raise DescriptionCachePublicationError(
+            "held stage generation changed before publication"
+        )
 
 
 def _require_identity(
     parent_descriptor: int,
     name: str,
-    expected: tuple[int, int],
+    expected: DirectoryIdentity,
 ) -> None:
-    if _directory_identity(parent_descriptor, name) != expected:
+    if directory_identity(parent_descriptor, name) != expected:
         raise DescriptionCacheConcurrentDestinationError(
             "existing cache changed identity during validation"
         )

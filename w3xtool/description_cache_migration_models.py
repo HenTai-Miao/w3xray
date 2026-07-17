@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum, unique
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .description_cache_publication_models import (
+        DescriptionCachePublicationResult,
+        RetainedCacheRecord,
+    )
 
 
 @unique
@@ -58,6 +66,24 @@ class DescriptionCacheMigrationResult:
     rejected_count: int
     rejections: tuple[DescriptionCacheRejection, ...]
     output: Path
+    retained: tuple[RetainedCacheRecord, ...] = ()
+
+    @classmethod
+    def from_publication(
+        cls,
+        publication: DescriptionCachePublicationResult,
+        rejections: Sequence[DescriptionCacheRejection],
+        output: Path,
+    ) -> DescriptionCacheMigrationResult:
+        """Construct migration counts from one publication boundary."""
+        rows = tuple(rejections)
+        return cls(
+            len(publication.active.cache.entries),
+            len(rows),
+            rows,
+            output,
+            publication.retained,
+        )
 
 
 class DescriptionCacheMigrationError(OSError):

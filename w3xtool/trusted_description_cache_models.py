@@ -18,6 +18,45 @@ class VerifiedDescriptionCache:
 
 
 @dataclass(frozen=True, slots=True)
+class TrustedCacheLeafProof:
+    """Exact identity and bytes written for one owned stage leaf."""
+
+    name: str
+    device: int
+    inode: int
+    size: int
+    mtime_ns: int
+    ctime_ns: int
+    mode: int
+    sha256: str
+
+    @property
+    def identity(self) -> tuple[int, int]:
+        return self.device, self.inode
+
+
+@dataclass(frozen=True, slots=True)
+class TrustedCacheGenerationProof:
+    """One stable directory identity and its complete five-leaf proof."""
+
+    directory_device: int
+    directory_inode: int
+    leaves: tuple[TrustedCacheLeafProof, ...]
+
+    @property
+    def directory_identity(self) -> tuple[int, int]:
+        return self.directory_device, self.directory_inode
+
+
+@dataclass(frozen=True, slots=True)
+class VerifiedDescriptionCacheGeneration:
+    """Validated cache bytes bound to a complete stable generation proof."""
+
+    verified: VerifiedDescriptionCache
+    proof: TrustedCacheGenerationProof
+
+
+@dataclass(frozen=True, slots=True)
 class TrustedDescriptionCachePayloads:
     """Exact owned bytes read through one held cache-directory descriptor."""
 
@@ -47,5 +86,8 @@ class TrustedDescriptionCacheError(OSError):
 __all__ = (
     "TrustedDescriptionCacheError",
     "TrustedDescriptionCachePayloads",
+    "TrustedCacheGenerationProof",
+    "TrustedCacheLeafProof",
     "VerifiedDescriptionCache",
+    "VerifiedDescriptionCacheGeneration",
 )

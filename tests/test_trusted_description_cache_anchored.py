@@ -13,7 +13,11 @@ from w3xtool import trusted_description_cache_io as anchored_io
 from w3xtool.trusted_description_cache import (
     TrustedDescriptionCacheError,
     load_trusted_description_cache,
+    load_trusted_description_cache_from_descriptor,
     load_trusted_description_cache_from_parent,
+)
+from w3xtool.trusted_description_cache_generation_io import (
+    read_trusted_cache_from_descriptor,
 )
 
 
@@ -33,18 +37,32 @@ def test_anchored_loader_proves_the_same_bytes_as_public_loader(
     expected = load_trusted_description_cache(root)
     parent_descriptor = os.open(root.parent, _DIRECTORY_FLAGS)
 
-    # When: the same leaf is loaded relative to the held parent.
+    # When: the same leaf is loaded through both held descriptor boundaries.
     try:
         actual = load_trusted_description_cache_from_parent(
             parent_descriptor,
             root.name,
             root,
         )
+        generation_descriptor = os.open(root, _DIRECTORY_FLAGS)
+        try:
+            _payloads, proof = read_trusted_cache_from_descriptor(
+                generation_descriptor,
+                root,
+            )
+            generation = load_trusted_description_cache_from_descriptor(
+                generation_descriptor,
+                root,
+                proof.leaves,
+            )
+        finally:
+            os.close(generation_descriptor)
     finally:
         os.close(parent_descriptor)
 
-    # Then: both boundaries return the same semantic byte proof.
+    # Then: all three boundaries return the same semantic byte proof.
     assert actual == expected
+    assert generation.verified == actual
 
 
 def test_public_loader_does_not_require_anchored_host_support(

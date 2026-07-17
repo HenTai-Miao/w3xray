@@ -1,15 +1,11 @@
-"""Anchored identity and cleanup primitives for cache publication."""
+"""Anchored identity primitives for cache publication."""
 
 from __future__ import annotations
 
 import os
-import shutil
 import stat
 
-from .description_cache_publication_errors import (
-    DescriptionCacheConcurrentDestinationError,
-    DescriptionCachePublicationError,
-)
+from .description_cache_publication_errors import DescriptionCachePublicationError
 
 type DirectoryIdentity = tuple[int, int]
 
@@ -28,26 +24,8 @@ def object_identity(parent_descriptor: int, name: str) -> DirectoryIdentity:
     return details.st_dev, details.st_ino
 
 
-def remove_directory(
-    parent_descriptor: int,
-    name: str,
-    expected: DirectoryIdentity,
-) -> None:
-    """Remove only the expected anchored directory through symlink-safe rmtree."""
-    if not shutil.rmtree.avoids_symlink_attacks:
-        raise DescriptionCachePublicationError(
-            "anchored private-directory cleanup is unavailable"
-        )
-    if directory_identity(parent_descriptor, name) != expected:
-        raise DescriptionCacheConcurrentDestinationError(
-            "isolated publication object changed identity"
-        )
-    shutil.rmtree(name, dir_fd=parent_descriptor)
-
-
 __all__ = (
     "DirectoryIdentity",
     "directory_identity",
     "object_identity",
-    "remove_directory",
 )

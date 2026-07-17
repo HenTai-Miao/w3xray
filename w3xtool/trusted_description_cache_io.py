@@ -8,32 +8,20 @@ from pathlib import Path
 import stat
 from typing import Final
 
-from .description_cache_owned_schema import (
-    TRUSTED_DESCRIPTION_CACHE_FILES,
-    TRUSTED_DESCRIPTION_CACHE_MANIFEST,
-    TRUSTED_DESCRIPTION_CACHE_MARKER,
+from .trusted_description_cache_generation_io import (
+    read_trusted_cache_from_descriptor,
 )
-from .trusted_description_cache_file import read_owned_regular_file
 from .trusted_description_cache_models import (
     TrustedDescriptionCacheError,
     TrustedDescriptionCachePayloads,
 )
 
 
-_MAX_METADATA_BYTES: Final = 4 * 1024 * 1024
-_MAX_PAYLOAD_BYTES: Final = 512 * 1024 * 1024
 _DIRECTORY_FLAGS: Final = (
     os.O_RDONLY
     | getattr(os, "O_DIRECTORY", 0)
     | getattr(os, "O_CLOEXEC", 0)
     | getattr(os, "O_NOFOLLOW", 0)
-)
-_EXPECTED_INVENTORY: Final = frozenset(
-    (
-        *TRUSTED_DESCRIPTION_CACHE_FILES,
-        TRUSTED_DESCRIPTION_CACHE_MANIFEST,
-        TRUSTED_DESCRIPTION_CACHE_MARKER,
-    )
 )
 _ANCHORED_CACHE_AVAILABLE: Final = bool(
     os.listdir in os.supports_fd
@@ -63,7 +51,10 @@ def read_trusted_cache_from_parent(
             raise TrustedDescriptionCacheError(
                 "trusted cache directory identity changed before open"
             )
-        payloads = _read_directory(descriptor, display_root)
+        payloads, _proof = read_trusted_cache_from_descriptor(
+            descriptor,
+            display_root,
+        )
         after = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
         if not _same_directory(opened, after):
             raise TrustedDescriptionCacheError(
@@ -80,66 +71,6 @@ def read_trusted_cache_from_parent(
     finally:
         if descriptor >= 0:
             os.close(descriptor)
-
-
-def _read_directory(
-    descriptor: int,
-    root: Path,
-) -> TrustedDescriptionCachePayloads:
-    names = tuple(os.listdir(descriptor))
-    if len(names) != len(_EXPECTED_INVENTORY) or set(names) != _EXPECTED_INVENTORY:
-        raise TrustedDescriptionCacheError("owned cache is partial or has unsafe files")
-    states: dict[str, os.stat_result] = {}
-    for name in names:
-        details = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
-        if not stat.S_ISREG(details.st_mode):
-            raise TrustedDescriptionCacheError(
-                "owned cache is partial or has unsafe files"
-            )
-        states[name] = details
-    marker = read_owned_regular_file(
-        descriptor,
-        TRUSTED_DESCRIPTION_CACHE_MARKER,
-        states[TRUSTED_DESCRIPTION_CACHE_MARKER],
-        root,
-        _MAX_METADATA_BYTES,
-    )
-    manifest = read_owned_regular_file(
-        descriptor,
-        TRUSTED_DESCRIPTION_CACHE_MANIFEST,
-        states[TRUSTED_DESCRIPTION_CACHE_MANIFEST],
-        root,
-        _MAX_METADATA_BYTES,
-    )
-    cache = read_owned_regular_file(
-        descriptor,
-        "可信描述缓存.tsv",
-        states["可信描述缓存.tsv"],
-        root,
-        _MAX_PAYLOAD_BYTES,
-    )
-    source_manifest = read_owned_regular_file(
-        descriptor,
-        "来源清单.tsv",
-        states["来源清单.tsv"],
-        root,
-        _MAX_PAYLOAD_BYTES,
-    )
-    rejections = read_owned_regular_file(
-        descriptor,
-        "可信缓存迁移拒绝.tsv",
-        states["可信缓存迁移拒绝.tsv"],
-        root,
-        _MAX_PAYLOAD_BYTES,
-    )
-    return TrustedDescriptionCachePayloads(
-        root,
-        marker,
-        manifest,
-        cache,
-        source_manifest,
-        rejections,
-    )
 
 
 def _require_anchored_support(path: Path) -> None:

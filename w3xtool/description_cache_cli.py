@@ -5,12 +5,13 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 import sys
-from typing import Final
+from typing import Final, assert_never
 
 from .description_cache_migration import (
     DescriptionCacheMigrationOptions,
     migrate_description_cache,
 )
+from .description_cache_publication_errors import DescriptionCachePublicationError
 from .presentation_safety import format_user_exception, single_line_text
 
 
@@ -81,6 +82,48 @@ def run_description_cache_cli(argv: tuple[str, ...]) -> int:
         return 2
     try:
         result = migrate_description_cache(options)
+    except DescriptionCachePublicationError as exc:
+        detail = format_user_exception(
+            exc,
+            paths=(
+                str(options.legacy_output),
+                str(options.legacy_cache),
+                str(options.output),
+            ),
+        )
+        print(f"可信描述缓存迁移失败：{detail}", file=sys.stderr)
+        for retained in exc.retained:
+            print(
+                single_line_text(f"保留对象：{retained.role.value} -> {retained.path}"),
+                file=sys.stderr,
+            )
+        for transient in exc.transient:
+            match transient.identity:
+                case None:
+                    object_identity_text = "unknown"
+                case (device, inode):
+                    object_identity_text = f"{device}:{inode}"
+                case unreachable:
+                    assert_never(unreachable)
+            match transient.held_identity:
+                case None:
+                    held_identity_text = "unknown"
+                case (device, inode):
+                    held_identity_text = f"{device}:{inode}"
+                case unreachable:
+                    assert_never(unreachable)
+            print(
+                single_line_text(
+                    "瞬态对象："
+                    f"display-parent={transient.parent} "
+                    f"parent={transient.parent_identity[0]}:"
+                    f"{transient.parent_identity[1]} "
+                    f"leaf={transient.leaf_name} object={object_identity_text} "
+                    f"held={held_identity_text}"
+                ),
+                file=sys.stderr,
+            )
+        return 2
     except OSError as exc:
         detail = format_user_exception(
             exc,
@@ -98,6 +141,8 @@ def run_description_cache_cli(argv: tuple[str, ...]) -> int:
             f"拒绝 {result.rejected_count} -> {options.output}"
         )
     )
+    for retained in result.retained:
+        print(single_line_text(f"保留对象：{retained.role.value} -> {retained.path}"))
     return 0
 
 

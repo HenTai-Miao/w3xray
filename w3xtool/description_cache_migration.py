@@ -121,11 +121,10 @@ def _migrate_from_source(
             )
         )
     rejections.sort(key=lambda row: row.row_number)
-    cache = publish_description_cache(legacy_root, output, retained, rejections)
-    return DescriptionCacheMigrationResult(
-        len(cache.entries),
-        len(rejections),
-        tuple(rejections),
+    publication = publish_description_cache(legacy_root, output, retained, rejections)
+    return DescriptionCacheMigrationResult.from_publication(
+        publication,
+        rejections,
         output,
     )
 

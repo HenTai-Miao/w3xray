@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import os
 from pathlib import Path
+from typing import Never
 
 import pytest
 
 from tests.description_cache_publication_fixture import (
+    assert_live_retained_records,
     exchange_in_parent,
-    private_publication_paths,
     rename_in_parent,
+    retained_publication_paths,
     replacement_inputs,
+    transient_publication_paths,
 )
 from tests.trusted_description_cache_fixture import published_cache
 from w3xtool import description_cache_publication as publication
@@ -26,6 +30,9 @@ from w3xtool.description_cache_publication import (
 from w3xtool.description_cache_publication_commit import (
     PublicationCommitContextError,
 )
+from w3xtool.description_cache_publication_models import RetainedCacheRecord
+from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
+from w3xtool.description_cache_publication_stage import BoundDescriptionCacheStage
 from w3xtool.trusted_description_cache import load_trusted_description_cache
 
 
@@ -64,7 +71,7 @@ def test_foreign_takeover_after_exchange_preserves_previous_generation(
     )
 
     # When: neither the foreign winner nor the old generation can be overwritten.
-    with pytest.raises(PublicationCommitContextError, match="NEEDS_CONTEXT"):
+    with pytest.raises(PublicationCommitContextError, match="NEEDS_CONTEXT") as raised:
         _ = migrate_description_cache(
             DescriptionCacheMigrationOptions(legacy_output, legacy_cache, root)
         )
@@ -75,12 +82,18 @@ def test_foreign_takeover_after_exchange_preserves_previous_generation(
     assert (status.st_dev, status.st_ino) == foreign_identities[0]
     assert (root / "foreign.txt").read_text(encoding="utf-8") == "foreign"
     assert not (root / ".w3xray-trusted-description-cache").exists()
-    recovery_paths = private_publication_paths(root)
+    recovery_paths = tuple(
+        path
+        for path in retained_publication_paths(root)
+        if path.name.endswith("-recovery")
+    )
     assert len(recovery_paths) == 1
     recovered = load_trusted_description_cache(recovery_paths[0])
     entry = recovered.cache.lookup("物品", "ratf", "扩展提示", None)[0]
     assert entry.raw_value == "first"
     assert displaced_new.is_dir()
+    assert_live_retained_records(raised.value.retained)
+    assert not transient_publication_paths(root)
 
 
 def test_foreign_takeover_before_exchange_is_restored_without_displacement(
@@ -92,7 +105,9 @@ def test_foreign_takeover_before_exchange_is_restored_without_displacement(
     legacy_output, legacy_cache = replacement_inputs(tmp_path, "second")
     displaced_previous = root.parent / "concurrent-previous"
     foreign_identities: list[tuple[int, int]] = []
+    original_errors: list[Exception] = []
     exchange_count = 0
+    original_boundary = publication._raise_after_private_finalization
 
     def takeover_before_first_exchange(
         parent_descriptor: int,
@@ -114,15 +129,42 @@ def test_foreign_takeover_before_exchange_is_restored_without_displacement(
             foreign_identities.append((status.st_dev, status.st_ino))
         exchange_in_parent(parent_descriptor, source_name, destination_name)
 
+    def capture_original_error(
+        bound: BoundDescriptionCacheStage,
+        backup: Path,
+        names: RetainedCacheNames,
+        output: Path,
+        published_records: tuple[RetainedCacheRecord, ...],
+        cause: Exception,
+        rename_noreplace: Callable[[int, str, str], None],
+        sync_parent: Callable[[int], None],
+    ) -> Never:
+        original_errors.append(cause)
+        original_boundary(
+            bound,
+            backup,
+            names,
+            output,
+            published_records,
+            cause,
+            rename_noreplace,
+            sync_parent,
+        )
+
     monkeypatch.setattr(
         publication,
         "_rename_exchange",
         takeover_before_first_exchange,
         raising=False,
     )
+    monkeypatch.setattr(
+        publication,
+        "_raise_after_private_finalization",
+        capture_original_error,
+    )
 
     # When: publication detects that the exchanged object was not the verified cache.
-    with pytest.raises(DescriptionCacheConcurrentDestinationError):
+    with pytest.raises(PublicationCommitContextError) as raised:
         _ = migrate_description_cache(
             DescriptionCacheMigrationOptions(legacy_output, legacy_cache, root)
         )
@@ -136,7 +178,20 @@ def test_foreign_takeover_before_exchange_is_restored_without_displacement(
     previous = load_trusted_description_cache(displaced_previous)
     entry = previous.cache.lookup("物品", "ratf", "扩展提示", None)[0]
     assert entry.raw_value == "first"
-    assert not private_publication_paths(root)
+    assert len(original_errors) == 1
+    original_error = original_errors[0]
+    assert type(original_error) is DescriptionCacheConcurrentDestinationError
+    assert sum(failure is original_error for failure in raised.value.failures) == 1
+    assert raised.value.__context__ is original_error
+    assert raised.value.retained[0].role.value == "failed-stage"
+    assert_live_retained_records(raised.value.retained)
+    output_evidence = tuple(
+        item for item in raised.value.transient if item.leaf_name == root.name
+    )
+    assert len(output_evidence) == 1
+    assert output_evidence[0].identity == foreign_identities[0]
+    assert output_evidence[0].held_identity is None
+    assert not transient_publication_paths(root)
 
 
 def test_existing_replacement_never_exposes_an_absent_output_name(
@@ -172,7 +227,9 @@ def test_existing_replacement_never_exposes_an_absent_output_name(
     # Then: one exchange keeps the public name present on both sides.
     assert result.accepted_count == 1
     assert observations == [True, True]
-    assert not private_publication_paths(root)
+    assert result.retained[0].role.value == "previous"
+    assert_live_retained_records(result.retained)
+    assert not transient_publication_paths(root)
 
 
 def test_absent_destination_created_before_publish_is_never_replaced(
@@ -205,9 +262,11 @@ def test_absent_destination_created_before_publish_is_never_replaced(
         _ = migrate_description_cache(
             DescriptionCacheMigrationOptions(legacy_output, legacy_cache, output)
         )
-    assert isinstance(raised.value, DescriptionCacheConcurrentDestinationError)
+    assert type(raised.value) is PublicationCommitContextError
     assert len(foreign_identities) == 1
     status = os.stat(output, follow_symlinks=False)
     assert (status.st_dev, status.st_ino) == foreign_identities[0]
     assert (output / "foreign.txt").read_text(encoding="utf-8") == "foreign"
-    assert not private_publication_paths(output)
+    assert raised.value.retained[0].role.value == "failed-stage"
+    assert_live_retained_records(raised.value.retained)
+    assert not transient_publication_paths(output)

@@ -13,9 +13,14 @@ from .description_cache_owned_schema import (
 from .trusted_description_cache_io import (
     read_trusted_cache_from_parent,
 )
+from .trusted_description_cache_generation_io import (
+    read_trusted_cache_from_descriptor,
+)
 from .trusted_description_cache_models import (
+    TrustedCacheLeafProof,
     TrustedDescriptionCacheError,
     VerifiedDescriptionCache,
+    VerifiedDescriptionCacheGeneration,
 )
 from .trusted_description_cache_path import read_trusted_cache_path
 from .trusted_description_cache_validation import (
@@ -39,6 +44,23 @@ def load_trusted_description_cache_from_parent(
     )
 
 
+def load_trusted_description_cache_from_descriptor(
+    descriptor: int,
+    display_root: Path,
+    expected_leaves: tuple[TrustedCacheLeafProof, ...],
+) -> VerifiedDescriptionCacheGeneration:
+    """Validate bytes and retain their complete generation proof."""
+    payloads, proof = read_trusted_cache_from_descriptor(
+        descriptor,
+        display_root,
+        expected_leaves,
+    )
+    return VerifiedDescriptionCacheGeneration(
+        validate_trusted_description_cache_payloads(payloads),
+        proof,
+    )
+
+
 __all__ = (
     "TRUSTED_DESCRIPTION_CACHE_FILES",
     "TRUSTED_DESCRIPTION_CACHE_MANIFEST",
@@ -47,5 +69,6 @@ __all__ = (
     "TrustedDescriptionCacheError",
     "VerifiedDescriptionCache",
     "load_trusted_description_cache",
+    "load_trusted_description_cache_from_descriptor",
     "load_trusted_description_cache_from_parent",
 )

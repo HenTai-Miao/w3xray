@@ -145,3 +145,27 @@ def test_atomic_exchange_fails_closed_on_unsupported_platform(
     # When / Then
     with pytest.raises(AtomicRenameUnavailableError, match="unavailable"):
         atomic_rename.rename_exchange(3, "source", 4, "target")
+
+
+def test_atomic_rename_support_preflight_rejects_unsupported_platform(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adapter_calls: list[None] = []
+
+    def forbidden_call(
+        _symbol: str,
+        _source_descriptor: int,
+        _source_name: str,
+        _destination_descriptor: int,
+        _destination_name: str,
+        _flags: int,
+    ) -> None:
+        adapter_calls.append(None)
+
+    monkeypatch.setattr(sys, "platform", "unsupported")
+    monkeypatch.setattr(atomic_rename, "_call", forbidden_call)
+
+    with pytest.raises(AtomicRenameUnavailableError):
+        getattr(atomic_rename, "require_atomic_rename_support")()
+
+    assert adapter_calls == []
