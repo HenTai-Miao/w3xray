@@ -8,15 +8,18 @@ import pytest
 
 import w3xtool.acceptance_batch as acceptance_batch
 from tests.batch_global_evidence_fixture import (
+    GAP_PATH,
     publish_nonempty_icon_result,
     terminal_result_with_evidence,
 )
 from tests.batch_publication_fixture import publish_empty_result
 from w3xtool.batch_global_evidence_models import GlobalEvidenceError
+from w3xtool.batch_global_evidence_reports import parse_icon_candidates_tsv
 from w3xtool.batch_global_publication import publish_global_generation
 from w3xtool.batch_models import BATCH_SCHEMA_VERSION, BatchState, SourceFingerprint
 from w3xtool.description_cache import format_description_cache_tsv
 from w3xtool.description_cache_models import EMPTY_DESCRIPTION_CACHE
+from w3xtool.icon_evidence_models import IconCandidateKind
 
 
 def test_terminal_result_is_axis_only_and_authority_remains_loadable(
@@ -49,6 +52,54 @@ def test_terminal_result_is_axis_only_and_authority_remains_loadable(
     assert terminal.source.path not in gaps
     assert terminal.source.sha256 not in candidates
     assert len(generation.evidence.gaps) == published.unresolved_icon_count
+
+
+def test_two_manifest_bound_maps_publish_both_candidate_kinds(
+    tmp_path: Path,
+) -> None:
+    # Given: map A's gap/pathless payload both match map B's named evidence.
+    first_source = SourceFingerprint("/maps/a.w3x", 3, 4, "a" * 64)
+    second_source = SourceFingerprint("/maps/b.w3x", 3, 4, "b" * 64)
+    first = publish_nonempty_icon_result(
+        1,
+        first_source,
+        str(tmp_path),
+        gap_path=GAP_PATH,
+        named_path=r"Custom\BTNFirstOnly.blp",
+        anonymous_digest="e" * 64,
+    )
+    second = publish_nonempty_icon_result(
+        2,
+        second_source,
+        str(tmp_path),
+        gap_path=r"Custom\BTNSecondGap.blp",
+        named_path=GAP_PATH,
+        named_digest="e" * 64,
+        anonymous_digest="f" * 64,
+    )
+
+    # When: snapshots are parsed, candidates built, and global reports published.
+    generation = publish_global_generation(
+        tmp_path,
+        BatchState(BATCH_SCHEMA_VERSION, (first, second)),
+        _cache_text(),
+        "",
+    )
+    candidates = parse_icon_candidates_tsv(
+        (tmp_path / "图标候选绑定.tsv").read_text(encoding="utf-8")
+    )
+
+    # Then: both non-adopted suggestions exist and the original gap remains.
+    assert {row.kind for row in candidates} == {
+        IconCandidateKind.EXACT_OTHER_MAP_PATH,
+        IconCandidateKind.ANONYMOUS_HASH_MATCH,
+    }
+    assert len(candidates) == 2
+    assert all(row.adopted is False for row in candidates)
+    assert any(
+        row.map_sha256 == first_source.sha256 and row.normalized_path == GAP_PATH
+        for row in generation.evidence.gaps
+    )
 
 
 @pytest.mark.parametrize("error", (GlobalEvidenceError("evidence"), OSError("disk")))

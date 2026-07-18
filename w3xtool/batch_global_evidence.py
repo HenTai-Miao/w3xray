@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 from .batch_global_evidence_models import (
+    GlobalAnonymousIcon,
     GlobalEvidenceIndex,
     GlobalEvidenceError,
     GlobalIconGap,
+    GlobalResolvedIcon,
 )
 from .batch_global_evidence_reader import read_global_gap_rows, read_global_icon_rows
 from .batch_manifest_validation import verify_map_publication
-from .batch_models import BatchState
+from .batch_models import BatchState, MapBatchResult
 from .batch_status import PublicationResult
 from .icon_candidate_bindings import build_icon_candidate_bindings
 from .safe_output import safe_destination
@@ -59,7 +62,12 @@ def collect_global_evidence(
     return GlobalEvidenceIndex.build(gaps, resolved, anonymous, candidates)
 
 
-def _require_map_counts(result, gaps, named, anonymous) -> None:
+def _require_map_counts(
+    result: MapBatchResult,
+    gaps: Sequence[GlobalIconGap],
+    named: Sequence[GlobalResolvedIcon],
+    anonymous: Sequence[GlobalAnonymousIcon],
+) -> None:
     if (
         len(gaps) != result.unresolved_icon_count
         or sum(row.reference_count for row in gaps)
@@ -70,7 +78,10 @@ def _require_map_counts(result, gaps, named, anonymous) -> None:
         raise GlobalEvidenceError("map icon counts disagree with supplied state")
 
 
-def _require_unique_icons(named, anonymous) -> None:
+def _require_unique_icons(
+    named: Sequence[GlobalResolvedIcon],
+    anonymous: Sequence[GlobalAnonymousIcon],
+) -> None:
     if len(set(named)) != len(named):
         raise GlobalEvidenceError("duplicate named global icon identity")
     if len(set(anonymous)) != len(anonymous):

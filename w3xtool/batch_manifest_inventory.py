@@ -21,6 +21,7 @@ from .safe_output import safe_relative_path
 
 
 _MAX_REPORT_BYTES: Final = 512 * 1024 * 1024
+_MAX_TOTAL_REPORT_BYTES: Final = 512 * 1024 * 1024
 _METADATA_NAMES: Final = frozenset((CONTENT_MANIFEST_NAME, OWNERSHIP_MARKER_NAME))
 _REPORT_NAMES: Final = frozenset(REQUIRED_MAP_REPORTS)
 
@@ -76,12 +77,11 @@ def _inventory(
         identities.add(identity)
         try:
             if snapshot_reports and relative in _REPORT_NAMES:
+                remaining = _MAX_TOTAL_REPORT_BYTES - report_bytes
                 content, file_identity = read_bounded_regular_file(
-                    path, _MAX_REPORT_BYTES
+                    path, min(_MAX_REPORT_BYTES, remaining)
                 )
                 report_bytes += len(content)
-                if report_bytes > _MAX_REPORT_BYTES:
-                    raise OSError("required report snapshots exceed size limit")
                 digest = hashlib.sha256(content).hexdigest()
                 reports.append(VerifiedReportPayload(relative, content))
             else:

@@ -40,6 +40,11 @@ def publish_nonempty_icon_result(
     index: int,
     fingerprint: SourceFingerprint,
     output_root: str,
+    *,
+    gap_path: str = GAP_PATH,
+    named_path: str = NAMED_PATH,
+    named_digest: str = "c" * 64,
+    anonymous_digest: str = "d" * 64,
 ) -> MapBatchResult:
     """Publish one gap, one named payload, and one anonymous payload."""
     relative = f"地图/{index:03d}_{fingerprint.sha256[:8]}"
@@ -48,7 +53,13 @@ def publish_nonempty_icon_result(
     base = empty_result(fingerprint, relative)
     _ = write_empty_publication(destination, base, f"{index:032x}")
     _remove_metadata(destination)
-    evidence, exports = _evidence(fingerprint)
+    evidence, exports = _evidence(
+        fingerprint,
+        gap_path,
+        named_path,
+        named_digest,
+        anonymous_digest,
+    )
     result = _result(base, evidence, exports)
     reports = (
         ("地图摘要.txt", format_map_summary(result)),
@@ -96,16 +107,18 @@ def terminal_result_with_evidence(fingerprint: SourceFingerprint) -> MapBatchRes
 
 def _evidence(
     fingerprint: SourceFingerprint,
+    gap_path: str,
+    named_path: str,
+    named_digest: str,
+    anonymous_digest: str,
 ) -> tuple[IconEvidenceIndex, tuple[IconExportRecord, ...]]:
-    gap_reference = _reference(fingerprint, GAP_PATH, "A001")
-    named_reference = _reference(fingerprint, NAMED_PATH, "A002")
-    named_digest = "c" * 64
-    anonymous_digest = "d" * 64
+    gap_reference = _reference(fingerprint, gap_path, "A001")
+    named_reference = _reference(fingerprint, named_path, "A002")
     anonymous = AnonymousIconResource(
         17,
         b"BLP1anonymous",
         anonymous_digest,
-        "block_000017_dddddddd",
+        f"block_000017_{anonymous_digest[:8]}",
         f"{fingerprint.path}#block17",
         BlockSource.ARCHIVE_RECOVERED,
         BlockState.DECODED,
@@ -114,7 +127,7 @@ def _evidence(
         resolved=(
             ResolvedIconEvidence(
                 named_reference,
-                NAMED_PATH,
+                named_path,
                 fingerprint.path,
                 b"BLP1named",
                 named_digest,
@@ -135,7 +148,7 @@ def _evidence(
     exports = (
         _export(
             IconKind.NAMED,
-            NAMED_PATH,
+            named_path,
             fingerprint.path,
             None,
             named_digest,
