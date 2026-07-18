@@ -2390,8 +2390,14 @@ git commit -m "feat: expose icon and text evidence in GUI"
 - Create: `w3xtool/integrity_snapshot.py`
 - Create: `w3xtool/integrity_snapshot_io.py`
 - Create: `w3xtool/integrity_cli.py`
+- Create: `w3xtool/description_cache_retained_integrity_models.py`
+- Create: `w3xtool/description_cache_retained_integrity.py`
 - Create: `tests/test_integrity_snapshot.py`
 - Create: `tests/test_integrity_cli.py`
+- Create: `tests/test_description_cache_retained_integrity.py`
+- Create: `tests/test_description_cache_retained_integrity_bounds.py`
+- Create: `tests/test_description_cache_retained_integrity_stability.py`
+- Create: `tests/test_integrity_cli_retained_cache.py`
 - Modify: `main.py:15-76`
 - Modify: `w3xtool/__init__.py:1-4`
 - Modify: `w3xtool/quality_gate.py:10-170`
@@ -2411,6 +2417,31 @@ git commit -m "feat: expose icon and text evidence in GUI"
 - Produces CLI: `uv run main.py integrity snapshot --root LABEL=PATH [--root LABEL=PATH] --output FILE`.
 - Produces CLI: `uv run main.py integrity verify --snapshot FILE`.
 - Produces: `SnapshotRoot`, `IntegrityEntry`, `IntegrityRoot`, `IntegritySnapshot`, `IntegrityDifference`, `build_integrity_snapshot(roots)`, `format_integrity_snapshot()`, `parse_integrity_snapshot()`, and `compare_integrity_snapshot(expected, actual)`.
+- Produces: `CacheArtifactKind` (`directory`, `regular-file`, `symlink`, `special`, `unknown`), `RetainedArtifactValidation` (`valid-cache`, `partial-evidence`, `invalid-previous`, `unsafe-object`, `oversized`, `unstable`, `unreadable`), `RetentionArtifactReason` (`stage-transient`, `backup-transient`, `malformed-stage-name`, `malformed-backup-name`, `malformed-retained-name`, `unreadable-transient`), `RetainedDescriptionCacheArtifact`, `TransientDescriptionCacheArtifact`, `MalformedDescriptionCacheArtifact`, and `DescriptionCacheRetentionReport`. No formatter/parser accepts a reason outside that complete enum.
+- Defines exact report fields: each retained artifact stores absolute path, transaction ID, closed role, no-follow kind, optional device/inode when unreadable, validation, optional size/file-count/entry-count/SHA-256, and optional safe relative problem path; each transient or malformed artifact stores absolute path, no-follow kind, optional device/inode, parsed transaction ID when available, and one closed `RetentionArtifactReason`. The report stores schema `1`, the exact active-root path and identity, and stable tuples. Canonical sort keys are `(absolute_path.as_posix().encode("utf-8"), role.value)` for retained and `(absolute_path.as_posix().encode("utf-8"), reason.value)` for transient/malformed; formatter and parser both reject any other ordering.
+- Canonical JSON has exactly top-level keys `schema`, `active_root`, `active_device`, `active_inode`, `retained`, `transient`, and `malformed`. Retained rows have exactly `path`, `transaction_id`, `role`, `kind`, `device`, `inode`, `validation`, `size`, `file_count`, `entry_count`, `sha256`, and `problem_path`; transient/malformed rows have exactly `path`, `transaction_id`, `kind`, `device`, `inode`, and `reason`. Optional values serialize as JSON `null`, hashes are lowercase, and the document uses `ensure_ascii=False`, `sort_keys=True`, two-space indentation, and one final newline.
+- Produces: `inspect_retained_description_caches(active_root)`, `format_description_cache_retention_report(report)`, and `parse_description_cache_retention_report(payload)`.
+- Adds CLI: `integrity retained-cache --active-root PATH --output FILE`; `0` is allowed only when all retained rows are `valid-cache` or ordinary `partial-evidence` and transient/malformed are empty; `1` is required for `invalid-previous`, `unsafe-object`, `oversized`, `unstable`, `unreadable`, any transient, or any malformed row; `2` is required for request parsing, unsafe/unbindable active root, unstable publication-parent enumeration, report parsing, or report write failure.
+- Uses this closed role × no-follow-kind classification; no implementation fallback may reinterpret a row:
+
+  | Retained role | Stable directory | Stable regular file | Symlink / special | Unknown / unreadable |
+  |---|---|---|---|---|
+  | `previous` | `valid-cache` only after exact five-leaf validation; otherwise `invalid-previous` | `unsafe-object` | `unsafe-object` | `unreadable` |
+  | `failed-stage`, `failed-output`, `recovery` | `partial-evidence` after a complete bounded tree proof | `partial-evidence` after a complete bounded file proof | `unsafe-object` | `unreadable` |
+
+  `previous` therefore never reaches `partial-evidence`, and every non-directory
+  `previous` exits `1`. Replacement of its top-level sibling identity remains a command
+  boundary failure/exit `2` before this table is applied.
+- Parses only exact `.w3xray-description-cache-retained-<32 lowercase hex>-<closed role>` sibling leaves; malformed retained-prefix leaves are violations and are never inferred into a role.
+- Uses descriptor-relative no-follow traversal; directories receive a complete tree snapshot before any payload read and another complete tree snapshot after every payload read. A tree snapshot contains every relative path in UTF-8 path-byte order plus kind/device/inode/size/`mtime_ns`/`ctime_ns`/mode. The scanner requires the two tree snapshots to match before accepting that artifact's size/digest. Regular files receive the same bounded content proof, while symlinks/special files are recorded as unsafe without following or reading their target.
+- Fixes scanner bounds as constants: `MAX_RETAINED_FILE_BYTES = 64 * 1024 * 1024`, `MAX_RETAINED_TREE_BYTES = 512 * 1024 * 1024`, `MAX_RETAINED_FILE_COUNT = 100_000`, `MAX_RETAINED_ENTRY_COUNT = 125_000`, and `MAX_RETAINED_DEPTH = 64`. Tree bytes sum regular-file payload sizes; file count counts regular files; entry count counts every no-follow directory entry. The retained root is depth `0`, its direct children are depth `1`, depth `64` is accepted, and the first entry at depth `65` is oversized. Crossing any bound stops that artifact scan without following another entry and yields `oversized`; it never truncates bytes and then reports a complete digest.
+- Opens every hashed regular file with no-follow semantics and compares descriptor `(device, inode, size, mtime_ns, ctime_ns, mode)` before/after reading and against its anchored name. Permission/I/O denial for a named leaf produces explicit `unknown`/`identity=None` evidence and `unreadable`; only `FileNotFoundError` removes a formerly observed name. Inability to bind the explicitly requested active root is command-level code `2`.
+- Holds the active cache parent descriptor for enumeration and validation and proves the requested active leaf identity before and after the whole scan; loss or replacement of that explicit root is a command-boundary code `2`, not a trustworthy report. A directory-role `previous` is eligible for payload validation only when its retained root snapshot contains exactly `TRUSTED_DESCRIPTION_CACHE_OWNED_INVENTORY` as five direct regular-file leaves, with no missing name, extra entry, or nested entry. Any stable inventory mismatch is `invalid-previous`/code `1`. Only then pass the exact five payload byte strings already read inside that artifact's stable before/read/after tree interval to `validate_trusted_description_cache_payloads()`; neither public nor held-parent pathname loader performs a second read. Stable invalid bytes are also `invalid-previous`, while any tree/identity change is `unstable`. `failed-stage`, `failed-output`, and `recovery` objects report evidence but are never loaded as description sources.
+- One artifact-set round snapshots the relevant sibling namespace, proves every retained artifact with its complete tree interval, and snapshots the relevant siblings again. After all artifacts finish, the scanner repeats that entire artifact-set round and requires the ordered artifact states, tree states, payload digests, validation results, and sibling snapshots to equal the first round. An early retained child modified in place while a later artifact is scanned therefore fails even when the retained/publication parent inode and metadata do not change.
+- Captures every publication-relevant sibling in UTF-8 name-byte order: the active leaf, every exact or malformed retained-prefix leaf, and every exact or malformed stage/backup-prefix leaf, including `(name, kind, device, inode, size, mtime_ns, ctime_ns, mode)`. Any insertion, removal, replacement, or metadata change in either set-wide round is a command-boundary code `2`; unrelated sibling churn is outside this report and does not invalidate it.
+- Reports stage/backup leaves of every filesystem kind as transient integrity violations; batch transaction/quarantine checks remain in the existing batch integrity path.
+- Maps reasons without fallback: a readable exact stage/backup name is `stage-transient`/`backup-transient`; a stage/backup/retained prefix that fails its exact grammar is `malformed-stage-name`/`malformed-backup-name`/`malformed-retained-name`; and an exact stage/backup leaf whose no-follow stat fails is `unreadable-transient`. An exact retained name whose leaf stat fails remains a retained row with validation `unreadable`, `kind=unknown`, and null device/inode; it has no reason field.
+- Computes each complete tree SHA-256 from one UTF-8 stream of canonical JSON arrays `[relative_path, kind, device, inode, size, mtime_ns, ctime_ns, mode, file_sha256]`, one compact `separators=(",", ":")` array plus `"\n"` per entry in UTF-8 relative-path-byte order. Directory/symlink/special entries use JSON null for `file_sha256`; a bounded regular file uses its lowercase digest. An oversized, unstable, or unreadable tree has no complete tree digest.
 - Sets project/runtime/release documentation to `0.1.4`; schema/revision documentation to `5`.
 - Keeps all generated acceptance output outside the repository and all four input roots read-only.
 
@@ -2502,6 +2533,111 @@ def build_integrity_snapshot(
 
 `_scan_integrity_root()` uses `os.walk(..., followlinks=False)`, rejects every symlink and non-regular file, sorts directory/file names by `(casefold, original)`, hashes through `sha256_regular_file()`, and compares `lstat()` device/inode/size/mtime before and after hashing. `_tree_sha256()` hashes canonical JSON tuples of relative path, size, mtime-ns, and file SHA-256. The parser requires exact keys, schema `1`, absolute nonoverlapping roots, safe relative paths, nonnegative integers, lowercase hashes, unique case-folded paths, exact file/byte totals, and a recomputed tree digest.
 
+- [ ] **Step 3a: Write one retained-scanner RED against the existing snapshot namespace**
+
+Before any retained-integrity production module exists, create
+`tests/test_description_cache_retained_integrity.py`,
+`tests/test_description_cache_retained_integrity_bounds.py`, and
+`tests/test_description_cache_retained_integrity_stability.py`. Keep core
+classification/format tests, hard-limit tests, and mutation/readability/no-follow race tests
+in those respective files, with every file below 200 pure LOC. The tests initially import
+only the then-importable `w3xtool.integrity_snapshot` module namespace, look up the proposed
+scanner attribute inside each test body, and compare enum-like results by string value.
+
+Run exactly once:
+
+```bash
+uv run python -m pytest -q \
+  tests/test_description_cache_retained_integrity.py \
+  tests/test_description_cache_retained_integrity_bounds.py \
+  tests/test_description_cache_retained_integrity_stability.py
+```
+
+Expected: collection succeeds and runtime fails at the in-body scanner lookup or observable
+assertion because the existing snapshot namespace has no retained-cache behavior. A missing
+module or top-level missing-import error is a test defect. Only after this RED may the
+dedicated retained model/scanner modules be created and the three test imports refactored
+without changing assertions.
+
+Before implementing the scanner, include focused RED cases for: exact and one-byte-exceeded
+file/tree byte limits; exact and exceeded file-count and entry-count limits; retained depth
+`0`, accepted depth `64`, and rejected depth `65`; replacement or mutation between file
+`fstat` proofs; unreadable entries with `kind=unknown` and `identity=None`; top-level and
+nested symlinks; active-root symlink and mid-scan replacement as code `2`; special objects;
+every closed reason and unknown-reason rejection; malformed retained/stage/backup leaves;
+canonical field-set/order/format/parse round trips; and parser rejection of unknown states,
+unsafe problem paths, unsorted rows, or inconsistent totals/digests. For retained `previous`,
+separately test a missing owned leaf, an extra file, a nested entry, and exact-role top-level
+regular-file, symlink, and special-object siblings: the first three are
+`invalid-previous`/code `1`, the last three are `unsafe-object`/code `1`, and none may become
+`valid-cache` or `partial-evidence`.
+
+Use deterministic seams, never sleeps, to insert a stage leaf, insert a malformed
+retained-prefix leaf, remove a backup leaf, and replace a retained leaf between the initial
+and final relevant-sibling snapshots; each exits `2` without a clean report. Mutating an
+already-read early child in place with the same inode and size while a later artifact is
+scanned must be caught by the terminal whole-set round as `unstable`/code `1`. For
+`previous`, inject distinct valid bytes on any second loader read, validate only the first
+round's captured bytes, and prove neither the public nor held-parent pathname loader is
+called. Replacing the top-level `previous` inode during either round is code `2` with no
+report; only mutation below a still-exact held sibling is `unstable`/code `1`.
+
+After GREEN, the core test uses independently published active and old fixtures, renames the
+old root to an exact `previous` sibling, and proves valid, partial, transient, and unsafe
+objects remain separate:
+
+```python
+def test_retained_integrity_separates_valid_partial_and_transient_objects(
+    tmp_path: Path,
+) -> None:
+    active = published_cache(tmp_path / "active-source", raw="active")
+    old = published_cache(tmp_path / "old-source", raw="previous")
+    previous = active.parent / (
+        ".w3xray-description-cache-retained-"
+        f"{'1' * 32}-previous"
+    )
+    old.rename(previous)
+    failed = active.parent / (
+        ".w3xray-description-cache-retained-"
+        f"{'2' * 32}-failed-stage"
+    )
+    failed.mkdir()
+    (failed / "partial.bin").write_bytes(b"partial")
+    transient = active.parent / (
+        ".w3xray-description-cache-stage-"
+        f"{'3' * 32}"
+    )
+    transient.write_bytes(b"transient")
+    unsafe = active.parent / (
+        ".w3xray-description-cache-retained-"
+        f"{'4' * 32}-recovery"
+    )
+    unsafe.symlink_to(tmp_path / "outside", target_is_directory=True)
+
+    report = inspect_retained_description_caches(active)
+
+    by_role = {item.role: item for item in report.retained}
+    assert by_role[RetainedCacheRole.PREVIOUS].validation is (
+        RetainedArtifactValidation.VALID_CACHE
+    )
+    assert by_role[RetainedCacheRole.PREVIOUS].kind is CacheArtifactKind.DIRECTORY
+    assert by_role[RetainedCacheRole.FAILED_STAGE].size == len(b"partial")
+    assert len(by_role[RetainedCacheRole.FAILED_STAGE].sha256) == 64
+    assert by_role[RetainedCacheRole.RECOVERY].kind is CacheArtifactKind.SYMLINK
+    assert by_role[RetainedCacheRole.RECOVERY].validation is (
+        RetainedArtifactValidation.UNSAFE_OBJECT
+    )
+    assert len(report.transient) == 1
+    assert report.transient[0].path == transient
+    assert report.transient[0].kind is CacheArtifactKind.REGULAR_FILE
+    assert load_trusted_description_cache(active).cache.lookup(
+        "物品", "ratf", "扩展提示", None
+    )[0].raw_value == "active"
+    assert parse_description_cache_retention_report(
+        format_description_cache_retention_report(report)
+    ) == report
+```
+
 - [ ] **Step 4: Write failing CLI safety and exit-code tests**
 
 ```python
@@ -2535,21 +2671,42 @@ def test_integrity_cli_returns_one_for_a_changed_input(tmp_path: Path) -> None:
 
 Parse/schema/path errors return `2`; a valid snapshot with differences returns `1`; exact equality returns `0`. Snapshot publication uses `write_text_safely()` in the output file's parent, rejects an output inside any snapshotted root, and never deletes or normalizes an input.
 
-- [ ] **Step 5: Add the two explicit `integrity` actions to `main.py`**
+- [ ] **Step 5: Add the explicit `integrity` dispatch and all three actions**
 
 Retain the `description-cache` dispatch introduced in Task 5, and add the sibling `integrity` dispatch using `run_integrity_cli()` before legacy map CLI handling. Both receive `tuple(sys.argv[2:])`; both own their typed diagnostics and process exit codes. No command searches for user directories implicitly.
 
+Complete the base `snapshot`/`verify` parser and `run_integrity_cli()` first. Then create
+`tests/test_integrity_cli_retained_cache.py`, import that existing function normally, and add
+all retained-cache exit-code cases before adding the parser/action branch. Run this separate
+CLI RED:
+
+```bash
+uv run python -m pytest -q tests/test_integrity_cli_retained_cache.py
+```
+
+Expected: collection succeeds and the existing CLI rejects the unknown `retained-cache`
+action at the observable exit-code/output assertion. Only then add
+`integrity retained-cache --active-root PATH --output FILE` and run all four retained
+integrity files together for GREEN. Code `0` covers only `valid-cache` plus ordinary
+`partial-evidence`; code `1` covers every per-artifact violation plus transient/malformed;
+code `2` is reserved for request/report boundaries and unstable relevant-sibling
+enumeration. JSON output must exist for codes `0` and `1`.
+
+Write the report with `write_text_safely()`. It may be an unrelated regular file in the
+active cache's parent, but it must never be inside the active directory or any retained or
+transient artifact.
+
 - [ ] **Step 6: Run integrity CLI tests and focused static gates**
 
-Run: `uv run python -m pytest -q tests/test_integrity_snapshot.py tests/test_integrity_cli.py tests/test_cli_options.py`
+Run: `uv run python -m pytest -q tests/test_integrity_snapshot.py tests/test_integrity_cli.py tests/test_description_cache_retained_integrity.py tests/test_description_cache_retained_integrity_bounds.py tests/test_description_cache_retained_integrity_stability.py tests/test_integrity_cli_retained_cache.py tests/test_cli_options.py`
 
-Run: `uv run --with ruff ruff check w3xtool/integrity_snapshot_models.py w3xtool/integrity_snapshot.py w3xtool/integrity_snapshot_io.py w3xtool/integrity_cli.py main.py`
+Run: `uv run --with ruff ruff check w3xtool/integrity_snapshot_models.py w3xtool/integrity_snapshot.py w3xtool/integrity_snapshot_io.py w3xtool/integrity_cli.py w3xtool/description_cache_retained_integrity_models.py w3xtool/description_cache_retained_integrity.py tests/test_description_cache_retained_integrity.py tests/test_description_cache_retained_integrity_bounds.py tests/test_description_cache_retained_integrity_stability.py tests/test_integrity_cli_retained_cache.py main.py`
 
-Run: `uv run --with basedpyright basedpyright --level error w3xtool/integrity_snapshot_models.py w3xtool/integrity_snapshot.py w3xtool/integrity_snapshot_io.py w3xtool/integrity_cli.py main.py`
+Run: `uv run --with basedpyright basedpyright --level error w3xtool/integrity_snapshot_models.py w3xtool/integrity_snapshot.py w3xtool/integrity_snapshot_io.py w3xtool/integrity_cli.py w3xtool/description_cache_retained_integrity_models.py w3xtool/description_cache_retained_integrity.py tests/test_description_cache_retained_integrity.py tests/test_description_cache_retained_integrity_bounds.py tests/test_description_cache_retained_integrity_stability.py tests/test_integrity_cli_retained_cache.py main.py`
 
 - [ ] **Step 7: Write failing version, workflow, and quality-gate assertions**
 
-Set the release test constant and expected asset names to `0.1.4`; set the POSIX workflow test to require `default: v0.1.4`; extend `test_quality_gate_covers_audit_gap_core_modules()` with every new hand-written Python module and focused test from Tasks 1–10. Run these tests before changing metadata:
+Set the release test constant and expected asset names to `0.1.4`; set the POSIX workflow test to require `default: v0.1.4`; extend `test_quality_gate_covers_audit_gap_core_modules()` with every new hand-written Python module and focused test from Tasks 1–10, including both retained-integrity modules and all four retained-integrity tests. Run these tests before changing metadata:
 
 Run: `uv run python -m pytest -q tests/test_release_metadata.py tests/test_posix_package_assets.py tests/test_quality_gate.py`
 
@@ -2565,7 +2722,7 @@ Expected: the editable `w3xray` package in `uv.lock` is exactly `0.1.4` and no u
 
 - [ ] **Step 9: Update the maintained quality authority**
 
-Remove the Task 6 deleted `w3xtool/batch_description_cache.py` and `w3xtool/description_cache_batch.py` paths, then add all created/modified Python modules and their focused tests from this plan to `STRICT_PATHS`. Preserve one sorted duplicate-free tuple and all three commands (`ruff check`, `ruff format --check`, `basedpyright --level error`). Do not add new files to `tool.basedpyright.ignore`.
+Remove the Task 6 deleted `w3xtool/batch_description_cache.py` and `w3xtool/description_cache_batch.py` paths, then add all created/modified Python modules and their focused tests from this plan to `STRICT_PATHS`, explicitly including `w3xtool/description_cache_retained_integrity_models.py`, `w3xtool/description_cache_retained_integrity.py`, `tests/test_description_cache_retained_integrity.py`, `tests/test_description_cache_retained_integrity_bounds.py`, `tests/test_description_cache_retained_integrity_stability.py`, and `tests/test_integrity_cli_retained_cache.py`. Preserve one sorted duplicate-free tuple and all three commands (`ruff check`, `ruff format --check`, `basedpyright --level error`). Do not add new files to `tool.basedpyright.ignore`.
 
 - [ ] **Step 10: Document schema 5 commands and evidence semantics**
 
@@ -2576,13 +2733,14 @@ uv run main.py description-cache migrate --legacy-output <schema-1-root> --legac
 uv run main.py batch <maps-root> --output <v5-root> --game-data <client-or-trusted-icon-root> --description-cache <owned-cache-root>
 uv run main.py integrity snapshot --root maps=<maps-root> --root legacy-v1=<root> --root legacy-v2=<root> --root legacy-v4=<root> --output <before.json>
 uv run main.py integrity verify --snapshot <before.json>
+uv run main.py integrity retained-cache --active-root <owned-cache-root> --output <retained-cache-report.json>
 ```
 
-Explain the four new global reports, `图标未解析.tsv`, current/all text views, candidate non-adoption, and the publication/archive/knowledge axes. Update `docs/batch-icon-description-extraction.md` from current schema 4 behavior to the schema 5 contracts without rewriting historical observed counts as if they were v5 results. Update `AGENTS.md` orientation/commands and keep it under 120 lines; update `AGENTS.d/runtime.md` and `AGENTS.d/testing.md` with only verified commands, read-only roots, output roots, required reports, and acceptance invariants.
+Explain the four new global reports, `图标未解析.tsv`, current/all text views, candidate non-adoption, and the publication/archive/knowledge axes. Document that the explicit retained-cache command reports intentional retained evidence separately from stage/backup transient violations, never automatically loads retained objects as description sources, and does not delete them. Update `docs/batch-icon-description-extraction.md` from current schema 4 behavior to the schema 5 contracts without rewriting historical observed counts as if they were v5 results. Update `AGENTS.md` orientation/commands and keep it under 120 lines; update `AGENTS.d/runtime.md` and `AGENTS.d/testing.md` with only verified commands, read-only roots, output roots, required reports, and acceptance invariants.
 
 - [ ] **Step 11: Re-run metadata, docs, quality, and focused integration tests**
 
-Run: `uv run python -m pytest -q tests/test_integrity_snapshot.py tests/test_integrity_cli.py tests/test_release_metadata.py tests/test_posix_package_assets.py tests/test_quality_gate.py tests/test_batch_dependencies.py tests/test_batch_e2e.py tests/test_acceptance_runner.py`
+Run: `uv run python -m pytest -q tests/test_integrity_snapshot.py tests/test_integrity_cli.py tests/test_description_cache_retained_integrity.py tests/test_description_cache_retained_integrity_bounds.py tests/test_description_cache_retained_integrity_stability.py tests/test_integrity_cli_retained_cache.py tests/test_release_metadata.py tests/test_posix_package_assets.py tests/test_quality_gate.py tests/test_batch_dependencies.py tests/test_batch_e2e.py tests/test_acceptance_runner.py`
 
 Run: `uv run w3xray-quality`
 
@@ -2591,7 +2749,7 @@ Expected: PASS; `git diff --check` reports no whitespace errors, `AGENTS.md` is 
 - [ ] **Step 12: Commit the operator and release boundary**
 
 ```bash
-git add main.py w3xtool/integrity_snapshot_models.py w3xtool/integrity_snapshot.py w3xtool/integrity_snapshot_io.py w3xtool/integrity_cli.py w3xtool/__init__.py w3xtool/quality_gate.py tests/test_integrity_snapshot.py tests/test_integrity_cli.py tests/test_quality_gate.py tests/test_release_metadata.py tests/test_posix_package_assets.py pyproject.toml uv.lock .github/workflows/posix-package.yml README.md docs/batch-icon-description-extraction.md AGENTS.md AGENTS.d/runtime.md AGENTS.d/testing.md
+git add main.py w3xtool/integrity_snapshot_models.py w3xtool/integrity_snapshot.py w3xtool/integrity_snapshot_io.py w3xtool/integrity_cli.py w3xtool/description_cache_retained_integrity_models.py w3xtool/description_cache_retained_integrity.py w3xtool/__init__.py w3xtool/quality_gate.py tests/test_integrity_snapshot.py tests/test_integrity_cli.py tests/test_description_cache_retained_integrity.py tests/test_description_cache_retained_integrity_bounds.py tests/test_description_cache_retained_integrity_stability.py tests/test_integrity_cli_retained_cache.py tests/test_quality_gate.py tests/test_release_metadata.py tests/test_posix_package_assets.py pyproject.toml uv.lock .github/workflows/posix-package.yml README.md docs/batch-icon-description-extraction.md AGENTS.md AGENTS.d/runtime.md AGENTS.d/testing.md
 git commit -m "feat: add schema five integrity acceptance tools"
 ```
 
@@ -2613,12 +2771,14 @@ git commit -m "feat: add schema five integrity acceptance tools"
 - New batch output: `/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v5`
 - Integrity evidence output: `/Users/zhongerbing/Documents/xm/war3_xg/schema5-input-integrity.json`
 - Cache integrity evidence output: `/Users/zhongerbing/Documents/xm/war3_xg/schema5-cache-integrity.json`
+- Retained-cache integrity evidence output: `/Users/zhongerbing/Documents/xm/war3_xg/schema5-retained-cache-integrity.json`
 
 **Interfaces:**
 - Adds an opt-in real-data acceptance module gated by `W3XRAY_MAPS_ROOT`, `W3XRAY_V4_OUTPUT`, `W3XRAY_V5_OUTPUT`, and `W3XRAY_DESCRIPTION_CACHE`.
 - Reuses `require_authoritative_batch()`, the standard TSV decoder, trusted-cache loader, schema-5 state models, and integrity CLI; it does not implement parallel acceptance-only parsers.
 - Requires first-run progress to contain 39 `processed` results and the immediate identical run to contain 39 `reused` results.
-- Produces no tracked generated data; the cache, batch output, logs, and integrity snapshot remain outside the repository.
+- Requires successful cache publication to have zero stage/backup names; retained objects and impossible-normalization transient violations are reported separately by the no-follow retained-cache integrity action.
+- Produces no tracked generated data; the cache, batch output, logs, integrity snapshots, and retained-cache report remain outside the repository.
 
 - [ ] **Step 1: Write the opt-in real-data assertions before running the new batch**
 
@@ -2824,7 +2984,7 @@ git commit -m "test: define schema five real-map acceptance"
 
 - [ ] **Step 5: Run every focused test lane from Tasks 1–10**
 
-Run: `uv run python -m pytest -q tests/test_icon_field_evidence.py tests/test_icon_path_evidence.py tests/test_icon_evidence_builder.py tests/test_icon_evidence_exports.py tests/test_icon_candidate_bindings.py tests/test_object_text_roles.py tests/test_object_text_priority.py tests/test_object_text_index.py tests/test_description_cache_migration.py tests/test_description_cache_publication.py tests/test_trusted_description_cache.py tests/test_batch_cli.py tests/test_batch_dependencies.py tests/test_batch_status.py tests/test_batch_result_parser.py tests/test_batch_global_evidence.py tests/test_batch_global_publication.py tests/test_gui_icon_gaps.py tests/test_gui_batch_status.py tests/test_gui_object_presentation.py tests/test_integrity_snapshot.py tests/test_integrity_cli.py`
+Run: `uv run python -m pytest -q tests/test_icon_field_evidence.py tests/test_icon_path_evidence.py tests/test_icon_evidence_builder.py tests/test_icon_evidence_exports.py tests/test_icon_candidate_bindings.py tests/test_object_text_roles.py tests/test_object_text_priority.py tests/test_object_text_index.py tests/test_description_cache_migration.py tests/test_description_cache_publication.py tests/test_trusted_description_cache.py tests/test_batch_cli.py tests/test_batch_dependencies.py tests/test_batch_status.py tests/test_batch_result_parser.py tests/test_batch_global_evidence.py tests/test_batch_global_publication.py tests/test_gui_icon_gaps.py tests/test_gui_batch_status.py tests/test_gui_object_presentation.py tests/test_integrity_snapshot.py tests/test_integrity_cli.py tests/test_description_cache_retained_integrity.py tests/test_description_cache_retained_integrity_bounds.py tests/test_description_cache_retained_integrity_stability.py tests/test_integrity_cli_retained_cache.py`
 
 Expected: PASS with no skipped test in this focused lane.
 
@@ -2866,6 +3026,23 @@ uv run main.py description-cache migrate \
   --output /Users/zhongerbing/Documents/xm/war3_xg/trusted-description-cache-v5
 ```
 
+Run:
+
+```bash
+uv run main.py integrity retained-cache \
+  --active-root /Users/zhongerbing/Documents/xm/war3_xg/trusted-description-cache-v5 \
+  --output /Users/zhongerbing/Documents/xm/war3_xg/schema5-retained-cache-integrity.json
+```
+
+For this required first migration into an absent `trusted-description-cache-v5`, expected
+exit is `0`, retained count is zero, and transient count is zero. If an operator deliberately
+reruns migration against an existing owned v5 cache, run the same retained-cache command
+again immediately after that replacement. Its expected exit remains `0`, exactly one
+`previous` artifact validates as a complete cache, the active cache remains valid, and
+transient count remains zero. A code `1` report aborts acceptance while preserving every
+reported artifact for operator review. No `find -type d` check may replace this no-follow
+action: regular files, symlinks, special objects, and directories must all be observed.
+
 Then load the cache through the public verifier:
 
 Run: `uv run python -c 'from w3xtool.trusted_description_cache import load_trusted_description_cache; c=load_trusted_description_cache("/Users/zhongerbing/Documents/xm/war3_xg/trusted-description-cache-v5"); print(len(c.cache.entries), c.manifest_sha256, c.content_sha256)'`
@@ -2901,7 +3078,7 @@ uv run main.py batch "$SMOKE_ROOT/large" \
   --minimum-free-bytes 0
 ```
 
-Expected: each private lane has one `已发布` result, valid per-map/global manifests, all required schema-5 reports, zero original/PNG write failures, and no stage/backup/transaction/quarantine leftovers.
+Expected: each private lane has one `已发布` result, valid per-map/global manifests, all required schema-5 reports, zero original/PNG write failures, and no batch stage/backup/transaction/quarantine leftovers. These batch transaction/quarantine checks remain separate from retained-cache integrity.
 
 Run: `uv run main.py integrity verify --snapshot /Users/zhongerbing/Documents/xm/war3_xg/schema5-input-integrity.json`
 
@@ -2967,7 +3144,7 @@ Run: `test "$(grep -c ' processed ' /Users/zhongerbing/Documents/xm/war3_xg/sche
 
 Run: `test "$(grep -Ec ' failed | cancelled ' /Users/zhongerbing/Documents/xm/war3_xg/schema5-reuse-run.log)" -eq 0`
 
-Expected: exit `0`; zero `processed`, `failed`, or `cancelled` progress rows; state/results/manifests remain equal; exactly 39 authoritative map directories remain; no stage, backup, transaction, or quarantine path remains.
+Expected: exit `0`; zero `processed`, `failed`, or `cancelled` progress rows; state/results/manifests remain equal; exactly 39 authoritative map directories remain; no batch stage, backup, transaction, or quarantine path remains. Intentional description-cache retained objects are not batch leftovers and are judged only by the retained-cache integrity report.
 
 - [ ] **Step 13: Verify every source and historical output byte/metadata identity**
 
@@ -2978,9 +3155,12 @@ uv run main.py integrity verify \
   --snapshot /Users/zhongerbing/Documents/xm/war3_xg/schema5-input-integrity.json
 uv run main.py integrity verify \
   --snapshot /Users/zhongerbing/Documents/xm/war3_xg/schema5-cache-integrity.json
+uv run main.py integrity retained-cache \
+  --active-root /Users/zhongerbing/Documents/xm/war3_xg/trusted-description-cache-v5 \
+  --output /Users/zhongerbing/Documents/xm/war3_xg/schema5-retained-cache-integrity.json
 ```
 
-Expected: both commands exit `0`, with no differences across `maps`, `legacy-v1`, `legacy-v2`, `legacy-v4`, or the newly owned trusted-description cache.
+Expected: all three commands exit `0`, with no differences across `maps`, `legacy-v1`, `legacy-v2`, `legacy-v4`, or the newly owned trusted-description cache; the retained-cache report still separates valid retained evidence from transient violations.
 
 - [ ] **Step 14: Run final repository checks and inspect tracked scope**
 

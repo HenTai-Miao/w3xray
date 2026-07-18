@@ -1,7 +1,7 @@
 # Retained Trusted-Description Cache Generations Design
 
 **Date:** 2026-07-16  
-**Status:** approved approach; implementation pending  
+**Status:** publication lifecycle implemented; retained-integrity implementation and real acceptance pending Tasks 10–11
 **Amends:** `2026-07-16-icon-text-evidence-gap-closure-design.md`
 
 ## Context
@@ -24,12 +24,13 @@ recovery objects. Whenever an exact object can reach an unoccupied legal destina
 will atomically move that object into an intentional retained-evidence name and leave its
 bytes unchanged.
 
-Preservation is the higher-order invariant. If every legal retained name is occupied, the
-publication parent loses its captured binding, or the filesystem rejects the required
-atomic no-replace operation, the publisher must not overwrite, delete, or guess. It keeps
-every reachable object at its current name and returns typed `NEEDS_CONTEXT`. Therefore
-zero transient names is mandatory for success and for every failure that can be normalized
-safely, but is not claimed for an impossible-to-normalize adversarial failure.
+Preservation is the higher-order invariant. Zero transient names is mandatory for success
+and for every failure where an exact object can reach a free retained role. If every legal
+retained role is occupied or the filesystem rejects the required atomic no-replace move,
+overwriting and deletion remain forbidden: the command returns typed `NEEDS_CONTEXT`, leaves
+the exact transient evidence reachable, and the integrity action reports a violation. Loss
+of the captured publication-parent binding likewise preserves every reachable object and
+returns typed `NEEDS_CONTEXT` rather than guessing.
 
 The active output remains the exact five-file owned cache defined by the parent design.
 Retained evidence is a sibling of the active output, not a child of it, and is never
@@ -316,7 +317,10 @@ The integrity workflow distinguishes transient and retained artifacts:
 
 - stage and backup names must be zero after every successful command and every safely
   normalizable failure; an impossible normalization is a reported integrity violation,
-  never a successful command;
+  never a successful command. If every legal retained role is occupied or the filesystem
+  rejects the required atomic no-replace move, overwriting and deletion remain forbidden;
+  the command returns `NEEDS_CONTEXT`, leaves the exact transient evidence reachable, and
+  this integrity action reports that violation;
 - retained names are intentional immutable evidence and are counted separately;
 - a `previous` retained directory must contain exactly the five owned cache names as direct
   regular-file leaves, with no missing name, extra entry, or nested entry, and must still
