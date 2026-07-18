@@ -5,22 +5,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 import os
 import stat
-from typing import Final, assert_never
+from typing import assert_never
 
+from .descriptor_open_flags import directory_read_flags
 from .description_cache_retained_integrity_models import (
     CacheArtifactKind,
     TreeEntryState,
     TreeProofStatus,
 )
 from .description_cache_retained_siblings import kind_from_mode
-
-
-_DIRECTORY_FLAGS: Final = (
-    os.O_RDONLY
-    | getattr(os, "O_DIRECTORY", 0)
-    | getattr(os, "O_CLOEXEC", 0)
-    | getattr(os, "O_NOFOLLOW", 0)
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,7 +196,11 @@ def _visit_child_directory(
     accumulator: _Accumulator,
 ) -> None:
     try:
-        descriptor = os.open(name, _DIRECTORY_FLAGS, dir_fd=parent_descriptor)
+        descriptor = os.open(
+            name,
+            directory_read_flags(),
+            dir_fd=parent_descriptor,
+        )
     except OSError:
         _fail(accumulator, TreeProofStatus.UNREADABLE, relative)
         return

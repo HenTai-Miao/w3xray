@@ -5,6 +5,9 @@ from __future__ import annotations
 import re
 from typing import Final, assert_never
 
+from .description_cache_owned_schema import (
+    TRUSTED_DESCRIPTION_CACHE_OWNED_INVENTORY,
+)
 from .description_cache_retained_integrity_models import (
     CacheArtifactKind,
     DescriptionCacheRetentionError,
@@ -14,6 +17,7 @@ from .description_cache_retained_integrity_models import (
 
 
 _DIGEST: Final = re.compile(r"[0-9a-f]{64}")
+_OWNED_NAMES: Final = frozenset(TRUSTED_DESCRIPTION_CACHE_OWNED_INVENTORY)
 
 
 def validate_retained_metrics(item: RetainedDescriptionCacheArtifact) -> None:
@@ -42,6 +46,7 @@ def validate_retained_metrics(item: RetainedDescriptionCacheArtifact) -> None:
         case RetainedArtifactValidation.INVALID_PREVIOUS:
             if complete:
                 _validate_directory_totals(item)
+                _validate_complete_invalid_previous(item)
             elif not incomplete or item.problem_path is None:
                 raise DescriptionCacheRetentionError(
                     "invalid previous proof is incomplete"
@@ -103,6 +108,27 @@ def _validate_directory_totals(item: RetainedDescriptionCacheArtifact) -> None:
         raise DescriptionCacheRetentionError("directory proof totals are inconsistent")
     if item.file_count == 0 and item.size != 0:
         raise DescriptionCacheRetentionError("empty directory proof has nonzero size")
+
+
+def _validate_complete_invalid_previous(
+    item: RetainedDescriptionCacheArtifact,
+) -> None:
+    expected = len(_OWNED_NAMES)
+    if item.problem_path is None:
+        if item.file_count != expected or item.entry_count != expected:
+            raise DescriptionCacheRetentionError(
+                "invalid previous inventory mismatch lacks a problem path"
+            )
+        return
+    if (
+        item.file_count is not None
+        and item.entry_count is not None
+        and (item.file_count < expected or item.entry_count < expected)
+        and item.problem_path not in _OWNED_NAMES
+    ):
+        raise DescriptionCacheRetentionError(
+            "invalid previous inventory problem path is not canonical"
+        )
 
 
 def _validate_unsafe_problem(item: RetainedDescriptionCacheArtifact) -> None:

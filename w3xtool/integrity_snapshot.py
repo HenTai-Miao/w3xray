@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from .integrity_snapshot_io import (
@@ -28,22 +29,9 @@ def build_integrity_snapshot(
     """Build a stable content-plus-metadata snapshot of explicit roots."""
     if not roots:
         raise IntegritySnapshotError("at least one root is required")
-    labels: set[str] = set()
-    root_paths: list[Path] = []
     normalized_roots: list[IntegrityRoot] = []
-    for item in roots:
-        if not item.label or item.label in labels:
-            raise IntegritySnapshotError("root labels must be unique and nonempty")
-        labels.add(item.label)
-        root, entries = scan_integrity_root(item.path)
-        if any(
-            root == previous
-            or root.is_relative_to(previous)
-            or previous.is_relative_to(root)
-            for previous in root_paths
-        ):
-            raise IntegritySnapshotError("snapshot roots overlap")
-        root_paths.append(root)
+    for item, requested in _preflight_roots(roots):
+        root, entries = scan_integrity_root(requested)
         normalized_roots.append(
             IntegrityRoot(
                 item.label,
@@ -57,6 +45,29 @@ def build_integrity_snapshot(
         INTEGRITY_SNAPSHOT_SCHEMA,
         tuple(sorted(normalized_roots, key=lambda value: value.label)),
     )
+
+
+def _preflight_roots(
+    roots: tuple[SnapshotRoot, ...],
+) -> tuple[tuple[SnapshotRoot, Path], ...]:
+    labels: set[str] = set()
+    paths: list[Path] = []
+    prepared: list[tuple[SnapshotRoot, Path]] = []
+    for item in roots:
+        if not item.label or item.label in labels:
+            raise IntegritySnapshotError("root labels must be unique and nonempty")
+        labels.add(item.label)
+        path = Path(os.path.abspath(item.path.expanduser()))
+        if any(
+            path == previous
+            or path.is_relative_to(previous)
+            or previous.is_relative_to(path)
+            for previous in paths
+        ):
+            raise IntegritySnapshotError("snapshot roots overlap")
+        paths.append(path)
+        prepared.append((item, path))
+    return tuple(prepared)
 
 
 def compare_integrity_snapshot(

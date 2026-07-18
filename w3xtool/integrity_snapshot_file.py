@@ -8,16 +8,11 @@ from pathlib import Path
 import stat
 from typing import Final, override
 
+from .descriptor_open_flags import file_read_flags
 from .integrity_path_binding import stable_stat
 from .integrity_snapshot_models import IntegrityEntry
 
 
-_FILE_FLAGS: Final = (
-    os.O_RDONLY
-    | getattr(os, "O_BINARY", 0)
-    | getattr(os, "O_CLOEXEC", 0)
-    | getattr(os, "O_NOFOLLOW", 0)
-)
 _READ_BYTES: Final = 1024 * 1024
 
 
@@ -51,7 +46,7 @@ def snapshot_regular_file(
         raise IntegritySnapshotFileError(display_path, "unsafe snapshot object")
     expected_state = stable_stat(expected)
     try:
-        descriptor = os.open(name, _FILE_FLAGS, dir_fd=parent_descriptor)
+        descriptor = os.open(name, file_read_flags(), dir_fd=parent_descriptor)
     except OSError as exc:
         raise IntegritySnapshotFileError(display_path, str(exc)) from exc
     try:

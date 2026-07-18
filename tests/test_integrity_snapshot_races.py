@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from w3xtool import integrity_snapshot as snapshot_api
+from w3xtool import integrity_snapshot_tree as tree_api
 
 
 def test_snapshot_does_not_accept_an_os_walk_ancestor_swap(
@@ -119,6 +120,20 @@ def test_snapshot_rejects_restored_ancestor_swap_before_child_open(
     monkeypatch.setattr(os, "open", swap_before_open)
 
     with pytest.raises(snapshot_api.IntegritySnapshotError):
+        snapshot_api.build_integrity_snapshot(
+            (snapshot_api.SnapshotRoot("root", root),)
+        )
+
+
+def test_snapshot_rejects_a_surrogate_name_before_sorting_or_hashing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    monkeypatch.setattr(tree_api.os, "listdir", lambda _descriptor: ["bad\udcff"])
+
+    with pytest.raises(snapshot_api.IntegritySnapshotError, match="not UTF-8"):
         snapshot_api.build_integrity_snapshot(
             (snapshot_api.SnapshotRoot("root", root),)
         )

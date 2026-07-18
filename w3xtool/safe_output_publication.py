@@ -1,25 +1,27 @@
-"""Atomic publication and restoration for anchored staged outputs.
-
-Publication commits when the post-publish ancestry check succeeds. A later
-external move may relocate the committed directory while its private rollback
-link is being discarded; that does not alter another destination path.
-"""
+"""Identity-owned atomic publication for descriptor-anchored outputs."""
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 import errno
-import os
-import secrets
-import stat
-from typing import Final
 
-from w3xtool.durable_io import sync_directory_descriptor
-from w3xtool.safe_output_models import SafeWriteResult, SafeWriteStatus
-from w3xtool.safe_output_staging import discard_file
+from .durable_io import sync_directory_descriptor
+from .safe_output_models import SafeWriteResult, SafeWriteStatus
+from .safe_output_publication_identity import (
+    FileIdentity,
+    PublicationIdentityError,
+    claim_name,
+    regular_identity,
+    remove_owned_name,
+)
+from .safe_output_publication_rollback import (
+    claim_previous,
+    restore_previous,
+    rollback_published,
+)
+from .safe_output_staging import discard_file
 
 
-_BACKUP_NAME_ATTEMPTS: Final = 16
 _ContainmentCheck = Callable[[], str | None]
 _FailureStatus = Callable[[OSError], SafeWriteStatus]
 
@@ -27,230 +29,221 @@ _FailureStatus = Callable[[OSError], SafeWriteStatus]
 def publish_staged_file(
     parent_descriptor: int,
     staged_name: str,
+    staged_identity: FileIdentity,
     destination_name: str,
     destination: str,
     check_containment: _ContainmentCheck,
     failure_status: _FailureStatus,
 ) -> SafeWriteResult | None:
-    """Publish staged data while preserving an existing destination on failure."""
+    """Publish only while prior, staged, and final names retain ownership."""
     try:
-        backup_name = _backup_destination(parent_descriptor, destination_name)
+        if regular_identity(parent_descriptor, staged_name) != staged_identity:
+            raise PublicationIdentityError("staged output identity changed")
+        previous = regular_identity(parent_descriptor, destination_name)
+        backup_name = claim_previous(
+            parent_descriptor,
+            destination_name,
+            previous,
+        )
     except OSError as exc:
-        return discard_file(
+        return _discard_stage(
             parent_descriptor,
             staged_name,
+            staged_identity,
             destination,
-            failure_status(exc),
+            _status(exc, failure_status),
             str(exc),
         )
-    containment_error = check_containment()
-    if containment_error is not None:
-        return _discard_files(
-            parent_descriptor,
-            _present_names(staged_name, backup_name),
-            destination,
-            SafeWriteStatus.UNSAFE,
-            containment_error,
-        )
-    if backup_name is None:
-        return _publish_new_destination(
-            parent_descriptor,
-            staged_name,
-            destination_name,
-            destination,
-            check_containment,
-            failure_status,
-        )
-    return _replace_with_backup(
-        parent_descriptor,
-        staged_name,
-        destination_name,
-        backup_name,
-        destination,
-        check_containment,
-        failure_status,
-    )
-
-
-def _backup_destination(parent_descriptor: int, name: str) -> str | None:
-    try:
-        details = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
-    except FileNotFoundError:
-        return None
-    if not stat.S_ISREG(details.st_mode):
-        raise OSError(errno.EINVAL, "unsafe destination changed before publication")
-    for _ in range(_BACKUP_NAME_ATTEMPTS):
-        backup_name = f".w3xray-backup-{secrets.token_hex(16)}.tmp"
+    if backup_name is not None:
         try:
-            os.link(
-                name,
+            sync_directory_descriptor(parent_descriptor)
+        except OSError as exc:
+            reason = restore_previous(
+                parent_descriptor,
+                destination_name,
                 backup_name,
-                src_dir_fd=parent_descriptor,
-                dst_dir_fd=parent_descriptor,
-                follow_symlinks=False,
+                previous,
+                str(exc),
             )
-        except FileExistsError:
-            continue
-        except FileNotFoundError:
-            return None
-        try:
-            sync_directory_descriptor(parent_descriptor)
-        except OSError:
-            _ = _unlink_error(parent_descriptor, backup_name)
-            sync_directory_descriptor(parent_descriptor)
-            raise
-        return backup_name
-    raise FileExistsError(errno.EEXIST, "could not allocate destination backup")
-
-
-def _publish_new_destination(
-    parent_descriptor: int,
-    staged_name: str,
-    destination_name: str,
-    destination: str,
-    check_containment: _ContainmentCheck,
-    failure_status: _FailureStatus,
-) -> SafeWriteResult | None:
-    try:
-        os.link(
-            staged_name,
-            destination_name,
-            src_dir_fd=parent_descriptor,
-            dst_dir_fd=parent_descriptor,
-            follow_symlinks=False,
-        )
-    except OSError as exc:
-        return discard_file(
-            parent_descriptor,
-            staged_name,
-            destination,
-            failure_status(exc),
-            str(exc),
-        )
+            try:
+                sync_directory_descriptor(parent_descriptor)
+            except OSError as restore_exc:
+                reason = f"{reason}; restore sync failed: {restore_exc}"
+            return _discard_stage(
+                parent_descriptor,
+                staged_name,
+                staged_identity,
+                destination,
+                SafeWriteStatus.FAILED,
+                reason,
+            )
     containment_error = check_containment()
     if containment_error is not None:
-        return _discard_files(
+        reason = restore_previous(
             parent_descriptor,
-            (destination_name, staged_name),
+            destination_name,
+            backup_name,
+            previous,
+            containment_error,
+        )
+        return _discard_stage(
+            parent_descriptor,
+            staged_name,
+            staged_identity,
             destination,
             SafeWriteStatus.UNSAFE,
-            containment_error,
+            reason,
+        )
+    try:
+        claim_name(
+            parent_descriptor,
+            staged_name,
+            destination_name,
+            staged_identity,
+        )
+    except OSError as exc:
+        reason = restore_previous(
+            parent_descriptor,
+            destination_name,
+            backup_name,
+            previous,
+            str(exc),
+        )
+        return _discard_stage(
+            parent_descriptor,
+            staged_name,
+            staged_identity,
+            destination,
+            _status(exc, failure_status),
+            reason,
+        )
+    containment_error = check_containment()
+    identity_error = _final_identity_error(
+        parent_descriptor,
+        destination_name,
+        staged_identity,
+    )
+    if containment_error is not None or identity_error is not None:
+        reason = containment_error or identity_error or "unsafe publication"
+        return rollback_published(
+            parent_descriptor,
+            destination_name,
+            staged_identity,
+            backup_name,
+            previous,
+            destination,
+            SafeWriteStatus.UNSAFE,
+            reason,
         )
     try:
         sync_directory_descriptor(parent_descriptor)
     except OSError as exc:
-        return _discard_files(
+        return rollback_published(
             parent_descriptor,
-            (destination_name, staged_name),
+            destination_name,
+            staged_identity,
+            backup_name,
+            previous,
             destination,
             SafeWriteStatus.FAILED,
             str(exc),
         )
-    cleanup_error = _unlink_error(parent_descriptor, staged_name)
-    if cleanup_error is not None:
-        return SafeWriteResult(SafeWriteStatus.FAILED, destination, 0, cleanup_error)
-    try:
-        sync_directory_descriptor(parent_descriptor)
-    except OSError as exc:
-        return SafeWriteResult(SafeWriteStatus.FAILED, destination, 0, str(exc))
-    return None
-
-
-def _replace_with_backup(
-    parent_descriptor: int,
-    staged_name: str,
-    destination_name: str,
-    backup_name: str,
-    destination: str,
-    check_containment: _ContainmentCheck,
-    failure_status: _FailureStatus,
-) -> SafeWriteResult | None:
-    try:
-        os.rename(
-            staged_name,
-            destination_name,
-            src_dir_fd=parent_descriptor,
-            dst_dir_fd=parent_descriptor,
-        )
-    except OSError as exc:
-        return _discard_files(
+    identity_error = _final_identity_error(
+        parent_descriptor,
+        destination_name,
+        staged_identity,
+    )
+    if identity_error is not None:
+        return rollback_published(
             parent_descriptor,
-            (staged_name, backup_name),
+            destination_name,
+            staged_identity,
+            backup_name,
+            previous,
             destination,
-            failure_status(exc),
-            str(exc),
+            SafeWriteStatus.UNSAFE,
+            identity_error,
         )
-    containment_error = check_containment()
-    if containment_error is not None:
-        try:
-            os.rename(
-                backup_name,
+    if backup_name is not None and previous is not None:
+        cleanup_error = remove_owned_name(
+            parent_descriptor,
+            backup_name,
+            previous,
+        )
+        if cleanup_error is not None:
+            return rollback_published(
+                parent_descriptor,
                 destination_name,
-                src_dir_fd=parent_descriptor,
-                dst_dir_fd=parent_descriptor,
+                staged_identity,
+                backup_name,
+                previous,
+                destination,
+                SafeWriteStatus.FAILED,
+                cleanup_error,
             )
+        try:
+            sync_directory_descriptor(parent_descriptor)
         except OSError as exc:
-            containment_error = f"{containment_error}; restore failed: {exc}"
+            return SafeWriteResult(
+                SafeWriteStatus.FAILED,
+                destination,
+                0,
+                str(exc),
+            )
+    identity_error = _final_identity_error(
+        parent_descriptor,
+        destination_name,
+        staged_identity,
+    )
+    if identity_error is not None:
         return SafeWriteResult(
             SafeWriteStatus.UNSAFE,
             destination,
             0,
-            containment_error,
+            identity_error,
         )
-    try:
-        sync_directory_descriptor(parent_descriptor)
-    except OSError as exc:
-        reason = str(exc)
-        try:
-            os.rename(
-                backup_name,
-                destination_name,
-                src_dir_fd=parent_descriptor,
-                dst_dir_fd=parent_descriptor,
-            )
-            sync_directory_descriptor(parent_descriptor)
-        except OSError as restore_exc:
-            reason = f"{reason}; restore failed: {restore_exc}"
-        return SafeWriteResult(SafeWriteStatus.FAILED, destination, 0, reason)
-    cleanup_error = _unlink_error(parent_descriptor, backup_name)
-    if cleanup_error is not None:
-        return SafeWriteResult(SafeWriteStatus.FAILED, destination, 0, cleanup_error)
-    try:
-        sync_directory_descriptor(parent_descriptor)
-    except OSError as exc:
-        return SafeWriteResult(SafeWriteStatus.FAILED, destination, 0, str(exc))
     return None
 
 
-def _discard_files(
+def _discard_stage(
     parent_descriptor: int,
-    names: Iterable[str],
+    staged_name: str,
+    staged_identity: FileIdentity,
     destination: str,
     status: SafeWriteStatus,
     reason: str,
 ) -> SafeWriteResult:
-    for name in names:
-        cleanup_error = _unlink_error(parent_descriptor, name)
-        if cleanup_error is not None:
-            reason = f"{reason}; cleanup failed: {cleanup_error}"
-    try:
-        sync_directory_descriptor(parent_descriptor)
-    except OSError as exc:
-        reason = f"{reason}; cleanup sync failed: {exc}"
-    return SafeWriteResult(status, destination, 0, reason)
+    return discard_file(
+        parent_descriptor,
+        staged_name,
+        staged_identity,
+        destination,
+        status,
+        reason,
+    )
 
 
-def _unlink_error(parent_descriptor: int, name: str) -> str | None:
+def _final_identity_error(
+    parent_descriptor: int,
+    destination_name: str,
+    staged_identity: FileIdentity,
+) -> str | None:
     try:
-        os.unlink(name, dir_fd=parent_descriptor)
-    except FileNotFoundError:
-        return None
+        current = regular_identity(parent_descriptor, destination_name)
     except OSError as exc:
         return str(exc)
+    if current != staged_identity:
+        return "published output identity changed"
     return None
 
 
-def _present_names(staged_name: str, backup_name: str | None) -> tuple[str, ...]:
-    if backup_name is None:
-        return (staged_name,)
-    return staged_name, backup_name
+def _status(exc: OSError, failure_status: _FailureStatus) -> SafeWriteStatus:
+    if isinstance(exc, PublicationIdentityError) or exc.errno in {
+        errno.EEXIST,
+        errno.EBUSY,
+    }:
+        return SafeWriteStatus.UNSAFE
+    return failure_status(exc)
+
+
+__all__ = ("publish_staged_file",)

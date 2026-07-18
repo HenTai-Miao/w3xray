@@ -14,6 +14,7 @@ import os
 from pathlib import PurePosixPath
 from typing import Final
 
+from w3xtool.descriptor_open_flags import directory_read_flags
 from w3xtool.safe_output_chunk_writer import write_chunks_to_descriptor
 from w3xtool.safe_output_models import SafeWriteResult, SafeWriteStatus
 from w3xtool.safe_output_publication import publish_staged_file
@@ -35,10 +36,8 @@ ANCHORED_WRITES_AVAILABLE: Final = (
     and os.link in os.supports_follow_symlinks
     and os.stat in os.supports_follow_symlinks
     and hasattr(os, "O_DIRECTORY")
+    and hasattr(os, "O_CLOEXEC")
     and hasattr(os, "O_NOFOLLOW")
-)
-_DIRECTORY_OPEN_FLAGS: Final = (
-    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
 )
 _UNSAFE_OPEN_ERRNOS: Final = frozenset((errno.EISDIR, errno.ELOOP, errno.ENOTDIR))
 _StageWriter = Callable[[int], int]
@@ -90,7 +89,7 @@ def _write_anchored(
     root_real = os.path.realpath(root_path)
     destination = os.path.join(root_real, *relative.parts)
     try:
-        root_descriptor = os.open(root_path, _DIRECTORY_OPEN_FLAGS)
+        root_descriptor = os.open(root_path, directory_read_flags())
     except OSError as exc:
         return SafeWriteResult(_open_failure_status(exc), root_path, 0, str(exc))
 
@@ -155,7 +154,6 @@ def _write_from_parent(
             str(exc),
         )
     staged_identity = _identity(file_descriptor)
-    size = 0
     try:
         try:
             containment_error = _containment_error(root_descriptor, parent_descriptor)
@@ -163,6 +161,7 @@ def _write_from_parent(
                 return discard_file(
                     parent_descriptor,
                     temporary_name,
+                    staged_identity,
                     destination,
                     SafeWriteStatus.UNSAFE,
                     containment_error,
@@ -173,6 +172,7 @@ def _write_from_parent(
                 return discard_file(
                     parent_descriptor,
                     temporary_name,
+                    staged_identity,
                     destination,
                     SafeWriteStatus.FAILED,
                     str(exc),
@@ -182,6 +182,7 @@ def _write_from_parent(
                 return discard_file(
                     parent_descriptor,
                     temporary_name,
+                    staged_identity,
                     destination,
                     SafeWriteStatus.UNSAFE,
                     containment_error,
@@ -191,6 +192,7 @@ def _write_from_parent(
         publication_error = publish_staged_file(
             parent_descriptor,
             temporary_name,
+            staged_identity,
             name,
             destination,
             lambda: _containment_error(root_descriptor, parent_descriptor),
@@ -229,7 +231,7 @@ def _is_descendant(descriptor: int, root_identity: tuple[int, int]) -> bool:
         while current_identity != root_identity:
             ancestor_descriptor = os.open(
                 "..",
-                _DIRECTORY_OPEN_FLAGS,
+                directory_read_flags(),
                 dir_fd=current_descriptor,
             )
             _ = ancestors.callback(os.close, ancestor_descriptor)
@@ -250,7 +252,7 @@ def _open_or_create_directory(parent_descriptor: int, name: str) -> int:
     try:
         return os.open(
             name,
-            _DIRECTORY_OPEN_FLAGS,
+            directory_read_flags(),
             dir_fd=parent_descriptor,
         )
     except FileNotFoundError:
@@ -259,12 +261,12 @@ def _open_or_create_directory(parent_descriptor: int, name: str) -> int:
         except FileExistsError:
             return os.open(
                 name,
-                _DIRECTORY_OPEN_FLAGS,
+                directory_read_flags(),
                 dir_fd=parent_descriptor,
             )
         return os.open(
             name,
-            _DIRECTORY_OPEN_FLAGS,
+            directory_read_flags(),
             dir_fd=parent_descriptor,
         )
 

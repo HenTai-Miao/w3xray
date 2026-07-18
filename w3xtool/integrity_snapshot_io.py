@@ -81,7 +81,7 @@ def format_integrity_snapshot(snapshot: IntegritySnapshot) -> str:
 def parse_integrity_snapshot(payload: str) -> IntegritySnapshot:
     """Parse exact JSON fields and reprove all canonical snapshot invariants."""
     try:
-        value: JsonValue = json.loads(payload)
+        value: JsonValue = json.loads(payload, object_pairs_hook=_unique_mapping)
     except json.JSONDecodeError as exc:
         raise IntegritySnapshotError(f"invalid snapshot JSON: {exc.msg}") from exc
     root = _mapping(value, "snapshot")
@@ -95,6 +95,17 @@ def parse_integrity_snapshot(payload: str) -> IntegritySnapshot:
     )
     _validate_snapshot(snapshot)
     return snapshot
+
+
+def _unique_mapping(
+    pairs: list[tuple[str, JsonValue]],
+) -> dict[str, JsonValue]:
+    mapping: dict[str, JsonValue] = {}
+    for key, value in pairs:
+        if key in mapping:
+            raise IntegritySnapshotError(f"duplicate snapshot JSON key: {key}")
+        mapping[key] = value
+    return mapping
 
 
 def _parse_root(value: JsonValue) -> IntegrityRoot:

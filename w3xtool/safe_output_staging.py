@@ -8,16 +8,11 @@ import secrets
 import stat
 from typing import Final
 
+from w3xtool.descriptor_open_flags import staged_create_flags
 from w3xtool.safe_output_models import SafeWriteResult, SafeWriteStatus
+from w3xtool.safe_output_publication_identity import remove_owned_name
 
 
-_TEMP_FILE_OPEN_FLAGS: Final = (
-    os.O_CREAT
-    | os.O_EXCL
-    | os.O_WRONLY
-    | getattr(os, "O_CLOEXEC", 0)
-    | getattr(os, "O_NOFOLLOW", 0)
-)
 _TEMP_NAME_ATTEMPTS: Final = 16
 
 
@@ -28,7 +23,7 @@ def open_staged_file(parent_descriptor: int) -> tuple[int, str]:
         try:
             descriptor = os.open(
                 name,
-                _TEMP_FILE_OPEN_FLAGS,
+                staged_create_flags(),
                 0o600,
                 dir_fd=parent_descriptor,
             )
@@ -54,17 +49,15 @@ def destination_error(parent_descriptor: int, name: str) -> str | None:
 def discard_file(
     parent_descriptor: int,
     name: str,
+    identity: tuple[int, int],
     destination: str,
     status: SafeWriteStatus,
     reason: str,
 ) -> SafeWriteResult:
     """Remove a staged file and preserve result context."""
-    try:
-        os.unlink(name, dir_fd=parent_descriptor)
-    except FileNotFoundError:
-        return SafeWriteResult(status, destination, 0, reason)
-    except OSError as exc:
-        reason = f"{reason}; cleanup failed: {exc}"
+    cleanup_error = remove_owned_name(parent_descriptor, name, identity)
+    if cleanup_error is not None:
+        reason = f"{reason}; cleanup failed: {cleanup_error}"
     return SafeWriteResult(status, destination, 0, reason)
 
 
@@ -74,9 +67,4 @@ def remove_owned_staged_file(
     identity: tuple[int, int],
 ) -> None:
     """Remove a leftover stage only when its inode still matches this write."""
-    try:
-        details = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
-    except FileNotFoundError:
-        return
-    if (details.st_dev, details.st_ino) == identity:
-        os.unlink(name, dir_fd=parent_descriptor)
+    _ = remove_owned_name(parent_descriptor, name, identity)

@@ -17,21 +17,10 @@ from .description_cache_retained_tree_snapshot import (
     RetainedScanBounds,
     stable_entry_state,
 )
+from .descriptor_open_flags import directory_read_flags, file_read_flags
 
 
 _READ_BYTES: Final = 1024 * 1024
-_FILE_FLAGS: Final = (
-    os.O_RDONLY
-    | getattr(os, "O_BINARY", 0)
-    | getattr(os, "O_CLOEXEC", 0)
-    | getattr(os, "O_NOFOLLOW", 0)
-)
-_DIRECTORY_FLAGS: Final = (
-    os.O_RDONLY
-    | getattr(os, "O_DIRECTORY", 0)
-    | getattr(os, "O_CLOEXEC", 0)
-    | getattr(os, "O_NOFOLLOW", 0)
-)
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,7 +58,7 @@ def prove_retained_regular_file(
         before = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
         if stable_entry_state(before) != _state_from_sibling(expected):
             raise RetainedFileUnstable
-        descriptor = os.open(name, _FILE_FLAGS, dir_fd=parent_descriptor)
+        descriptor = os.open(name, file_read_flags(), dir_fd=parent_descriptor)
         try:
             opened = os.fstat(descriptor)
             if stable_entry_state(opened) != stable_entry_state(before):
@@ -111,14 +100,14 @@ def read_relative_retained_file(
     parent = os.dup(root_descriptor)
     try:
         for part in parts[:-1]:
-            child = os.open(part, _DIRECTORY_FLAGS, dir_fd=parent)
+            child = os.open(part, directory_read_flags(), dir_fd=parent)
             os.close(parent)
             parent = child
         name = parts[-1]
         before = os.stat(name, dir_fd=parent, follow_symlinks=False)
         if stable_entry_state(before) != _state_from_entry(expected):
             raise RetainedFileUnstable
-        descriptor = os.open(name, _FILE_FLAGS, dir_fd=parent)
+        descriptor = os.open(name, file_read_flags(), dir_fd=parent)
         try:
             opened = os.fstat(descriptor)
             if stable_entry_state(opened) != stable_entry_state(before):

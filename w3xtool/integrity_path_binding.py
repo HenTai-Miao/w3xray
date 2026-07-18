@@ -9,12 +9,19 @@ import stat
 from types import TracebackType
 from typing import Final, Literal, Self, override
 
+from .atomic_rename import AtomicRenameUnavailableError, require_atomic_rename_support
 
-_DIRECTORY_FLAGS: Final = (
-    os.O_RDONLY
-    | getattr(os, "O_DIRECTORY", 0)
-    | getattr(os, "O_CLOEXEC", 0)
-    | getattr(os, "O_NOFOLLOW", 0)
+_PATH_BINDING_AVAILABLE: Final = bool(
+    os.name == "posix"
+    and os.open in os.supports_dir_fd
+    and os.mkdir in os.supports_dir_fd
+    and os.stat in os.supports_dir_fd
+    and os.unlink in os.supports_dir_fd
+    and os.listdir in os.supports_fd
+    and os.stat in os.supports_follow_symlinks
+    and hasattr(os, "O_DIRECTORY")
+    and hasattr(os, "O_CLOEXEC")
+    and hasattr(os, "O_NOFOLLOW")
 )
 
 
@@ -111,21 +118,22 @@ def bind_directory_path(
     create: bool = False,
 ) -> BoundDirectoryPath:
     """Open every absolute path component without following symlinks."""
+    flags = _require_path_binding_support()
     path = Path(os.path.abspath(requested.expanduser()))
     descriptors: list[int] = []
     names: list[str] = []
     identities: list[tuple[int, int, int]] = []
     try:
-        descriptors.append(os.open(os.sep, _DIRECTORY_FLAGS))
+        descriptors.append(os.open(os.sep, flags))
         for name in path.parts[1:]:
             parent = descriptors[-1]
             try:
-                descriptor = os.open(name, _DIRECTORY_FLAGS, dir_fd=parent)
+                descriptor = os.open(name, flags, dir_fd=parent)
             except FileNotFoundError:
                 if not create:
                     raise
                 os.mkdir(name, 0o700, dir_fd=parent)
-                descriptor = os.open(name, _DIRECTORY_FLAGS, dir_fd=parent)
+                descriptor = os.open(name, flags, dir_fd=parent)
             details = os.fstat(descriptor)
             if not stat.S_ISDIR(details.st_mode):
                 os.close(descriptor)
@@ -143,10 +151,24 @@ def bind_directory_path(
         for descriptor in reversed(descriptors):
             os.close(descriptor)
         raise
-    except OSError as exc:
+    except (OSError, NotImplementedError) as exc:
         for descriptor in reversed(descriptors):
             os.close(descriptor)
         raise IntegrityPathBindingError(f"cannot bind directory path: {path}") from exc
+
+
+def _require_path_binding_support() -> int:
+    if not _PATH_BINDING_AVAILABLE:
+        raise IntegrityPathBindingError(
+            "descriptor-anchored integrity filesystem operations are unavailable"
+        )
+    try:
+        require_atomic_rename_support()
+        return os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
+    except (AttributeError, AtomicRenameUnavailableError, NotImplementedError) as exc:
+        raise IntegrityPathBindingError(
+            "descriptor-anchored integrity filesystem operations are unavailable"
+        ) from exc
 
 
 def stable_stat(details: os.stat_result) -> tuple[int, int, int, int, int, int]:

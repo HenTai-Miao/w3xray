@@ -77,8 +77,8 @@ tests/test_icon_candidate_input_normalization.py
 tests/test_icon_evidence_query.py
 tests/test_integrity_cli.py
 tests/test_integrity_cli_retained_cache.py
-tests/test_integrity_output_safety.py
-tests/test_integrity_snapshot.py
+tests/test_integrity_output_identity_races.py tests/test_integrity_output_safety.py
+tests/test_integrity_platform_boundaries.py tests/test_integrity_snapshot.py
 tests/test_integrity_snapshot_races.py
 tests/test_item_relation_models.py
 tests/test_item_relation_resilience.py
@@ -174,7 +174,7 @@ w3xtool/description_cache_retained_set_scan.py
 w3xtool/description_cache_retained_siblings.py
 w3xtool/description_cache_retained_tree.py
 w3xtool/description_cache_retained_tree_snapshot.py
-w3xtool/description_cache_schema.py
+w3xtool/description_cache_schema.py w3xtool/descriptor_open_flags.py
 w3xtool/durable_io.py
 w3xtool/gui.py
 w3xtool/gui_batch_status.py
@@ -249,7 +249,7 @@ w3xtool/quality_paths.py
 w3xtool/safe_output.py
 w3xtool/safe_output_chunk_writer.py
 w3xtool/safe_output_path_publication.py
-w3xtool/safe_output_publication.py""".split()
+w3xtool/safe_output_publication.py w3xtool/safe_output_publication_identity.py w3xtool/safe_output_publication_rollback.py""".split()
 )
 
 __all__ = ("STRICT_PATHS",)

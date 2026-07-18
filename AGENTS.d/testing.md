@@ -10,6 +10,8 @@ uv run python -m pytest -q \
   tests/test_integrity_snapshot_races.py \
   tests/test_integrity_cli.py \
   tests/test_integrity_output_safety.py \
+  tests/test_integrity_output_identity_races.py \
+  tests/test_integrity_platform_boundaries.py \
   tests/test_description_cache_retained_capture.py \
   tests/test_description_cache_retained_integrity.py \
   tests/test_description_cache_retained_integrity_bounds.py \
@@ -24,7 +26,8 @@ uv run python -m pytest -q \
   tests/test_acceptance_runner.py
 ```
 
-Verified on 2026-07-19 after independent-review closure: 115 passed.
+Verified on 2026-07-19 after wave-two independent-review closure: 136 passed
+and 1 Darwin platform fixture skipped.
 
 Repository gate:
 
@@ -32,7 +35,8 @@ Repository gate:
 uv run w3xray-test
 ```
 
-Verified on 2026-07-19 after independent-review closure: 2,069 passed, 11 skipped, and 1 subtest passed.
+Verified on 2026-07-19 after wave-two independent-review closure: 2,090
+passed, 12 skipped, and 1 subtest passed.
 
 Maintained strict-path gate:
 
@@ -42,7 +46,10 @@ uv run w3xray-quality
 
 The quality command runs Ruff lint, Ruff format check, and basedpyright `--level error` over one sorted, duplicate-free maintained path tuple. New paths must not be added to `tool.basedpyright.ignore`.
 
-Verified on 2026-07-19 after independent-review closure: Ruff check passed, 249 maintained files were formatted, and basedpyright reported 0 errors, 0 warnings, and 0 notes. The review-fix no-excuse audit reported no violations in 18 Python files.
+Verified on 2026-07-19 after wave-two independent-review closure: Ruff check
+passed, 254 maintained files were formatted, and basedpyright reported 0
+errors, 0 warnings, and 0 notes. The changed-file no-excuse audit reported no
+violations in 25 Python files.
 
 Changed-file diagnostics when narrowing a failure:
 

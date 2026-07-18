@@ -80,6 +80,7 @@ w3xtool/description_cache_retained_set_scan.py
 w3xtool/description_cache_retained_siblings.py
 w3xtool/description_cache_retained_tree.py
 w3xtool/description_cache_retained_tree_snapshot.py
+w3xtool/descriptor_open_flags.py
 w3xtool/gui_batch_status.py
 w3xtool/gui_batch_status_layout.py
 w3xtool/gui_icon_evidence_loader.py
@@ -109,7 +110,9 @@ w3xtool/integrity_snapshot_tree.py
 w3xtool/load_context.py
 w3xtool/object_text_presentation.py
 w3xtool/quality_paths.py
-w3xtool/safe_output_publication.py""".splitlines()
+w3xtool/safe_output_publication.py
+w3xtool/safe_output_publication_identity.py
+w3xtool/safe_output_publication_rollback.py""".splitlines()
 )
 
 __all__ = ("AUDIT_GAP_REQUIRED_PATHS",)

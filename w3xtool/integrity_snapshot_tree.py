@@ -5,8 +5,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import stat
-from typing import Final
 
+from .descriptor_open_flags import directory_read_flags
 from .integrity_path_binding import (
     IntegrityPathBindingError,
     bind_directory_path,
@@ -14,14 +14,6 @@ from .integrity_path_binding import (
 )
 from .integrity_snapshot_file import IntegritySnapshotFileError, snapshot_regular_file
 from .integrity_snapshot_models import IntegrityEntry, IntegritySnapshotError
-
-
-_DIRECTORY_FLAGS: Final = (
-    os.O_RDONLY
-    | getattr(os, "O_DIRECTORY", 0)
-    | getattr(os, "O_CLOEXEC", 0)
-    | getattr(os, "O_NOFOLLOW", 0)
-)
 
 
 def scan_integrity_root(root: Path) -> tuple[Path, tuple[IntegrityEntry, ...]]:
@@ -48,7 +40,12 @@ def scan_integrity_root(root: Path) -> tuple[Path, tuple[IntegrityEntry, ...]]:
             )
     except IntegritySnapshotError:
         raise
-    except (IntegrityPathBindingError, IntegritySnapshotFileError, OSError) as exc:
+    except (
+        IntegrityPathBindingError,
+        IntegritySnapshotFileError,
+        OSError,
+        NotImplementedError,
+    ) as exc:
         raise IntegritySnapshotError(f"cannot snapshot root {root}: {exc}") from exc
 
 
@@ -62,9 +59,12 @@ def _visit_directory(
     if not stat.S_ISDIR(before.st_mode):
         raise IntegritySnapshotError(f"unsafe snapshot object: {root / prefix}")
     try:
+        raw_names = os.listdir(descriptor)
+        for name in raw_names:
+            _ = name.encode("utf-8", errors="strict")
         names = tuple(
             sorted(
-                os.listdir(descriptor),
+                raw_names,
                 key=lambda value: (value.casefold(), value),
             )
         )
@@ -106,7 +106,7 @@ def _visit_child_directory(
     root: Path,
     entries: list[IntegrityEntry],
 ) -> None:
-    descriptor = os.open(name, _DIRECTORY_FLAGS, dir_fd=parent_descriptor)
+    descriptor = os.open(name, directory_read_flags(), dir_fd=parent_descriptor)
     try:
         opened = os.fstat(descriptor)
         expected_state = stable_stat(expected)

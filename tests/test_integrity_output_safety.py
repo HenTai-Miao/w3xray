@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import errno
-import os
 from pathlib import Path
 
 import pytest
 
 from tests.retained_integrity_fixture import active_cache, backup, retained, stage
+from w3xtool import integrity_output as output_api
+from w3xtool import safe_output_publication as publication_api
 from w3xtool.integrity_cli import run_integrity_cli
 
 
@@ -89,31 +91,27 @@ def test_snapshot_rejects_output_parent_replacement_during_publication(
     output_parent.mkdir(parents=True)
     moved = tmp_path / "moved-output"
     output = output_parent / "snapshot.json"
-    original_link = os.link
+    original = output_api.BoundIntegrityOutput._publication_error
+    checks = 0
     replaced = False
 
-    def replace_parent_before_link(
-        source: str,
-        destination: str,
-        *,
-        src_dir_fd: int | None = None,
-        dst_dir_fd: int | None = None,
-        follow_symlinks: bool = True,
-    ) -> None:
-        nonlocal replaced
-        if not replaced:
+    def replace_parent_before_proof(
+        bound: output_api.BoundIntegrityOutput,
+        require_protected: Callable[[], None] | None,
+    ) -> str | None:
+        nonlocal checks, replaced
+        checks += 1
+        if checks == 2:
             replaced = True
             output_root.rename(moved)
             output_root.symlink_to(protected, target_is_directory=True)
-        original_link(
-            source,
-            destination,
-            src_dir_fd=src_dir_fd,
-            dst_dir_fd=dst_dir_fd,
-            follow_symlinks=follow_symlinks,
-        )
+        return original(bound, require_protected)
 
-    monkeypatch.setattr(os, "link", replace_parent_before_link)
+    monkeypatch.setattr(
+        output_api.BoundIntegrityOutput,
+        "_publication_error",
+        replace_parent_before_proof,
+    )
     try:
         code = run_integrity_cli(_snapshot_argv(root, output))
     finally:
@@ -133,18 +131,15 @@ def test_retained_publication_failure_writes_no_report(
     active = active_cache(tmp_path)
     output = tmp_path / "report.json"
 
-    def fail_link(
+    def fail_claim(
+        _parent_descriptor: int,
         _source: str,
         _destination: str,
-        *,
-        src_dir_fd: int | None = None,
-        dst_dir_fd: int | None = None,
-        follow_symlinks: bool = True,
+        _identity: tuple[int, int],
     ) -> None:
-        del src_dir_fd, dst_dir_fd, follow_symlinks
         raise OSError(errno.EIO, "publication failed")
 
-    monkeypatch.setattr(os, "link", fail_link)
+    monkeypatch.setattr(publication_api, "claim_name", fail_claim)
 
     assert run_integrity_cli(_retained_argv(active, output)) == 2
     assert not output.exists()
@@ -157,30 +152,26 @@ def test_retained_rejects_relevant_namespace_insertion_during_publication(
     active = active_cache(tmp_path)
     output = tmp_path / "report.json"
     inserted = stage(active, "8")
-    original_link = os.link
+    original = output_api.BoundIntegrityOutput._publication_error
+    checks = 0
     mutated = False
 
-    def insert_stage_before_link(
-        source: str,
-        destination: str,
-        *,
-        src_dir_fd: int | None = None,
-        dst_dir_fd: int | None = None,
-        follow_symlinks: bool = True,
-    ) -> None:
-        nonlocal mutated
-        if not mutated:
+    def insert_stage_before_proof(
+        bound: output_api.BoundIntegrityOutput,
+        require_protected: Callable[[], None] | None,
+    ) -> str | None:
+        nonlocal checks, mutated
+        checks += 1
+        if checks == 2:
             mutated = True
             inserted.mkdir()
-        original_link(
-            source,
-            destination,
-            src_dir_fd=src_dir_fd,
-            dst_dir_fd=dst_dir_fd,
-            follow_symlinks=follow_symlinks,
-        )
+        return original(bound, require_protected)
 
-    monkeypatch.setattr(os, "link", insert_stage_before_link)
+    monkeypatch.setattr(
+        output_api.BoundIntegrityOutput,
+        "_publication_error",
+        insert_stage_before_proof,
+    )
 
     code = run_integrity_cli(_retained_argv(active, output))
 

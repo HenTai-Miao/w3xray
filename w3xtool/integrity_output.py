@@ -108,6 +108,7 @@ class BoundIntegrityOutput:
                 return discard_file(
                     self.parent.descriptor,
                     staged_name,
+                    staged_identity,
                     str(self.destination),
                     SafeWriteStatus.FAILED,
                     str(exc),
@@ -117,6 +118,7 @@ class BoundIntegrityOutput:
             publication_error = publish_staged_file(
                 self.parent.descriptor,
                 staged_name,
+                staged_identity,
                 self.destination.name,
                 str(self.destination),
                 lambda: self._publication_error(require_protected),

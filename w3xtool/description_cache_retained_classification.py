@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Final, assert_never
+from typing import assert_never
 
+from .descriptor_open_flags import directory_read_flags
 from .description_cache_owned_schema import TRUSTED_DESCRIPTION_CACHE_OWNED_INVENTORY
 from .description_cache_publication_models import RetainedCacheRole
 from .description_cache_retained_binding import BoundActiveCache
@@ -23,14 +24,6 @@ from .description_cache_retained_previous import classify_retained_previous
 from .description_cache_retained_siblings import stat_sibling
 from .description_cache_retained_tree import prove_retained_directory
 from .description_cache_retained_tree_snapshot import RetainedScanBounds
-
-
-_DIRECTORY_FLAGS: Final = (
-    os.O_RDONLY
-    | getattr(os, "O_DIRECTORY", 0)
-    | getattr(os, "O_CLOEXEC", 0)
-    | getattr(os, "O_NOFOLLOW", 0)
-)
 
 
 def inspect_retained_artifact(
@@ -88,7 +81,7 @@ def _prove_directory(
     try:
         descriptor = os.open(
             state.name,
-            _DIRECTORY_FLAGS,
+            directory_read_flags(),
             dir_fd=bound.parent_descriptor,
         )
     except OSError:

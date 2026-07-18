@@ -39,8 +39,17 @@ uv run main.py integrity retained-cache \
 
 - Snapshot roots must be absolute after normalization, nonoverlapping, no-follow directories; outputs cannot be inside an input root.
 - Verification returns 0 for equality, 1 for content/metadata differences, and 2 for request, parse, unsafe-root, or I/O boundaries.
-- Retained-cache inspection holds the publication parent and active-root descriptors, scans relevant siblings twice, and never follows symlinks.
+- Retained-cache inspection holds every no-follow ancestry descriptor plus the
+  publication parent and active-root descriptors through both sibling scans
+  and report-publication proof; required descriptor capabilities and flags
+  fail closed as code 2.
 - Retained `previous`, failed-stage, failed-output, and recovery evidence is reported separately from stage/backup transient violations. Retained objects are never automatically loaded as description sources and are never deleted by inspection.
+- Integrity outputs atomically claim existing and staged inodes without
+  replacing an unclaimed final name, then prove staged/final identities.
+  Rollback and staged cleanup are identity-gated, so a concurrent regular-file
+  or symlink replacement is preserved. If restoring an existing report would
+  overwrite that replacement, the prior report remains under the named
+  private recovery path recorded by the failure.
 
 ## Protected roots and new outputs
 

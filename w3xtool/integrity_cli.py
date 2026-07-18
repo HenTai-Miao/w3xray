@@ -67,7 +67,7 @@ def _run_snapshot(roots: tuple[SnapshotRoot, ...], output: Path) -> int:
         ) as bound_output:
             snapshot = build_integrity_snapshot(roots)
             result = bound_output.write_text(format_integrity_snapshot(snapshot))
-    except OSError as exc:
+    except (OSError, NotImplementedError) as exc:
         print(f"完整性快照写入失败：{exc}", file=sys.stderr)
         return 2
     except IntegritySnapshotError as exc:
@@ -94,7 +94,12 @@ def _run_verify(snapshot_path: Path) -> int:
         actual = build_integrity_snapshot(
             tuple(SnapshotRoot(root.label, Path(root.path)) for root in expected.roots)
         )
-    except (BoundedFileError, UnicodeError, IntegritySnapshotError) as exc:
+    except (
+        BoundedFileError,
+        UnicodeError,
+        IntegritySnapshotError,
+        NotImplementedError,
+    ) as exc:
         print(f"完整性验证失败：{exc}", file=sys.stderr)
         return 2
     differences = compare_integrity_snapshot(expected, actual)
@@ -122,7 +127,7 @@ def _run_retained_cache(active_root: Path, output: Path) -> int:
                     payload,
                     lambda: inspection.require_current(bound_active),
                 )
-    except OSError as exc:
+    except (OSError, NotImplementedError) as exc:
         print(f"保留缓存报告写入失败：{exc}", file=sys.stderr)
         return 2
     except DescriptionCacheRetentionError as exc:
