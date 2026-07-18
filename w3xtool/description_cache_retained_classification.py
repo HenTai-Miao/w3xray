@@ -6,11 +6,7 @@ import os
 from pathlib import Path
 from typing import Final, assert_never
 
-from .description_cache_owned_schema import (
-    TRUSTED_DESCRIPTION_CACHE_MANIFEST,
-    TRUSTED_DESCRIPTION_CACHE_MARKER,
-    TRUSTED_DESCRIPTION_CACHE_OWNED_INVENTORY,
-)
+from .description_cache_owned_schema import TRUSTED_DESCRIPTION_CACHE_OWNED_INVENTORY
 from .description_cache_publication_models import RetainedCacheRole
 from .description_cache_retained_binding import BoundActiveCache
 from .description_cache_retained_file_proof import prove_retained_regular_file
@@ -23,16 +19,10 @@ from .description_cache_retained_integrity_models import (
     SiblingState,
     TreeProofStatus,
 )
+from .description_cache_retained_previous import classify_retained_previous
 from .description_cache_retained_siblings import stat_sibling
 from .description_cache_retained_tree import prove_retained_directory
 from .description_cache_retained_tree_snapshot import RetainedScanBounds
-from .trusted_description_cache_models import (
-    TrustedDescriptionCacheError,
-    TrustedDescriptionCachePayloads,
-)
-from .trusted_description_cache_validation import (
-    validate_trusted_description_cache_payloads,
-)
 
 
 _DIRECTORY_FLAGS: Final = (
@@ -41,7 +31,6 @@ _DIRECTORY_FLAGS: Final = (
     | getattr(os, "O_CLOEXEC", 0)
     | getattr(os, "O_NOFOLLOW", 0)
 )
-_OWNED_NAMES: Final = frozenset(TRUSTED_DESCRIPTION_CACHE_OWNED_INVENTORY)
 
 
 def inspect_retained_artifact(
@@ -110,7 +99,11 @@ def _prove_directory(
         opened = os.fstat(descriptor)
         if (opened.st_dev, opened.st_ino) != (state.device, state.inode):
             raise DescriptionCacheRetentionError("retained sibling identity changed")
-        capture = _OWNED_NAMES if role is RetainedCacheRole.PREVIOUS else frozenset()
+        capture = (
+            frozenset(TRUSTED_DESCRIPTION_CACHE_OWNED_INVENTORY)
+            if role is RetainedCacheRole.PREVIOUS
+            else frozenset()
+        )
         return prove_retained_directory(descriptor, bounds, capture)
     finally:
         os.close(descriptor)
@@ -126,7 +119,7 @@ def _classify_proof(
     match proof.status:
         case TreeProofStatus.COMPLETE:
             if role is RetainedCacheRole.PREVIOUS:
-                validation, problem = _validate_previous(path, proof)
+                validation, problem = classify_retained_previous(path, proof)
             else:
                 validation = RetainedArtifactValidation.PARTIAL_EVIDENCE
                 problem = None
@@ -145,7 +138,11 @@ def _classify_proof(
                 problem,
             )
         case TreeProofStatus.UNSAFE:
-            validation = RetainedArtifactValidation.UNSAFE_OBJECT
+            validation = (
+                RetainedArtifactValidation.INVALID_PREVIOUS
+                if role is RetainedCacheRole.PREVIOUS
+                else RetainedArtifactValidation.UNSAFE_OBJECT
+            )
         case TreeProofStatus.OVERSIZED:
             validation = RetainedArtifactValidation.OVERSIZED
         case TreeProofStatus.UNSTABLE:
@@ -162,53 +159,6 @@ def _classify_proof(
         validation,
         proof.problem_path,
     )
-
-
-def _validate_previous(
-    path: Path,
-    proof: RetainedTreeProof,
-) -> tuple[RetainedArtifactValidation, str | None]:
-    paths = tuple(entry.relative_path for entry in proof.entries)
-    if (
-        proof.file_count != len(_OWNED_NAMES)
-        or proof.entry_count != len(_OWNED_NAMES)
-        or frozenset(paths) != _OWNED_NAMES
-        or any("/" in value for value in paths)
-    ):
-        return RetainedArtifactValidation.INVALID_PREVIOUS, _inventory_problem(paths)
-    payloads = dict(proof.payloads)
-    try:
-        validate_trusted_description_cache_payloads(
-            TrustedDescriptionCachePayloads(
-                path,
-                payloads[TRUSTED_DESCRIPTION_CACHE_MARKER],
-                payloads[TRUSTED_DESCRIPTION_CACHE_MANIFEST],
-                payloads["可信描述缓存.tsv"],
-                payloads["来源清单.tsv"],
-                payloads["可信缓存迁移拒绝.tsv"],
-            )
-        )
-    except KeyError, TrustedDescriptionCacheError:
-        return RetainedArtifactValidation.INVALID_PREVIOUS, None
-    return RetainedArtifactValidation.VALID_CACHE, None
-
-
-def _inventory_problem(paths: tuple[str, ...]) -> str | None:
-    missing = tuple(
-        sorted(
-            _OWNED_NAMES - frozenset(paths),
-            key=lambda value: value.encode("utf-8"),
-        )
-    )
-    if missing:
-        return missing[0]
-    extras = tuple(
-        sorted(
-            (value for value in paths if value not in _OWNED_NAMES),
-            key=lambda value: value.encode("utf-8"),
-        )
-    )
-    return None if not extras else extras[0]
 
 
 def _row(

@@ -6,16 +6,11 @@ from typing import Final
 
 
 STRICT_PATHS: Final = tuple(
-    """main.py
-tests/batch_axis_fixture.py
-tests/batch_cli_fixture.py
-tests/batch_global_evidence_fixture.py
-tests/batch_icon_report_fixture.py
-tests/batch_manifest_fixture.py
-tests/batch_publication_fixture.py
-tests/batch_schema_five_evidence_fixture.py
-tests/gui_worker_fakes.py
-tests/quality_audit_gap_paths.py
+    """main.py tests/batch_axis_fixture.py
+tests/batch_cli_fixture.py tests/batch_global_evidence_fixture.py
+tests/batch_icon_report_fixture.py tests/batch_manifest_fixture.py
+tests/batch_publication_fixture.py tests/batch_schema_five_evidence_fixture.py
+tests/gui_worker_fakes.py tests/quality_audit_gap_paths.py
 tests/retained_integrity_fixture.py
 tests/test_acceptance_runner.py
 tests/test_batch_cli.py
@@ -50,9 +45,11 @@ tests/test_batch_status.py
 tests/test_campaign_shared_object_identity.py
 tests/test_description_cache.py
 tests/test_description_cache_manifest_binding.py
+tests/test_description_cache_retained_capture.py
 tests/test_description_cache_retained_integrity.py
 tests/test_description_cache_retained_integrity_bounds.py
 tests/test_description_cache_retained_integrity_stability.py
+tests/test_description_cache_retained_report_relations.py
 tests/test_durable_io.py
 tests/test_external_listfile_gui.py
 tests/test_gui_batch_status.py
@@ -80,7 +77,9 @@ tests/test_icon_candidate_input_normalization.py
 tests/test_icon_evidence_query.py
 tests/test_integrity_cli.py
 tests/test_integrity_cli_retained_cache.py
+tests/test_integrity_output_safety.py
 tests/test_integrity_snapshot.py
+tests/test_integrity_snapshot_races.py
 tests/test_item_relation_models.py
 tests/test_item_relation_resilience.py
 tests/test_map_relation_loading.py
@@ -165,8 +164,10 @@ w3xtool/description_cache_retained_classification.py
 w3xtool/description_cache_retained_file_proof.py
 w3xtool/description_cache_retained_integrity.py
 w3xtool/description_cache_retained_integrity_models.py
+w3xtool/description_cache_retained_previous.py
 w3xtool/description_cache_retained_report.py
 w3xtool/description_cache_retained_report_format.py
+w3xtool/description_cache_retained_report_metrics.py
 w3xtool/description_cache_retained_report_parse.py
 w3xtool/description_cache_retained_report_validation.py
 w3xtool/description_cache_retained_set_scan.py
@@ -209,9 +210,13 @@ w3xtool/icon_evidence_query.py
 w3xtool/icons.py
 w3xtool/integrity_cli.py
 w3xtool/integrity_cli_options.py
+w3xtool/integrity_output.py
+w3xtool/integrity_path_binding.py
 w3xtool/integrity_snapshot.py
+w3xtool/integrity_snapshot_file.py
 w3xtool/integrity_snapshot_io.py
 w3xtool/integrity_snapshot_models.py
+w3xtool/integrity_snapshot_tree.py
 w3xtool/item_relation_builder.py
 w3xtool/item_relation_endpoints.py
 w3xtool/item_relation_exports.py
@@ -243,7 +248,8 @@ w3xtool/quality_gate.py
 w3xtool/quality_paths.py
 w3xtool/safe_output.py
 w3xtool/safe_output_chunk_writer.py
-w3xtool/safe_output_path_publication.py""".splitlines()
+w3xtool/safe_output_path_publication.py
+w3xtool/safe_output_publication.py""".split()
 )
 
 __all__ = ("STRICT_PATHS",)

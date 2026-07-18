@@ -1,0 +1,61 @@
+"""Exact metric and problem-path relations for retained report rows."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from tests.retained_integrity_fixture import active_cache, install_previous, retained
+from w3xtool import description_cache_retained_integrity as retained_api
+
+
+type JsonValue = (
+    str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
+)
+
+
+def _payload(tmp_path: Path, row_kind: str) -> dict[str, JsonValue]:
+    active = active_cache(tmp_path)
+    if row_kind == "valid":
+        install_previous(active, tmp_path)
+    elif row_kind == "regular":
+        retained(active, "2", "failed-output").write_bytes(b"evidence")
+    else:
+        retained(active, "2", "recovery").symlink_to(tmp_path / "outside")
+    report = retained_api.inspect_retained_description_caches(active)
+    payload: JsonValue = json.loads(
+        retained_api.format_description_cache_retention_report(report)
+    )
+    assert isinstance(payload, dict)
+    return payload
+
+
+@pytest.mark.parametrize(
+    ("row_kind", "updates"),
+    (
+        ("valid", {"file_count": 4}),
+        ("valid", {"entry_count": 4}),
+        ("valid", {"problem_path": "leaf"}),
+        ("regular", {"file_count": 2}),
+        ("regular", {"entry_count": 1}),
+        ("regular", {"problem_path": "leaf"}),
+        ("unsafe", {"size": 0}),
+        ("unsafe", {"problem_path": "leaf"}),
+    ),
+)
+def test_report_parser_rejects_impossible_metric_relations(
+    tmp_path: Path,
+    row_kind: str,
+    updates: dict[str, JsonValue],
+) -> None:
+    payload = _payload(tmp_path, row_kind)
+    retained_rows = payload["retained"]
+    assert isinstance(retained_rows, list)
+    row = retained_rows[0]
+    assert isinstance(row, dict)
+    row.update(updates)
+
+    with pytest.raises(ValueError):
+        retained_api.parse_description_cache_retention_report(json.dumps(payload))

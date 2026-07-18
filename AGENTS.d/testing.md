@@ -7,10 +7,14 @@ Task 10 focused behavior and integration gate:
 ```bash
 uv run python -m pytest -q \
   tests/test_integrity_snapshot.py \
+  tests/test_integrity_snapshot_races.py \
   tests/test_integrity_cli.py \
+  tests/test_integrity_output_safety.py \
+  tests/test_description_cache_retained_capture.py \
   tests/test_description_cache_retained_integrity.py \
   tests/test_description_cache_retained_integrity_bounds.py \
   tests/test_description_cache_retained_integrity_stability.py \
+  tests/test_description_cache_retained_report_relations.py \
   tests/test_integrity_cli_retained_cache.py \
   tests/test_release_metadata.py \
   tests/test_posix_package_assets.py \
@@ -20,7 +24,7 @@ uv run python -m pytest -q \
   tests/test_acceptance_runner.py
 ```
 
-Verified on 2026-07-19: 93 passed.
+Verified on 2026-07-19 after independent-review closure: 115 passed.
 
 Repository gate:
 
@@ -28,7 +32,7 @@ Repository gate:
 uv run w3xray-test
 ```
 
-Verified on 2026-07-19: 2,047 passed, 11 skipped, and 1 subtest passed.
+Verified on 2026-07-19 after independent-review closure: 2,069 passed, 11 skipped, and 1 subtest passed.
 
 Maintained strict-path gate:
 
@@ -38,7 +42,7 @@ uv run w3xray-quality
 
 The quality command runs Ruff lint, Ruff format check, and basedpyright `--level error` over one sorted, duplicate-free maintained path tuple. New paths must not be added to `tool.basedpyright.ignore`.
 
-Verified on 2026-07-19: Ruff check passed, 238 maintained files were formatted, and basedpyright reported 0 errors, 0 warnings, and 0 notes. The changed-file no-excuse audit reported no violations in 34 Python files.
+Verified on 2026-07-19 after independent-review closure: Ruff check passed, 249 maintained files were formatted, and basedpyright reported 0 errors, 0 warnings, and 0 notes. The review-fix no-excuse audit reported no violations in 18 Python files.
 
 Changed-file diagnostics when narrowing a failure:
 
@@ -64,6 +68,8 @@ uv run --with basedpyright basedpyright --level error <paths>
 6. Every map publication binds `图标未解析.tsv`, all text/relation evidence counters, and exact report bytes in its content manifest.
 7. The four global evidence reports reconcile only verified map snapshots. Candidate rows remain unadopted; failed/cancelled terminal inputs appear on the three-axis report without inventing map evidence.
 8. Full regression, quality, lockfile version, whitespace, AGENTS line count, and generated-output checks must pass before the Task 10 commit.
+9. Base snapshots traverse only through held directory descriptors and reject ancestor replacement or any `(dev, ino, size, mtime_ns, ctime_ns, mode)` change around hashing.
+10. Snapshot and retained-report outputs reject symlink components and reserved cache-publication names, and publication rollback leaves no report when output or relevant retained namespaces change.
 
 ## Opt-in real-data acceptance (Task 11 only)
 

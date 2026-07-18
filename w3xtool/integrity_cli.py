@@ -12,8 +12,9 @@ from .description_cache_retained_integrity import (
     DescriptionCacheRetentionError,
     RetainedArtifactValidation,
     format_description_cache_retention_report,
-    inspect_retained_description_caches,
+    inspect_bound_retained_description_caches,
 )
+from .description_cache_retained_binding import bind_active_cache
 from .integrity_snapshot import (
     IntegritySnapshotError,
     SnapshotRoot,
@@ -29,7 +30,11 @@ from .integrity_cli_options import (
     VerifyCliOptions,
     parse_integrity_cli_options,
 )
-from .safe_output import SafeWriteStatus, write_text_safely
+from .integrity_output import (
+    bind_retained_output,
+    bind_snapshot_output,
+)
+from .safe_output import SafeWriteStatus
 
 
 _MAX_SNAPSHOT_BYTES: Final = 64 * 1024 * 1024
@@ -54,23 +59,20 @@ def run_integrity_cli(argv: tuple[str, ...]) -> int:
 
 
 def _run_snapshot(roots: tuple[SnapshotRoot, ...], output: Path) -> int:
+    destination = Path(os.path.abspath(output.expanduser()))
     try:
-        snapshot = build_integrity_snapshot(roots)
+        with bind_snapshot_output(
+            destination,
+            tuple(root.path for root in roots),
+        ) as bound_output:
+            snapshot = build_integrity_snapshot(roots)
+            result = bound_output.write_text(format_integrity_snapshot(snapshot))
+    except OSError as exc:
+        print(f"完整性快照写入失败：{exc}", file=sys.stderr)
+        return 2
     except IntegritySnapshotError as exc:
         print(f"完整性快照失败：{exc}", file=sys.stderr)
         return 2
-    destination = Path(os.path.abspath(output.expanduser()))
-    if any(
-        destination == Path(root.path) or destination.is_relative_to(Path(root.path))
-        for root in snapshot.roots
-    ):
-        print("完整性快照失败：输出不能位于输入根内", file=sys.stderr)
-        return 2
-    result = write_text_safely(
-        str(destination.parent),
-        destination.name,
-        format_integrity_snapshot(snapshot),
-    )
     match result.status:
         case SafeWriteStatus.WRITTEN:
             print(f"完整性快照已写入：{destination}")
@@ -109,31 +111,23 @@ def _run_verify(snapshot_path: Path) -> int:
 
 
 def _run_retained_cache(active_root: Path, output: Path) -> int:
+    destination = Path(os.path.abspath(output.expanduser()))
     try:
-        report = inspect_retained_description_caches(active_root)
+        with bind_retained_output(destination, active_root) as bound_output:
+            with bind_active_cache(active_root) as bound_active:
+                inspection = inspect_bound_retained_description_caches(bound_active)
+                report = inspection.report
+                payload = format_description_cache_retention_report(report)
+                result = bound_output.write_text(
+                    payload,
+                    lambda: inspection.require_current(bound_active),
+                )
+    except OSError as exc:
+        print(f"保留缓存报告写入失败：{exc}", file=sys.stderr)
+        return 2
     except DescriptionCacheRetentionError as exc:
         print(f"保留缓存完整性检查失败：{exc}", file=sys.stderr)
         return 2
-    destination = Path(os.path.abspath(output.expanduser()))
-    blocked = (
-        report.active_root,
-        *(item.path for item in report.retained),
-        *(item.path for item in report.transient),
-        *(item.path for item in report.malformed),
-    )
-    if any(destination == path or destination.is_relative_to(path) for path in blocked):
-        print("保留缓存报告不能写入被检查对象", file=sys.stderr)
-        return 2
-    try:
-        payload = format_description_cache_retention_report(report)
-    except DescriptionCacheRetentionError as exc:
-        print(f"保留缓存报告格式错误：{exc}", file=sys.stderr)
-        return 2
-    result = write_text_safely(
-        str(destination.parent),
-        destination.name,
-        payload,
-    )
     match result.status:
         case SafeWriteStatus.WRITTEN:
             pass

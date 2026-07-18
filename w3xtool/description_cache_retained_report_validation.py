@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-import re
 from typing import Final, assert_never
 
 from .description_cache_publication_models import RetainedCacheRole
@@ -18,6 +17,7 @@ from .description_cache_retained_integrity_models import (
     RetentionArtifactReason,
     TransientDescriptionCacheArtifact,
 )
+from .description_cache_retained_report_metrics import validate_retained_metrics
 from .description_cache_retained_siblings import (
     BACKUP_PREFIX,
     RETAINED_PREFIX,
@@ -30,14 +30,6 @@ from .description_cache_retained_siblings import (
 from .safe_output import safe_relative_path
 
 
-_DIGEST: Final = re.compile(r"[0-9a-f]{64}")
-_COMPLETE_VALIDATIONS: Final = frozenset(
-    (
-        RetainedArtifactValidation.VALID_CACHE,
-        RetainedArtifactValidation.PARTIAL_EVIDENCE,
-        RetainedArtifactValidation.INVALID_PREVIOUS,
-    )
-)
 _FAILED_DIRECTORY_VALIDATIONS: Final = frozenset(
     (
         RetainedArtifactValidation.PARTIAL_EVIDENCE,
@@ -81,23 +73,11 @@ def _validate_retained(active: Path, item: RetainedDescriptionCacheArtifact) -> 
     if not _transaction(item.transaction_id):
         raise DescriptionCacheRetentionError("invalid transaction ID")
     _identity(item.kind, item.device, item.inode)
-    metrics = (item.size, item.file_count, item.entry_count, item.sha256)
-    if (item.validation in _COMPLETE_VALIDATIONS) != all(
-        value is not None for value in metrics
-    ):
-        raise DescriptionCacheRetentionError("retained proof fields are inconsistent")
-    if item.size is not None and item.size < 0:
-        raise DescriptionCacheRetentionError("negative retained size")
-    if item.file_count is not None and item.file_count < 0:
-        raise DescriptionCacheRetentionError("negative retained file count")
-    if item.entry_count is not None and item.entry_count < 0:
-        raise DescriptionCacheRetentionError("negative retained entry count")
-    if item.sha256 is not None and _DIGEST.fullmatch(item.sha256) is None:
-        raise DescriptionCacheRetentionError("invalid retained SHA-256")
     if item.problem_path is not None:
         safe = safe_relative_path(item.problem_path)
         if safe is None or safe.as_posix() != item.problem_path:
             raise DescriptionCacheRetentionError("unsafe retained problem path")
+    validate_retained_metrics(item)
     _validate_classification(item)
 
 

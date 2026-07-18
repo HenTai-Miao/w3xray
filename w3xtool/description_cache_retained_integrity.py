@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Final
 
 from .description_cache_publication_models import RetainedCacheRole
-from .description_cache_retained_binding import bind_active_cache
+from .description_cache_retained_binding import BoundActiveCache, bind_active_cache
 from .description_cache_retained_integrity_models import (
     CacheArtifactKind,
     DescriptionCacheRetentionError,
@@ -16,6 +16,7 @@ from .description_cache_retained_integrity_models import (
     RetainedArtifactValidation,
     RetainedDescriptionCacheArtifact,
     RetentionArtifactReason,
+    SiblingState,
     TransientDescriptionCacheArtifact,
 )
 from .description_cache_retained_report import (
@@ -23,6 +24,7 @@ from .description_cache_retained_report import (
     parse_description_cache_retention_report,
 )
 from .description_cache_retained_set_scan import scan_artifact_set
+from .description_cache_retained_siblings import capture_relevant_siblings
 from .description_cache_retained_tree_snapshot import RetainedScanBounds
 
 
@@ -33,22 +35,50 @@ MAX_RETAINED_ENTRY_COUNT: Final = 125_000
 MAX_RETAINED_DEPTH: Final = 64
 
 
+@dataclass(frozen=True, slots=True)
+class StableRetentionInspection:
+    """One report plus its exact publication-relevant sibling namespace."""
+
+    report: DescriptionCacheRetentionReport
+    siblings: tuple[SiblingState, ...]
+
+    def require_current(self, bound: BoundActiveCache) -> None:
+        """Re-prove active binding and exact relevant siblings."""
+        bound.require_current()
+        if (
+            capture_relevant_siblings(bound.parent_descriptor, bound.root.name)
+            != self.siblings
+        ):
+            raise DescriptionCacheRetentionError(
+                "publication-relevant sibling namespace changed after inspection"
+            )
+
+
 def inspect_retained_description_caches(
     active_root: Path,
 ) -> DescriptionCacheRetentionReport:
     """Inspect relevant siblings twice while holding parent and active fds."""
     with bind_active_cache(active_root) as bound:
-        first = scan_artifact_set(bound, _bounds())
-        bound.require_current()
-        second = scan_artifact_set(bound, _bounds())
-        bound.require_current()
+        return inspect_bound_retained_description_caches(bound).report
+
+
+def inspect_bound_retained_description_caches(
+    bound: BoundActiveCache,
+) -> StableRetentionInspection:
+    """Inspect twice through a caller-held active-cache binding."""
+    first = scan_artifact_set(bound, _bounds())
+    bound.require_current()
+    second = scan_artifact_set(bound, _bounds())
+    bound.require_current()
     if first.siblings != second.siblings:
         raise DescriptionCacheRetentionError(
             "publication-relevant sibling namespace changed between rounds"
         )
     if first.report == second.report:
-        return first.report
-    return _unstable_round_report(first.report, second.report)
+        report = first.report
+    else:
+        report = _unstable_round_report(first.report, second.report)
+    return StableRetentionInspection(report, second.siblings)
 
 
 def _unstable_round_report(
@@ -97,7 +127,9 @@ __all__ = (
     "RetainedDescriptionCacheArtifact",
     "RetentionArtifactReason",
     "TransientDescriptionCacheArtifact",
+    "StableRetentionInspection",
     "format_description_cache_retention_report",
     "inspect_retained_description_caches",
+    "inspect_bound_retained_description_caches",
     "parse_description_cache_retention_report",
 )

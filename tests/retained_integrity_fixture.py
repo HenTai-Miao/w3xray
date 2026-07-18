@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 from typing import Final
 
+import pytest
+
 from tests.trusted_description_cache_fixture import published_cache
 
 
@@ -44,6 +46,8 @@ def install_previous(active: Path, tmp_path: Path) -> Path:
 
 def make_fifo(path: Path) -> None:
     """Create a special object on hosts that support POSIX FIFOs."""
+    if not hasattr(os, "mkfifo"):
+        pytest.skip("POSIX FIFO fixtures are unavailable")
     os.mkfifo(path)
 
 

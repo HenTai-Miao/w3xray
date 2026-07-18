@@ -25,9 +25,11 @@ tests/test_batch_manifest_parser.py
 tests/test_batch_manifest_publication.py
 tests/test_batch_result_parser.py
 tests/test_batch_status.py
+tests/test_description_cache_retained_capture.py
 tests/test_description_cache_retained_integrity.py
 tests/test_description_cache_retained_integrity_bounds.py
 tests/test_description_cache_retained_integrity_stability.py
+tests/test_description_cache_retained_report_relations.py
 tests/test_gui_batch_status.py
 tests/test_gui_complete_text_presentation.py
 tests/test_gui_icon_gaps.py
@@ -39,7 +41,9 @@ tests/test_icon_candidate_input_normalization.py
 tests/test_icon_evidence_query.py
 tests/test_integrity_cli.py
 tests/test_integrity_cli_retained_cache.py
+tests/test_integrity_output_safety.py
 tests/test_integrity_snapshot.py
+tests/test_integrity_snapshot_races.py
 w3xtool/batch_cli_options.py
 w3xtool/batch_description_cache_input.py
 w3xtool/batch_evidence_report_validation.py
@@ -64,8 +68,10 @@ w3xtool/description_cache_retained_classification.py
 w3xtool/description_cache_retained_file_proof.py
 w3xtool/description_cache_retained_integrity.py
 w3xtool/description_cache_retained_integrity_models.py
+w3xtool/description_cache_retained_previous.py
 w3xtool/description_cache_retained_report.py
 w3xtool/description_cache_retained_report_format.py
+w3xtool/description_cache_retained_report_metrics.py
 w3xtool/description_cache_retained_report_parse.py
 w3xtool/description_cache_retained_report_validation.py
 w3xtool/description_cache_retained_set_scan.py
@@ -91,12 +97,17 @@ w3xtool/icon_evidence_query.py
 w3xtool/icons.py
 w3xtool/integrity_cli.py
 w3xtool/integrity_cli_options.py
+w3xtool/integrity_output.py
+w3xtool/integrity_path_binding.py
 w3xtool/integrity_snapshot.py
+w3xtool/integrity_snapshot_file.py
 w3xtool/integrity_snapshot_io.py
 w3xtool/integrity_snapshot_models.py
+w3xtool/integrity_snapshot_tree.py
 w3xtool/load_context.py
 w3xtool/object_text_presentation.py
-w3xtool/quality_paths.py""".splitlines()
+w3xtool/quality_paths.py
+w3xtool/safe_output_publication.py""".splitlines()
 )
 
 __all__ = ("AUDIT_GAP_REQUIRED_PATHS",)
