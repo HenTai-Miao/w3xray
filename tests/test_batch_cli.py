@@ -5,100 +5,19 @@ from __future__ import annotations
 from dataclasses import replace
 import signal
 import sys
-from typing import assert_never
 
 import pytest
 
 import main as entrypoint
 import w3xtool.batch_cli as batch_cli
+from tests.batch_cli_fixture import batch_cli_result
 from w3xtool.batch_models import (
     BATCH_SCHEMA_VERSION,
     BatchState,
-    MapBatchResult,
     MapBatchState,
-    SourceFingerprint,
 )
 from w3xtool.batch_runner import DEFAULT_BATCH_OUTPUT, BatchOptions
 from w3xtool.batch_runtime import BatchAction, BatchProgress
-from w3xtool.batch_status import PublicationResult, derive_batch_axes
-
-
-def _result(state: MapBatchState) -> MapBatchResult:
-    match state:
-        case MapBatchState.COMPLETE:
-            publication, raw_blocks, restricted_blocks = (
-                PublicationResult.PUBLISHED,
-                0,
-                0,
-            )
-        case MapBatchState.PARTIAL:
-            publication, raw_blocks, restricted_blocks = (
-                PublicationResult.PUBLISHED,
-                1,
-                0,
-            )
-        case MapBatchState.RESTRICTED:
-            publication, raw_blocks, restricted_blocks = (
-                PublicationResult.PUBLISHED,
-                0,
-                1,
-            )
-        case MapBatchState.FAILED:
-            publication, raw_blocks, restricted_blocks = (
-                PublicationResult.FAILED,
-                0,
-                0,
-            )
-        case MapBatchState.CANCELLED:
-            publication, raw_blocks, restricted_blocks = (
-                PublicationResult.CANCELLED,
-                0,
-                0,
-            )
-        case unreachable:
-            assert_never(unreachable)
-    terminal = publication is not PublicationResult.PUBLISHED
-    axes = derive_batch_axes(
-        publication,
-        raw_blocks=raw_blocks,
-        damaged_blocks=0,
-        restricted_blocks=restricted_blocks,
-        icon_gaps=0,
-        current_text_states=(),
-        relation_partial_count=0,
-        unresolved_endpoint_count=0,
-    )
-    return MapBatchResult(
-        source=SourceFingerprint("/maps/a.w3x", 10, 20, "a" * 64),
-        display_name="A",
-        output_directory="" if terminal else "地图/001_A_aaaaaaaa",
-        stage="load/process" if terminal else "published",
-        state=state,
-        first_error="broken" if terminal else "",
-        object_count=1,
-        description_counts=(),
-        named_icon_count=1,
-        anonymous_icon_count=0,
-        original_written_count=1,
-        png_written_count=1,
-        icon_failure_count=0,
-        restricted_block_count=restricted_blocks,
-        elapsed_ms=1,
-        publication_result=axes.publication,
-        archive_integrity=axes.archive,
-        knowledge_evidence=axes.knowledge,
-        knowledge_gap_reasons=axes.knowledge_reasons,
-        raw_block_count=raw_blocks,
-        damaged_block_count=0,
-        valid_icon_reference_count=0,
-        resolved_icon_reference_count=0,
-        filtered_icon_field_count=0,
-        unresolved_icon_count=0,
-        unresolved_icon_reference_count=0,
-        anonymous_read_failure_count=0,
-        original_write_failure_count=0,
-        png_failure_count=0,
-    )
 
 
 def test_parse_batch_cli_uses_documented_default_output() -> None:
@@ -188,7 +107,10 @@ def test_run_batch_cli_returns_one_only_when_a_map_failed(
     # Given
     state = BatchState(
         BATCH_SCHEMA_VERSION,
-        (_result(MapBatchState.COMPLETE), _result(MapBatchState.FAILED)),
+        (
+            batch_cli_result(MapBatchState.COMPLETE),
+            batch_cli_result(MapBatchState.FAILED),
+        ),
     )
     monkeypatch.setattr(batch_cli, "run_batch", lambda _options, **_kwargs: state)
 
@@ -207,7 +129,9 @@ def test_run_batch_cli_uses_authoritative_publication_result(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     # Given: the compatibility state is not the publication authority.
-    failed = replace(_result(MapBatchState.FAILED), state=MapBatchState.PARTIAL)
+    failed = replace(
+        batch_cli_result(MapBatchState.FAILED), state=MapBatchState.PARTIAL
+    )
     monkeypatch.setattr(
         batch_cli,
         "run_batch",
@@ -241,7 +165,9 @@ def test_first_sigint_requests_graceful_cancellation(
         assert callable(handler)
         handler(signal.SIGINT, None)
         assert cancellation.is_set()
-        return BatchState(BATCH_SCHEMA_VERSION, (_result(MapBatchState.CANCELLED),))
+        return BatchState(
+            BATCH_SCHEMA_VERSION, (batch_cli_result(MapBatchState.CANCELLED),)
+        )
 
     monkeypatch.setattr(batch_cli, "run_batch", cancel_run)
 
@@ -306,7 +232,9 @@ def test_cli_progress_prints_counts_action_elapsed_rss_and_eta(
                 diagnostic_code="processed",
             )
         )
-        return BatchState(BATCH_SCHEMA_VERSION, (_result(MapBatchState.COMPLETE),))
+        return BatchState(
+            BATCH_SCHEMA_VERSION, (batch_cli_result(MapBatchState.COMPLETE),)
+        )
 
     monkeypatch.setattr(batch_cli, "run_batch", progress_run)
 

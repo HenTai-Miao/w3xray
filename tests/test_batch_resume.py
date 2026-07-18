@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.batch_axis_fixture import axis_fields
 from tests.batch_publication_fixture import empty_result, write_empty_publication
 from w3xtool.batch_manifest_models import CONTENT_MANIFEST_NAME
 from w3xtool.batch_models import (
@@ -21,7 +22,6 @@ from w3xtool.batch_resume import (
     checkpoint_state,
     find_reusable_result,
 )
-from w3xtool.batch_status import BatchAxes, PublicationResult, derive_batch_axes
 
 
 @pytest.mark.parametrize(
@@ -268,7 +268,7 @@ def _publish_valid_result(
     relative = f"地图/001_{label}_{fingerprint.sha256[:8]}"
     result = replace(
         empty_result(fingerprint, relative),
-        **_axis_fields(state),
+        **axis_fields(state),
         dependency_fingerprint=dependency,
     )
     destination = output_root / relative
@@ -293,66 +293,11 @@ def _result(
             stage="load/process",
             first_error="broken",
             dependency_fingerprint="",
-            **_axis_fields(state),
+            **axis_fields(state),
         )
     return replace(
         empty_result(fingerprint, f"地图/001_{label}_{fingerprint.sha256[:8]}"),
-        **_axis_fields(state),
-    )
-
-
-def _axis_fields(state: MapBatchState) -> dict[str, object]:
-    axes, raw_blocks, restricted_blocks = _axes_for_state(state)
-    return {
-        "state": state,
-        "publication_result": axes.publication,
-        "archive_integrity": axes.archive,
-        "knowledge_evidence": axes.knowledge,
-        "knowledge_gap_reasons": axes.knowledge_reasons,
-        "raw_block_count": raw_blocks,
-        "restricted_block_count": restricted_blocks,
-    }
-
-
-def _axes_for_state(state: MapBatchState) -> tuple[BatchAxes, int, int]:
-    match state:
-        case MapBatchState.COMPLETE:
-            return _published_axes(), 0, 0
-        case MapBatchState.PARTIAL:
-            return _published_axes(raw_blocks=1), 1, 0
-        case MapBatchState.RESTRICTED:
-            return _published_axes(restricted_blocks=1), 0, 1
-        case MapBatchState.FAILED:
-            return _terminal_axes(PublicationResult.FAILED), 0, 0
-        case MapBatchState.CANCELLED:
-            return _terminal_axes(PublicationResult.CANCELLED), 0, 0
-        case unreachable:
-            raise AssertionError(f"unhandled state: {unreachable}")
-
-
-def _published_axes(*, raw_blocks: int = 0, restricted_blocks: int = 0) -> BatchAxes:
-    return derive_batch_axes(
-        PublicationResult.PUBLISHED,
-        raw_blocks=raw_blocks,
-        damaged_blocks=0,
-        restricted_blocks=restricted_blocks,
-        icon_gaps=0,
-        current_text_states=(),
-        relation_partial_count=0,
-        unresolved_endpoint_count=0,
-    )
-
-
-def _terminal_axes(publication: PublicationResult) -> BatchAxes:
-    return derive_batch_axes(
-        publication,
-        raw_blocks=0,
-        damaged_blocks=0,
-        restricted_blocks=0,
-        icon_gaps=0,
-        current_text_states=(),
-        relation_partial_count=0,
-        unresolved_endpoint_count=0,
+        **axis_fields(state),
     )
 
 
