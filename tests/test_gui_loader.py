@@ -66,7 +66,7 @@ class LifecycleResolver:
     def build_evidence_index(self, md: MapData) -> IconEvidenceIndex:
         _ = md
         if self.evidence_fails:
-            raise RuntimeError("evidence failed")
+            raise OSError("evidence failed")
         return IconEvidenceIndex.build()
 
     def get_image(self, path: str) -> Image.Image | None:

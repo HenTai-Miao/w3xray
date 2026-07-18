@@ -245,6 +245,6 @@ def _safe_list_loader[T](
 ) -> list[T]:
     try:
         return loader(md)
-    except Exception:  # noqa: BLE001 - GUI preparation boundary isolates optional report failure.
+    except Exception:  # noqa: BLE001  # noqa: BROAD_EXCEPT_OK - GUI report boundary.
         traceback.print_exc()
         return []

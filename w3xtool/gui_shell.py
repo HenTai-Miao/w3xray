@@ -34,6 +34,8 @@ from .theme import (
 class ShellLayoutMixin:
     """Build the always-visible source rail and editor workspace."""
 
+    detail_title: ctk.CTkLabel
+
     def _build_topbar(self) -> None:
         build_topbar(self)
 
@@ -139,7 +141,7 @@ class ShellLayoutMixin:
         try:
             style.theme_use("clam")
         except tk.TclError:
-            pass
+            style = ttk.Style()
         style.configure(
             "Treeview",
             background=CARD,

@@ -44,7 +44,7 @@ def build_resolver_evidence(md: MapData, resolver) -> IconEvidenceIndex:
     """Assign one custom resolver's immutable strict evidence index."""
     try:
         index = resolver.build_evidence_index(md)
-    except Exception:  # noqa: BLE001 - GUI lifecycle closes a failed optional resolver.
+    except Exception:  # noqa: BLE001  # noqa: BROAD_EXCEPT_OK - closes failed optional resolver.
         close_icon_resolver(resolver)
         raise
     md.icon_evidence = index
@@ -55,7 +55,7 @@ def close_icon_resolver(resolver: PreparedIconResolver) -> None:
     """Release one optional resolver without leaking its close failure to Tk."""
     try:
         resolver.close()
-    except Exception:  # noqa: BLE001 - GUI lifecycle must isolate optional close failures.
+    except Exception:  # noqa: BLE001  # noqa: BROAD_EXCEPT_OK - isolates optional close failures.
         traceback.print_exc()
 
 
@@ -70,7 +70,7 @@ def safe_default_icon_resolver(
         return build_strict_icon_resolver(
             md, campaign_path, game_data_path, resolver_factory
         )
-    except Exception:  # noqa: BLE001 - GUI worker boundary isolates optional resolver setup.
+    except Exception:  # noqa: BLE001  # noqa: BROAD_EXCEPT_OK - GUI worker setup boundary.
         md.icon_evidence = empty_icon_evidence_index()
         traceback.print_exc()
         return None
@@ -87,7 +87,7 @@ def safe_custom_icon_resolver(
         if resolver is not None:
             build_resolver_evidence(md, resolver)
         return resolver
-    except Exception:  # noqa: BLE001 - GUI worker boundary isolates optional resolver setup.
+    except Exception:  # noqa: BLE001  # noqa: BROAD_EXCEPT_OK - GUI worker setup boundary.
         md.icon_evidence = empty_icon_evidence_index()
         traceback.print_exc()
         return None
