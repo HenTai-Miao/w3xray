@@ -15,19 +15,19 @@ GUI触发器、场景放置、触发指令、合成配方、孤立对象、分�
 
 Windows x64 同时提供：
 
-- `w3xray-v0.1.3-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
-- `w3xray-v0.1.3-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
+- `w3xray-v0.1.4-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
+- `w3xray-v0.1.4-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
 
 两者功能相同；遇到杀软误报或启动问题时优先使用 ZIP 版。
 
 macOS 提供两个未签名、未公证的 onedir ZIP，请按 Mac 处理器选择并完整解压：
 
-- `w3xray-v0.1.3-macos-arm64.zip`：Apple Silicon（M1/M2/M3/M4/M5）。
-- `w3xray-v0.1.3-macos-x64.zip`：Intel Mac。
+- `w3xray-v0.1.4-macos-arm64.zip`：Apple Silicon（M1/M2/M3/M4/M5）。
+- `w3xray-v0.1.4-macos-x64.zip`：Intel Mac。
 
 Linux 提供：
 
-- `w3xray-v0.1.3-linux-x64.tar.gz`：Linux x86-64，解压后运行 `./魔兽地图提取器/魔兽地图提取器`。
+- `w3xray-v0.1.4-linux-x64.tar.gz`：Linux x86-64，解压后运行 `./魔兽地图提取器/魔兽地图提取器`。
 
 macOS/Linux 包支持地图与战役的静态提取；Windows 专用的 CascLib 游戏客户端原生后端不包含在这两类包中。macOS 首次运行可能出现 Gatekeeper 未验证开发者提示。
 
@@ -43,13 +43,38 @@ uv run main.py acceptance --help # 源码或打包 EXE 验收并生成 JSON
 uv run main.py batch <地图目录> --output <新输出目录> --game-data <客户端证据目录>
 uv run w3xray-test             # 运行测试（Windows 下避开 pytest.exe trampoline）
 ```
-批量结果使用 schema 4；每张地图会输出无截断的 `对象完整描述.tsv`、
-`掉落与获取关系.tsv`、`装备技能关系.tsv` 和 `关系完整性.txt`。GUI 的
-「掉落/获取」工作区可搜索怪物掉落、商店、合成、地面放置、脚本奖励及装备技能，
-并从关系证据跳转到对应装备、技能或来源对象。完整批次发布权威状态后，只会退休通过严格
-所有权与清单验证、同源且不再被状态引用的旧显示名目录，不会删除未知目录或符号链接。
-2026-07-15 的 revision 4 真实验收对 39 张只读地图先完成 39/39 全量处理，再完成 39/39
-清单验证复用；共发布 700,979 条完整文本证据、13,442 条物品关系和 79,078 条图标记录。
+
+## Schema 5 批量证据与完整性命令
+
+schema 5 / extraction revision 5 使用显式输入，不搜索或改写旧结果。典型迁移、批处理和
+前后完整性检查命令为：
+
+```bash
+uv run main.py description-cache migrate --legacy-output <schema-1-root> --legacy-cache <schema-2-cache.tsv> --output <owned-cache-root>
+uv run main.py batch <maps-root> --output <v5-root> --game-data <client-or-trusted-icon-root> --description-cache <owned-cache-root>
+uv run main.py integrity snapshot --root maps=<maps-root> --root legacy-v1=<root> --root legacy-v2=<root> --root legacy-v4=<root> --output <before.json>
+uv run main.py integrity verify --snapshot <before.json>
+uv run main.py integrity retained-cache --active-root <owned-cache-root> --output <retained-cache-report.json>
+```
+
+每张已发布地图必须包含 `图标未解析.tsv`，逐项保留规范路径、主原因、诊断标志和对象引用；
+`对象完整描述.tsv` 保留全部证据，并以 `是否当前值` 区分当前选择。GUI 对象详情可在
+「当前文本」和「全部证据」之间切换，两种视图都不截断正文。掉落、商店、合成、地面放置、
+脚本奖励及装备技能仍可从关系证据跳转到对应对象。
+
+完整批次额外发布四份全局证据报告：`图标缺口汇总.tsv` 聚合经过清单验证的缺口，
+`图标候选绑定.tsv` 仅列出跨地图同路径或匿名内容哈希匹配的候选且 `是否采用` 永远为“否”，
+`图标缺口统计.txt` 汇总原因/命名空间/扩展名/对象分类/地图，`三轴状态汇总.tsv` 则分别记录
+发布结果、档案完整性和知识证据完整性。候选不会自动填补当前地图，也不会改变缺口权威记录。
+
+`integrity retained-cache` 把有意保留的 `previous`、失败 stage/output 和 recovery 证据，与仍在
+发布命名空间中的 stage/backup 临时违规分开报告。它只做有界、no-follow、双轮完整性证明，
+不会把保留对象自动加载为描述来源，也不会删除、修复或重命名任何对象。
+
+完整批次发布权威状态后，只会退休通过严格所有权与清单验证、同源且不再被状态引用的旧显示名
+目录，不会删除未知目录或符号链接。下列数字仅是 2026-07-15 的历史 schema 4 / revision 4
+只读验收结果，不代表 schema 5 实测：39/39 全量处理和 39/39 清单复用，共发布 700,979 条
+完整文本证据、13,442 条物品关系和 79,078 条图标记录。
 战役子地图按“分类 + rawcode”解析战役共享对象，不会在单位、物品或技能同码时串用对象。
 源地图与历史 v2 输出的前后内容校验均一致，详见
 [批量图标、完整描述与装备关系提取](docs/batch-icon-description-extraction.md)。

@@ -2,114 +2,71 @@
 
 ## Automated gates
 
-Focused schema-4 text/relation/icon suite:
+Task 10 focused behavior and integration gate:
 
 ```bash
 uv run python -m pytest -q \
-  tests/test_object_pipeline.py \
-  tests/test_object_candidate_merge.py \
-  tests/test_object_pipeline_priority.py \
-  tests/test_object_candidate_collection.py \
-  tests/test_object_text_pipeline.py \
-  tests/test_object_text_roles.py \
-  tests/test_object_text_sources.py \
-  tests/test_object_text_index.py \
-  tests/test_client_object_data.py \
-  tests/test_item_relation_models.py \
-  tests/test_item_relations.py \
-  tests/test_item_relation_scripts.py \
-  tests/test_item_relation_exports.py \
-  tests/test_item_relation_resilience.py \
-  tests/test_component_parse_diagnostics.py \
-  tests/test_map_relation_loading.py \
-  tests/test_campaign_shared_object_identity.py \
-  tests/test_gui_item_relations.py \
-  tests/test_gui_object_presentation.py \
-  tests/test_gui_layout.py \
-  tests/test_batch_dependencies.py \
-  tests/test_batch_state_reports.py \
-  tests/test_batch_description_cache.py \
-  tests/test_batch_map_retirement.py \
-  tests/test_batch_map_retirement_safety.py \
-  tests/test_batch_runtime_runner.py \
-  tests/test_batch_resume_runner.py \
-  tests/test_batch_global_publication.py \
-  tests/test_batch_reports.py \
-  tests/test_description_cache.py \
-  tests/test_windows_acceptance_assets.py \
-  tests/test_windows_real_install_workflow.py \
-  tests/test_posix_package_assets.py \
+  tests/test_integrity_snapshot.py \
+  tests/test_integrity_cli.py \
+  tests/test_description_cache_retained_integrity.py \
+  tests/test_description_cache_retained_integrity_bounds.py \
+  tests/test_description_cache_retained_integrity_stability.py \
+  tests/test_integrity_cli_retained_cache.py \
   tests/test_release_metadata.py \
-  tests/test_quality_gate.py
+  tests/test_posix_package_assets.py \
+  tests/test_quality_gate.py \
+  tests/test_batch_dependencies.py \
+  tests/test_batch_e2e.py \
+  tests/test_acceptance_runner.py
 ```
 
-Verified result on 2026-07-15: 241 passed.
+Verified on 2026-07-19: 93 passed.
 
-Repository test gate:
+Repository gate:
 
 ```bash
 uv run w3xray-test
 ```
 
-Verified result on 2026-07-15: 1,542 passed, 11 skipped, and 1 subtest passed.
+Verified on 2026-07-19: 2,047 passed, 11 skipped, and 1 subtest passed.
 
-Maintained high-availability quality gate:
+Maintained strict-path gate:
 
 ```bash
 uv run w3xray-quality
 ```
 
-Verified result on 2026-07-15: Ruff check passed, all 150 maintained paths were formatted, and basedpyright reported 0 errors, 0 warnings, and 0 notes. The no-excuse checker reported no violations in 76 changed Python files.
+The quality command runs Ruff lint, Ruff format check, and basedpyright `--level error` over one sorted, duplicate-free maintained path tuple. New paths must not be added to `tool.basedpyright.ignore`.
 
-GUI worker regression after Tk-main-thread marshalling: 58 passed. The exact object-filter/reference-ID scenarios passed 12 tests with no `main thread is not in main loop` exception or thread-exception warning.
+Verified on 2026-07-19: Ruff check passed, 238 maintained files were formatted, and basedpyright reported 0 errors, 0 warnings, and 0 notes. The changed-file no-excuse audit reported no violations in 34 Python files.
 
-Pure-LOC audit of the 150 maintained Python paths: 0 files exceeded 250 code lines. Twenty-eight files are in the 200–250 warning band (`test_batch_cli`, `test_batch_runner`, `test_external_listfile_gui`, `test_gui_current_map_lifecycle`, `test_object_candidate_merge`, `test_object_text_index`, `test_object_text_pipeline`, `test_real_map_item_relation_acceptance`, `test_windows_acceptance_assets`, `acceptance_batch`, `acceptance_runner`, `batch_global_publication`, `batch_manifest_io`, `batch_map_attempt`, `batch_map_publication`, `batch_publication_record`, `batch_retirement_quarantine`, `batch_state_parser`, `gui_casc_browser`, `gui_item_relation_layout`, `gui_source_browser`, `item_relation_models`, `map_loader`, `object_materialization`, `object_text_index`, `quality_gate`, `safe_output`, and `safe_output_publication`); split their owning responsibility before adding substantial logic.
-
-Changed-file static gates:
+Changed-file diagnostics when narrowing a failure:
 
 ```bash
-uv run --with ruff ruff check PATHS...
-uv run --with ruff ruff format --check PATHS...
-uv run --with basedpyright basedpyright --level error PATHS...
+uv run --with ruff ruff check <paths>
+uv run --with ruff ruff format --check <paths>
+uv run --with basedpyright basedpyright --level error <paths>
 ```
 
-The full-repository Ruff and basedpyright commands may expose historical findings outside the maintained high-availability path set. Do not silently broaden a batch change to repair that baseline; require all batch-changed Python paths to pass `w3xray-quality`.
+## Task 10 fixture boundary
 
-Run static gates on the reviewed task path list, not every unrelated dirty-worktree path. Preserve any user changes and do not broaden a feature to rewrite paths with independent Ruff/type/no-excuse findings. New task modules and tests must still pass all four focused gates.
+- All snapshot, retained-cache, CLI, migration, and batch integration tests use pytest `tmp_path` or system-temporary roots.
+- Do not open or mutate `/Users/zhongerbing/Desktop/Maps`, `map-extract-output`, `map-extract-output-v2`, `map-extract-output-v4`, or `trusted-icon-cache-classic` during Task 10.
+- Do not create acceptance outputs inside the repository. Check `git status --short` for tracked/generated output roots before commit.
 
-## Real-map acceptance
+## Required acceptance invariants
 
-High-availability source/packaged acceptance command:
+1. Snapshot formatting/parsing is canonical; roots are unique/nonoverlapping; no symlink or special entry is followed; content and nanosecond mtime changes compare as differences.
+2. Retained-cache bounds are exact: 64 MiB/file, 512 MiB/tree, 100,000 files, 125,000 entries, and accepted depth 64; the first exceeded unit reports `oversized` without a partial digest.
+3. Retained artifacts receive two complete tree intervals in two whole-set rounds. File/child mutation is `unstable`; active-root, top-level retained identity, or relevant sibling namespace replacement is a code-2 command boundary with no report.
+4. A `previous` directory validates only the five already captured owned payloads. Pathname cache loaders are never called; retained failed/recovery objects are never description sources.
+5. Codes 0/1 write canonical retained reports; 0 permits only valid-cache/ordinary partial evidence with no transient/malformed rows, 1 represents artifact violations, and 2 represents request/binding/namespace/report-write boundaries.
+6. Every map publication binds `图标未解析.tsv`, all text/relation evidence counters, and exact report bytes in its content manifest.
+7. The four global evidence reports reconcile only verified map snapshots. Candidate rows remain unadopted; failed/cancelled terminal inputs appear on the three-axis report without inventing map evidence.
+8. Full regression, quality, lockfile version, whitespace, AGENTS line count, and generated-output checks must pass before the Task 10 commit.
 
-```bash
-uv run main.py acceptance \
-  --map tests/fixtures/maps/war3net-map-script-builder.w3x \
-  --campaign tests/fixtures/reference/stormlib-campaign.w3n \
-  --output /tmp/w3xray-schema4-acceptance/output \
-  --report /tmp/w3xray-schema4-acceptance/acceptance.json \
-  --repeat 5
-```
+## Opt-in real-data acceptance (Task 11 only)
 
-Verified on 2026-07-15: overall `pass`; map/campaign/71-file knowledge-pack checks passed, `batch_publication` reported `processed` then `reused` with zero leftovers, five repeated loads were stable, and all 10 GUI tabs loaded. Windows/CASC lanes were explicitly skipped on this non-Windows run.
+Task 11 snapshots the four read-only map/historical roots before migration, writes only to the new external cache/output/evidence paths, then verifies the same snapshot after processing. It must prove first-run `processed`, immediate-run `reused`, manifest/report/count reconciliation, no transient publication names, retained-cache evidence, and exact source/input content+metadata equality.
 
-1. Capture every source path, size, mtime-ns, and SHA-256 with `w3xtool.batch_runner.fingerprint_source` before processing. If sources were copied to a new root, match persisted results by SHA-256 and size and report path/mtime changes separately.
-2. Copy the smallest and largest maps to private temporary directories. Final symlinks are intentionally rejected by the no-follow regular-file boundary.
-3. Run the batch command against the smallest copy, largest copy, then the full source directory.
-4. Require one summary row and one owned published directory per source, with the legacy reports plus `对象完整描述.tsv`, `掉落与获取关系.tsv`, `装备技能关系.tsv`, and `关系完整性.txt` present.
-5. Recompute source fingerprints and require an exact byte-for-byte match with the before manifest.
-6. Cross-check every icon row against its original SHA-256 and PNG magic, validate anonymous names, and parse all text/relation TSV files with a standard tab-delimited CSV reader.
-7. Run `tests/test_real_map_item_relation_acceptance.py` with `W3XRAY_MAPS_ROOT`, `W3XRAY_OLD_OUTPUT`, and `W3XRAY_NEW_OUTPUT`; require every legacy non-placeholder value to remain bound to the same category/object identity, compatible level, and mapped text role, plus stable relation evidence, nested DOO indexes, and GUI/export count parity.
-
-Current schema-4 / v4 content output verified on 2026-07-15:
-
-- 39/39 published, with 1 complete, 38 partial, 0 restricted, and 0 failed results.
-- 79,078 logical icon rows, 78,916 unique original paths, and 78,916 unique PNG paths; full physical/hash/magic audit passed.
-- 700,979 complete-text rows and 13,442 relation rows; all state/type counts reconcile exactly and no malformed TSV rows remain.
-- Every ownership marker and required report matched its summary row.
-- No temporary publication directories remained.
-- Real relation acceptance: 7 passed; focused audit suite: 241 passed; current full suite: 1,542 passed, 11 skipped, 1 subtest passed.
-- The revision-4 real batch first processed 39/39 maps and then reused 39/39 validated publications. It left exactly 39 authoritative map directories and zero stage/backup/transaction/quarantine leftovers.
-- All 39 desktop source paths, sizes, mtime-ns values, and SHA-256 values exactly match the before-run manifest for 4,227,067,802 source bytes. The historical v2 tree also retained 158,226 files, 5,860,928,096 bytes, and the same content+metadata Merkle SHA-256.
-- No local classic MPQ/CASC text source is available. The icon-only trusted cache cannot fill descriptions, and the unbound legacy v2 description cache is rejected instead of being promoted to verified evidence.
-
-Historical schema-3 / v2 output remains read-only at `map-extract-output-v2`; its older counts are not the schema-4 acceptance authority.
+Historical schema-4 measurements from 2026-07-15 remain evidence only: 39/39 processed then reused, 700,979 text rows, 13,442 relation rows, and 79,078 logical icon rows. Do not relabel those counts as schema-5 results.

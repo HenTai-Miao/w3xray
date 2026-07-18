@@ -1,55 +1,64 @@
 # Runtime Knowledge
 
-## Schema-4 revision-4 resilient batch extraction
+## Schema-5 revision-5 workflow
 
-Run from the repository root:
+Run from the repository root with explicit paths:
 
 ```bash
-uv run main.py batch MAP_DIRECTORY \
-  --output OUTPUT_DIRECTORY \
-  --game-data WARCRAFT_DIRECTORY
+uv run main.py description-cache migrate \
+  --legacy-output <schema-1-root> \
+  --legacy-cache <schema-2-cache.tsv> \
+  --output <owned-cache-root>
+
+uv run main.py batch <maps-root> \
+  --output <v5-root> \
+  --game-data <client-or-trusted-icon-root> \
+  --description-cache <owned-cache-root>
 ```
 
 - Sources are scanned recursively in stable order for `.w3x`, `.w3m`, and `.w3n`.
-- Normal CLI processing isolates one map at a time in a spawned child. The default per-map timeout is 900 seconds; the default free-space reserve is 536,870,912 bytes; the address-space limit is disabled unless `--max-memory-bytes` is supplied.
-- Optional boundaries are `--map-timeout-seconds`, `--max-memory-bytes`, and `--minimum-free-bytes`. The first Ctrl-C requests a checkpointed graceful cancellation; a second Ctrl-C exits immediately with code 130.
-- Classic client lookup order is `War3Patch.mpq`, `War3xLocal.mpq`, `War3x.mpq`, then `war3.mpq`.
-- Source maps and client archives are read-only. All writes stay below the selected output root.
-- One non-blocking cross-process lease owns the output root for recovery, checkpoints, final publication, and retirement; a concurrent writer fails before processing.
-- The current 39-map schema-4 publication target is `/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v4`; never use the historical `map-extract-output-v2` as a new-run destination.
-- `完整`, `部分完成`, and `受限` results are reused only when source identity, dependency fingerprint, ownership marker, content manifest, every file hash, report schema, and reconciled counts all match. Failed results are retried unless `--no-retry-failed` is supplied.
+- Source maps, legacy outputs/caches, and game-data roots are read-only. All writes stay below the selected new output/cache root.
+- Normal batch processing isolates one map at a time in a spawned child. Defaults: 900-second timeout, 536,870,912-byte free-space reserve, and no address-space limit unless `--max-memory-bytes` is supplied.
+- Optional boundaries are `--map-timeout-seconds`, `--max-memory-bytes`, and `--minimum-free-bytes`. First Ctrl-C requests a checkpointed cancellation; second Ctrl-C exits with 130.
+- Reuse requires exact source identity, dependency fingerprint, ownership marker, content manifest, file hashes, report schemas, and reconciled evidence counters. Failed results retry unless `--no-retry-failed` is supplied.
 
-Each map directory below `地图/` contains `内容清单.json`, `.w3xray-batch-owned`, the legacy reports, complete-text/acquisition/equipment-skill reports, and icon artifacts. Map publication uses transaction-bound stage and backup directories; startup recovery keeps a validated destination, finishes a validated prepared stage, or restores a validated owned backup, while leaving unprovable paths untouched.
+## Integrity commands
 
-After a full batch with no failed or cancelled result publishes its final authoritative generation, the runner retires obsolete display-name directories only when they are direct children of `地图/`, are not referenced by the authority, pass the complete ownership/manifest/report/file validation, and bind the same source SHA-256 as a current result. Unowned paths, foreign-source publications, symlinks, private transaction paths, and interrupted batches are never retired by this pass.
+```bash
+uv run main.py integrity snapshot \
+  --root maps=<maps-root> \
+  --root legacy-v1=<root> \
+  --root legacy-v2=<root> \
+  --root legacy-v4=<root> \
+  --output <before.json>
+uv run main.py integrity verify --snapshot <before.json>
+uv run main.py integrity retained-cache \
+  --active-root <owned-cache-root> \
+  --output <retained-cache-report.json>
+```
 
-The only resume authority is `.w3xray-global/current.json`, which selects a validated immutable generation below `.w3xray-global/generations/`. A generation binds `批量提取汇总.tsv`, `批量提取状态.json`, `失败与重试.tsv`, `可信描述缓存.tsv`, and `批量诊断.jsonl` through `全局清单.json`. Root reports are compatibility mirrors, not resume state. Legacy root-only batch state is ignored but not deleted.
+- Snapshot roots must be absolute after normalization, nonoverlapping, no-follow directories; outputs cannot be inside an input root.
+- Verification returns 0 for equality, 1 for content/metadata differences, and 2 for request, parse, unsafe-root, or I/O boundaries.
+- Retained-cache inspection holds the publication parent and active-root descriptors, scans relevant siblings twice, and never follows symlinks.
+- Retained `previous`, failed-stage, failed-output, and recovery evidence is reported separately from stage/backup transient violations. Retained objects are never automatically loaded as description sources and are never deleted by inspection.
 
-## Local high-availability acceptance on 2026-07-15
+## Protected roots and new outputs
 
-- `uv run main.py acceptance ... --repeat 5` completed with overall status `pass`.
-- `batch_publication` validated the source SHA-256 and map manifest, observed `processed` then `reused`, and found zero stage/backup/transaction leftovers.
-- `repeat_load` completed five stable loads with `stable_total=18`; map load, campaign switch, 71-file knowledge-pack export, and all 10 GUI tabs passed.
-- The existing `/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v2/` was not modified.
+Do not inspect or mutate the real-data roots during ordinary development. Task 11 alone owns opt-in real-data acceptance:
 
-## Current schema-4 real-map publication on 2026-07-15
+- Read-only maps: `/Users/zhongerbing/Desktop/Maps`.
+- Read-only historical evidence: `/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output`, `map-extract-output-v2`, and `map-extract-output-v4`.
+- Read-only icon evidence: `/Users/zhongerbing/Documents/xm/war3_xg/trusted-icon-cache-classic`.
+- New external outputs: `trusted-description-cache-v5`, `map-extract-output-v5`, and `schema5-*-integrity.json` below `/Users/zhongerbing/Documents/xm/war3_xg/`.
 
-- Current source root: `/Users/zhongerbing/Desktop/Maps/`.
-- Current inventory: 39 maps, 4,227,067,802 source bytes.
-- Published output: `/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v4/`, about 5.7 GiB.
-- Result states: 1 `完整`, 38 `部分完成`, 0 `受限`, 0 `失败`.
-- Objects: 109,637 summary objects and 700,979 lossless text-evidence rows.
-- Text states: 285,565 map values, 0 live-client fills, 0 trusted-cache fills, 857 explicit empty values, 7,000 author-undefined rows, 351,923 source-unavailable rows, and 55,634 conflict variants.
-- Full-text audit: the longest raw value is 6,363 characters; 341 rows contain physical newlines and 128,340 rows retain Warcraft color-code evidence.
-- The schema-4 trusted-description cache is empty because the local evidence root is icon-only. The legacy v2 cache has no source-manifest binding and is intentionally rejected rather than treated as verified text evidence.
-- Relations: 13,442 total — 135 unit drops, 221 destructable drops, 4,067 shop sales, 1,078 shop makes, 294 recipes, 277 ground placements, 39 inventories, 2,255 script rewards, 3,449 item abilities, and 1,627 cooldown abilities.
-- Relation evidence: 12,836 confirmed and 606 inferred; completeness is 7,974 complete, 4,883 partial, 585 unresolved, and 0 conflicts in this corpus.
-- Icon records: 32,690 named plus 46,388 anonymous; all 79,078 logical exports wrote an original and PNG with zero decode/write failures.
-- Physical files: 78,916 unique originals and 78,916 unique PNGs. The 162-record difference is `.tga`/`.blp` references resolving to the same proven `.blp` and intentionally reusing one file.
-- Unresolved named references: 9,682. These are recorded static-evidence gaps, not failures of already exported files.
-- The revision-4 clean run processed 39/39 results in 566.45 seconds with an observed 783.98 MiB peak resident set size. The immediate validation run reused 39/39 in 39.77 seconds.
-- Campaign children inherit shared objects through exact `(category, rawcode)` identities, so equal rawcodes in different object categories cannot cross-resolve.
-- After high-availability acceptance, all 39 source paths, sizes, mtime-ns values, and SHA-256 values exactly matched the saved before-run manifest byte for byte; the historical v2 tree also retained the same 158,226 files and content+metadata Merkle SHA-256.
-- The final authority contains exactly 39 ordinary map directories and zero stage/backup/transaction/quarantine leftovers.
-- Version-8 fixed placements with `randomFlag=-1` are supported; the real `LT科技转职` sample now parses 345/345 units and publishes its drop, ground-item, inventory, and shop-instance relations.
-- A complete classic MPQ set is no longer present locally. Final icon parity used the hash-bound `trusted-icon-cache-classic` evidence root; it cannot supply descriptions or cross-map custom assets.
+Development and Task 10 acceptance use only `tmp_path`/system-temp fixtures. Generated outputs never belong in the repository.
+
+## Publication and reports
+
+Each map publication requires `内容清单.json`, `.w3xray-batch-owned`, and all reports in `REQUIRED_MAP_REPORTS`, including `图标未解析.tsv`, `对象完整描述.tsv`, both relation TSVs, and `关系完整性.txt`.
+
+Each immutable global generation binds the ordinary summary/state/retry/cache/diagnostic payloads plus `图标缺口汇总.tsv`, `图标候选绑定.tsv`, `图标缺口统计.txt`, and `三轴状态汇总.tsv` through `全局清单.json`. Root copies are compatibility mirrors; `.w3xray-global/current.json` selecting a validated generation is the only resume authority.
+
+`图标候选绑定.tsv` is non-authoritative suggestion evidence and every row remains unadopted. `三轴状态汇总.tsv` keeps publication result, archive integrity, and knowledge completeness independent. Current-text counters use only `是否当前值=是`; all text evidence remains in the report and GUI “全部证据” view.
+
+Retirement/recovery may act only on direct owned children whose identities, manifests, report bytes, and source bindings are re-proved under the output lease. Unknown paths, symlinks, foreign sources, private transaction paths, and unprovable objects remain untouched.

@@ -6,7 +6,7 @@
 - Preserve unrelated dirty work. Never execute historical binaries, DLLs, or map payloads; source maps are read-only inputs.
 
 ## Orientation
-- `main.py`: default GUI plus `cli`, `current`, `casc`, `save`, `acceptance`, and `batch` dispatch.
+- `main.py`: default GUI plus `description-cache`, `integrity`, `cli`, `current`, `casc`, `save`, `acceptance`, and `batch` dispatch.
 - `w3xtool/gui.py`, `gui_topbar.py`, `gui_lifecycle.py`: GUI composition, top-level actions, and shutdown.
 - `w3xtool/cli_options.py`, `api.py`, `archive_source.py`: existing map CLI, load/export API, and archive boundary.
 - `w3xtool/current_map_models.py`: typed evidence and pure confidence resolution.
@@ -18,6 +18,8 @@
 - `w3xtool/batch_manifest_*.py`, `batch_publication_*.py`: per-map content manifests, durable transactions, validation, and crash recovery.
 - `w3xtool/batch_global_*.py`, `batch_resume.py`: authoritative immutable generations, `current.json`, checkpoints, and verified reuse.
 - `w3xtool/batch_execution.py`, `batch_runtime.py`: isolated map workers, cancellation/timeouts, disk/RSS preflight, progress, and diagnostics.
+- `w3xtool/integrity_snapshot*.py`, `integrity_cli*.py`: explicit read-only root snapshots, verification, and CLI boundaries.
+- `w3xtool/description_cache_retained_*.py`: descriptor-relative, no-follow, two-round retained-cache evidence scanning and canonical reports.
 - `w3xtool/object_text_models.py`, `object_text_index.py`, `description_cache.py`: lossless object-text evidence, seven states, and trusted base-object fills.
 - `w3xtool/item_relation_models.py`, `item_relation_builder.py`, `item_relation_exports.py`: immutable drop/acquisition/equipment-skill relations and TSV reports.
 - `w3xtool/gui_item_relations.py`, `gui_item_relation_layout.py`: searchable relation workspace and evidence navigation.
@@ -29,7 +31,10 @@
 - Run GUI: `uv run main.py`.
 - Run map CLI: `uv run main.py cli <map-path>`.
 - Locate current map: `uv run main.py current [--root PATH] [--accept-suggestion]`.
-- Batch icons/descriptions: `uv run main.py batch <maps-dir> --output <output-dir> --game-data <warcraft-dir>`.
+- Migrate trusted descriptions: `uv run main.py description-cache migrate --legacy-output <schema-1-root> --legacy-cache <schema-2-cache.tsv> --output <owned-cache-root>`.
+- Batch schema 5: `uv run main.py batch <maps-root> --output <v5-root> --game-data <client-or-trusted-icon-root> --description-cache <owned-cache-root>`.
+- Snapshot/verify inputs: `uv run main.py integrity snapshot --root LABEL=PATH --output <snapshot.json>` and `uv run main.py integrity verify --snapshot <snapshot.json>`.
+- Inspect retained cache: `uv run main.py integrity retained-cache --active-root <owned-cache-root> --output <report.json>`.
 - Full tests: `uv run w3xray-test` (Windows-safe); direct alternative: `uv run python -m pytest -q`.
 - Maintained changed-path quality gate: `uv run w3xray-quality`.
 - Focused tests: `uv run python -m pytest -q <test-paths>`.
@@ -37,8 +42,8 @@
 - Type-check changed Python: `uv run --with basedpyright basedpyright --level error <paths>`; no checked-in basedpyright config.
 
 ## Knowledge
-- `AGENTS.d/runtime.md`: batch command, output semantics, resume rules, and observed real-map counts.
-- `AGENTS.d/testing.md`: focused/full/static gates and real-map source-integrity acceptance.
+- `AGENTS.d/runtime.md`: schema-5 commands, protected roots, output semantics, required reports, and resume rules.
+- `AGENTS.d/testing.md`: focused/full/static gates and schema-5 acceptance invariants.
 
 ## Boundaries
 - Do not hand-edit caches/environments: `.venv/`, `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`.
@@ -46,5 +51,5 @@
 - Treat `third_party/` as vendored; CascLib DLL/hash under `third_party/CascLib/bin/win-x64/` are generated local artifacts.
 - Generated tables: `w3xtool/base_names.py`, `base_objects.py`, `westrings.py`, `jass_natives.py`, `field_meta.py`; update through their `build_*.py` generators.
 - Keep current-map discovery bounded and evidence-based; never add memory reads, `Game.dll` loading, injection, elevation, or runtime decryption.
-- Keep source maps read-only; batch artifacts belong outside the repository under the selected output root.
-- Do not use `/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v2` for high-availability development or acceptance runs.
+- Keep `/Users/zhongerbing/Desktop/Maps`, `map-extract-output`, `map-extract-output-v2`, `map-extract-output-v4`, and `trusted-icon-cache-classic` read-only; never use a historical root as a new-run destination.
+- Generated schema-5 caches, batch outputs, logs, integrity snapshots, and acceptance reports belong outside the repository.

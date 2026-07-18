@@ -8,6 +8,7 @@ import tomllib
 
 import pytest
 
+from tests.quality_audit_gap_paths import AUDIT_GAP_REQUIRED_PATHS
 from w3xtool import quality_gate
 
 
@@ -48,6 +49,7 @@ def test_quality_gate_paths_are_one_unique_immutable_set() -> None:
 def test_quality_gate_covers_audit_gap_core_modules() -> None:
     # Given
     expected_paths = {
+        *AUDIT_GAP_REQUIRED_PATHS,
         "tests/test_gui_item_relations.py",
         "tests/test_item_relation_resilience.py",
         "tests/test_item_relation_models.py",

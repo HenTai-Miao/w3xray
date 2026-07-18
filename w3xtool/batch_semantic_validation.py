@@ -52,7 +52,9 @@ def batch_semantics_error(evidence: BatchSemanticEvidence) -> str | None:
     if evidence.valid_icon_references != (
         evidence.resolved_icon_references + evidence.unresolved_icon_references
     ):
-        return "valid icon reference count must equal resolved plus unresolved references"
+        return (
+            "valid icon reference count must equal resolved plus unresolved references"
+        )
     if evidence.unresolved_icons > evidence.unresolved_icon_references:
         return "unresolved icon count exceeds unresolved icon reference count"
     if evidence.client_unavailable_icon_count > evidence.unresolved_icons:

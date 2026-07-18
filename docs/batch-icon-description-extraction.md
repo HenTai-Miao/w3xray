@@ -1,9 +1,35 @@
 # 批量图标、完整描述与装备关系提取
 
-## 当前验收结果
+## Schema 5 当前契约
+
+批量输出使用 schema 5 / extraction revision 5。输入地图、旧输出、旧缓存和客户端证据都是
+只读根；新产物只写到显式选择的 v5 输出根。schema 5 把一张地图的结果拆成三条独立轴：
+
+- **发布结果**：是否形成通过所有权、内容清单、必需报告和文件哈希验证的权威发布。
+- **档案完整性**：完整、存在原始块、存在损坏块或存在受限块，不因“发布成功”而隐藏缺口。
+- **知识证据完整性**：依据当前文本、图标缺口、关系部分和端点未解析单独判断完整或部分。
+
+单一的“完整/部分/受限”状态只作为兼容投影；`三轴状态汇总.tsv` 才是这三条轴的权威视图。
+
+每张地图的 `对象完整描述.tsv` 保留全部文本证据，并用 `是否当前值` 标记当前选择；GUI 可在
+「当前文本」与「全部证据」之间切换，不删减原始值。每张地图还必须发布 `图标未解析.tsv`，
+保留规范路径、主原因、诊断标志、对象身份和引用集合，发布验证会把这些行与清单和状态计数
+逐项对账。
+
+批次根另外发布四份全局证据：
+
+- `图标缺口汇总.tsv`：只聚合通过清单验证的逐地图 `图标未解析.tsv`。
+- `图标候选绑定.tsv`：记录跨地图同路径或匿名内容哈希匹配；`是否采用` 必须为“否”。
+- `图标缺口统计.txt`：按原因、命名空间、扩展名、对象分类和地图汇总。
+- `三轴状态汇总.tsv`：每个输入的发布、档案和知识三轴以及精确计数。
+
+候选只供人工排查，绝不会被采用为当前地图资源，也不会覆盖缺口记录。终止/失败输入只进入
+三轴状态，不会凭未验证的地图目录制造全局图标证据。
+
+## 历史 schema 4 验收结果
 
 工具已对 `/Users/zhongerbing/Desktop/Maps/` 中 39 张地图完成 schema 4、revision 4
-只读验收。最终产物位于：
+只读验收。以下路径和数字是 2026-07-15 的历史记录，不是 schema 5 实测结果。最终产物位于：
 
 `/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v4/`
 
@@ -20,36 +46,67 @@
 ## 运行命令
 
 ```bash
-uv run main.py batch \
-  '/Users/zhongerbing/Desktop/Maps' \
-  --output '/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v4' \
-  --game-data '/Users/zhongerbing/Documents/xm/war3_xg/trusted-icon-cache-classic'
+uv run main.py description-cache migrate \
+  --legacy-output <schema-1-root> \
+  --legacy-cache <schema-2-cache.tsv> \
+  --output <owned-cache-root>
+
+uv run main.py batch <maps-root> \
+  --output <v5-root> \
+  --game-data <client-or-trusted-icon-root> \
+  --description-cache <owned-cache-root>
+
+uv run main.py integrity snapshot \
+  --root maps=<maps-root> \
+  --root legacy-v1=<root> \
+  --root legacy-v2=<root> \
+  --root legacy-v4=<root> \
+  --output <before.json>
+
+uv run main.py integrity verify --snapshot <before.json>
+uv run main.py integrity retained-cache \
+  --active-root <owned-cache-root> \
+  --output <retained-cache-report.json>
 ```
 
 `--game-data` 可指向可读的 Warcraft 客户端数据目录。经典客户端按
-`War3Patch.mpq → War3xLocal.mpq → War3x.mpq → war3.mpq` 查询。本次验收使用由旧批次客户端
+`War3Patch.mpq → War3xLocal.mpq → War3x.mpq → war3.mpq` 查询。历史 schema 4 验收使用由旧批次客户端
 MPQ 证据构建的只读可信图标缓存；缓存中的每个虚拟路径都绑定 SHA-256、原客户端档案和同一张
 源地图的引用证据，不能把其他地图的自定义图标当作客户端资源。
 
-批处理会自动从自己拥有且 schema 可识别的旧结果构建 `可信描述缓存.tsv`。GUI 也可从数据工具
-菜单选择或清除可信描述缓存。缓存只接纳原版基础对象、客户端补全、键和值均唯一的记录。
+schema 5 只接受显式 `--description-cache` 指向的已拥有、已验证缓存 generation。迁移命令从
+只读 legacy 输入构建新缓存；批处理不会从任意旧结果隐式采纳文本。GUI 也可从数据工具菜单
+选择或清除可信描述缓存。缓存只接纳原版基础对象、客户端补全、键和值均唯一的记录。
+
+`integrity snapshot` 与 `verify` 用内容和纳秒 mtime 证明只读输入前后一致。`retained-cache` 将
+有意保留的 `previous`、失败 stage/output 和 recovery，与仍在发布命名空间中的 stage/backup
+临时违规分开报告；它不会把保留对象加载为描述来源，也不会删除、修复或重命名它们。
 
 ## 输出结构
 
 ```text
-map-extract-output-v4/
+v5-root/
 ├── .w3xray-global/
 │   ├── current.json
 │   └── generations/<generation-id>/
+│       ├── 全局清单.json
+│       ├── 图标缺口汇总.tsv
+│       ├── 图标候选绑定.tsv
+│       ├── 图标缺口统计.txt
+│       └── 三轴状态汇总.tsv
 ├── 批量提取汇总.tsv
 ├── 批量提取状态.json
 ├── 失败与重试.tsv
-├── 可信描述缓存.tsv
+├── 图标缺口汇总.tsv
+├── 图标候选绑定.tsv
+├── 图标缺口统计.txt
+├── 三轴状态汇总.tsv
 └── 地图/
     └── 001_地图名_SHA前8位/
         ├── .w3xray-batch-owned
         ├── 地图摘要.txt
         ├── 图标索引.tsv
+        ├── 图标未解析.tsv
         ├── 图标完整性.txt
         ├── 对象描述.tsv
         ├── 对象完整描述.tsv
@@ -64,8 +121,8 @@ map-extract-output-v4/
             └── PNG/匿名/
 ```
 
-每张地图先写入工具拥有的私有暂存目录，全部必需报告和所有权标记齐备后再原子发布。schema 3
-结果不会被 schema 4 断点续跑误认成完成结果；恢复只信任 `current.json` 指向且通过全局清单
+每张地图先写入工具拥有的私有暂存目录，全部必需报告和所有权标记齐备后再原子发布。旧 schema
+结果不会被 schema 5 断点续跑误认成完成结果；恢复只信任 `current.json` 指向且通过全局清单
 验证的不可变 generation。完整批次发布最终权威状态后，会清理同源 SHA 的旧显示名目录，但只
 删除严格通过所有权、清单、报告和文件哈希验证且未被当前状态引用的 `地图/` 直接子目录；
 未证明所有权的目录、不同源目录、符号链接和中断批次均保持不动。
@@ -95,7 +152,7 @@ map-extract-output-v4/
 地图中显式零长度值会阻止低优先级补全。固定占位值会保留为证据，但允许客户端或缓存补全。
 绝不使用其他地图的自定义对象说明，也不根据名称或短文本猜写描述。
 
-最终 700,979 条文本证据按七种状态统计如下：
+历史 schema 4 的 700,979 条文本证据按七种状态统计如下；这些数量没有重写为 schema 5 结果：
 
 | 状态 | 数量 |
 |---|---:|
@@ -150,7 +207,7 @@ Warcraft 颜色代码证据，均未因 GUI 或 TSV 导出被截断。
 `randomFlag=-1` 也已覆盖；真实 `LT科技转职` 地图从 0/345 恢复为 345/345 个预放置实例，新增
 46 条直接掉落、28 条地面物品和 37 条预放置背包关系。
 
-## 图标覆盖口径
+## 历史 schema 4 图标覆盖口径
 
 - 具名逻辑记录 32,690 条，匿名 BLP 46,388 条，总计 79,078 条。
 - 原始写出与 PNG 成功均为 79,078；唯一原始文件和唯一 PNG 各 78,916 份。
@@ -161,7 +218,7 @@ Warcraft 颜色代码证据，均未因 GUI 或 TSV 导出被截断。
 最终物理审计逐个核对了索引路径、原始文件 SHA-256、PNG 魔数、符号链接和磁盘文件集合：
 79,078 条逻辑记录对应 78,916 份唯一原始文件与 78,916 份唯一 PNG，全部通过。
 
-## 最终验证
+## 历史 schema 4 最终验证
 
 - 修订 4 全量批处理：39/39 均为 `processed`，耗时 566.45 秒，实测峰值常驻内存
   783.98 MiB，发布文件 5,833,248,359 字节；修订 3 结果未被复用。

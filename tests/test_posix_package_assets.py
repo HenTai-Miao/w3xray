@@ -13,7 +13,7 @@ def test_posix_workflow_targets_release_tag_on_supported_runners() -> None:
     workflow = _WORKFLOW.read_text(encoding="utf-8")
 
     assert "workflow_dispatch:" in workflow
-    assert "default: v0.1.3" in workflow
+    assert "default: v0.1.4" in workflow
     assert "ref: ${{ inputs.source_ref }}" in workflow
     assert "persist-credentials: false" in workflow
     assert "SOURCE_REF_INPUT: ${{ inputs.source_ref }}" in workflow
@@ -76,9 +76,9 @@ def test_readme_lists_macos_and_linux_release_assets() -> None:
     release_section = readme.split("## 开发运行（uv）", maxsplit=1)[0]
 
     for asset in (
-        "w3xray-v0.1.3-macos-arm64.zip",
-        "w3xray-v0.1.3-macos-x64.zip",
-        "w3xray-v0.1.3-linux-x64.tar.gz",
+        "w3xray-v0.1.4-macos-arm64.zip",
+        "w3xray-v0.1.4-macos-x64.zip",
+        "w3xray-v0.1.4-linux-x64.tar.gz",
     ):
         assert asset in release_section
     assert "Apple Silicon" in release_section
