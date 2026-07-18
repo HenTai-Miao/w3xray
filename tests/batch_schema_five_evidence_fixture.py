@@ -5,14 +5,25 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal, assert_never
 
+from dataclasses import replace
 from w3xtool.batch_reports import format_icon_index_tsv
 from w3xtool.batch_tsv import format_tsv_rows
+from w3xtool.batch_models import MapBatchResult
+from w3xtool.batch_status import (
+    PublicationResult,
+    derive_batch_axes,
+    derive_legacy_map_state,
+)
 from w3xtool.icon_evidence_exports import (
     format_icon_integrity,
     format_unresolved_icon_tsv,
 )
 from w3xtool.icon_evidence_index import IconEvidenceIndex
-from w3xtool.icon_evidence_models import IconGapReason, UnresolvedIconEvidence
+from w3xtool.icon_evidence_models import (
+    IconDiagnosticFlag,
+    IconGapReason,
+    UnresolvedIconEvidence,
+)
 from w3xtool.icon_resources import IconObjectReference
 from w3xtool.item_relation_exports import ACQUISITION_REPORT_HEADER
 from w3xtool.item_relation_models import ItemRelationKind, RelationCompleteness
@@ -32,6 +43,80 @@ def write_schema_five_evidence_reports(root: Path, kind: EvidenceKind) -> None:
             _write_unresolved_relation(root)
         case "icon_diagnostic":
             _write_undiagnosed_icon_gap(root)
+        case unreachable:
+            assert_never(unreachable)
+
+
+def schema_five_evidence_result(
+    result: MapBatchResult,
+    kind: EvidenceKind,
+) -> MapBatchResult:
+    """Produce a semantically valid summary for one report-evidence drift case."""
+    match kind:
+        case "current_text":
+            axes = derive_batch_axes(
+                PublicationResult.PUBLISHED,
+                raw_blocks=0,
+                damaged_blocks=0,
+                restricted_blocks=0,
+                icon_gaps=0,
+                current_text_states=(ObjectTextState.SOURCE_UNAVAILABLE,),
+                relation_partial_count=0,
+                unresolved_endpoint_count=0,
+            )
+            return replace(
+                result,
+                state=derive_legacy_map_state(axes),
+                knowledge_evidence=axes.knowledge,
+                knowledge_gap_reasons=axes.knowledge_reasons,
+                description_counts=tuple(
+                    (state.value, int(state is ObjectTextState.SOURCE_UNAVAILABLE))
+                    for state in ObjectTextState
+                ),
+                current_source_unavailable_count=1,
+            )
+        case "relation":
+            axes = derive_batch_axes(
+                PublicationResult.PUBLISHED,
+                raw_blocks=0,
+                damaged_blocks=0,
+                restricted_blocks=0,
+                icon_gaps=0,
+                current_text_states=(),
+                relation_partial_count=1,
+                unresolved_endpoint_count=0,
+            )
+            return replace(
+                result,
+                state=derive_legacy_map_state(axes),
+                knowledge_evidence=axes.knowledge,
+                knowledge_gap_reasons=axes.knowledge_reasons,
+                relation_counts=(("怪物直接掉落", 1),),
+                relation_incomplete_count=1,
+                relation_partial_count=1,
+            )
+        case "icon_diagnostic":
+            axes = derive_batch_axes(
+                PublicationResult.PUBLISHED,
+                raw_blocks=0,
+                damaged_blocks=0,
+                restricted_blocks=0,
+                icon_gaps=1,
+                current_text_states=(),
+                relation_partial_count=0,
+                unresolved_endpoint_count=0,
+                icon_diagnostics=(IconDiagnosticFlag.CLIENT_NOT_PROVIDED,),
+            )
+            return replace(
+                result,
+                state=derive_legacy_map_state(axes),
+                knowledge_evidence=axes.knowledge,
+                knowledge_gap_reasons=axes.knowledge_reasons,
+                valid_icon_reference_count=1,
+                unresolved_icon_count=1,
+                unresolved_icon_reference_count=1,
+                client_unavailable_icon_count=1,
+            )
         case unreachable:
             assert_never(unreachable)
 
