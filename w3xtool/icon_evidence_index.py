@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from .icon_evidence_models import (
     FilteredIconEvidence,
@@ -76,7 +76,7 @@ class IconEvidenceIndex:
 
 def empty_icon_evidence_index() -> IconEvidenceIndex:
     """Return an empty immutable evidence index."""
-    return IconEvidenceIndex.build()
+    return _EMPTY_ICON_EVIDENCE_INDEX
 
 
 def merge_icon_evidence_indexes(
@@ -222,3 +222,6 @@ def _attempts_key(
         )
         for attempt in attempts
     )
+
+
+_EMPTY_ICON_EVIDENCE_INDEX: Final = IconEvidenceIndex.build()

@@ -11,6 +11,7 @@ from typing import Final, Protocol
 from .api import MapData, commands_from_map, load_map, recipes_from_map
 from .gui_icon_evidence_loader import (
     build_strict_icon_resolver,
+    close_icon_resolver,
     PreparedIconResolver,
     safe_default_icon_resolver,
     safe_custom_icon_resolver,
@@ -224,7 +225,7 @@ def prepare_map_view(
         recipes = recipe_future.result() if recipe_future is not None else []
         resolver = resolver_future.result() if resolver_future is not None else None
     if not options[OBJECT_BROWSER_KEY] and resolver is not None:
-        resolver.close()
+        close_icon_resolver(resolver)
         resolver = None
     return LoadedMap(md, commands, recipes, resolver, views, campaign_path)
 
@@ -233,7 +234,7 @@ def build_icon_resolver(
     md: MapData,
     campaign_path: str | None,
     game_data_path: str | None = None,
-) -> IconResolver | None:
+) -> PreparedIconResolver | None:
     """Create the resolver lazily; images decode on demand in the main view."""
     return build_strict_icon_resolver(md, campaign_path, game_data_path, IconResolver)
 
@@ -244,6 +245,6 @@ def _safe_list_loader[T](
 ) -> list[T]:
     try:
         return loader(md)
-    except Exception:  # noqa: BROAD_EXCEPT_OK - GUI preparation logs and isolates optional report failure.
+    except Exception:  # noqa: BLE001 - GUI preparation boundary isolates optional report failure.
         traceback.print_exc()
         return []

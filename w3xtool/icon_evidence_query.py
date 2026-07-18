@@ -37,6 +37,9 @@ class IconGapFilter:
     show_candidates: bool
 
 
+type MapIdentity = tuple[str, str]
+
+
 def map_icon_gap_rows(index: IconEvidenceIndex) -> tuple[IconGapViewRow, ...]:
     """Expand every unresolved reference without coalescing its reason."""
     rows: list[IconGapViewRow] = []
@@ -62,14 +65,18 @@ def map_icon_gap_rows(index: IconEvidenceIndex) -> tuple[IconGapViewRow, ...]:
     return tuple(rows)
 
 
-def global_icon_gap_rows(index: GlobalEvidenceIndex) -> tuple[IconGapViewRow, ...]:
+def global_icon_gap_rows(
+    index: GlobalEvidenceIndex,
+    current_map: MapIdentity | None = None,
+) -> tuple[IconGapViewRow, ...]:
     """Project global gaps and non-authoritative candidates as separate rows."""
     rows: list[IconGapViewRow] = []
     for gap in index.gaps:
         identity = None
-        if len(gap.references) == 1:
+        if len(gap.references) == 1 and current_map == (gap.map_path, gap.map_sha256):
             ref = gap.references[0]
-            identity = (ref.category, ref.object_id)
+            if (ref.map_path, ref.map_sha256) == current_map:
+                identity = (ref.category, ref.object_id)
         rows.append(
             IconGapViewRow(
                 f"gap:{gap.map_sha256}:{gap.normalized_path}:{gap.reason.value}",

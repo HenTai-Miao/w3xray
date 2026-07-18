@@ -1,4 +1,5 @@
 """Refresh or clear GUI modules according to load options."""
+# pyright: reportAttributeAccessIssue=false, reportUninitializedInstanceVariable=false
 
 from __future__ import annotations
 
@@ -59,7 +60,7 @@ class ModuleRefreshMixin:
             REPORTS_KEY
         ) else self._clear_reports()
         self._refresh_item_relations()
-        self._set_batch_icon_gaps(None)
+        self._refresh_current_icon_gaps()
 
     def _clear_object_browser(self) -> None:
         for cat in PARALLEL_CATS:

@@ -6,7 +6,11 @@ import unittest
 from PIL import Image
 
 from w3xtool.api import MapData
-from w3xtool.icon_evidence_index import IconEvidenceIndex
+from w3xtool.icon_evidence_index import IconEvidenceIndex, empty_icon_evidence_index
+from w3xtool.gui_icon_evidence_loader import (
+    safe_custom_icon_resolver,
+    safe_default_icon_resolver,
+)
 from w3xtool.gui_loader import (
     LoadedMap,
     PreparedIconResolver,
@@ -51,7 +55,80 @@ class FakeEvidenceResolver:
         return None
 
 
+class LifecycleResolver:
+    def __init__(
+        self, *, evidence_fails: bool = False, close_fails: bool = False
+    ) -> None:
+        self.evidence_fails = evidence_fails
+        self.close_fails = close_fails
+        self.close_calls = 0
+
+    def build_evidence_index(self, md: MapData) -> IconEvidenceIndex:
+        _ = md
+        if self.evidence_fails:
+            raise RuntimeError("evidence failed")
+        return IconEvidenceIndex.build()
+
+    def get_image(self, path: str) -> Image.Image | None:
+        _ = path
+        return None
+
+    def close(self) -> None:
+        self.close_calls += 1
+        if self.close_fails:
+            raise OSError("close failed")
+
+
 class TestGuiLoader(unittest.TestCase):
+    def test_default_evidence_failure_closes_resolver_and_returns_none(self) -> None:
+        # Given
+        md = MapData("map.w3x", "map")
+        md.icon_evidence = IconEvidenceIndex.build()
+        resolver = LifecycleResolver(evidence_fails=True)
+
+        # When
+        loaded = safe_default_icon_resolver(
+            md, None, None, lambda *_args, **_kwargs: resolver
+        )
+
+        # Then
+        self.assertIsNone(loaded)
+        self.assertEqual(resolver.close_calls, 1)
+        self.assertIs(md.icon_evidence, empty_icon_evidence_index())
+
+    def test_custom_evidence_failure_closes_even_when_close_fails(self) -> None:
+        # Given
+        md = MapData("map.w3x", "map")
+        md.icon_evidence = IconEvidenceIndex.build()
+        resolver = LifecycleResolver(evidence_fails=True, close_fails=True)
+
+        # When
+        loaded = safe_custom_icon_resolver(lambda *_args: resolver, md, None)
+
+        # Then
+        self.assertIsNone(loaded)
+        self.assertEqual(resolver.close_calls, 1)
+        self.assertIs(md.icon_evidence, empty_icon_evidence_index())
+
+    def test_disabled_object_browser_closes_resolver_without_propagating_close_failure(
+        self,
+    ) -> None:
+        # Given
+        md = MapData("map.w3x", "map")
+        resolver = LifecycleResolver(close_fails=True)
+        options = {key: False for key in object_only_load_options()}
+
+        # When
+        loaded = prepare_map_view(
+            md,
+            load_options=options,
+            resolver_loader=lambda *_args: resolver,
+        )
+
+        # Then
+        self.assertIsNone(loaded.resolver)
+        self.assertEqual(resolver.close_calls, 1)
+
     def test_default_icon_resolver_builds_map_evidence_before_returning(self):
         # Given
         from unittest.mock import patch

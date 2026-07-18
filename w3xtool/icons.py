@@ -55,7 +55,7 @@ class IconResolver:
         self.map_path = map_path
         try:
             self.map = MPQArchive(map_path)
-        except Exception:  # noqa: BROAD_EXCEPT_OK - invalid optional map keeps icon lookup usable.
+        except Exception:  # noqa: BLE001 - invalid optional map keeps icon lookup usable.
             self.map = None
         # 额外档（如战役 .w3n 顶层，子图图标常放那里）。**不**进进程级游戏缓存：
         # 那是给固定几个 war3*.mpq 大档用的；战役档各不相同，进了缓存就永不释放(内存泄漏)。
@@ -64,7 +64,7 @@ class IconResolver:
         for p in extra_paths or []:
             try:
                 self.extra.append(MPQArchive(p))
-            except Exception:  # noqa: BROAD_EXCEPT_OK - skip unreadable optional campaign archives.
+            except Exception:  # noqa: BLE001 - skip unreadable optional campaign archives.
                 continue
         self.game_dir = find_game_dir(map_path)
         self.game_data_source = _open_game_data_source(game_data_path)
@@ -80,7 +80,7 @@ class IconResolver:
             if arch is not None:
                 try:
                     arch.close()
-                except Exception:  # noqa: BROAD_EXCEPT_OK - close every remaining optional archive.
+                except Exception:  # noqa: BLE001 - close every remaining optional archive.
                     continue
         self.map = None
         self.extra = []
@@ -108,7 +108,7 @@ class IconResolver:
                     if os.path.exists(p):
                         try:
                             self._game.append(_open_game_mpq(p))
-                        except Exception:  # noqa: BROAD_EXCEPT_OK - skip invalid optional game archives.
+                        except Exception:  # noqa: BLE001 - skip invalid optional game archives.
                             continue
         return self._game
 
@@ -165,7 +165,7 @@ class IconResolver:
                             return img
                 except MemoryError:
                     raise  # 内存耗尽不可吞：暴露出来而非伪装成"无图标"
-                except Exception:  # noqa: BROAD_EXCEPT_OK - one corrupt icon candidate must not stop lookup.
+                except Exception:  # noqa: BLE001 - one corrupt icon candidate must not stop lookup.
                     continue
         return None
 

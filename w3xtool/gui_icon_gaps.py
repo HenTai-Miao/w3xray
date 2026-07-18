@@ -18,21 +18,37 @@ class IconGapGuiMixin(IconGapLayoutMixin):
     """Refresh and navigate strict evidence without resolving or adopting hints."""
 
     def _init_icon_gap_gui(self) -> None:
-        self._batch_icon_gap_rows: tuple[IconGapViewRow, ...] | None = None
+        self._current_icon_gap_rows: tuple[IconGapViewRow, ...] = ()
+        self._batch_icon_gap_rows: tuple[IconGapViewRow, ...] = ()
+        self._batch_icon_evidence = None
+
+    def _refresh_current_icon_gaps(self) -> None:
+        md = self.map_data
+        self._current_icon_gap_rows = (
+            () if md is None else map_icon_gap_rows(md.icon_evidence)
+        )
+        if self._batch_icon_evidence is not None:
+            self._batch_icon_gap_rows = global_icon_gap_rows(
+                self._batch_icon_evidence, self._current_map_identity()
+            )
+        self._refresh_icon_gaps()
 
     def _refresh_icon_gaps(self) -> None:
-        rows = self._batch_icon_gap_rows
-        if rows is None:
-            rows = (
-                ()
-                if self.map_data is None
-                else map_icon_gap_rows(self.map_data.icon_evidence)
-            )
+        rows = (
+            self._batch_icon_gap_rows
+            if self.icon_gap_scope.get() == "批量结果"
+            else self._current_icon_gap_rows
+        )
+        self._set_icon_gap_filter_values(rows)
         candidates = self.icon_gap_mode.get() == "候选（未采用）"
         visible = filter_icon_gap_rows(
             rows,
             IconGapFilter(
-                self.icon_gap_search.get(), "全部", "全部", "全部", candidates
+                self.icon_gap_search.get(),
+                self.icon_gap_reason.get(),
+                self.icon_gap_category.get(),
+                self.icon_gap_archive.get(),
+                candidates,
             ),
         )
         self.icon_gap_tree.delete(*self.icon_gap_tree.get_children())
@@ -68,16 +84,17 @@ class IconGapGuiMixin(IconGapLayoutMixin):
             self.icon_gap_detail.insert("end", format_icon_gap_evidence(row))
         self.icon_gap_detail.configure(state="disabled")
         self.icon_gap_open_button.configure(
-            state="normal"
-            if row is not None and row.object_identity is not None
-            else "disabled"
+            state="normal" if self._can_open_icon_gap(row) else "disabled"
         )
 
     def _open_icon_gap_object(self) -> None:
         selected = self.icon_gap_tree.selection()
         row = self.icon_gap_rows.get(selected[0]) if selected else None
-        if row is None or row.object_identity is None or self.map_data is None:
+        if not self._can_open_icon_gap(row):
             return
+        assert row is not None
+        assert row.object_identity is not None
+        assert self.map_data is not None
         obj = self.map_data.obj_identity_index.get(row.object_identity)
         if obj is None:
             return
@@ -86,8 +103,40 @@ class IconGapGuiMixin(IconGapLayoutMixin):
         self._show_detail(obj)
 
     def _set_batch_icon_gaps(self, rows: tuple[IconGapViewRow, ...] | None) -> None:
-        self._batch_icon_gap_rows = rows
+        self._batch_icon_evidence = None
+        self._batch_icon_gap_rows = () if rows is None else rows
         self._refresh_icon_gaps()
 
     def _set_global_icon_evidence(self, evidence) -> None:
-        self._set_batch_icon_gaps(global_icon_gap_rows(evidence))
+        self._batch_icon_evidence = evidence
+        self._batch_icon_gap_rows = global_icon_gap_rows(
+            evidence, self._current_map_identity()
+        )
+        self._refresh_icon_gaps()
+
+    def _set_icon_gap_filter_values(self, rows: tuple[IconGapViewRow, ...]) -> None:
+        self._set_filter_values(self.icon_gap_reason, (row.reason for row in rows))
+        self._set_filter_values(self.icon_gap_category, (row.category for row in rows))
+        self._set_filter_values(
+            self.icon_gap_archive, (row.archive_status for row in rows)
+        )
+
+    def _set_filter_values(self, control, values) -> None:
+        options = ("全部", *sorted({value for value in values if value}))
+        control.configure(values=options)
+        if control.get() not in options:
+            control.set("全部")
+
+    def _can_open_icon_gap(self, row: IconGapViewRow | None) -> bool:
+        current_map = self._current_map_identity()
+        return bool(
+            row is not None
+            and row.object_identity is not None
+            and current_map is not None
+            and (row.map_path, row.map_sha256) == current_map
+        )
+
+    def _current_map_identity(self) -> tuple[str, str] | None:
+        md = self.map_data
+        ledger = None if md is None else md.extraction_ledger
+        return None if ledger is None else (ledger.source_path, ledger.source_sha256)

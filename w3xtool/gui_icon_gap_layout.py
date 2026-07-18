@@ -47,6 +47,13 @@ class IconGapLayoutMixin:
         search.pack(side="left", fill="x", expand=True, padx=(0, 6))
         search.bind("<Return>", lambda _event: self._refresh_icon_gaps())
         self._attach_ctx_menu(search, paste=True)
+        self.icon_gap_scope = ctk.CTkSegmentedButton(
+            controls,
+            values=["当前地图", "批量结果"],
+            command=lambda _value: self._refresh_icon_gaps(),
+        )
+        self.icon_gap_scope.set("当前地图")
+        self.icon_gap_scope.pack(side="right", padx=(6, 0))
         self.icon_gap_mode = ctk.CTkSegmentedButton(
             controls,
             values=["未解析", "候选（未采用）"],
@@ -54,6 +61,35 @@ class IconGapLayoutMixin:
         )
         self.icon_gap_mode.set("未解析")
         self.icon_gap_mode.pack(side="right")
+        filters = ctk.CTkFrame(parent, fg_color="transparent")
+        filters.pack(fill="x", padx=4, pady=(0, 6))
+        self.icon_gap_reason = ctk.CTkComboBox(
+            filters,
+            values=["全部"],
+            width=170,
+            state="readonly",
+            command=lambda _value: self._refresh_icon_gaps(),
+        )
+        self.icon_gap_reason.set("全部")
+        self.icon_gap_reason.pack(side="left", padx=(0, 6))
+        self.icon_gap_category = ctk.CTkComboBox(
+            filters,
+            values=["全部"],
+            width=110,
+            state="readonly",
+            command=lambda _value: self._refresh_icon_gaps(),
+        )
+        self.icon_gap_category.set("全部")
+        self.icon_gap_category.pack(side="left", padx=(0, 6))
+        self.icon_gap_archive = ctk.CTkComboBox(
+            filters,
+            values=["全部"],
+            width=130,
+            state="readonly",
+            command=lambda _value: self._refresh_icon_gaps(),
+        )
+        self.icon_gap_archive.set("全部")
+        self.icon_gap_archive.pack(side="left")
         self.icon_gap_status = ctk.CTkLabel(
             parent,
             text="打开地图后显示严格图标缺口",
