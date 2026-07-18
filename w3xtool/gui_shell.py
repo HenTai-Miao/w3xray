@@ -1,5 +1,5 @@
 """Main GUI shell layout for the map inspection workbench."""
-# pyright: reportAttributeAccessIssue=false, reportUninitializedInstanceVariable=false
+# pyright: reportArgumentType=false, reportAttributeAccessIssue=false, reportUninitializedInstanceVariable=false
 
 from __future__ import annotations
 
@@ -8,9 +8,12 @@ from tkinter import ttk
 
 import customtkinter as ctk
 
+from .api import GameObject
 from .gui_shell_object_panel import build_object_tab
 from .gui_shell_source_panel import build_source_panel
 from .gui_topbar import build_topbar
+from .map_gallery import MapEntry, MapGallery
+from .object_gallery import ObjectGallery
 from .theme import (
     ACCENT_DARK,
     ACCENT_HOVER,
@@ -34,7 +37,30 @@ from .theme import (
 class ShellLayoutMixin:
     """Build the always-visible source rail and editor workspace."""
 
+    mode_seg: ctk.CTkSegmentedButton
+    left_brow: ctk.CTkFrame
+    left_title: ctk.CTkLabel
+    map_search: tk.StringVar
+    map_gallery: MapGallery
+    map_list: ttk.Treeview
+    _map_gallery_entries: list[MapEntry]
+    _dir_maps: list[tuple[str, str]]
+    search_var: tk.StringVar
+    paned: tk.PanedWindow
+    col_trees: dict[str, ttk.Treeview]
+    col_results: dict[str, list[GameObject]]
+    col_headers: dict[str, ctk.CTkLabel]
+    active_object_category: str
+    object_gallery: ObjectGallery
+    object_gallery_hint: ctk.CTkLabel
+    object_cat_buttons: dict[str, ctk.CTkButton]
+    object_cards: ttk.Treeview
+    detail_blank_icon: ctk.CTkImage
+    detail_icon_image: ctk.CTkImage
+    detail_icon: ctk.CTkLabel
     detail_title: ctk.CTkLabel
+    detail_sub: ctk.CTkLabel
+    detail: ctk.CTkTextbox
 
     def _build_topbar(self) -> None:
         build_topbar(self)

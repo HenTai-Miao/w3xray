@@ -34,12 +34,18 @@ if TYPE_CHECKING:
 
         def get(self) -> str: ...
 
+        def tab(self, name: str) -> ctk.CTkFrame: ...
+
     class _TypingTabs:
         def set(self, name: str) -> None:
             _ = name
 
         def get(self) -> str:
             return ""
+
+        def tab(self, name: str) -> ctk.CTkFrame:
+            _ = name
+            return ctk.CTkFrame(ctk.CTk())
 
     class _ItemRelationHost:
         _typing_root: ctk.CTk = ctk.CTk()

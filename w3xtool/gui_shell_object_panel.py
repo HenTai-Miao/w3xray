@@ -1,17 +1,19 @@
 """Object editor and detail panel construction for the main GUI shell."""
-# pyright: reportArgumentType=false
 
+# pyright: reportArgumentType=false
 from __future__ import annotations
 
 import tkinter as tk
 from tkinter import ttk
+from typing import Protocol
 
 import customtkinter as ctk
 from PIL import Image
 
 from .deferred_paned import add_deferred_pane, build_deferred_horizontal_paned
 from .gui_pane_state import OBJECT_EDITOR_PANE_KEY
-from .object_gallery import build_object_gallery
+from .map_data import GameObject
+from .object_gallery import ObjectGallery, build_object_gallery
 from .theme import (
     BG,
     BORDER,
@@ -27,7 +29,50 @@ from .theme import (
 )
 
 
-def build_object_tab(host, parent) -> None:
+class ObjectPanelHost(Protocol):
+    """Shell members initialized by the object-browser and detail builders."""
+
+    search_var: tk.StringVar
+    paned: tk.PanedWindow
+    col_trees: dict[str, ttk.Treeview]
+    col_results: dict[str, list[GameObject]]
+    col_headers: dict[str, ctk.CTkLabel]
+    active_object_category: str
+    object_gallery: ObjectGallery
+    object_gallery_hint: ctk.CTkLabel
+    object_cat_buttons: dict[str, ctk.CTkButton]
+    object_cards: ttk.Treeview
+    detail_blank_icon: ctk.CTkImage
+    detail_icon_image: ctk.CTkImage
+    detail_icon: ctk.CTkLabel
+    detail_title: ctk.CTkLabel
+    detail_sub: ctk.CTkLabel
+    detail: ctk.CTkTextbox
+
+    def _refresh_list(self) -> None: ...
+
+    def _attach_ctx_menu(
+        self,
+        widget: ctk.CTkEntry | ctk.CTkTextbox,
+        *,
+        paste: bool = False,
+        copy_all: bool = False,
+    ) -> None: ...
+
+    def _register_paned_window(self, name: str, paned: tk.PanedWindow) -> None: ...
+
+    def _on_object_category(self, category: str) -> None: ...
+
+    def _attach_tree_copy(self, tree: ttk.Treeview) -> None: ...
+
+    def _on_col_select(self, category: str) -> None: ...
+
+    def _build_object_text_controls(self, parent: ctk.CTkFrame) -> None: ...
+
+    def _render_object_cards(self) -> None: ...
+
+
+def build_object_tab(host: ObjectPanelHost, parent: ctk.CTkFrame) -> None:
     """Build searchable object lists and the selected-object evidence pane."""
     ctrl = ctk.CTkFrame(parent, fg_color=BG)
     ctrl.pack(fill="x", padx=2, pady=(2, 8))
@@ -80,7 +125,7 @@ def build_object_tab(host, parent) -> None:
     host._render_object_cards()
 
 
-def build_detail_panel(host, paned) -> None:
+def build_detail_panel(host: ObjectPanelHost, paned: tk.PanedWindow) -> None:
     """Build icon, complete-text controls, and detail textbox."""
     rightp = ctk.CTkFrame(paned, width=380, **card_style())
     detail_head = ctk.CTkFrame(rightp, fg_color="transparent")

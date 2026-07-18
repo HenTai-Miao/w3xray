@@ -1,14 +1,15 @@
 """Source rail construction for the main GUI shell."""
-# pyright: reportArgumentType=false
 
+# pyright: reportArgumentType=false
 from __future__ import annotations
 
 import tkinter as tk
 from tkinter import ttk
+from typing import Protocol
 
 import customtkinter as ctk
 
-from .map_gallery import build_map_gallery
+from .map_gallery import MapEntry, MapGallery, build_map_gallery
 from .theme import (
     ACCENT_DARK,
     ACCENT_HOVER,
@@ -26,7 +27,36 @@ from .theme import (
 )
 
 
-def build_source_panel(host, parent) -> None:
+class SourcePanelHost(Protocol):
+    """Shell members initialized by the persistent source-panel builder."""
+
+    mode_seg: ctk.CTkSegmentedButton
+    left_brow: ctk.CTkFrame
+    left_title: ctk.CTkLabel
+    map_search: tk.StringVar
+    map_gallery: MapGallery
+    map_list: ttk.Treeview
+    _map_gallery_entries: list[MapEntry]
+    _dir_maps: list[tuple[str, str]]
+
+    def _on_mode_change(self, mode: str) -> None: ...
+
+    def on_pick_dir(self) -> None: ...
+
+    def on_refresh_dir(self) -> None: ...
+
+    def _populate_left(self) -> None: ...
+
+    def _attach_ctx_menu(self, widget: ctk.CTkEntry, *, paste: bool) -> None: ...
+
+    def _on_map_pick(self, event: tk.Event[tk.Misc]) -> None: ...
+
+    def _on_tree_open(self, event: tk.Event[tk.Misc]) -> None: ...
+
+    def _render_map_gallery(self) -> None: ...
+
+
+def build_source_panel(host: SourcePanelHost, parent: ctk.CTkFrame) -> None:
     """Build persistent map-source controls outside the editor workspace."""
     ctk.CTkLabel(
         parent, text="图源", font=(FONT, 12, "bold"), text_color=MUTED, anchor="w"
