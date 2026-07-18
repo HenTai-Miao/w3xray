@@ -1,4 +1,5 @@
 """编辑器风格 GUI 布局测试。"""
+
 import unittest
 
 from PIL import Image
@@ -13,8 +14,18 @@ class TestEditorStyleLayout(GuiTestCase):
     def test_editor_tabs_are_present(self):
         # Given: the GUI has been constructed.
         expected = (
-            "总览", "对象编辑器", "地图信息", "GUI触发器", "场景放置", "掉落/获取",
-            "触发指令", "合成配方", "孤立对象", "分析报告",
+            "总览",
+            "对象编辑器",
+            "地图信息",
+            "GUI触发器",
+            "场景放置",
+            "掉落/获取",
+            "触发指令",
+            "合成配方",
+            "孤立对象",
+            "分析报告",
+            "图标缺口",
+            "批量状态",
         )
 
         # When/Then: the editor-style workspace exposes the expected sections.
@@ -132,7 +143,9 @@ class TestEditorStyleLayout(GuiTestCase):
         self.assertEqual(self.app.object_cards.item(rows[0], "text"), "物品0")
         self.assertEqual(self.app.object_cards.item(rows[3], "text"), "物品3")
         self.assertEqual(tuple(self.app.object_cards.cget("columns")), ())
-        self.pump_events_until(lambda: bool(self.app.object_cards.item(rows[0], "image")))
+        self.pump_events_until(
+            lambda: bool(self.app.object_cards.item(rows[0], "image"))
+        )
         self.assertEqual(len(self.app.object_cards.winfo_children()), 0)
 
     def test_object_gallery_shows_every_object_in_current_category(self):
@@ -173,7 +186,9 @@ class TestEditorStyleLayout(GuiTestCase):
                 "物品": [GameObject("物品", "w3t", "I001", "I001", "药水", True)],
                 "技能": [GameObject("技能", "w3a", "A001", "A001", "火球", True)],
                 "科技": [GameObject("科技", "w3q", "R001", "R001", "升级", True)],
-                "可破坏物": [GameObject("可破坏物", "w3b", "D001", "D001", "树木", True)],
+                "可破坏物": [
+                    GameObject("可破坏物", "w3b", "D001", "D001", "树木", True)
+                ],
                 "装饰物": [GameObject("装饰物", "w3d", "B001", "B001", "雕像", True)],
                 "增益": [GameObject("增益", "w3h", "F001", "F001", "眩晕", True)],
             },

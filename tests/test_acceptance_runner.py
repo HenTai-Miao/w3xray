@@ -164,12 +164,12 @@ def test_main_acceptance_mode_loads_and_visits_all_gui_tabs(tmp_path: Path) -> N
         check=False,
     )
 
-    # Then: the lane reports all ten tabs through the public entrypoint.
+    # Then: the lane reports every primary evidence tab through the public entrypoint.
     assert result.returncode == 0, result.stdout + result.stderr
     payload = json.loads(report_path.read_text(encoding="utf-8"))
     gui_check = next(item for item in payload["checks"] if item["name"] == "gui_tabs")
     assert gui_check["status"] == "pass"
-    assert "tabs=10" in gui_check["detail"]
+    assert "tabs=12" in gui_check["detail"]
 
 
 def test_packaged_acceptance_rejects_partial_publication(

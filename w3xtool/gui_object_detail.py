@@ -1,4 +1,5 @@
 """Object gallery selection and detail panel rendering."""
+# pyright: reportAttributeAccessIssue=false, reportUninitializedInstanceVariable=false
 
 from __future__ import annotations
 
@@ -10,6 +11,7 @@ from .object_detail_presentation import (
     object_detail_title,
 )
 from .object_gallery import render_object_gallery
+from .icon_evidence_presentation import format_object_icon_evidence_section
 
 
 class ObjectDetailMixin:
@@ -42,6 +44,13 @@ class ObjectDetailMixin:
         self._show_detail(results[index])
 
     def _show_detail(self, obj) -> None:
+        self._selected_detail_object = obj
+        self._render_selected_object_detail()
+
+    def _render_selected_object_detail(self) -> None:
+        obj = getattr(self, "_selected_detail_object", None)
+        if obj is None:
+            return
         self.detail_icon_image = (
             self._get_photo(getattr(obj, "icon", "")) or self.detail_blank_icon
         )
@@ -56,7 +65,10 @@ class ObjectDetailMixin:
         self.detail.insert("end", format_object_summary(obj))
         md = self.map_data
         if md is not None:
-            self.detail.insert("end", format_complete_text_section(md, obj))
+            self.detail.insert(
+                "end", format_complete_text_section(md, obj, self.object_text_view)
+            )
+            self.detail.insert("end", format_object_icon_evidence_section(md, obj))
         self.detail.insert("end", format_object_fields(obj))
         self._insert_references(obj)
         if md is not None:

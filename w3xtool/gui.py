@@ -15,12 +15,15 @@ from .gui_data_tabs import DataTabLayoutMixin
 from .gui_export_actions import ExportActionsMixin
 from .gui_external_data import ExternalDataToolsMixin
 from .gui_icon_cache import IconCacheMixin
+from .gui_icon_gaps import IconGapGuiMixin
 from .gui_item_relations import ItemRelationGuiMixin
+from .gui_batch_status import BatchStatusGuiMixin
 from .gui_lifecycle import GuiLifecycleMixin
 from .gui_load_settings import LoadSettingsMixin
 from .gui_loader_runner import BackgroundLoaderMixin
 from .gui_module_refresh import ModuleRefreshMixin
 from .gui_object_detail import ObjectDetailMixin
+from .gui_object_text_controls import ObjectTextControlsMixin
 from .gui_object_filter_runner import ObjectFilterRunnerMixin
 from .gui_pane_state import PaneStateMixin
 from .gui_report_tabs import ReportTabsMixin
@@ -38,6 +41,8 @@ class App(
     GuiWorkerHostMixin,
     CascBrowserMixin,
     ExternalDataToolsMixin,
+    BatchStatusGuiMixin,
+    IconGapGuiMixin,
     ItemRelationGuiMixin,
     LoadSettingsMixin,
     IconCacheMixin,
@@ -53,6 +58,7 @@ class App(
     DataRefreshMixin,
     SourceBrowserMixin,
     ObjectDetailMixin,
+    ObjectTextControlsMixin,
     CurrentMapGuiMixin,
     GuiLifecycleMixin,
     ClipboardMixin,
@@ -63,6 +69,8 @@ class App(
     def __init__(self) -> None:
         super().__init__()
         self._init_gui_worker_host()
+        self._init_icon_gap_gui()
+        self._init_batch_status_gui()
         self.title("W3XRAY 魔兽地图提取器")
         self.geometry("1440x860")
         self.minsize(1040, 640)

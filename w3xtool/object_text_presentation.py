@@ -2,13 +2,40 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
+
 from .map_data import GameObject, MapData
 from .object_text_models import ObjectTextRecord
 
 
-def format_complete_text_section(md: MapData, obj: GameObject) -> str:
+class ObjectTextView(StrEnum):
+    """The two lossless evidence scopes selectable in object detail."""
+
+    CURRENT = "当前文本"
+    ALL = "全部证据"
+
+
+def records_for_text_view(
+    records: tuple[ObjectTextRecord, ...],
+    view: ObjectTextView,
+) -> tuple[ObjectTextRecord, ...]:
+    """Keep every current record or every retained source record."""
+    return (
+        records
+        if view is ObjectTextView.ALL
+        else tuple(row for row in records if row.is_current)
+    )
+
+
+def format_complete_text_section(
+    md: MapData,
+    obj: GameObject,
+    view: ObjectTextView = ObjectTextView.ALL,
+) -> str:
     """Render every readable and raw text record without truncation."""
-    records = md.object_texts.for_object(obj.category, obj.obj_id)
+    records = records_for_text_view(
+        md.object_texts.for_object(obj.category, obj.obj_id), view
+    )
     if not records:
         return "\n【完整文本】\n（未发现该对象的逐字段文本证据）\n"
     readable = _format_text_view("可读版", records, raw=False)

@@ -37,16 +37,29 @@ class ModuleRefreshMixin:
             self._clear_object_browser()
 
         self.commands = cmds if self._load_option_enabled(COMMANDS_KEY) else []
-        self._refresh_cmds() if self._load_option_enabled(COMMANDS_KEY) else self._clear_commands()
+        self._refresh_cmds() if self._load_option_enabled(
+            COMMANDS_KEY
+        ) else self._clear_commands()
 
         self.recipes = (recipes or []) if self._load_option_enabled(RECIPES_KEY) else []
-        self._refresh_recipes() if self._load_option_enabled(RECIPES_KEY) else self._clear_recipes()
+        self._refresh_recipes() if self._load_option_enabled(
+            RECIPES_KEY
+        ) else self._clear_recipes()
 
-        self._refresh_preplaced() if self._load_option_enabled(PREPLACED_KEY) else self._clear_preplaced()
-        self._refresh_orphans() if self._load_option_enabled(ORPHANS_KEY) else self._clear_orphans()
-        self._refresh_info() if self._load_option_enabled(MAP_INFO_KEY) else self._clear_info()
-        self._refresh_editor_reports() if self._load_option_enabled(REPORTS_KEY) else self._clear_reports()
+        self._refresh_preplaced() if self._load_option_enabled(
+            PREPLACED_KEY
+        ) else self._clear_preplaced()
+        self._refresh_orphans() if self._load_option_enabled(
+            ORPHANS_KEY
+        ) else self._clear_orphans()
+        self._refresh_info() if self._load_option_enabled(
+            MAP_INFO_KEY
+        ) else self._clear_info()
+        self._refresh_editor_reports() if self._load_option_enabled(
+            REPORTS_KEY
+        ) else self._clear_reports()
         self._refresh_item_relations()
+        self._set_batch_icon_gaps(None)
 
     def _clear_object_browser(self) -> None:
         for cat in PARALLEL_CATS:
@@ -89,5 +102,9 @@ class ModuleRefreshMixin:
     def _clear_reports(self) -> None:
         self._set_textbox(self.overview_box, DISABLED_TEXT)
         self._set_textbox(self.analysis_box, DISABLED_TEXT)
-        self._render_empty_report(self.overview_surface, self.overview_cards, DISABLED_TEXT)
-        self._render_empty_report(self.analysis_surface, self.analysis_cards, DISABLED_TEXT)
+        self._render_empty_report(
+            self.overview_surface, self.overview_cards, DISABLED_TEXT
+        )
+        self._render_empty_report(
+            self.analysis_surface, self.analysis_cards, DISABLED_TEXT
+        )

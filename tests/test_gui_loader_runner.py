@@ -11,6 +11,7 @@ from unittest.mock import patch
 from PIL import Image
 
 from w3xtool.api import MapData
+from w3xtool.icon_evidence_index import IconEvidenceIndex
 from w3xtool.gui_loader import LoadedMap
 from w3xtool.gui_loader_runner import BackgroundLoaderMixin
 from w3xtool.gui_worker_host import GuiWorkerHostMixin
@@ -75,6 +76,10 @@ class _Resolver:
     def get_image(self, path: str) -> Image.Image | None:
         _ = path
         return None
+
+    def build_evidence_index(self, md: MapData) -> IconEvidenceIndex:
+        _ = md
+        return IconEvidenceIndex.build()
 
 
 def _loaded_map(resolver: _Resolver, name: str) -> LoadedMap:

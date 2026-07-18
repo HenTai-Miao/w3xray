@@ -8,9 +8,13 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Final, Protocol
 
-from PIL import Image
-
 from .api import MapData, commands_from_map, load_map, recipes_from_map
+from .gui_icon_evidence_loader import (
+    build_strict_icon_resolver,
+    PreparedIconResolver,
+    safe_default_icon_resolver,
+    safe_custom_icon_resolver,
+)
 from .icons import IconResolver
 from .load_context import MapLoadContext, build_map_load_context
 from .load_options import (
@@ -43,12 +47,6 @@ class PrepareMapFunc(Protocol):
         *,
         load_options: dict[str, bool] | None,
     ) -> LoadedMap: ...
-
-
-class PreparedIconResolver(Protocol):
-    def get_image(self, path: str) -> Image.Image | None: ...
-
-    def close(self) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,18 +205,17 @@ def prepare_map_view(
             if options[RECIPES_KEY]
             else None
         )
-        if not options[OBJECT_BROWSER_KEY]:
-            resolver_future = None
-        elif resolver_loader is None:
+        if resolver_loader is None:
             resolver_future = pool.submit(
-                _safe_default_resolver_loader,
+                safe_default_icon_resolver,
                 md,
                 campaign_path,
                 game_data_path,
+                IconResolver,
             )
         else:
             resolver_future = pool.submit(
-                _safe_resolver_loader,
+                safe_custom_icon_resolver,
                 resolver_loader,
                 md,
                 campaign_path,
@@ -226,6 +223,9 @@ def prepare_map_view(
         commands = command_future.result() if command_future is not None else []
         recipes = recipe_future.result() if recipe_future is not None else []
         resolver = resolver_future.result() if resolver_future is not None else None
+    if not options[OBJECT_BROWSER_KEY] and resolver is not None:
+        resolver.close()
+        resolver = None
     return LoadedMap(md, commands, recipes, resolver, views, campaign_path)
 
 
@@ -235,8 +235,7 @@ def build_icon_resolver(
     game_data_path: str | None = None,
 ) -> IconResolver | None:
     """Create the resolver lazily; images decode on demand in the main view."""
-    extra = [campaign_path] if campaign_path and campaign_path != md.path else None
-    return IconResolver(md.path, extra_paths=extra, game_data_path=game_data_path)
+    return build_strict_icon_resolver(md, campaign_path, game_data_path, IconResolver)
 
 
 def _safe_list_loader[T](
@@ -248,27 +247,3 @@ def _safe_list_loader[T](
     except Exception:  # noqa: BROAD_EXCEPT_OK - GUI preparation logs and isolates optional report failure.
         traceback.print_exc()
         return []
-
-
-def _safe_resolver_loader(
-    loader: Callable[[MapData, str | None], PreparedIconResolver | None],
-    md: MapData,
-    campaign_path: str | None,
-) -> PreparedIconResolver | None:
-    try:
-        return loader(md, campaign_path)
-    except Exception:  # noqa: BROAD_EXCEPT_OK - GUI preparation logs and isolates optional resolver failure.
-        traceback.print_exc()
-        return None
-
-
-def _safe_default_resolver_loader(
-    md: MapData,
-    campaign_path: str | None,
-    game_data_path: str | None,
-) -> IconResolver | None:
-    try:
-        return build_icon_resolver(md, campaign_path, game_data_path)
-    except Exception:  # noqa: BROAD_EXCEPT_OK - GUI preparation logs and isolates optional resolver failure.
-        traceback.print_exc()
-        return None

@@ -6,6 +6,7 @@ import unittest
 from PIL import Image
 
 from w3xtool.api import MapData
+from w3xtool.icon_evidence_index import IconEvidenceIndex
 from w3xtool.gui_loader import (
     LoadedMap,
     PreparedIconResolver,
@@ -29,8 +30,47 @@ class _Resolver:
         _ = path
         return None
 
+    def build_evidence_index(self, md: MapData) -> IconEvidenceIndex:
+        _ = md
+        return IconEvidenceIndex.build()
+
+
+class FakeEvidenceResolver:
+    def __init__(self, index: IconEvidenceIndex) -> None:
+        self.index = index
+        self.evidence_calls: list[MapData] = []
+
+    def build_evidence_index(self, md: MapData) -> IconEvidenceIndex:
+        self.evidence_calls.append(md)
+        return self.index
+
+    def get_image(self, _path: str) -> None:
+        return None
+
+    def close(self) -> None:
+        return None
+
 
 class TestGuiLoader(unittest.TestCase):
+    def test_default_icon_resolver_builds_map_evidence_before_returning(self):
+        # Given
+        from unittest.mock import patch
+
+        from w3xtool import gui_loader
+
+        md = MapData("map.w3x", "map")
+        expected = IconEvidenceIndex.build()
+        resolver = FakeEvidenceResolver(expected)
+
+        # When
+        with patch.object(gui_loader, "IconResolver", return_value=resolver):
+            loaded = gui_loader.build_icon_resolver(md, None, None)
+
+        # Then
+        self.assertIs(loaded, resolver)
+        self.assertIs(md.icon_evidence, expected)
+        self.assertEqual(resolver.evidence_calls, [md])
+
     def test_load_path_payload_prepares_first_campaign_view(self):
         # Given: opening a campaign returns shared data plus one sub-map.
         top = MapData(path="campaign.w3n", name="战役共享")

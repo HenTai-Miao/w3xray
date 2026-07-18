@@ -8,6 +8,10 @@ from __future__ import annotations
 import os
 
 from .game_data_source import GameDataSource, open_game_data_source
+from .icon_evidence_builder import build_icon_evidence_index
+from .icon_evidence_index import IconEvidenceIndex
+from .icon_evidence_models import IconArchiveLayer, IconResolutionLayer
+from .map_data import MapData
 from .mpq import MPQArchive
 from .blp import decode_blp
 
@@ -118,6 +122,21 @@ class IconResolver:
         self._cache[key] = img
         return img
 
+    def build_evidence_index(self, md: MapData) -> IconEvidenceIndex:
+        """Build strict archive evidence without using browsing fallback paths."""
+        archives: list[IconArchiveLayer] = []
+        if self.map is not None:
+            archives.append(
+                IconArchiveLayer(
+                    IconResolutionLayer.CURRENT_MAP, self.map, self.map_path
+                )
+            )
+        archives.extend(
+            IconArchiveLayer(IconResolutionLayer.CAMPAIGN_ROOT, archive, archive.path)
+            for archive in self.extra
+        )
+        return build_icon_evidence_index(md, tuple(archives), self.game_data_source)
+
     def _load(self, path: str):
         p = path.replace("/", "\\").strip().strip('"')
         if not p:
@@ -127,7 +146,10 @@ class IconResolver:
         # 去重保序
         seen = set()
         cands = [c for c in candidates if not (c in seen or seen.add(c))]
-        archives = ([self.map] if self.map else []) + self.extra
+        archives: list[MPQArchive | GameDataSource] = []
+        if self.map is not None:
+            archives.append(self.map)
+        archives.extend(self.extra)
         if self.game_data_source is not None:
             archives.append(self.game_data_source)
         archives += self._games()

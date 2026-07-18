@@ -69,7 +69,7 @@ class ShellLayoutMixin:
         self.tabs.pack(fill="both", expand=True)
         self.editor_tab_labels = (
             "总览", "对象编辑器", "地图信息", "GUI触发器", "场景放置", "掉落/获取",
-            "触发指令", "合成配方", "孤立对象", "分析报告")
+            "触发指令", "合成配方", "孤立对象", "分析报告", "图标缺口", "批量状态")
         self.tab_overview = self.tabs.add("总览")
         self.tab_obj = self.tabs.add("对象编辑器")
         self.tab_info = self.tabs.add("地图信息")
@@ -80,6 +80,8 @@ class ShellLayoutMixin:
         self.tab_rec = self.tabs.add("合成配方")
         self.tab_orphan = self.tabs.add("孤立对象")
         self.tab_analysis = self.tabs.add("分析报告")
+        self.tab_icon_gaps = self.tabs.add("图标缺口")
+        self.tab_batch_status = self.tabs.add("批量状态")
         self._build_overview_tab(self.tab_overview)
         self._build_obj_tab(self.tab_obj)
         self._build_info_tab(self.tab_info)
@@ -90,6 +92,8 @@ class ShellLayoutMixin:
         self._build_rec_tab(self.tab_rec)
         self._build_orphan_tab(self.tab_orphan)
         self._build_analysis_tab(self.tab_analysis)
+        self._build_icon_gap_tab(self.tab_icon_gaps)
+        self._build_batch_status_tab(self.tab_batch_status)
         self._refresh_editor_reports()
 
     def _build_source_panel(self, parent) -> None:
@@ -196,6 +200,7 @@ class ShellLayoutMixin:
             rightp, text="", font=(FONT, 11), text_color=SUBTLE,
             anchor="w", wraplength=460, justify="left")
         self.detail_sub.pack(fill="x", padx=12)
+        self._build_object_text_controls(rightp)
         self.detail = ctk.CTkTextbox(
             rightp, font=(MONO_FONT, 12), fg_color=PANEL, text_color=TEXT,
             border_width=1, border_color=BORDER, wrap="word")
