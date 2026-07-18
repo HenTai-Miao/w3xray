@@ -35,6 +35,31 @@ def test_publication_validation_accepts_exact_manifest_fixture(tmp_path: Path) -
     assert validation.code == "valid"
     assert validation.manifest_sha256 == result.manifest_sha256
     assert validation.published_bytes > 0
+    assert validation.reports.payloads == ()
+
+
+def test_publication_validation_returns_only_requested_verified_reports(
+    tmp_path: Path,
+) -> None:
+    # Given
+    result = publish_manifest_fixture(tmp_path)
+
+    # When
+    validation = verify_map_publication(
+        tmp_path,
+        result,
+        requested_reports=frozenset(("图标索引.tsv",)),
+    )
+
+    # Then
+    assert validation.valid
+    assert tuple(item.relative_path for item in validation.reports.payloads) == (
+        "图标索引.tsv",
+    )
+    assert (
+        validation.reports.content("图标索引.tsv")
+        == (tmp_path / "图标索引.tsv").read_bytes()
+    )
 
 
 def test_publication_validation_rejects_same_size_tampering(tmp_path: Path) -> None:

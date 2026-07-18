@@ -17,9 +17,14 @@ from tests.trusted_description_cache_fixture import published_cache
 import w3xtool.batch_runner as batch_runner
 import w3xtool.batch_map_attempt as batch_map_attempt
 from w3xtool.batch_configuration import BatchConfigurationError
-from w3xtool.batch_models import MapBatchResult, MapBatchState, SourceFingerprint
+from w3xtool.batch_models import MapBatchResult, SourceFingerprint
 from w3xtool.batch_resume import load_previous_state
 from w3xtool.batch_runner import BatchOptions, run_batch
+from w3xtool.batch_status import (
+    PublicationResult,
+    derive_batch_axes,
+    derive_legacy_map_state,
+)
 from w3xtool.load_context import MapLoadContext
 from w3xtool.trusted_description_cache import load_trusted_description_cache
 
@@ -126,12 +131,26 @@ def test_no_retry_failed_reprocesses_when_description_cache_manifest_changes(
     ) -> MapBatchResult:
         nonlocal calls
         calls += 1
+        axes = derive_batch_axes(
+            PublicationResult.FAILED,
+            raw_blocks=0,
+            damaged_blocks=0,
+            restricted_blocks=0,
+            icon_gaps=0,
+            current_text_states=(),
+            relation_partial_count=0,
+            unresolved_endpoint_count=0,
+        )
         return replace(
             empty_result(fingerprint, "unused"),
             output_directory="",
             stage="load/process",
-            state=MapBatchState.FAILED,
+            state=derive_legacy_map_state(axes),
             first_error="broken",
+            publication_result=axes.publication,
+            archive_integrity=axes.archive,
+            knowledge_evidence=axes.knowledge,
+            knowledge_gap_reasons=axes.knowledge_reasons,
             dependency_fingerprint=context.description_cache_manifest_sha256,
         )
 

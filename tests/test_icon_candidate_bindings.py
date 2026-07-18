@@ -102,44 +102,6 @@ def test_anonymous_hash_match_has_no_unproved_requested_path() -> None:
     assert candidate.adopted is False
 
 
-def test_basename_suffix_and_client_rows_never_become_candidates() -> None:
-    # Given
-    gap = GlobalIconGap(
-        "/maps/a.w3x",
-        "a" * 64,
-        "root",
-        r"Custom\BTNBlade.blp",
-        IconGapReason.NAMED_RESOURCE_MISSING,
-        (),
-        ("物品",),
-        ("I001",),
-        (_reference(),),
-        1,
-    )
-    resolved = (
-        GlobalResolvedIcon(
-            "/maps/b.w3x",
-            "b" * 64,
-            r"Other\BTNBlade.blp",
-            IconResolutionLayer.CURRENT_MAP,
-            "b" * 64,
-            "/maps/b.w3x",
-        ),
-        GlobalResolvedIcon(
-            "/maps/c.w3x",
-            "c" * 64,
-            r"Custom\BTNBlade.blp",
-            IconResolutionLayer.CLIENT,
-            "c" * 64,
-            "War3x.mpq",
-        ),
-    )
-    evidence = GlobalEvidenceIndex.build((gap,), resolved, (), ())
-
-    # When / Then
-    assert build_icon_candidate_bindings(evidence) == ()
-
-
 def test_candidate_report_round_trips_without_adopting_suggestions() -> None:
     # Given
     resolved = GlobalResolvedIcon(

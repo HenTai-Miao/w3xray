@@ -11,6 +11,7 @@ from .icon_evidence_models import (
     IconCandidateKind,
     IconResolutionLayer,
 )
+from .icon_path_evidence import plan_icon_path
 
 
 _SHA256: Final = re.compile(r"[0-9a-f]{64}")
@@ -31,9 +32,14 @@ def build_icon_candidate_bindings(
         and _SHA256.fullmatch(row.map_sha256) is not None
         and _SHA256.fullmatch(row.content_sha256) is not None
         and bool(row.normalized_path)
+        and plan_icon_path(row.normalized_path).normalized == row.normalized_path
     )
     for gap in evidence.gaps:
-        if _SHA256.fullmatch(gap.map_sha256) is None or not gap.normalized_path:
+        if (
+            _SHA256.fullmatch(gap.map_sha256) is None
+            or not gap.normalized_path
+            or plan_icon_path(gap.normalized_path).normalized != gap.normalized_path
+        ):
             continue
         for row in named:
             if (

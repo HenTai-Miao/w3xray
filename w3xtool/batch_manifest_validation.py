@@ -5,14 +5,17 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 from typing import Final
-from unicodedata import normalize
 
+from .batch_manifest_inventory import (
+    ManifestInventoryError,
+    build_artifact_inventory,
+    snapshot_artifact_inventory,
+)
 from .batch_manifest_io import parse_map_manifest, parse_ownership_record
 from .batch_manifest_models import (
     CONTENT_MANIFEST_NAME,
     OWNERSHIP_MARKER_NAME,
     REQUIRED_MAP_REPORTS,
-    ArtifactKind,
     ManifestArtifact,
     ManifestResultSummary,
     MapContentManifest,
@@ -20,13 +23,12 @@ from .batch_manifest_models import (
 )
 from .batch_models import MapBatchResult
 from .batch_report_validation import validate_report_summaries
-from .bounded_file import read_bounded_regular_file, sha256_regular_file
-from .safe_output import safe_relative_path
+from .bounded_file import read_bounded_regular_file
 
 
 _MAX_MANIFEST_BYTES: Final = 64 * 1024 * 1024
 _MAX_MARKER_BYTES: Final = 64 * 1024
-_METADATA_NAMES: Final = frozenset((CONTENT_MANIFEST_NAME, OWNERSHIP_MARKER_NAME))
+_REPORT_NAMES: Final = frozenset(REQUIRED_MAP_REPORTS)
 
 
 def build_map_manifest(
@@ -87,8 +89,12 @@ def summary_from_result(result: MapBatchResult) -> ManifestResultSummary:
 def verify_map_publication(
     directory: Path,
     expected: MapBatchResult | None = None,
+    *,
+    requested_reports: frozenset[str] = frozenset(),
 ) -> PublicationValidation:
     """Re-read ownership, manifest, files, and report summaries for reuse."""
+    if not requested_reports <= _REPORT_NAMES:
+        return _invalid("invalid_report_request")
     if directory.is_symlink() or not directory.is_dir():
         return _invalid("unsafe_directory")
     marker_path = directory / OWNERSHIP_MARKER_NAME
@@ -116,9 +122,10 @@ def verify_map_publication(
         expected, manifest, manifest_digest
     ):
         return _invalid("result_summary_mismatch")
-    inventory = _validated_inventory(directory)
-    if isinstance(inventory, PublicationValidation):
-        return inventory
+    try:
+        inventory, reports = snapshot_artifact_inventory(directory)
+    except ManifestInventoryError as exc:
+        return _invalid(exc.code, exc.detail, exc.relative_path)
     actual_by_path = {item.relative_path: item for item in inventory}
     expected_by_path = {item.relative_path: item for item in manifest.artifacts}
     if actual_by_path.keys() != expected_by_path.keys():
@@ -132,7 +139,7 @@ def verify_map_publication(
     if not set(REQUIRED_MAP_REPORTS).issubset(expected_by_path):
         return _invalid("required_report_missing")
     try:
-        mismatch = validate_report_summaries(directory, manifest.result)
+        mismatch = validate_report_summaries(reports, manifest.result)
     except (OSError, UnicodeError, ValueError) as exc:
         return _invalid("report_schema_mismatch", str(exc))
     if mismatch is not None:
@@ -143,53 +150,15 @@ def verify_map_publication(
         manifest_sha256=manifest_digest,
         published_bytes=manifest.total_size,
         manifest=manifest,
+        reports=reports.select(requested_reports),
     )
 
 
 def _inventory(root: Path) -> tuple[ManifestArtifact, ...]:
-    inventory = _validated_inventory(root, reject_metadata=False)
-    if isinstance(inventory, PublicationValidation):
-        raise ValueError(inventory.detail or inventory.code)
-    return inventory
-
-
-def _validated_inventory(
-    root: Path,
-    *,
-    reject_metadata: bool = True,
-) -> tuple[ManifestArtifact, ...] | PublicationValidation:
-    artifacts: list[ManifestArtifact] = []
-    identities: set[str] = set()
-    for path in sorted(root.rglob("*"), key=lambda item: str(item).casefold()):
-        if path.is_symlink():
-            return _invalid("unsafe_artifact", relative_path=_relative(root, path))
-        if path.is_dir():
-            continue
-        relative = _relative(root, path)
-        if relative in _METADATA_NAMES:
-            if reject_metadata:
-                continue
-            continue
-        parsed = safe_relative_path(relative)
-        if parsed is None or parsed.as_posix() != relative:
-            return _invalid("unsafe_artifact", relative_path=relative)
-        identity = normalize("NFC", relative).casefold()
-        if identity in identities:
-            return _invalid("duplicate artifact path", relative_path=relative)
-        identities.add(identity)
-        try:
-            digest, file_identity = sha256_regular_file(path)
-        except OSError as exc:
-            return _invalid("unsafe_artifact", str(exc), relative)
-        artifacts.append(
-            ManifestArtifact(
-                relative,
-                _artifact_kind(relative),
-                file_identity.size,
-                digest,
-            )
-        )
-    return tuple(sorted(artifacts, key=lambda item: item.relative_path.casefold()))
+    try:
+        return build_artifact_inventory(root)
+    except ManifestInventoryError as exc:
+        raise ValueError(exc.detail or exc.code) from exc
 
 
 def _matches_expected(
@@ -204,20 +173,6 @@ def _matches_expected(
         and summary_from_result(expected) == manifest.result
         and expected.published_bytes == manifest.total_size
     )
-
-
-def _artifact_kind(relative: str) -> ArtifactKind:
-    if relative.startswith("图标/原始/"):
-        return ArtifactKind.ICON_ORIGINAL
-    if relative.startswith("图标/PNG/"):
-        return ArtifactKind.ICON_PNG
-    if relative in REQUIRED_MAP_REPORTS:
-        return ArtifactKind.REPORT
-    return ArtifactKind.OTHER
-
-
-def _relative(root: Path, path: Path) -> str:
-    return path.relative_to(root).as_posix()
 
 
 def _invalid(

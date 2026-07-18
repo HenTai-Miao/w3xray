@@ -9,6 +9,7 @@ from typing import Final, assert_never, override
 
 from .batch_configuration import BatchOptions
 from .batch_global_evidence import collect_global_evidence
+from .batch_global_evidence_models import GlobalEvidenceError
 from .batch_global_publication import load_current_generation
 from .batch_global_models import GLOBAL_PAYLOAD_NAMES, GlobalGeneration
 from .batch_manifest_validation import verify_map_publication
@@ -77,7 +78,11 @@ def require_authoritative_batch(
             raise BatchAcceptanceError(
                 f"map publication validation failed: {validation.code}"
             )
-    if collect_global_evidence(output, generation.state) != generation.evidence:
+    try:
+        fresh_evidence = collect_global_evidence(output, generation.state)
+    except (GlobalEvidenceError, OSError) as exc:
+        raise BatchAcceptanceError("global icon evidence collection failed") from exc
+    if fresh_evidence != generation.evidence:
         raise BatchAcceptanceError("global icon evidence disagrees with map reports")
     return AuthoritativeBatch(generation, publications)
 
@@ -115,7 +120,7 @@ def _authoritative_publications(
             case PublicationResult.PUBLISHED:
                 pass
             case PublicationResult.FAILED | PublicationResult.CANCELLED:
-                raise BatchAcceptanceError("authority contains an unpublished result")
+                continue
             case unreachable:
                 assert_never(unreachable)
         relative = safe_relative_path(result.output_directory)

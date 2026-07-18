@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Final
 
 from .batch_icon_reports import ICON_REPORT_HEADER
-from .batch_manifest_models import ManifestResultSummary
-from .batch_report_reader import BatchReportValidationError, read_report_rows
+from .batch_manifest_models import ManifestResultSummary, VerifiedReportSet
+from .batch_report_reader import BatchReportValidationError, read_report_rows_bytes
 from .icon_evidence_counts import IconIntegrityCounts
 from .icon_evidence_exports import UNRESOLVED_ICON_HEADER
 from .icon_evidence_models import IconDiagnosticFlag, IconGapReason
@@ -30,11 +29,13 @@ _INTEGRITY_LABELS: Final = (
 
 
 def validate_icon_report_summaries(
-    directory: Path,
+    reports: VerifiedReportSet,
     summary: ManifestResultSummary,
 ) -> str | None:
     """Return the first resolved/gap/write counter mismatch, if any."""
-    icon_rows = read_report_rows(directory / "图标索引.tsv", ICON_REPORT_HEADER)
+    icon_rows = read_report_rows_bytes(
+        reports.content("图标索引.tsv"), "图标索引.tsv", ICON_REPORT_HEADER
+    )
     if sum(row[0] == "具名" for row in icon_rows) != summary.named_icon_count:
         return "named_icon_count"
     if sum(row[0] == "匿名" for row in icon_rows) != summary.anonymous_icon_count:
@@ -58,7 +59,9 @@ def validate_icon_report_summaries(
     ):
         return "png_failure_count"
 
-    gap_rows = read_report_rows(directory / "图标未解析.tsv", UNRESOLVED_ICON_HEADER)
+    gap_rows = read_report_rows_bytes(
+        reports.content("图标未解析.tsv"), "图标未解析.tsv", UNRESOLVED_ICON_HEADER
+    )
     unresolved_references, client_unavailable = _validate_gap_rows(gap_rows, icon_rows)
     if client_unavailable != summary.client_unavailable_icon_count:
         return "client_unavailable_icon_count"
@@ -66,7 +69,7 @@ def validate_icon_report_summaries(
         return "unresolved_icon_count"
     if unresolved_references != summary.unresolved_icon_reference_count:
         return "unresolved_icon_reference_count"
-    integrity = _read_icon_integrity(directory / "图标完整性.txt")
+    integrity = _read_icon_integrity(reports.content("图标完整性.txt"))
     checks = (
         (integrity.valid_reference_count, summary.valid_icon_reference_count),
         (integrity.resolved_reference_count, summary.resolved_icon_reference_count),
@@ -180,9 +183,9 @@ def _diagnostics(value: str) -> tuple[IconDiagnosticFlag, ...]:
     return diagnostics
 
 
-def _read_icon_integrity(path: Path) -> IconIntegrityCounts:
+def _read_icon_integrity(content: bytes) -> IconIntegrityCounts:
     values: dict[str, int] = {}
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in content.decode("utf-8").splitlines():
         parts = line.split("：", 1)
         if len(parts) != 2 or parts[0] in values:
             raise BatchReportValidationError("malformed icon integrity line")

@@ -30,6 +30,7 @@ from .batch_reports import (
     format_retry_tsv,
     parse_batch_state_json,
 )
+from .batch_status import PublicationResult
 from .bounded_file import read_bounded_regular_file, sha256_regular_file
 from .description_cache import (
     format_description_cache_tsv,
@@ -117,13 +118,20 @@ def validate_global_generation(
             fresh.anonymous,
             parsed_candidates,
         )
+        published_results = tuple(
+            result
+            for result in state.results
+            if result.publication_result is PublicationResult.PUBLISHED
+        )
         if evidence != fresh:
             return None
         if (
             len(evidence.gaps)
-            != sum(result.unresolved_icon_count for result in state.results)
+            != sum(result.unresolved_icon_count for result in published_results)
             or sum(row.reference_count for row in evidence.gaps)
-            != sum(result.unresolved_icon_reference_count for result in state.results)
+            != sum(
+                result.unresolved_icon_reference_count for result in published_results
+            )
             or format_global_icon_gaps_tsv(evidence) != payloads[_GAPS_NAME]
             or format_icon_candidates_tsv(evidence) != payloads[_CANDIDATES_NAME]
             or format_icon_gap_statistics(evidence, state) != payloads[_STATISTICS_NAME]

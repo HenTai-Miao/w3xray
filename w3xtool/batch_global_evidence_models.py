@@ -15,11 +15,16 @@ from .icon_evidence_models import (
 from .icon_resources import IconObjectReference
 
 
-@dataclass(frozen=True, slots=True)
 class GlobalEvidenceError(ValueError):
     """Verified map evidence cannot be represented without ambiguity."""
 
+    __slots__ = ("detail",)
+
     detail: str
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(detail)
+        self.detail = detail
 
     @override
     def __str__(self) -> str:

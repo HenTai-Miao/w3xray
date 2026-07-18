@@ -124,6 +124,41 @@ class OwnershipRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class VerifiedReportPayload:
+    """One required report's bounded manifest-verified bytes."""
+
+    relative_path: str
+    content: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class VerifiedReportSet:
+    """Immutable requested subset of verified report snapshots."""
+
+    payloads: tuple[VerifiedReportPayload, ...] = ()
+
+    def content(self, relative_path: str) -> bytes:
+        """Return exact verified bytes for one required report."""
+        match = next(
+            (
+                item.content
+                for item in self.payloads
+                if item.relative_path == relative_path
+            ),
+            None,
+        )
+        if match is None:
+            raise KeyError(relative_path)
+        return match
+
+    def select(self, names: frozenset[str]) -> VerifiedReportSet:
+        """Retain only explicitly requested reports without copying bytes."""
+        return VerifiedReportSet(
+            tuple(item for item in self.payloads if item.relative_path in names)
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class PublicationValidation:
     """Typed validation result used by resume, cache, and recovery."""
 
@@ -134,3 +169,4 @@ class PublicationValidation:
     manifest_sha256: str = ""
     published_bytes: int = 0
     manifest: MapContentManifest | None = None
+    reports: VerifiedReportSet = VerifiedReportSet()

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+from io import StringIO
 from pathlib import Path
 import sys
 
@@ -29,24 +30,37 @@ def read_report_rows(
     header: tuple[str, ...],
 ) -> tuple[tuple[str, ...], ...]:
     """Decode one exact-header TSV report with the shared cell codec."""
+    return read_report_rows_bytes(path.read_bytes(), path.name, header)
+
+
+def read_report_rows_bytes(
+    content: bytes,
+    report_name: str,
+    header: tuple[str, ...],
+) -> tuple[tuple[str, ...], ...]:
+    """Decode one exact-header TSV from its verified byte snapshot."""
     previous_limit = csv.field_size_limit()
     try:
         csv.field_size_limit(sys.maxsize)
-        with path.open("r", encoding="utf-8", newline="") as handle:
-            reader = csv.reader(handle, delimiter="\t")
-            first = next(reader, None)
-            decoded_header = (
-                None
-                if first is None
-                else tuple(decode_tsv_cell(cell) for cell in first)
-            )
-            if decoded_header != header:
-                raise BatchReportValidationError(
-                    f"unexpected report header: {path.name}"
-                )
-            rows = tuple(tuple(decode_tsv_cell(cell) for cell in row) for row in reader)
+        reader = csv.reader(
+            StringIO(content.decode("utf-8"), newline=""), delimiter="\t"
+        )
+        first = next(reader, None)
+        decoded_header = (
+            None if first is None else tuple(decode_tsv_cell(cell) for cell in first)
+        )
+        if decoded_header != header:
+            raise BatchReportValidationError(f"unexpected report header: {report_name}")
+        rows = tuple(tuple(decode_tsv_cell(cell) for cell in row) for row in reader)
     finally:
         csv.field_size_limit(previous_limit)
     if any(len(row) != len(header) for row in rows):
-        raise BatchReportValidationError(f"malformed report row: {path.name}")
+        raise BatchReportValidationError(f"malformed report row: {report_name}")
     return rows
+
+
+__all__ = (
+    "BatchReportValidationError",
+    "read_report_rows",
+    "read_report_rows_bytes",
+)
