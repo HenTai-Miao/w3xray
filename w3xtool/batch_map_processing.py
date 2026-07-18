@@ -100,24 +100,26 @@ def process_one_map(
         relation_partial_count, unresolved_endpoint_count = _relation_gap_counts(
             item_reports
         )
+        current_text_states = tuple(
+            record.state
+            for record in item_reports.object_texts.records
+            if record.is_current
+        )
+        icon_diagnostics = tuple(
+            diagnostic
+            for row in icon_index.unresolved
+            for diagnostic in row.diagnostics
+        )
         axes = derive_batch_axes(
             PublicationResult.PUBLISHED,
             raw_blocks=raw_blocks,
             damaged_blocks=damaged_blocks,
             restricted_blocks=restricted,
             icon_gaps=len(icon_index.unresolved),
-            current_text_states=tuple(
-                record.state
-                for record in item_reports.object_texts.records
-                if record.is_current
-            ),
+            current_text_states=current_text_states,
             relation_partial_count=relation_partial_count,
             unresolved_endpoint_count=unresolved_endpoint_count,
-            icon_diagnostics=tuple(
-                diagnostic
-                for row in icon_index.unresolved
-                for diagnostic in row.diagnostics
-            ),
+            icon_diagnostics=icon_diagnostics,
         )
         elapsed_ms = max(0, (monotonic_ns() - started) // 1_000_000)
         dependency = fingerprint_dependencies(
@@ -136,6 +138,10 @@ def process_one_map(
             raw_blocks,
             damaged_blocks,
             restricted,
+            current_text_states,
+            relation_partial_count,
+            unresolved_endpoint_count,
+            icon_diagnostics,
             elapsed_ms,
             item_reports,
             dependency,

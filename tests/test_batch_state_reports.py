@@ -250,6 +250,7 @@ def _map_result(*, source_path: str = "/maps/a.w3x") -> MapBatchResult:
         anonymous_read_failure_count=1,
         original_write_failure_count=2,
         png_failure_count=3,
+        relation_partial_count=1,
         relation_counts=(("怪物直接掉落", 2),),
         relation_incomplete_count=1,
         dependency_fingerprint="b" * 64,

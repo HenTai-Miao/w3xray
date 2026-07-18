@@ -34,6 +34,11 @@ _SUMMARY_KEYS: Final = frozenset(
         "original_write_failure_count",
         "original_written_count",
         "png_failure_count",
+        "current_source_unavailable_count",
+        "current_source_conflict_count",
+        "relation_partial_count",
+        "unresolved_endpoint_count",
+        "client_unavailable_icon_count",
         "png_written_count",
         "publication_result",
         "raw_block_count",
@@ -69,6 +74,11 @@ def manifest_summary_payload(summary: ManifestResultSummary) -> dict[str, JsonVa
         "original_write_failure_count": summary.original_write_failure_count,
         "original_written_count": summary.original_written_count,
         "png_failure_count": summary.png_failure_count,
+        "current_source_unavailable_count": summary.current_source_unavailable_count,
+        "current_source_conflict_count": summary.current_source_conflict_count,
+        "relation_partial_count": summary.relation_partial_count,
+        "unresolved_endpoint_count": summary.unresolved_endpoint_count,
+        "client_unavailable_icon_count": summary.client_unavailable_icon_count,
         "png_written_count": summary.png_written_count,
         "publication_result": summary.publication_result.value,
         "raw_block_count": summary.raw_block_count,
@@ -142,6 +152,24 @@ def parse_manifest_summary(value: JsonValue) -> ManifestResultSummary:
             raw["original_write_failure_count"], "original write failure count"
         ),
         png_failure_count=_nonnegative(raw["png_failure_count"], "PNG failure count"),
+        current_source_unavailable_count=_nonnegative(
+            raw["current_source_unavailable_count"],
+            "current source unavailable count",
+        ),
+        current_source_conflict_count=_nonnegative(
+            raw["current_source_conflict_count"],
+            "current source conflict count",
+        ),
+        relation_partial_count=_nonnegative(
+            raw["relation_partial_count"], "relation partial count"
+        ),
+        unresolved_endpoint_count=_nonnegative(
+            raw["unresolved_endpoint_count"], "unresolved endpoint count"
+        ),
+        client_unavailable_icon_count=_nonnegative(
+            raw["client_unavailable_icon_count"],
+            "client unavailable icon count",
+        ),
     )
     validate_manifest_summary(summary)
     return summary

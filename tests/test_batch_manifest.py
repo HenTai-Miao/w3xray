@@ -34,6 +34,7 @@ from w3xtool.batch_reports import (
 from w3xtool.batch_status import (
     ArchiveIntegrity,
     KnowledgeEvidence,
+    KnowledgeGapReason,
     PublicationResult,
 )
 from w3xtool.icon_evidence_exports import (
@@ -97,6 +98,9 @@ def test_manifest_round_trip_retains_every_split_icon_counter(
         anonymous_read_failure_count=1,
         original_write_failure_count=2,
         png_failure_count=3,
+        state=MapBatchState.PARTIAL,
+        knowledge_evidence=KnowledgeEvidence.PARTIAL,
+        knowledge_gap_reasons=(KnowledgeGapReason.ICON_UNBOUND,),
     )
 
     # When
@@ -128,6 +132,26 @@ def test_manifest_parser_rejects_legacy_state_that_disagrees_with_axes(
 
     # When / Then: the immutable manifest rejects contradictory state metadata.
     with pytest.raises(BatchManifestFormatError, match="state|axes"):
+        parse_map_manifest(json.dumps(payload))
+
+
+def test_manifest_parser_rejects_icon_gap_claimed_as_complete_knowledge(
+    tmp_path: Path,
+) -> None:
+    # Given: the manifest stores an unresolved normalized icon path.
+    manifest = build_map_manifest(
+        tmp_path, _write_empty_stage(tmp_path), _TRANSACTION_ID
+    )
+    payload = json.loads(format_map_manifest(manifest))
+    payload["result"]["unresolved_icon_count"] = 1
+    payload["result"]["unresolved_icon_reference_count"] = 1
+    payload["result"]["valid_icon_reference_count"] = 1
+
+    # When / Then: complete knowledge cannot discard the derived icon reason.
+    with pytest.raises(
+        BatchManifestFormatError,
+        match="knowledge.*reason|reason.*knowledge",
+    ):
         parse_map_manifest(json.dumps(payload))
 
 

@@ -9,6 +9,8 @@ from .batch_models import MapBatchResult, SourceFingerprint
 from .batch_status import BatchAxes, derive_legacy_map_state
 from .icon_evidence_counts import icon_integrity_counts
 from .icon_evidence_index import IconEvidenceIndex
+from .icon_evidence_models import IconDiagnosticFlag
+from .object_text_models import ObjectTextState
 
 
 def build_map_result(
@@ -22,6 +24,10 @@ def build_map_result(
     raw_blocks: int,
     damaged_blocks: int,
     restricted: int,
+    current_text_states: tuple[ObjectTextState, ...],
+    relation_partial_count: int,
+    unresolved_endpoint_count: int,
+    icon_diagnostics: tuple[IconDiagnosticFlag, ...],
     elapsed_ms: int,
     item_reports: BatchItemReports,
     dependency_fingerprint: str,
@@ -70,6 +76,17 @@ def build_map_result(
         anonymous_read_failure_count=icon_counts.anonymous_read_failure_count,
         original_write_failure_count=icon_counts.original_write_failure_count,
         png_failure_count=icon_counts.png_failure_count,
+        current_source_unavailable_count=sum(
+            state is ObjectTextState.SOURCE_UNAVAILABLE for state in current_text_states
+        ),
+        current_source_conflict_count=sum(
+            state is ObjectTextState.SOURCE_CONFLICT for state in current_text_states
+        ),
+        relation_partial_count=relation_partial_count,
+        unresolved_endpoint_count=unresolved_endpoint_count,
+        client_unavailable_icon_count=sum(
+            flag is IconDiagnosticFlag.CLIENT_NOT_PROVIDED for flag in icon_diagnostics
+        ),
         relation_counts=item_reports.relation_counts,
         relation_incomplete_count=item_reports.relation_incomplete_count,
         dependency_fingerprint=dependency_fingerprint,

@@ -7,57 +7,42 @@ from typing import assert_never
 from .batch_models import BatchStateFormatError, MapBatchResult
 from .batch_status import (
     ArchiveIntegrity,
-    BatchAxes,
-    KnowledgeEvidence,
+    BatchSemanticEvidence,
     PublicationResult,
-    derive_batch_axes,
-    derive_legacy_map_state,
+    batch_semantics_error,
 )
-from .icon_evidence_counts import physical_icon_failure_count
 from .safe_output import safe_relative_path
 
 
 def validate_result_state(result: MapBatchResult) -> None:
     """Reject published and terminal results with contradictory state."""
-    if result.valid_icon_reference_count != (
-        result.resolved_icon_reference_count + result.unresolved_icon_reference_count
-    ):
-        raise BatchStateFormatError(
-            "valid icon reference count must equal resolved plus unresolved references"
+    error = batch_semantics_error(
+        BatchSemanticEvidence(
+            result.publication_result,
+            result.archive_integrity,
+            result.knowledge_evidence,
+            result.knowledge_gap_reasons,
+            result.state,
+            result.raw_block_count,
+            result.damaged_block_count,
+            result.restricted_block_count,
+            result.valid_icon_reference_count,
+            result.resolved_icon_reference_count,
+            result.unresolved_icon_reference_count,
+            result.unresolved_icon_count,
+            result.anonymous_read_failure_count,
+            result.original_write_failure_count,
+            result.png_failure_count,
+            result.icon_failure_count,
+            result.current_source_unavailable_count,
+            result.current_source_conflict_count,
+            result.relation_partial_count,
+            result.unresolved_endpoint_count,
+            result.client_unavailable_icon_count,
         )
-    if result.icon_failure_count != physical_icon_failure_count(
-        result.anonymous_read_failure_count,
-        result.original_write_failure_count,
-        result.png_failure_count,
-    ):
-        raise BatchStateFormatError(
-            "icon failure count must equal anonymous read plus original write plus PNG failures"
-        )
-    has_reasons = bool(result.knowledge_gap_reasons)
-    if (result.knowledge_evidence is KnowledgeEvidence.PARTIAL) != has_reasons:
-        raise BatchStateFormatError(
-            "knowledge evidence must be partial exactly when reasons are present"
-        )
-    expected_archive = derive_batch_axes(
-        result.publication_result,
-        raw_blocks=result.raw_block_count,
-        damaged_blocks=result.damaged_block_count,
-        restricted_blocks=result.restricted_block_count,
-        icon_gaps=0,
-        current_text_states=(),
-        relation_partial_count=0,
-        unresolved_endpoint_count=0,
-    ).archive
-    if result.archive_integrity is not expected_archive:
-        raise BatchStateFormatError("archive integrity disagrees with block counters")
-    axes = BatchAxes(
-        result.publication_result,
-        result.archive_integrity,
-        result.knowledge_evidence,
-        result.knowledge_gap_reasons,
     )
-    if result.state is not derive_legacy_map_state(axes):
-        raise BatchStateFormatError("legacy state disagrees with authoritative axes")
+    if error is not None:
+        raise BatchStateFormatError(error)
     match result.publication_result:
         case PublicationResult.PUBLISHED:
             relative = safe_relative_path(result.output_directory)

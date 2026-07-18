@@ -9,6 +9,7 @@ from typing import assert_never
 from .icon_evidence_models import IconDiagnosticFlag
 from .object_text_models import ObjectTextState
 
+
 class PublicationResult(StrEnum):
     """Whether one map produced an authoritative publication."""
 
@@ -63,6 +64,33 @@ class BatchAxes:
     knowledge_reasons: tuple[KnowledgeGapReason, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class BatchSemanticEvidence:
+    """Persisted evidence needed to re-derive every schema-five axis."""
+
+    publication: PublicationResult
+    archive: ArchiveIntegrity
+    knowledge: KnowledgeEvidence
+    knowledge_reasons: tuple[KnowledgeGapReason, ...]
+    state: MapBatchState
+    raw_blocks: int
+    damaged_blocks: int
+    restricted_blocks: int
+    valid_icon_references: int
+    resolved_icon_references: int
+    unresolved_icon_references: int
+    unresolved_icons: int
+    anonymous_read_failures: int
+    original_write_failures: int
+    png_failures: int
+    icon_failures: int
+    current_source_unavailable_count: int
+    current_source_conflict_count: int
+    relation_partial_count: int
+    unresolved_endpoint_count: int
+    client_unavailable_icon_count: int
+
+
 def derive_batch_axes(
     publication: PublicationResult,
     *,
@@ -88,10 +116,44 @@ def derive_batch_axes(
         relation_partial_count,
         unresolved_endpoint_count,
     )
-    knowledge = (
-        KnowledgeEvidence.PARTIAL if reasons else KnowledgeEvidence.COMPLETE
-    )
+    knowledge = KnowledgeEvidence.PARTIAL if reasons else KnowledgeEvidence.COMPLETE
     return BatchAxes(publication, archive, knowledge, reasons)
+
+
+def batch_semantics_error(evidence: BatchSemanticEvidence) -> str | None:
+    """Return a stable contradiction detail, or None for exact derived axes."""
+    if evidence.valid_icon_references != (
+        evidence.resolved_icon_references + evidence.unresolved_icon_references
+    ):
+        return (
+            "valid icon reference count must equal resolved plus unresolved references"
+        )
+    if evidence.icon_failures != (
+        evidence.anonymous_read_failures
+        + evidence.original_write_failures
+        + evidence.png_failures
+    ):
+        return "icon failure count must equal anonymous read plus original write plus PNG failures"
+    expected = derive_batch_axes(
+        evidence.publication,
+        raw_blocks=evidence.raw_blocks,
+        damaged_blocks=evidence.damaged_blocks,
+        restricted_blocks=evidence.restricted_blocks,
+        icon_gaps=evidence.unresolved_icons,
+        current_text_states=_current_text_states(evidence),
+        relation_partial_count=evidence.relation_partial_count,
+        unresolved_endpoint_count=evidence.unresolved_endpoint_count,
+        icon_diagnostics=_icon_diagnostics(evidence),
+    )
+    if evidence.archive is not expected.archive:
+        return "archive integrity disagrees with block counters"
+    if evidence.knowledge_reasons != expected.knowledge_reasons:
+        return "knowledge gap reasons disagree with persisted evidence"
+    if evidence.knowledge is not expected.knowledge:
+        return "knowledge evidence disagrees with persisted evidence"
+    if evidence.state is not derive_legacy_map_state(expected):
+        return "legacy state disagrees with authoritative axes"
+    return None
 
 
 def derive_legacy_map_state(axes: BatchAxes) -> MapBatchState:
@@ -161,13 +223,41 @@ def _derive_knowledge_reasons(
     return tuple(reasons)
 
 
+def _current_text_states(
+    evidence: BatchSemanticEvidence,
+) -> tuple[ObjectTextState, ...]:
+    """Rebuild only persisted current text evidence relevant to status."""
+    unavailable = (
+        (ObjectTextState.SOURCE_UNAVAILABLE,)
+        if evidence.current_source_unavailable_count > 0
+        else ()
+    )
+    conflict = (
+        (ObjectTextState.SOURCE_CONFLICT,)
+        if evidence.current_source_conflict_count > 0
+        else ()
+    )
+    return unavailable + conflict
+
+
+def _icon_diagnostics(
+    evidence: BatchSemanticEvidence,
+) -> tuple[IconDiagnosticFlag, ...]:
+    """Rebuild the persisted client-source availability diagnostic."""
+    if evidence.client_unavailable_icon_count > 0:
+        return (IconDiagnosticFlag.CLIENT_NOT_PROVIDED,)
+    return ()
+
+
 __all__ = (
     "ArchiveIntegrity",
     "BatchAxes",
+    "BatchSemanticEvidence",
     "KnowledgeEvidence",
     "KnowledgeGapReason",
     "MapBatchState",
     "PublicationResult",
+    "batch_semantics_error",
     "derive_batch_axes",
     "derive_legacy_map_state",
 )

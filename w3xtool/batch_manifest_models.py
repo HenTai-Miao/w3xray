@@ -93,6 +93,11 @@ class ManifestResultSummary:
     anonymous_read_failure_count: int
     original_write_failure_count: int
     png_failure_count: int
+    current_source_unavailable_count: int
+    current_source_conflict_count: int
+    relation_partial_count: int
+    unresolved_endpoint_count: int
+    client_unavailable_icon_count: int
 
 
 @dataclass(frozen=True, slots=True)

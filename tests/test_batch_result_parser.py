@@ -94,6 +94,20 @@ def test_parser_rejects_archive_axis_that_disagrees_with_block_counters() -> Non
         parse_batch_state_json(json.dumps(payload))
 
 
+def test_parser_rejects_icon_gap_claimed_as_complete_knowledge() -> None:
+    # Given: the unresolved icon counter proves an icon knowledge gap.
+    payload = _state_payload()
+    payload["results"][0]["knowledge_evidence"] = KnowledgeEvidence.COMPLETE.value
+    payload["results"][0]["knowledge_gap_reasons"] = []
+    payload["results"][0]["state"] = MapBatchState.COMPLETE.value
+
+    # When / Then: persisted knowledge must be re-derived from its evidence.
+    with pytest.raises(
+        BatchStateFormatError, match="knowledge.*reason|reason.*knowledge"
+    ):
+        parse_batch_state_json(json.dumps(payload))
+
+
 def _state_payload() -> _StatePayload:
     state = BatchState(BATCH_SCHEMA_VERSION, (_published_result(),))
     return json.loads(format_batch_state_json(state))

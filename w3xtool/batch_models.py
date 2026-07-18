@@ -70,6 +70,11 @@ class MapBatchResult:
     anonymous_read_failure_count: int
     original_write_failure_count: int
     png_failure_count: int
+    current_source_unavailable_count: int = 0
+    current_source_conflict_count: int = 0
+    relation_partial_count: int = 0
+    unresolved_endpoint_count: int = 0
+    client_unavailable_icon_count: int = 0
     relation_counts: tuple[tuple[str, int], ...] = ()
     relation_incomplete_count: int = 0
     dependency_fingerprint: str = ""

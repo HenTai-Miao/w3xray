@@ -55,6 +55,11 @@ class _ResultJson(TypedDict):
     anonymous_read_failure_count: int
     original_write_failure_count: int
     png_failure_count: int
+    current_source_unavailable_count: int
+    current_source_conflict_count: int
+    relation_partial_count: int
+    unresolved_endpoint_count: int
+    client_unavailable_icon_count: int
 
 
 class _StateJson(TypedDict):
@@ -120,6 +125,11 @@ def _result_json(result: MapBatchResult) -> _ResultJson:
         anonymous_read_failure_count=result.anonymous_read_failure_count,
         original_write_failure_count=result.original_write_failure_count,
         png_failure_count=result.png_failure_count,
+        current_source_unavailable_count=result.current_source_unavailable_count,
+        current_source_conflict_count=result.current_source_conflict_count,
+        relation_partial_count=result.relation_partial_count,
+        unresolved_endpoint_count=result.unresolved_endpoint_count,
+        client_unavailable_icon_count=result.client_unavailable_icon_count,
     )
 
 

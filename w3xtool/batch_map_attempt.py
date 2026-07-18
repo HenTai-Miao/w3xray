@@ -247,6 +247,11 @@ def _terminal_result(
         anonymous_read_failure_count=0,
         original_write_failure_count=0,
         png_failure_count=0,
+        current_source_unavailable_count=0,
+        current_source_conflict_count=0,
+        relation_partial_count=0,
+        unresolved_endpoint_count=0,
+        client_unavailable_icon_count=0,
         dependency_fingerprint=dependency,
         peak_rss_bytes=max(0, peak_rss_bytes),
     )
