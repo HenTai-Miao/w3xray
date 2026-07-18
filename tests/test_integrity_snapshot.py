@@ -90,3 +90,33 @@ def test_integrity_parser_rejects_inconsistent_tree_digest(tmp_path: Path) -> No
         parse_integrity_snapshot(
             format_integrity_snapshot(replace(snapshot, roots=(damaged_root,)))
         )
+
+
+@pytest.mark.parametrize("scope", ("snapshot", "root", "entry"))
+def test_integrity_parser_rejects_duplicate_json_keys(
+    tmp_path: Path,
+    scope: str,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "payload").write_bytes(b"evidence")
+    payload = format_integrity_snapshot(
+        build_integrity_snapshot((SnapshotRoot("root", root),))
+    )
+    if scope == "snapshot":
+        payload = payload.replace('  "roots":', '  "schema": 1,\n  "roots":', 1)
+    elif scope == "root":
+        payload = payload.replace(
+            '      "entries":',
+            '      "label": "root",\n      "entries":',
+            1,
+        )
+    else:
+        payload = payload.replace(
+            '          "mtime_ns":',
+            '          "path": "payload",\n          "mtime_ns":',
+            1,
+        )
+
+    with pytest.raises(IntegritySnapshotError):
+        parse_integrity_snapshot(payload)

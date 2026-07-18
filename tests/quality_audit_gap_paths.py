@@ -41,7 +41,9 @@ tests/test_icon_candidate_input_normalization.py
 tests/test_icon_evidence_query.py
 tests/test_integrity_cli.py
 tests/test_integrity_cli_retained_cache.py
+tests/test_integrity_output_identity_races.py
 tests/test_integrity_output_safety.py
+tests/test_integrity_platform_boundaries.py
 tests/test_integrity_snapshot.py
 tests/test_integrity_snapshot_races.py
 w3xtool/batch_cli_options.py
