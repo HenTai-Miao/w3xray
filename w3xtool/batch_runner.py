@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import replace
-import hashlib
 from pathlib import Path
 from time import monotonic_ns
 
@@ -17,7 +16,7 @@ from .batch_configuration import (
     normalize_batch_options,
     validate_batch_roots,
 )
-from .batch_description_cache import build_and_publish_description_cache
+from .batch_description_cache_input import load_batch_description_cache
 from .batch_execution import CancellationSignal
 from .batch_manifest_models import (
     OWNERSHIP_MARKER_NAME as OWNERSHIP_MARKER,
@@ -43,6 +42,7 @@ from .bounded_file import BoundedFileError, sha256_regular_file
 from .description_cache import format_description_cache_tsv
 from .load_context import MapLoadContext, build_map_load_context
 from .map_directory import scan_map_sources
+from .trusted_description_cache import VerifiedDescriptionCache
 
 __all__ = (
     "DEFAULT_BATCH_OUTPUT",
@@ -66,10 +66,12 @@ def run_batch(
     """Process sources sequentially and persist progress after every map."""
     normalized = normalize_batch_options(options)
     validate_batch_roots(normalized)
+    verified_cache = load_batch_description_cache(normalized)
     with hold_batch_output_lock(normalized.output_root) as lease:
         return _run_batch_locked(
             normalized,
             lease,
+            verified_cache,
             cancellation=cancellation,
             on_progress=on_progress,
         )
@@ -78,6 +80,7 @@ def run_batch(
 def _run_batch_locked(
     normalized: BatchOptions,
     lease: BatchOutputLease,
+    verified_cache: VerifiedDescriptionCache,
     *,
     cancellation: CancellationSignal | None,
     on_progress: Callable[[BatchProgress], None] | None,
@@ -86,12 +89,13 @@ def _run_batch_locked(
     started_ns = monotonic_ns()
     recovery = recover_map_publications(normalized.output_root)
     previous = load_previous_state(normalized.output_root)
-    cache = build_and_publish_description_cache(normalized.output_root)
+    cache = verified_cache.cache
     cache_text = format_description_cache_tsv(cache)
-    cache_sha256 = hashlib.sha256(cache_text.encode("utf-8")).hexdigest()
+    cache_identity = verified_cache.manifest_sha256
     context = replace(
         build_map_load_context(game_data_path=normalized.game_data_path),
         description_cache=cache,
+        description_cache_manifest_sha256=cache_identity,
     )
     paths = tuple(scan_map_sources(normalized.source_directory))
     results: list[MapBatchResult] = []
@@ -126,7 +130,7 @@ def _run_batch_locked(
                 normalized,
                 context,
                 previous,
-                cache_sha256,
+                cache_identity,
                 cancellation,
                 process_one_map,
             )

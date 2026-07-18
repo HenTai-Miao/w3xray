@@ -8,7 +8,6 @@ from io import StringIO
 from pathlib import Path
 
 from .batch_tsv import decode_tsv_cell, format_tsv_rows
-from .description_cache_batch import build_description_cache_from_batch
 from .description_cache_models import (
     EMPTY_DESCRIPTION_CACHE,
     DescriptionCache,
@@ -117,7 +116,6 @@ __all__ = (
     "EMPTY_DESCRIPTION_CACHE",
     "DescriptionCache",
     "DescriptionCacheEntry",
-    "build_description_cache_from_batch",
     "format_description_cache_tsv",
     "load_description_cache",
     "load_description_cache_text",

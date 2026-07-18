@@ -19,7 +19,9 @@ from w3xtool.batch_execution_messages import (
     decode_child_message,
     encode_child_success,
 )
+from w3xtool.batch_execution_request import build_execution_request
 from w3xtool.batch_models import MapBatchResult, MapBatchState, SourceFingerprint
+from w3xtool.description_cache_models import DescriptionCache, DescriptionCacheEntry
 from w3xtool.load_context import MapLoadContext
 
 
@@ -110,6 +112,37 @@ def test_child_message_round_trip_preserves_peak_rss(tmp_path: Path) -> None:
     # Then
     assert isinstance(message, ChildSuccess)
     assert message.peak_rss_bytes == 123
+
+
+def test_execution_request_carries_cache_entries_without_trusted_root(
+    tmp_path: Path,
+) -> None:
+    # Given: the parent has already verified one explicit cache generation.
+    fingerprint = SourceFingerprint(str(tmp_path / "sample.w3x"), 3, 4, "a" * 64)
+    options = BatchOptions(
+        str(tmp_path / "maps"),
+        str(tmp_path / "output"),
+        description_cache_path=str(tmp_path / "trusted"),
+    )
+    entry = DescriptionCacheEntry(
+        "物品",
+        "ratf",
+        "扩展提示",
+        None,
+        "缓存全文",
+        "缓存全文",
+        "b" * 64,
+        "c" * 64,
+        "owned.tsv",
+    )
+    context = MapLoadContext(description_cache=DescriptionCache.build((entry,)))
+
+    # When
+    request = build_execution_request(1, fingerprint, options, context)
+
+    # Then: children receive immutable values, never a path they could re-trust.
+    assert request.options.description_cache_path is None
+    assert request.context().description_cache.entries == (entry,)
 
 
 def _execute(

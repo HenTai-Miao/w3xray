@@ -132,6 +132,8 @@ def find_reusable_result(
         case MapBatchState.FAILED:
             if retry_failed:
                 return ReuseDecision(None, "retry_failed_result")
+            if result.dependency_fingerprint != dependency_fingerprint:
+                return ReuseDecision(None, "dependency_changed")
             return ReuseDecision(result, "reused_failed_without_retry")
         case MapBatchState.CANCELLED:
             return ReuseDecision(None, "retry_cancelled_result")

@@ -78,6 +78,8 @@ class App(
         self.game_data_path = None
         self.author_bundle_path = None
         self.description_cache_path = None
+        self.description_cache_manifest_sha256 = ""
+        self.description_cache_entry_count = 0
         self.mode = "battle"
         self._campaign_views = None
         self._campaign_path = None

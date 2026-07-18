@@ -1,4 +1,4 @@
-"""Validated manifest-bound base-object description cache contracts."""
+"""Lossless standalone description-cache TSV contracts."""
 
 from __future__ import annotations
 
@@ -6,65 +6,12 @@ import csv
 import io
 from pathlib import Path
 
-from tests.batch_publication_fixture import publish_client_fill_result
-from w3xtool.batch_models import SourceFingerprint
 from w3xtool.description_cache import (
-    build_description_cache_from_batch,
+    DescriptionCache,
+    DescriptionCacheEntry,
     format_description_cache_tsv,
     load_description_cache,
 )
-
-
-def test_batch_cache_accepts_only_manifest_valid_client_fill_rows(
-    tmp_path: Path,
-) -> None:
-    # Given: one valid generation has two client roles and one legacy marker lies.
-    published = publish_client_fill_result(
-        1,
-        _fingerprint("a"),
-        str(tmp_path),
-        values=(("基础提示", "基础提示"), ("扩展提示", "完整说明")),
-    )
-    legacy = tmp_path / "地图" / "legacy"
-    legacy.mkdir()
-    (legacy / ".w3xray-batch-owned").write_text("b" * 64, encoding="ascii")
-    (legacy / "对象描述.tsv").write_text("legacy\n", encoding="utf-8")
-
-    # When
-    cache = build_description_cache_from_batch(tmp_path)
-
-    # Then
-    assert cache.lookup("物品", "ratf", "基础提示", None)[0].raw_value == "基础提示"
-    entry = cache.lookup("物品", "ratf", "扩展提示", None)[0]
-    assert entry.raw_value == "完整说明"
-    assert entry.source_manifest_sha256 == published.manifest_sha256
-    assert any("manifest_validation_failed" in item for item in cache.diagnostics)
-
-
-def test_batch_cache_removes_a_key_when_valid_generations_disagree(
-    tmp_path: Path,
-) -> None:
-    # Given: two fully validated generations disagree byte-for-byte on one key.
-    _ = publish_client_fill_result(
-        1,
-        _fingerprint("b"),
-        str(tmp_path),
-        values=(("扩展提示", "甲"),),
-    )
-    _ = publish_client_fill_result(
-        2,
-        _fingerprint("c"),
-        str(tmp_path),
-        values=(("扩展提示", "乙"),),
-    )
-
-    # When
-    cache = build_description_cache_from_batch(tmp_path)
-
-    # Then
-    assert cache.lookup("物品", "ratf", "扩展提示", None) == ()
-    assert cache.conflict_count == 1
-    assert any("物品/ratf/扩展提示" in item for item in cache.diagnostics)
 
 
 def test_formatted_cache_round_trips_all_text_and_both_source_hashes(
@@ -72,13 +19,18 @@ def test_formatted_cache_round_trips_all_text_and_both_source_hashes(
 ) -> None:
     # Given: raw text contains a formula, TSV controls, newlines, and edge spaces.
     raw = ' \u200e=HYPERLINK("https://example.invalid")\t正文\r\n第二行  '
-    published = publish_client_fill_result(
-        1,
-        _fingerprint("d"),
-        str(tmp_path),
-        values=(("扩展提示", raw),),
+    expected = DescriptionCacheEntry(
+        "物品",
+        "ratf",
+        "扩展提示",
+        None,
+        raw,
+        raw,
+        "d" * 64,
+        "e" * 64,
+        "owned.tsv",
     )
-    cache = build_description_cache_from_batch(tmp_path)
+    cache = DescriptionCache.build((expected,))
     path = tmp_path / "可信描述缓存.tsv"
     report = format_description_cache_tsv(cache)
     physical = tuple(csv.reader(io.StringIO(report), delimiter="\t"))[1][4]
@@ -92,8 +44,8 @@ def test_formatted_cache_round_trips_all_text_and_both_source_hashes(
     assert not physical.lstrip().startswith(("=", "+", "-", "@"))
     entry = loaded.lookup("物品", "ratf", "扩展提示", None)[0]
     assert entry.raw_value == raw
-    assert entry.source_map_sha256 == published.source.sha256
-    assert entry.source_manifest_sha256 == published.manifest_sha256
+    assert entry.source_map_sha256 == expected.source_map_sha256
+    assert entry.source_manifest_sha256 == expected.source_manifest_sha256
 
 
 def test_standalone_cache_rejects_legacy_schema_and_symlinks(tmp_path: Path) -> None:
@@ -110,12 +62,3 @@ def test_standalone_cache_rejects_legacy_schema_and_symlinks(tmp_path: Path) -> 
     assert load_description_cache(str(legacy)).entries == ()
     assert "schema" in load_description_cache(str(legacy)).diagnostics[0]
     assert load_description_cache(str(linked)).entries == ()
-
-
-def _fingerprint(character: str) -> SourceFingerprint:
-    return SourceFingerprint(
-        f"/maps/{character}.w3x",
-        3,
-        4,
-        character * 64,
-    )

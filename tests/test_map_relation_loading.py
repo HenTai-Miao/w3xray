@@ -2,11 +2,8 @@
 
 from pathlib import Path
 
-from w3xtool.description_cache import (
-    DescriptionCache,
-    DescriptionCacheEntry,
-    format_description_cache_tsv,
-)
+from tests.trusted_description_cache_fixture import published_cache
+from w3xtool.description_cache import DescriptionCache, DescriptionCacheEntry
 from w3xtool.gui_loader import LoadedMap, load_path_payload
 from w3xtool.load_context import MapLoadContext
 from w3xtool.map_data import MapData
@@ -61,24 +58,8 @@ def test_map_loader_publishes_text_and_relation_indexes_before_return() -> None:
 
 
 def test_description_cache_path_reaches_gui_map_load_context(tmp_path: Path) -> None:
-    # Given: a valid standalone trusted cache selected by the GUI loader.
-    cache = DescriptionCache.build(
-        (
-            DescriptionCacheEntry(
-                "物品",
-                "ratf",
-                "扩展提示",
-                None,
-                "缓存全文",
-                "缓存全文",
-                "a" * 64,
-                "b" * 64,
-                "owned.tsv",
-            ),
-        )
-    )
-    cache_path = tmp_path / "可信描述缓存.tsv"
-    cache_path.write_text(format_description_cache_tsv(cache), encoding="utf-8")
+    # Given: a valid owned trusted-cache root selected by the GUI loader.
+    cache_root = published_cache(tmp_path / "cache-fixture", raw="缓存全文")
     captured: list[MapLoadContext | None] = []
     md = MapData("x.w3x", "缓存图")
 
@@ -103,7 +84,7 @@ def test_description_cache_path_reaches_gui_map_load_context(tmp_path: Path) -> 
         load=load,
         prepare=prepare,
         game_data_path=str(tmp_path / "missing-client"),
-        description_cache_path=str(cache_path),
+        description_cache_path=str(cache_root),
     )
 
     # Then: the context is not optimized away and contains the selected evidence.

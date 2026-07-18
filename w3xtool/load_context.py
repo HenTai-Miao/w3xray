@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 
 from .client_object_data import ClientBaseObject, snapshot_client_base_objects
 from .description_cache import (
     EMPTY_DESCRIPTION_CACHE,
     DescriptionCache,
-    load_description_cache,
 )
+from .description_cache_models import NO_DESCRIPTION_CACHE_SHA256
+from .trusted_description_cache import load_trusted_description_cache
 from .trigger_schema import TriggerSchema
 
 
@@ -23,6 +25,7 @@ class MapLoadContext:
     compat_bundle_path: str | None = None
     client_text_available: bool = False
     description_cache: DescriptionCache = EMPTY_DESCRIPTION_CACHE
+    description_cache_manifest_sha256: str = NO_DESCRIPTION_CACHE_SHA256
 
 
 def build_map_load_context(
@@ -48,6 +51,11 @@ def build_map_load_context(
                 source.close()
             except OSError:
                 source = None
+    verified_cache = (
+        None
+        if description_cache_path is None
+        else load_trusted_description_cache(Path(description_cache_path))
+    )
     return MapLoadContext(
         external_names=tuple(external_names),
         trigger_schema=schema,
@@ -55,5 +63,12 @@ def build_map_load_context(
         client_base_objects=client_snapshot.objects,
         compat_bundle_path=compat_bundle_path,
         client_text_available=client_snapshot.text_available,
-        description_cache=load_description_cache(description_cache_path),
+        description_cache=(
+            EMPTY_DESCRIPTION_CACHE if verified_cache is None else verified_cache.cache
+        ),
+        description_cache_manifest_sha256=(
+            NO_DESCRIPTION_CACHE_SHA256
+            if verified_cache is None
+            else verified_cache.manifest_sha256
+        ),
     )

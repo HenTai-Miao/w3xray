@@ -26,6 +26,7 @@ class BatchOptions:
     map_timeout_seconds: float | None = None
     max_memory_bytes: int | None = None
     minimum_free_bytes: int = DEFAULT_MINIMUM_FREE_BYTES
+    description_cache_path: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,6 +63,11 @@ def normalize_batch_options(options: BatchOptions) -> BatchOptions:
     source = os.path.abspath(os.path.expanduser(options.source_directory))
     output = os.path.abspath(os.path.expanduser(options.output_root))
     game_data = options.game_data_path or _find_classic_root(source)
+    description_cache = (
+        None
+        if options.description_cache_path is None
+        else os.path.abspath(os.path.expanduser(options.description_cache_path))
+    )
     return BatchOptions(
         source_directory=source,
         output_root=output,
@@ -70,6 +76,7 @@ def normalize_batch_options(options: BatchOptions) -> BatchOptions:
         map_timeout_seconds=options.map_timeout_seconds,
         max_memory_bytes=options.max_memory_bytes,
         minimum_free_bytes=options.minimum_free_bytes,
+        description_cache_path=description_cache,
     )
 
 
@@ -85,16 +92,36 @@ def validate_batch_roots(options: BatchOptions) -> None:
         raise BatchConfigurationError("source directory does not exist")
     if os.path.islink(options.output_root):
         raise BatchConfigurationError("output root is a symlink")
+    cache_path = options.description_cache_path
+    if cache_path is not None:
+        if os.path.islink(cache_path):
+            raise BatchConfigurationError("description cache root is a symlink")
+        if not os.path.isdir(cache_path):
+            raise BatchConfigurationError("description cache root does not exist")
     source = os.path.realpath(options.source_directory)
     output = os.path.realpath(options.output_root)
+    _reject_overlap(source, output, "source and output roots overlap")
+    if cache_path is not None:
+        cache = os.path.realpath(cache_path)
+        _reject_overlap(
+            source,
+            cache,
+            "description cache and source roots overlap",
+        )
+        _reject_overlap(
+            output,
+            cache,
+            "description cache and output roots overlap",
+        )
+
+
+def _reject_overlap(first: str, second: str, detail: str) -> None:
     try:
-        common = os.path.commonpath((source, output))
+        common = os.path.commonpath((first, second))
     except ValueError as exc:
-        raise BatchConfigurationError(
-            "source and output roots cannot be compared"
-        ) from exc
-    if common in {source, output}:
-        raise BatchConfigurationError("source and output roots overlap")
+        raise BatchConfigurationError("batch roots cannot be compared") from exc
+    if common in {first, second}:
+        raise BatchConfigurationError(detail)
 
 
 def _find_classic_root(source_directory: str) -> str | None:

@@ -41,6 +41,8 @@ def test_quality_gate_paths_are_one_unique_immutable_set() -> None:
     assert isinstance(paths, tuple)
     assert len(paths) == len(set(paths))
     assert paths == tuple(sorted(paths))
+    assert "w3xtool/batch_description_cache.py" not in paths
+    assert "w3xtool/description_cache_batch.py" not in paths
 
 
 def test_quality_gate_covers_audit_gap_core_modules() -> None:

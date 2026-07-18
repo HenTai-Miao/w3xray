@@ -76,7 +76,6 @@ w3xtool/batch_checkpoint_publication.py
 w3xtool/batch_cli.py
 w3xtool/batch_configuration.py
 w3xtool/batch_dependencies.py
-w3xtool/batch_description_cache.py
 w3xtool/batch_execution.py
 w3xtool/batch_execution_messages.py
 w3xtool/batch_execution_models.py
@@ -111,7 +110,6 @@ w3xtool/batch_state_io.py
 w3xtool/batch_state_parser.py
 w3xtool/campaign_child_loader.py
 w3xtool/description_cache.py
-w3xtool/description_cache_batch.py
 w3xtool/description_cache_models.py
 w3xtool/description_cache_schema.py
 w3xtool/durable_io.py

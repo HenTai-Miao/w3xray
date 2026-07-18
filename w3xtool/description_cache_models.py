@@ -4,11 +4,17 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+import hashlib
 from types import MappingProxyType
 from typing import Final
 
 
 type DescriptionCacheKey = tuple[str, str, str, int | None]
+
+
+NO_DESCRIPTION_CACHE_SHA256: Final = hashlib.sha256(
+    b"w3xray:no-description-cache"
+).hexdigest()
 
 
 @dataclass(frozen=True, slots=True)

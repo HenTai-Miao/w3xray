@@ -153,20 +153,31 @@ def test_no_retry_failed_preserves_only_an_unchanged_failed_result(
     tmp_path: Path,
 ) -> None:
     # Given
-    result = _result("a", state=MapBatchState.FAILED)
+    dependency = "d" * 64
+    result = replace(
+        _result("a", state=MapBatchState.FAILED),
+        dependency_fingerprint=dependency,
+    )
 
     # When
     retained = find_reusable_result(
         _previous(result),
         result.source,
-        "d" * 64,
+        dependency,
+        str(tmp_path),
+        retry_failed=False,
+    )
+    changed = find_reusable_result(
+        _previous(result),
+        result.source,
+        "e" * 64,
         str(tmp_path),
         retry_failed=False,
     )
     retried = find_reusable_result(
         _previous(result),
         result.source,
-        "d" * 64,
+        dependency,
         str(tmp_path),
         retry_failed=True,
     )
@@ -174,6 +185,8 @@ def test_no_retry_failed_preserves_only_an_unchanged_failed_result(
     # Then
     assert retained.result == result
     assert retained.code == "reused_failed_without_retry"
+    assert changed.result is None
+    assert changed.code == "dependency_changed"
     assert retried.result is None
     assert retried.code == "retry_failed_result"
 

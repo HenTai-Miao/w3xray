@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
 from pathlib import Path
 from time import monotonic_ns
 from typing import Protocol, override
@@ -36,7 +35,6 @@ from .batch_reports import (
     format_map_summary,
 )
 from .extraction_ledger import BlockState
-from .description_cache import format_description_cache_tsv
 from .game_data_source import GameDataSource, open_game_data_source
 from .icon_evidence_exports import format_icon_integrity, format_unresolved_icon_tsv
 from .icon_evidence_index import IconEvidenceIndex
@@ -115,11 +113,10 @@ def process_one_map(
             descriptions=descriptions,
         )
         elapsed_ms = max(0, (monotonic_ns() - started) // 1_000_000)
-        cache_text = format_description_cache_tsv(context.description_cache)
         dependency = fingerprint_dependencies(
             fingerprint,
             options,
-            hashlib.sha256(cache_text.encode()).hexdigest(),
+            context.description_cache_manifest_sha256,
         )
         result = build_map_result(
             fingerprint,

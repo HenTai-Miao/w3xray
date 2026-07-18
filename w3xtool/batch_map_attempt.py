@@ -51,15 +51,6 @@ def attempt_map(
     """Resolve one source without crossing an unbounded resource boundary."""
     if cancellation is not None and cancellation.is_set():
         return _cancelled(fingerprint, "cancellation requested")
-    early = find_reusable_result(
-        previous,
-        fingerprint,
-        "",
-        options.output_root,
-        retry_failed=options.retry_failed,
-    )
-    if early.result is not None:
-        return MapAttempt(early.result, BatchAction.REUSED, early.code, early.detail)
     try:
         dependency = fingerprint_dependencies(fingerprint, options, cache_sha256)
     except (OSError, ValueError, KeyError, IndexError, struct.error) as exc:

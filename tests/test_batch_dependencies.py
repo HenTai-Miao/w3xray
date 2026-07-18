@@ -52,12 +52,12 @@ def test_dependency_fingerprint_binds_extraction_logic_revision(
     assert changed != current
 
 
-def test_current_extraction_revision_invalidates_pre_category_safe_outputs() -> None:
-    # Given: revision 3 could resolve campaign-shared rawcodes through the wrong category.
-    category_unsafe_revision = 3
+def test_schema_five_uses_extraction_revision_five() -> None:
+    # Given: schema 5 binds explicit trusted-description cache generations.
+    schema_five_revision = 5
 
-    # When / Then: the current extractor cannot reuse that semantic revision.
-    assert batch_dependencies.BATCH_EXTRACTION_REVISION == category_unsafe_revision + 1
+    # When / Then: schema-4 publications cannot be silently reused.
+    assert batch_dependencies.BATCH_EXTRACTION_REVISION == schema_five_revision
 
 
 def test_classic_dependency_changes_with_archive_identity(tmp_path: Path) -> None:

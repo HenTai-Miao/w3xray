@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .batch_configuration import BatchOptions
 from .batch_models import SourceFingerprint
@@ -27,6 +27,7 @@ class MapExecutionRequest:
     client_text_available: bool
     cache_entries: tuple[DescriptionCacheEntry, ...]
     cache_diagnostics: tuple[str, ...]
+    cache_manifest_sha256: str
 
     def context(self) -> MapLoadContext:
         """Rebuild mapping-backed cache state inside the child process."""
@@ -41,6 +42,7 @@ class MapExecutionRequest:
                 self.cache_entries,
                 self.cache_diagnostics,
             ),
+            description_cache_manifest_sha256=self.cache_manifest_sha256,
         )
 
 
@@ -55,7 +57,7 @@ def build_execution_request(
     return MapExecutionRequest(
         index,
         fingerprint,
-        options,
+        replace(options, description_cache_path=None),
         context.external_names,
         context.trigger_schema,
         context.author_bundle_path,
@@ -64,6 +66,7 @@ def build_execution_request(
         context.client_text_available,
         cache.entries,
         cache.diagnostics,
+        context.description_cache_manifest_sha256,
     )
 
 

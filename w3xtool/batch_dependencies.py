@@ -23,7 +23,7 @@ _SHA256: Final = re.compile(r"[0-9a-f]{64}")
 _MAX_IDENTITY_FILE_BYTES: Final = 256 * 1024 * 1024
 _TRUSTED_MANIFEST: Final = "可信图标缓存.tsv"
 _TRUSTED_EVIDENCE_DIRECTORY: Final = "地图图标证据"
-BATCH_EXTRACTION_REVISION: Final = 4
+BATCH_EXTRACTION_REVISION: Final = 5
 
 type EvidenceField = str | int
 type EvidenceRecord = tuple[EvidenceField, ...]
@@ -64,11 +64,14 @@ class DependencyFingerprintError(ValueError):
 def fingerprint_dependencies(
     source: SourceFingerprint,
     options: BatchOptionsView,
-    cache_sha256: str,
+    description_cache_manifest_sha256: str,
 ) -> str:
     """Hash schema, tool, source, options, client evidence, and trusted cache."""
     _require_digest(source.sha256, "source SHA-256")
-    _require_digest(cache_sha256, "description cache SHA-256")
+    _require_digest(
+        description_cache_manifest_sha256,
+        "description cache manifest SHA-256",
+    )
     evidence = _game_data_evidence(options.game_data_path)
     normalized_path = (
         ""
@@ -80,7 +83,7 @@ def fingerprint_dependencies(
     payload = {
         "batch_extraction_revision": BATCH_EXTRACTION_REVISION,
         "batch_schema_version": BATCH_SCHEMA_VERSION,
-        "cache_sha256": cache_sha256,
+        "description_cache_manifest_sha256": description_cache_manifest_sha256,
         "client": {
             "file_count": evidence.file_count,
             "identity_sha256": evidence.identity_sha256,

@@ -232,6 +232,11 @@ def test_no_retry_failed_reuses_an_unchanged_failed_result(
     monkeypatch.setattr(
         batch_runner, "build_map_load_context", lambda **_kwargs: MapLoadContext()
     )
+    monkeypatch.setattr(
+        batch_map_attempt,
+        "fingerprint_dependencies",
+        lambda source, *_args: source.sha256,
+    )
 
     def fail(
         _index: int,

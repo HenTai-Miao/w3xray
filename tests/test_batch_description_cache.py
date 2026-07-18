@@ -1,31 +1,30 @@
-"""Trusted description cache setup for resumable batch extraction."""
+"""Explicit trusted-description cache contracts for batch extraction."""
 
 from __future__ import annotations
 
-import csv
+from dataclasses import replace
 from pathlib import Path
-import shutil
+from typing import Literal, assert_never
 
 import pytest
 
 from tests.batch_publication_fixture import (
+    empty_result,
     publish_client_fill_result,
     publish_empty_result,
 )
+from tests.trusted_description_cache_fixture import published_cache
 import w3xtool.batch_runner as batch_runner
-from w3xtool.batch_description_cache import build_and_publish_description_cache
-from w3xtool.description_cache import load_description_cache
-from w3xtool.map_data import GameObject
-from w3xtool.batch_models import (
-    BATCH_SCHEMA_VERSION,
-    MapBatchResult,
-    SourceFingerprint,
-)
-from w3xtool.batch_runner import BatchOptions, run_batch
+import w3xtool.batch_map_attempt as batch_map_attempt
+from w3xtool.batch_configuration import BatchConfigurationError
+from w3xtool.batch_models import MapBatchResult, MapBatchState, SourceFingerprint
 from w3xtool.batch_resume import load_previous_state
+from w3xtool.batch_runner import BatchOptions, run_batch
 from w3xtool.load_context import MapLoadContext
-from w3xtool.object_text_index import build_object_text_index
-from w3xtool.object_text_models import ObjectTextState
+from w3xtool.trusted_description_cache import load_trusted_description_cache
+
+
+type InvalidCacheKind = Literal["missing", "unowned", "symlink"]
 
 
 def test_schema_one_root_state_is_not_reused(tmp_path: Path) -> None:
@@ -45,173 +44,203 @@ def test_schema_one_root_state_is_not_reused(tmp_path: Path) -> None:
     )
 
 
-def test_batch_builds_and_publishes_cache_before_processing_maps(
+def test_no_cache_run_stays_empty_when_output_has_description_rows(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Given: one previously published map has two manifest-bound client rows.
-    source_root = tmp_path / "Maps"
-    source_root.mkdir()
-    (source_root / "sample.w3x").write_bytes(b"map")
+    # Given: the output contains harvestable rows, but no explicit cache was selected.
+    source_root = _maps(tmp_path)
     output = tmp_path / "output"
     _ = publish_client_fill_result(
         1,
         SourceFingerprint("/maps/old.w3x", 3, 4, "a" * 64),
         str(output),
-        values=(("基础提示", "基础提示"), ("扩展提示", "完整说明")),
+    )
+    seen_cache_sizes: list[int] = []
+    _patch_batch(monkeypatch, seen_cache_sizes)
+
+    # When
+    _ = run_batch(BatchOptions(str(source_root), str(output)))
+
+    # Then: active output rows never become trusted inputs for the same pipeline.
+    assert seen_cache_sizes == [0]
+
+
+def test_explicit_owned_cache_is_loaded_without_mutating_its_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: a separately published owned cache and two consecutive batch runs.
+    source_root = _maps(tmp_path)
+    output = tmp_path / "output"
+    cache_root = published_cache(tmp_path / "cache-fixture")
+    before = _tree_snapshot(cache_root)
+    seen_cache_sizes: list[int] = []
+    seen_cache_identities: list[str] = []
+    _patch_batch(monkeypatch, seen_cache_sizes, seen_cache_identities)
+    options = BatchOptions(
+        str(source_root),
+        str(output),
+        description_cache_path=str(cache_root),
+    )
+
+    # When
+    _ = run_batch(options)
+    _ = run_batch(options)
+
+    # Then
+    assert seen_cache_sizes == [1]
+    assert seen_cache_identities == [
+        load_trusted_description_cache(cache_root).manifest_sha256
+    ]
+    assert _tree_snapshot(cache_root) == before
+
+
+def test_no_retry_failed_reprocesses_when_description_cache_manifest_changes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: the same source first fails while bound to cache A.
+    source_root = _maps(tmp_path)
+    output = tmp_path / "output"
+    cache_a = published_cache(tmp_path / "cache-a", raw="first")
+    cache_b = published_cache(tmp_path / "cache-b", raw="second")
+    cache_b_identity = load_trusted_description_cache(cache_b).manifest_sha256
+    calls = 0
+    monkeypatch.setattr(
+        batch_map_attempt,
+        "fingerprint_dependencies",
+        lambda _source, _options, cache_identity: cache_identity,
     )
     monkeypatch.setattr(
         batch_runner,
         "build_map_load_context",
         lambda **_kwargs: MapLoadContext(),
     )
-    seen_cache_sizes: list[int] = []
 
-    def process(
+    def fail(
         _index: int,
         fingerprint: SourceFingerprint,
         _options: BatchOptions,
         context: MapLoadContext,
     ) -> MapBatchResult:
-        seen_cache_sizes.append(len(context.description_cache.entries))
-        return publish_empty_result(
-            1,
-            fingerprint,
-            _options.output_root,
+        nonlocal calls
+        calls += 1
+        return replace(
+            empty_result(fingerprint, "unused"),
+            output_directory="",
+            stage="load/process",
+            state=MapBatchState.FAILED,
+            first_error="broken",
+            dependency_fingerprint=context.description_cache_manifest_sha256,
         )
+
+    monkeypatch.setattr(batch_runner, "process_one_map", fail)
+    first_options = BatchOptions(
+        str(source_root),
+        str(output),
+        retry_failed=False,
+        description_cache_path=str(cache_a),
+    )
+    _ = run_batch(first_options)
+
+    # When: cache B becomes the explicit input while failed retries stay disabled.
+    second = run_batch(replace(first_options, description_cache_path=str(cache_b)))
+
+    # Then: the failure from cache A is not reused beside cache B's snapshot.
+    assert calls == 2
+    assert second.results[0].dependency_fingerprint == cache_b_identity
+
+
+@pytest.mark.parametrize("kind", ("missing", "unowned", "symlink"))
+def test_batch_preflight_rejects_an_invalid_explicit_cache(
+    tmp_path: Path,
+    kind: InvalidCacheKind,
+) -> None:
+    # Given: missing, unowned, and symlinked roots all fail closed.
+    selected = tmp_path / "not-owned"
+    match kind:
+        case "missing":
+            selected = tmp_path / "missing"
+        case "unowned":
+            selected.mkdir()
+        case "symlink":
+            target = tmp_path / "target"
+            target.mkdir()
+            selected.symlink_to(target, target_is_directory=True)
+        case unreachable:
+            assert_never(unreachable)
+    options = BatchOptions(
+        source_directory=str(_maps(tmp_path)),
+        output_root=str(tmp_path / "output"),
+        description_cache_path=str(selected),
+    )
+
+    # When / Then
+    with pytest.raises(BatchConfigurationError, match="description cache"):
+        run_batch(options)
+
+
+@pytest.mark.parametrize("overlap", ("source", "output"))
+def test_batch_preflight_rejects_cache_overlap(
+    tmp_path: Path,
+    overlap: str,
+) -> None:
+    # Given
+    source_root = _maps(tmp_path)
+    output = tmp_path / "output"
+    selected = source_root if overlap == "source" else output
+    options = BatchOptions(
+        str(source_root),
+        str(output),
+        description_cache_path=str(selected),
+    )
+
+    # When / Then
+    with pytest.raises(BatchConfigurationError, match="description cache"):
+        run_batch(options)
+
+
+def _maps(tmp_path: Path) -> Path:
+    root = tmp_path / "Maps"
+    root.mkdir(exist_ok=True)
+    (root / "sample.w3x").write_bytes(b"map")
+    return root
+
+
+def _patch_batch(
+    monkeypatch: pytest.MonkeyPatch,
+    seen_cache_sizes: list[int],
+    seen_cache_identities: list[str] | None = None,
+) -> None:
+    monkeypatch.setattr(
+        batch_map_attempt,
+        "fingerprint_dependencies",
+        lambda source, *_args: source.sha256,
+    )
+    monkeypatch.setattr(
+        batch_runner,
+        "build_map_load_context",
+        lambda **_kwargs: MapLoadContext(),
+    )
+
+    def process(
+        index: int,
+        fingerprint: SourceFingerprint,
+        options: BatchOptions,
+        context: MapLoadContext,
+    ) -> MapBatchResult:
+        seen_cache_sizes.append(len(context.description_cache.entries))
+        if seen_cache_identities is not None:
+            seen_cache_identities.append(context.description_cache_manifest_sha256)
+        return publish_empty_result(index, fingerprint, options.output_root)
 
     monkeypatch.setattr(batch_runner, "process_one_map", process)
 
-    # When
-    state = run_batch(BatchOptions(str(source_root), str(output)))
 
-    # Then
-    assert state.schema_version == BATCH_SCHEMA_VERSION == 4
-    assert seen_cache_sizes == [2]
-    with (output / "可信描述缓存.tsv").open(
-        "r",
-        encoding="utf-8",
-        newline="",
-    ) as handle:
-        rows = tuple(csv.reader(handle, delimiter="\t"))
-    assert rows[1][4] == "基础提示"
-    assert rows[2][4] == "完整说明"
-
-
-def test_unpointed_root_cache_is_not_an_automatic_seed(tmp_path: Path) -> None:
-    # Given: a cache mirror exists, but no validated global current pointer does.
-    output = tmp_path / "output"
-    _ = publish_client_fill_result(
-        1,
-        SourceFingerprint("/maps/old.w3x", 3, 4, "a" * 64),
-        str(output),
-    )
-    first = build_and_publish_description_cache(str(output))
-    shutil.rmtree(output / "地图")
-
-    # When
-    second = build_and_publish_description_cache(str(output))
-
-    # Then
-    assert len(first.entries) == 1
-    assert second.entries == ()
-
-
-def test_batch_removes_values_when_valid_publications_conflict(
-    tmp_path: Path,
-) -> None:
-    # Given
-    output = tmp_path / "output"
-    _ = publish_client_fill_result(
-        1,
-        SourceFingerprint("/maps/a.w3x", 3, 4, "a" * 64),
-        str(output),
-        values=(("扩展提示", "原说明"),),
-    )
-    _ = publish_client_fill_result(
-        2,
-        SourceFingerprint("/maps/b.w3x", 3, 4, "b" * 64),
-        str(output),
-        values=(("扩展提示", "冲突说明"),),
-    )
-
-    # When
-    cache = build_and_publish_description_cache(str(output))
-
-    # Then
-    assert cache.lookup("物品", "ratf", "扩展提示", None) == ()
-    assert cache.conflict_count == 1
-
-
-def test_batch_cache_rejects_noncanonical_semantic_siblings(tmp_path: Path) -> None:
-    # Given: a valid unit publication contains only long revive and awaken fields.
-    output = tmp_path / "output"
-    _ = publish_client_fill_result(
-        1,
-        SourceFingerprint("/maps/old.w3x", 3, 4, "a" * 64),
-        str(output),
-        values=(
-            ("复活提示", "reviveubertip", "复活长提示"),
-            ("唤醒提示", "awakenubertip", "唤醒长提示"),
-        ),
-        category="单位",
-        base_id="Hpal",
-        object_name="圣骑士",
-    )
-
-    # When: the role-only cache is built, published, loaded, and used for fallback.
-    _ = build_and_publish_description_cache(str(output))
-    loaded = load_description_cache(str(output / "可信描述缓存.tsv"))
-    obj = GameObject("单位", "w3u", "H001", "Hpal", "自定义英雄", True)
-    index = build_object_text_index(
-        (obj,),
-        (),
-        (),
-        loaded,
-        client_text_available=True,
-    )
-
-    # Then: neither sibling enters the cache or backfills its canonical short field.
-    assert loaded.entries == ()
-    canonical = tuple(
-        row for row in index.records if row.semantic_field in {"revivetip", "awakentip"}
-    )
-    assert {row.semantic_field for row in canonical} == {"revivetip", "awakentip"}
-    assert all(row.state is ObjectTextState.AUTHOR_UNDEFINED for row in canonical)
-    assert all(not row.is_current for row in canonical)
-
-
-def test_batch_cache_keeps_canonical_rows_beside_semantic_siblings(
-    tmp_path: Path,
-) -> None:
-    # Given: canonical, sibling, and existing canonical fields coexist in one report.
-    output = tmp_path / "output"
-    _ = publish_client_fill_result(
-        1,
-        SourceFingerprint("/maps/old.w3x", 3, 4, "a" * 64),
-        str(output),
-        values=(
-            ("复活提示", "revivetip", "复活短提示"),
-            ("复活提示", "reviveubertip", "复活长提示"),
-            ("唤醒提示", "awakentip", "唤醒短提示"),
-            ("唤醒提示", "awakenubertip", "唤醒长提示"),
-            ("基础提示", "tip", "现有基础提示"),
-        ),
-        category="单位",
-        base_id="Hpal",
-        object_name="圣骑士",
-    )
-
-    # When: the batch cache is built and round-tripped through its standalone file.
-    built = build_and_publish_description_cache(str(output))
-    loaded = load_description_cache(str(output / "可信描述缓存.tsv"))
-
-    # Then: siblings cannot conflict away the three safely representable rows.
-    expected = {
-        "基础提示": "现有基础提示",
-        "复活提示": "复活短提示",
-        "唤醒提示": "唤醒短提示",
+def _tree_snapshot(root: Path) -> dict[str, tuple[bytes, int]]:
+    return {
+        path.relative_to(root).as_posix(): (path.read_bytes(), path.stat().st_mtime_ns)
+        for path in sorted(root.iterdir())
+        if path.is_file()
     }
-    assert {entry.role: entry.raw_value for entry in built.entries} == expected
-    assert {entry.role: entry.raw_value for entry in loaded.entries} == expected
-    assert built.conflict_count == loaded.conflict_count == 0
