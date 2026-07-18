@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .batch_configuration import BatchOutputError
+from .batch_global_evidence_models import GlobalEvidenceError
 from .batch_global_publication import publish_global_generation
 from .batch_models import BatchState
 from .batch_output_lock import BatchOutputLease
@@ -24,7 +25,7 @@ def publish_batch_checkpoint(
             diagnostics_text,
             lease,
         )
-    except OSError as exc:
+    except (OSError, GlobalEvidenceError) as exc:
         raise BatchOutputError(
             ".w3xray-global",
             str(exc),

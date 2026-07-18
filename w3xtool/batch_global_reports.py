@@ -2,6 +2,14 @@
 
 from __future__ import annotations
 
+from .batch_global_evidence_reports import (
+    format_axis_status_tsv,
+    format_global_icon_gaps_tsv,
+    format_icon_candidates_tsv,
+    format_icon_gap_statistics,
+    parse_global_icon_gaps_tsv,
+    parse_icon_candidates_tsv,
+)
 from .batch_models import BatchState, MapBatchResult
 from .batch_status import PublicationResult
 from .batch_tsv import format_tsv_rows
@@ -75,3 +83,15 @@ def format_retry_tsv(state: BatchState) -> str:
 
 def _result_key(result: MapBatchResult) -> tuple[str, str]:
     return result.source.path.casefold(), result.source.path
+
+
+__all__ = (
+    "format_axis_status_tsv",
+    "format_batch_summary_tsv",
+    "format_global_icon_gaps_tsv",
+    "format_icon_candidates_tsv",
+    "format_icon_gap_statistics",
+    "format_retry_tsv",
+    "parse_global_icon_gaps_tsv",
+    "parse_icon_candidates_tsv",
+)

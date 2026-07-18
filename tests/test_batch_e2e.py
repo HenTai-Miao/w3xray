@@ -35,6 +35,10 @@ def test_batch_e2e_publishes_per_map_and_global_reports(tmp_path: Path) -> None:
     assert (output / "批量提取状态.json").is_file()
     assert (output / "失败与重试.tsv").is_file()
     assert (output / "可信描述缓存.tsv").is_file()
+    assert (output / "图标缺口汇总.tsv").is_file()
+    assert (output / "图标候选绑定.tsv").is_file()
+    assert (output / "图标缺口统计.txt").is_file()
+    assert (output / "三轴状态汇总.tsv").is_file()
 
 
 def test_batch_e2e_continues_after_a_corrupt_sibling(tmp_path: Path) -> None:
@@ -54,3 +58,7 @@ def test_batch_e2e_continues_after_a_corrupt_sibling(tmp_path: Path) -> None:
     assert "a_corrupt.w3x" in summary and "失败" in summary
     assert "b_valid.w3x" in summary
     assert tuple(output.glob("地图/*/地图摘要.txt"))
+    axes = (output / "三轴状态汇总.tsv").read_text(encoding="utf-8")
+    gaps = (output / "图标缺口汇总.tsv").read_text(encoding="utf-8")
+    assert "a_corrupt.w3x" in axes
+    assert "a_corrupt.w3x" not in gaps

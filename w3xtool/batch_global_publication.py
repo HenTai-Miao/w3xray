@@ -1,5 +1,3 @@
-"""Transactional publication for authoritative global batch generations."""
-
 from __future__ import annotations
 
 import hashlib
@@ -15,6 +13,7 @@ from .batch_global_io import (
     format_global_pointer,
     parse_global_pointer,
 )
+from .batch_global_payloads import build_global_payloads
 from .batch_global_models import (
     GLOBAL_MANIFEST_NAME,
     GLOBAL_PAYLOAD_NAMES,
@@ -33,12 +32,6 @@ from .batch_output_lock import (
     BatchOutputLease,
     hold_batch_output_lock,
     lease_is_current,
-)
-from .batch_reports import (
-    format_batch_state_json,
-    format_batch_summary_tsv,
-    format_retry_tsv,
-    parse_batch_state_json,
 )
 from .bounded_file import read_bounded_regular_file
 from .durable_io import sync_directory
@@ -82,14 +75,14 @@ def _publish_global_generation_locked(
     diagnostics_text: str,
     lease: BatchOutputLease,
 ) -> GlobalGeneration:
-    """Publish one generation only while its exact output lease remains current."""
     if not lease_is_current(lease, output_root):
         raise GlobalPublicationError("batch output lease is not current")
     output, global_root, generations = _prepare_roots(Path(output_root))
     generation_id = uuid4().hex
     stage = global_root / f".w3xray-global-stage-{generation_id}"
     destination = generations / generation_id
-    payloads = _payloads(state, cache_text, diagnostics_text)
+    bundle = build_global_payloads(output, state, cache_text, diagnostics_text)
+    payloads = bundle.payloads
     stage.mkdir(mode=0o700)
     try:
         sync_directory(global_root)
@@ -123,10 +116,7 @@ def load_current_generation(output_root: str | Path) -> GlobalGeneration | None:
     if global_root.is_symlink() or not global_root.is_dir():
         return None
     try:
-        payload, _identity = read_bounded_regular_file(
-            pointer_path,
-            _MAX_POINTER_BYTES,
-        )
+        payload, _identity = read_bounded_regular_file(pointer_path, _MAX_POINTER_BYTES)
         pointer = parse_global_pointer(payload.decode("utf-8"))
     except OSError, UnicodeError, ValueError:
         return None
@@ -157,23 +147,6 @@ def _prepare_roots(output: Path) -> tuple[Path, Path, Path]:
     sync_directory(output)
     sync_directory(global_root)
     return output, global_root, generations
-
-
-def _payloads(
-    state: BatchState,
-    cache_text: str,
-    diagnostics_text: str,
-) -> Mapping[str, str]:
-    state_text = format_batch_state_json(state)
-    if parse_batch_state_json(state_text) != state:
-        raise GlobalPublicationError("batch state does not round-trip strictly")
-    return {
-        "批量提取汇总.tsv": format_batch_summary_tsv(state),
-        "批量提取状态.json": state_text,
-        "失败与重试.tsv": format_retry_tsv(state),
-        "可信描述缓存.tsv": cache_text,
-        "批量诊断.jsonl": diagnostics_text,
-    }
 
 
 def _manifest(

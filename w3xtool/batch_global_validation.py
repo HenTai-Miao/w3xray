@@ -7,6 +7,16 @@ import json
 from pathlib import Path
 from typing import Final
 
+from .batch_global_evidence import collect_global_evidence
+from .batch_global_evidence_models import GlobalEvidenceIndex
+from .batch_global_evidence_reports import (
+    format_axis_status_tsv,
+    format_global_icon_gaps_tsv,
+    format_icon_candidates_tsv,
+    format_icon_gap_statistics,
+    parse_global_icon_gaps_tsv,
+    parse_icon_candidates_tsv,
+)
 from .batch_global_io import parse_global_manifest
 from .batch_global_models import (
     GLOBAL_MANIFEST_NAME,
@@ -34,6 +44,10 @@ _STATE_NAME: Final = "批量提取状态.json"
 _RETRY_NAME: Final = "失败与重试.tsv"
 _CACHE_NAME: Final = "可信描述缓存.tsv"
 _DIAGNOSTICS_NAME: Final = "批量诊断.jsonl"
+_GAPS_NAME: Final = "图标缺口汇总.tsv"
+_CANDIDATES_NAME: Final = "图标候选绑定.tsv"
+_STATISTICS_NAME: Final = "图标缺口统计.txt"
+_AXES_NAME: Final = "三轴状态汇总.tsv"
 
 
 def validate_global_generation(
@@ -94,6 +108,28 @@ def validate_global_generation(
         ):
             return None
         _validate_json_lines(payloads[_DIAGNOSTICS_NAME])
+        parsed_gaps = parse_global_icon_gaps_tsv(payloads[_GAPS_NAME])
+        parsed_candidates = parse_icon_candidates_tsv(payloads[_CANDIDATES_NAME])
+        fresh = collect_global_evidence(directory.parents[2], state)
+        evidence = GlobalEvidenceIndex.build(
+            parsed_gaps,
+            fresh.resolved,
+            fresh.anonymous,
+            parsed_candidates,
+        )
+        if evidence != fresh:
+            return None
+        if (
+            len(evidence.gaps)
+            != sum(result.unresolved_icon_count for result in state.results)
+            or sum(row.reference_count for row in evidence.gaps)
+            != sum(result.unresolved_icon_reference_count for result in state.results)
+            or format_global_icon_gaps_tsv(evidence) != payloads[_GAPS_NAME]
+            or format_icon_candidates_tsv(evidence) != payloads[_CANDIDATES_NAME]
+            or format_icon_gap_statistics(evidence, state) != payloads[_STATISTICS_NAME]
+            or format_axis_status_tsv(state) != payloads[_AXES_NAME]
+        ):
+            return None
         return GlobalGeneration(
             manifest.generation_id,
             directory,
@@ -101,6 +137,7 @@ def validate_global_generation(
             state,
             payloads[_CACHE_NAME],
             payloads[_DIAGNOSTICS_NAME],
+            evidence,
         )
     except OSError, UnicodeError, ValueError, GlobalFormatError:
         return None

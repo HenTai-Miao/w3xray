@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+from .batch_global_evidence_models import GlobalEvidenceIndex
 from .batch_models import BatchState
 
 
@@ -19,6 +20,10 @@ GLOBAL_PAYLOAD_NAMES: Final = (
     "失败与重试.tsv",
     "可信描述缓存.tsv",
     "批量诊断.jsonl",
+    "图标缺口汇总.tsv",
+    "图标候选绑定.tsv",
+    "图标缺口统计.txt",
+    "三轴状态汇总.tsv",
 )
 
 
@@ -61,6 +66,7 @@ class GlobalGeneration:
     state: BatchState
     cache_text: str
     diagnostics_text: str
+    evidence: GlobalEvidenceIndex
 
 
 class GlobalPublicationError(OSError):

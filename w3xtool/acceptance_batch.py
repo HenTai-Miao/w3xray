@@ -8,11 +8,11 @@ import shutil
 from typing import Final, assert_never, override
 
 from .batch_configuration import BatchOptions
+from .batch_global_evidence import collect_global_evidence
 from .batch_global_publication import load_current_generation
-from .batch_global_models import GlobalGeneration
+from .batch_global_models import GLOBAL_PAYLOAD_NAMES, GlobalGeneration
 from .batch_manifest_validation import verify_map_publication
 from .batch_models import BatchState, MapBatchResult
-from .batch_reports import parse_batch_state_json
 from .batch_runner import fingerprint_source, run_batch
 from .batch_runtime import BatchAction, BatchProgress
 from .batch_status import PublicationResult
@@ -20,7 +20,7 @@ from .bounded_file import read_bounded_regular_file
 from .safe_output import safe_relative_path
 
 
-_MAX_STATE_BYTES: Final = 512 * 1024 * 1024
+_MAX_GLOBAL_PAYLOAD_BYTES: Final = 512 * 1024 * 1024
 
 
 class BatchAcceptanceError(RuntimeError):
@@ -58,18 +58,7 @@ def require_authoritative_batch(
         raise BatchAcceptanceError("current global generation is invalid")
     if expected_state is not None and generation.state != expected_state:
         raise BatchAcceptanceError("current global generation changed")
-    try:
-        payload, _identity = read_bounded_regular_file(
-            output / "批量提取状态.json",
-            _MAX_STATE_BYTES,
-        )
-        mirror = parse_batch_state_json(payload.decode("utf-8"))
-    except (OSError, UnicodeError, ValueError) as exc:
-        raise BatchAcceptanceError("compatibility mirror is invalid") from exc
-    if mirror != generation.state:
-        raise BatchAcceptanceError(
-            "compatibility mirror disagrees with current pointer"
-        )
+    _require_compatibility_mirrors(output, generation)
     maps_root = output / "地图"
     if output.is_symlink() or maps_root.is_symlink() or not maps_root.is_dir():
         raise BatchAcceptanceError("authoritative map root is unsafe")
@@ -88,7 +77,31 @@ def require_authoritative_batch(
             raise BatchAcceptanceError(
                 f"map publication validation failed: {validation.code}"
             )
+    if collect_global_evidence(output, generation.state) != generation.evidence:
+        raise BatchAcceptanceError("global icon evidence disagrees with map reports")
     return AuthoritativeBatch(generation, publications)
+
+
+def _require_compatibility_mirrors(
+    output: Path,
+    generation: GlobalGeneration,
+) -> None:
+    for name in GLOBAL_PAYLOAD_NAMES:
+        try:
+            mirror, _mirror_identity = read_bounded_regular_file(
+                output / name,
+                _MAX_GLOBAL_PAYLOAD_BYTES,
+            )
+            authoritative, _authority_identity = read_bounded_regular_file(
+                generation.directory / name,
+                _MAX_GLOBAL_PAYLOAD_BYTES,
+            )
+        except OSError as exc:
+            raise BatchAcceptanceError("compatibility mirror is invalid") from exc
+        if mirror != authoritative:
+            raise BatchAcceptanceError(
+                "compatibility mirror disagrees with current pointer"
+            )
 
 
 def _authoritative_publications(
