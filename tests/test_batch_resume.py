@@ -21,6 +21,7 @@ from w3xtool.batch_resume import (
     checkpoint_state,
     find_reusable_result,
 )
+from w3xtool.batch_status import BatchAxes, PublicationResult, derive_batch_axes
 
 
 @pytest.mark.parametrize(
@@ -97,6 +98,32 @@ def test_dependency_change_forces_reprocessing(tmp_path: Path) -> None:
     # Then
     assert decision.result is None
     assert decision.code == "dependency_changed"
+
+
+def test_reuse_selection_uses_authoritative_publication_result(
+    tmp_path: Path,
+) -> None:
+    # Given: publication is authoritative even if a compatibility value drifts.
+    dependency = "d" * 64
+    result = _publish_valid_result(
+        tmp_path,
+        "a",
+        MapBatchState.PARTIAL,
+        dependency,
+    )
+
+    # When
+    decision = find_reusable_result(
+        _previous(result),
+        result.source,
+        dependency,
+        str(tmp_path),
+        retry_failed=True,
+    )
+
+    # Then
+    assert decision.result == result
+    assert decision.code == "reused_verified_publication"
 
 
 def test_same_size_artifact_tampering_forces_reprocessing(tmp_path: Path) -> None:
@@ -241,7 +268,7 @@ def _publish_valid_result(
     relative = f"地图/001_{label}_{fingerprint.sha256[:8]}"
     result = replace(
         empty_result(fingerprint, relative),
-        state=state,
+        **_axis_fields(state),
         dependency_fingerprint=dependency,
     )
     destination = output_root / relative
@@ -264,11 +291,69 @@ def _result(
             empty_result(fingerprint, "unused"),
             output_directory="",
             stage="load/process",
-            state=state,
             first_error="broken",
             dependency_fingerprint="",
+            **_axis_fields(state),
         )
-    return empty_result(fingerprint, f"地图/001_{label}_{fingerprint.sha256[:8]}")
+    return replace(
+        empty_result(fingerprint, f"地图/001_{label}_{fingerprint.sha256[:8]}"),
+        **_axis_fields(state),
+    )
+
+
+def _axis_fields(state: MapBatchState) -> dict[str, object]:
+    axes, raw_blocks, restricted_blocks = _axes_for_state(state)
+    return {
+        "state": state,
+        "publication_result": axes.publication,
+        "archive_integrity": axes.archive,
+        "knowledge_evidence": axes.knowledge,
+        "knowledge_gap_reasons": axes.knowledge_reasons,
+        "raw_block_count": raw_blocks,
+        "restricted_block_count": restricted_blocks,
+    }
+
+
+def _axes_for_state(state: MapBatchState) -> tuple[BatchAxes, int, int]:
+    match state:
+        case MapBatchState.COMPLETE:
+            return _published_axes(), 0, 0
+        case MapBatchState.PARTIAL:
+            return _published_axes(raw_blocks=1), 1, 0
+        case MapBatchState.RESTRICTED:
+            return _published_axes(restricted_blocks=1), 0, 1
+        case MapBatchState.FAILED:
+            return _terminal_axes(PublicationResult.FAILED), 0, 0
+        case MapBatchState.CANCELLED:
+            return _terminal_axes(PublicationResult.CANCELLED), 0, 0
+        case unreachable:
+            raise AssertionError(f"unhandled state: {unreachable}")
+
+
+def _published_axes(*, raw_blocks: int = 0, restricted_blocks: int = 0) -> BatchAxes:
+    return derive_batch_axes(
+        PublicationResult.PUBLISHED,
+        raw_blocks=raw_blocks,
+        damaged_blocks=0,
+        restricted_blocks=restricted_blocks,
+        icon_gaps=0,
+        current_text_states=(),
+        relation_partial_count=0,
+        unresolved_endpoint_count=0,
+    )
+
+
+def _terminal_axes(publication: PublicationResult) -> BatchAxes:
+    return derive_batch_axes(
+        publication,
+        raw_blocks=0,
+        damaged_blocks=0,
+        restricted_blocks=0,
+        icon_gaps=0,
+        current_text_states=(),
+        relation_partial_count=0,
+        unresolved_endpoint_count=0,
+    )
 
 
 def _fingerprint(label: str) -> SourceFingerprint:

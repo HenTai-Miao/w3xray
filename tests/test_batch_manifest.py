@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 import hashlib
+import json
 from pathlib import Path
 
 import pytest
@@ -14,6 +15,7 @@ from w3xtool.batch_manifest_io import (
     parse_map_manifest,
 )
 from w3xtool.batch_manifest_models import (
+    BatchManifestFormatError,
     CONTENT_MANIFEST_NAME,
     OWNERSHIP_MARKER_NAME,
     OwnershipRecord,
@@ -28,6 +30,11 @@ from w3xtool.batch_reports import (
     format_description_tsv,
     format_icon_index_tsv,
     format_map_summary,
+)
+from w3xtool.batch_status import (
+    ArchiveIntegrity,
+    KnowledgeEvidence,
+    PublicationResult,
 )
 from w3xtool.icon_evidence_exports import (
     format_icon_integrity,
@@ -68,6 +75,11 @@ def test_manifest_round_trip_binds_every_regular_artifact(tmp_path: Path) -> Non
     assert CONTENT_MANIFEST_NAME not in paths
     assert OWNERSHIP_MARKER_NAME not in paths
     assert parsed.total_size == sum(item.size for item in parsed.artifacts)
+    assert parsed.result.publication_result is PublicationResult.PUBLISHED
+    assert parsed.result.archive_integrity is ArchiveIntegrity.COMPLETE
+    assert parsed.result.knowledge_evidence is KnowledgeEvidence.COMPLETE
+    assert parsed.result.raw_block_count == 0
+    assert parsed.result.damaged_block_count == 0
 
 
 def test_manifest_round_trip_retains_every_split_icon_counter(
@@ -102,6 +114,21 @@ def test_manifest_round_trip_retains_every_split_icon_counter(
     assert parsed.result.anonymous_read_failure_count == 1
     assert parsed.result.original_write_failure_count == 2
     assert parsed.result.png_failure_count == 3
+
+
+def test_manifest_parser_rejects_legacy_state_that_disagrees_with_axes(
+    tmp_path: Path,
+) -> None:
+    # Given: a complete three-axis result whose legacy compatibility field drifts.
+    manifest = build_map_manifest(
+        tmp_path, _write_empty_stage(tmp_path), _TRANSACTION_ID
+    )
+    payload = json.loads(format_map_manifest(manifest))
+    payload["result"]["state"] = MapBatchState.PARTIAL.value
+
+    # When / Then: the immutable manifest rejects contradictory state metadata.
+    with pytest.raises(BatchManifestFormatError, match="state|axes"):
+        parse_map_manifest(json.dumps(payload))
 
 
 def test_publication_validation_accepts_exact_manifest_fixture(tmp_path: Path) -> None:
@@ -248,6 +275,20 @@ def _result() -> MapBatchResult:
         icon_failure_count=0,
         restricted_block_count=0,
         elapsed_ms=1,
+        publication_result=PublicationResult.PUBLISHED,
+        archive_integrity=ArchiveIntegrity.COMPLETE,
+        knowledge_evidence=KnowledgeEvidence.COMPLETE,
+        knowledge_gap_reasons=(),
+        raw_block_count=0,
+        damaged_block_count=0,
+        valid_icon_reference_count=0,
+        resolved_icon_reference_count=0,
+        filtered_icon_field_count=0,
+        unresolved_icon_count=0,
+        unresolved_icon_reference_count=0,
+        anonymous_read_failure_count=0,
+        original_write_failure_count=0,
+        png_failure_count=0,
         relation_counts=tuple((kind.value, 0) for kind in ItemRelationKind),
         relation_incomplete_count=0,
         dependency_fingerprint="b" * 64,

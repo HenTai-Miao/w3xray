@@ -3,19 +3,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import Final
 
+from .batch_status import (
+    ArchiveIntegrity,
+    KnowledgeEvidence,
+    KnowledgeGapReason,
+    MapBatchState,
+    PublicationResult,
+)
 
-BATCH_SCHEMA_VERSION: Final = 4
-
-
-class MapBatchState(StrEnum):
-    COMPLETE = "完整"
-    PARTIAL = "部分完成"
-    RESTRICTED = "受限"
-    FAILED = "失败"
-    CANCELLED = "已取消"
+BATCH_SCHEMA_VERSION: Final = 5
 
 
 class BatchStateFormatError(ValueError):
@@ -58,20 +56,26 @@ class MapBatchResult:
     icon_failure_count: int
     restricted_block_count: int
     elapsed_ms: int
+    publication_result: PublicationResult
+    archive_integrity: ArchiveIntegrity
+    knowledge_evidence: KnowledgeEvidence
+    knowledge_gap_reasons: tuple[KnowledgeGapReason, ...]
+    raw_block_count: int
+    damaged_block_count: int
+    valid_icon_reference_count: int
+    resolved_icon_reference_count: int
+    filtered_icon_field_count: int
+    unresolved_icon_count: int
+    unresolved_icon_reference_count: int
+    anonymous_read_failure_count: int
+    original_write_failure_count: int
+    png_failure_count: int
     relation_counts: tuple[tuple[str, int], ...] = ()
     relation_incomplete_count: int = 0
     dependency_fingerprint: str = ""
     manifest_sha256: str = ""
     published_bytes: int = 0
     peak_rss_bytes: int = 0
-    valid_icon_reference_count: int = 0
-    resolved_icon_reference_count: int = 0
-    filtered_icon_field_count: int = 0
-    unresolved_icon_count: int = 0
-    unresolved_icon_reference_count: int = 0
-    anonymous_read_failure_count: int = 0
-    original_write_failure_count: int = 0
-    png_failure_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)

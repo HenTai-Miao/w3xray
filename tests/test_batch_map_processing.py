@@ -15,6 +15,12 @@ import w3xtool.batch_map_processing as batch_map_processing
 from w3xtool.batch_map_processing import process_one_map
 from w3xtool.batch_models import MapBatchState
 from w3xtool.batch_runner import BatchOptions, fingerprint_source
+from w3xtool.batch_status import (
+    ArchiveIntegrity,
+    KnowledgeEvidence,
+    KnowledgeGapReason,
+    PublicationResult,
+)
 from w3xtool.icon_resources import (
     HistoricalIconEvidenceSet,
     IconObjectReference,
@@ -98,6 +104,10 @@ def test_process_one_map_publishes_partial_result_for_an_unresolved_named_icon(
     output = tmp_path / "output" / result.output_directory
     gaps = read_tsv(output / "图标未解析.tsv")
     assert result.state is MapBatchState.PARTIAL
+    assert result.publication_result is PublicationResult.PUBLISHED
+    assert result.archive_integrity is ArchiveIntegrity.COMPLETE
+    assert result.knowledge_evidence is KnowledgeEvidence.PARTIAL
+    assert KnowledgeGapReason.ICON_UNBOUND in result.knowledge_gap_reasons
     assert result.named_icon_count == 0
     assert result.icon_failure_count == 0
     assert len(gaps.rows) == result.unresolved_icon_count == 1

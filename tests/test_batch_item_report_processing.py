@@ -63,17 +63,18 @@ def test_process_one_map_publishes_lossless_text_and_relation_reports(
 
 
 @pytest.mark.parametrize(
-    "text_state",
+    ("text_state", "expected_state"),
     (
-        ObjectTextState.AUTHOR_UNDEFINED,
-        ObjectTextState.SOURCE_UNAVAILABLE,
-        ObjectTextState.SOURCE_CONFLICT,
+        (ObjectTextState.AUTHOR_UNDEFINED, MapBatchState.COMPLETE),
+        (ObjectTextState.SOURCE_UNAVAILABLE, MapBatchState.PARTIAL),
+        (ObjectTextState.SOURCE_CONFLICT, MapBatchState.PARTIAL),
     ),
 )
-def test_process_one_map_marks_incomplete_complete_text_as_partial(
+def test_process_one_map_derives_knowledge_from_current_text_evidence(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     text_state: ObjectTextState,
+    expected_state: MapBatchState,
 ) -> None:
     # Given / When
     result, _output, _source = _process_loaded_map(
@@ -83,7 +84,7 @@ def test_process_one_map_marks_incomplete_complete_text_as_partial(
     )
 
     # Then
-    assert result.state is MapBatchState.PARTIAL
+    assert result.state is expected_state
 
 
 def test_process_one_map_treats_explicit_empty_text_as_complete(

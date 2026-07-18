@@ -11,9 +11,17 @@ import pytest
 
 from tests.batch_publication_fixture import empty_result, write_empty_publication
 import w3xtool.batch_map_attempt as batch_map_attempt
+import w3xtool.batch_map_retirement as batch_map_retirement
 import w3xtool.batch_runner as batch_runner
 from w3xtool.batch_configuration import BatchOptions
-from w3xtool.batch_models import MapBatchResult, SourceFingerprint
+from w3xtool.batch_manifest_models import PublicationValidation
+from w3xtool.batch_models import (
+    BatchState,
+    MapBatchResult,
+    MapBatchState,
+    SourceFingerprint,
+)
+from w3xtool.batch_status import PublicationResult
 from w3xtool.load_context import MapLoadContext
 
 
@@ -211,3 +219,30 @@ def test_retirement_never_follows_a_map_root_symlink(
     # Then: the link and its external target remain untouched.
     assert linked.is_symlink()
     assert external.is_dir()
+
+
+def test_retirement_authority_rejects_legacy_partial_failed_publication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: a legacy partial state whose authoritative publication axis failed.
+    source = SourceFingerprint("/maps/failed.w3x", 3, 4, "a" * 64)
+    result = replace(
+        empty_result(source, "地图/001_failed_aaaaaaaa"),
+        state=MapBatchState.PARTIAL,
+        publication_result=PublicationResult.FAILED,
+    )
+    maps_root = tmp_path / "地图"
+    destination = maps_root / "001_failed_aaaaaaaa"
+    destination.mkdir(parents=True)
+    monkeypatch.setattr(
+        batch_map_retirement,
+        "verify_map_publication",
+        lambda *_args: PublicationValidation(True, "valid"),
+    )
+
+    # When: retirement derives its authority from the global state.
+    authority = batch_map_retirement._authority(BatchState(5, (result,)), maps_root)
+
+    # Then: publication failure prevents any directory from becoming authority.
+    assert authority is None

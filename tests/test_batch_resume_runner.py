@@ -22,6 +22,7 @@ from w3xtool.batch_models import (
 from w3xtool.batch_output_lock import BatchOutputLease
 from w3xtool.batch_resume import PreviousBatchState
 from w3xtool.batch_runner import BatchOptions, BatchOutputError, run_batch
+from w3xtool.batch_status import PublicationResult, derive_batch_axes
 from w3xtool.load_context import MapLoadContext
 
 
@@ -212,9 +213,25 @@ def _publish_result(
     dependency: str,
 ) -> MapBatchResult:
     relative = f"地图/{index:03d}_{fingerprint.sha256[:8]}"
+    axes = derive_batch_axes(
+        PublicationResult.PUBLISHED,
+        raw_blocks=1 if state is MapBatchState.PARTIAL else 0,
+        damaged_blocks=0,
+        restricted_blocks=1 if state is MapBatchState.RESTRICTED else 0,
+        icon_gaps=0,
+        current_text_states=(),
+        relation_partial_count=0,
+        unresolved_endpoint_count=0,
+    )
     result = replace(
         empty_result(fingerprint, relative),
         state=state,
+        publication_result=axes.publication,
+        archive_integrity=axes.archive,
+        knowledge_evidence=axes.knowledge,
+        knowledge_gap_reasons=axes.knowledge_reasons,
+        raw_block_count=1 if state is MapBatchState.PARTIAL else 0,
+        restricted_block_count=1 if state is MapBatchState.RESTRICTED else 0,
         dependency_fingerprint=dependency,
     )
     destination = Path(output_root, relative)

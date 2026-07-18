@@ -16,6 +16,7 @@ from w3xtool.batch_reports import (
     format_icon_index_tsv,
     format_map_summary,
 )
+from w3xtool.batch_status import PublicationResult, derive_batch_axes
 from w3xtool.icon_evidence_exports import (
     format_icon_integrity,
     format_unresolved_icon_tsv,
@@ -86,6 +87,16 @@ def empty_result(
     output_directory: str,
 ) -> MapBatchResult:
     """Build the matching zero-count immutable result."""
+    axes = derive_batch_axes(
+        PublicationResult.PUBLISHED,
+        raw_blocks=0,
+        damaged_blocks=0,
+        restricted_blocks=0,
+        icon_gaps=0,
+        current_text_states=(),
+        relation_partial_count=0,
+        unresolved_endpoint_count=0,
+    )
     return MapBatchResult(
         source=fingerprint,
         display_name=Path(fingerprint.path).stem,
@@ -102,6 +113,20 @@ def empty_result(
         icon_failure_count=0,
         restricted_block_count=0,
         elapsed_ms=1,
+        publication_result=axes.publication,
+        archive_integrity=axes.archive,
+        knowledge_evidence=axes.knowledge,
+        knowledge_gap_reasons=axes.knowledge_reasons,
+        raw_block_count=0,
+        damaged_block_count=0,
+        valid_icon_reference_count=0,
+        resolved_icon_reference_count=0,
+        filtered_icon_field_count=0,
+        unresolved_icon_count=0,
+        unresolved_icon_reference_count=0,
+        anonymous_read_failure_count=0,
+        original_write_failure_count=0,
+        png_failure_count=0,
         dependency_fingerprint=fingerprint.sha256,
     )
 

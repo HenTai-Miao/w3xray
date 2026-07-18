@@ -1,7 +1,8 @@
-"""Batch schema-4 persistence and global summary tests."""
+"""Batch schema-five persistence and global summary tests."""
 
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from pathlib import Path
 
@@ -19,7 +20,13 @@ from w3xtool.batch_models import (
 from w3xtool.batch_reports import (
     format_batch_state_json,
     format_batch_summary_tsv,
+    format_retry_tsv,
     parse_batch_state_json,
+)
+from w3xtool.batch_status import (
+    PublicationResult,
+    derive_batch_axes,
+    derive_legacy_map_state,
 )
 
 
@@ -34,8 +41,8 @@ def test_batch_state_json_round_trips_source_fingerprint() -> None:
     assert restored == state
 
 
-def test_batch_schema_is_four_for_category_safe_relation_state() -> None:
-    assert BATCH_SCHEMA_VERSION == 4
+def test_batch_schema_is_five_for_independent_status_axes() -> None:
+    assert BATCH_SCHEMA_VERSION == 5
 
 
 def test_batch_state_json_rejects_an_unknown_schema() -> None:
@@ -65,6 +72,43 @@ def test_global_summary_is_sorted_and_includes_relation_counts() -> None:
     assert lines[2].startswith("/maps/z.w3x\t")
     assert "关系类型计数" in lines[0]
     assert "关系不完整" in lines[0]
+
+
+def test_retry_report_excludes_published_partial_knowledge() -> None:
+    # Given
+    published = _map_result()
+    terminal_axes = derive_batch_axes(
+        PublicationResult.FAILED,
+        raw_blocks=0,
+        damaged_blocks=0,
+        restricted_blocks=0,
+        icon_gaps=0,
+        current_text_states=(),
+        relation_partial_count=0,
+        unresolved_endpoint_count=0,
+    )
+    failed = replace(
+        published,
+        source=SourceFingerprint("/maps/failed.w3x", 3, 4, "f" * 64),
+        display_name="failed",
+        output_directory="",
+        stage="load/process",
+        state=derive_legacy_map_state(terminal_axes),
+        first_error="broken",
+        publication_result=terminal_axes.publication,
+        archive_integrity=terminal_axes.archive,
+        knowledge_evidence=terminal_axes.knowledge,
+        knowledge_gap_reasons=terminal_axes.knowledge_reasons,
+        manifest_sha256="",
+        published_bytes=0,
+    )
+
+    # When
+    report = format_retry_tsv(BatchState(BATCH_SCHEMA_VERSION, (published, failed)))
+
+    # Then
+    assert "/maps/failed.w3x" in report
+    assert published.source.path not in report
 
 
 @pytest.mark.parametrize(
@@ -166,12 +210,22 @@ def test_batch_state_parser_rejects_unreconciled_icon_failures() -> None:
 
 
 def _map_result(*, source_path: str = "/maps/a.w3x") -> MapBatchResult:
+    axes = derive_batch_axes(
+        PublicationResult.PUBLISHED,
+        raw_blocks=0,
+        damaged_blocks=0,
+        restricted_blocks=0,
+        icon_gaps=2,
+        current_text_states=(),
+        relation_partial_count=1,
+        unresolved_endpoint_count=0,
+    )
     return MapBatchResult(
         source=SourceFingerprint(source_path, 100, 123456, "a" * 64),
         display_name=Path(source_path).stem,
         output_directory="地图/001_a_aaaaaaaa",
         stage="published",
-        state=MapBatchState.COMPLETE,
+        state=derive_legacy_map_state(axes),
         first_error="",
         object_count=1,
         description_counts=((DescriptionState.MAP_VALUE.value, 1),),
@@ -182,12 +236,12 @@ def _map_result(*, source_path: str = "/maps/a.w3x") -> MapBatchResult:
         icon_failure_count=6,
         restricted_block_count=0,
         elapsed_ms=25,
-        relation_counts=(("怪物直接掉落", 2),),
-        relation_incomplete_count=1,
-        dependency_fingerprint="b" * 64,
-        manifest_sha256="c" * 64,
-        published_bytes=100,
-        peak_rss_bytes=10,
+        publication_result=axes.publication,
+        archive_integrity=axes.archive,
+        knowledge_evidence=axes.knowledge,
+        knowledge_gap_reasons=axes.knowledge_reasons,
+        raw_block_count=0,
+        damaged_block_count=0,
         valid_icon_reference_count=7,
         resolved_icon_reference_count=3,
         filtered_icon_field_count=2,
@@ -196,4 +250,10 @@ def _map_result(*, source_path: str = "/maps/a.w3x") -> MapBatchResult:
         anonymous_read_failure_count=1,
         original_write_failure_count=2,
         png_failure_count=3,
+        relation_counts=(("怪物直接掉落", 2),),
+        relation_incomplete_count=1,
+        dependency_fingerprint="b" * 64,
+        manifest_sha256="c" * 64,
+        published_bytes=100,
+        peak_rss_bytes=10,
     )

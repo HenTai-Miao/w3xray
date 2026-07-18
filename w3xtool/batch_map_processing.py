@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic_ns
-from typing import Protocol, override
+from typing import Protocol, assert_never, override
 
 from .batch_descriptions import (
     DescriptionRecord,
@@ -28,16 +28,17 @@ from .batch_map_publication import (
 )
 from .batch_models import MapBatchResult, SourceFingerprint
 from .batch_reports import (
-    derive_map_state,
     format_description_completeness,
     format_description_tsv,
     format_icon_index_tsv,
     format_map_summary,
 )
+from .batch_status import PublicationResult, derive_batch_axes
 from .extraction_ledger import BlockState
 from .game_data_source import GameDataSource, open_game_data_source
 from .icon_evidence_exports import format_icon_integrity, format_unresolved_icon_tsv
 from .icon_evidence_index import IconEvidenceIndex
+from .item_relation_models import RelationCompleteness
 from .load_context import MapLoadContext
 from .map_loader import load_map
 from .safe_output import write_text_safely
@@ -94,23 +95,29 @@ def process_one_map(
         restricted = sum(
             ledger.count(BlockState.ENCRYPTED_BLOCKED) for ledger in ledgers
         )
-        ledger_incomplete = (
-            any(
-                ledger.count(BlockState.RAW_ONLY) or ledger.count(BlockState.DAMAGED)
-                for ledger in ledgers
-            )
-            or root.extraction_ledger is None
+        raw_blocks = sum(ledger.count(BlockState.RAW_ONLY) for ledger in ledgers)
+        damaged_blocks = sum(ledger.count(BlockState.DAMAGED) for ledger in ledgers)
+        relation_partial_count, unresolved_endpoint_count = _relation_gap_counts(
+            item_reports
         )
-        state = derive_map_state(
-            structural_error=False,
-            restricted_block_count=restricted,
-            ledger_incomplete=ledger_incomplete
-            or bool(icon_index.unresolved)
-            or bool(icon_index.anonymous_read_failure_count),
-            text_incomplete=bool(item_reports.text_incomplete_count),
-            relation_incomplete=bool(item_reports.relation_incomplete_count),
-            icons=icons,
-            descriptions=descriptions,
+        axes = derive_batch_axes(
+            PublicationResult.PUBLISHED,
+            raw_blocks=raw_blocks,
+            damaged_blocks=damaged_blocks,
+            restricted_blocks=restricted,
+            icon_gaps=len(icon_index.unresolved),
+            current_text_states=tuple(
+                record.state
+                for record in item_reports.object_texts.records
+                if record.is_current
+            ),
+            relation_partial_count=relation_partial_count,
+            unresolved_endpoint_count=unresolved_endpoint_count,
+            icon_diagnostics=tuple(
+                diagnostic
+                for row in icon_index.unresolved
+                for diagnostic in row.diagnostics
+            ),
         )
         elapsed_ms = max(0, (monotonic_ns() - started) // 1_000_000)
         dependency = fingerprint_dependencies(
@@ -122,10 +129,12 @@ def process_one_map(
             fingerprint,
             root.name,
             relative,
-            state,
+            axes,
             descriptions,
             icons,
             icon_index,
+            raw_blocks,
+            damaged_blocks,
             restricted,
             elapsed_ms,
             item_reports,
@@ -148,6 +157,22 @@ def process_one_map(
         if game_source is not None:
             game_source.close()
         root.close()
+
+
+def _relation_gap_counts(item_reports: BatchItemReports) -> tuple[int, int]:
+    partial = 0
+    unresolved = 0
+    for relation in item_reports.item_relations.records:
+        match relation.completeness:
+            case RelationCompleteness.COMPLETE:
+                pass
+            case RelationCompleteness.PARTIAL | RelationCompleteness.CONFLICT:
+                partial += 1
+            case RelationCompleteness.UNRESOLVED:
+                unresolved += 1
+            case unreachable:
+                assert_never(unreachable)
+    return partial, unresolved
 
 
 def _write_reports(

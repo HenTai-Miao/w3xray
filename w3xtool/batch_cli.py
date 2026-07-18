@@ -12,8 +12,8 @@ from .batch_cli_options import (
     BatchCliOptions,
     parse_batch_cli_options as parse_batch_cli_options,
 )
-from .batch_models import MapBatchState
 from .batch_runtime import BatchProgress
+from .batch_status import PublicationResult
 from .batch_runner import (
     BatchConfigurationError,
     BatchOutputError,
@@ -58,8 +58,14 @@ def run_batch_cli(options: BatchCliOptions) -> int:
                 f"[{result.state.value}] {result.display_name} -> {result.output_directory or '未发布'}",
             )
         )
-    failed = sum(result.state is MapBatchState.FAILED for result in state.results)
-    cancelled = sum(result.state is MapBatchState.CANCELLED for result in state.results)
+    failed = sum(
+        result.publication_result is PublicationResult.FAILED
+        for result in state.results
+    )
+    cancelled = sum(
+        result.publication_result is PublicationResult.CANCELLED
+        for result in state.results
+    )
     completed = len(state.results) - failed - cancelled
     print(
         f"完成：{completed}/{len(state.results)}，失败：{failed}，已取消：{cancelled}"

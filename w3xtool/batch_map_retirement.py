@@ -11,12 +11,13 @@ from unicodedata import normalize
 from .batch_global_publication import load_current_generation
 from .batch_global_models import GlobalGeneration
 from .batch_manifest_validation import verify_map_publication
-from .batch_models import BatchState, MapBatchState
+from .batch_models import BatchState
 from .batch_output_lock import (
     BatchOutputLease,
     hold_batch_output_lock,
     lease_is_current,
 )
+from .batch_status import PublicationResult
 from .batch_retirement_quarantine import (
     open_maps_root,
     retire_isolated_candidate,
@@ -136,14 +137,10 @@ def _authority(
     referenced: set[str] = set()
     source_digests: set[str] = set()
     for result in state.results:
-        match result.state:
-            case (
-                MapBatchState.COMPLETE
-                | MapBatchState.PARTIAL
-                | MapBatchState.RESTRICTED
-            ):
+        match result.publication_result:
+            case PublicationResult.PUBLISHED:
                 pass
-            case MapBatchState.FAILED | MapBatchState.CANCELLED:
+            case PublicationResult.FAILED | PublicationResult.CANCELLED:
                 return None
             case unreachable:
                 assert_never(unreachable)

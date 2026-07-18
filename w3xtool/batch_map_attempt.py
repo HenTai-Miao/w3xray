@@ -17,7 +17,7 @@ from .batch_execution import (
     MapWorker,
     execute_map_isolated,
 )
-from .batch_models import MapBatchResult, MapBatchState, SourceFingerprint
+from .batch_models import MapBatchResult, SourceFingerprint
 from .batch_resume import PreviousBatchState, find_reusable_result
 from .batch_runtime import (
     BatchAction,
@@ -26,6 +26,7 @@ from .batch_runtime import (
     check_disk_preflight,
     current_peak_rss_bytes,
 )
+from .batch_status import PublicationResult, derive_batch_axes, derive_legacy_map_state
 from .load_context import MapLoadContext
 
 
@@ -164,7 +165,7 @@ def _failed(
     result = _terminal_result(
         fingerprint,
         "load/process",
-        MapBatchState.FAILED,
+        PublicationResult.FAILED,
         code,
         detail,
         dependency,
@@ -182,7 +183,7 @@ def _cancelled(
     result = _terminal_result(
         fingerprint,
         "cancelled",
-        MapBatchState.CANCELLED,
+        PublicationResult.CANCELLED,
         "map_cancelled",
         detail,
         dependency,
@@ -200,18 +201,28 @@ def _cancelled(
 def _terminal_result(
     fingerprint: SourceFingerprint,
     stage: str,
-    state: MapBatchState,
+    publication: PublicationResult,
     code: str,
     detail: str,
     dependency: str,
     peak_rss_bytes: int,
 ) -> MapBatchResult:
+    axes = derive_batch_axes(
+        publication,
+        raw_blocks=0,
+        damaged_blocks=0,
+        restricted_blocks=0,
+        icon_gaps=0,
+        current_text_states=(),
+        relation_partial_count=0,
+        unresolved_endpoint_count=0,
+    )
     return MapBatchResult(
         source=fingerprint,
         display_name=Path(fingerprint.path).stem,
         output_directory="",
         stage=stage,
-        state=state,
+        state=derive_legacy_map_state(axes),
         first_error=f"{code}: {detail}".replace("\n", " "),
         object_count=0,
         description_counts=(),
@@ -222,6 +233,20 @@ def _terminal_result(
         icon_failure_count=0,
         restricted_block_count=0,
         elapsed_ms=0,
+        publication_result=axes.publication,
+        archive_integrity=axes.archive,
+        knowledge_evidence=axes.knowledge,
+        knowledge_gap_reasons=axes.knowledge_reasons,
+        raw_block_count=0,
+        damaged_block_count=0,
+        valid_icon_reference_count=0,
+        resolved_icon_reference_count=0,
+        filtered_icon_field_count=0,
+        unresolved_icon_count=0,
+        unresolved_icon_reference_count=0,
+        anonymous_read_failure_count=0,
+        original_write_failure_count=0,
+        png_failure_count=0,
         dependency_fingerprint=dependency,
         peak_rss_bytes=max(0, peak_rss_bytes),
     )

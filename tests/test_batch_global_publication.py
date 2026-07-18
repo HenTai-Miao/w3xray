@@ -17,6 +17,7 @@ from w3xtool.batch_models import (
 )
 from w3xtool.description_cache import format_description_cache_tsv
 from w3xtool.description_cache_models import EMPTY_DESCRIPTION_CACHE
+from w3xtool.batch_status import PublicationResult, derive_batch_axes
 
 
 def test_global_generation_round_trip_selects_only_validated_payloads(
@@ -164,6 +165,16 @@ def test_compatibility_mirror_failure_keeps_new_authoritative_generation(
 
 def _state(label: str) -> BatchState:
     source_digest = ("a" if label == "a" else "b") * 64
+    axes = derive_batch_axes(
+        PublicationResult.PUBLISHED,
+        raw_blocks=0,
+        damaged_blocks=0,
+        restricted_blocks=0,
+        icon_gaps=0,
+        current_text_states=(),
+        relation_partial_count=0,
+        unresolved_endpoint_count=0,
+    )
     result = MapBatchResult(
         source=SourceFingerprint(f"/maps/{label}.w3x", 3, 4, source_digest),
         display_name=label,
@@ -180,6 +191,20 @@ def _state(label: str) -> BatchState:
         icon_failure_count=0,
         restricted_block_count=0,
         elapsed_ms=1,
+        publication_result=axes.publication,
+        archive_integrity=axes.archive,
+        knowledge_evidence=axes.knowledge,
+        knowledge_gap_reasons=axes.knowledge_reasons,
+        raw_block_count=0,
+        damaged_block_count=0,
+        valid_icon_reference_count=0,
+        resolved_icon_reference_count=0,
+        filtered_icon_field_count=0,
+        unresolved_icon_count=0,
+        unresolved_icon_reference_count=0,
+        anonymous_read_failure_count=0,
+        original_write_failure_count=0,
+        png_failure_count=0,
         dependency_fingerprint="d" * 64,
         manifest_sha256="e" * 64,
         published_bytes=1,

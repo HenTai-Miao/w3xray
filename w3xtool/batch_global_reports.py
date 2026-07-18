@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from .batch_models import BatchState, MapBatchResult, MapBatchState
+from .batch_models import BatchState, MapBatchResult
+from .batch_status import PublicationResult
 from .batch_tsv import format_tsv_rows
 
 
@@ -67,7 +68,7 @@ def format_retry_tsv(state: BatchState) -> str:
     rows.extend(
         (result.source.path, result.state.value, result.stage, result.first_error)
         for result in sorted(state.results, key=_result_key)
-        if result.state is not MapBatchState.COMPLETE
+        if result.publication_result is not PublicationResult.PUBLISHED
     )
     return format_tsv_rows(rows)
 

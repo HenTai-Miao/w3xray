@@ -35,6 +35,12 @@ class _ResultJson(TypedDict):
     icon_failure_count: int
     restricted_block_count: int
     elapsed_ms: int
+    publication_result: str
+    archive_integrity: str
+    knowledge_evidence: str
+    knowledge_gap_reasons: list[str]
+    raw_block_count: int
+    damaged_block_count: int
     relation_counts: list[tuple[str, int]]
     relation_incomplete_count: int
     dependency_fingerprint: str
@@ -94,6 +100,12 @@ def _result_json(result: MapBatchResult) -> _ResultJson:
         icon_failure_count=result.icon_failure_count,
         restricted_block_count=result.restricted_block_count,
         elapsed_ms=result.elapsed_ms,
+        publication_result=result.publication_result.value,
+        archive_integrity=result.archive_integrity.value,
+        knowledge_evidence=result.knowledge_evidence.value,
+        knowledge_gap_reasons=[reason.value for reason in result.knowledge_gap_reasons],
+        raw_block_count=result.raw_block_count,
+        damaged_block_count=result.damaged_block_count,
         relation_counts=list(result.relation_counts),
         relation_incomplete_count=result.relation_incomplete_count,
         dependency_fingerprint=result.dependency_fingerprint,

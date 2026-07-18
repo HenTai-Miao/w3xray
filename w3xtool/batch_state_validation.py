@@ -4,7 +4,15 @@ from __future__ import annotations
 
 from typing import assert_never
 
-from .batch_models import BatchStateFormatError, MapBatchResult, MapBatchState
+from .batch_models import BatchStateFormatError, MapBatchResult
+from .batch_status import (
+    ArchiveIntegrity,
+    BatchAxes,
+    KnowledgeEvidence,
+    PublicationResult,
+    derive_batch_axes,
+    derive_legacy_map_state,
+)
 from .icon_evidence_counts import physical_icon_failure_count
 from .safe_output import safe_relative_path
 
@@ -25,8 +33,33 @@ def validate_result_state(result: MapBatchResult) -> None:
         raise BatchStateFormatError(
             "icon failure count must equal anonymous read plus original write plus PNG failures"
         )
-    match result.state:
-        case MapBatchState.COMPLETE | MapBatchState.PARTIAL | MapBatchState.RESTRICTED:
+    has_reasons = bool(result.knowledge_gap_reasons)
+    if (result.knowledge_evidence is KnowledgeEvidence.PARTIAL) != has_reasons:
+        raise BatchStateFormatError(
+            "knowledge evidence must be partial exactly when reasons are present"
+        )
+    expected_archive = derive_batch_axes(
+        result.publication_result,
+        raw_blocks=result.raw_block_count,
+        damaged_blocks=result.damaged_block_count,
+        restricted_blocks=result.restricted_block_count,
+        icon_gaps=0,
+        current_text_states=(),
+        relation_partial_count=0,
+        unresolved_endpoint_count=0,
+    ).archive
+    if result.archive_integrity is not expected_archive:
+        raise BatchStateFormatError("archive integrity disagrees with block counters")
+    axes = BatchAxes(
+        result.publication_result,
+        result.archive_integrity,
+        result.knowledge_evidence,
+        result.knowledge_gap_reasons,
+    )
+    if result.state is not derive_legacy_map_state(axes):
+        raise BatchStateFormatError("legacy state disagrees with authoritative axes")
+    match result.publication_result:
+        case PublicationResult.PUBLISHED:
             relative = safe_relative_path(result.output_directory)
             if (
                 result.stage != "published"
@@ -37,7 +70,7 @@ def validate_result_state(result: MapBatchResult) -> None:
                 raise BatchStateFormatError("published state has an unsafe stage/path")
             _require_digest(result.dependency_fingerprint, "dependency fingerprint")
             _require_digest(result.manifest_sha256, "manifest SHA-256")
-        case MapBatchState.FAILED | MapBatchState.CANCELLED:
+        case PublicationResult.FAILED | PublicationResult.CANCELLED:
             if (
                 not result.stage
                 or result.stage == "published"
@@ -50,6 +83,10 @@ def validate_result_state(result: MapBatchResult) -> None:
                 _require_digest(
                     result.dependency_fingerprint,
                     "dependency fingerprint",
+                )
+            if result.archive_integrity is not ArchiveIntegrity.COMPLETE:
+                raise BatchStateFormatError(
+                    "unpublished result cannot claim archive block evidence"
                 )
         case unreachable:
             assert_never(unreachable)

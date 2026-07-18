@@ -16,6 +16,7 @@ from w3xtool.batch_global_publication import load_current_generation
 from w3xtool.batch_models import MapBatchResult, MapBatchState, SourceFingerprint
 from w3xtool.batch_runner import BatchOptions, run_batch
 from w3xtool.batch_runtime import BatchAction, BatchProgress
+from w3xtool.batch_status import ArchiveIntegrity, PublicationResult
 from w3xtool.load_context import MapLoadContext
 
 
@@ -52,6 +53,8 @@ def test_disk_preflight_failure_never_calls_map_processor(
     # Then
     assert calls == 0
     assert state.results[0].state is MapBatchState.FAILED
+    assert state.results[0].publication_result is PublicationResult.FAILED
+    assert state.results[0].archive_integrity is ArchiveIntegrity.COMPLETE
     assert "insufficient_disk_space" in state.results[0].first_error
 
 
@@ -80,6 +83,7 @@ def test_pre_cancelled_batch_publishes_cancelled_checkpoint(
 
     # Then
     assert state.results[0].state is MapBatchState.CANCELLED
+    assert state.results[0].publication_result is PublicationResult.CANCELLED
     assert progress[-1].action is BatchAction.CANCELLED
     assert progress[-1].completed == 1
     loaded = load_current_generation(tmp_path / "output")

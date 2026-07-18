@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import json
 import os
+from dataclasses import replace
 from pathlib import Path
 import subprocess
 import sys
@@ -12,6 +13,9 @@ import sys
 import pytest
 
 from w3xtool.casclib_enumeration import CascEntry, CascNameType
+from w3xtool.batch_models import MapBatchState, SourceFingerprint
+from w3xtool.batch_status import PublicationResult
+from tests.batch_publication_fixture import empty_result
 
 _ROOT = Path(__file__).resolve().parents[1]
 _MAP = _ROOT / "tests" / "fixtures" / "maps" / "war3net-map-script-builder.w3x"
@@ -198,6 +202,24 @@ def test_packaged_acceptance_rejects_partial_publication(
     # When/Then: the packaged acceptance lane refuses to false-pass a partial pack.
     with pytest.raises(module.AcceptanceCheckError, match="部分"):
         module._check_knowledge_pack(Path("fixture.w3x"), tmp_path)
+
+
+def test_batch_acceptance_rejects_legacy_partial_failed_publication() -> None:
+    # Given: the compatibility state is partial but no authoritative publication exists.
+    module = importlib.import_module("w3xtool.acceptance_batch")
+    result = empty_result(
+        SourceFingerprint("/maps/failed.w3x", 3, 4, "a" * 64),
+        "地图/001_failed_aaaaaaaa",
+    )
+    failed = replace(
+        result,
+        state=MapBatchState.PARTIAL,
+        publication_result=PublicationResult.FAILED,
+    )
+
+    # When / Then: acceptance refuses the compatibility state as publication evidence.
+    with pytest.raises(module.BatchAcceptanceError, match="失败"):
+        module._single_published_result((failed,))
 
 
 def test_real_casc_acceptance_reopens_one_unknown_root_identity(

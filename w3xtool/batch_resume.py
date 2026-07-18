@@ -16,9 +16,9 @@ from .batch_models import (
     BATCH_SCHEMA_VERSION,
     BatchState,
     MapBatchResult,
-    MapBatchState,
     SourceFingerprint,
 )
+from .batch_status import PublicationResult
 from .safe_output import safe_destination
 
 
@@ -118,8 +118,8 @@ def find_reusable_result(
     result = matches[0]
     if result.source != fingerprint:
         return ReuseDecision(None, "source_changed")
-    match result.state:
-        case MapBatchState.COMPLETE | MapBatchState.PARTIAL | MapBatchState.RESTRICTED:
+    match result.publication_result:
+        case PublicationResult.PUBLISHED:
             if result.dependency_fingerprint != dependency_fingerprint:
                 return ReuseDecision(None, "dependency_changed")
             destination = safe_destination(output_root, result.output_directory)
@@ -129,13 +129,13 @@ def find_reusable_result(
             if not validation.valid:
                 return ReuseDecision(None, "publication_invalid", validation.code)
             return ReuseDecision(result, "reused_verified_publication")
-        case MapBatchState.FAILED:
+        case PublicationResult.FAILED:
             if retry_failed:
                 return ReuseDecision(None, "retry_failed_result")
             if result.dependency_fingerprint != dependency_fingerprint:
                 return ReuseDecision(None, "dependency_changed")
             return ReuseDecision(result, "reused_failed_without_retry")
-        case MapBatchState.CANCELLED:
+        case PublicationResult.CANCELLED:
             return ReuseDecision(None, "retry_cancelled_result")
         case unreachable:
             assert_never(unreachable)

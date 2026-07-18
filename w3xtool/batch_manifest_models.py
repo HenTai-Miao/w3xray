@@ -7,6 +7,12 @@ from enum import StrEnum
 from typing import Final, override
 
 from .batch_models import MapBatchState, SourceFingerprint
+from .batch_status import (
+    ArchiveIntegrity,
+    KnowledgeEvidence,
+    KnowledgeGapReason,
+    PublicationResult,
+)
 
 
 CONTENT_MANIFEST_NAME: Final = "内容清单.json"
@@ -63,6 +69,10 @@ class ManifestResultSummary:
 
     stage: str
     state: MapBatchState
+    publication_result: PublicationResult
+    archive_integrity: ArchiveIntegrity
+    knowledge_evidence: KnowledgeEvidence
+    knowledge_gap_reasons: tuple[KnowledgeGapReason, ...]
     object_count: int
     description_counts: tuple[tuple[str, int], ...]
     named_icon_count: int
@@ -71,6 +81,8 @@ class ManifestResultSummary:
     png_written_count: int
     icon_failure_count: int
     restricted_block_count: int
+    raw_block_count: int
+    damaged_block_count: int
     relation_counts: tuple[tuple[str, int], ...]
     relation_incomplete_count: int
     valid_icon_reference_count: int

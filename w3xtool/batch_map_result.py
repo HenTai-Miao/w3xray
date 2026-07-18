@@ -5,7 +5,8 @@ from __future__ import annotations
 from .batch_descriptions import DescriptionRecord, DescriptionState
 from .batch_icon_export import IconExportRecord, IconKind
 from .batch_item_reports import BatchItemReports
-from .batch_models import MapBatchResult, MapBatchState, SourceFingerprint
+from .batch_models import MapBatchResult, SourceFingerprint
+from .batch_status import BatchAxes, derive_legacy_map_state
 from .icon_evidence_counts import icon_integrity_counts
 from .icon_evidence_index import IconEvidenceIndex
 
@@ -14,10 +15,12 @@ def build_map_result(
     fingerprint: SourceFingerprint,
     display_name: str,
     relative: str,
-    state: MapBatchState,
+    axes: BatchAxes,
     descriptions: tuple[DescriptionRecord, ...],
     icons: tuple[IconExportRecord, ...],
     icon_index: IconEvidenceIndex,
+    raw_blocks: int,
+    damaged_blocks: int,
     restricted: int,
     elapsed_ms: int,
     item_reports: BatchItemReports,
@@ -42,7 +45,7 @@ def build_map_result(
         display_name=display_name,
         output_directory=relative,
         stage="published",
-        state=state,
+        state=derive_legacy_map_state(axes),
         first_error=first_error,
         object_count=len({(item.category, item.object_id) for item in descriptions}),
         description_counts=item_reports.description_counts,
@@ -53,9 +56,12 @@ def build_map_result(
         icon_failure_count=icon_counts.failure_count,
         restricted_block_count=restricted,
         elapsed_ms=elapsed_ms,
-        relation_counts=item_reports.relation_counts,
-        relation_incomplete_count=item_reports.relation_incomplete_count,
-        dependency_fingerprint=dependency_fingerprint,
+        publication_result=axes.publication,
+        archive_integrity=axes.archive,
+        knowledge_evidence=axes.knowledge,
+        knowledge_gap_reasons=axes.knowledge_reasons,
+        raw_block_count=raw_blocks,
+        damaged_block_count=damaged_blocks,
         valid_icon_reference_count=icon_counts.valid_reference_count,
         resolved_icon_reference_count=icon_counts.resolved_reference_count,
         filtered_icon_field_count=icon_counts.filtered_field_count,
@@ -64,4 +70,7 @@ def build_map_result(
         anonymous_read_failure_count=icon_counts.anonymous_read_failure_count,
         original_write_failure_count=icon_counts.original_write_failure_count,
         png_failure_count=icon_counts.png_failure_count,
+        relation_counts=item_reports.relation_counts,
+        relation_incomplete_count=item_reports.relation_incomplete_count,
+        dependency_fingerprint=dependency_fingerprint,
     )

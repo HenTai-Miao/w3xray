@@ -21,6 +21,7 @@ from w3xtool.batch_execution_messages import (
 )
 from w3xtool.batch_execution_request import build_execution_request
 from w3xtool.batch_models import MapBatchResult, MapBatchState, SourceFingerprint
+from w3xtool.batch_status import PublicationResult, derive_batch_axes
 from w3xtool.description_cache_models import DescriptionCache, DescriptionCacheEntry
 from w3xtool.load_context import MapLoadContext
 
@@ -171,6 +172,16 @@ def _success_worker(
     _options: BatchOptions,
     _context: MapLoadContext,
 ) -> MapBatchResult:
+    axes = derive_batch_axes(
+        PublicationResult.PUBLISHED,
+        raw_blocks=0,
+        damaged_blocks=0,
+        restricted_blocks=0,
+        icon_gaps=0,
+        current_text_states=(),
+        relation_partial_count=0,
+        unresolved_endpoint_count=0,
+    )
     return MapBatchResult(
         source=fingerprint,
         display_name="sample",
@@ -187,6 +198,20 @@ def _success_worker(
         icon_failure_count=0,
         restricted_block_count=0,
         elapsed_ms=1,
+        publication_result=axes.publication,
+        archive_integrity=axes.archive,
+        knowledge_evidence=axes.knowledge,
+        knowledge_gap_reasons=axes.knowledge_reasons,
+        raw_block_count=0,
+        damaged_block_count=0,
+        valid_icon_reference_count=0,
+        resolved_icon_reference_count=0,
+        filtered_icon_field_count=0,
+        unresolved_icon_count=0,
+        unresolved_icon_reference_count=0,
+        anonymous_read_failure_count=0,
+        original_write_failure_count=0,
+        png_failure_count=0,
         dependency_fingerprint="b" * 64,
         manifest_sha256="c" * 64,
         published_bytes=1,

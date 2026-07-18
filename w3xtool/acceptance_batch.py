@@ -11,10 +11,11 @@ from .batch_configuration import BatchOptions
 from .batch_global_publication import load_current_generation
 from .batch_global_models import GlobalGeneration
 from .batch_manifest_validation import verify_map_publication
-from .batch_models import BatchState, MapBatchResult, MapBatchState
+from .batch_models import BatchState, MapBatchResult
 from .batch_reports import parse_batch_state_json
 from .batch_runner import fingerprint_source, run_batch
 from .batch_runtime import BatchAction, BatchProgress
+from .batch_status import PublicationResult
 from .bounded_file import read_bounded_regular_file
 from .safe_output import safe_relative_path
 
@@ -97,14 +98,10 @@ def _authoritative_publications(
     publications: list[tuple[MapBatchResult, Path]] = []
     names: set[str] = set()
     for result in state.results:
-        match result.state:
-            case (
-                MapBatchState.COMPLETE
-                | MapBatchState.PARTIAL
-                | MapBatchState.RESTRICTED
-            ):
+        match result.publication_result:
+            case PublicationResult.PUBLISHED:
                 pass
-            case MapBatchState.FAILED | MapBatchState.CANCELLED:
+            case PublicationResult.FAILED | PublicationResult.CANCELLED:
                 raise BatchAcceptanceError("authority contains an unpublished result")
             case unreachable:
                 assert_never(unreachable)
@@ -189,14 +186,15 @@ def _single_published_result(
     if len(results) != 1:
         raise BatchAcceptanceError(f"batch result count is {len(results)}, expected 1")
     result = results[0]
-    match result.state:
-        case MapBatchState.COMPLETE | MapBatchState.PARTIAL | MapBatchState.RESTRICTED:
+    match result.publication_result:
+        case PublicationResult.PUBLISHED:
             if not result.output_directory:
                 raise BatchAcceptanceError("successful batch result was not published")
             return result
-        case MapBatchState.FAILED | MapBatchState.CANCELLED:
+        case PublicationResult.FAILED | PublicationResult.CANCELLED:
             raise BatchAcceptanceError(
-                f"batch result is {result.state.value}: {result.first_error}"
+                f"batch result publication is {result.publication_result.value}: "
+                f"{result.first_error}"
             )
         case unreachable:
             assert_never(unreachable)
