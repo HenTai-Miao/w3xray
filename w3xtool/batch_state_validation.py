@@ -5,12 +5,8 @@ from __future__ import annotations
 from typing import assert_never
 
 from .batch_models import BatchStateFormatError, MapBatchResult
-from .batch_status import (
-    ArchiveIntegrity,
-    BatchSemanticEvidence,
-    PublicationResult,
-    batch_semantics_error,
-)
+from .batch_semantic_validation import BatchSemanticEvidence, batch_semantics_error
+from .batch_status import ArchiveIntegrity, PublicationResult
 from .safe_output import safe_relative_path
 
 
@@ -18,27 +14,30 @@ def validate_result_state(result: MapBatchResult) -> None:
     """Reject published and terminal results with contradictory state."""
     error = batch_semantics_error(
         BatchSemanticEvidence(
-            result.publication_result,
-            result.archive_integrity,
-            result.knowledge_evidence,
-            result.knowledge_gap_reasons,
-            result.state,
-            result.raw_block_count,
-            result.damaged_block_count,
-            result.restricted_block_count,
-            result.valid_icon_reference_count,
-            result.resolved_icon_reference_count,
-            result.unresolved_icon_reference_count,
-            result.unresolved_icon_count,
-            result.anonymous_read_failure_count,
-            result.original_write_failure_count,
-            result.png_failure_count,
-            result.icon_failure_count,
-            result.current_source_unavailable_count,
-            result.current_source_conflict_count,
-            result.relation_partial_count,
-            result.unresolved_endpoint_count,
-            result.client_unavailable_icon_count,
+            publication=result.publication_result,
+            archive=result.archive_integrity,
+            knowledge=result.knowledge_evidence,
+            knowledge_reasons=result.knowledge_gap_reasons,
+            state=result.state,
+            raw_blocks=result.raw_block_count,
+            damaged_blocks=result.damaged_block_count,
+            restricted_blocks=result.restricted_block_count,
+            valid_icon_references=result.valid_icon_reference_count,
+            resolved_icon_references=result.resolved_icon_reference_count,
+            unresolved_icon_references=result.unresolved_icon_reference_count,
+            unresolved_icons=result.unresolved_icon_count,
+            anonymous_read_failures=result.anonymous_read_failure_count,
+            original_write_failures=result.original_write_failure_count,
+            png_failures=result.png_failure_count,
+            icon_failures=result.icon_failure_count,
+            description_counts=result.description_counts,
+            current_source_unavailable_count=result.current_source_unavailable_count,
+            current_source_conflict_count=result.current_source_conflict_count,
+            relation_counts=result.relation_counts,
+            relation_incomplete_count=result.relation_incomplete_count,
+            relation_partial_count=result.relation_partial_count,
+            unresolved_endpoint_count=result.unresolved_endpoint_count,
+            client_unavailable_icon_count=result.client_unavailable_icon_count,
         )
     )
     if error is not None:

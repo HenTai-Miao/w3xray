@@ -7,7 +7,7 @@ from .batch_icon_export import IconExportRecord, IconKind
 from .batch_item_reports import BatchItemReports
 from .batch_models import MapBatchResult, SourceFingerprint
 from .batch_status import BatchAxes, derive_legacy_map_state
-from .icon_evidence_counts import icon_integrity_counts
+from .icon_evidence_counts import icon_gap_identity, icon_integrity_counts
 from .icon_evidence_index import IconEvidenceIndex
 from .icon_evidence_models import IconDiagnosticFlag
 from .object_text_models import ObjectTextState
@@ -27,7 +27,6 @@ def build_map_result(
     current_text_states: tuple[ObjectTextState, ...],
     relation_partial_count: int,
     unresolved_endpoint_count: int,
-    icon_diagnostics: tuple[IconDiagnosticFlag, ...],
     elapsed_ms: int,
     item_reports: BatchItemReports,
     dependency_fingerprint: str,
@@ -84,8 +83,12 @@ def build_map_result(
         ),
         relation_partial_count=relation_partial_count,
         unresolved_endpoint_count=unresolved_endpoint_count,
-        client_unavailable_icon_count=sum(
-            flag is IconDiagnosticFlag.CLIENT_NOT_PROVIDED for flag in icon_diagnostics
+        client_unavailable_icon_count=len(
+            {
+                icon_gap_identity(row.reference)
+                for row in icon_index.unresolved
+                if IconDiagnosticFlag.CLIENT_NOT_PROVIDED in row.diagnostics
+            }
         ),
         relation_counts=item_reports.relation_counts,
         relation_incomplete_count=item_reports.relation_incomplete_count,

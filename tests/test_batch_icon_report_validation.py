@@ -116,6 +116,30 @@ def test_publication_validation_allows_same_path_in_distinct_submaps(
     assert validation.valid
 
 
+@pytest.mark.parametrize(
+    "diagnostics_json",
+    (
+        "{",
+        '["client_not_provided", "client_not_provided"]',
+        '["historical_evidence_checked", "client_not_provided"]',
+        '["unknown"]',
+    ),
+)
+def test_publication_validation_rejects_invalid_icon_diagnostics(
+    tmp_path: Path,
+    diagnostics_json: str,
+) -> None:
+    # Given / When: the required report has malformed, duplicate, unordered, or unknown flags.
+    validation = validate_icon_publication(
+        tmp_path,
+        diagnostics_json=diagnostics_json,
+    )
+
+    # Then: reuse never accepts non-canonical diagnostic evidence.
+    assert not validation.valid
+    assert validation.code == "report_schema_mismatch"
+
+
 def test_publication_validation_requires_the_unresolved_icon_report(
     tmp_path: Path,
 ) -> None:

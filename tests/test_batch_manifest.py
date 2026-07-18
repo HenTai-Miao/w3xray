@@ -9,6 +9,10 @@ from pathlib import Path
 
 import pytest
 
+from tests.batch_schema_five_evidence_fixture import (
+    EvidenceKind,
+    write_schema_five_evidence_reports,
+)
 from w3xtool.batch_manifest_io import (
     format_map_manifest,
     format_ownership_record,
@@ -36,11 +40,14 @@ from w3xtool.batch_status import (
     KnowledgeEvidence,
     KnowledgeGapReason,
     PublicationResult,
+    derive_batch_axes,
+    derive_legacy_map_state,
 )
 from w3xtool.icon_evidence_exports import (
     format_icon_integrity,
     format_unresolved_icon_tsv,
 )
+from w3xtool.icon_evidence_models import IconDiagnosticFlag
 from w3xtool.icon_evidence_index import empty_icon_evidence_index
 from w3xtool.item_relation_exports import (
     format_equipment_skills_tsv,
@@ -155,6 +162,66 @@ def test_manifest_parser_rejects_icon_gap_claimed_as_complete_knowledge(
         parse_map_manifest(json.dumps(payload))
 
 
+@pytest.mark.parametrize(
+    ("updates", "detail"),
+    (
+        (
+            {
+                "client_unavailable_icon_count": 1,
+                "state": MapBatchState.PARTIAL.value,
+                "knowledge_evidence": KnowledgeEvidence.PARTIAL.value,
+                "knowledge_gap_reasons": [KnowledgeGapReason.CLIENT_MISSING.value],
+            },
+            "client unavailable icon",
+        ),
+        (
+            {
+                "relation_partial_count": 1,
+                "state": MapBatchState.PARTIAL.value,
+                "knowledge_evidence": KnowledgeEvidence.PARTIAL.value,
+                "knowledge_gap_reasons": [KnowledgeGapReason.RELATION_PARTIAL.value],
+            },
+            "relation evidence counts",
+        ),
+        (
+            {
+                "current_source_conflict_count": 1,
+                "state": MapBatchState.PARTIAL.value,
+                "knowledge_evidence": KnowledgeEvidence.PARTIAL.value,
+                "knowledge_gap_reasons": [
+                    KnowledgeGapReason.TRUE_SOURCE_CONFLICT.value
+                ],
+            },
+            "current text evidence",
+        ),
+        (
+            {
+                "unresolved_icon_count": 1,
+                "state": MapBatchState.PARTIAL.value,
+                "knowledge_evidence": KnowledgeEvidence.PARTIAL.value,
+                "knowledge_gap_reasons": [KnowledgeGapReason.ICON_UNBOUND.value],
+            },
+            "unresolved icon count",
+        ),
+    ),
+)
+def test_manifest_parser_rejects_impossible_persisted_evidence_counts(
+    tmp_path: Path,
+    updates: dict[str, str | int | list[str]],
+    detail: str,
+) -> None:
+    # Given: one immutable publication summary contains impossible evidence.
+    manifest = build_map_manifest(
+        tmp_path, _write_empty_stage(tmp_path), _TRANSACTION_ID
+    )
+    payload = json.loads(format_map_manifest(manifest))
+    payload["result"].update(updates)
+
+    # When / Then: manifest parsing rejects it before reuse validation.
+    with pytest.raises(BatchManifestFormatError, match=detail):
+        parse_map_manifest(json.dumps(payload))
+
+
 def test_publication_validation_accepts_exact_manifest_fixture(tmp_path: Path) -> None:
     # Given: a manifest and ownership marker bind an untouched directory.
     result = _publish_manifest_fixture(tmp_path)
@@ -223,6 +290,33 @@ def test_publication_validation_rejects_report_count_drift(tmp_path: Path) -> No
     assert validation.code == "result_summary_mismatch"
 
 
+@pytest.mark.parametrize(
+    ("kind", "expected_detail"),
+    (
+        ("current_text", "current_source_unavailable_count"),
+        ("relation", "relation_partial_count"),
+        ("icon_diagnostic", "client_unavailable_icon_count"),
+    ),
+)
+def test_publication_validation_rejects_schema_five_evidence_report_drift(
+    tmp_path: Path,
+    kind: EvidenceKind,
+    expected_detail: str,
+) -> None:
+    # Given: aggregate reports agree but one current/evidence dimension drifts.
+    result = _schema_five_evidence_result(_write_empty_stage(tmp_path), kind)
+    write_schema_five_evidence_reports(tmp_path, kind)
+    published = _publish_manifest_fixture(tmp_path, result)
+
+    # When: reuse validation reconciles the manifest with required reports.
+    validation = verify_map_publication(tmp_path, published)
+
+    # Then: metadata hash validity cannot make report drift reusable.
+    assert not validation.valid
+    assert validation.code == "result_summary_mismatch"
+    assert validation.detail == expected_detail
+
+
 def test_manifest_builder_rejects_duplicate_casefolded_paths(tmp_path: Path) -> None:
     # Given: a POSIX backslash filename aliases a nested Windows path.
     result = _write_empty_stage(tmp_path)
@@ -236,8 +330,11 @@ def test_manifest_builder_rejects_duplicate_casefolded_paths(tmp_path: Path) -> 
         build_map_manifest(tmp_path, result, _TRANSACTION_ID)
 
 
-def _publish_manifest_fixture(root: Path) -> MapBatchResult:
-    result = _write_empty_stage(root)
+def _publish_manifest_fixture(
+    root: Path,
+    result: MapBatchResult | None = None,
+) -> MapBatchResult:
+    result = _write_empty_stage(root) if result is None else result
     manifest = build_map_manifest(root, result, _TRANSACTION_ID)
     manifest_text = format_map_manifest(manifest)
     (root / CONTENT_MANIFEST_NAME).write_text(manifest_text, encoding="utf-8")
@@ -320,3 +417,76 @@ def _result() -> MapBatchResult:
         published_bytes=0,
         peak_rss_bytes=0,
     )
+
+
+def _schema_five_evidence_result(
+    result: MapBatchResult,
+    kind: EvidenceKind,
+) -> MapBatchResult:
+    match kind:
+        case "current_text":
+            axes = derive_batch_axes(
+                PublicationResult.PUBLISHED,
+                raw_blocks=0,
+                damaged_blocks=0,
+                restricted_blocks=0,
+                icon_gaps=0,
+                current_text_states=(ObjectTextState.SOURCE_UNAVAILABLE,),
+                relation_partial_count=0,
+                unresolved_endpoint_count=0,
+            )
+            return replace(
+                result,
+                state=derive_legacy_map_state(axes),
+                knowledge_evidence=axes.knowledge,
+                knowledge_gap_reasons=axes.knowledge_reasons,
+                description_counts=tuple(
+                    (state.value, int(state is ObjectTextState.SOURCE_UNAVAILABLE))
+                    for state in ObjectTextState
+                ),
+                current_source_unavailable_count=1,
+            )
+        case "relation":
+            axes = derive_batch_axes(
+                PublicationResult.PUBLISHED,
+                raw_blocks=0,
+                damaged_blocks=0,
+                restricted_blocks=0,
+                icon_gaps=0,
+                current_text_states=(),
+                relation_partial_count=1,
+                unresolved_endpoint_count=0,
+            )
+            return replace(
+                result,
+                state=derive_legacy_map_state(axes),
+                knowledge_evidence=axes.knowledge,
+                knowledge_gap_reasons=axes.knowledge_reasons,
+                relation_counts=(("怪物直接掉落", 1),),
+                relation_incomplete_count=1,
+                relation_partial_count=1,
+            )
+        case "icon_diagnostic":
+            axes = derive_batch_axes(
+                PublicationResult.PUBLISHED,
+                raw_blocks=0,
+                damaged_blocks=0,
+                restricted_blocks=0,
+                icon_gaps=1,
+                current_text_states=(),
+                relation_partial_count=0,
+                unresolved_endpoint_count=0,
+                icon_diagnostics=(IconDiagnosticFlag.CLIENT_NOT_PROVIDED,),
+            )
+            return replace(
+                result,
+                state=derive_legacy_map_state(axes),
+                knowledge_evidence=axes.knowledge,
+                knowledge_gap_reasons=axes.knowledge_reasons,
+                valid_icon_reference_count=1,
+                unresolved_icon_count=1,
+                unresolved_icon_reference_count=1,
+                client_unavailable_icon_count=1,
+            )
+        case unreachable:
+            raise AssertionError(f"unknown evidence kind: {unreachable}")

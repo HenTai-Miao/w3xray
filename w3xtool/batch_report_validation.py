@@ -6,6 +6,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Final
 
+from .batch_evidence_report_validation import validate_evidence_report_summaries
 from .batch_icon_report_validation import validate_icon_report_summaries
 from .batch_manifest_models import ManifestResultSummary
 from .batch_report_reader import read_report_rows
@@ -25,6 +26,9 @@ def validate_report_summaries(
     summary: ManifestResultSummary,
 ) -> str | None:
     """Return a stable mismatch detail or None when schemas/counts agree."""
+    evidence_mismatch = validate_evidence_report_summaries(directory, summary)
+    if evidence_mismatch is not None:
+        return evidence_mismatch
     legacy_rows = read_report_rows(
         directory / "对象描述.tsv", DESCRIPTION_REPORT_HEADER
     )

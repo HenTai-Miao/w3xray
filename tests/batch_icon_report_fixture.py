@@ -18,6 +18,11 @@ from w3xtool.batch_manifest_validation import verify_map_publication
 from w3xtool.batch_map_manifest import finalize_map_manifest
 from w3xtool.batch_models import MapBatchResult, SourceFingerprint
 from w3xtool.batch_reports import format_icon_index_tsv
+from w3xtool.batch_status import (
+    PublicationResult,
+    derive_batch_axes,
+    derive_legacy_map_state,
+)
 from w3xtool.batch_tsv import format_tsv_rows
 from w3xtool.icon_evidence_exports import (
     format_icon_integrity,
@@ -26,6 +31,7 @@ from w3xtool.icon_evidence_exports import (
 )
 from w3xtool.icon_evidence_index import IconEvidenceIndex
 from w3xtool.icon_evidence_models import (
+    IconDiagnosticFlag,
     IconGapReason,
     IconResolutionLayer,
     ResolvedIconEvidence,
@@ -44,6 +50,7 @@ def validate_icon_publication(
     duplicate_gap_row: bool = False,
     resolved_conflict: bool = False,
     resolved_other_map: bool = False,
+    diagnostics_json: str | None = None,
 ) -> PublicationValidation:
     """Publish chosen icon reports and run the real publication validator."""
     fingerprint = SourceFingerprint("/maps/map.w3x", 3, 4, _DIGEST)
@@ -58,6 +65,8 @@ def validate_icon_publication(
     if duplicate_gap_row:
         table = read_tsv_text(gap_text)
         gap_text = format_tsv_rows((table.header, *table.rows, *table.rows))
+    if diagnostics_json is not None:
+        gap_text = _replace_diagnostics_json(gap_text, diagnostics_json)
     (root / "图标未解析.tsv").write_text(gap_text, encoding="utf-8", newline="")
     (root / "图标索引.tsv").write_text(
         format_icon_index_tsv(exports), encoding="utf-8", newline=""
@@ -130,6 +139,18 @@ def _icon_result(
     exports: tuple[IconExportRecord, ...],
 ) -> MapBatchResult:
     gaps = normalized_icon_gap_count(index)
+    diagnostics = tuple(flag for row in index.unresolved for flag in row.diagnostics)
+    axes = derive_batch_axes(
+        PublicationResult.PUBLISHED,
+        raw_blocks=0,
+        damaged_blocks=0,
+        restricted_blocks=0,
+        icon_gaps=gaps,
+        current_text_states=(),
+        relation_partial_count=0,
+        unresolved_endpoint_count=0,
+        icon_diagnostics=diagnostics,
+    )
     original_failures = sum(not item.original_written for item in exports)
     png_failures = sum(
         item.original_written and not item.png_written for item in exports
@@ -137,6 +158,11 @@ def _icon_result(
     anonymous_read_failures = index.anonymous_read_failure_count
     return replace(
         base,
+        state=derive_legacy_map_state(axes),
+        publication_result=axes.publication,
+        archive_integrity=axes.archive,
+        knowledge_evidence=axes.knowledge,
+        knowledge_gap_reasons=axes.knowledge_reasons,
         named_icon_count=len(exports),
         icon_failure_count=(anonymous_read_failures + original_failures + png_failures),
         valid_icon_reference_count=len(index.resolved) + len(index.unresolved),
@@ -146,6 +172,10 @@ def _icon_result(
         anonymous_read_failure_count=anonymous_read_failures,
         original_write_failure_count=original_failures,
         png_failure_count=png_failures,
+        client_unavailable_icon_count=sum(
+            IconDiagnosticFlag.CLIENT_NOT_PROVIDED in row.diagnostics
+            for row in index.unresolved
+        ),
     )
 
 
@@ -195,6 +225,13 @@ def _replace_reference_json(report: str, reference_json: str) -> str:
     table = read_tsv_text(report)
     row = list(table.rows[0])
     row[table.header.index("引用集合")] = reference_json
+    return format_tsv_rows((table.header, tuple(row)))
+
+
+def _replace_diagnostics_json(report: str, diagnostics_json: str) -> str:
+    table = read_tsv_text(report)
+    row = list(table.rows[0])
+    row[table.header.index("诊断标志")] = diagnostics_json
     return format_tsv_rows((table.header, tuple(row)))
 
 

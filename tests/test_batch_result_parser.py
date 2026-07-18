@@ -29,6 +29,10 @@ class _ResultPayload(TypedDict, total=False):
     knowledge_evidence: str
     knowledge_gap_reasons: list[str]
     damaged_block_count: int
+    client_unavailable_icon_count: int
+    relation_partial_count: int
+    current_source_unavailable_count: int
+    unresolved_icon_count: int
 
 
 class _StatePayload(TypedDict):
@@ -105,6 +109,55 @@ def test_parser_rejects_icon_gap_claimed_as_complete_knowledge() -> None:
     with pytest.raises(
         BatchStateFormatError, match="knowledge.*reason|reason.*knowledge"
     ):
+        parse_batch_state_json(json.dumps(payload))
+
+
+@pytest.mark.parametrize(
+    ("updates", "detail"),
+    (
+        (
+            {
+                "client_unavailable_icon_count": 2,
+                "knowledge_gap_reasons": [
+                    KnowledgeGapReason.CLIENT_MISSING.value,
+                    KnowledgeGapReason.ICON_UNBOUND.value,
+                ],
+            },
+            "client unavailable icon",
+        ),
+        (
+            {
+                "relation_partial_count": 1,
+                "knowledge_gap_reasons": [
+                    KnowledgeGapReason.ICON_UNBOUND.value,
+                    KnowledgeGapReason.RELATION_PARTIAL.value,
+                ],
+            },
+            "relation evidence counts",
+        ),
+        (
+            {
+                "current_source_unavailable_count": 1,
+                "knowledge_gap_reasons": [
+                    KnowledgeGapReason.CLIENT_MISSING.value,
+                    KnowledgeGapReason.ICON_UNBOUND.value,
+                ],
+            },
+            "current text evidence",
+        ),
+        ({"unresolved_icon_count": 2}, "unresolved icon count"),
+    ),
+)
+def test_parser_rejects_impossible_persisted_evidence_counts(
+    updates: _ResultPayload,
+    detail: str,
+) -> None:
+    # Given: one persisted counter combination cannot be produced by extraction.
+    payload = _state_payload()
+    payload["results"][0].update(updates)
+
+    # When / Then: parsing rejects it before state reuse can trust the row.
+    with pytest.raises(BatchStateFormatError, match=detail):
         parse_batch_state_json(json.dumps(payload))
 
 

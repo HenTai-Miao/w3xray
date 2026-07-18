@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Final
 
@@ -10,7 +11,7 @@ from .batch_manifest_models import ManifestResultSummary
 from .batch_report_reader import BatchReportValidationError, read_report_rows
 from .icon_evidence_counts import IconIntegrityCounts
 from .icon_evidence_exports import UNRESOLVED_ICON_HEADER
-from .icon_evidence_models import IconGapReason
+from .icon_evidence_models import IconDiagnosticFlag, IconGapReason
 from .icon_gap_reference_codec import parse_icon_gap_references
 from .icon_path_evidence import plan_icon_path
 from .icon_report_map_codec import parse_icon_report_map_identities
@@ -58,7 +59,9 @@ def validate_icon_report_summaries(
         return "png_failure_count"
 
     gap_rows = read_report_rows(directory / "图标未解析.tsv", UNRESOLVED_ICON_HEADER)
-    unresolved_references = _validate_gap_rows(gap_rows, icon_rows)
+    unresolved_references, client_unavailable = _validate_gap_rows(gap_rows, icon_rows)
+    if client_unavailable != summary.client_unavailable_icon_count:
+        return "client_unavailable_icon_count"
     if len(gap_rows) != summary.unresolved_icon_count:
         return "unresolved_icon_count"
     if unresolved_references != summary.unresolved_icon_reference_count:
@@ -117,7 +120,7 @@ def validate_icon_report_summaries(
 def _validate_gap_rows(
     rows: tuple[tuple[str, ...], ...],
     icon_rows: tuple[tuple[str, ...], ...],
-) -> int:
+) -> tuple[int, int]:
     identities: set[tuple[str, str, str]] = set()
     resolved_identities: set[tuple[str, str, str]] = set()
     for row in icon_rows:
@@ -131,6 +134,7 @@ def _validate_gap_rows(
             for item in parse_icon_report_map_identities(row[14])
         )
     reference_count = 0
+    client_unavailable_count = 0
     for row in rows:
         normalized = row[4]
         plan = plan_icon_path(normalized)
@@ -140,6 +144,9 @@ def _validate_gap_rows(
             _ = IconGapReason(row[6])
         except ValueError as exc:
             raise BatchReportValidationError("invalid icon gap reason") from exc
+        diagnostics = _diagnostics(row[7])
+        if IconDiagnosticFlag.CLIENT_NOT_PROVIDED in diagnostics:
+            client_unavailable_count += 1
         references = parse_icon_gap_references(row[12])
         if any(item.map.casefold() != row[0].casefold() for item in references):
             raise BatchReportValidationError("icon gap reference map mismatch")
@@ -153,7 +160,24 @@ def _validate_gap_rows(
         if identity in resolved_identities:
             raise BatchReportValidationError("resolved/gap path conflict")
         reference_count += declared
-    return reference_count
+    return reference_count, client_unavailable_count
+
+
+def _diagnostics(value: str) -> tuple[IconDiagnosticFlag, ...]:
+    try:
+        raw = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise BatchReportValidationError("invalid icon diagnostics JSON") from exc
+    if not isinstance(raw, list) or not all(isinstance(item, str) for item in raw):
+        raise BatchReportValidationError("invalid icon diagnostics")
+    try:
+        diagnostics = tuple(IconDiagnosticFlag(item) for item in raw)
+    except ValueError as exc:
+        raise BatchReportValidationError("invalid icon diagnostic flag") from exc
+    expected = tuple(sorted(set(diagnostics), key=lambda flag: flag.value))
+    if diagnostics != expected:
+        raise BatchReportValidationError("unordered or duplicate icon diagnostics")
+    return diagnostics
 
 
 def _read_icon_integrity(path: Path) -> IconIntegrityCounts:

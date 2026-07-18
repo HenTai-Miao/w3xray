@@ -141,7 +141,6 @@ def process_one_map(
             current_text_states,
             relation_partial_count,
             unresolved_endpoint_count,
-            icon_diagnostics,
             elapsed_ms,
             item_reports,
             dependency,
