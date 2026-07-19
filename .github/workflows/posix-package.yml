@@ -106,6 +106,13 @@ jobs:
             # remaining GUI suite and packaged GUI acceptance stay mandatory.
             --deselect
             tests/test_gui_scroll.py::TestColumnAutosize::test_object_column_grows_for_long_name
+            # The hosted Xvfb desktop never maps the first hidden object pane
+            # at the geometry required by these two sash assertions. Intel
+            # macOS covers both; packaged Linux GUI acceptance still visits it.
+            --deselect
+            tests/test_gui_pane_state.py::TestPaneState::test_object_editor_pane_positions_restore_from_named_config
+            --deselect
+            tests/test_gui_pane_state.py::TestPaneState::test_object_editor_pane_positions_save_on_drag_release
           )
           for Attempt in 1 2; do
             if xvfb-run -a uv run w3xray-test "${PytestArgs[@]}"; then

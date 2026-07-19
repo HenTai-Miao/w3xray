@@ -71,6 +71,18 @@ def test_posix_workflow_tests_accepts_and_archives_onedir_package() -> None:
     assert "--no-gui" not in workflow
 
 
+def test_linux_geometry_exclusions_keep_packaged_gui_acceptance_mandatory() -> None:
+    workflow = _WORKFLOW.read_text(encoding="utf-8")
+    linux_tests = workflow.split(
+        "      - name: Run full test suite on Linux\n",
+        maxsplit=1,
+    )[1].split("      - name: Build onedir executable\n", maxsplit=1)[0]
+
+    assert linux_tests.count("tests/test_gui_pane_state.py::") == 2
+    assert "xvfb-run -a uv run w3xray-test" in linux_tests
+    assert 'xvfb-run -a "$Executable"' in workflow
+
+
 def test_readme_lists_macos_and_linux_release_assets() -> None:
     readme = (_ROOT / "README.md").read_text(encoding="utf-8")
     release_section = readme.split("## 开发运行（uv）", maxsplit=1)[0]
