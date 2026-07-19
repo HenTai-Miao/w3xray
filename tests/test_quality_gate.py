@@ -106,6 +106,17 @@ def test_quality_gate_covers_audit_gap_core_modules() -> None:
     assert all(expected_paths.issubset(command.argv) for command in commands)
 
 
+def test_both_quality_authorities_cover_safe_output_callers_and_races() -> None:
+    required = {
+        "tests/test_safe_output_races.py",
+        "w3xtool/safe_output_anchored.py",
+        "w3xtool/safe_output_staging.py",
+    }
+
+    assert required.issubset(AUDIT_GAP_REQUIRED_PATHS)
+    assert required.issubset(quality_gate.STRICT_PATHS)
+
+
 def test_quality_gate_stops_on_first_nonzero_command(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

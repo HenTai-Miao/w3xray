@@ -10,7 +10,7 @@ import pytest
 from w3xtool.safe_output import write_bytes_safely
 from w3xtool.safe_output_anchored import ANCHORED_WRITES_AVAILABLE
 from w3xtool.safe_output_models import SafeWriteStatus
-from w3xtool import safe_output_publication_rollback as rollback_api
+from w3xtool import safe_output_publication_displaced as displaced_api
 
 
 class _UnexpectedWrapperError(RuntimeError):
@@ -82,13 +82,15 @@ def test_parent_move_during_publish_restores_existing_external_file(
     original_rename = os.rename
     parent_moved = False
 
-    original_claim = rollback_api.claim_name
+    original_claim = displaced_api.identity_api.claim_name
 
     def racing_claim(
         parent_descriptor: int,
         source: str,
         destination: str,
         identity: tuple[int, int],
+        *,
+        claimed_parent_descriptor: int | None = None,
     ) -> None:
         nonlocal parent_moved
         if not parent_moved:
@@ -100,9 +102,10 @@ def test_parent_move_during_publish_restores_existing_external_file(
             source,
             destination,
             identity,
+            claimed_parent_descriptor=claimed_parent_descriptor,
         )
 
-    monkeypatch.setattr(rollback_api, "claim_name", racing_claim)
+    monkeypatch.setattr(displaced_api.identity_api, "claim_name", racing_claim)
 
     # When: the staged output is published through the held parent fd.
     result = write_bytes_safely(str(root), "assets/x.bin", b"new-data")

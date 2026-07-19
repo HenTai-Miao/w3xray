@@ -11,6 +11,7 @@ uv run python -m pytest -q \
   tests/test_integrity_cli.py \
   tests/test_integrity_output_safety.py \
   tests/test_integrity_output_identity_races.py \
+  tests/test_integrity_output_naming_probe.py \
   tests/test_integrity_physical_aliases.py \
   tests/test_integrity_platform_boundaries.py \
   tests/test_integrity_utf8_boundaries.py \
@@ -21,6 +22,7 @@ uv run python -m pytest -q \
   tests/test_description_cache_retained_report_relations.py \
   tests/test_integrity_cli_retained_cache.py \
   tests/test_safe_output.py \
+  tests/test_safe_output_cleanup_recovery.py \
   tests/test_safe_output_races.py \
   tests/test_safe_output_publication_atomicity.py \
   tests/test_safe_output_publication_cleanup_races.py \
@@ -33,9 +35,10 @@ uv run python -m pytest -q \
   tests/test_acceptance_runner.py
 ```
 
-Verified on 2026-07-19 after wave-three independent-review closure, including
-physical-alias, UTF-8-boundary, cleanup/restoration race, and continuous-name
-publication regressions: 186 passed and 4 platform fixtures skipped.
+Verified on 2026-07-19 after wave-five independent-review closure, including
+filesystem-aware alias behavior, probe ownership, typed cleanup/restoration
+states, exchange-reversal races, and continuous-name publication regressions:
+196 passed and 7 platform/capability fixtures skipped.
 
 Repository gate:
 
@@ -43,8 +46,8 @@ Repository gate:
 uv run w3xray-test
 ```
 
-Verified on 2026-07-19 after wave-three independent-review closure: 2,108
-passed, 15 skipped, and 1 subtest passed.
+Verified on 2026-07-19 after wave-five independent-review closure: 2,118
+passed, 18 skipped, and 1 subtest passed.
 
 Maintained strict-path gate:
 
@@ -54,10 +57,10 @@ uv run w3xray-quality
 
 The quality command runs Ruff lint, Ruff format check, and basedpyright `--level error` over one sorted, duplicate-free maintained path tuple. New paths must not be added to `tool.basedpyright.ignore`.
 
-Verified on 2026-07-19 after wave-three independent-review closure: Ruff check
-passed, 263 maintained files were formatted, and basedpyright reported 0
-errors, 0 warnings, and 0 notes. The changed-file no-excuse audit reported no
-violations in 24 Python files.
+Verified on 2026-07-19 after wave-five independent-review closure: Ruff check
+passed, 276 maintained files were formatted, and basedpyright reported 0
+errors, 0 warnings, and 0 notes. The changed-file audit passed for all 22
+changed/new Python files, each at or below 250 pure LOC.
 
 Changed-file diagnostics when narrowing a failure:
 
@@ -85,8 +88,8 @@ uv run --with basedpyright basedpyright --level error <paths>
 8. Full regression, quality, lockfile version, whitespace, AGENTS line count, and generated-output checks must pass before the Task 10 commit.
 9. Base snapshots traverse only through held directory descriptors and reject ancestor replacement or any `(dev, ino, size, mtime_ns, ctime_ns, mode)` change around hashing.
 10. Snapshot and retained-report outputs reject symlink components and reserved cache-publication names, and publication rollback leaves no report when output or relevant retained namespaces change.
-11. Snapshot roots and output ancestry reject physical case/normalization aliases while all protected descriptors remain held; rejected output paths create no stage.
-12. Existing-output publication keeps the public name continuously present, including crash-state sync seams; cleanup/restoration atomically claim then prove caller-owned identities, and recovery paths are reported only after re-proof.
+11. Snapshot roots and output ancestry reject real physical case/normalization aliases while all protected descriptors remain held, but accept distinct spellings on filesystems that preserve them. Exact reserved prefixes remain forbidden; absent alias spellings require an exact-parent isolated capability probe.
+12. Existing-output publication keeps the public name continuously present, including crash-state sync seams. Stage, backup, and cleanup-retained states are explicit; every exchange is proved in both directions, replacements are preserved, and nested recovery paths require outer-directory plus inner-leaf re-proof.
 13. Every external label/path boundary rejects non-strict UTF-8 before binding or serialization, and exact 5/5 invalid-previous inventory mismatches require the canonical missing owned problem path.
 
 ## Opt-in real-data acceptance (Task 11 only)

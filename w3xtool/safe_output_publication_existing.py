@@ -6,23 +6,31 @@ from collections.abc import Callable
 import errno
 
 from .atomic_rename import rename_exchange
-from .durable_io import sync_directory_descriptor as _rollback_sync
+from .durable_io import sync_directory_descriptor as rollback_sync
 from .safe_output_models import SafeWriteResult, SafeWriteStatus
+from .safe_output_publication_displaced import (
+    claim_displaced_previous,
+    locate_displaced,
+)
+from .safe_output_publication_existing_finish import (
+    finish_publication,
+    rollback_or_unproved,
+    rollback_result,
+)
 from .safe_output_publication_identity import (
     FileIdentity,
     PublicationIdentityError,
+    object_identity,
     private_name,
     regular_identity,
-    remove_owned_name,
 )
-from .safe_output_publication_exchange_rollback import rollback_exchanged
-from .safe_output_publication_rollback import claim_displaced_previous
+from .safe_output_publication_states import DisplacedAtBackup, DisplacedAtStage
 from .safe_output_staging import discard_file
 
 
-_ContainmentCheck = Callable[[], str | None]
-_FailureStatus = Callable[[OSError], SafeWriteStatus]
-_DirectorySync = Callable[[int], None]
+type _ContainmentCheck = Callable[[], str | None]
+type _FailureStatus = Callable[[OSError], SafeWriteStatus]
+type _DirectorySync = Callable[[int], None]
 
 
 def publish_over_existing(
@@ -36,7 +44,7 @@ def publish_over_existing(
     failure_status: _FailureStatus,
     sync_directory: _DirectorySync,
 ) -> SafeWriteResult | None:
-    """Exchange a complete stage without ever unbinding the public name."""
+    """Exchange a complete stage and carry the displaced state explicitly."""
     backup_name = private_name("w3xray-backup")
     try:
         _require_identity(parent_descriptor, staged_name, staged_identity, "staged")
@@ -57,27 +65,24 @@ def publish_over_existing(
             parent_descriptor,
             destination_name,
         )
-        _require_identity(parent_descriptor, destination_name, staged_identity, "final")
-        _require_identity(parent_descriptor, staged_name, previous, "previous")
-        claim_displaced_previous(
-            parent_descriptor,
-            staged_name,
-            backup_name,
-            previous,
-        )
     except OSError as exc:
-        if _is_exchanged(parent_descriptor, destination_name, staged_identity):
-            return _rollback(
+        displaced = _post_exchange_state(
+            parent_descriptor,
+            destination_name,
+            staged_name,
+            staged_identity,
+        )
+        if displaced is not None:
+            return rollback_result(
                 parent_descriptor,
                 destination_name,
                 staged_name,
                 staged_identity,
-                backup_name,
-                previous,
+                displaced,
                 destination,
                 _status(exc, failure_status),
                 str(exc),
-                _rollback_sync,
+                rollback_sync,
             )
         return discard_file(
             parent_descriptor,
@@ -87,116 +92,127 @@ def publish_over_existing(
             _status(exc, failure_status),
             str(exc),
         )
-    try:
-        sync_directory(parent_descriptor)
-    except OSError as exc:
-        return _rollback(
-            parent_descriptor,
-            destination_name,
-            staged_name,
-            staged_identity,
-            backup_name,
-            previous,
-            destination,
-            SafeWriteStatus.FAILED,
-            str(exc),
-            sync_directory,
-        )
-    error = check_containment() or _identity_error(
-        parent_descriptor,
-        destination_name,
-        staged_identity,
-    )
-    if error is not None:
-        return _rollback(
-            parent_descriptor,
-            destination_name,
-            staged_name,
-            staged_identity,
-            backup_name,
-            previous,
-            destination,
-            SafeWriteStatus.UNSAFE,
-            error,
-            _rollback_sync,
-        )
-    try:
-        sync_directory(parent_descriptor)
-    except OSError as exc:
-        return _rollback(
-            parent_descriptor,
-            destination_name,
-            staged_name,
-            staged_identity,
-            backup_name,
-            previous,
-            destination,
-            SafeWriteStatus.FAILED,
-            str(exc),
-            _rollback_sync,
-        )
-    error = _identity_error(parent_descriptor, destination_name, staged_identity)
-    if error is not None:
-        return _rollback(
-            parent_descriptor,
-            destination_name,
-            staged_name,
-            staged_identity,
-            backup_name,
-            previous,
-            destination,
-            SafeWriteStatus.UNSAFE,
-            error,
-            _rollback_sync,
-        )
-    cleanup_error = remove_owned_name(parent_descriptor, backup_name, previous)
-    if cleanup_error is not None:
-        return _rollback(
-            parent_descriptor,
-            destination_name,
-            staged_name,
-            staged_identity,
-            backup_name,
-            previous,
-            destination,
-            SafeWriteStatus.FAILED,
-            cleanup_error,
-            _rollback_sync,
-        )
-    try:
-        sync_directory(parent_descriptor)
-    except OSError as exc:
-        return SafeWriteResult(SafeWriteStatus.FAILED, destination, 0, str(exc))
-    error = _identity_error(parent_descriptor, destination_name, staged_identity)
-    if error is not None:
-        return SafeWriteResult(SafeWriteStatus.UNSAFE, destination, 0, error)
-    return None
-
-
-def _rollback(
-    parent_descriptor: int,
-    destination_name: str,
-    staged_name: str,
-    staged_identity: FileIdentity,
-    backup_name: str,
-    previous: FileIdentity,
-    destination: str,
-    status: SafeWriteStatus,
-    reason: str,
-    sync_directory: _DirectorySync,
-) -> SafeWriteResult:
-    return rollback_exchanged(
+    displaced = _post_exchange_state(
         parent_descriptor,
         destination_name,
         staged_name,
         staged_identity,
+    )
+    if displaced is None:
+        return SafeWriteResult(
+            SafeWriteStatus.UNSAFE,
+            destination,
+            0,
+            "exchange result identity unavailable; recovery path unproved",
+        )
+    if displaced.expected != previous:
+        return rollback_result(
+            parent_descriptor,
+            destination_name,
+            staged_name,
+            staged_identity,
+            displaced,
+            destination,
+            SafeWriteStatus.UNSAFE,
+            "previous output identity changed before exchange",
+            rollback_sync,
+        )
+    return _claim_backup_and_finish(
+        parent_descriptor,
+        destination_name,
+        staged_name,
+        staged_identity,
+        displaced,
         backup_name,
-        previous,
         destination,
-        status,
-        reason,
+        check_containment,
+        failure_status,
         sync_directory,
     )
+
+
+def _claim_backup_and_finish(
+    parent_descriptor: int,
+    destination_name: str,
+    staged_name: str,
+    staged_identity: FileIdentity,
+    displaced: DisplacedAtStage,
+    backup_name: str,
+    destination: str,
+    check_containment: _ContainmentCheck,
+    failure_status: _FailureStatus,
+    sync_directory: _DirectorySync,
+) -> SafeWriteResult | None:
+    try:
+        claim = claim_displaced_previous(
+            parent_descriptor,
+            displaced,
+            backup_name,
+        )
+    except OSError as exc:
+        current = locate_displaced(
+            parent_descriptor,
+            staged_name,
+            backup_name,
+            displaced.expected,
+        )
+        return rollback_or_unproved(
+            parent_descriptor,
+            destination_name,
+            staged_name,
+            staged_identity,
+            current,
+            destination,
+            _status(exc, failure_status),
+            str(exc),
+        )
+    if claim.error is not None:
+        return rollback_or_unproved(
+            parent_descriptor,
+            destination_name,
+            staged_name,
+            staged_identity,
+            claim.state,
+            destination,
+            _status(claim.error, failure_status),
+            str(claim.error),
+        )
+    if not isinstance(claim.state, DisplacedAtBackup):
+        return rollback_or_unproved(
+            parent_descriptor,
+            destination_name,
+            staged_name,
+            staged_identity,
+            claim.state,
+            destination,
+            SafeWriteStatus.UNSAFE,
+            "backup claim state unproved",
+        )
+    return finish_publication(
+        parent_descriptor,
+        destination_name,
+        staged_name,
+        staged_identity,
+        claim.state,
+        destination,
+        check_containment,
+        sync_directory,
+    )
+
+
+def _post_exchange_state(
+    parent_descriptor: int,
+    destination_name: str,
+    staged_name: str,
+    staged_identity: FileIdentity,
+) -> DisplacedAtStage | None:
+    try:
+        if regular_identity(parent_descriptor, destination_name) != staged_identity:
+            return None
+        displaced = object_identity(parent_descriptor, staged_name)
+    except OSError:
+        return None
+    return None if displaced is None else DisplacedAtStage(staged_name, displaced)
 
 
 def _require_identity(
@@ -207,29 +223,6 @@ def _require_identity(
 ) -> None:
     if regular_identity(parent_descriptor, name) != expected:
         raise PublicationIdentityError(f"{role} output identity changed")
-
-
-def _identity_error(
-    parent_descriptor: int,
-    name: str,
-    expected: FileIdentity,
-) -> str | None:
-    try:
-        _require_identity(parent_descriptor, name, expected, "published")
-    except OSError as exc:
-        return str(exc)
-    return None
-
-
-def _is_exchanged(
-    parent_descriptor: int,
-    destination_name: str,
-    staged_identity: FileIdentity,
-) -> bool:
-    try:
-        return regular_identity(parent_descriptor, destination_name) == staged_identity
-    except OSError:
-        return False
 
 
 def _status(exc: OSError, failure_status: _FailureStatus) -> SafeWriteStatus:

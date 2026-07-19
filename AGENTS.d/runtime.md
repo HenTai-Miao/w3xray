@@ -39,8 +39,10 @@ uv run main.py integrity retained-cache \
 
 - Snapshot roots must be absolute after normalization and bind as physically
   nonoverlapping no-follow directories. All root descriptors are held through
-  traversal and report publication; case/Unicode aliases and physical ancestor
-  relationships are rejected before scanning.
+  traversal and report publication. Real case/Unicode aliases and physical
+  ancestor relationships are rejected by held identity, while distinct
+  spellings on a case-sensitive or normalization-preserving filesystem remain
+  valid independent paths.
 - Verification returns 0 for equality, 1 for content/metadata differences, and 2 for request, parse, unsafe-root, or I/O boundaries.
 - Retained-cache inspection holds every no-follow ancestry descriptor plus the
   publication parent and active-root descriptors through both sibling scans
@@ -49,11 +51,15 @@ uv run main.py integrity retained-cache \
 - Retained `previous`, failed-stage, failed-output, and recovery evidence is reported separately from stage/backup transient violations. Retained objects are never automatically loaded as description sources and are never deleted by inspection.
 - Integrity outputs atomically exchange a complete staged inode with an
   existing regular output, so the public name is continuously bound across
-  every synchronization boundary. The displaced inode is atomically claimed
-  and proved before cleanup or restoration; cleanup never unlinks the original
-  pathname after a separate stat. A recovery path is reported only after its
-  expected regular-file identity is re-proved, while concurrent regular files
-  and symlinks are preserved.
+  every synchronization boundary. Exact publication prefixes are always
+  reserved; absent alias spellings are classified by a fail-closed probe inside
+  a held random mode-0700 directory on the exact destination-parent filesystem.
+- The displaced inode moves through explicit stage, backup, and cleanup-retained
+  states. Cleanup occurs only inside a held transaction-owned mode-0700
+  namespace. Every exchange and reversal proves both resulting names, and a
+  nested recovery path is reported only after re-proving the public cleanup
+  directory identity plus the expected inner regular-file identity. Concurrent
+  regular files and symlinks are preserved.
 - Snapshot/report labels and all external path values must encode as strict
   UTF-8 before filesystem binding, sorting, hashing, or publication. Invalid
   external Unicode is a command-boundary exit 2.

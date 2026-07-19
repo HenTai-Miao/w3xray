@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import Final
 
+from .quality_safe_output_paths import SAFE_OUTPUT_STRICT_PATHS
 
-STRICT_PATHS: Final = tuple(
+
+_BASE_STRICT_PATHS: Final = tuple(
     """main.py tests/batch_axis_fixture.py
 tests/batch_cli_fixture.py tests/batch_global_evidence_fixture.py
 tests/batch_icon_report_fixture.py tests/batch_manifest_fixture.py
@@ -95,7 +97,7 @@ tests/test_posix_package_assets.py
 tests/test_quality_gate.py
 tests/test_real_map_item_relation_acceptance.py
 tests/test_reference_id_reports.py
-tests/test_release_metadata.py tests/test_safe_output_publication_atomicity.py tests/test_safe_output_publication_cleanup_races.py
+tests/test_release_metadata.py
 tests/test_windows_acceptance_assets.py
 tests/test_windows_real_install_workflow.py
 w3xtool/__init__.py
@@ -210,7 +212,7 @@ w3xtool/icon_evidence_query.py
 w3xtool/icons.py
 w3xtool/integrity_cli.py
 w3xtool/integrity_cli_options.py
-w3xtool/integrity_output.py w3xtool/integrity_output_path.py
+w3xtool/integrity_output.py w3xtool/integrity_output_naming.py w3xtool/integrity_output_path.py
 w3xtool/integrity_path_binding.py
 w3xtool/integrity_snapshot.py w3xtool/integrity_snapshot_binding.py
 w3xtool/integrity_snapshot_file.py
@@ -245,11 +247,9 @@ w3xtool/object_text_records.py
 w3xtool/object_text_roles.py
 w3xtool/object_text_sources.py
 w3xtool/quality_gate.py
-w3xtool/quality_paths.py
-w3xtool/safe_output.py
-w3xtool/safe_output_chunk_writer.py
-w3xtool/safe_output_path_publication.py
-w3xtool/safe_output_publication.py w3xtool/safe_output_publication_exchange_rollback.py w3xtool/safe_output_publication_existing.py w3xtool/safe_output_publication_identity.py w3xtool/safe_output_publication_rollback.py""".split()
+w3xtool/quality_paths.py""".split()
 )
+
+STRICT_PATHS: Final = tuple(sorted((*_BASE_STRICT_PATHS, *SAFE_OUTPUT_STRICT_PATHS)))
 
 __all__ = ("STRICT_PATHS",)

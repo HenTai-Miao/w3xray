@@ -10,7 +10,7 @@ from typing import Final
 
 from w3xtool.descriptor_open_flags import staged_create_flags
 from w3xtool.safe_output_models import SafeWriteResult, SafeWriteStatus
-from w3xtool.safe_output_publication_identity import remove_owned_name
+from w3xtool.safe_output_cleanup import remove_owned_name
 
 
 _TEMP_NAME_ATTEMPTS: Final = 16

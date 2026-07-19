@@ -65,18 +65,26 @@ def claim_name(
     source_name: str,
     claimed_name: str,
     expected: FileIdentity,
+    *,
+    claimed_parent_descriptor: int | None = None,
 ) -> None:
     """Atomically move one name to an absent claim and prove its identity."""
+    target_descriptor = (
+        parent_descriptor
+        if claimed_parent_descriptor is None
+        else claimed_parent_descriptor
+    )
     rename_noreplace(
         parent_descriptor,
         source_name,
-        parent_descriptor,
+        target_descriptor,
         claimed_name,
     )
-    if object_identity(parent_descriptor, claimed_name) != expected:
+    if object_identity(target_descriptor, claimed_name) != expected:
         _restore_unproved_claim(
             parent_descriptor,
             source_name,
+            target_descriptor,
             claimed_name,
         )
         raise PublicationIdentityError("claimed output identity changed")
@@ -101,36 +109,17 @@ def restore_claim(
     return None
 
 
-def remove_owned_name(
-    parent_descriptor: int,
-    name: str,
-    expected: FileIdentity,
-) -> str | None:
-    """Claim, prove, and unlink an owned name without unlinking its pathname."""
-    cleanup_name = private_name("w3xray-cleanup")
-    try:
-        claim_name(parent_descriptor, name, cleanup_name, expected)
-    except FileNotFoundError:
-        return None
-    except OSError as exc:
-        return str(exc)
-    try:
-        os.unlink(cleanup_name, dir_fd=parent_descriptor)
-    except OSError as exc:
-        return str(exc)
-    return None
-
-
 def _restore_unproved_claim(
-    parent_descriptor: int,
+    source_parent_descriptor: int,
     source_name: str,
+    claimed_parent_descriptor: int,
     claimed_name: str,
 ) -> None:
     try:
         rename_noreplace(
-            parent_descriptor,
+            claimed_parent_descriptor,
             claimed_name,
-            parent_descriptor,
+            source_parent_descriptor,
             source_name,
         )
     except OSError:
@@ -149,6 +138,5 @@ __all__ = (
     "object_identity",
     "private_name",
     "regular_identity",
-    "remove_owned_name",
     "restore_claim",
 )

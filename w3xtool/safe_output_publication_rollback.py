@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from .durable_io import sync_directory_descriptor
 from .safe_output_models import SafeWriteResult, SafeWriteStatus
+from .safe_output_cleanup import remove_owned_name
 from .safe_output_publication_identity import (
     FileIdentity,
     claim_name,
     object_identity,
     private_name,
     regular_identity,
-    remove_owned_name,
     restore_claim,
 )
 

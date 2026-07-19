@@ -21,6 +21,16 @@ def _require_same_directory(actual: Path, alias: Path, reason: str) -> None:
         pytest.skip(reason)
 
 
+def _require_distinct_directory(actual: Path, alternate: Path, reason: str) -> None:
+    actual.mkdir()
+    try:
+        alternate.mkdir()
+    except FileExistsError:
+        pytest.skip(reason)
+    if os.path.samefile(actual, alternate):
+        pytest.skip(reason)
+
+
 def _snapshot_argv(
     roots: tuple[tuple[str, Path], ...],
     output: Path,
@@ -82,6 +92,44 @@ def test_snapshot_rejects_unicode_normalization_physical_root_aliases(
     assert not output.exists()
 
 
+def test_snapshot_accepts_distinct_case_spelling_on_case_sensitive_filesystem(
+    tmp_path: Path,
+) -> None:
+    protected = tmp_path / "ProtectedRoot"
+    distinct = tmp_path / "protectedroot"
+    _require_distinct_directory(
+        protected,
+        distinct,
+        "filesystem is not case-sensitive",
+    )
+    (protected / "payload").write_bytes(b"evidence")
+    output = distinct / "snapshot.json"
+
+    code = run_integrity_cli(_snapshot_argv((("root", protected),), output))
+
+    assert code == 0
+    assert output.is_file()
+
+
+def test_snapshot_accepts_distinct_normalization_on_preserving_filesystem(
+    tmp_path: Path,
+) -> None:
+    protected = tmp_path / "\u00e9"
+    distinct = tmp_path / "e\u0301"
+    _require_distinct_directory(
+        protected,
+        distinct,
+        "filesystem does not preserve distinct Unicode normalizations",
+    )
+    (protected / "payload").write_bytes(b"evidence")
+    output = distinct / "snapshot.json"
+
+    code = run_integrity_cli(_snapshot_argv((("root", protected),), output))
+
+    assert code == 0
+    assert output.is_file()
+
+
 def test_snapshot_rejects_case_aliased_output_inside_a_root(
     tmp_path: Path,
 ) -> None:
@@ -96,6 +144,45 @@ def test_snapshot_rejects_case_aliased_output_inside_a_root(
 
     assert code == 2
     assert not output.exists()
+
+
+def test_snapshot_rejects_unicode_aliased_output_inside_a_root(
+    tmp_path: Path,
+) -> None:
+    actual = tmp_path / "\u00e9"
+    actual.mkdir()
+    alias = tmp_path / "e\u0301"
+    _require_same_directory(
+        actual,
+        alias,
+        "filesystem does not normalize Unicode names",
+    )
+    (actual / "payload").write_bytes(b"evidence")
+    output = alias / "report.json"
+
+    code = run_integrity_cli(_snapshot_argv((("root", actual),), output))
+
+    assert code == 2
+    assert not output.exists()
+
+
+def test_retained_cache_accepts_case_variant_reserved_leaf_when_distinct(
+    tmp_path: Path,
+) -> None:
+    active = active_cache(tmp_path)
+    case_probe = active.parent / "CaseProbe"
+    alternate = active.parent / "caseprobe"
+    _require_distinct_directory(
+        case_probe,
+        alternate,
+        "filesystem is not case-sensitive",
+    )
+    output = active.parent / ".W3XRAY-DESCRIPTION-CACHE-RETAINED-distinct.tmp"
+
+    code = run_integrity_cli(_retained_argv(active, output))
+
+    assert code == 0
+    assert output.is_file()
 
 
 def test_retained_cache_rejects_case_aliased_output_inside_active_root(

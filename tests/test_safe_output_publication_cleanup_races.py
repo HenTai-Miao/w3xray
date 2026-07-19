@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from w3xtool.safe_output_models import SafeWriteStatus
+from w3xtool import safe_output_cleanup as cleanup_api
 from w3xtool import safe_output_publication_identity as identity_api
 from w3xtool import safe_output_publication_rollback as rollback_api
 
@@ -18,7 +19,7 @@ def _identity(path: Path) -> tuple[int, int]:
 
 
 def _payloads(parent: Path) -> set[bytes]:
-    return {item.read_bytes() for item in parent.iterdir() if item.is_file()}
+    return {item.read_bytes() for item in parent.rglob("*") if item.is_file()}
 
 
 def test_cleanup_claim_preserves_a_replacement_before_atomic_claim(
@@ -36,6 +37,8 @@ def test_cleanup_claim_preserves_a_replacement_before_atomic_claim(
         source_name: str,
         claimed_name: str,
         claimed_identity: tuple[int, int],
+        *,
+        claimed_parent_descriptor: int | None = None,
     ) -> None:
         nonlocal raced
         if source_name == owned.name:
@@ -47,12 +50,13 @@ def test_cleanup_claim_preserves_a_replacement_before_atomic_claim(
             source_name,
             claimed_name,
             claimed_identity,
+            claimed_parent_descriptor=claimed_parent_descriptor,
         )
 
     monkeypatch.setattr(identity_api, "claim_name", replace_before_claim)
     parent_descriptor = os.open(tmp_path, os.O_RDONLY)
     try:
-        cleanup_error = identity_api.remove_owned_name(
+        cleanup_error = cleanup_api.remove_owned_name(
             parent_descriptor,
             owned.name,
             expected,
@@ -63,6 +67,98 @@ def test_cleanup_claim_preserves_a_replacement_before_atomic_claim(
     assert raced
     assert cleanup_error is not None
     assert b"concurrent" in _payloads(tmp_path)
+
+
+def test_cleanup_preserves_replacement_after_claim_before_unlink(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    owned = tmp_path / "owned"
+    owned.write_bytes(b"owned")
+    expected = _identity(owned)
+    original_identity = identity_api.object_identity
+    raced = False
+
+    def replace_after_claim_proof(
+        parent_descriptor: int,
+        name: str,
+    ) -> tuple[int, int] | None:
+        nonlocal raced
+        observed = original_identity(parent_descriptor, name)
+        if not raced and "w3xray-cleanup" in name and observed == expected:
+            os.rename(
+                name,
+                "retained-owned",
+                src_dir_fd=parent_descriptor,
+                dst_dir_fd=parent_descriptor,
+            )
+            replacement = os.open(
+                name,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+                dir_fd=parent_descriptor,
+            )
+            try:
+                _ = os.write(replacement, b"concurrent")
+            finally:
+                os.close(replacement)
+            raced = True
+        return observed
+
+    monkeypatch.setattr(identity_api, "object_identity", replace_after_claim_proof)
+    parent_descriptor = os.open(tmp_path, os.O_RDONLY)
+    try:
+        cleanup_error = cleanup_api.remove_owned_name(
+            parent_descriptor,
+            owned.name,
+            expected,
+        )
+    finally:
+        os.close(parent_descriptor)
+
+    assert raced
+    assert cleanup_error is not None
+    assert b"concurrent" in _payloads(tmp_path)
+
+
+def test_cleanup_unlink_failure_reports_proved_retained_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    owned = tmp_path / "owned"
+    owned.write_bytes(b"owned")
+    expected = _identity(owned)
+    original_unlink = identity_api.os.unlink
+
+    def fail_owned_unlink(
+        name: str,
+        *,
+        dir_fd: int | None = None,
+    ) -> None:
+        if "w3xray-cleanup" in name:
+            raise PermissionError("synthetic cleanup denial")
+        original_unlink(name, dir_fd=dir_fd)
+
+    monkeypatch.setattr(identity_api.os, "unlink", fail_owned_unlink)
+    parent_descriptor = os.open(tmp_path, os.O_RDONLY)
+    try:
+        cleanup_error = cleanup_api.remove_owned_name(
+            parent_descriptor,
+            owned.name,
+            expected,
+        )
+    finally:
+        os.close(parent_descriptor)
+
+    retained = tuple(
+        item
+        for item in tmp_path.rglob("*")
+        if item.is_file() and _identity(item) == expected
+    )
+    assert cleanup_error is not None
+    assert len(retained) == 1
+    relative = retained[0].relative_to(tmp_path).as_posix()
+    assert f"retained at {relative}" in cleanup_error
 
 
 def test_restore_carries_expected_identity_and_never_publishes_replacement(

@@ -42,14 +42,17 @@ tests/test_icon_evidence_query.py
 tests/test_integrity_cli.py
 tests/test_integrity_cli_retained_cache.py
 tests/test_integrity_output_identity_races.py
+tests/test_integrity_output_naming_probe.py
 tests/test_integrity_output_safety.py
 tests/test_integrity_physical_aliases.py
 tests/test_integrity_platform_boundaries.py
 tests/test_integrity_snapshot.py
 tests/test_integrity_snapshot_races.py
 tests/test_integrity_utf8_boundaries.py
+tests/test_safe_output_cleanup_recovery.py
 tests/test_safe_output_publication_atomicity.py
 tests/test_safe_output_publication_cleanup_races.py
+tests/test_safe_output_races.py
 w3xtool/batch_cli_options.py
 w3xtool/batch_description_cache_input.py
 w3xtool/batch_evidence_report_validation.py
@@ -105,6 +108,7 @@ w3xtool/icons.py
 w3xtool/integrity_cli.py
 w3xtool/integrity_cli_options.py
 w3xtool/integrity_output.py
+w3xtool/integrity_output_naming.py
 w3xtool/integrity_output_path.py
 w3xtool/integrity_path_binding.py
 w3xtool/integrity_snapshot.py
@@ -117,11 +121,19 @@ w3xtool/integrity_utf8.py
 w3xtool/load_context.py
 w3xtool/object_text_presentation.py
 w3xtool/quality_paths.py
+w3xtool/quality_safe_output_paths.py
+w3xtool/safe_output_anchored.py
+w3xtool/safe_output_cleanup.py
+w3xtool/safe_output_cleanup_recovery.py
 w3xtool/safe_output_publication.py
+w3xtool/safe_output_publication_displaced.py
 w3xtool/safe_output_publication_exchange_rollback.py
 w3xtool/safe_output_publication_existing.py
+w3xtool/safe_output_publication_existing_finish.py
 w3xtool/safe_output_publication_identity.py
-w3xtool/safe_output_publication_rollback.py""".splitlines()
+w3xtool/safe_output_publication_rollback.py
+w3xtool/safe_output_publication_states.py
+w3xtool/safe_output_staging.py""".splitlines()
 )
 
 __all__ = ("AUDIT_GAP_REQUIRED_PATHS",)
