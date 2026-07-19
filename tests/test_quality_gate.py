@@ -36,6 +36,43 @@ def test_quality_gate_builds_all_three_cross_platform_commands() -> None:
     assert all("shell=True" not in command.argv for command in commands)
 
 
+def test_quality_gate_disables_broken_github_annotations_for_basedpyright(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: GitHub Actions enables basedpyright's incompatible annotation reporter.
+    captured: list[tuple[str | None, str | None]] = []
+
+    def run(
+        argv: tuple[str, ...],
+        *,
+        check: bool,
+        shell: bool,
+        env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        assert not check
+        assert not shell
+        captured.append(
+            (
+                None if env is None else env.get("GITHUB_ACTIONS"),
+                None
+                if env is None
+                else env.get("PYRIGHT_DISABLE_GITHUB_ACTIONS_OUTPUT"),
+            )
+        )
+        return subprocess.CompletedProcess(argv, 0)
+
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setattr(quality_gate.subprocess, "run", run)
+    basedpyright = quality_gate.build_quality_commands(python_executable="python")[-1]
+
+    # When: the project runs its basedpyright command.
+    code = quality_gate.run_quality_commands((basedpyright,))
+
+    # Then: ordinary CI context is preserved while the broken reporter is disabled.
+    assert code == 0
+    assert captured == [("true", "1")]
+
+
 def test_quality_gate_paths_are_one_unique_immutable_set() -> None:
     # Given / When
     paths = quality_gate.STRICT_PATHS
@@ -130,10 +167,12 @@ def test_quality_gate_stops_on_first_nonzero_command(
         *,
         check: bool,
         shell: bool,
+        env: dict[str, str],
     ) -> subprocess.CompletedProcess[str]:
         calls.append(argv)
         assert not check
         assert not shell
+        assert env["PYRIGHT_DISABLE_GITHUB_ACTIONS_OUTPUT"] == "1"
         return subprocess.CompletedProcess(argv, 0 if len(calls) == 1 else 9)
 
     monkeypatch.setattr(quality_gate.subprocess, "run", run)

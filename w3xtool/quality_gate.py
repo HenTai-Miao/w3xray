@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 import shlex
 import subprocess
 import sys
@@ -52,9 +53,16 @@ def build_quality_commands(
 
 def run_quality_commands(commands: tuple[QualityCommand, ...]) -> int:
     """Echo and execute commands, stopping at the first failure."""
+    environment = dict(os.environ)
+    environment["PYRIGHT_DISABLE_GITHUB_ACTIONS_OUTPUT"] = "1"
     for command in commands:
         print(f"[{command.tool}] {shlex.join(command.argv)}", flush=True)
-        result = subprocess.run(command.argv, check=False, shell=False)
+        result = subprocess.run(
+            command.argv,
+            check=False,
+            shell=False,
+            env=environment,
+        )
         if result.returncode:
             return result.returncode
     return 0
