@@ -61,3 +61,19 @@ def test_path_plan_keeps_supported_extension_first_without_duplicates() -> None:
         r"Icons\BTNHero.blp",
         r"Icons\BTNHero.dds",
     )
+
+
+def test_path_plan_rejects_non_utf8_unicode_without_retaining_an_unwritable_value() -> (
+    None
+):
+    # Given: malformed UTF-16 text can expose an isolated surrogate in a map field.
+    raw = "Icons\\BTN\ud800Broken.blp"
+
+    # When
+    plan = plan_icon_path(raw)
+
+    # Then: the path remains auditable in escaped form but cannot reach archive or disk I/O.
+    assert plan.original == r"Icons\BTN\ud800Broken.blp"
+    assert plan.normalized == ""
+    assert plan.candidates == ()
+    plan.original.encode("utf-8", errors="strict")

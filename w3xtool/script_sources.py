@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 _TEXT_MEMBERS: Final = ("war3map.j", "war3map.lua", "war3map.wts")
 _BINARY_MEMBERS: Final = ("war3map.wtg", "war3map.wct")
 WCT_TEXT_NAME: Final = "war3map.wct(自定义代码).txt"
+_SCRIPT_PLACEHOLDER_CHARS: Final = "\x00\r\n\t "
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,7 +62,9 @@ def collect_readable_scripts(
             readable = _format_wct_text(parsed)
             if readable is not None:
                 texts[WCT_TEXT_NAME] = readable
-    return ScriptCollection(MappingProxyType(texts), binary_members, diagnostic, wts_raw)
+    return ScriptCollection(
+        MappingProxyType(texts), binary_members, diagnostic, wts_raw
+    )
 
 
 def _read_script_member(
@@ -70,18 +73,26 @@ def _read_script_member(
     md: MapData | None,
 ) -> bytes | None:
     if md is not None:
-        component = "wts" if name == "war3map.wts" else ("wct" if name == "war3map.wct" else "script")
-        return read_component(md, component, name, lambda: archive.read_file(name), stage="read")
+        component = (
+            "wts"
+            if name == "war3map.wts"
+            else ("wct" if name == "war3map.wct" else "script")
+        )
+        return read_component(
+            md, component, name, lambda: archive.read_file(name), stage="read"
+        )
     try:
         return archive.read_file(name)
-    except (KeyError, OSError, ValueError):
+    except KeyError, OSError, ValueError:
         return None
 
 
 def _decode_script_member(raw: bytes, name: str, md: MapData | None) -> str | None:
     if md is not None:
         component = "wts" if name == "war3map.wts" else "script"
-        return read_component(md, component, name, lambda: decode_warcraft_string(raw), stage="decode")
+        return read_component(
+            md, component, name, lambda: decode_warcraft_string(raw), stage="decode"
+        )
     return decode_warcraft_string(raw)
 
 
@@ -92,7 +103,13 @@ def analysis_script_texts(md: MapData) -> tuple[tuple[str, str], ...]:
         for name, text in sorted(md.scripts.items())
         if name.casefold().endswith((".j", ".lua", ".txt"))
         and not name.casefold().endswith(".wts")
+        and is_substantive_script_text(text)
     )
+
+
+def is_substantive_script_text(text: str) -> bool:
+    """Return whether a decoded script contains more than placeholder bytes."""
+    return bool(text.strip(_SCRIPT_PLACEHOLDER_CHARS))
 
 
 def _format_wct_text(script: WctScript) -> str | None:

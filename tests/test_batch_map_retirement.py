@@ -16,6 +16,7 @@ import w3xtool.batch_runner as batch_runner
 from w3xtool.batch_configuration import BatchOptions
 from w3xtool.batch_manifest_models import PublicationValidation
 from w3xtool.batch_models import (
+    BATCH_SCHEMA_VERSION,
     BatchState,
     MapBatchResult,
     MapBatchState,
@@ -242,7 +243,9 @@ def test_retirement_authority_rejects_legacy_partial_failed_publication(
     )
 
     # When: retirement derives its authority from the global state.
-    authority = batch_map_retirement._authority(BatchState(5, (result,)), maps_root)
+    authority = batch_map_retirement._authority(
+        BatchState(BATCH_SCHEMA_VERSION, (result,)), maps_root
+    )
 
     # Then: publication failure prevents any directory from becoming authority.
     assert authority is None

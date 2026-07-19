@@ -119,6 +119,12 @@ def format_map_summary(result: MapBatchResult) -> str:
         f"源文件：{result.source.path}",
         f"源 SHA-256：{result.source.sha256}",
         f"状态：{result.state.value}",
+        f"发布结果：{result.publication_result.value}",
+        f"档案完整性：{result.archive_integrity.value}",
+        f"知识证据：{result.knowledge_evidence.value}",
+        "知识缺口："
+        + ("、".join(reason.value for reason in result.knowledge_gap_reasons) or "无"),
+        f"源覆盖缺口：{result.source_coverage_gap_count}",
         f"对象数：{result.object_count}",
         f"具名图标：{result.named_icon_count}",
         f"匿名图标：{result.anonymous_icon_count}",

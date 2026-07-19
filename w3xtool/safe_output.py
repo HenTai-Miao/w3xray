@@ -23,6 +23,10 @@ _UNSAFE_OPEN_ERRNOS: Final = frozenset((errno.EISDIR, errno.ELOOP, errno.ENOTDIR
 
 def safe_relative_path(name: str) -> PurePosixPath | None:
     """Parse an untrusted name as a relative, traversal-free path."""
+    try:
+        _ = name.encode("utf-8", errors="strict")
+    except UnicodeEncodeError:
+        return None
     if not name or "\0" in name or name.startswith(("/", "\\")):
         return None
     if PureWindowsPath(name).drive:

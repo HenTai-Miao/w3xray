@@ -1,4 +1,4 @@
-"""Shared semantic validation for persisted schema-five batch evidence."""
+"""Shared semantic validation for persisted schema-six batch evidence."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ from .object_text_models import ObjectTextState
 
 @dataclass(frozen=True, slots=True)
 class BatchSemanticEvidence:
-    """All persisted counters needed to prove schema-five axes and reasons."""
+    """All persisted counters needed to prove schema-six axes and reasons."""
 
     publication: PublicationResult
     archive: ArchiveIntegrity
@@ -45,6 +45,7 @@ class BatchSemanticEvidence:
     relation_partial_count: int
     unresolved_endpoint_count: int
     client_unavailable_icon_count: int
+    source_coverage_gap_count: int
 
 
 def batch_semantics_error(evidence: BatchSemanticEvidence) -> str | None:
@@ -92,6 +93,7 @@ def batch_semantics_error(evidence: BatchSemanticEvidence) -> str | None:
         relation_partial_count=evidence.relation_partial_count,
         unresolved_endpoint_count=evidence.unresolved_endpoint_count,
         icon_diagnostics=_icon_diagnostics(evidence),
+        source_coverage_gap_count=evidence.source_coverage_gap_count,
     )
     if evidence.archive is not expected.archive:
         return "archive integrity disagrees with block counters"

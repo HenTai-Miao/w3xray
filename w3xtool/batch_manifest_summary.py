@@ -39,6 +39,7 @@ _SUMMARY_KEYS: Final = frozenset(
         "relation_partial_count",
         "unresolved_endpoint_count",
         "client_unavailable_icon_count",
+        "source_coverage_gap_count",
         "png_written_count",
         "publication_result",
         "raw_block_count",
@@ -79,6 +80,7 @@ def manifest_summary_payload(summary: ManifestResultSummary) -> dict[str, JsonVa
         "relation_partial_count": summary.relation_partial_count,
         "unresolved_endpoint_count": summary.unresolved_endpoint_count,
         "client_unavailable_icon_count": summary.client_unavailable_icon_count,
+        "source_coverage_gap_count": summary.source_coverage_gap_count,
         "png_written_count": summary.png_written_count,
         "publication_result": summary.publication_result.value,
         "raw_block_count": summary.raw_block_count,
@@ -169,6 +171,9 @@ def parse_manifest_summary(value: JsonValue) -> ManifestResultSummary:
         client_unavailable_icon_count=_nonnegative(
             raw["client_unavailable_icon_count"],
             "client unavailable icon count",
+        ),
+        source_coverage_gap_count=_nonnegative(
+            raw["source_coverage_gap_count"], "source coverage gap count"
         ),
     )
     validate_manifest_summary(summary)

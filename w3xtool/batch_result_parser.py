@@ -1,4 +1,4 @@
-"""Strict schema-five parser for one authoritative map batch result."""
+"""Strict schema-six parser for one authoritative map batch result."""
 
 from __future__ import annotations
 
@@ -64,6 +64,7 @@ _RESULT_KEYS: Final = frozenset(
         "relation_partial_count",
         "unresolved_endpoint_count",
         "client_unavailable_icon_count",
+        "source_coverage_gap_count",
     )
 )
 
@@ -148,6 +149,9 @@ def parse_map_batch_result(value: JsonValue) -> MapBatchResult:
         client_unavailable_icon_count=_nonnegative(
             raw["client_unavailable_icon_count"],
             "client unavailable icon count",
+        ),
+        source_coverage_gap_count=_nonnegative(
+            raw["source_coverage_gap_count"], "source coverage gap count"
         ),
         relation_counts=_counts(raw["relation_counts"], "relation counts"),
         relation_incomplete_count=_nonnegative(

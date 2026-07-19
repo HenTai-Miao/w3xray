@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import Final, assert_never
 
-from .icon_field_evidence import IconFieldDisposition, classify_icon_field
+from .icon_field_evidence import (
+    IconFieldDisposition,
+    classify_icon_field,
+    icon_display_priority,
+)
 from .object_candidates import ObjectFieldValue, ObjectSourceKind
 
 _DISPLAY_ALIASES: Final[Mapping[str, str]] = {
@@ -91,6 +95,37 @@ def selected_display_value(
     return "" if value is None else value.value
 
 
+def select_current_icon_fields(
+    values: Iterable[ObjectFieldValue],
+    category: str,
+) -> tuple[ObjectFieldValue, ...]:
+    """Select one current value for the primary and each auxiliary icon role."""
+    selected: dict[str, ObjectFieldValue] = {}
+    for value in values:
+        decision = classify_icon_field(
+            category,
+            value.key,
+            value.label,
+            value.value_type,
+            value.source_kind,
+        )
+        if decision.disposition is not IconFieldDisposition.ELIGIBLE:
+            continue
+        role = (
+            "display:icon"
+            if icon_display_priority(category, value.key, value.source_kind) > 1
+            else f"icon:{decision.canonical_key}"
+        )
+        previous = selected.get(role)
+        if previous is None or _field_rank(value, role, category) > _field_rank(
+            previous,
+            role,
+            category,
+        ):
+            selected[role] = value
+    return tuple(selected[role] for role in sorted(selected))
+
+
 def object_field_source_priority(value: ObjectFieldValue, category: str) -> int:
     """Return the effective priority used by public-field selection."""
     identity = _field_identity(value, category)
@@ -142,9 +177,15 @@ def _field_rank(
     value: ObjectFieldValue,
     identity: str,
     category: str,
-) -> tuple[int, str, str, str, str, str, str, str, str]:
+) -> tuple[int, int, str, str, str, str, str, str, str, str]:
     normalized_source = value.source.replace("/", "\\")
+    display_priority = (
+        icon_display_priority(category, value.key, value.source_kind)
+        if identity == "display:icon"
+        else 0
+    )
     return (
+        display_priority,
         object_field_source_priority(value, category),
         normalized_source.casefold(),
         normalized_source,

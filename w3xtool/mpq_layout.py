@@ -63,8 +63,7 @@ def normalize_classic_header_size(
 ) -> int:
     """Return the bounded effective header size for one classic candidate."""
     if stored_header_size < MPQ_HEADER_SIZE_V1 or (
-        not protected_classic
-        and archive_offset + stored_header_size > file_size
+        not protected_classic and archive_offset + stored_header_size > file_size
     ):
         raise MPQLayoutError(f"MPQ 头大小非法：{stored_header_size}")
     return MPQ_HEADER_SIZE_V1 if protected_classic else stored_header_size
@@ -153,7 +152,17 @@ def _layout_from_user_data(data: ArchiveBytes, offset: int) -> MPQLayout:
 
 def _parse_main_header(data: ArchiveBytes, offset: int) -> MPQLayout:
     fields = struct.unpack_from("<4sIIHHIIII", data, offset)
-    magic, header_size, _archive_size, version, shift, hash_pos, block_pos, hashes, blocks = fields
+    (
+        magic,
+        header_size,
+        _archive_size,
+        version,
+        shift,
+        hash_pos,
+        block_pos,
+        hashes,
+        blocks,
+    ) = fields
     if magic != MPQ_HEADER_MAGIC:
         raise MPQLayoutError("无效的 MPQ 主头签名")
     protected_classic = data[:4] == WAR3_MAP_MAGIC and version == 0
@@ -210,10 +219,12 @@ def read_mpq_tables(
     hash_raw = _decrypt(
         bytes(hash_raw), hash_name_bytes(b"(hash table)", HASH_FILE_KEY)
     )
-    hashes = [
-        HashEntry(*struct.unpack_from("<IIHHI", hash_raw, index * 16))
-        for index in range(layout.hash_count)
-    ]
+    hashes: list[HashEntry] = []
+    for index in range(layout.hash_count):
+        name_a, name_b, locale, platform, _reserved, block_index = struct.unpack_from(
+            "<IIHBBI", hash_raw, index * 16
+        )
+        hashes.append(HashEntry(name_a, name_b, locale, platform, block_index))
 
     block_raw = data[
         layout.block_table_offset : layout.block_table_offset + layout.block_count * 16

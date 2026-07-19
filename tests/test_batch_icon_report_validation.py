@@ -12,6 +12,7 @@ from tests.batch_icon_report_fixture import (
     validate_icon_publication,
     validate_missing_gap_publication,
 )
+from w3xtool.icon_evidence_models import IconGapReason
 
 
 class _ReferencePayload(TypedDict):
@@ -63,6 +64,22 @@ def test_publication_validation_accepts_one_reconciled_gap_row(
     validation = validate_icon_publication(tmp_path)
 
     # Then
+    assert validation.valid
+
+
+def test_publication_validation_accepts_empty_path_for_invalid_reference(
+    tmp_path: Path,
+) -> None:
+    # Given / When: an eligible icon field is explicitly empty, so no normalized
+    # path can exist but the evidence still belongs in the structured gap report.
+    validation = validate_icon_publication(
+        tmp_path,
+        requested_path="",
+        normalized_path="",
+        reason=IconGapReason.INVALID_REFERENCE,
+    )
+
+    # Then: the knowledge gap must not turn a valid map publication into failure.
     assert validation.valid
 
 

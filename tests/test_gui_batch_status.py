@@ -35,6 +35,7 @@ def test_batch_status_rows_expose_three_independent_axes() -> None:
         unresolved_icon_count=1,
         unresolved_icon_reference_count=1,
         valid_icon_reference_count=1,
+        source_coverage_gap_count=2,
     )
     # When
     rows = batch_status_rows(BatchState(BATCH_SCHEMA_VERSION, (result,)))
@@ -43,6 +44,18 @@ def test_batch_status_rows_expose_three_independent_axes() -> None:
     assert rows[0].archive == "完整"
     assert rows[0].knowledge == "部分"
     assert rows[0].knowledge_reasons == ("图标未绑定",)
+    assert rows[0].source_coverage_gap_count == 2
+
+
+def test_batch_status_layout_has_a_source_coverage_column() -> None:
+    # Given
+    from w3xtool.gui_batch_status_layout import _COLUMNS
+
+    # When
+    columns = {key: title for key, title, _width in _COLUMNS}
+
+    # Then
+    assert columns["source_coverage"] == "源覆盖缺口"
 
 
 def test_batch_status_loader_uses_a_validated_generation(tmp_path: Path) -> None:

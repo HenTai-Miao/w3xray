@@ -38,6 +38,7 @@ def validate_result_state(result: MapBatchResult) -> None:
             relation_partial_count=result.relation_partial_count,
             unresolved_endpoint_count=result.unresolved_endpoint_count,
             client_unavailable_icon_count=result.client_unavailable_icon_count,
+            source_coverage_gap_count=result.source_coverage_gap_count,
         )
     )
     if error is not None:

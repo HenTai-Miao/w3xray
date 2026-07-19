@@ -1,4 +1,4 @@
-"""Batch schema-five persistence and global summary tests."""
+"""Batch schema-six persistence and global summary tests."""
 
 from __future__ import annotations
 
@@ -41,8 +41,8 @@ def test_batch_state_json_round_trips_source_fingerprint() -> None:
     assert restored == state
 
 
-def test_batch_schema_is_five_for_independent_status_axes() -> None:
-    assert BATCH_SCHEMA_VERSION == 5
+def test_batch_schema_is_six_for_source_coverage_evidence() -> None:
+    assert BATCH_SCHEMA_VERSION == 6
 
 
 def test_batch_state_json_rejects_an_unknown_schema() -> None:
@@ -72,6 +72,20 @@ def test_global_summary_is_sorted_and_includes_relation_counts() -> None:
     assert lines[2].startswith("/maps/z.w3x\t")
     assert "关系类型计数" in lines[0]
     assert "关系不完整" in lines[0]
+
+
+def test_global_summary_exposes_source_coverage_gap_count() -> None:
+    # Given
+    result = replace(_map_result(), source_coverage_gap_count=3)
+    state = BatchState(BATCH_SCHEMA_VERSION, (result,))
+
+    # When
+    lines = format_batch_summary_tsv(state).splitlines()
+    header = lines[0].split("\t")
+    values = lines[1].split("\t")
+
+    # Then
+    assert values[header.index("源覆盖缺口")] == "3"
 
 
 def test_retry_report_excludes_published_partial_knowledge() -> None:

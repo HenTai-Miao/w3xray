@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import PureWindowsPath
 from typing import Final
 
+from .icon_evidence_models import IconGapReason
+
 
 @dataclass(frozen=True, slots=True)
 class IconPathPlan:
@@ -27,6 +29,9 @@ _SUPPORTED_EXTENSIONS: Final = frozenset((".blp", ".tga", ".dds"))
 
 def plan_icon_path(raw: str) -> IconPathPlan:
     """Normalize one virtual path and produce exact extension attempts."""
+    reportable = reportable_icon_path(raw)
+    if reportable != raw:
+        return IconPathPlan(reportable, "", ())
     cleaned = raw.strip()
     if len(cleaned) >= 2 and cleaned.startswith('"') and cleaned.endswith('"'):
         cleaned = cleaned[1:-1]
@@ -59,3 +64,27 @@ def plan_icon_path(raw: str) -> IconPathPlan:
             seen.add(key)
             candidates.append(candidate)
     return IconPathPlan(raw, normalized, tuple(candidates))
+
+
+def reportable_icon_path(value: str) -> str:
+    """Escape isolated surrogates so malformed map text remains strict UTF-8."""
+    try:
+        _ = value.encode("utf-8", errors="strict")
+    except UnicodeEncodeError:
+        return "".join(
+            f"\\u{ord(character):04x}"
+            if 0xD800 <= ord(character) <= 0xDFFF
+            else character
+            for character in value
+        )
+    return value
+
+
+def is_canonical_icon_gap_path(normalized: str, reason: IconGapReason) -> bool:
+    """Accept invalid references without pretending they have a usable path."""
+    plan = plan_icon_path(normalized)
+    if plan.normalized != normalized:
+        return False
+    if reason is IconGapReason.INVALID_REFERENCE:
+        return not plan.candidates
+    return bool(normalized and plan.candidates)

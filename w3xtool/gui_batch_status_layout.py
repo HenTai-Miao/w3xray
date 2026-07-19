@@ -16,6 +16,7 @@ _COLUMNS = (
     ("archive", "归档", 90),
     ("knowledge", "知识", 80),
     ("reasons", "原因", 180),
+    ("source_coverage", "源覆盖缺口", 95),
     ("gaps", "路径/引用", 105),
     ("filtered", "过滤字段", 85),
     ("relations", "关系部分", 85),

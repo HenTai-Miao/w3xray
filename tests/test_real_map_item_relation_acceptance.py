@@ -1,4 +1,4 @@
-"""Read-only acceptance checks for the 39-map schema-4 publication."""
+"""Read-only acceptance checks for the current 39-map publication."""
 
 from __future__ import annotations
 
@@ -117,10 +117,10 @@ def acceptance_context() -> AcceptanceContext:
     return AcceptanceContext(maps, old_by_digest, new_by_digest, state.results)
 
 
-def test_v4_batch_covers_all_sources_and_required_artifacts(
+def test_current_batch_covers_all_sources_and_required_artifacts(
     acceptance_context: AcceptanceContext,
 ) -> None:
-    # Given: schema-4 state and the read-only source directory.
+    # Given: current-schema state and the read-only source directory.
     context = acceptance_context
 
     # When: publication identities and per-map files are enumerated.
@@ -130,7 +130,7 @@ def test_v4_batch_covers_all_sources_and_required_artifacts(
     }
 
     # Then: every one of the 39 sources has one complete artifact set.
-    assert BATCH_SCHEMA_VERSION == 4
+    assert BATCH_SCHEMA_VERSION == 6
     assert len(context.maps) == len(context.results) == 39
     assert source_paths == published_paths
     assert set(context.old_by_digest) == set(context.new_by_digest)
@@ -138,10 +138,10 @@ def test_v4_batch_covers_all_sources_and_required_artifacts(
         assert _REQUIRED_ARTIFACTS <= {path.name for path in output.iterdir()}
 
 
-def test_every_old_non_placeholder_raw_text_remains_v4_evidence(
+def test_every_old_non_placeholder_raw_text_remains_current_evidence(
     acceptance_context: AcceptanceContext,
 ) -> None:
-    # Given: legacy reports and matching v4 outputs are joined by source digest.
+    # Given: legacy reports and matching current outputs are joined by source digest.
     context = acceptance_context
 
     # When: every legacy raw tip and description is compared with v2 raw evidence.

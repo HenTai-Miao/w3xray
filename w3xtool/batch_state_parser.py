@@ -1,4 +1,4 @@
-"""Strict root parser for authoritative schema-five batch state."""
+"""Strict root parser for authoritative schema-six batch state."""
 
 from __future__ import annotations
 

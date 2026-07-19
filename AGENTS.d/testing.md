@@ -62,6 +62,12 @@ reported 2131 passed, 18 skipped, and 1 subtest passed. Ruff check and format
 covered 287 maintained files, and basedpyright reported 0 errors, 0 warnings,
 and 0 notes. The changed-file no-excuse audit passed.
 
+Verified on 2026-07-19 after the revision-6 three-defect closure: the focused
+regression suite reported 153 passed; `w3xray-test` reported 2166 passed,
+18 skipped, and 1 subtest passed. Ruff check and format covered 313 maintained
+files, basedpyright reported 0 errors, 0 warnings, and 0 notes, and the
+changed-file no-excuse audit reported no violations in 74 files.
+
 Changed-file diagnostics when narrowing a failure:
 
 ```bash
@@ -96,4 +102,13 @@ uv run --with basedpyright basedpyright --level error <paths>
 
 Task 11 snapshots the four read-only map/historical roots before migration, writes only to the new external cache/output/evidence paths, then verifies the same snapshot after processing. It must prove first-run `processed`, immediate-run `reused`, manifest/report/count reconciliation, no transient publication names, retained-cache evidence, and exact source/input content+metadata equality.
 
-Historical schema-4 measurements from 2026-07-15 remain evidence only: 39/39 processed then reused, 700,979 text rows, 13,442 relation rows, and 79,078 logical icon rows. Do not relabel those counts as schema-5 results.
+The 2026-07-19 revision-6 three-defect acceptance processed and published 39/39
+maps with zero failures, cancellations, or timeouts, then strictly reused 39/39
+from `map-extract-output-v6-three-fix-20260719T133434Z`. All 82,880 located icon
+payloads wrote both original and PNG with zero physical failures. The sole
+zero-object map persisted one source-coverage gap and remained `部分完成`; the
+slowest map completed in 127,561 ms. The input integrity snapshot verified
+unchanged after both runs, and no stage/backup/transaction/retirement residue
+remained.
+
+Historical schema-4 measurements from 2026-07-15 remain evidence only: 39/39 processed then reused, 700,979 text rows, 13,442 relation rows, and 79,078 logical icon rows. Do not relabel those counts as schema-6 results.

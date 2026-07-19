@@ -90,6 +90,7 @@ def build_map_result(
                 if IconDiagnosticFlag.CLIENT_NOT_PROVIDED in row.diagnostics
             }
         ),
+        source_coverage_gap_count=item_reports.source_coverage_gap_count,
         relation_counts=item_reports.relation_counts,
         relation_incomplete_count=item_reports.relation_incomplete_count,
         dependency_fingerprint=dependency_fingerprint,

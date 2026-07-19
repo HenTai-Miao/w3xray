@@ -51,3 +51,25 @@ def test_archive_damage_does_not_change_knowledge_axis() -> None:
     # Then
     assert axes.archive is ArchiveIntegrity.DAMAGED_BLOCKS
     assert axes.knowledge is KnowledgeEvidence.COMPLETE
+
+
+def test_missing_substantive_source_coverage_is_knowledge_partial() -> None:
+    # Given / When: publication succeeds without any analysis-bearing source.
+    axes = derive_batch_axes(
+        publication=PublicationResult.PUBLISHED,
+        raw_blocks=0,
+        damaged_blocks=0,
+        restricted_blocks=0,
+        icon_gaps=0,
+        current_text_states=(),
+        relation_partial_count=0,
+        unresolved_endpoint_count=0,
+        source_coverage_gap_count=1,
+    )
+
+    # Then: absence of observable gaps cannot be promoted to complete knowledge.
+    assert axes.publication is PublicationResult.PUBLISHED
+    assert axes.archive is ArchiveIntegrity.COMPLETE
+    assert axes.knowledge is KnowledgeEvidence.PARTIAL
+    assert axes.knowledge_reasons == (KnowledgeGapReason.SOURCE_COVERAGE_MISSING,)
+    assert derive_legacy_map_state(axes) is MapBatchState.PARTIAL

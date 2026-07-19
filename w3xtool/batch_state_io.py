@@ -60,6 +60,7 @@ class _ResultJson(TypedDict):
     relation_partial_count: int
     unresolved_endpoint_count: int
     client_unavailable_icon_count: int
+    source_coverage_gap_count: int
 
 
 class _StateJson(TypedDict):
@@ -130,6 +131,7 @@ def _result_json(result: MapBatchResult) -> _ResultJson:
         relation_partial_count=result.relation_partial_count,
         unresolved_endpoint_count=result.unresolved_endpoint_count,
         client_unavailable_icon_count=result.client_unavailable_icon_count,
+        source_coverage_gap_count=result.source_coverage_gap_count,
     )
 
 

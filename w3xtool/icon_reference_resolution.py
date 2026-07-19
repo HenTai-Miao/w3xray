@@ -44,7 +44,7 @@ def resolve_icon_reference(
     attempts: list[IconLookupAttempt] = []
     history = _UNAVAILABLE_HISTORY
     history_checked = False
-    if not plan.candidates:
+    if not reference.normalized_path or not plan.candidates:
         return unresolved_icon_evidence(
             reference,
             attempts,

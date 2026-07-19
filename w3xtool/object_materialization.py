@@ -11,6 +11,7 @@ from .object_candidates import ObjectCandidate, ObjectFieldValue, ObjectSourceKi
 from .object_field_selection import (
     object_field_source_priority,
     public_object_field_key,
+    select_current_icon_fields,
     select_object_field,
     selected_display_value,
 )
@@ -148,6 +149,10 @@ def _materialize(
         if selected_icon is None
         else _materialized_evidence((selected_icon,), category)[0]
     )
+    icon_fields_evidence = _materialized_evidence(
+        select_current_icon_fields(evidence_values, category),
+        category,
+    )
     refs = _merge_refs(candidates)
     search_text = " ".join(
         (obj_id, representative.base_id, name, *(value for _label, value in fields))
@@ -168,6 +173,7 @@ def _materialize(
         field_sources=field_sources,
         field_evidence=_materialized_evidence(evidence_values, category),
         icon_field_evidence=icon_evidence,
+        icon_fields_evidence=icon_fields_evidence,
     )
 
 

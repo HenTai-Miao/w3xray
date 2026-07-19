@@ -95,6 +95,33 @@ def test_manifest_round_trip_retains_every_split_icon_counter(tmp_path: Path) ->
     assert parsed.result.png_failure_count == 3
 
 
+def test_manifest_round_trip_retains_source_coverage_gap_count(
+    tmp_path: Path,
+) -> None:
+    # Given: a published result is partial only because source coverage is absent.
+    result = replace(
+        write_empty_manifest_stage(tmp_path),
+        source_coverage_gap_count=1,
+        state=MapBatchState.PARTIAL,
+        knowledge_evidence=KnowledgeEvidence.PARTIAL,
+        knowledge_gap_reasons=(KnowledgeGapReason.SOURCE_COVERAGE_MISSING,),
+    )
+
+    # When: the manifest is built and parsed through the strict wire codec.
+    parsed = parse_map_manifest(
+        format_map_manifest(
+            build_map_manifest(tmp_path, result, MANIFEST_TRANSACTION_ID)
+        )
+    )
+
+    # Then: the counter re-proves the closed knowledge-gap reason.
+    assert parsed.schema_version == 2
+    assert parsed.result.source_coverage_gap_count == 1
+    assert parsed.result.knowledge_gap_reasons == (
+        KnowledgeGapReason.SOURCE_COVERAGE_MISSING,
+    )
+
+
 def test_manifest_parser_rejects_legacy_state_that_disagrees_with_axes(
     tmp_path: Path,
 ) -> None:

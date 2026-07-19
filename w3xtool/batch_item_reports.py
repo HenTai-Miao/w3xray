@@ -19,6 +19,9 @@ from .item_relation_models import (
 from .map_data import GameObject, MapData
 from .object_text_exports import format_object_text_tsv
 from .object_text_models import ObjectTextIndex, ObjectTextState
+from .object_text_names import normalized_name, trusted_source_kind
+from .script_sources import analysis_script_texts
+from .slk_objects import SLK_CATEGORY_FILES
 
 _INCOMPLETE_TEXT_STATES: Final = frozenset(
     (
@@ -26,6 +29,21 @@ _INCOMPLETE_TEXT_STATES: Final = frozenset(
         ObjectTextState.SOURCE_UNAVAILABLE,
         ObjectTextState.SOURCE_CONFLICT,
     )
+)
+_OBJECT_BINARY_SUFFIXES: Final = (
+    ".w3u",
+    ".w3t",
+    ".w3a",
+    ".w3q",
+    ".w3b",
+    ".w3d",
+    ".w3h",
+)
+_STRUCTURAL_SOURCE_NAMES: Final = frozenset(
+    ("war3map.wtg", "war3map.wct", "war3map.doo", "war3mapunits.doo")
+)
+_SLK_SOURCE_NAMES: Final = frozenset(
+    name.casefold() for names in SLK_CATEGORY_FILES.values() for name in names
 )
 
 
@@ -41,6 +59,7 @@ class BatchItemReports:
     text_incomplete_count: int
     relation_counts: tuple[tuple[str, int], ...]
     relation_incomplete_count: int
+    source_coverage_gap_count: int
 
     def artifacts(self) -> tuple[tuple[str, str], ...]:
         """Render lossless complete-text and relation artifacts."""
@@ -84,6 +103,7 @@ def build_batch_item_reports(root: MapData) -> BatchItemReports:
             relation.completeness is not RelationCompleteness.COMPLETE
             for relation in item_relations.records
         ),
+        source_coverage_gap_count=_source_coverage_gap_count(maps),
     )
 
 
@@ -95,3 +115,34 @@ def _all_maps(root: MapData) -> tuple[MapData, ...]:
         maps.append(current)
         pending.extend(reversed(current.sub_maps))
     return tuple(maps)
+
+
+def _source_coverage_gap_count(maps: tuple[MapData, ...]) -> int:
+    analysis_maps = tuple(
+        item for item in maps if not item.path.casefold().endswith(".w3n")
+    )
+    if not analysis_maps:
+        return int(bool(maps))
+    return sum(not _has_substantive_source(item) for item in analysis_maps)
+
+
+def _has_substantive_source(md: MapData) -> bool:
+    if any(md.objects.values()) or analysis_script_texts(md):
+        return True
+    failed_sources = {normalized_name(item.source) for item in md.diagnostics}
+    return any(
+        _is_analysis_source(name) and normalized_name(name) not in failed_sources
+        for name in md.all_files
+    )
+
+
+def _is_analysis_source(name: str) -> bool:
+    normalized = normalized_name(name)
+    basename = normalized.rsplit("\\", 1)[-1]
+    if basename in _STRUCTURAL_SOURCE_NAMES or basename in _SLK_SOURCE_NAMES:
+        return True
+    if basename.startswith(("war3map.", "war3campaign.")) and basename.endswith(
+        _OBJECT_BINARY_SUFFIXES
+    ):
+        return True
+    return trusted_source_kind(name) is not None

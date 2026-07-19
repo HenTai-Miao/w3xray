@@ -24,6 +24,16 @@ from w3xtool.icon_evidence_models import (
 from w3xtool.icon_resources import IconObjectReference
 
 
+class _CountingDigest(str):
+    comparisons = 0
+
+    def __eq__(self, other) -> bool:
+        type(self).comparisons += 1
+        return super().__eq__(other)
+
+    __hash__ = str.__hash__
+
+
 def test_exact_path_in_another_map_is_only_a_non_adopted_candidate() -> None:
     # Given
     gap = GlobalIconGap(
@@ -161,6 +171,40 @@ def test_candidate_report_rejects_an_adopted_suggestion() -> None:
     # When / Then
     with pytest.raises(GlobalEvidenceError, match="adopted"):
         parse_icon_candidates_tsv(text)
+
+
+def test_candidate_derivation_does_not_compare_every_anonymous_and_named_pair() -> None:
+    # Given: unrelated anonymous and named payloads form two moderately large sets.
+    named = tuple(
+        GlobalResolvedIcon(
+            f"/maps/n{index}.w3x",
+            f"{index + 256:064x}",
+            rf"Icons\BTN{index}.blp",
+            IconResolutionLayer.CURRENT_MAP,
+            f"{index + 512:064x}",
+            f"/maps/n{index}.w3x",
+        )
+        for index in range(64)
+    )
+    anonymous = tuple(
+        GlobalAnonymousIcon(
+            f"/maps/a{index}.w3x",
+            f"{index + 1024:064x}",
+            index,
+            _CountingDigest(f"{index + 2048:064x}"),
+            f"/maps/a{index}.w3x#block{index}",
+        )
+        for index in range(64)
+    )
+    evidence = GlobalEvidenceIndex.build((), named, anonymous, ())
+    _CountingDigest.comparisons = 0
+
+    # When
+    candidates = build_icon_candidate_bindings(evidence)
+
+    # Then: hash/path indexes replace the 64 x 64 Cartesian scan.
+    assert candidates == ()
+    assert _CountingDigest.comparisons <= 128
 
 
 def _reference() -> IconObjectReference:

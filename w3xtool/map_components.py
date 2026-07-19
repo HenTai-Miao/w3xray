@@ -14,14 +14,18 @@ from .extraction_diagnostics import (
 )
 from .map_archive_reader import MapArchiveReader
 from .map_data import GameObject, MapData
-from .script_sources import WCT_TEXT_NAME, collect_readable_scripts
+from .script_sources import (
+    WCT_TEXT_NAME,
+    collect_readable_scripts,
+    is_substantive_script_text,
+)
 
 
 def _best_script_text(scripts: Mapping[str, str]) -> str | None:
     """Return the first non-empty primary script for legacy callers."""
     for name in ("war3map.j", "war3map.lua"):
         text = scripts.get(name)
-        if text and text.strip("\x00\r\n\t "):
+        if text is not None and is_substantive_script_text(text):
             return text
     return None
 

@@ -7,6 +7,7 @@ from typing import assert_never
 from .batch_icon_models import IconExportRecord, IconExportState, IconKind
 from .batch_icon_paths import collision_path, icon_path_suffix, without_leaf_suffix
 from .batch_icon_png import convert_icon_to_png
+from .icon_path_evidence import reportable_icon_path
 from .icon_evidence_models import IconResolutionLayer, ResolvedIconEvidence
 from .icon_resources import (
     AnonymousIconResource,
@@ -187,9 +188,9 @@ def _failed_record(
 ) -> IconExportRecord:
     return IconExportRecord(
         kind=IconKind.NAMED,
-        requested_path=requested_path,
-        resolved_path=resolved_path,
-        source_path=source_path,
+        requested_path=reportable_icon_path(requested_path),
+        resolved_path=reportable_icon_path(resolved_path),
+        source_path=reportable_icon_path(source_path),
         block_index=None,
         sha256=digest,
         original_relative_path="",

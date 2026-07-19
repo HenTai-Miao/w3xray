@@ -8,6 +8,7 @@ import io
 
 import pytest
 
+from tests.batch_publication_fixture import empty_result
 import w3xtool.batch_tsv as batch_tsv
 from w3xtool.batch_descriptions import DescriptionRecord, DescriptionState
 from w3xtool.batch_icon_export import (
@@ -18,7 +19,10 @@ from w3xtool.batch_icon_export import (
 from w3xtool.batch_reports import (
     format_description_tsv,
     format_icon_index_tsv,
+    format_map_summary,
 )
+from w3xtool.batch_models import MapBatchState, SourceFingerprint
+from w3xtool.batch_status import KnowledgeEvidence, KnowledgeGapReason
 from w3xtool.icon_evidence_models import IconResolutionLayer
 from w3xtool.icon_resources import IconObjectReference
 
@@ -168,3 +172,26 @@ def test_icon_index_reports_the_exact_resolution_layer() -> None:
 
     # Then
     assert row["解析层"] == "current_map"
+
+
+def test_map_summary_explains_source_coverage_partial_state() -> None:
+    # Given: publication succeeded but no substantive source was available.
+    result = replace(
+        empty_result(
+            SourceFingerprint("/maps/opaque.w3x", 3, 4, "a" * 64),
+            "地图/001_opaque_aaaaaaaa",
+        ),
+        state=MapBatchState.PARTIAL,
+        knowledge_evidence=KnowledgeEvidence.PARTIAL,
+        knowledge_gap_reasons=(KnowledgeGapReason.SOURCE_COVERAGE_MISSING,),
+        source_coverage_gap_count=1,
+    )
+
+    # When: the per-map human-readable summary is rendered.
+    summary = format_map_summary(result)
+
+    # Then: the user can see why zero extracted objects are not called complete.
+    assert "发布结果：已发布" in summary
+    assert "知识证据：部分" in summary
+    assert "知识缺口：源覆盖缺失" in summary
+    assert "源覆盖缺口：1" in summary

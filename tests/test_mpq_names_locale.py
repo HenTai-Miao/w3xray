@@ -45,6 +45,7 @@ def build_archive_bytes(
     localized_payloads: tuple[tuple[int, bytes], ...],
     *,
     encrypted: bool = False,
+    reserved: int = 0,
 ) -> bytes:
     """Build a small real MPQ with duplicate locale hashes for one byte name."""
     hash_count = 8
@@ -74,7 +75,7 @@ def build_archive_bytes(
     name_b = hash_name_bytes(name_bytes, HASH_NAME_B)
     for offset, (locale, _payload) in enumerate(localized_payloads):
         hashes[(start + offset) & (hash_count - 1)] = struct.pack(
-            "<IIHHI", name_a, name_b, locale, 0, offset
+            "<IIHBBI", name_a, name_b, locale, 0, reserved, offset
         )
 
     hash_bytes = b"".join(hashes)
@@ -135,10 +136,15 @@ def test_locale_selection_prefers_requested_then_last_neutral() -> None:
         HashEntry(1, 2, 0x0404, 0, 4),
     )
 
-    # When/Then: the first exact pair wins; fallback retains the last neutral.
-    assert select_hash_entry(entries, locale_id=0x0404).block_index == 2
-    assert select_hash_entry(entries, locale_id=0x0804).block_index == 3
-    assert select_hash_entry(entries, locale_id=0).block_index == 3
+    # When: three locale requests select from the same duplicate hash rows.
+    exact = select_hash_entry(entries, locale_id=0x0404)
+    fallback = select_hash_entry(entries, locale_id=0x0804)
+    neutral = select_hash_entry(entries, locale_id=0)
+
+    # Then: the first exact pair wins; fallback retains the last neutral.
+    assert exact is not None and exact.block_index == 2
+    assert fallback is not None and fallback.block_index == 3
+    assert neutral is not None and neutral.block_index == 3
 
 
 def test_locale_selection_requires_exact_nonzero_platform_pair() -> None:
@@ -149,15 +155,22 @@ def test_locale_selection_requires_exact_nonzero_platform_pair() -> None:
         HashEntry(1, 2, 0x0404, 2, 3),
     )
 
-    # When/Then: a nonzero request returns only the exact locale/platform pair.
-    assert select_hash_entry(entries, locale_id=0x0404, platform=2).block_index == 3
+    # When: the compound locale/platform request is selected.
+    selected = select_hash_entry(entries, locale_id=0x0404, platform=2)
+
+    # Then: a nonzero request returns only the exact locale/platform pair.
+    assert selected is not None and selected.block_index == 3
 
 
-def test_gbk_lookup_reuses_matching_candidate_for_encrypted_file_key(tmp_path: Path) -> None:
+def test_gbk_lookup_reuses_matching_candidate_for_encrypted_file_key(
+    tmp_path: Path,
+) -> None:
     # Given: both table hashes and encryption key use a GBK filename candidate.
     name = "目录\\单位数据.txt"
     path = tmp_path / "gbk-name.w3x"
-    path.write_bytes(build_archive_bytes(name.encode("gbk"), ((0, b"GBK!"),), encrypted=True))
+    path.write_bytes(
+        build_archive_bytes(name.encode("gbk"), ((0, b"GBK!"),), encrypted=True)
+    )
 
     # When: the archive is configured with the matching legacy codec.
     with MPQArchive(str(path), legacy_codecs=("gbk",)) as archive:
@@ -167,11 +180,15 @@ def test_gbk_lookup_reuses_matching_candidate_for_encrypted_file_key(tmp_path: P
     assert payload == b"GBK!"
 
 
-def test_archive_locale_configuration_does_not_leak_between_instances(tmp_path: Path) -> None:
+def test_archive_locale_configuration_does_not_leak_between_instances(
+    tmp_path: Path,
+) -> None:
     # Given: one archive has a requested locale plus two neutral fallbacks.
     path = tmp_path / "locales.w3x"
     path.write_bytes(
-        build_archive_bytes(b"war3map.j", ((0, b"ONE!"), (0, b"LAST"), (0x0404, b"EXACT")))
+        build_archive_bytes(
+            b"war3map.j", ((0, b"ONE!"), (0, b"LAST"), (0x0404, b"EXACT"))
+        )
     )
 
     # When: two independent readers request different locales.
@@ -183,3 +200,22 @@ def test_archive_locale_configuration_does_not_leak_between_instances(tmp_path: 
     # Then: each reader applies only its own locale preference.
     assert exact_payload == b"EXACT"
     assert fallback_payload == b"LAST"
+
+
+def test_hash_reserved_byte_does_not_change_platform_selection(tmp_path: Path) -> None:
+    # Given: a valid neutral-platform hash entry uses its reserved byte.
+    path = tmp_path / "reserved-byte.w3x"
+    path.write_bytes(
+        build_archive_bytes(
+            b"war3mapImported\\BTNItem.blp",
+            ((0, b"BLP1"),),
+            reserved=0xFF,
+        )
+    )
+
+    # When: the exact named member is read through normal locale selection.
+    with MPQArchive(str(path)) as archive:
+        payload = archive.read_file(r"war3mapImported\BTNItem.blp")
+
+    # Then: the reserved byte cannot impersonate a non-neutral platform.
+    assert payload == b"BLP1"

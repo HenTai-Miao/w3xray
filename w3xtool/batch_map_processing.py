@@ -120,6 +120,7 @@ def process_one_map(
             relation_partial_count=relation_partial_count,
             unresolved_endpoint_count=unresolved_endpoint_count,
             icon_diagnostics=icon_diagnostics,
+            source_coverage_gap_count=item_reports.source_coverage_gap_count,
         )
         elapsed_ms = max(0, (monotonic_ns() - started) // 1_000_000)
         dependency = fingerprint_dependencies(

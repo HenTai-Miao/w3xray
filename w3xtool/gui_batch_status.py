@@ -30,6 +30,7 @@ class BatchStatusRow:
     archive: str
     knowledge: str
     knowledge_reasons: tuple[str, ...]
+    source_coverage_gap_count: int
     unresolved_paths: int
     unresolved_references: int
     filtered_fields: int
@@ -61,7 +62,7 @@ def load_batch_status(root: str | Path) -> BatchStatusSnapshot:
 
 
 def batch_status_rows(state: BatchState) -> tuple[BatchStatusRow, ...]:
-    """Render independent schema-5 axes without deriving replacement state."""
+    """Render independent schema-six axes without deriving replacement state."""
     return tuple(
         BatchStatusRow(
             result.source.path,
@@ -70,6 +71,7 @@ def batch_status_rows(state: BatchState) -> tuple[BatchStatusRow, ...]:
             result.archive_integrity.value,
             result.knowledge_evidence.value,
             tuple(reason.value for reason in result.knowledge_gap_reasons),
+            result.source_coverage_gap_count,
             result.unresolved_icon_count,
             result.unresolved_icon_reference_count,
             result.filtered_icon_field_count,
@@ -135,6 +137,7 @@ class BatchStatusGuiMixin(BatchStatusLayoutMixin):
                     row.archive,
                     row.knowledge,
                     "、".join(row.knowledge_reasons),
+                    row.source_coverage_gap_count,
                     f"{row.unresolved_paths}/{row.unresolved_references}",
                     row.filtered_fields,
                     row.relation_partial_count,

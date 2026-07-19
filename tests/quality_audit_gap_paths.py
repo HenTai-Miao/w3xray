@@ -11,18 +11,20 @@ tests/batch_cli_fixture.py
 tests/batch_global_evidence_fixture.py
 tests/batch_icon_report_fixture.py
 tests/batch_manifest_fixture.py
-tests/batch_schema_five_evidence_fixture.py
+tests/batch_schema_evidence_fixture.py
 tests/quality_audit_gap_paths.py
 tests/retained_integrity_fixture.py
 tests/test_batch_description_cache_cli.py
 tests/test_batch_e2e.py
 tests/test_batch_global_evidence.py
 tests/test_batch_global_fix_acceptance.py
+tests/test_batch_icon_export.py
 tests/test_batch_icon_report_validation.py
 tests/test_batch_item_report_processing.py
 tests/test_batch_manifest_inventory.py
 tests/test_batch_manifest_parser.py
 tests/test_batch_manifest_publication.py
+tests/test_batch_reports.py
 tests/test_batch_result_parser.py
 tests/test_batch_status.py
 tests/test_description_cache_retained_capture.py
@@ -39,6 +41,7 @@ tests/test_gui_object_presentation.py
 tests/test_icon_candidate_bindings.py
 tests/test_icon_candidate_input_normalization.py
 tests/test_icon_evidence_query.py
+tests/test_icon_path_evidence.py
 tests/test_integrity_cli.py
 tests/test_integrity_cli_retained_cache.py
 tests/test_integrity_output_identity_races.py
@@ -56,6 +59,10 @@ tests/test_safe_output_cleanup_recovery.py
 tests/test_safe_output_publication_atomicity.py
 tests/test_safe_output_publication_cleanup_races.py
 tests/test_safe_output_races.py
+tests/test_save_call_context.py
+tests/test_script_function_index.py
+tests/test_script_sources.py
+w3xtool/batch_icon_export.py
 w3xtool/batch_cli_options.py
 w3xtool/batch_description_cache_input.py
 w3xtool/batch_evidence_report_validation.py
@@ -67,6 +74,7 @@ w3xtool/batch_global_evidence_reports.py
 w3xtool/batch_global_payloads.py
 w3xtool/batch_global_reports.py
 w3xtool/batch_icon_report_validation.py
+w3xtool/batch_item_reports.py
 w3xtool/batch_manifest_inventory.py
 w3xtool/batch_manifest_summary.py
 w3xtool/batch_manifest_summary_validation.py
@@ -104,9 +112,13 @@ w3xtool/gui_shell.py
 w3xtool/gui_shell_object_panel.py
 w3xtool/gui_shell_source_panel.py
 w3xtool/icon_candidate_bindings.py
+w3xtool/icon_evidence_builder.py
 w3xtool/icon_evidence_index.py
 w3xtool/icon_evidence_presentation.py
 w3xtool/icon_evidence_query.py
+w3xtool/icon_gap_diagnostics.py
+w3xtool/icon_path_evidence.py
+w3xtool/icon_reference_resolution.py
 w3xtool/icons.py
 w3xtool/integrity_cli.py
 w3xtool/integrity_cli_options.py
@@ -144,7 +156,10 @@ w3xtool/safe_output_publication_existing_finish.py
 w3xtool/safe_output_publication_identity.py
 w3xtool/safe_output_publication_rollback.py
 w3xtool/safe_output_publication_states.py
-w3xtool/safe_output_staging.py""".splitlines()
+w3xtool/safe_output_staging.py
+w3xtool/save_call_context.py
+w3xtool/script_function_index.py
+w3xtool/script_sources.py""".splitlines()
 )
 
 __all__ = ("AUDIT_GAP_REQUIRED_PATHS",)

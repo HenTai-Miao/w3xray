@@ -62,6 +62,7 @@ class GameObject:
     field_labels: dict[str, str] = field(default_factory=dict)
     field_evidence: tuple[GameObjectFieldEvidence, ...] = ()
     icon_field_evidence: GameObjectFieldEvidence | None = None
+    icon_fields_evidence: tuple[GameObjectFieldEvidence, ...] = ()
 
     @property
     def decimal(self) -> int:

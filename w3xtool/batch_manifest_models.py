@@ -17,7 +17,7 @@ from .batch_status import (
 
 CONTENT_MANIFEST_NAME: Final = "内容清单.json"
 OWNERSHIP_MARKER_NAME: Final = ".w3xray-batch-owned"
-MANIFEST_SCHEMA_VERSION: Final = 1
+MANIFEST_SCHEMA_VERSION: Final = 2
 OWNERSHIP_SCHEMA_VERSION: Final = 1
 REQUIRED_MAP_REPORTS: Final = (
     "地图摘要.txt",
@@ -98,6 +98,7 @@ class ManifestResultSummary:
     relation_partial_count: int
     unresolved_endpoint_count: int
     client_unavailable_icon_count: int
+    source_coverage_gap_count: int
 
 
 @dataclass(frozen=True, slots=True)

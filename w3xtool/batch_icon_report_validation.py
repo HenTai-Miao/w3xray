@@ -12,7 +12,7 @@ from .icon_evidence_counts import IconIntegrityCounts
 from .icon_evidence_exports import UNRESOLVED_ICON_HEADER
 from .icon_evidence_models import IconDiagnosticFlag, IconGapReason
 from .icon_gap_reference_codec import parse_icon_gap_references
-from .icon_path_evidence import plan_icon_path
+from .icon_path_evidence import is_canonical_icon_gap_path, plan_icon_path
 from .icon_report_map_codec import parse_icon_report_map_identities
 
 _INTEGRITY_LABELS: Final = (
@@ -140,13 +140,12 @@ def _validate_gap_rows(
     client_unavailable_count = 0
     for row in rows:
         normalized = row[4]
-        plan = plan_icon_path(normalized)
-        if not normalized or plan.normalized != normalized:
-            raise BatchReportValidationError("invalid normalized icon gap path")
         try:
-            _ = IconGapReason(row[6])
+            reason = IconGapReason(row[6])
         except ValueError as exc:
             raise BatchReportValidationError("invalid icon gap reason") from exc
+        if not is_canonical_icon_gap_path(normalized, reason):
+            raise BatchReportValidationError("invalid normalized icon gap path")
         diagnostics = _diagnostics(row[7])
         if IconDiagnosticFlag.CLIENT_NOT_PROVIDED in diagnostics:
             client_unavailable_count += 1

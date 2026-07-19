@@ -1,4 +1,4 @@
-"""Reports whose aggregate counters agree but schema-five evidence disagrees."""
+"""Reports whose aggregate counters agree but current-schema evidence disagrees."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ from w3xtool.object_text_models import ObjectTextState
 type EvidenceKind = Literal["current_text", "relation", "icon_diagnostic"]
 
 
-def write_schema_five_evidence_reports(root: Path, kind: EvidenceKind) -> None:
+def write_batch_schema_evidence_reports(root: Path, kind: EvidenceKind) -> None:
     """Leave aggregate reports valid while changing one precise evidence dimension."""
     match kind:
         case "current_text":
@@ -47,7 +47,7 @@ def write_schema_five_evidence_reports(root: Path, kind: EvidenceKind) -> None:
             assert_never(unreachable)
 
 
-def schema_five_evidence_result(
+def batch_schema_evidence_result(
     result: MapBatchResult,
     kind: EvidenceKind,
 ) -> MapBatchResult:

@@ -28,10 +28,10 @@ class IconFieldDecision:
 
 
 _KNOWN_KEYS: Final[Mapping[str, frozenset[str]]] = {
-    "单位": frozenset(("uico",)),
-    "物品": frozenset(("iico",)),
+    "单位": frozenset(("uico", "art")),
+    "物品": frozenset(("iico", "art")),
     "技能": frozenset(("aart", "art")),
-    "科技": frozenset(("gar1",)),
+    "科技": frozenset(("gar1", "art")),
     "增益": frozenset(("fart",)),
     "效果": frozenset(("fart",)),
 }
@@ -50,10 +50,7 @@ def classify_icon_field(
 ) -> IconFieldDecision:
     """Return the exact icon eligibility decision for one object field."""
     _ = label
-    canonical_key = key.casefold().removeprefix("binary:").removeprefix("field:")
-    base_key, separator, level = canonical_key.rpartition(":")
-    if separator and level.isdecimal():
-        canonical_key = base_key
+    canonical_key = _canonical_key(key)
     normalized_type = value_type.casefold()
     if (
         normalized_type in _FILTERED_VALUE_TYPES
@@ -96,3 +93,41 @@ def classify_icon_field(
     ):
         return IconFieldDecision(IconFieldDisposition.ELIGIBLE, canonical_key)
     return IconFieldDecision(IconFieldDisposition.NOT_AN_ICON_FIELD, canonical_key)
+
+
+def icon_display_priority(
+    category: str,
+    key: str,
+    source_kind: ObjectSourceKind,
+) -> int:
+    """Rank ordinary object icons above auxiliary metadata-confirmed icons."""
+    canonical_key = _canonical_key(key)
+    if source_kind is ObjectSourceKind.BASE and canonical_key == "base:图标":
+        return 2
+    if canonical_key in _KNOWN_KEYS.get(category.casefold(), ()):
+        return 2
+    return 1
+
+
+def split_icon_field_values(
+    category: str,
+    key: str,
+    value: str,
+) -> tuple[tuple[str, str], ...]:
+    """Expand Warcraft's comma-packed ability and technology Art levels."""
+    if (
+        category.casefold() not in ("技能", "科技")
+        or _canonical_key(key) != "art"
+        or "," not in value
+    ):
+        return ((key, value),)
+    return tuple(
+        (f"{key}:{level}", part.strip())
+        for level, part in enumerate(value.split(","), start=1)
+    )
+
+
+def _canonical_key(key: str) -> str:
+    canonical = key.casefold().removeprefix("binary:").removeprefix("field:")
+    base_key, separator, level = canonical.rpartition(":")
+    return base_key if separator and level.isdecimal() else canonical

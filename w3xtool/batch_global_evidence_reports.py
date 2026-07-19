@@ -29,6 +29,7 @@ AXIS_STATUS_HEADER: Final = (
     "档案完整性",
     "知识证据完整性",
     "知识缺口原因",
+    "源覆盖缺口",
     "有效图标引用",
     "已解析图标引用",
     "已过滤非图标字段",
@@ -118,7 +119,7 @@ def format_icon_gap_statistics(
 
 
 def format_axis_status_tsv(state: BatchState) -> str:
-    """Render every result on the three authoritative schema-five axes."""
+    """Render every result on the three authoritative schema-six axes."""
     rows: list[tuple[str, ...]] = [AXIS_STATUS_HEADER]
     rows.extend(_axis_row(result) for result in sorted(state.results, key=_result_key))
     return format_tsv_rows(rows)
@@ -169,6 +170,7 @@ def _axis_row(result: MapBatchResult) -> tuple[str, ...]:
         result.archive_integrity.value,
         result.knowledge_evidence.value,
         ";".join(reason.value for reason in result.knowledge_gap_reasons),
+        str(result.source_coverage_gap_count),
         str(result.valid_icon_reference_count),
         str(result.resolved_icon_reference_count),
         str(result.filtered_icon_field_count),

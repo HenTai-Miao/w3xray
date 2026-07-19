@@ -14,6 +14,7 @@ from .batch_manifest_inventory import (
 from .batch_manifest_io import parse_map_manifest, parse_ownership_record
 from .batch_manifest_models import (
     CONTENT_MANIFEST_NAME,
+    MANIFEST_SCHEMA_VERSION,
     OWNERSHIP_MARKER_NAME,
     REQUIRED_MAP_REPORTS,
     ManifestArtifact,
@@ -39,7 +40,7 @@ def build_map_manifest(
     """Hash every staged artifact in bounded chunks and freeze its inventory."""
     artifacts = _inventory(stage)
     return MapContentManifest(
-        schema_version=1,
+        schema_version=MANIFEST_SCHEMA_VERSION,
         transaction_id=transaction_id,
         source=result.source,
         dependency_fingerprint=result.dependency_fingerprint,
@@ -83,6 +84,7 @@ def summary_from_result(result: MapBatchResult) -> ManifestResultSummary:
         relation_partial_count=result.relation_partial_count,
         unresolved_endpoint_count=result.unresolved_endpoint_count,
         client_unavailable_icon_count=result.client_unavailable_icon_count,
+        source_coverage_gap_count=result.source_coverage_gap_count,
     )
 
 

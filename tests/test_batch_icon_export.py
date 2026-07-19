@@ -116,6 +116,30 @@ def test_named_export_rejects_unc_paths_instead_of_normalizing_them(
     assert not (tmp_path / "server/share/outside.blp").exists()
 
 
+def test_named_export_isolates_non_utf8_unicode_as_one_icon_failure(
+    tmp_path: Path,
+) -> None:
+    # Given: one resolved icon carries a path that the host filesystem cannot encode.
+    resource = _named_resource("Icons\\BTN\ud800Broken.blp", b"BLP1broken")
+
+    # When
+    record = export_named_icon(str(tmp_path), resource)
+
+    # Then: the icon fails locally and every persisted field remains strict UTF-8.
+    assert record.state is IconExportState.UNSAFE_PATH
+    assert record.original_written is False
+    assert record.png_written is False
+    for value in (
+        record.requested_path,
+        record.resolved_path,
+        record.source_path,
+        record.original_relative_path,
+        record.png_relative_path,
+        record.error,
+    ):
+        value.encode("utf-8", errors="strict")
+
+
 def test_named_export_hash_suffixes_a_different_existing_payload(
     tmp_path: Path,
 ) -> None:

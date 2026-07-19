@@ -47,6 +47,7 @@ class KnowledgeEvidence(StrEnum):
 class KnowledgeGapReason(StrEnum):
     """Closed reasons for partial knowledge evidence, in report order."""
 
+    SOURCE_COVERAGE_MISSING = "源覆盖缺失"
     CLIENT_MISSING = "缺少客户端"
     ICON_UNBOUND = "图标未绑定"
     RELATION_PARTIAL = "关系部分"
@@ -75,6 +76,7 @@ def derive_batch_axes(
     relation_partial_count: int,
     unresolved_endpoint_count: int,
     icon_diagnostics: tuple[IconDiagnosticFlag, ...] = (),
+    source_coverage_gap_count: int = 0,
 ) -> BatchAxes:
     """Derive independent axes from exact counters and current evidence only."""
     archive = _derive_archive_integrity(
@@ -88,6 +90,7 @@ def derive_batch_axes(
         current_text_states,
         relation_partial_count,
         unresolved_endpoint_count,
+        source_coverage_gap_count,
     )
     knowledge = KnowledgeEvidence.PARTIAL if reasons else KnowledgeEvidence.COMPLETE
     return BatchAxes(publication, archive, knowledge, reasons)
@@ -142,8 +145,11 @@ def _derive_knowledge_reasons(
     current_text_states: tuple[ObjectTextState, ...],
     relation_partial_count: int,
     unresolved_endpoint_count: int,
+    source_coverage_gap_count: int,
 ) -> tuple[KnowledgeGapReason, ...]:
     reasons: list[KnowledgeGapReason] = []
+    if source_coverage_gap_count > 0:
+        reasons.append(KnowledgeGapReason.SOURCE_COVERAGE_MISSING)
     if (
         ObjectTextState.SOURCE_UNAVAILABLE in current_text_states
         or IconDiagnosticFlag.CLIENT_NOT_PROVIDED in icon_diagnostics

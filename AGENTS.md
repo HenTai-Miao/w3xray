@@ -33,7 +33,7 @@
 - Run map CLI: `uv run main.py cli <map-path>`.
 - Locate current map: `uv run main.py current [--root PATH] [--accept-suggestion]`.
 - Migrate trusted descriptions: `uv run main.py description-cache migrate --legacy-output <schema-1-root> --legacy-cache <schema-2-cache.tsv> --output <owned-cache-root>`.
-- Batch schema 5: `uv run main.py batch <maps-root> --output <v5-root> --game-data <client-or-trusted-icon-root> --description-cache <owned-cache-root>`.
+- Batch schema 6: `uv run main.py batch <maps-root> --output <v6-root> --game-data <client-or-trusted-icon-root> --description-cache <owned-cache-root>`.
 - Snapshot/verify inputs: `uv run main.py integrity snapshot --root LABEL=PATH --output <snapshot.json>` and `uv run main.py integrity verify --snapshot <snapshot.json>`.
 - Inspect retained cache: `uv run main.py integrity retained-cache --active-root <owned-cache-root> --output <report.json>`.
 - Full tests: `uv run w3xray-test` (Windows-safe); direct alternative: `uv run python -m pytest -q`.
@@ -43,8 +43,8 @@
 - Type-check changed Python: `uv run --with basedpyright basedpyright --level error <paths>`; no checked-in basedpyright config.
 
 ## Knowledge
-- `AGENTS.d/runtime.md`: schema-5 commands, protected roots, output semantics, required reports, and resume rules.
-- `AGENTS.d/testing.md`: focused/full/static gates and schema-5 acceptance invariants.
+- `AGENTS.d/runtime.md`: schema-6 commands, protected roots, output semantics, required reports, and resume rules.
+- `AGENTS.d/testing.md`: focused/full/static gates and schema-6 acceptance invariants.
 
 ## Boundaries
 - Do not hand-edit caches/environments: `.venv/`, `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`.
@@ -53,4 +53,4 @@
 - Generated tables: `w3xtool/base_names.py`, `base_objects.py`, `westrings.py`, `jass_natives.py`, `field_meta.py`; update through their `build_*.py` generators.
 - Keep current-map discovery bounded and evidence-based; never add memory reads, `Game.dll` loading, injection, elevation, or runtime decryption.
 - Keep `/Users/zhongerbing/Desktop/Maps`, `map-extract-output`, `map-extract-output-v2`, `map-extract-output-v4`, and `trusted-icon-cache-classic` read-only; never use a historical root as a new-run destination.
-- Generated schema-5 caches, batch outputs, logs, integrity snapshots, and acceptance reports belong outside the repository.
+- Generated caches, schema-6 batch outputs, logs, integrity snapshots, and acceptance reports belong outside the repository.

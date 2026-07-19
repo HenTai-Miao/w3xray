@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Final, assert_never, override
 
 from .game_data_source import GameDataSource
+from .historical_icon_bindings import unique_historical_object_icons
 from .icon_evidence_index import IconEvidenceIndex
 from .icon_evidence_models import (
     FilteredIconEvidence,
@@ -14,7 +15,11 @@ from .icon_evidence_models import (
     ResolvedIconEvidence,
     UnresolvedIconEvidence,
 )
-from .icon_field_evidence import IconFieldDisposition, classify_icon_field
+from .icon_field_evidence import (
+    IconFieldDisposition,
+    classify_icon_field,
+    split_icon_field_values,
+)
 from .icon_path_evidence import plan_icon_path
 from .icon_reference_resolution import resolve_icon_reference
 from .icon_resources import (
@@ -63,6 +68,22 @@ def build_icon_evidence_index(
             history_cache = _history_for(md, game_source)
         return history_cache
 
+    if isinstance(game_source, TrustedIconEvidenceSource):
+        historical_references: list[IconObjectReference] = []
+        objects = (obj for values in md.objects.values() for obj in values)
+        for obj, resource in unique_historical_object_icons(objects, load_history):
+            evidence = GameObjectFieldEvidence(
+                key="history:object-icon",
+                label="图标 - 同图历史绑定",
+                value=resource.requested_path,
+                source=resource.source_path,
+                source_priority=0,
+                value_type="icon",
+            )
+            historical_references.append(_reference(md, obj, evidence))
+            obj.icon = resource.requested_path
+        references = (*references, *historical_references)
+
     ordered_archives = tuple(
         sorted(
             archives,
@@ -108,9 +129,11 @@ def collect_icon_field_references(
     filtered: list[FilteredIconEvidence] = []
     objects = tuple(obj for values in md.objects.values() for obj in values)
     for obj in objects:
-        evidence = obj.icon_field_evidence
-        if evidence is not None:
-            references.append(_reference(md, obj, evidence))
+        evidences = obj.icon_fields_evidence
+        if not evidences and obj.icon_field_evidence is not None:
+            evidences = (obj.icon_field_evidence,)
+        for evidence in evidences:
+            references.extend(_icon_references(md, obj, evidence))
         for field in obj.field_evidence:
             decision = classify_icon_field(
                 obj.category,
@@ -170,8 +193,12 @@ def _reference(
     md: MapData,
     obj: GameObject,
     evidence: GameObjectFieldEvidence,
+    *,
+    field_key: str | None = None,
+    requested_path: str | None = None,
 ) -> IconObjectReference:
-    plan = plan_icon_path(evidence.value)
+    requested = evidence.value if requested_path is None else requested_path
+    plan = plan_icon_path(requested)
     ledger = md.extraction_ledger
     if ledger is None:
         raise IconEvidenceBuildError(md.path)
@@ -183,13 +210,34 @@ def _reference(
         md.path,
         ledger.source_sha256,
         md.path,
-        evidence.key,
+        evidence.key if field_key is None else field_key,
         evidence.label,
         evidence.value_type,
         evidence.source,
         evidence.value_source,
-        evidence.value,
+        plan.original,
         plan.normalized,
+    )
+
+
+def _icon_references(
+    md: MapData,
+    obj: GameObject,
+    evidence: GameObjectFieldEvidence,
+) -> tuple[IconObjectReference, ...]:
+    return tuple(
+        _reference(
+            md,
+            obj,
+            evidence,
+            field_key=field_key,
+            requested_path=requested_path,
+        )
+        for field_key, requested_path in split_icon_field_values(
+            obj.category,
+            evidence.key,
+            evidence.value,
+        )
     )
 
 

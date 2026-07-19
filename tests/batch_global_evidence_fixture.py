@@ -45,6 +45,7 @@ def publish_nonempty_icon_result(
     named_path: str = NAMED_PATH,
     named_digest: str = "c" * 64,
     anonymous_digest: str = "d" * 64,
+    gap_reason: IconGapReason = IconGapReason.NAMED_RESOURCE_MISSING,
 ) -> MapBatchResult:
     """Publish one gap, one named payload, and one anonymous payload."""
     relative = f"地图/{index:03d}_{fingerprint.sha256[:8]}"
@@ -59,6 +60,7 @@ def publish_nonempty_icon_result(
         named_path,
         named_digest,
         anonymous_digest,
+        gap_reason,
     )
     result = _result(base, evidence, exports)
     reports = (
@@ -111,6 +113,7 @@ def _evidence(
     named_path: str,
     named_digest: str,
     anonymous_digest: str,
+    gap_reason: IconGapReason,
 ) -> tuple[IconEvidenceIndex, tuple[IconExportRecord, ...]]:
     gap_reference = _reference(fingerprint, gap_path, "A001")
     named_reference = _reference(fingerprint, named_path, "A002")
@@ -138,7 +141,7 @@ def _evidence(
         unresolved=(
             UnresolvedIconEvidence(
                 gap_reference,
-                IconGapReason.NAMED_RESOURCE_MISSING,
+                gap_reason,
                 (IconDiagnosticFlag.HISTORICAL_EVIDENCE_CHECKED,),
                 (),
             ),

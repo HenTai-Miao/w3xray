@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Final
 
-from .batch_global_evidence_models import GlobalEvidenceIndex
+from .batch_global_evidence_models import GlobalEvidenceIndex, GlobalResolvedIcon
 from .icon_evidence_models import (
     IconCandidateEvidence,
     IconCandidateKind,
@@ -34,6 +34,11 @@ def build_icon_candidate_bindings(
         and bool(row.normalized_path)
         and plan_icon_path(row.normalized_path).normalized == row.normalized_path
     )
+    named_by_path: dict[str, list[GlobalResolvedIcon]] = {}
+    named_by_digest: dict[str, list[GlobalResolvedIcon]] = {}
+    for row in named:
+        named_by_path.setdefault(row.normalized_path.casefold(), []).append(row)
+        named_by_digest.setdefault(row.content_sha256, []).append(row)
     for gap in evidence.gaps:
         if (
             _SHA256.fullmatch(gap.map_sha256) is None
@@ -41,11 +46,8 @@ def build_icon_candidate_bindings(
             or plan_icon_path(gap.normalized_path).normalized != gap.normalized_path
         ):
             continue
-        for row in named:
-            if (
-                gap.map_sha256 != row.map_sha256
-                and gap.normalized_path.casefold() == row.normalized_path.casefold()
-            ):
+        for row in named_by_path.get(gap.normalized_path.casefold(), ()):
+            if gap.map_sha256 != row.map_sha256:
                 candidates.add(
                     IconCandidateEvidence(
                         IconCandidateKind.EXACT_OTHER_MAP_PATH,
@@ -65,11 +67,8 @@ def build_icon_candidate_bindings(
             or anonymous.block_index < 0
         ):
             continue
-        for row in named:
-            if (
-                anonymous.map_sha256 != row.map_sha256
-                and anonymous.content_sha256 == row.content_sha256
-            ):
+        for row in named_by_digest.get(anonymous.content_sha256, ()):
+            if anonymous.map_sha256 != row.map_sha256:
                 candidates.add(
                     IconCandidateEvidence(
                         IconCandidateKind.ANONYMOUS_HASH_MATCH,

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -16,14 +15,11 @@ from w3xtool.icon_evidence_builder import (
 from w3xtool.icon_evidence_index import merge_icon_evidence_indexes
 from w3xtool.icon_evidence_models import (
     IconArchiveLayer,
+    IconDiagnosticFlag,
     IconGapReason,
     IconResolutionLayer,
 )
-from w3xtool.icon_resources import (
-    HistoricalIconEvidenceSet,
-    IconObjectReference,
-    NamedIconResource,
-)
+from w3xtool.icon_resources import IconObjectReference
 from w3xtool.map_data import GameObject, GameObjectFieldEvidence, MapData
 
 _DIGEST = "a" * 64
@@ -43,47 +39,7 @@ class _Archive:
         return self._files[name.casefold()]
 
 
-class _TrustedSource:
-    def __init__(
-        self,
-        history: HistoricalIconEvidenceSet,
-        files: dict[str, bytes] | None = None,
-    ) -> None:
-        self._history = history
-        self.history_calls = 0
-        self._files = {
-            name.casefold(): payload for name, payload in (files or {}).items()
-        }
-
-    def historical_icons_for(self, source_digest: str) -> HistoricalIconEvidenceSet:
-        assert source_digest == _DIGEST
-        self.history_calls += 1
-        return self._history
-
-    def has_exact_file(self, name: str) -> bool:
-        return name.casefold() in self._files
-
-    def read_exact_file(self, name: str) -> bytes:
-        return self._files[name.casefold()]
-
-    def has_file(self, name: str) -> bool:
-        return self.has_exact_file(name)
-
-    def read_file(self, name: str) -> bytes:
-        return self.read_exact_file(name)
-
-    def close(self) -> None:
-        """The fake owns no resources."""
-
-
-class _FailingHistorySource(_TrustedSource):
-    def historical_icons_for(self, source_digest: str) -> HistoricalIconEvidenceSet:
-        assert source_digest == _DIGEST
-        self.history_calls += 1
-        raise AssertionError("history must not load before an archive hit")
-
-
-def test_resolution_uses_current_map_before_later_layers() -> None:
+def test_resolution_uses_current_map_before_later_layers(tmp_path: Path) -> None:
     # Given
     md = _map_data(_PATH)
     archives = (
@@ -93,13 +49,13 @@ def test_resolution_uses_current_map_before_later_layers() -> None:
             "logical-map.w3x",
         ),
     )
-    trusted = _TrustedSource(
-        HistoricalIconEvidenceSet(available=True, resources=()),
-        {_PATH: b"BLP1cache"},
-    )
+    cached = tmp_path / _PATH.replace("\\", "/")
+    cached.parent.mkdir(parents=True)
+    cached.write_bytes(b"BLP1cache")
+    client = DirectoryDataSource(str(tmp_path))
 
     # When
-    index = build_icon_evidence_index(md, archives, trusted)
+    index = build_icon_evidence_index(md, archives, client)
 
     # Then
     row = index.resolved[0]
@@ -131,75 +87,6 @@ def test_resolution_layer_order_is_independent_of_archive_input_order() -> None:
     # Then
     assert row.layer is IconResolutionLayer.CURRENT_MAP
     assert row.payload == _PAYLOAD
-
-
-def test_current_map_hit_does_not_load_unusable_history() -> None:
-    # Given
-    source = _FailingHistorySource(
-        HistoricalIconEvidenceSet(available=False, resources=())
-    )
-    archives = (
-        IconArchiveLayer(
-            IconResolutionLayer.CURRENT_MAP,
-            _Archive("current", {_PATH: _PAYLOAD}),
-            "logical-map.w3x",
-        ),
-    )
-
-    # When
-    row = build_icon_evidence_index(_map_data(_PATH), archives, source).resolved[0]
-
-    # Then
-    assert row.layer is IconResolutionLayer.CURRENT_MAP
-    assert source.history_calls == 0
-
-
-def test_history_is_loaded_once_for_multiple_references_in_one_build() -> None:
-    # Given
-    md = _map_data(_PATH)
-    md.objects["技能"].append(replace(md.objects["技能"][0], obj_id="A002"))
-    source = _TrustedSource(HistoricalIconEvidenceSet(available=True, resources=()))
-
-    # When
-    index = build_icon_evidence_index(md, (), source)
-
-    # Then
-    assert len(index.unresolved) == 2
-    assert source.history_calls == 1
-
-
-def test_same_map_history_replaces_old_object_labels_on_exact_path_match() -> None:
-    # Given
-    historical = _historical_resource(_PATH, object_name="旧标签")
-    source = _TrustedSource(
-        HistoricalIconEvidenceSet(available=True, resources=(historical,))
-    )
-
-    # When
-    index = build_icon_evidence_index(_map_data(_PATH), (), source)
-
-    # Then
-    row = index.resolved[0]
-    assert row.layer is IconResolutionLayer.SAME_MAP_HISTORY
-    assert row.reference.object_name == "当前对象"
-    assert row.attempts[-1].source_path == "可信图标缓存:war3.mpq"
-
-
-def test_same_map_history_must_match_current_requested_path() -> None:
-    # Given
-    source = _TrustedSource(
-        HistoricalIconEvidenceSet(
-            available=True,
-            resources=(_historical_resource(r"Other\BTNHero.blp"),),
-        )
-    )
-
-    # When
-    index = build_icon_evidence_index(_map_data(_PATH), (), source)
-
-    # Then
-    assert not index.resolved
-    assert index.unresolved[0].reason is IconGapReason.HISTORICAL_CLIENT_MISS
 
 
 def test_basename_candidate_never_resolves_from_a_real_client(tmp_path: Path) -> None:
@@ -242,6 +129,94 @@ def test_selected_icon_reference_retains_field_wts_and_logical_map_identity() ->
         _PATH,
         _PATH,
     )
+
+
+def test_invalid_reference_does_not_claim_that_client_data_was_needed() -> None:
+    # Given / When: an author-defined empty icon cannot be looked up anywhere.
+    row = build_icon_evidence_index(_map_data(""), (), None).unresolved[0]
+
+    # Then: preserve the invalid field without inventing a client dependency.
+    assert row.reason is IconGapReason.INVALID_REFERENCE
+    assert IconDiagnosticFlag.CLIENT_NOT_PROVIDED not in row.diagnostics
+    assert row.attempts == ()
+
+
+def test_technology_art_list_is_split_into_lossless_level_references() -> None:
+    # Given: optimized UpgradeData text stores every level icon in one Art cell.
+    value = "Icons\\One.blp, Icons\\Two.blp,Icons\\Two.blp"
+    evidence = GameObjectFieldEvidence(
+        key="Art",
+        label="图标",
+        value=value,
+        source="war3map UpgradeData.txt",
+        source_priority=15,
+        value_type="string",
+    )
+    obj = GameObject(
+        category="科技",
+        ext="txt",
+        obj_id="R001",
+        base_id="R001",
+        name="测试升级",
+        is_custom=True,
+        icon="Icons\\One.blp",
+        field_evidence=(evidence,),
+        icon_field_evidence=evidence,
+    )
+    md = MapData("logical-map.w3x", "fixture", objects={"科技": [obj]})
+    md.extraction_ledger = build_extraction_ledger(md.path, _DIGEST, ())
+
+    # When: strict icon references are built.
+    index = build_icon_evidence_index(md, (), None)
+
+    # Then: all levels survive, including two levels sharing the same image.
+    assert tuple(row.reference.requested_path for row in index.unresolved) == (
+        r"Icons\One.blp",
+        r"Icons\Two.blp",
+        r"Icons\Two.blp",
+    )
+    assert tuple(row.reference.field_key for row in index.unresolved) == (
+        "Art:1",
+        "Art:2",
+        "Art:3",
+    )
+
+
+def test_ability_art_list_is_split_into_lossless_level_references() -> None:
+    # Given: ability string data stores multiple level icons in one Art cell.
+    md = _ability_art_map_data(r"Icons\One.blp, Icons\Two.blp")
+
+    # When: strict icon references are built.
+    index = build_icon_evidence_index(md, (), None)
+
+    # Then: every level retains its own field identity and requested path.
+    assert tuple(row.reference.requested_path for row in index.unresolved) == (
+        r"Icons\One.blp",
+        r"Icons\Two.blp",
+    )
+    assert tuple(row.reference.field_key for row in index.unresolved) == (
+        "Art:1",
+        "Art:2",
+    )
+
+
+def test_empty_ability_art_levels_are_not_a_named_comma_path() -> None:
+    # Given: two author-empty ability icon levels are serialized as one comma.
+    md = _ability_art_map_data(",")
+
+    # When: strict icon references are built.
+    index = build_icon_evidence_index(md, (), None)
+
+    # Then: preserve both empty levels without inventing an archive named comma.
+    assert tuple(row.reference.field_key for row in index.unresolved) == (
+        "Art:1",
+        "Art:2",
+    )
+    assert tuple(row.reference.requested_path for row in index.unresolved) == ("", "")
+    assert all(
+        row.reason is IconGapReason.INVALID_REFERENCE for row in index.unresolved
+    )
+    assert all(row.reference.normalized_path == "" for row in index.unresolved)
 
 
 def test_filtered_non_icon_field_is_not_an_unresolved_gap() -> None:
@@ -328,17 +303,26 @@ def _map_data(
     return md
 
 
-def _historical_resource(
-    path: str,
-    *,
-    object_name: str = "历史对象",
-) -> NamedIconResource:
-    return NamedIconResource(
-        requested_path=path,
-        normalized_path=path,
-        resolved_path=path,
-        source_path="可信图标缓存:war3.mpq",
-        payload=b"BLP1history",
-        sha256="f" * 64,
-        objects=(IconObjectReference("技能", "OLD1", object_name),),
+def _ability_art_map_data(value: str) -> MapData:
+    evidence = GameObjectFieldEvidence(
+        key="Art",
+        label="图标",
+        value=value,
+        source=r"units\campaignabilitystrings.txt",
+        source_priority=15,
+        value_type="string",
     )
+    obj = GameObject(
+        category="技能",
+        ext="txt",
+        obj_id="A001",
+        base_id="A001",
+        name="测试技能",
+        is_custom=True,
+        icon=value,
+        field_evidence=(evidence,),
+        icon_field_evidence=evidence,
+    )
+    md = MapData("logical-map.w3x", "fixture", objects={"技能": [obj]})
+    md.extraction_ledger = build_extraction_ledger(md.path, _DIGEST, ())
+    return md

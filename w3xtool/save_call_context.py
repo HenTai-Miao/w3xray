@@ -13,21 +13,37 @@ _FILE_ARG_INDEX: Final = {
     "PreloadGenEnd": 0,
 }
 _GAMECACHE_KEY_APIS: Final = {
-    "StoreInteger", "StoreReal", "StoreBoolean", "StoreString", "StoreUnit",
-    "GetStoredInteger", "GetStoredReal", "GetStoredBoolean", "GetStoredString", "GetStoredUnit",
-    "FlushStoredMission", "SyncStoredInteger", "SyncStoredReal", "SyncStoredBoolean", "SyncStoredString",
+    "StoreInteger",
+    "StoreReal",
+    "StoreBoolean",
+    "StoreString",
+    "StoreUnit",
+    "GetStoredInteger",
+    "GetStoredReal",
+    "GetStoredBoolean",
+    "GetStoredString",
+    "GetStoredUnit",
+    "FlushStoredMission",
+    "SyncStoredInteger",
+    "SyncStoredReal",
+    "SyncStoredBoolean",
+    "SyncStoredString",
 }
 _SYNC_ARG_INDEX: Final = {
     "BlzSendSyncData": 0,
     "BlzTriggerRegisterPlayerSyncEvent": 2,
 }
 _PLATFORM_KEY_ARG1: Final = {
-    "DzAPI_Map_SaveServerValue", "DzAPI_Map_GetServerValue",
-    "DzAPI_Map_SavePublicArchive", "DzAPI_Map_GetPublicArchive",
-    "KKAPI_SaveServerValue", "KKAPI_GetServerValue",
+    "DzAPI_Map_SaveServerValue",
+    "DzAPI_Map_GetServerValue",
+    "DzAPI_Map_SavePublicArchive",
+    "DzAPI_Map_GetPublicArchive",
+    "KKAPI_SaveServerValue",
+    "KKAPI_GetServerValue",
 }
 _PLATFORM_SECTION_KEY_ARG12: Final = {
-    "DzAPI_Map_StoreInteger", "DzAPI_Map_GetStoredInteger",
+    "DzAPI_Map_StoreInteger",
+    "DzAPI_Map_GetStoredInteger",
 }
 
 
@@ -82,7 +98,8 @@ def extract_call_args(line: str, start: int) -> tuple[str, ...]:
     depth = 0
     quote = ""
     escaped = False
-    for char in line[start:]:
+    for index in range(start, len(line)):
+        char = line[index]
         if quote:
             chunk.append(char)
             if escaped:

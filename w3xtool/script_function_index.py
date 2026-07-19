@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from bisect import bisect_left, bisect_right
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Final
 
 from .map_data import MapData
@@ -53,35 +55,49 @@ class _FunctionRange:
     summary: str
 
 
+@dataclass(frozen=True, slots=True)
+class _PrimaryCallIndex:
+    by_source: Mapping[str, tuple[ScriptCall, ...]]
+    lines_by_source: Mapping[str, tuple[int, ...]]
+    counts_by_name: Mapping[str, int]
+
+
 def build_script_function_index(md: MapData) -> ScriptFunctionIndex:
     """Return function ranges with function-scoped call and object-code clues."""
     calls = build_script_call_catalog(md).calls
+    call_index = _build_primary_call_index(calls)
     ranges = tuple(
         item
         for source, text in analysis_script_texts(md)
         for item in _function_ranges(source, text)
     )
-    functions = tuple(_function_row(item, calls) for item in ranges)
+    functions = tuple(_function_row(item, call_index) for item in ranges)
     return ScriptFunctionIndex(tuple(sorted(functions, key=_function_sort_key)))
 
 
 def format_script_function_index_tsv(index: ScriptFunctionIndex) -> str:
     """Format function-scoped script clues as TSV."""
-    rows = ["函数\t来源\t起始行\t结束行\t行数\t被调用次数\t内部调用数\t机制\t对象码\t调用函数\t摘要"]
+    rows = [
+        "函数\t来源\t起始行\t结束行\t行数\t被调用次数\t内部调用数\t机制\t对象码\t调用函数\t摘要"
+    ]
     for item in index.functions:
-        rows.append("\t".join((
-            _tsv(item.name),
-            _tsv(item.source),
-            str(item.start_line),
-            str(item.end_line),
-            str(item.line_count),
-            str(item.inbound_calls),
-            str(item.internal_calls),
-            _tsv("; ".join(item.mechanisms)),
-            _tsv("; ".join(item.object_codes)),
-            _tsv("; ".join(item.called_functions)),
-            _tsv(item.summary),
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    _tsv(item.name),
+                    _tsv(item.source),
+                    str(item.start_line),
+                    str(item.end_line),
+                    str(item.line_count),
+                    str(item.inbound_calls),
+                    str(item.internal_calls),
+                    _tsv("; ".join(item.mechanisms)),
+                    _tsv("; ".join(item.object_codes)),
+                    _tsv("; ".join(item.called_functions)),
+                    _tsv(item.summary),
+                )
+            )
+        )
     return "\n".join(rows) + "\n"
 
 
@@ -117,24 +133,55 @@ def _function_ranges(source: str, text: str) -> Iterable[_FunctionRange]:
         index += 1
 
 
-def _function_row(item: _FunctionRange, calls: tuple[ScriptCall, ...]) -> ScriptFunction:
-    internal = tuple(call for call in calls if _inside(item, call) and _is_primary_call(call))
-    inbound = tuple(
-        call for call in calls
-        if call.function == item.name and not _inside(item, call) and _is_primary_call(call)
-    )
+def _function_row(item: _FunctionRange, calls: _PrimaryCallIndex) -> ScriptFunction:
+    internal = _calls_inside(item, calls)
+    recursive_calls = sum(call.function == item.name for call in internal)
     return ScriptFunction(
         name=item.name,
         source=item.source,
         start_line=item.start_line,
         end_line=item.end_line,
-        inbound_calls=len(inbound),
+        inbound_calls=calls.counts_by_name.get(item.name, 0) - recursive_calls,
         internal_calls=len(internal),
         mechanisms=_mechanism_summary(internal),
-        object_codes=tuple(sorted({code for call in internal for code in call.object_codes})),
+        object_codes=tuple(
+            sorted({code for call in internal for code in call.object_codes})
+        ),
         called_functions=_unique_ordered(call.function for call in internal),
         summary=item.summary,
     )
+
+
+def _build_primary_call_index(calls: Iterable[ScriptCall]) -> _PrimaryCallIndex:
+    grouped: dict[str, list[ScriptCall]] = {}
+    counts: dict[str, int] = {}
+    for call in calls:
+        if not _is_primary_call(call):
+            continue
+        grouped.setdefault(call.source, []).append(call)
+        counts[call.function] = counts.get(call.function, 0) + 1
+    by_source = {source: tuple(rows) for source, rows in grouped.items()}
+    return _PrimaryCallIndex(
+        MappingProxyType(by_source),
+        MappingProxyType(
+            {
+                source: tuple(call.line for call in rows)
+                for source, rows in by_source.items()
+            },
+        ),
+        MappingProxyType(counts),
+    )
+
+
+def _calls_inside(
+    item: _FunctionRange,
+    calls: _PrimaryCallIndex,
+) -> tuple[ScriptCall, ...]:
+    source_calls = calls.by_source.get(item.source, ())
+    source_lines = calls.lines_by_source.get(item.source, ())
+    start = bisect_left(source_lines, item.start_line)
+    end = bisect_right(source_lines, item.end_line)
+    return tuple(call for call in source_calls[start:end] if _inside(item, call))
 
 
 def _inside(item: _FunctionRange, call: ScriptCall) -> bool:

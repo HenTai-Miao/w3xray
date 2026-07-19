@@ -23,7 +23,7 @@ from .icon_evidence_models import (
     IconResolutionLayer,
 )
 from .icon_gap_reference_codec import parse_icon_gap_references
-from .icon_path_evidence import plan_icon_path
+from .icon_path_evidence import is_canonical_icon_gap_path, plan_icon_path
 from .icon_resources import IconObjectReference
 
 
@@ -41,14 +41,14 @@ def read_global_gap_rows(
     rows = read_report_rows_bytes(content, "图标未解析.tsv", UNRESOLVED_ICON_HEADER)
     for row in rows:
         normalized = row[_GAP_COLUMNS["规范路径"]]
-        if not normalized or plan_icon_path(normalized).normalized != normalized:
-            raise GlobalEvidenceError("invalid normalized global gap path")
         try:
             reason = IconGapReason(row[_GAP_COLUMNS["主原因"]])
             diagnostics = _diagnostics(row[_GAP_COLUMNS["诊断标志"]])
             identities = parse_icon_gap_references(row[_GAP_COLUMNS["引用集合"]])
         except ValueError as exc:
             raise GlobalEvidenceError("invalid global gap evidence") from exc
+        if not is_canonical_icon_gap_path(normalized, reason):
+            raise GlobalEvidenceError("invalid normalized global gap path")
         map_path = row[_GAP_COLUMNS["地图路径"]]
         map_scope = row[_GAP_COLUMNS["子地图"]]
         references = tuple(

@@ -56,7 +56,7 @@ def _source_archive() -> _MemoryArchive:
             "war3map.lua": "-- 圣骑士\nDoNothing()\n".encode("gbk"),
             "war3map.wts": "STRING 1\n{\n开始游戏\n}\n".encode("gbk"),
             "war3map.wtg": b"\xffWTG-binary\x00",
-            "war3map.wct": _classic_wct("call BJDebugMsg(\"自定义代码\")"),
+            "war3map.wct": _classic_wct('call BJDebugMsg("自定义代码")'),
         }
     )
 
@@ -141,6 +141,19 @@ def test_analysis_script_texts_returns_sorted_readable_analysis_sources() -> Non
         ("war3map.j", "jass"),
         ("war3map.lua", "lua"),
     )
+
+
+def test_analysis_script_texts_excludes_nul_and_whitespace_placeholders() -> None:
+    # Given: protected archives may expose nominal script members without code.
+    md = MapData(path="x.w3x", name="x")
+    md.scripts = {
+        "war3map.j": "\x00",
+        "war3map.lua": "\r\n\t ",
+        "notes.txt": "call Confirmed()",
+    }
+
+    # When / Then: only substantive readable code is accepted for analysis.
+    assert analysis_script_texts(md) == (("notes.txt", "call Confirmed()"),)
 
 
 def test_best_script_text_keeps_legacy_primary_preference() -> None:
@@ -275,7 +288,9 @@ end
 
     # When / Then: the Lua result remains visible.
     recipes = recipes_from_map(md)
-    assert [(item.ingredients, item.result) for item in recipes] == [(["I001", "I002"], "I003")]
+    assert [(item.ingredients, item.result) for item in recipes] == [
+        (["I001", "I002"], "I003")
+    ]
 
 
 def test_exports_and_joined_scans_use_only_analysis_texts_with_source_labels() -> None:

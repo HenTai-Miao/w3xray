@@ -14,9 +14,12 @@ import w3xtool.batch_map_processing as batch_map_processing
 from w3xtool.batch_map_processing import process_one_map
 from w3xtool.batch_item_reports import build_batch_item_reports
 from w3xtool.batch_models import MapBatchResult, MapBatchState
+from w3xtool.batch_status import KnowledgeGapReason
+from w3xtool.batch_status import PublicationResult
 from w3xtool.batch_runner import BatchOptions, fingerprint_source
 from w3xtool.item_relation_models import ItemRelationIndex, RelationCompleteness
 from w3xtool.load_context import MapLoadContext
+from w3xtool.map_data import MapData
 from w3xtool.object_text_models import (
     ObjectTextIndex,
     ObjectTextState,
@@ -118,6 +121,44 @@ def test_process_one_map_counts_incomplete_relations_and_marks_partial(
     assert result.relation_incomplete_count == 2
 
 
+def test_process_one_map_marks_placeholder_only_source_partial(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given / When: loading succeeds but exposes no substantive analysis source.
+    result, _output, _source = _process_loaded_map(
+        tmp_path,
+        monkeypatch,
+        source_coverage_missing=True,
+    )
+
+    # Then: publication succeeds while knowledge remains explicitly partial.
+    assert result.state is MapBatchState.PARTIAL
+    assert result.knowledge_gap_reasons == (KnowledgeGapReason.SOURCE_COVERAGE_MISSING,)
+    assert result.source_coverage_gap_count == 1
+
+
+def test_process_one_map_publishes_when_one_icon_path_is_not_utf8(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given / When: one map field contains an isolated surrogate from malformed text.
+    result, output, archive_source = _process_loaded_map(
+        tmp_path,
+        monkeypatch,
+        icon_path="Icons\\BTN\ud800Broken.blp",
+    )
+
+    # Then: the map still publishes, while the bad field remains an explicit gap.
+    assert result.publication_result is PublicationResult.PUBLISHED
+    assert result.state is MapBatchState.PARTIAL
+    assert result.unresolved_icon_count == 1
+    report = (output / "图标未解析.tsv").read_text(encoding="utf-8")
+    assert r"\ud800" in report
+    assert "invalid_reference" in report
+    assert archive_source.closed
+
+
 def test_batch_item_reports_aggregate_campaign_children_without_rescanning() -> None:
     # Given
     root, root_source = loaded_map("root.w3n", r"Icons\BTNHero.blp")
@@ -164,21 +205,89 @@ def test_description_counts_include_current_and_lower_priority_evidence() -> Non
     assert source.closed
 
 
+def test_batch_item_reports_count_placeholder_only_map_as_source_gap() -> None:
+    # Given: a protected map exposes metadata and a one-NUL JASS placeholder only.
+    root = MapData(
+        path="opaque.w3x",
+        name="不透明地图",
+        scripts={"war3map.j": "\x00"},
+        all_files=["war3map.j", "war3map.w3i", "war3map.mmp", "war3mapMap.blp"],
+    )
+
+    # When: batch knowledge evidence is aggregated.
+    reports = build_batch_item_reports(root)
+
+    # Then: zero observed gaps are not mistaken for complete source coverage.
+    assert reports.source_coverage_gap_count == 1
+
+
+@pytest.mark.parametrize(
+    "source_name",
+    ("war3map.w3u", "war3map.wtg", "war3mapUnits.doo"),
+)
+def test_batch_item_reports_accept_validated_empty_analysis_source(
+    source_name: str,
+) -> None:
+    # Given: a standard analysis source is readable and valid but has zero records.
+    root = MapData(
+        path="empty.w3x",
+        name="空地图",
+        all_files=[source_name],
+    )
+
+    # When: batch knowledge evidence is aggregated.
+    reports = build_batch_item_reports(root)
+
+    # Then: an author-confirmed empty source is not treated as unavailable.
+    assert reports.source_coverage_gap_count == 0
+
+
+def test_batch_item_reports_assess_campaign_children_not_container_shell() -> None:
+    # Given: a campaign shell contains one child with substantive script evidence.
+    root = MapData(path="campaign.w3n", name="战役")
+    child = MapData(
+        path="chapter.w3x",
+        name="章节",
+        scripts={"war3map.j": "call Confirmed()"},
+    )
+    root.sub_maps.append(child)
+
+    # When: campaign knowledge evidence is aggregated.
+    reports = build_batch_item_reports(root)
+
+    # Then: only the analysis-bearing child contributes source coverage status.
+    assert reports.maps == (root, child)
+    assert reports.source_coverage_gap_count == 0
+
+
 def _process_loaded_map(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     *,
     text_state: ObjectTextState = ObjectTextState.MAP_VALUE,
     relation_completeness: RelationCompleteness = RelationCompleteness.COMPLETE,
+    source_coverage_missing: bool = False,
+    icon_path: str = r"Icons\BTNHero.blp",
 ) -> tuple[MapBatchResult, Path, ArchiveSource]:
     source_path = tmp_path / "sample.w3x"
     source_path.write_bytes(b"map")
     loaded, archive_source = loaded_map(
         str(source_path),
-        r"Icons\BTNHero.blp",
+        icon_path,
         text_state=text_state,
         relation_completeness=relation_completeness,
     )
+    if source_coverage_missing:
+        loaded.objects = {}
+        loaded.scripts = {"war3map.j": "\x00"}
+        loaded.all_files = [
+            "war3map.j",
+            "war3map.w3i",
+            "war3map.mmp",
+            "war3mapMap.blp",
+        ]
+        loaded.object_texts = ObjectTextIndex.build(())
+        loaded.item_relations = ItemRelationIndex.build(())
     monkeypatch.setattr(
         batch_map_processing, "load_map", lambda *_args, **_kwargs: loaded
     )

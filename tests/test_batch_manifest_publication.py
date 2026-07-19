@@ -12,10 +12,10 @@ from tests.batch_manifest_fixture import (
     publish_manifest_fixture,
     write_empty_manifest_stage,
 )
-from tests.batch_schema_five_evidence_fixture import (
+from tests.batch_schema_evidence_fixture import (
     EvidenceKind,
-    schema_five_evidence_result,
-    write_schema_five_evidence_reports,
+    batch_schema_evidence_result,
+    write_batch_schema_evidence_reports,
 )
 from w3xtool.batch_manifest_validation import build_map_manifest, verify_map_publication
 
@@ -122,14 +122,14 @@ def test_publication_validation_rejects_report_count_drift(tmp_path: Path) -> No
         ("icon_diagnostic", "client_unavailable_icon_count"),
     ),
 )
-def test_publication_validation_rejects_schema_five_evidence_report_drift(
+def test_publication_validation_rejects_batch_schema_evidence_report_drift(
     tmp_path: Path,
     kind: EvidenceKind,
     expected_detail: str,
 ) -> None:
     # Given: aggregate reports agree but one current/evidence dimension drifts.
-    result = schema_five_evidence_result(write_empty_manifest_stage(tmp_path), kind)
-    write_schema_five_evidence_reports(tmp_path, kind)
+    result = batch_schema_evidence_result(write_empty_manifest_stage(tmp_path), kind)
+    write_batch_schema_evidence_reports(tmp_path, kind)
     published = publish_manifest_fixture(tmp_path, result)
 
     # When: reuse validation reconciles the manifest with required reports.

@@ -1,4 +1,4 @@
-"""Required-report reconciliation for persisted schema-five evidence counters."""
+"""Required-report reconciliation for persisted schema-six evidence counters."""
 
 from __future__ import annotations
 

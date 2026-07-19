@@ -51,13 +51,22 @@ def validate_icon_publication(
     resolved_conflict: bool = False,
     resolved_other_map: bool = False,
     diagnostics_json: str | None = None,
+    requested_path: str = _PATH,
+    normalized_path: str = _PATH,
+    reason: IconGapReason = IconGapReason.NAMED_RESOURCE_MISSING,
 ) -> PublicationValidation:
     """Publish chosen icon reports and run the real publication validator."""
     fingerprint = SourceFingerprint("/maps/map.w3x", 3, 4, _DIGEST)
     base = empty_result(fingerprint, "地图/001_map_aaaaaaaa")
     _ = write_empty_publication(root, base, "1" * 32)
     _remove_metadata(root)
-    index = _icon_index(resolved_conflict, resolved_other_map)
+    index = _icon_index(
+        resolved_conflict,
+        resolved_other_map,
+        requested_path=requested_path,
+        normalized_path=normalized_path,
+        reason=reason,
+    )
     exports = (_failed_export(index.resolved[0].reference),) if index.resolved else ()
     gap_text = format_unresolved_icon_tsv(index)
     if reference_json is not None:
@@ -98,8 +107,15 @@ def validate_missing_gap_publication(root: Path) -> PublicationValidation:
 def _icon_index(
     resolved_conflict: bool,
     resolved_other_map: bool,
+    *,
+    requested_path: str,
+    normalized_path: str,
+    reason: IconGapReason,
 ) -> IconEvidenceIndex:
-    reference = _reference()
+    reference = _reference(
+        requested_path=requested_path,
+        normalized_path=normalized_path,
+    )
     resolved_reference = (
         _reference(map_path="other-child.w3x", digest="c" * 64)
         if resolved_other_map
@@ -125,7 +141,7 @@ def _icon_index(
         unresolved=(
             UnresolvedIconEvidence(
                 reference,
-                IconGapReason.NAMED_RESOURCE_MISSING,
+                reason,
                 (),
                 (),
             ),
@@ -202,6 +218,8 @@ def _reference(
     *,
     map_path: str = "map.w3x",
     digest: str = _DIGEST,
+    requested_path: str = _PATH,
+    normalized_path: str = _PATH,
 ) -> IconObjectReference:
     return IconObjectReference(
         "技能",
@@ -216,8 +234,8 @@ def _reference(
         "icon",
         "war3map.w3a",
         "",
-        _PATH,
-        _PATH,
+        requested_path,
+        normalized_path,
     )
 
 

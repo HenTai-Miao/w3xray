@@ -52,12 +52,12 @@ def test_dependency_fingerprint_binds_extraction_logic_revision(
     assert changed != current
 
 
-def test_schema_five_uses_extraction_revision_five() -> None:
-    # Given: schema 5 binds explicit trusted-description cache generations.
-    schema_five_revision = 5
+def test_batch_extraction_revision_is_six() -> None:
+    # Given: the dependency fingerprint binds extraction semantics separately.
+    expected_revision = 6
 
-    # When / Then: schema-4 publications cannot be silently reused.
-    assert batch_dependencies.BATCH_EXTRACTION_REVISION == schema_five_revision
+    # When / Then: older extraction revisions cannot be silently reused.
+    assert batch_dependencies.BATCH_EXTRACTION_REVISION == expected_revision
 
 
 def test_classic_dependency_changes_with_archive_identity(tmp_path: Path) -> None:

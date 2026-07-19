@@ -1,6 +1,6 @@
 # Runtime Knowledge
 
-## Schema-5 revision-5 workflow
+## Schema-6 revision-6 workflow
 
 Run from the repository root with explicit paths:
 
@@ -11,7 +11,7 @@ uv run main.py description-cache migrate \
   --output <owned-cache-root>
 
 uv run main.py batch <maps-root> \
-  --output <v5-root> \
+  --output <v6-root> \
   --game-data <client-or-trusted-icon-root> \
   --description-cache <owned-cache-root>
 ```
@@ -76,7 +76,7 @@ Do not inspect or mutate the real-data roots during ordinary development. Task 1
 - Read-only maps: `/Users/zhongerbing/Desktop/Maps`.
 - Read-only historical evidence: `/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output`, `map-extract-output-v2`, and `map-extract-output-v4`.
 - Read-only icon evidence: `/Users/zhongerbing/Documents/xm/war3_xg/trusted-icon-cache-classic`.
-- New external outputs: `trusted-description-cache-v5`, `map-extract-output-v5`, and `schema5-*-integrity.json` below `/Users/zhongerbing/Documents/xm/war3_xg/`.
+- New external outputs: `trusted-description-cache-v5`, `map-extract-output-v6`, and `schema6-*-integrity.json` below `/Users/zhongerbing/Documents/xm/war3_xg/`.
 
 Development and Task 10 acceptance use only `tmp_path`/system-temp fixtures. Generated outputs never belong in the repository.
 
@@ -87,5 +87,9 @@ Each map publication requires `内容清单.json`, `.w3xray-batch-owned`, and al
 Each immutable global generation binds the ordinary summary/state/retry/cache/diagnostic payloads plus `图标缺口汇总.tsv`, `图标候选绑定.tsv`, `图标缺口统计.txt`, and `三轴状态汇总.tsv` through `全局清单.json`. Root copies are compatibility mirrors; `.w3xray-global/current.json` selecting a validated generation is the only resume authority.
 
 `图标候选绑定.tsv` is non-authoritative suggestion evidence and every row remains unadopted. `三轴状态汇总.tsv` keeps publication result, archive integrity, and knowledge completeness independent. Current-text counters use only `是否当前值=是`; all text evidence remains in the report and GUI “全部证据” view.
+
+Icon evidence retains every current eligible role, while the compatibility display icon prefers the ordinary unit/item interface key over auxiliary metadata. Ability and technology comma-packed `Art` values expand into lossless numbered levels; empty levels remain explicit invalid references rather than a named comma path. An object with no current icon evidence may use trusted history only from the exact source-map SHA-256 and exact `(category, rawcode)` identity when that identity has one unique historical path. Explicit current fields and conflicts are never backfilled.
+
+The 2026-07-19 revision-6 three-defect acceptance root is `map-extract-output-v6-three-fix-20260719T133434Z`. It processed and published 39/39 maps in 2,354.78 seconds, then strictly reused 39/39 in 1,845.78 seconds; both runs had zero failures, cancellations, and timeouts. It wrote 82,880 original/PNG pairs with zero physical failures, and the source integrity snapshot revalidated unchanged. Unencodable virtual icon paths now become escaped `invalid_reference` evidence instead of aborting a map. The sole zero-object map remains `部分完成` with one source-coverage gap. The slowest map, `繁星绘卷9.6`, completed in 127,561 ms under the 900-second limit; global candidate derivation produced the same 1,986 rows in 16.01 seconds after replacing the anonymous-by-named Cartesian scan with path/digest indexes. The screenshot map remains 695/695 item rawcodes through 125 exact-map historical bindings. Remaining named-source gaps are evidence deficits, not write failures; see `docs/batch-icon-description-extraction.md` for the reason counts.
 
 Retirement/recovery may act only on direct owned children whose identities, manifests, report bytes, and source bindings are re-proved under the output lease. Unknown paths, symlinks, foreign sources, private transaction paths, and unprovable objects remain untouched.

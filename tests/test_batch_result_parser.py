@@ -1,7 +1,8 @@
-"""Schema-five authoritative batch-result wire contracts."""
+"""Schema-six authoritative batch-result wire contracts."""
 
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 from typing import TypedDict
 
@@ -40,21 +41,42 @@ class _StatePayload(TypedDict):
     results: list[_ResultPayload]
 
 
-def test_schema_five_result_round_trips_authoritative_axes() -> None:
+def test_schema_six_result_round_trips_authoritative_axes() -> None:
     # Given
     result = _published_result()
-    state = BatchState(5, (result,))
+    state = BatchState(6, (result,))
 
     # When
     restored = parse_batch_state_json(format_batch_state_json(state))
 
     # Then
-    assert BATCH_SCHEMA_VERSION == 5
+    assert BATCH_SCHEMA_VERSION == 6
     assert restored == state
     assert restored.results[0].publication_result is PublicationResult.PUBLISHED
     assert restored.results[0].knowledge_gap_reasons == (
         KnowledgeGapReason.ICON_UNBOUND,
     )
+
+
+def test_batch_state_persists_source_coverage_gap_evidence() -> None:
+    # Given: source coverage itself proves partial knowledge.
+    result = replace(
+        _published_result(),
+        source_coverage_gap_count=1,
+        knowledge_gap_reasons=(
+            KnowledgeGapReason.SOURCE_COVERAGE_MISSING,
+            KnowledgeGapReason.ICON_UNBOUND,
+        ),
+    )
+    state = BatchState(BATCH_SCHEMA_VERSION, (result,))
+
+    # When: authoritative state is serialized and parsed.
+    restored = parse_batch_state_json(format_batch_state_json(state))
+
+    # Then: the exact source-evidence counter remains independently provable.
+    assert BATCH_SCHEMA_VERSION == 6
+    assert restored == state
+    assert restored.results[0].source_coverage_gap_count == 1
 
 
 @pytest.mark.parametrize(

@@ -13,7 +13,7 @@ from tests.batch_global_evidence_fixture import (
     NAMED_PATH,
     publish_nonempty_icon_result,
 )
-from tests.batch_publication_fixture import publish_empty_result
+from tests.batch_publication_fixture import empty_result, publish_empty_result
 from tests.real_map_text_acceptance import read_tsv_text
 from w3xtool.batch_global_evidence import GlobalEvidenceError, collect_global_evidence
 from w3xtool.batch_manifest_models import CONTENT_MANIFEST_NAME, OWNERSHIP_MARKER_NAME
@@ -23,6 +23,23 @@ from w3xtool.batch_models import SourceFingerprint
 from w3xtool.batch_tsv import format_tsv_rows
 from w3xtool.description_cache import format_description_cache_tsv
 from w3xtool.description_cache_models import EMPTY_DESCRIPTION_CACHE
+from w3xtool.icon_evidence_models import IconGapReason
+
+
+def test_axis_status_exposes_source_coverage_gap_count() -> None:
+    # Given
+    source = SourceFingerprint("/maps/a.w3x", 1, 1, "a" * 64)
+    result = replace(empty_result(source, "地图/001_a"), source_coverage_gap_count=2)
+    state = BatchState(BATCH_SCHEMA_VERSION, (result,))
+
+    # When
+    from w3xtool.batch_global_evidence_reports import format_axis_status_tsv
+
+    table = read_tsv_text(format_axis_status_tsv(state))
+
+    # Then
+    column = table.header.index("源覆盖缺口")
+    assert table.rows[0][column] == "2"
 
 
 def test_global_evidence_reads_only_verified_map_publications(
@@ -81,6 +98,34 @@ def test_global_evidence_parses_nonempty_manifest_bound_rows(tmp_path: Path) -> 
     assert evidence.resolved[0].content_sha256 == "c" * 64
     assert evidence.anonymous[0].block_index == 17
     assert evidence.anonymous[0].content_sha256 == "d" * 64
+
+
+def test_global_evidence_round_trips_an_invalid_reference_without_a_path(
+    tmp_path: Path,
+) -> None:
+    # Given: the map report contains a legitimate structured invalid reference.
+    result = publish_nonempty_icon_result(
+        1,
+        SourceFingerprint("/maps/a.w3x", 3, 4, "a" * 64),
+        str(tmp_path),
+        gap_path="",
+        gap_reason=IconGapReason.INVALID_REFERENCE,
+    )
+    state = BatchState(BATCH_SCHEMA_VERSION, (result,))
+
+    # When: verified map evidence is aggregated and serialized globally.
+    from w3xtool.batch_global_evidence_reports import (
+        format_global_icon_gaps_tsv,
+        parse_global_icon_gaps_tsv,
+    )
+
+    evidence = collect_global_evidence(tmp_path, state)
+    restored = parse_global_icon_gaps_tsv(format_global_icon_gaps_tsv(evidence))
+
+    # Then: no path is invented and the reason/reference evidence remains exact.
+    assert restored == evidence.gaps
+    assert restored[0].normalized_path == ""
+    assert restored[0].reason is IconGapReason.INVALID_REFERENCE
 
 
 def test_global_evidence_observes_the_verified_report_snapshot(

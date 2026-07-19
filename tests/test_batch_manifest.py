@@ -12,6 +12,9 @@ test_manifest_round_trip_binds_every_regular_artifact = (
 test_manifest_round_trip_retains_every_split_icon_counter = (
     _parser.test_manifest_round_trip_retains_every_split_icon_counter
 )
+test_manifest_round_trip_retains_source_coverage_gap_count = (
+    _parser.test_manifest_round_trip_retains_source_coverage_gap_count
+)
 test_manifest_parser_rejects_legacy_state_that_disagrees_with_axes = (
     _parser.test_manifest_parser_rejects_legacy_state_that_disagrees_with_axes
 )
@@ -36,8 +39,8 @@ test_publication_validation_rejects_symlink_artifact = (
 test_publication_validation_rejects_report_count_drift = (
     _publication.test_publication_validation_rejects_report_count_drift
 )
-test_publication_validation_rejects_schema_five_evidence_report_drift = (
-    _publication.test_publication_validation_rejects_schema_five_evidence_report_drift
+test_publication_validation_rejects_batch_schema_evidence_report_drift = (
+    _publication.test_publication_validation_rejects_batch_schema_evidence_report_drift
 )
 test_manifest_builder_rejects_duplicate_casefolded_paths = (
     _publication.test_manifest_builder_rejects_duplicate_casefolded_paths
