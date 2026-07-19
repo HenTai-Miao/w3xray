@@ -14,7 +14,11 @@ from .integrity_path_binding import (
     IntegrityPathBindingError,
     bind_directory_path,
 )
-from .integrity_output_naming import is_reserved_output_name
+from .integrity_output_naming import (
+    is_reserved_output_name,
+    probe_filesystem_naming,
+)
+from .integrity_report_history import INTEGRITY_HISTORY_ROOT_NAME
 from .integrity_snapshot_binding import (
     BoundSnapshotRoot,
     protected_root_identities,
@@ -42,23 +46,24 @@ class IntegrityOutputError(OSError):
 def bind_snapshot_output_path(
     requested: Path,
     roots: tuple[BoundSnapshotRoot, ...],
-) -> tuple[Path, BoundDirectoryPath]:
+) -> tuple[Path, BoundDirectoryPath, frozenset[tuple[int, int]]]:
     """Bind an output parent outside every continuously held snapshot root."""
     destination = _absolute_path(requested)
     require_snapshot_roots(roots)
-    parent = _bind_parent(destination, protected_root_identities(roots))
+    protected = protected_root_identities(roots)
+    parent = _bind_parent(destination, protected)
     try:
         require_snapshot_roots(roots)
     except (IntegrityPathBindingError, OSError) as exc:
         parent.close()
         raise IntegrityOutputError(str(exc)) from exc
-    return destination, parent
+    return destination, parent, protected
 
 
 def bind_retained_output_path(
     requested: Path,
     active: BoundActiveCache,
-) -> tuple[Path, BoundDirectoryPath]:
+) -> tuple[Path, BoundDirectoryPath, frozenset[tuple[int, int]]]:
     """Bind outside the active root and every reserved retained sibling."""
     destination = _absolute_path(requested)
     active.require_current()
@@ -91,7 +96,7 @@ def bind_retained_output_path(
     except (IntegrityOutputError, IntegrityPathBindingError, OSError) as exc:
         parent.close()
         raise IntegrityOutputError(str(exc)) from exc
-    return destination, parent
+    return destination, parent, protected
 
 
 def _bind_parent(
@@ -100,14 +105,27 @@ def _bind_parent(
 ) -> BoundDirectoryPath:
     if not destination.name or destination.name in {".", ".."}:
         raise IntegrityOutputError("output must name a file")
+    if destination.name == INTEGRITY_HISTORY_ROOT_NAME:
+        raise IntegrityOutputError("output uses the integrity history root name")
     try:
-        return bind_directory_path(
+        parent = bind_directory_path(
             destination.parent,
             create=True,
             forbidden_ancestors=protected,
         )
     except IntegrityPathBindingError as exc:
         raise IntegrityOutputError(str(exc)) from exc
+    if destination.name.casefold() != INTEGRITY_HISTORY_ROOT_NAME.casefold():
+        return parent
+    try:
+        behavior = probe_filesystem_naming(parent.descriptor)
+    except OSError as exc:
+        parent.close()
+        raise IntegrityOutputError(str(exc)) from exc
+    if behavior.key(destination.name) == behavior.key(INTEGRITY_HISTORY_ROOT_NAME):
+        parent.close()
+        raise IntegrityOutputError("output aliases the integrity history root name")
+    return parent
 
 
 def _require_destination_not_reserved(

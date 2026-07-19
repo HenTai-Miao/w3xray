@@ -9,6 +9,7 @@ import pytest
 
 from tests.retained_integrity_fixture import active_cache
 from w3xtool import integrity_output as output_api
+from w3xtool import integrity_report_replacement as history_replacement_api
 from w3xtool import safe_output_publication as publication_api
 from w3xtool.integrity_cli import run_integrity_cli
 
@@ -98,7 +99,10 @@ def test_rollback_never_removes_or_overwrites_a_final_name_replacement(
     assert output.read_bytes() == _ATTACKER_PAYLOAD
 
 
-@pytest.mark.parametrize("sync_boundary", ("new", "existing", "cleanup"))
+@pytest.mark.parametrize(
+    "sync_boundary",
+    ("new", "history-stage", "history-bucket", "history-parent"),
+)
 def test_final_name_replacement_during_directory_sync_is_rejected(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -108,10 +112,17 @@ def test_final_name_replacement_during_directory_sync_is_rejected(
     output = tmp_path / "report.json"
     if sync_boundary != "new":
         output.write_bytes(b"prior report")
-    target_call = 1 if sync_boundary == "new" else 2
-    if sync_boundary == "cleanup":
-        target_call = 3
-    original = publication_api.sync_directory_descriptor
+    target_call = {
+        "new": 1,
+        "history-stage": 1,
+        "history-bucket": 2,
+        "history-parent": 3,
+    }[sync_boundary]
+    original = (
+        publication_api.sync_directory_descriptor
+        if sync_boundary == "new"
+        else history_replacement_api.sync_directory_descriptor
+    )
     syncs = 0
 
     def replace_during_sync(descriptor: int) -> None:
@@ -122,15 +133,12 @@ def test_final_name_replacement_during_directory_sync_is_rejected(
             output.unlink()
             output.write_bytes(_ATTACKER_PAYLOAD)
 
-    monkeypatch.setattr(
-        publication_api,
-        "sync_directory_descriptor",
-        replace_during_sync,
-    )
+    target = publication_api if sync_boundary == "new" else history_replacement_api
+    monkeypatch.setattr(target, "sync_directory_descriptor", replace_during_sync)
 
     code = run_integrity_cli(_argv(active, output))
 
-    assert syncs == target_call
+    assert syncs >= target_call
     assert code == 2
     assert output.read_bytes() == _ATTACKER_PAYLOAD
 

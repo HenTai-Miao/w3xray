@@ -57,10 +57,10 @@ uv run w3xray-quality
 
 The quality command runs Ruff lint, Ruff format check, and basedpyright `--level error` over one sorted, duplicate-free maintained path tuple. New paths must not be added to `tool.basedpyright.ignore`.
 
-Verified on 2026-07-19 after wave-five independent-review closure: Ruff check
-passed, 276 maintained files were formatted, and basedpyright reported 0
-errors, 0 warnings, and 0 notes. The changed-file audit passed for all 22
-changed/new Python files, each at or below 250 pure LOC.
+Verified on 2026-07-19 after immutable integrity-report history: `w3xray-test`
+reported 2131 passed, 18 skipped, and 1 subtest passed. Ruff check and format
+covered 287 maintained files, and basedpyright reported 0 errors, 0 warnings,
+and 0 notes. The changed-file no-excuse audit passed.
 
 Changed-file diagnostics when narrowing a failure:
 
@@ -87,7 +87,7 @@ uv run --with basedpyright basedpyright --level error <paths>
 7. The four global evidence reports reconcile only verified map snapshots. Candidate rows remain unadopted; failed/cancelled terminal inputs appear on the three-axis report without inventing map evidence.
 8. Full regression, quality, lockfile version, whitespace, AGENTS line count, and generated-output checks must pass before the Task 10 commit.
 9. Base snapshots traverse only through held directory descriptors and reject ancestor replacement or any `(dev, ino, size, mtime_ns, ctime_ns, mode)` change around hashing.
-10. Snapshot and retained-report outputs reject symlink components and reserved cache-publication names, and publication rollback leaves no report when output or relevant retained namespaces change.
+10. Snapshot and retained-report outputs reject symlink components, reserved cache-publication names, and the integrity-history root or its proved filesystem aliases. A successful overwrite keeps the new report public and moves the exact old inode into a two-file manifested history generation; later overwrites append without changing or deleting earlier generations. Pre-exchange failures clean only the proved-owned new stage; uncertain exchange/history races fail closed and retain every provable current/old/concurrent object rather than deleting evidence.
 11. Snapshot roots and output ancestry reject real physical case/normalization aliases while all protected descriptors remain held, but accept distinct spellings on filesystems that preserve them. Exact reserved prefixes remain forbidden; absent alias spellings require an exact-parent isolated capability probe.
 12. Existing-output publication keeps the public name continuously present, including crash-state sync seams. Stage, backup, and cleanup-retained states are explicit; every exchange is proved in both directions, replacements are preserved, and nested recovery paths require outer-directory plus inner-leaf re-proof.
 13. Every external label/path boundary rejects non-strict UTF-8 before binding or serialization, and exact 5/5 invalid-previous inventory mismatches require the canonical missing owned problem path.

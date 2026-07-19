@@ -81,6 +81,12 @@ schema 5 只接受显式 `--description-cache` 指向的已拥有、已验证缓
 `integrity snapshot` 与 `verify` 用内容和纳秒 mtime 证明只读输入前后一致。`retained-cache` 将
 有意保留的 `previous`、失败 stage/output 和 recovery，与仍在发布命名空间中的 stage/backup
 临时违规分开报告；它不会把保留对象加载为描述来源，也不会删除、修复或重命名它们。
+完整性报告覆盖采用追加式不可变历史：新报告保持 `--output` 原路径，旧报告移入
+`.w3xray-integrity-history/<输出文件名 SHA-256>/<generation-id>/`。历史代的
+`report.json` 由 `历史清单.json` 绑定原文件名、大小和 SHA-256，每次覆盖只追加一代，
+不会自动删除旧代。历史根名称及其目标文件系统物理别名不能作为报告输出名；交换前失败
+会对仍属本次写出的 stage 做身份门控清理，交换结果不可信时保留证据。该历史策略不影响
+通用地图/资源写出器的原子替换职责。
 
 ## 输出结构
 

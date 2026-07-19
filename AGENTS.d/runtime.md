@@ -49,17 +49,22 @@ uv run main.py integrity retained-cache \
   and report-publication proof; required descriptor capabilities and flags
   fail closed as code 2.
 - Retained `previous`, failed-stage, failed-output, and recovery evidence is reported separately from stage/backup transient violations. Retained objects are never automatically loaded as description sources and are never deleted by inspection.
-- Integrity outputs atomically exchange a complete staged inode with an
-  existing regular output, so the public name is continuously bound across
-  every synchronization boundary. Exact publication prefixes are always
-  reserved; absent alias spellings are classified by a fail-closed probe inside
-  a held random mode-0700 directory on the exact destination-parent filesystem.
-- The displaced inode moves through explicit stage, backup, and cleanup-retained
-  states. Cleanup occurs only inside a held transaction-owned mode-0700
-  namespace. Every exchange and reversal proves both resulting names, and a
-  nested recovery path is reported only after re-proving the public cleanup
-  directory identity plus the expected inner regular-file identity. Concurrent
-  regular files and symlinks are preserved.
+- An integrity output that already exists is atomically exchanged with the new
+  report. The new report keeps the requested path; the displaced inode moves to
+  `.w3xray-integrity-history/<sha256(output leaf)>/<generation-id>/report.json`.
+  Its exact two-file generation also contains `历史清单.json`, which binds
+  schema, generation ID, original output leaf, size, and SHA-256.
+- History roots, buckets, stages, and finalized generations are descriptor-held
+  mode-0700 directories outside protected identities. Every binding and both
+  history files are re-proved around synchronization. Finalized generations are
+  append-only and never automatically deleted or overwritten; an uncertain
+  failure retains the provable recovery object instead of deleting evidence.
+- The history-root leaf and its exact-parent filesystem aliases are reserved.
+  Before exchange, both participating file identities are re-proved and an
+  owned failed stage is cleaned through identity gating. Once exchange state is
+  uncertain, automatic cleanup stops and every recoverable object is retained.
+- The generic safe-output writer retains plain atomic-replacement semantics for
+  maps and resources and never creates integrity-report history on its own.
 - Snapshot/report labels and all external path values must encode as strict
   UTF-8 before filesystem binding, sorting, hashing, or publication. Invalid
   external Unicode is a command-boundary exit 2.

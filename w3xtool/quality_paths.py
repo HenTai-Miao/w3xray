@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Final
 
+from .quality_integrity_paths import INTEGRITY_STRICT_PATHS
 from .quality_safe_output_paths import SAFE_OUTPUT_STRICT_PATHS
 
 
@@ -77,11 +78,6 @@ tests/test_gui_worker_registry.py
 tests/test_icon_candidate_bindings.py
 tests/test_icon_candidate_input_normalization.py
 tests/test_icon_evidence_query.py
-tests/test_integrity_cli.py
-tests/test_integrity_cli_retained_cache.py
-tests/test_integrity_output_identity_races.py tests/test_integrity_output_safety.py
-tests/test_integrity_physical_aliases.py tests/test_integrity_platform_boundaries.py tests/test_integrity_snapshot.py
-tests/test_integrity_snapshot_races.py tests/test_integrity_utf8_boundaries.py
 tests/test_item_relation_models.py
 tests/test_item_relation_resilience.py
 tests/test_map_relation_loading.py
@@ -210,15 +206,6 @@ w3xtool/icon_evidence_index.py
 w3xtool/icon_evidence_presentation.py
 w3xtool/icon_evidence_query.py
 w3xtool/icons.py
-w3xtool/integrity_cli.py
-w3xtool/integrity_cli_options.py
-w3xtool/integrity_output.py w3xtool/integrity_output_naming.py w3xtool/integrity_output_path.py
-w3xtool/integrity_path_binding.py
-w3xtool/integrity_snapshot.py w3xtool/integrity_snapshot_binding.py
-w3xtool/integrity_snapshot_file.py
-w3xtool/integrity_snapshot_io.py
-w3xtool/integrity_snapshot_models.py
-w3xtool/integrity_snapshot_tree.py w3xtool/integrity_utf8.py
 w3xtool/item_relation_builder.py
 w3xtool/item_relation_endpoints.py
 w3xtool/item_relation_exports.py
@@ -250,6 +237,8 @@ w3xtool/quality_gate.py
 w3xtool/quality_paths.py""".split()
 )
 
-STRICT_PATHS: Final = tuple(sorted((*_BASE_STRICT_PATHS, *SAFE_OUTPUT_STRICT_PATHS)))
+STRICT_PATHS: Final = tuple(
+    sorted((*_BASE_STRICT_PATHS, *INTEGRITY_STRICT_PATHS, *SAFE_OUTPUT_STRICT_PATHS))
+)
 
 __all__ = ("STRICT_PATHS",)

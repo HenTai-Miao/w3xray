@@ -19,16 +19,20 @@ from .integrity_output_path import (
     bind_snapshot_output_path,
 )
 from .integrity_path_binding import BoundDirectoryPath, IntegrityPathBindingError
+from .integrity_report_publication import publish_integrity_report
+from .integrity_report_publication_models import (
+    IntegrityPublicationComplete,
+    IntegrityStageCleanupRequired,
+    IntegrityStageRetained,
+)
 from .integrity_snapshot_binding import BoundSnapshotRoot
 from .integrity_snapshot_models import IntegritySnapshotError
 from .safe_output_chunk_writer import write_chunks_to_descriptor
 from .safe_output_models import SafeWriteResult, SafeWriteStatus
-from .safe_output_publication import publish_staged_file
 from .safe_output_staging import (
     destination_error,
     discard_file,
     open_staged_file,
-    remove_owned_staged_file,
 )
 
 
@@ -38,6 +42,7 @@ class BoundIntegrityOutput:
 
     destination: Path
     parent: BoundDirectoryPath
+    protected_identities: frozenset[tuple[int, int]]
 
     def __enter__(self) -> Self:
         self.parent.__enter__()
@@ -82,44 +87,53 @@ class BoundIntegrityOutput:
         staged = os.fstat(descriptor)
         staged_identity = staged.st_dev, staged.st_ino
         try:
-            try:
-                size = write_chunks_to_descriptor(
-                    descriptor,
-                    (payload.encode("utf-8"),),
-                )
-            except OSError as exc:
+            size = write_chunks_to_descriptor(
+                descriptor,
+                (payload.encode("utf-8"),),
+            )
+        except OSError as exc:
+            return discard_file(
+                self.parent.descriptor,
+                staged_name,
+                staged_identity,
+                str(self.destination),
+                SafeWriteStatus.FAILED,
+                str(exc),
+            )
+        finally:
+            os.close(descriptor)
+        publication = publish_integrity_report(
+            self.parent.descriptor,
+            staged_name,
+            staged_identity,
+            self.destination.name,
+            self.destination,
+            lambda: self._publication_error(require_protected),
+            _failure_status,
+            self.protected_identities,
+        )
+        match publication:
+            case IntegrityPublicationComplete(result=result):
+                if result is not None:
+                    return result
+            case IntegrityStageCleanupRequired(result=result):
                 return discard_file(
                     self.parent.descriptor,
                     staged_name,
                     staged_identity,
-                    str(self.destination),
-                    SafeWriteStatus.FAILED,
-                    str(exc),
+                    result.path,
+                    result.status,
+                    result.error,
                 )
-            finally:
-                os.close(descriptor)
-            publication_error = publish_staged_file(
-                self.parent.descriptor,
-                staged_name,
-                staged_identity,
-                self.destination.name,
-                str(self.destination),
-                lambda: self._publication_error(require_protected),
-                _failure_status,
-            )
-            if publication_error is not None:
-                return publication_error
-            return SafeWriteResult(
-                SafeWriteStatus.WRITTEN,
-                str(self.destination),
-                size,
-            )
-        finally:
-            remove_owned_staged_file(
-                self.parent.descriptor,
-                staged_name,
-                staged_identity,
-            )
+            case IntegrityStageRetained(result=result):
+                return result
+            case unreachable:
+                assert_never(unreachable)
+        return SafeWriteResult(
+            SafeWriteStatus.WRITTEN,
+            str(self.destination),
+            size,
+        )
 
     def _publication_error(
         self,
@@ -145,8 +159,8 @@ def bind_snapshot_output(
     roots: tuple[BoundSnapshotRoot, ...],
 ) -> BoundIntegrityOutput:
     """Bind one output outside all held physical snapshot roots."""
-    destination, parent = bind_snapshot_output_path(requested, roots)
-    return BoundIntegrityOutput(destination, parent)
+    destination, parent, protected = bind_snapshot_output_path(requested, roots)
+    return BoundIntegrityOutput(destination, parent, protected)
 
 
 def bind_retained_output(
@@ -154,8 +168,8 @@ def bind_retained_output(
     active: BoundActiveCache,
 ) -> BoundIntegrityOutput:
     """Bind one output outside the held active and reserved cache objects."""
-    destination, parent = bind_retained_output_path(requested, active)
-    return BoundIntegrityOutput(destination, parent)
+    destination, parent, protected = bind_retained_output_path(requested, active)
+    return BoundIntegrityOutput(destination, parent, protected)
 
 
 def _failure_status(exc: OSError) -> SafeWriteStatus:
