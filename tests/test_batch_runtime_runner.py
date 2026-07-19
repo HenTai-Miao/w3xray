@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import threading
 
@@ -218,6 +219,46 @@ def test_output_lock_closes_descriptors_when_unlock_fails(
 
     # Then: both acquired lease descriptors were still closed.
     assert set(descriptors).issubset(observed)
+
+
+def test_output_lock_validates_a_windows_root_without_a_directory_descriptor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: Windows can lock regular files but cannot os.open a directory.
+    root = tmp_path / "output"
+    root.mkdir()
+    lock = root / ".w3xray-output.lock"
+    lock.write_bytes(b"\0")
+    lock_descriptor = os.open(lock, os.O_RDWR)
+    monkeypatch.setattr(
+        batch_output_lock,
+        "_DIRECTORY_DESCRIPTORS_AVAILABLE",
+        False,
+    )
+    root_descriptor, root_status = batch_output_lock._open_root_binding(root)
+    lock_status = os.fstat(lock_descriptor)
+    lease = batch_output_lock.BatchOutputLease(
+        root,
+        root_descriptor,
+        lock_descriptor,
+        root_status.st_dev,
+        root_status.st_ino,
+        lock_status.st_dev,
+        lock_status.st_ino,
+    )
+
+    try:
+        # When / Then: the held lock and exact root pathname still prove the lease.
+        assert root_descriptor == -1
+        assert batch_output_lock.lease_is_current(lease, root)
+        replacement = tmp_path / "replacement"
+        replacement.mkdir()
+        root.rename(tmp_path / "displaced")
+        replacement.rename(root)
+        assert not batch_output_lock.lease_is_current(lease, root)
+    finally:
+        os.close(lock_descriptor)
 
 
 def _source_root(tmp_path: Path) -> Path:

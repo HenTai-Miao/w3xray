@@ -10,8 +10,15 @@ import pytest
 
 from w3xtool import durable_io, safe_output, safe_output_publication
 from w3xtool.safe_output import write_bytes_safely
+from w3xtool.safe_output_anchored import ANCHORED_WRITES_AVAILABLE
 from w3xtool.safe_output_chunk_writer import write_chunks_to_descriptor
 from w3xtool.safe_output_models import SafeWriteStatus
+
+
+_REQUIRES_ANCHORED_WRITES = pytest.mark.skipif(
+    not ANCHORED_WRITES_AVAILABLE,
+    reason="requires descriptor-anchored publication",
+)
 
 
 def test_chunk_writer_syncs_complete_stage_before_return(
@@ -48,6 +55,7 @@ def test_directory_sync_rejects_non_windows_io_failure(
         durable_io.sync_directory_descriptor(3)
 
 
+@_REQUIRES_ANCHORED_WRITES
 def test_existing_destination_is_restored_when_directory_sync_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -79,6 +87,7 @@ def test_existing_destination_is_restored_when_directory_sync_fails(
     assert not tuple(tmp_path.glob(".w3xray-backup-*.tmp"))
 
 
+@_REQUIRES_ANCHORED_WRITES
 def test_new_destination_is_removed_when_directory_sync_fails(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -98,9 +98,12 @@ def test_snapshot_maps_a_raw_byte_explicit_root_to_code_two(
 def test_retained_cache_maps_a_raw_byte_ancestor_to_code_two(
     tmp_path: Path,
 ) -> None:
+    staged = active_cache(tmp_path / "staged")
     raw_parent = os.path.join(os.fsencode(tmp_path), b"invalid-\xff")
     os.mkdir(raw_parent)
-    active = active_cache(Path(os.fsdecode(raw_parent)) / "holder")
+    raw_active = os.path.join(raw_parent, b"active")
+    os.rename(os.fsencode(staged), raw_active)
+    active = Path(os.fsdecode(raw_active))
     output = tmp_path / "report.json"
 
     code = run_integrity_cli(

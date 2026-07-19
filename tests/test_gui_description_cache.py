@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from tempfile import TemporaryDirectory
+from tempfile import gettempdir, TemporaryDirectory
 import tkinter as tk
 from unittest.mock import patch
 
@@ -15,11 +15,13 @@ from tests.trusted_description_cache_fixture import published_cache
 from w3xtool.gui import App
 from w3xtool.trusted_description_cache import load_trusted_description_cache
 
+_CANONICAL_TEMP_ROOT = Path(gettempdir()).resolve()
+
 
 class DescriptionCacheGuiTest(GuiTestCase):
     def test_valid_cache_root_persists_and_shows_verified_identity(self) -> None:
         # Given
-        tmp_path = Path(self.enterContext(TemporaryDirectory(dir="/private/tmp")))
+        tmp_path = Path(self.enterContext(TemporaryDirectory(dir=_CANONICAL_TEMP_ROOT)))
         cache_root = published_cache(tmp_path / "fixture")
         verified = load_trusted_description_cache(cache_root)
         config_path = tmp_path / "gui.json"
@@ -52,7 +54,7 @@ class DescriptionCacheGuiTest(GuiTestCase):
 
     def test_invalid_cache_root_keeps_previous_selection(self) -> None:
         # Given
-        tmp_path = Path(self.enterContext(TemporaryDirectory(dir="/private/tmp")))
+        tmp_path = Path(self.enterContext(TemporaryDirectory(dir=_CANONICAL_TEMP_ROOT)))
         previous = published_cache(tmp_path / "previous")
         invalid = tmp_path / "invalid"
         invalid.mkdir()
@@ -82,7 +84,7 @@ class DescriptionCacheGuiTest(GuiTestCase):
 
     def test_cancelled_picker_keeps_previous_selection(self) -> None:
         # Given
-        tmp_path = Path(self.enterContext(TemporaryDirectory(dir="/private/tmp")))
+        tmp_path = Path(self.enterContext(TemporaryDirectory(dir=_CANONICAL_TEMP_ROOT)))
         previous = published_cache(tmp_path / "previous")
         self.app.description_cache_path = str(previous)
 
@@ -106,7 +108,7 @@ class DescriptionCacheGuiTest(GuiTestCase):
 
     def test_clear_cache_persists_none_and_reloads(self) -> None:
         # Given
-        tmp_path = Path(self.enterContext(TemporaryDirectory(dir="/private/tmp")))
+        tmp_path = Path(self.enterContext(TemporaryDirectory(dir=_CANONICAL_TEMP_ROOT)))
         config_path = tmp_path / "gui.json"
         self.app.description_cache_path = str(published_cache(tmp_path / "fixture"))
 
@@ -130,7 +132,7 @@ class DescriptionCacheGuiTest(GuiTestCase):
 
     def test_restore_accepts_only_a_verified_owned_root(self) -> None:
         # Given
-        tmp_path = Path(self.enterContext(TemporaryDirectory(dir="/private/tmp")))
+        tmp_path = Path(self.enterContext(TemporaryDirectory(dir=_CANONICAL_TEMP_ROOT)))
         cache_root = published_cache(tmp_path / "fixture")
         config_path = tmp_path / "gui.json"
         config_path.write_text(

@@ -14,6 +14,7 @@ tests/batch_icon_report_fixture.py
 tests/batch_manifest_fixture.py
 tests/batch_publication_fixture.py
 tests/batch_schema_evidence_fixture.py
+tests/conftest.py
 tests/gui_worker_fakes.py
 tests/quality_audit_gap_paths.py
 tests/retained_integrity_fixture.py

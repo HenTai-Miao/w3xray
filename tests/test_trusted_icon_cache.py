@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import os
 from pathlib import Path
 
 import pytest
@@ -76,6 +77,7 @@ def test_missing_same_map_evidence_is_unavailable_not_a_verified_miss(
 
 def test_trusted_icon_cache_rejects_conflicting_normalized_payloads(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Given: the manifest assigns two different hashes to one virtual path.
     cache = _write_cache(tmp_path)
@@ -89,6 +91,18 @@ def test_trusted_icon_cache_rejects_conflicting_normalized_payloads(
                 "conflicting-output",
             )
         )
+
+    real_isfile = os.path.isfile
+
+    def case_sensitive_is_file(path: os.PathLike[str] | str) -> bool:
+        if os.fspath(path).endswith("icons/btnhero.blp"):
+            return False
+        return real_isfile(path)
+
+    monkeypatch.setattr(
+        "w3xtool.trusted_icon_cache.os.path.isfile",
+        case_sensitive_is_file,
+    )
 
     # When/Then: the trust boundary refuses archive-order resolution.
     with pytest.raises(TrustedIconCacheError, match="conflicting virtual path"):

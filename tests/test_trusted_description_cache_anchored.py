@@ -27,8 +27,13 @@ _DIRECTORY_FLAGS: Final = (
     | getattr(os, "O_CLOEXEC", 0)
     | getattr(os, "O_NOFOLLOW", 0)
 )
+_REQUIRES_ANCHORED_CACHE = pytest.mark.skipif(
+    not anchored_io._ANCHORED_CACHE_AVAILABLE,
+    reason="requires descriptor-relative no-follow cache reads",
+)
 
 
+@_REQUIRES_ANCHORED_CACHE
 def test_anchored_loader_proves_the_same_bytes_as_public_loader(
     tmp_path: Path,
 ) -> None:
@@ -71,7 +76,11 @@ def test_public_loader_does_not_require_anchored_host_support(
 ) -> None:
     # Given: a host where dir-fd cache traversal is unavailable.
     root = published_cache(tmp_path)
-    parent_descriptor = os.open(root.parent, _DIRECTORY_FLAGS)
+    parent_descriptor = (
+        os.open(root.parent, _DIRECTORY_FLAGS)
+        if anchored_io._ANCHORED_CACHE_AVAILABLE
+        else -1
+    )
     monkeypatch.setattr(anchored_io, "_ANCHORED_CACHE_AVAILABLE", False)
 
     # When / Then: public loading remains compatible; publication fails closed.
@@ -84,9 +93,11 @@ def test_public_loader_does_not_require_anchored_host_support(
                 root,
             )
     finally:
-        os.close(parent_descriptor)
+        if parent_descriptor >= 0:
+            os.close(parent_descriptor)
 
 
+@_REQUIRES_ANCHORED_CACHE
 @pytest.mark.parametrize("mutation", ("symlink", "directory"))
 def test_anchored_loader_rejects_unsafe_owned_inventory_entry(
     tmp_path: Path,
@@ -116,6 +127,7 @@ def test_anchored_loader_rejects_unsafe_owned_inventory_entry(
         os.close(parent_descriptor)
 
 
+@_REQUIRES_ANCHORED_CACHE
 def test_anchored_loader_rejects_owned_name_identity_change(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

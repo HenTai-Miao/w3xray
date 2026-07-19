@@ -46,6 +46,11 @@ Repository gate:
 uv run w3xray-test
 ```
 
+On Windows, `tests/conftest.py` marks only suites that require POSIX dir-fd,
+no-follow traversal, or atomic exchange as capability skips. Core batch,
+trusted-cache reading, GUI, package construction, and packaged acceptance stay
+mandatory; `tests/test_windows_acceptance_assets.py` guards that boundary.
+
 Verified on 2026-07-19 after wave-five independent-review closure: 2,118
 passed, 18 skipped, and 1 subtest passed.
 

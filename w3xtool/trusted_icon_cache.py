@@ -76,6 +76,13 @@ class TrustedIconCacheDataSource:
             normalized = _parse_icon_path(virtual_path, self.root)
             _parse_digest(digest, self.root)
             archive = _parse_archive(source_archive, self.root)
+            key = _path_key(normalized)
+            previous = payloads.get(key)
+            if previous is not None and previous.digest != digest:
+                raise TrustedIconCacheError(
+                    self.root,
+                    f"conflicting virtual path: {normalized}",
+                )
             payload_path = safe_destination(self.root, normalized)
             if (
                 payload_path is None
@@ -84,13 +91,6 @@ class TrustedIconCacheDataSource:
             ):
                 raise TrustedIconCacheError(self.root, f"missing payload: {normalized}")
             entry = _CachedPayload(normalized, digest, archive, payload_path)
-            key = _path_key(normalized)
-            previous = payloads.get(key)
-            if previous is not None and previous.digest != entry.digest:
-                raise TrustedIconCacheError(
-                    self.root,
-                    f"conflicting virtual path: {normalized}",
-                )
             if previous is None:
                 payloads[key] = entry
         self._payloads = MappingProxyType(payloads)

@@ -6,8 +6,28 @@ from pathlib import Path
 
 import pytest
 
+from tests.conftest import requires_posix_provenance
+
 
 _ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_windows_capability_filter_is_limited_to_posix_provenance_suites() -> None:
+    # Given / When / Then: extraction and packaged acceptance remain mandatory.
+    for path in (
+        Path("tests/test_batch_e2e.py"),
+        Path("tests/test_acceptance_runner.py"),
+        Path("tests/test_gui_description_cache.py"),
+        Path("tests/test_trusted_description_cache.py"),
+    ):
+        assert not requires_posix_provenance(path)
+    for path in (
+        Path("tests/test_batch_map_retirement.py"),
+        Path("tests/test_description_cache_publication.py"),
+        Path("tests/test_integrity_snapshot.py"),
+        Path("tests/test_safe_output_publication_atomicity.py"),
+    ):
+        assert requires_posix_provenance(path)
 
 
 def _onefile_acceptance_sources() -> tuple[tuple[str, str], ...]:

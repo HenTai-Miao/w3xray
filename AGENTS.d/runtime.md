@@ -48,6 +48,11 @@ uv run main.py integrity retained-cache \
   publication parent and active-root descriptors through both sibling scans
   and report-publication proof; required descriptor capabilities and flags
   fail closed as code 2.
+- Windows does not provide the required POSIX directory-descriptor traversal or
+  atomic directory exchange. Trusted-cache migration, retained-cache inspection,
+  integrity snapshots/history, and anchored retirement therefore fail closed or
+  leave evidence untouched there. Core extraction, trusted-cache reading, output
+  locking, GUI use, and packaged acceptance remain supported on Windows.
 - Retained `previous`, failed-stage, failed-output, and recovery evidence is reported separately from stage/backup transient violations. Retained objects are never automatically loaded as description sources and are never deleted by inspection.
 - An integrity output that already exists is atomically exchanged with the new
   report. The new report keeps the requested path; the displaced inode moves to

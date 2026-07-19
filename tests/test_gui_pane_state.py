@@ -1,4 +1,5 @@
 """拖拽分隔条位置持久化测试。"""
+
 import unittest
 
 from tests.gui_base import GuiTestCase
@@ -23,15 +24,14 @@ class TestPaneState(GuiTestCase):
         right_min_size = int(self.app.paned.panecget(right_pane, "minsize"))
         sash_width = int(self.app.paned.cget("sashwidth"))
         required_width = (
-            left_min_size
-            + right_min_size
-            + sash_width
-            + 2 * _SASH_TEST_MARGIN
-            + 1
+            left_min_size + right_min_size + sash_width + 2 * _SASH_TEST_MARGIN + 1
         )
         self.pump_events_until(
-            lambda: bool(self.app.paned.winfo_ismapped())
-            and self.app.paned.winfo_width() >= required_width,
+            lambda: (
+                bool(self.app.paned.winfo_ismapped())
+                and self.app.paned.winfo_width() >= required_width
+            ),
+            timeout=10.0,
         )
 
         lower = left_min_size + _SASH_TEST_MARGIN

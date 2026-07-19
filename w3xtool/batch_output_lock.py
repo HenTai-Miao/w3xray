@@ -16,6 +16,7 @@ from .durable_io import sync_directory, sync_file_descriptor
 
 
 _LOCK_NAME: Final = ".w3xray-output.lock"
+_DIRECTORY_DESCRIPTORS_AVAILABLE: Final = os.name != "nt"
 _CONTENTION_ERRNOS: Final = frozenset(
     (errno.EACCES, errno.EAGAIN, errno.EDEADLK, errno.EWOULDBLOCK)
 )
@@ -43,7 +44,7 @@ def hold_batch_output_lock(output_root: str | Path) -> Iterator[BatchOutputLease
     root.mkdir(parents=True, exist_ok=True)
     if root.is_symlink() or not root.is_dir():
         raise BatchOutputError(str(root), "output root is unsafe")
-    root_descriptor = _open_directory(root)
+    root_descriptor, root_status = _open_root_binding(root)
     lock_descriptor = -1
     locked = False
     try:
@@ -58,7 +59,6 @@ def hold_batch_output_lock(output_root: str | Path) -> Iterator[BatchOutputLease
                 ) from exc
             raise
         locked = True
-        root_status = os.fstat(root_descriptor)
         lock_status = os.fstat(lock_descriptor)
         lease = BatchOutputLease(
             root,
@@ -81,7 +81,8 @@ def hold_batch_output_lock(output_root: str | Path) -> Iterator[BatchOutputLease
                 if lock_descriptor >= 0:
                     os.close(lock_descriptor)
             finally:
-                os.close(root_descriptor)
+                if root_descriptor >= 0:
+                    os.close(root_descriptor)
 
 
 def lease_is_current(lease: BatchOutputLease, output_root: str | Path) -> bool:
@@ -91,24 +92,43 @@ def lease_is_current(lease: BatchOutputLease, output_root: str | Path) -> bool:
         return False
     try:
         root_path = os.lstat(root)
-        root_open = os.fstat(lease.root_descriptor)
         lock_path = os.lstat(root / _LOCK_NAME)
         lock_open = os.fstat(lease.lock_descriptor)
     except OSError:
         return False
+    root_descriptor_is_current = True
+    if lease.root_descriptor >= 0:
+        try:
+            root_open = os.fstat(lease.root_descriptor)
+        except OSError:
+            return False
+        root_descriptor_is_current = bool(
+            stat.S_ISDIR(root_open.st_mode)
+            and (root_open.st_dev, root_open.st_ino)
+            == (lease.root_device, lease.root_inode)
+        )
     return bool(
         stat.S_ISDIR(root_path.st_mode)
-        and stat.S_ISDIR(root_open.st_mode)
         and not stat.S_ISLNK(root_path.st_mode)
         and (root_path.st_dev, root_path.st_ino)
         == (lease.root_device, lease.root_inode)
-        == (root_open.st_dev, root_open.st_ino)
+        and root_descriptor_is_current
         and stat.S_ISREG(lock_path.st_mode)
         and stat.S_ISREG(lock_open.st_mode)
         and (lock_path.st_dev, lock_path.st_ino)
         == (lease.lock_device, lease.lock_inode)
         == (lock_open.st_dev, lock_open.st_ino)
     )
+
+
+def _open_root_binding(path: Path) -> tuple[int, os.stat_result]:
+    if not _DIRECTORY_DESCRIPTORS_AVAILABLE:
+        opened = os.lstat(path)
+        if stat.S_ISLNK(opened.st_mode) or not stat.S_ISDIR(opened.st_mode):
+            raise BatchOutputError(str(path), "output root is not a directory")
+        return -1, opened
+    descriptor = _open_directory(path)
+    return descriptor, os.fstat(descriptor)
 
 
 def _open_directory(path: Path) -> int:

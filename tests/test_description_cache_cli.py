@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import sys
 
@@ -96,6 +97,10 @@ def test_description_cache_cli_returns_two_without_traceback_for_parse_error(
     assert captured.out == ""
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="trusted-cache migration requires POSIX provenance primitives",
+)
 def test_description_cache_cli_returns_zero_for_structurally_valid_partial_migration(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
