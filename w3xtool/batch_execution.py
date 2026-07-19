@@ -161,7 +161,7 @@ def _wait_for_child(
         if remaining <= 0:
             _stop_and_reap(process)
             return MapExecutionFailure("map_timeout", "map execution timed out")
-        if receiver.poll(min(_POLL_SECONDS, remaining)):
+        if _receiver_has_payload(receiver, min(_POLL_SECONDS, remaining)):
             try:
                 payload = receiver.recv_bytes(_MAX_MESSAGE_BYTES)
             except EOFError:
@@ -170,7 +170,7 @@ def _wait_for_child(
                 return _execution_outcome(payload)
         if not process.is_alive():
             process.join()
-            if receiver.poll(_POLL_SECONDS):
+            if _receiver_has_payload(receiver, _POLL_SECONDS):
                 try:
                     payload = receiver.recv_bytes(_MAX_MESSAGE_BYTES)
                 except EOFError:
@@ -181,6 +181,14 @@ def _wait_for_child(
                 "child_process_exit",
                 f"child exited with code {process.exitcode}",
             )
+
+
+def _receiver_has_payload(receiver: _Receiver, timeout: float) -> bool:
+    """Treat Windows' ended named pipe as an empty child response."""
+    try:
+        return receiver.poll(timeout)
+    except BrokenPipeError, EOFError:
+        return False
 
 
 def _stop_and_reap(process: _ProcessHandle) -> None:

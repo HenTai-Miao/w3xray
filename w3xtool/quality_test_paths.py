@@ -25,6 +25,7 @@ tests/test_batch_description_cache.py
 tests/test_batch_description_cache_cli.py
 tests/test_batch_e2e.py
 tests/test_batch_execution.py
+tests/test_batch_execution_windows_pipe.py
 tests/test_batch_global_evidence.py
 tests/test_batch_global_fix_acceptance.py
 tests/test_batch_global_publication.py

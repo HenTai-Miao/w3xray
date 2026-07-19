@@ -31,6 +31,10 @@ def test_quality_gate_builds_all_three_cross_platform_commands() -> None:
     assert all("w3xtool/quality_tool_paths.py" in command.argv for command in commands)
     assert all("tests/test_batch_soak.py" in command.argv for command in commands)
     assert all(
+        "tests/test_batch_execution_windows_pipe.py" in command.argv
+        for command in commands
+    )
+    assert all(
         command.argv[:3] == ("python", "-m", command.module) for command in commands
     )
     assert all("shell=True" not in command.argv for command in commands)

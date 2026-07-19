@@ -147,8 +147,16 @@ def test_manifest_builder_rejects_duplicate_casefolded_paths(tmp_path: Path) -> 
     nested = tmp_path / "nested" / "value.txt"
     nested.parent.mkdir()
     nested.write_text("a", encoding="utf-8")
-    (tmp_path / "nested\\value.txt").write_text("b", encoding="utf-8")
+    ambiguous = tmp_path / "nested\\value.txt"
+    ambiguous.write_text("b", encoding="utf-8")
 
     # When / Then: a Windows-unsafe manifest is never emitted.
+    if ambiguous == nested:
+        manifest = build_map_manifest(tmp_path, result, MANIFEST_TRANSACTION_ID)
+        assert (
+            sum(item.relative_path == "nested/value.txt" for item in manifest.artifacts)
+            == 1
+        )
+        return
     with pytest.raises(ValueError, match="unsafe|duplicate"):
         build_map_manifest(tmp_path, result, MANIFEST_TRANSACTION_ID)

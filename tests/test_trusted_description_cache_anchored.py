@@ -9,6 +9,7 @@ from typing import Final
 import pytest
 
 from tests.trusted_description_cache_fixture import published_cache
+from w3xtool import anchored_source
 from w3xtool import trusted_description_cache_io as anchored_io
 from w3xtool.trusted_description_cache import (
     TrustedDescriptionCacheError,
@@ -81,6 +82,7 @@ def test_public_loader_does_not_require_anchored_host_support(
         if anchored_io._ANCHORED_CACHE_AVAILABLE
         else -1
     )
+    monkeypatch.setattr(anchored_source, "_ANCHORED_OPEN_AVAILABLE", False)
     monkeypatch.setattr(anchored_io, "_ANCHORED_CACHE_AVAILABLE", False)
 
     # When / Then: public loading remains compatible; publication fails closed.

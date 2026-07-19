@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+from contextlib import ExitStack
 import hashlib
 from pathlib import Path, PurePosixPath
 from typing import Final, assert_never, override
 
-from .anchored_source import AnchoredSourceError, AnchoredSourceRoot
+from .anchored_source import (
+    AnchoredSourceError,
+    AnchoredSourceRoot,
+    AnchoredSourceUnavailableError,
+)
 from .batch_tsv import format_tsv_rows
+from .bounded_file import read_bounded_regular_file
 from .description_cache_migration_models import (
     DescriptionCacheMigrationError,
     DescriptionCacheRejection,
@@ -71,58 +77,61 @@ def validate_source_manifest(
     if len(identities) != len(records):
         raise TrustedSourceError("duplicate source manifest identity")
     proven_entries: set[tuple[str, str, str, int | None, str, str]] = set()
-    try:
-        with AnchoredSourceRoot.open(source_root) as anchored_root:
-            for record in records:
-                entries = cache.lookup(
-                    record.category,
-                    record.base_id,
-                    record.role,
-                    parse_source_level(record.level_text),
-                )
-                if len(entries) != 1:
+    with ExitStack() as source_stack:
+        try:
+            anchored_root = source_stack.enter_context(
+                AnchoredSourceRoot.open(source_root)
+            )
+        except AnchoredSourceUnavailableError:
+            anchored_root = None
+        except AnchoredSourceError as exc:
+            raise TrustedSourceError(f"source report is unreadable: {exc}") from exc
+        for record in records:
+            entries = cache.lookup(
+                record.category,
+                record.base_id,
+                record.role,
+                parse_source_level(record.level_text),
+            )
+            if len(entries) != 1:
+                raise TrustedSourceError("source manifest row is not bound to cache")
+            entry = entries[0]
+            report = _source_report(record, source_root, anchored_root)
+            candidate = LegacyDescriptionCacheRow(
+                record.row_number,
+                record.category,
+                record.base_id,
+                record.role,
+                record.level_text,
+                entry.raw_value,
+                entry.readable_value,
+                record.source_map_sha256,
+                f"{record.report_path}#base:{record.base_id}",
+            )
+            match prove_candidate(candidate, (report,)):
+                case ProvenDescriptionCandidate() as proof:
+                    if (
+                        proof.report_row_number != record.report_row_number
+                        or proof.report_row_sha256 != record.report_row_sha256
+                        or proof.source_label != record.source_label
+                    ):
+                        raise TrustedSourceError("source report row proof mismatch")
+                case DescriptionCacheRejection() as rejection:
                     raise TrustedSourceError(
-                        "source manifest row is not bound to cache"
+                        f"source candidate rejected: {rejection.reason}"
                     )
-                entry = entries[0]
-                report = _source_report(record, source_root, anchored_root)
-                candidate = LegacyDescriptionCacheRow(
-                    record.row_number,
-                    record.category,
-                    record.base_id,
-                    record.role,
-                    record.level_text,
-                    entry.raw_value,
-                    entry.readable_value,
+                case unreachable:
+                    assert_never(unreachable)
+            proven_entries.add(
+                (
+                    entry.category,
+                    entry.base_id,
+                    entry.role,
+                    entry.level,
                     record.source_map_sha256,
-                    f"{record.report_path}#base:{record.base_id}",
+                    candidate.source_path,
                 )
-                match prove_candidate(candidate, (report,)):
-                    case ProvenDescriptionCandidate() as proof:
-                        if (
-                            proof.report_row_number != record.report_row_number
-                            or proof.report_row_sha256 != record.report_row_sha256
-                            or proof.source_label != record.source_label
-                        ):
-                            raise TrustedSourceError("source report row proof mismatch")
-                    case DescriptionCacheRejection() as rejection:
-                        raise TrustedSourceError(
-                            f"source candidate rejected: {rejection.reason}"
-                        )
-                    case unreachable:
-                        assert_never(unreachable)
-                proven_entries.add(
-                    (
-                        entry.category,
-                        entry.base_id,
-                        entry.role,
-                        entry.level,
-                        record.source_map_sha256,
-                        candidate.source_path,
-                    )
-                )
-    except AnchoredSourceError as exc:
-        raise TrustedSourceError(f"source report is unreadable: {exc}") from exc
+            )
     for entry in cache.entries:
         identity = (
             entry.category,
@@ -139,7 +148,7 @@ def validate_source_manifest(
 def _source_report(
     record: DescriptionCacheSourceRecord,
     root: Path,
-    anchored_root: AnchoredSourceRoot,
+    anchored_root: AnchoredSourceRoot | None,
 ) -> LegacySourceReport:
     path = Path(record.report_path)
     absolute = path.expanduser().absolute()
@@ -151,14 +160,19 @@ def _source_report(
         raise TrustedSourceError("source report escapes source root") from exc
     if not relative.parts:
         raise TrustedSourceError("source report escapes source root")
-    try:
-        anchored = anchored_root.read(
-            PurePosixPath(*relative.parts),
-            _MAX_REPORT_BYTES,
-        )
-    except AnchoredSourceError as exc:
-        raise TrustedSourceError(f"source report is unreadable: {exc}") from exc
-    payload = anchored.payload
+    match anchored_root:
+        case AnchoredSourceRoot():
+            try:
+                payload = anchored_root.read(
+                    PurePosixPath(*relative.parts),
+                    _MAX_REPORT_BYTES,
+                ).payload
+            except AnchoredSourceError as exc:
+                raise TrustedSourceError(f"source report is unreadable: {exc}") from exc
+        case None:
+            payload = _read_portable_source_report(absolute, root)
+        case unreachable:
+            assert_never(unreachable)
     if hashlib.sha256(payload).hexdigest() != record.report_sha256:
         raise TrustedSourceError("source report hash mismatch")
     try:
@@ -175,6 +189,31 @@ def _source_report(
         raise TrustedSourceError("source report row hash mismatch")
     state = LegacyStateResult("", record.source_map_sha256, "", "published")
     return LegacySourceReport(state, absolute, record.report_sha256, rows)
+
+
+def _read_portable_source_report(path: Path, root: Path) -> bytes:
+    """Double-read one canonical source path when dir-fd reads are unavailable."""
+    if path.is_symlink() or not path.is_file():
+        raise TrustedSourceError("source report is not a regular file or is a symlink")
+    try:
+        resolved = path.resolve(strict=True)
+    except OSError as exc:
+        raise TrustedSourceError(f"source report is unreadable: {exc}") from exc
+    if resolved != path or not resolved.is_relative_to(root):
+        raise TrustedSourceError("source report escapes source root through a symlink")
+    try:
+        first, identity = read_bounded_regular_file(path, _MAX_REPORT_BYTES)
+        second, _repeated = read_bounded_regular_file(
+            path,
+            _MAX_REPORT_BYTES,
+            expected=identity,
+        )
+        repeated_path = path.resolve(strict=True)
+    except OSError as exc:
+        raise TrustedSourceError(f"source report is unreadable: {exc}") from exc
+    if repeated_path != resolved or first != second:
+        raise TrustedSourceError("source report changed while reading")
+    return first
 
 
 __all__ = ("TrustedSourceError", "validate_rejection_table", "validate_source_manifest")

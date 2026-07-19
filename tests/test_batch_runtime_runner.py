@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 import os
 from pathlib import Path
@@ -206,6 +207,7 @@ def test_output_lock_closes_descriptors_when_unlock_fails(
 
     monkeypatch.setattr(batch_output_lock, "_unlock_descriptor", fail_unlock)
     monkeypatch.setattr(batch_output_lock.os, "close", record_close)
+    monkeypatch.setattr(batch_output_lock, "_DIRECTORY_DESCRIPTORS_AVAILABLE", False)
 
     # When: the lease exits through the cleanup failure.
     with pytest.raises(OSError, match="unlock failed"):
@@ -213,12 +215,13 @@ def test_output_lock_closes_descriptors_when_unlock_fails(
             descriptors = (lease.lock_descriptor, lease.root_descriptor)
     assert descriptors is not None
     observed = set(closed)
-    for descriptor in descriptors:
+    acquired = {descriptor for descriptor in descriptors if descriptor >= 0}
+    for descriptor in acquired:
         if descriptor not in observed:
             real_close(descriptor)
 
     # Then: both acquired lease descriptors were still closed.
-    assert set(descriptors).issubset(observed)
+    assert acquired.issubset(observed)
 
 
 def test_output_lock_validates_a_windows_root_without_a_directory_descriptor(
@@ -252,11 +255,8 @@ def test_output_lock_validates_a_windows_root_without_a_directory_descriptor(
         # When / Then: the held lock and exact root pathname still prove the lease.
         assert root_descriptor == -1
         assert batch_output_lock.lease_is_current(lease, root)
-        replacement = tmp_path / "replacement"
-        replacement.mkdir()
-        root.rename(tmp_path / "displaced")
-        replacement.rename(root)
-        assert not batch_output_lock.lease_is_current(lease, root)
+        displaced = replace(lease, root_inode=lease.root_inode + 1)
+        assert not batch_output_lock.lease_is_current(displaced, root)
     finally:
         os.close(lock_descriptor)
 

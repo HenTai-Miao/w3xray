@@ -20,13 +20,21 @@ from tests.trusted_description_cache_fixture import (
     resign_source_evidence,
     rewrite_source_record,
 )
+from w3xtool import anchored_source
 from w3xtool import trusted_description_cache_path as trusted_cache_path
+from w3xtool import trusted_description_cache_sources as trusted_sources
 from w3xtool.batch_tsv import format_tsv_rows
 from w3xtool.bounded_file import FileIdentity
 from w3xtool.description_cache_schema import LEGACY_DESCRIPTION_HEADER
 from w3xtool.trusted_description_cache import (
     TrustedDescriptionCacheError,
     load_trusted_description_cache,
+)
+
+
+_REQUIRES_ANCHORED_SOURCE = pytest.mark.skipif(
+    not anchored_source._ANCHORED_OPEN_AVAILABLE,
+    reason="requires descriptor-relative no-follow source reads",
 )
 
 
@@ -136,6 +144,7 @@ def test_trusted_cache_rejects_symlinked_source_report(tmp_path: Path) -> None:
         load_trusted_description_cache(root)
 
 
+@_REQUIRES_ANCHORED_SOURCE
 def test_trusted_replay_rejects_intermediate_source_parent_swapped_during_open(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -242,28 +251,28 @@ def test_trusted_cache_rejects_source_file_changing_between_reads(
     # Given: a bound historical report changes during its stable double-read.
     root = published_cache(tmp_path)
     report = tmp_path / "legacy-output" / LEGACY_RELATIVE / "对象描述.tsv"
-    original = report.read_bytes()
-    changed = b"X" + original[1:]
-    report_details = report.stat(follow_symlinks=False)
-    report_identity = report_details.st_dev, report_details.st_ino
-    real_lseek = os.lseek
-    rewinds = 0
+    real_read = trusted_sources.read_bounded_regular_file
+    report_reads = 0
 
-    def change_before_second_read(
-        descriptor: int,
-        position: int,
-        how: int,
-    ) -> int:
-        nonlocal rewinds
-        details = os.fstat(descriptor)
-        identity = details.st_dev, details.st_ino
-        if identity == report_identity and position == 0 and how == os.SEEK_SET:
-            rewinds += 1
-            if rewinds == 2:
-                _ = report.write_bytes(changed)
-        return real_lseek(descriptor, position, how)
+    def change_between_reads(
+        path: Path,
+        maximum: int,
+        *,
+        expected: FileIdentity | None = None,
+    ) -> tuple[bytes, FileIdentity]:
+        nonlocal report_reads
+        payload, identity = real_read(path, maximum, expected=expected)
+        if path != report:
+            return payload, identity
+        report_reads += 1
+        return (payload if report_reads == 1 else b"X" + payload[1:]), identity
 
-    monkeypatch.setattr(os, "lseek", change_before_second_read)
+    monkeypatch.setattr(anchored_source, "_ANCHORED_OPEN_AVAILABLE", False)
+    monkeypatch.setattr(
+        trusted_sources,
+        "read_bounded_regular_file",
+        change_between_reads,
+    )
 
     # When / Then
     with pytest.raises(TrustedDescriptionCacheError, match="changed"):
