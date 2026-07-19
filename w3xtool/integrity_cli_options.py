@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .integrity_snapshot_models import SnapshotRoot
+from .integrity_utf8 import IntegrityUtf8Error, require_utf8_text
 
 
 class IntegrityCliOptionError(ValueError):
@@ -54,6 +55,11 @@ type IntegrityCliOptions = (
 
 def parse_integrity_cli_options(argv: Sequence[str]) -> IntegrityCliOptions:
     """Parse only the exact snapshot, verify, and retained-cache grammars."""
+    try:
+        for value in argv:
+            require_utf8_text(value, "integrity argument")
+    except IntegrityUtf8Error as exc:
+        raise IntegrityCliOptionError(str(exc)) from exc
     if not argv:
         raise IntegrityCliOptionError("缺少完整性操作")
     action = argv[0]

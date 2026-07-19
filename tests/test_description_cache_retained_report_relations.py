@@ -23,6 +23,10 @@ def _payload(tmp_path: Path, row_kind: str) -> dict[str, JsonValue]:
     elif row_kind == "invalid-inventory":
         previous = install_previous(active, tmp_path)
         (previous / "来源清单.tsv").unlink()
+    elif row_kind == "invalid-exact-inventory":
+        previous = install_previous(active, tmp_path)
+        (previous / "来源清单.tsv").unlink()
+        (previous / "forged-extra.tsv").write_bytes(b"forged")
     elif row_kind == "invalid-nested":
         previous = install_previous(active, tmp_path)
         nested = previous / "nested"
@@ -95,6 +99,23 @@ def test_invalid_previous_rows_reject_incomplete_problem_relations(
     row = retained_rows[0]
     assert isinstance(row, dict)
     row.update(updates)
+
+    with pytest.raises(ValueError):
+        retained_api.parse_description_cache_retention_report(json.dumps(payload))
+
+
+def test_exact_inventory_mismatch_rejects_a_forged_non_owned_problem_path(
+    tmp_path: Path,
+) -> None:
+    payload = _payload(tmp_path, "invalid-exact-inventory")
+    retained_rows = payload["retained"]
+    assert isinstance(retained_rows, list)
+    row = retained_rows[0]
+    assert isinstance(row, dict)
+    assert row["file_count"] == 5
+    assert row["entry_count"] == 5
+    assert row["problem_path"] == "来源清单.tsv"
+    row["problem_path"] = "forged-extra.tsv"
 
     with pytest.raises(ValueError):
         retained_api.parse_description_cache_retention_report(json.dumps(payload))

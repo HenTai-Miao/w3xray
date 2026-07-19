@@ -123,7 +123,10 @@ def _validate_complete_invalid_previous(
     if (
         item.file_count is not None
         and item.entry_count is not None
-        and (item.file_count < expected or item.entry_count < expected)
+        and (
+            item.file_count < expected
+            or (item.file_count == expected and item.entry_count == expected)
+        )
         and item.problem_path not in _OWNED_NAMES
     ):
         raise DescriptionCacheRetentionError(

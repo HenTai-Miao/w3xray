@@ -28,6 +28,7 @@ from .description_cache_retained_siblings import (
     transaction_prefix,
 )
 from .safe_output import safe_relative_path
+from .integrity_utf8 import IntegrityUtf8Error, require_utf8_text
 
 
 _FAILED_DIRECTORY_VALIDATIONS: Final = frozenset(
@@ -43,6 +44,7 @@ _FAILED_DIRECTORY_VALIDATIONS: Final = frozenset(
 
 def validate_retention_report(report: DescriptionCacheRetentionReport) -> None:
     """Require exact schema, sibling paths, rows, fields, and canonical order."""
+    _require_utf8_path(report.active_root, "active root")
     if report.schema != DESCRIPTION_CACHE_RETENTION_SCHEMA:
         raise DescriptionCacheRetentionError("unsupported retention report schema")
     if not report.active_root.is_absolute():
@@ -201,8 +203,16 @@ def _identity(kind: CacheArtifactKind, device: int | None, inode: int | None) ->
 
 
 def _sibling_path(active: Path, path: Path) -> None:
+    _require_utf8_path(path, "artifact path")
     if not path.is_absolute() or path.parent != active.parent:
         raise DescriptionCacheRetentionError("artifact is not an active-root sibling")
+
+
+def _require_utf8_path(path: Path, label: str) -> None:
+    try:
+        require_utf8_text(str(path), label)
+    except IntegrityUtf8Error as exc:
+        raise DescriptionCacheRetentionError(str(exc)) from exc
 
 
 def _ordered_unique[T](

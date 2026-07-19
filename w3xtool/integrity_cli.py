@@ -18,11 +18,13 @@ from .description_cache_retained_binding import bind_active_cache
 from .integrity_snapshot import (
     IntegritySnapshotError,
     SnapshotRoot,
+    build_bound_integrity_snapshot,
     build_integrity_snapshot,
     compare_integrity_snapshot,
     format_integrity_snapshot,
     parse_integrity_snapshot,
 )
+from .integrity_snapshot_binding import bind_snapshot_roots, require_snapshot_roots
 from .integrity_cli_options import (
     IntegrityCliOptionError,
     RetainedCacheCliOptions,
@@ -61,13 +63,14 @@ def run_integrity_cli(argv: tuple[str, ...]) -> int:
 def _run_snapshot(roots: tuple[SnapshotRoot, ...], output: Path) -> int:
     destination = Path(os.path.abspath(output.expanduser()))
     try:
-        with bind_snapshot_output(
-            destination,
-            tuple(root.path for root in roots),
-        ) as bound_output:
-            snapshot = build_integrity_snapshot(roots)
-            result = bound_output.write_text(format_integrity_snapshot(snapshot))
-    except (OSError, NotImplementedError) as exc:
+        with bind_snapshot_roots(roots) as bound_roots:
+            with bind_snapshot_output(destination, bound_roots) as bound_output:
+                snapshot = build_bound_integrity_snapshot(bound_roots)
+                result = bound_output.write_text(
+                    format_integrity_snapshot(snapshot),
+                    lambda: require_snapshot_roots(bound_roots),
+                )
+    except (OSError, NotImplementedError, UnicodeError) as exc:
         print(f"完整性快照写入失败：{exc}", file=sys.stderr)
         return 2
     except IntegritySnapshotError as exc:
@@ -118,8 +121,8 @@ def _run_verify(snapshot_path: Path) -> int:
 def _run_retained_cache(active_root: Path, output: Path) -> int:
     destination = Path(os.path.abspath(output.expanduser()))
     try:
-        with bind_retained_output(destination, active_root) as bound_output:
-            with bind_active_cache(active_root) as bound_active:
+        with bind_active_cache(active_root) as bound_active:
+            with bind_retained_output(destination, bound_active) as bound_output:
                 inspection = inspect_bound_retained_description_caches(bound_active)
                 report = inspection.report
                 payload = format_description_cache_retention_report(report)
@@ -127,7 +130,7 @@ def _run_retained_cache(active_root: Path, output: Path) -> int:
                     payload,
                     lambda: inspection.require_current(bound_active),
                 )
-    except (OSError, NotImplementedError) as exc:
+    except (OSError, NotImplementedError, UnicodeError) as exc:
         print(f"保留缓存报告写入失败：{exc}", file=sys.stderr)
         return 2
     except DescriptionCacheRetentionError as exc:

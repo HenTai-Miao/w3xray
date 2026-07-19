@@ -37,19 +37,26 @@ uv run main.py integrity retained-cache \
   --output <retained-cache-report.json>
 ```
 
-- Snapshot roots must be absolute after normalization, nonoverlapping, no-follow directories; outputs cannot be inside an input root.
+- Snapshot roots must be absolute after normalization and bind as physically
+  nonoverlapping no-follow directories. All root descriptors are held through
+  traversal and report publication; case/Unicode aliases and physical ancestor
+  relationships are rejected before scanning.
 - Verification returns 0 for equality, 1 for content/metadata differences, and 2 for request, parse, unsafe-root, or I/O boundaries.
 - Retained-cache inspection holds every no-follow ancestry descriptor plus the
   publication parent and active-root descriptors through both sibling scans
   and report-publication proof; required descriptor capabilities and flags
   fail closed as code 2.
 - Retained `previous`, failed-stage, failed-output, and recovery evidence is reported separately from stage/backup transient violations. Retained objects are never automatically loaded as description sources and are never deleted by inspection.
-- Integrity outputs atomically claim existing and staged inodes without
-  replacing an unclaimed final name, then prove staged/final identities.
-  Rollback and staged cleanup are identity-gated, so a concurrent regular-file
-  or symlink replacement is preserved. If restoring an existing report would
-  overwrite that replacement, the prior report remains under the named
-  private recovery path recorded by the failure.
+- Integrity outputs atomically exchange a complete staged inode with an
+  existing regular output, so the public name is continuously bound across
+  every synchronization boundary. The displaced inode is atomically claimed
+  and proved before cleanup or restoration; cleanup never unlinks the original
+  pathname after a separate stat. A recovery path is reported only after its
+  expected regular-file identity is re-proved, while concurrent regular files
+  and symlinks are preserved.
+- Snapshot/report labels and all external path values must encode as strict
+  UTF-8 before filesystem binding, sorting, hashing, or publication. Invalid
+  external Unicode is a command-boundary exit 2.
 
 ## Protected roots and new outputs
 

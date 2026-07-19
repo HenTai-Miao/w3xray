@@ -10,6 +10,7 @@ from types import TracebackType
 from typing import Final, Literal, Self, override
 
 from .atomic_rename import AtomicRenameUnavailableError, require_atomic_rename_support
+from .integrity_utf8 import IntegrityUtf8Error, require_utf8_text
 
 _PATH_BINDING_AVAILABLE: Final = bool(
     os.name == "posix"
@@ -111,22 +112,35 @@ class BoundDirectoryPath:
                 "directory path binding became unavailable"
             ) from exc
 
+    def identity_chain(self) -> tuple[tuple[int, int], ...]:
+        """Return every currently held directory identity from root to leaf."""
+        self.require_current()
+        return tuple(_directory_identity(os.fstat(value)) for value in self.descriptors)
+
 
 def bind_directory_path(
     requested: Path,
     *,
     create: bool = False,
+    forbidden_ancestors: frozenset[tuple[int, int]] | None = None,
 ) -> BoundDirectoryPath:
     """Open every absolute path component without following symlinks."""
     flags = _require_path_binding_support()
+    try:
+        require_utf8_text(str(requested), "directory path")
+    except IntegrityUtf8Error as exc:
+        raise IntegrityPathBindingError(str(exc)) from exc
     path = Path(os.path.abspath(requested.expanduser()))
     descriptors: list[int] = []
     names: list[str] = []
     identities: list[tuple[int, int, int]] = []
     try:
         descriptors.append(os.open(os.sep, flags))
+        forbidden = forbidden_ancestors or frozenset()
+        _reject_forbidden_ancestor(descriptors[-1], forbidden)
         for name in path.parts[1:]:
             parent = descriptors[-1]
+            _reject_forbidden_ancestor(parent, forbidden)
             try:
                 descriptor = os.open(name, flags, dir_fd=parent)
             except FileNotFoundError:
@@ -138,6 +152,11 @@ def bind_directory_path(
             if not stat.S_ISDIR(details.st_mode):
                 os.close(descriptor)
                 raise IntegrityPathBindingError("path component is not a directory")
+            if _directory_identity(details) in forbidden:
+                os.close(descriptor)
+                raise IntegrityPathBindingError(
+                    "directory path enters a protected root"
+                )
             descriptors.append(descriptor)
             names.append(name)
             identities.append(_binding_identity(details))
@@ -185,6 +204,18 @@ def stable_stat(details: os.stat_result) -> tuple[int, int, int, int, int, int]:
 
 def _binding_identity(details: os.stat_result) -> tuple[int, int, int]:
     return details.st_dev, details.st_ino, details.st_mode
+
+
+def _directory_identity(details: os.stat_result) -> tuple[int, int]:
+    return details.st_dev, details.st_ino
+
+
+def _reject_forbidden_ancestor(
+    descriptor: int,
+    forbidden: frozenset[tuple[int, int]],
+) -> None:
+    if _directory_identity(os.fstat(descriptor)) in forbidden:
+        raise IntegrityPathBindingError("directory path enters a protected root")
 
 
 __all__ = (

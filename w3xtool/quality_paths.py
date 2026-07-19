@@ -78,8 +78,8 @@ tests/test_icon_evidence_query.py
 tests/test_integrity_cli.py
 tests/test_integrity_cli_retained_cache.py
 tests/test_integrity_output_identity_races.py tests/test_integrity_output_safety.py
-tests/test_integrity_platform_boundaries.py tests/test_integrity_snapshot.py
-tests/test_integrity_snapshot_races.py
+tests/test_integrity_physical_aliases.py tests/test_integrity_platform_boundaries.py tests/test_integrity_snapshot.py
+tests/test_integrity_snapshot_races.py tests/test_integrity_utf8_boundaries.py
 tests/test_item_relation_models.py
 tests/test_item_relation_resilience.py
 tests/test_map_relation_loading.py
@@ -95,7 +95,7 @@ tests/test_posix_package_assets.py
 tests/test_quality_gate.py
 tests/test_real_map_item_relation_acceptance.py
 tests/test_reference_id_reports.py
-tests/test_release_metadata.py
+tests/test_release_metadata.py tests/test_safe_output_publication_atomicity.py tests/test_safe_output_publication_cleanup_races.py
 tests/test_windows_acceptance_assets.py
 tests/test_windows_real_install_workflow.py
 w3xtool/__init__.py
@@ -210,13 +210,13 @@ w3xtool/icon_evidence_query.py
 w3xtool/icons.py
 w3xtool/integrity_cli.py
 w3xtool/integrity_cli_options.py
-w3xtool/integrity_output.py
+w3xtool/integrity_output.py w3xtool/integrity_output_path.py
 w3xtool/integrity_path_binding.py
-w3xtool/integrity_snapshot.py
+w3xtool/integrity_snapshot.py w3xtool/integrity_snapshot_binding.py
 w3xtool/integrity_snapshot_file.py
 w3xtool/integrity_snapshot_io.py
 w3xtool/integrity_snapshot_models.py
-w3xtool/integrity_snapshot_tree.py
+w3xtool/integrity_snapshot_tree.py w3xtool/integrity_utf8.py
 w3xtool/item_relation_builder.py
 w3xtool/item_relation_endpoints.py
 w3xtool/item_relation_exports.py
@@ -249,7 +249,7 @@ w3xtool/quality_paths.py
 w3xtool/safe_output.py
 w3xtool/safe_output_chunk_writer.py
 w3xtool/safe_output_path_publication.py
-w3xtool/safe_output_publication.py w3xtool/safe_output_publication_identity.py w3xtool/safe_output_publication_rollback.py""".split()
+w3xtool/safe_output_publication.py w3xtool/safe_output_publication_exchange_rollback.py w3xtool/safe_output_publication_existing.py w3xtool/safe_output_publication_identity.py w3xtool/safe_output_publication_rollback.py""".split()
 )
 
 __all__ = ("STRICT_PATHS",)

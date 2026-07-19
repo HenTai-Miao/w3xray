@@ -15,6 +15,7 @@ from .integrity_snapshot_models import (
     IntegritySnapshot,
     IntegritySnapshotError,
 )
+from .integrity_utf8 import IntegrityUtf8Error, require_utf8_text
 from .safe_output import safe_relative_path
 
 
@@ -143,6 +144,8 @@ def _validate_snapshot(snapshot: IntegritySnapshot) -> None:
     labels: set[str] = set()
     paths: list[Path] = []
     for root in snapshot.roots:
+        _require_utf8(root.label, "snapshot root label")
+        _require_utf8(root.path, "snapshot root path")
         if not root.label or root.label in labels:
             raise IntegritySnapshotError("root labels must be unique and nonempty")
         labels.add(root.label)
@@ -165,6 +168,7 @@ def _validate_snapshot(snapshot: IntegritySnapshot) -> None:
 def _validate_root(root: IntegrityRoot) -> None:
     keys: set[str] = set()
     for entry in root.entries:
+        _require_utf8(entry.relative_path, "snapshot entry path")
         relative = safe_relative_path(entry.relative_path)
         if relative is None or relative.as_posix() != entry.relative_path:
             raise IntegritySnapshotError("unsafe integrity entry path")
@@ -231,6 +235,13 @@ def _digest(value: JsonValue, label: str) -> str:
 def _require_digest(value: str, label: str) -> None:
     if _DIGEST.fullmatch(value) is None:
         raise IntegritySnapshotError(f"invalid {label}")
+
+
+def _require_utf8(value: str, label: str) -> None:
+    try:
+        require_utf8_text(value, label)
+    except IntegrityUtf8Error as exc:
+        raise IntegritySnapshotError(str(exc)) from exc
 
 
 __all__ = ("format_integrity_snapshot", "parse_integrity_snapshot")

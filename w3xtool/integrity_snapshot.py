@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
 from .integrity_snapshot_io import (
     format_integrity_snapshot,
     parse_integrity_snapshot,
     tree_sha256,
 )
-from .integrity_snapshot_tree import scan_integrity_root
+from .integrity_snapshot_binding import (
+    BoundSnapshotRoot,
+    bind_snapshot_roots,
+    require_snapshot_roots,
+)
+from .integrity_snapshot_tree import scan_bound_integrity_root
 from .integrity_snapshot_models import (
     INTEGRITY_SNAPSHOT_SCHEMA,
     IntegrityDifference,
@@ -27,47 +29,32 @@ def build_integrity_snapshot(
     roots: tuple[SnapshotRoot, ...],
 ) -> IntegritySnapshot:
     """Build a stable content-plus-metadata snapshot of explicit roots."""
-    if not roots:
-        raise IntegritySnapshotError("at least one root is required")
+    with bind_snapshot_roots(roots) as bound:
+        return build_bound_integrity_snapshot(bound)
+
+
+def build_bound_integrity_snapshot(
+    roots: tuple[BoundSnapshotRoot, ...],
+) -> IntegritySnapshot:
+    """Build one snapshot while the complete physical root set remains held."""
     normalized_roots: list[IntegrityRoot] = []
-    for item, requested in _preflight_roots(roots):
-        root, entries = scan_integrity_root(requested)
+    require_snapshot_roots(roots)
+    for item in roots:
+        root, entries = scan_bound_integrity_root(item.binding)
         normalized_roots.append(
             IntegrityRoot(
-                item.label,
+                item.requested.label,
                 str(root),
                 entries,
                 sum(entry.size for entry in entries),
                 tree_sha256(entries),
             )
         )
+    require_snapshot_roots(roots)
     return IntegritySnapshot(
         INTEGRITY_SNAPSHOT_SCHEMA,
         tuple(sorted(normalized_roots, key=lambda value: value.label)),
     )
-
-
-def _preflight_roots(
-    roots: tuple[SnapshotRoot, ...],
-) -> tuple[tuple[SnapshotRoot, Path], ...]:
-    labels: set[str] = set()
-    paths: list[Path] = []
-    prepared: list[tuple[SnapshotRoot, Path]] = []
-    for item in roots:
-        if not item.label or item.label in labels:
-            raise IntegritySnapshotError("root labels must be unique and nonempty")
-        labels.add(item.label)
-        path = Path(os.path.abspath(item.path.expanduser()))
-        if any(
-            path == previous
-            or path.is_relative_to(previous)
-            or previous.is_relative_to(path)
-            for previous in paths
-        ):
-            raise IntegritySnapshotError("snapshot roots overlap")
-        paths.append(path)
-        prepared.append((item, path))
-    return tuple(prepared)
 
 
 def compare_integrity_snapshot(
@@ -137,6 +124,7 @@ __all__ = (
     "IntegritySnapshot",
     "IntegritySnapshotError",
     "SnapshotRoot",
+    "build_bound_integrity_snapshot",
     "build_integrity_snapshot",
     "compare_integrity_snapshot",
     "format_integrity_snapshot",

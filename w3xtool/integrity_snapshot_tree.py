@@ -8,6 +8,7 @@ import stat
 
 from .descriptor_open_flags import directory_read_flags
 from .integrity_path_binding import (
+    BoundDirectoryPath,
     IntegrityPathBindingError,
     bind_directory_path,
     stable_stat,
@@ -20,24 +21,7 @@ def scan_integrity_root(root: Path) -> tuple[Path, tuple[IntegrityEntry, ...]]:
     """Bind and scan one explicit root solely through held descriptors."""
     try:
         with bind_directory_path(root) as bound:
-            before = os.fstat(bound.descriptor)
-            entries: list[IntegrityEntry] = []
-            _visit_directory(bound.descriptor, bound.path, "", entries)
-            after = os.fstat(bound.descriptor)
-            bound.require_current()
-            if stable_stat(before) != stable_stat(after):
-                raise IntegritySnapshotError(
-                    f"snapshot root changed while reading: {bound.path}"
-                )
-            return bound.path, tuple(
-                sorted(
-                    entries,
-                    key=lambda entry: (
-                        entry.relative_path.casefold(),
-                        entry.relative_path,
-                    ),
-                )
-            )
+            return scan_bound_integrity_root(bound)
     except IntegritySnapshotError:
         raise
     except (
@@ -47,6 +31,42 @@ def scan_integrity_root(root: Path) -> tuple[Path, tuple[IntegrityEntry, ...]]:
         NotImplementedError,
     ) as exc:
         raise IntegritySnapshotError(f"cannot snapshot root {root}: {exc}") from exc
+
+
+def scan_bound_integrity_root(
+    bound: BoundDirectoryPath,
+) -> tuple[Path, tuple[IntegrityEntry, ...]]:
+    """Scan one caller-held root without reopening its public pathname."""
+    try:
+        before = os.fstat(bound.descriptor)
+        entries: list[IntegrityEntry] = []
+        _visit_directory(bound.descriptor, bound.path, "", entries)
+        after = os.fstat(bound.descriptor)
+        bound.require_current()
+        if stable_stat(before) != stable_stat(after):
+            raise IntegritySnapshotError(
+                f"snapshot root changed while reading: {bound.path}"
+            )
+        return bound.path, tuple(
+            sorted(
+                entries,
+                key=lambda entry: (
+                    entry.relative_path.casefold(),
+                    entry.relative_path,
+                ),
+            )
+        )
+    except IntegritySnapshotError:
+        raise
+    except (
+        IntegrityPathBindingError,
+        IntegritySnapshotFileError,
+        OSError,
+        NotImplementedError,
+    ) as exc:
+        raise IntegritySnapshotError(
+            f"cannot snapshot root {bound.path}: {exc}"
+        ) from exc
 
 
 def _visit_directory(
@@ -125,4 +145,4 @@ def _visit_child_directory(
         os.close(descriptor)
 
 
-__all__ = ("scan_integrity_root",)
+__all__ = ("scan_bound_integrity_root", "scan_integrity_root")

@@ -11,13 +11,20 @@ uv run python -m pytest -q \
   tests/test_integrity_cli.py \
   tests/test_integrity_output_safety.py \
   tests/test_integrity_output_identity_races.py \
+  tests/test_integrity_physical_aliases.py \
   tests/test_integrity_platform_boundaries.py \
+  tests/test_integrity_utf8_boundaries.py \
   tests/test_description_cache_retained_capture.py \
   tests/test_description_cache_retained_integrity.py \
   tests/test_description_cache_retained_integrity_bounds.py \
   tests/test_description_cache_retained_integrity_stability.py \
   tests/test_description_cache_retained_report_relations.py \
   tests/test_integrity_cli_retained_cache.py \
+  tests/test_safe_output.py \
+  tests/test_safe_output_races.py \
+  tests/test_safe_output_publication_atomicity.py \
+  tests/test_safe_output_publication_cleanup_races.py \
+  tests/test_durable_io.py \
   tests/test_release_metadata.py \
   tests/test_posix_package_assets.py \
   tests/test_quality_gate.py \
@@ -26,8 +33,9 @@ uv run python -m pytest -q \
   tests/test_acceptance_runner.py
 ```
 
-Verified on 2026-07-19 after wave-two independent-review closure: 136 passed
-and 1 Darwin platform fixture skipped.
+Verified on 2026-07-19 after wave-three independent-review closure, including
+physical-alias, UTF-8-boundary, cleanup/restoration race, and continuous-name
+publication regressions: 186 passed and 4 platform fixtures skipped.
 
 Repository gate:
 
@@ -35,8 +43,8 @@ Repository gate:
 uv run w3xray-test
 ```
 
-Verified on 2026-07-19 after wave-two independent-review closure: 2,090
-passed, 12 skipped, and 1 subtest passed.
+Verified on 2026-07-19 after wave-three independent-review closure: 2,108
+passed, 15 skipped, and 1 subtest passed.
 
 Maintained strict-path gate:
 
@@ -46,10 +54,10 @@ uv run w3xray-quality
 
 The quality command runs Ruff lint, Ruff format check, and basedpyright `--level error` over one sorted, duplicate-free maintained path tuple. New paths must not be added to `tool.basedpyright.ignore`.
 
-Verified on 2026-07-19 after wave-two independent-review closure: Ruff check
-passed, 254 maintained files were formatted, and basedpyright reported 0
+Verified on 2026-07-19 after wave-three independent-review closure: Ruff check
+passed, 263 maintained files were formatted, and basedpyright reported 0
 errors, 0 warnings, and 0 notes. The changed-file no-excuse audit reported no
-violations in 25 Python files.
+violations in 24 Python files.
 
 Changed-file diagnostics when narrowing a failure:
 
@@ -77,6 +85,9 @@ uv run --with basedpyright basedpyright --level error <paths>
 8. Full regression, quality, lockfile version, whitespace, AGENTS line count, and generated-output checks must pass before the Task 10 commit.
 9. Base snapshots traverse only through held directory descriptors and reject ancestor replacement or any `(dev, ino, size, mtime_ns, ctime_ns, mode)` change around hashing.
 10. Snapshot and retained-report outputs reject symlink components and reserved cache-publication names, and publication rollback leaves no report when output or relevant retained namespaces change.
+11. Snapshot roots and output ancestry reject physical case/normalization aliases while all protected descriptors remain held; rejected output paths create no stage.
+12. Existing-output publication keeps the public name continuously present, including crash-state sync seams; cleanup/restoration atomically claim then prove caller-owned identities, and recovery paths are reported only after re-proof.
+13. Every external label/path boundary rejects non-strict UTF-8 before binding or serialization, and exact 5/5 invalid-previous inventory mismatches require the canonical missing owned problem path.
 
 ## Opt-in real-data acceptance (Task 11 only)
 

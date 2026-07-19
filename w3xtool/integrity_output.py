@@ -7,21 +7,20 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 from types import TracebackType
-from typing import Literal, Self, assert_never, override
+from typing import Literal, Self, assert_never
 
-from .description_cache_retained_siblings import (
-    BACKUP_PREFIX,
-    RETAINED_PREFIX,
-    STAGE_PREFIX,
-)
+from .description_cache_retained_binding import BoundActiveCache
 from .description_cache_retained_integrity_models import (
     DescriptionCacheRetentionError,
 )
-from .integrity_path_binding import (
-    BoundDirectoryPath,
-    IntegrityPathBindingError,
-    bind_directory_path,
+from .integrity_output_path import (
+    IntegrityOutputError,
+    bind_retained_output_path,
+    bind_snapshot_output_path,
 )
+from .integrity_path_binding import BoundDirectoryPath, IntegrityPathBindingError
+from .integrity_snapshot_binding import BoundSnapshotRoot
+from .integrity_snapshot_models import IntegritySnapshotError
 from .safe_output_chunk_writer import write_chunks_to_descriptor
 from .safe_output_models import SafeWriteResult, SafeWriteStatus
 from .safe_output_publication import publish_staged_file
@@ -31,22 +30,6 @@ from .safe_output_staging import (
     open_staged_file,
     remove_owned_staged_file,
 )
-
-
-class IntegrityOutputError(OSError):
-    """An integrity output path or publication crossed a safety boundary."""
-
-    __slots__ = ("detail",)
-
-    detail: str
-
-    def __init__(self, detail: str) -> None:
-        super().__init__(detail)
-        self.detail = detail
-
-    @override
-    def __str__(self) -> str:
-        return self.detail
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +133,7 @@ class BoundIntegrityOutput:
             DescriptionCacheRetentionError,
             IntegrityOutputError,
             IntegrityPathBindingError,
+            IntegritySnapshotError,
             OSError,
         ) as exc:
             return str(exc)
@@ -158,57 +142,20 @@ class BoundIntegrityOutput:
 
 def bind_snapshot_output(
     requested: Path,
-    roots: tuple[Path, ...],
+    roots: tuple[BoundSnapshotRoot, ...],
 ) -> BoundIntegrityOutput:
-    """Reject lexical/proven input containment and bind the output parent."""
-    destination = _absolute_destination(requested)
-    normalized_roots = tuple(_absolute_path(root) for root in roots)
-    if any(
-        destination == root or destination.is_relative_to(root)
-        for root in normalized_roots
-    ):
-        raise IntegrityOutputError("output is inside a snapshot root")
-    return _bind_output(destination)
+    """Bind one output outside all held physical snapshot roots."""
+    destination, parent = bind_snapshot_output_path(requested, roots)
+    return BoundIntegrityOutput(destination, parent)
 
 
 def bind_retained_output(
     requested: Path,
-    active_root: Path,
+    active: BoundActiveCache,
 ) -> BoundIntegrityOutput:
-    """Reject active and all reserved sibling prefixes before binding output."""
-    destination = _absolute_destination(requested)
-    active = _absolute_path(active_root)
-    if destination == active or destination.is_relative_to(active):
-        raise IntegrityOutputError("output is inside the active cache")
-    try:
-        relative = destination.relative_to(active.parent)
-    except ValueError:
-        relative = None
-    if relative is not None and relative.parts:
-        first = relative.parts[0]
-        if first == active.name or first.startswith(
-            (RETAINED_PREFIX, STAGE_PREFIX, BACKUP_PREFIX)
-        ):
-            raise IntegrityOutputError("output uses a reserved cache publication name")
-    return _bind_output(destination)
-
-
-def _bind_output(destination: Path) -> BoundIntegrityOutput:
-    if not destination.name or destination.name in {".", ".."}:
-        raise IntegrityOutputError("output must name a file")
-    try:
-        parent = bind_directory_path(destination.parent, create=True)
-    except IntegrityPathBindingError as exc:
-        raise IntegrityOutputError(str(exc)) from exc
+    """Bind one output outside the held active and reserved cache objects."""
+    destination, parent = bind_retained_output_path(requested, active)
     return BoundIntegrityOutput(destination, parent)
-
-
-def _absolute_destination(path: Path) -> Path:
-    return _absolute_path(path)
-
-
-def _absolute_path(path: Path) -> Path:
-    return Path(os.path.abspath(path.expanduser()))
 
 
 def _failure_status(exc: OSError) -> SafeWriteStatus:

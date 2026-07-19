@@ -74,6 +74,11 @@ def claim_name(
         claimed_name,
     )
     if object_identity(parent_descriptor, claimed_name) != expected:
+        _restore_unproved_claim(
+            parent_descriptor,
+            source_name,
+            claimed_name,
+        )
         raise PublicationIdentityError("claimed output identity changed")
 
 
@@ -81,13 +86,16 @@ def restore_claim(
     parent_descriptor: int,
     claimed_name: str,
     destination_name: str,
+    expected: FileIdentity,
 ) -> str | None:
     """Restore a claimed object without replacing any current destination."""
     try:
-        claimed = object_identity(parent_descriptor, claimed_name)
-        if claimed is None:
-            return "claimed output disappeared before restoration"
-        claim_name(parent_descriptor, claimed_name, destination_name, claimed)
+        claim_name(
+            parent_descriptor,
+            claimed_name,
+            destination_name,
+            expected,
+        )
     except OSError as exc:
         return str(exc)
     return None
@@ -98,17 +106,35 @@ def remove_owned_name(
     name: str,
     expected: FileIdentity,
 ) -> str | None:
-    """Unlink a private name only while it retains the owned identity."""
+    """Claim, prove, and unlink an owned name without unlinking its pathname."""
+    cleanup_name = private_name("w3xray-cleanup")
     try:
-        current = object_identity(parent_descriptor, name)
-        if current is None:
-            return None
-        if current != expected:
-            return "owned output name changed; concurrent object preserved"
-        os.unlink(name, dir_fd=parent_descriptor)
+        claim_name(parent_descriptor, name, cleanup_name, expected)
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        return str(exc)
+    try:
+        os.unlink(cleanup_name, dir_fd=parent_descriptor)
     except OSError as exc:
         return str(exc)
     return None
+
+
+def _restore_unproved_claim(
+    parent_descriptor: int,
+    source_name: str,
+    claimed_name: str,
+) -> None:
+    try:
+        rename_noreplace(
+            parent_descriptor,
+            claimed_name,
+            parent_descriptor,
+            source_name,
+        )
+    except OSError:
+        return
 
 
 def private_name(prefix: str) -> str:
