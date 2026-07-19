@@ -111,6 +111,7 @@ tests/test_save_call_context.py
 tests/test_script_function_index.py
 tests/test_script_sources.py
 tests/test_windows_acceptance_assets.py
+tests/test_windows_acceptance_support.py
 tests/test_windows_real_install_workflow.py""".splitlines()
 )
 

@@ -29,17 +29,53 @@ jobs:
       - name: Execute packaged onedir acceptance
         shell: powershell
         run: |
-          $Onedir = @(Get-ChildItem -LiteralPath ".\dist" -Directory)
+          $RepoRoot = (Resolve-Path -LiteralPath ".").Path
+          . (Join-Path $RepoRoot "tools/windows_process.ps1")
+          $DistDir = Join-Path $RepoRoot "dist"
+          $MapPath = (Resolve-Path -LiteralPath (Join-Path $RepoRoot "tests/fixtures/maps/war3net-map-script-builder.w3x")).Path
+          $CampaignPath = (Resolve-Path -LiteralPath (Join-Path $RepoRoot "tests/fixtures/reference/stormlib-campaign.w3n")).Path
+          $OnedirEvidenceDir = Join-Path $RepoRoot "artifacts/windows-onedir"
+          $OnedirReport = Join-Path $OnedirEvidenceDir "acceptance.json"
+          $OnedirWorkingDirectory = $RepoRoot
+          $Onedir = @(Get-ChildItem -LiteralPath $DistDir -Directory)
           if ($Onedir.Count -ne 1) { throw "Expected one onedir directory" }
           $OnedirExe = @(Get-ChildItem -LiteralPath $Onedir[0].FullName -Filter "*.exe" -File -Recurse)
           if ($OnedirExe.Count -ne 1) { throw "Expected one onedir executable" }
-          & $OnedirExe[0].FullName acceptance `
-            --map ".\tests\fixtures\maps\war3net-map-script-builder.w3x" `
-            --campaign ".\tests\fixtures\reference\stormlib-campaign.w3n" `
-            --output ".\artifacts/windows-onedir" `
-            --report ".\artifacts/windows-onedir/acceptance.json" `
-            --repeat 5 --require-windows
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $OnedirExePath = (Resolve-Path -LiteralPath $OnedirExe[0].FullName).Path
+          if (Test-Path -LiteralPath $OnedirEvidenceDir) {
+            Remove-Item -LiteralPath $OnedirEvidenceDir -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $OnedirEvidenceDir -Force | Out-Null
+          $OnedirAcceptanceArgs = @(
+            "acceptance",
+            "--map", $MapPath,
+            "--campaign", $CampaignPath,
+            "--output", $OnedirEvidenceDir,
+            "--report", $OnedirReport,
+            "--repeat", "5",
+            "--require-windows"
+          )
+          $OnedirCommandLine = ConvertTo-WindowsCommandLine $OnedirAcceptanceArgs
+          $OnedirProcess = Start-Process `
+            -FilePath $OnedirExePath `
+            -ArgumentList $OnedirCommandLine `
+            -WorkingDirectory $OnedirWorkingDirectory `
+            -Wait `
+            -PassThru
+          if ($OnedirProcess.ExitCode -ne 0) {
+            throw "Onedir EXE acceptance failed with exit code $($OnedirProcess.ExitCode); report: $OnedirReport"
+          }
+          if (-not (Test-Path -LiteralPath $OnedirReport -PathType Leaf)) {
+            throw "Onedir EXE acceptance did not write report: $OnedirReport"
+          }
+          $OnedirResult = Get-Content -LiteralPath $OnedirReport -Raw -Encoding UTF8 | ConvertFrom-Json
+          if ($OnedirResult.overall_status -ne "pass") {
+            throw "Onedir EXE acceptance report did not pass: $OnedirReport"
+          }
+          $ReportedExecutable = [System.IO.Path]::GetFullPath([string]$OnedirResult.executable)
+          if (-not [StringComparer]::OrdinalIgnoreCase.Equals($ReportedExecutable, $OnedirExePath)) {
+            throw "Onedir EXE acceptance report identifies a different executable: $ReportedExecutable"
+          }
       - name: Build onefile executable
         run: uv run w3xray-dist --onefile
       - name: Execute packaged onefile acceptance

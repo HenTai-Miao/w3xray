@@ -54,6 +54,7 @@ if ($LASTEXITCODE -ne 0) { throw "uv run w3xray-dist failed" }
 
 $DistDir = Join-Path $RepoRoot "dist"
 $OnedirEvidenceDir = Join-Path $EvidenceDir "windows-onedir"
+$OnedirWorkingDirectory = $RepoRoot
 $Onedir = @(Get-ChildItem -LiteralPath $DistDir -Directory)
 if ($Onedir.Count -ne 1) {
     throw "Expected one onedir directory"
@@ -62,7 +63,11 @@ $OnedirExe = @(Get-ChildItem -LiteralPath $Onedir[0].FullName -Filter "*.exe" -F
 if ($OnedirExe.Count -ne 1) {
     throw "Expected one onedir executable"
 }
+$OnedirExePath = (Resolve-Path -LiteralPath $OnedirExe[0].FullName).Path
 
+if (Test-Path -LiteralPath $OnedirEvidenceDir) {
+    Remove-Item -LiteralPath $OnedirEvidenceDir -Recurse -Force
+}
 New-Item -ItemType Directory -Path $OnedirEvidenceDir -Force | Out-Null
 $OnedirReport = Join-Path $OnedirEvidenceDir "acceptance.json"
 $OnedirAcceptanceArgs = @(
@@ -75,8 +80,27 @@ $OnedirAcceptanceArgs = @(
     "--require-windows",
     "--war3-dir", $env:W3XRAY_WAR3_DIR
 )
-& $OnedirExe[0].FullName @OnedirAcceptanceArgs
-if ($LASTEXITCODE -ne 0) { throw "Onedir EXE acceptance failed; report: $OnedirReport" }
+$OnedirCommandLine = ConvertTo-WindowsCommandLine $OnedirAcceptanceArgs
+$OnedirProcess = Start-Process `
+    -FilePath $OnedirExePath `
+    -ArgumentList $OnedirCommandLine `
+    -WorkingDirectory $OnedirWorkingDirectory `
+    -Wait `
+    -PassThru
+if ($OnedirProcess.ExitCode -ne 0) {
+    throw "Onedir EXE acceptance failed with exit code $($OnedirProcess.ExitCode); report: $OnedirReport"
+}
+if (-not (Test-Path -LiteralPath $OnedirReport -PathType Leaf)) {
+    throw "Onedir EXE acceptance did not write report: $OnedirReport"
+}
+$OnedirResult = Get-Content -LiteralPath $OnedirReport -Raw -Encoding UTF8 | ConvertFrom-Json
+if ($OnedirResult.overall_status -ne "pass") {
+    throw "Onedir EXE acceptance report did not pass: $OnedirReport"
+}
+$ReportedExecutable = [System.IO.Path]::GetFullPath([string]$OnedirResult.executable)
+if (-not [StringComparer]::OrdinalIgnoreCase.Equals($ReportedExecutable, $OnedirExePath)) {
+    throw "Onedir EXE acceptance report identifies a different executable: $ReportedExecutable"
+}
 
 & uv run w3xray-dist --onefile
 if ($LASTEXITCODE -ne 0) { throw "uv run w3xray-dist --onefile failed" }

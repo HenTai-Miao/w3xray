@@ -109,6 +109,7 @@ def test_quality_gate_covers_audit_gap_core_modules() -> None:
         "tests/test_posix_package_assets.py",
         "tests/test_release_metadata.py",
         "tests/test_windows_acceptance_assets.py",
+        "tests/test_windows_acceptance_support.py",
         "tests/test_windows_real_install_workflow.py",
         "w3xtool/__init__.py",
         "w3xtool/gui_item_relation_layout.py",
