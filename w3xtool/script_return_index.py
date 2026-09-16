@@ -12,10 +12,14 @@ from .presentation_safety import tsv_cell as _tsv
 from .resources import RESOURCE_EXTS
 from .save_api_catalog import save_api_info
 from .save_call_context import unescape_arg
-from .script_function_index import ScriptFunction, build_script_function_index
+from .script_function_index import (
+    ScriptFunctionLookup,
+    build_function_lookup,
+    build_script_function_index,
+)
 from .script_scan import _codes_in
 from .script_sources import analysis_script_texts
-from .script_tokens import script_code_text
+from .script_tokens import script_code_text, strip_line_comment as _strip_comment
 
 _RETURN_RE: Final = re.compile(r"^\s*return\b(?P<expr>.*)$", re.IGNORECASE)
 _CALL_RE: Final = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
@@ -47,7 +51,7 @@ class ScriptReturnIndex:
 
 def build_script_return_index(md: MapData) -> ScriptReturnIndex:
     """Return script return expressions with save, variable and object-ID clues."""
-    functions = build_script_function_index(md).functions
+    functions = build_function_lookup(build_script_function_index(md).functions)
     rows: list[ScriptReturn] = []
     for source, text in analysis_script_texts(md):
         rows.extend(_returns_for_script(source, text, functions))
@@ -76,7 +80,7 @@ def format_script_return_index_tsv(index: ScriptReturnIndex) -> str:
 def _returns_for_script(
     source: str,
     text: str,
-    functions: tuple[ScriptFunction, ...],
+    functions: ScriptFunctionLookup,
 ) -> list[ScriptReturn]:
     rows: list[ScriptReturn] = []
     code_lines = script_code_text(text).splitlines()
@@ -96,7 +100,7 @@ def _returns_for_script(
         rows.append(ScriptReturn(
             source=source,
             line=line_no,
-            function=_function_for(source, line_no, functions),
+            function=functions.name_for(source, line_no),
             expression=expression,
             calls=calls,
             variables=variables,
@@ -181,32 +185,6 @@ def _read_quoted(text: str, start: int) -> tuple[str, int]:
     return "".join(chars), len(text)
 
 
-def _function_for(source: str, line: int, functions: tuple[ScriptFunction, ...]) -> str:
-    for item in functions:
-        if item.source == source and item.start_line <= line <= item.end_line:
-            return item.name
-    return ""
-
-
-def _strip_comment(line: str) -> str:
-    index = 0
-    quote = ""
-    escaped = False
-    while index < len(line):
-        char = line[index]
-        if quote:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == quote:
-                quote = ""
-        elif char in {"'", '"'}:
-            quote = char
-        elif line.startswith("//", index) or line.startswith("--", index):
-            return line[:index]
-        index += 1
-    return line
 
 
 def _unique_ordered(values: Iterable[str]) -> tuple[str, ...]:

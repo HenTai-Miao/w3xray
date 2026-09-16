@@ -171,6 +171,7 @@ def _success_worker(
     fingerprint: SourceFingerprint,
     _options: BatchOptions,
     _context: MapLoadContext,
+    **_kwargs: object,
 ) -> MapBatchResult:
     axes = derive_batch_axes(
         PublicationResult.PUBLISHED,
@@ -223,6 +224,7 @@ def _blocking_worker(
     _fingerprint: SourceFingerprint,
     _options: BatchOptions,
     _context: MapLoadContext,
+    **_kwargs: object,
 ) -> MapBatchResult:
     _ = threading.Event().wait(60)
     raise AssertionError("blocking worker was not terminated")
@@ -233,6 +235,7 @@ def _hard_exit_worker(
     _fingerprint: SourceFingerprint,
     _options: BatchOptions,
     _context: MapLoadContext,
+    **_kwargs: object,
 ) -> MapBatchResult:
     os._exit(7)
 
@@ -242,6 +245,7 @@ def _memory_error_worker(
     _fingerprint: SourceFingerprint,
     _options: BatchOptions,
     _context: MapLoadContext,
+    **_kwargs: object,
 ) -> MapBatchResult:
     raise MemoryError("test oom")
 

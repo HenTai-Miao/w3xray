@@ -9,6 +9,7 @@ from .base_names import BASE_NAMES
 from .map_data import GameObject, GameObjectFieldEvidence
 from .object_candidates import ObjectCandidate, ObjectFieldValue, ObjectSourceKind
 from .object_field_selection import (
+    build_selection_index,
     object_field_source_priority,
     public_object_field_key,
     select_current_icon_fields,
@@ -101,6 +102,7 @@ def _materialize(
     category, obj_id = identity
     representative = max(candidates, key=_candidate_identity_rank)
     selected: dict[str, ObjectFieldValue] = {}
+    selection_index = build_selection_index()
     evidence_values: list[ObjectFieldValue] = []
     inherited = base_objects.get(representative.base_id)
     if inherited is not None and inherited[0] == category:
@@ -113,11 +115,11 @@ def _materialize(
                 ObjectSourceKind.BASE,
             )
             evidence_values.append(base_field)
-            select_object_field(selected, base_field, category)
+            select_object_field(selected, base_field, category, selection_index)
     for candidate in candidates:
         for value in candidate.fields:
             evidence_values.append(value)
-            select_object_field(selected, value, category)
+            select_object_field(selected, value, category, selection_index)
     ordered = tuple(
         sorted(selected.items(), key=lambda item: (item[1].label.casefold(), item[0]))
     )

@@ -7,7 +7,7 @@ from bisect import bisect_left, bisect_right
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Final
+from typing import Final, cast, final
 
 from .map_data import MapData
 from .presentation_safety import tsv_cell as _tsv
@@ -21,6 +21,7 @@ _LUA_FUNCTION_RE: Final = re.compile(
 )
 _LUA_OPEN_RE: Final = re.compile(r"\b(function|then|do|repeat)\b")
 _LUA_CLOSE_RE: Final = re.compile(r"\b(end|until)\b")
+_PRIMARY_CALL_RE: Final = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,8 +63,51 @@ class _PrimaryCallIndex:
     counts_by_name: Mapping[str, int]
 
 
+@final
+class ScriptFunctionLookup:
+    """按来源分组的函数范围二分索引。
+
+    各扫描器原来对每个调用点线性遍历全部函数（O(调用数×函数数)），
+    大地图上单这一步就要数秒；函数范围按来源顺序不重叠，可二分定位。
+    """
+
+    __slots__ = ("_by_source",)
+
+    def __init__(self, functions: Iterable[ScriptFunction]) -> None:
+        grouped: dict[str, list[ScriptFunction]] = {}
+        for item in functions:
+            grouped.setdefault(item.source, []).append(item)
+        by_source: dict[str, tuple[tuple[int, ...], tuple[ScriptFunction, ...]]] = {}
+        for source, items in grouped.items():
+            ordered = tuple(sorted(items, key=_function_sort_key))
+            by_source[source] = (tuple(item.start_line for item in ordered), ordered)
+        self._by_source = MappingProxyType(by_source)
+
+    def name_for(self, source: str, line: int) -> str:
+        """Return the enclosing function name for one script line."""
+        entry = self._by_source.get(source)
+        if entry is None:
+            return ""
+        starts, functions = entry
+        index = bisect_right(starts, line) - 1
+        while index >= 0:
+            item = functions[index]
+            if item.end_line >= line:
+                return item.name
+            index -= 1
+        return ""
+
+
+def build_function_lookup(functions: Iterable[ScriptFunction]) -> ScriptFunctionLookup:
+    """Wrap sorted function rows with the shared bisect lookup."""
+    return ScriptFunctionLookup(functions)
+
+
 def build_script_function_index(md: MapData) -> ScriptFunctionIndex:
     """Return function ranges with function-scoped call and object-code clues."""
+    cached = getattr(md, "_script_function_index_cache", None)
+    if cached is not None:
+        return cast("ScriptFunctionIndex", cached)
     calls = build_script_call_catalog(md).calls
     call_index = _build_primary_call_index(calls)
     ranges = tuple(
@@ -72,7 +116,12 @@ def build_script_function_index(md: MapData) -> ScriptFunctionIndex:
         for item in _function_ranges(source, text)
     )
     functions = tuple(_function_row(item, call_index) for item in ranges)
-    return ScriptFunctionIndex(tuple(sorted(functions, key=_function_sort_key)))
+    index = ScriptFunctionIndex(tuple(sorted(functions, key=_function_sort_key)))
+    try:
+        md._script_function_index_cache = index
+    except AttributeError:  # 测试替身可能不是带槽的 MapData
+        pass
+    return index
 
 
 def format_script_function_index_tsv(index: ScriptFunctionIndex) -> str:
@@ -195,7 +244,7 @@ def _mechanism_summary(calls: tuple[ScriptCall, ...]) -> tuple[str, ...]:
 
 
 def _is_primary_call(call: ScriptCall) -> bool:
-    match = re.search(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(", call.example)
+    match = _PRIMARY_CALL_RE.search(call.example)
     return match is not None and match.group(1) == call.function
 
 

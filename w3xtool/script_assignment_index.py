@@ -9,10 +9,14 @@ from typing import Final
 from .api import MapData
 from .presentation_safety import tsv_cell as _tsv
 from .resources import RESOURCE_EXTS
-from .script_function_index import ScriptFunction, build_script_function_index
+from .script_function_index import (
+    ScriptFunctionLookup,
+    build_function_lookup,
+    build_script_function_index,
+)
 from .script_scan import _codes_in
 from .script_sources import analysis_script_texts
-from .script_tokens import script_code_text
+from .script_tokens import script_code_text, strip_line_comment as _strip_comment
 
 _JASS_SET_RE: Final = re.compile(
     r"^\s*set\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?:\[(?P<index>[^\]]+)\])?\s*=\s*",
@@ -44,7 +48,7 @@ class ScriptAssignmentIndex:
 
 def build_script_assignment_index(md: MapData) -> ScriptAssignmentIndex:
     """Return script variable assignments with value and purpose clues."""
-    functions = build_script_function_index(md).functions
+    functions = build_function_lookup(build_script_function_index(md).functions)
     rows: list[ScriptAssignment] = []
     for source, text in analysis_script_texts(md):
         rows.extend(_assignments_for_script(source, text, functions))
@@ -73,7 +77,7 @@ def format_script_assignment_index_tsv(index: ScriptAssignmentIndex) -> str:
 def _assignments_for_script(
     source: str,
     text: str,
-    functions: tuple[ScriptFunction, ...],
+    functions: ScriptFunctionLookup,
 ) -> list[ScriptAssignment]:
     rows: list[ScriptAssignment] = []
     code_lines = script_code_text(text).splitlines()
@@ -107,7 +111,7 @@ def _assignment_row(
     line_no: int,
     match: re.Match[str],
     value: str,
-    functions: tuple[ScriptFunction, ...],
+    functions: ScriptFunctionLookup,
 ) -> ScriptAssignment:
     variable = match.group("name")
     index = (match.group("index") or "").strip()
@@ -116,7 +120,7 @@ def _assignment_row(
     return ScriptAssignment(
         source=source,
         line=line_no,
-        function=_function_for(source, line_no, functions),
+        function=functions.name_for(source, line_no),
         variable=variable,
         index=index,
         value=value,
@@ -127,32 +131,6 @@ def _assignment_row(
     )
 
 
-def _function_for(source: str, line: int, functions: tuple[ScriptFunction, ...]) -> str:
-    for item in functions:
-        if item.source == source and item.start_line <= line <= item.end_line:
-            return item.name
-    return ""
-
-
-def _strip_comment(line: str) -> str:
-    index = 0
-    quote = ""
-    escaped = False
-    while index < len(line):
-        char = line[index]
-        if quote:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == quote:
-                quote = ""
-        elif char in {"'", '"'}:
-            quote = char
-        elif line.startswith("//", index) or line.startswith("--", index):
-            return line[:index]
-        index += 1
-    return line
 
 
 def _first_string(value: str) -> str:

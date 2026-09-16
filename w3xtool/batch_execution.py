@@ -74,9 +74,16 @@ def execute_map_isolated(
     timeout_seconds: float,
     max_memory_bytes: int | None,
     cancellation: CancellationSignal | None,
+    dependency_fingerprint: str | None = None,
 ) -> MapExecutionOutcome:
     """Run one map in a spawn child and reap it on every outcome."""
-    request = build_execution_request(index, fingerprint, options, context)
+    request = build_execution_request(
+        index,
+        fingerprint,
+        options,
+        context,
+        dependency_fingerprint=dependency_fingerprint,
+    )
     process_context = multiprocessing.get_context("spawn")
     receiver, sender = process_context.Pipe(duplex=False)
     process = process_context.Process(
@@ -124,6 +131,7 @@ def _child_entry(
                 request.fingerprint,
                 request.options,
                 request.context(),
+                dependency_fingerprint=request.dependency_fingerprint,
             )
         except MemoryError as exc:
             sender.send_bytes(

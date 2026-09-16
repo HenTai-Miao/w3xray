@@ -1,6 +1,7 @@
 """地图内部结构文件的只读摘要。"""
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 import struct
@@ -105,21 +106,23 @@ def parse_wpm_summary(data: bytes) -> PathingSummary | None:
     if len(data) < end:
         return None
     payload = data[16:end]
+    # 单遍统计字节值再按位聚合；逐 flag 的生成器扫描要过 payload 六次。
+    byte_counts = Counter(payload)
+
+    def _flag_total(flag: int) -> int:
+        return sum(n for byte, n in byte_counts.items() if byte & flag)
+
     return PathingSummary(
         width=width,
         height=height,
         cells=cells,
-        no_walk=_count_flag(payload, 0x02),
-        no_fly=_count_flag(payload, 0x04),
-        no_build=_count_flag(payload, 0x08),
-        blight=_count_flag(payload, 0x20),
-        no_water=_count_flag(payload, 0x40),
-        unknown=_count_flag(payload, 0x80),
+        no_walk=_flag_total(0x02),
+        no_fly=_flag_total(0x04),
+        no_build=_flag_total(0x08),
+        blight=_flag_total(0x20),
+        no_water=_flag_total(0x40),
+        unknown=_flag_total(0x80),
     )
-
-
-def _count_flag(data: bytes, flag: int) -> int:
-    return sum(1 for cell in data if cell & flag)
 
 
 def parse_shd_summary(data: bytes, pathing: PathingSummary | None = None) -> ShadowSummary | None:

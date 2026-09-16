@@ -25,6 +25,8 @@ class MapWorker(Protocol):
         fingerprint: SourceFingerprint,
         options: BatchOptions,
         context: MapLoadContext,
+        *,
+        dependency_fingerprint: str | None = None,
     ) -> MapBatchResult: ...
 
 

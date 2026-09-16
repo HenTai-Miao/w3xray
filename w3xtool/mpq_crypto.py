@@ -48,12 +48,17 @@ def _decrypt(data: bytes, key: int) -> bytes:
     count = len(data) // 4
     if count == 0:
         return data
-    values = list(struct.unpack(f"<{count}I", data[: count * 4]))
+    # 解密是导出路径最重的纯 Python 热点：绑定局部表、去掉冗余掩码
+    # （参与异或的两个数都已是 32 位内），避免每次循环的全局查找。
+    table = CRYPT_TABLE
     seed1 = key & 0xFFFFFFFF
     seed2 = 0xEEEEEEEE
-    for index, encrypted in enumerate(values):
-        seed2 = (seed2 + CRYPT_TABLE[0x400 + (seed1 & 0xFF)]) & 0xFFFFFFFF
-        value = (encrypted ^ ((seed1 + seed2) & 0xFFFFFFFF)) & 0xFFFFFFFF
+    encrypted_words = struct.unpack(f"<{count}I", data[: count * 4])
+    values = [0] * count
+    for index in range(count):
+        encrypted = encrypted_words[index]
+        seed2 = (seed2 + table[0x400 + (seed1 & 0xFF)]) & 0xFFFFFFFF
+        value = encrypted ^ ((seed1 + seed2) & 0xFFFFFFFF)
         values[index] = value
         seed1 = (
             ((~seed1 & 0xFFFFFFFF) << 0x15) + 0x11111111 | (seed1 >> 0x0B)

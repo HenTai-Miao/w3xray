@@ -181,11 +181,19 @@ def process_one_map(
     fingerprint: SourceFingerprint,
     options: BatchOptions,
     context: MapLoadContext,
+    *,
+    dependency_fingerprint: str | None = None,
 ) -> MapBatchResult:
     """Load the focused single-map processor without coupling scan tests to it."""
     from .batch_map_processing import process_one_map as process
 
-    return process(index, fingerprint, options, context)
+    return process(
+        index,
+        fingerprint,
+        options,
+        context,
+        dependency_fingerprint=dependency_fingerprint,
+    )
 
 
 def fingerprint_source(path: str) -> SourceFingerprint:

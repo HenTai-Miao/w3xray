@@ -6,15 +6,31 @@ import hashlib
 import os
 from pathlib import PurePosixPath
 
-from .safe_output import safe_destination
+from .safe_output import safe_relative_path
 
 
-def collision_path(root: str, name: str, payload: bytes) -> str:
-    """Return a stable hash-suffixed path only for a content collision."""
-    digest = hashlib.sha256(payload).hexdigest()
-    destination = safe_destination(root, name)
-    if destination is None or not os.path.isfile(destination):
+def collision_path(
+    root: str,
+    name: str,
+    payload: bytes,
+    *,
+    digest: str | None = None,
+) -> str:
+    """Return a stable hash-suffixed path only for a content collision.
+
+    这里只决定输出文件名；目录/符号链接安全由 write_bytes_safely 的
+    双重目的地验证承担，因此存在性检查不再做第三次全路径 realpath
+    遍历（图标多的地图一次批处理要多出上千次）。摘要只在真发生
+    同尺寸碰撞时才计算，调用方已有原始图标摘要时直接传入。
+    """
+    relative = safe_relative_path(name)
+    if relative is None:
         return name
+    destination = os.path.join(root, *relative.parts)
+    if not os.path.isfile(destination):
+        return name
+    if digest is None:
+        digest = hashlib.sha256(payload).hexdigest()
     try:
         if os.path.getsize(destination) == len(payload):
             with open(destination, "rb") as handle:

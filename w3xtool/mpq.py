@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import struct
+from typing import Final
 
 from .explode import explode as explode
 from .mpq_block_reader import (
@@ -62,6 +63,12 @@ from .mpq_storage import MPQBackingStore, open_mpq_backing
 _decompress_sector = decompress_mpq_sector
 _sparse_decompress = sparse_decompress
 
+# 组件解析与台账盘点会对同名文件各读一次；解压是纯 Python 的最重开销，
+# 把已解压字节按（块索引, 名字候选字节）留在有上限的缓存里直接复用。
+_PAYLOAD_CACHE_BUDGET: Final = 256 * 1024 * 1024
+# 命名查找要重放编码候选并逐项探测哈希表；导出对每个名字会查三次，必须记忆化。
+_RESOLVE_CACHE_LIMIT: Final = 262_144
+
 
 class MPQArchive:
     def __init__(
@@ -78,11 +85,14 @@ class MPQArchive:
         encoded_name_candidates("", legacy_codecs=legacy_codecs)
         self._backing: MPQBackingStore = open_mpq_backing(path)
         self._sync_backing()
+        self._names = None
+        self._resolve_cache: dict[str, tuple[HashEntry, bytes] | None] = {}
+        self._payload_cache: dict[tuple[int, bytes], bytes] = {}
+        self._payload_cache_bytes = 0
         initialized = False
         try:
             self._parse_header()
             self._read_tables()
-            self._names = None
             initialized = True
         finally:
             if not initialized:
@@ -93,6 +103,8 @@ class MPQArchive:
         """Release the owned backing store; repeated calls are harmless."""
         self._backing.close()
         self._sync_backing()
+        self._payload_cache.clear()
+        self._payload_cache_bytes = 0
 
     def _sync_backing(self) -> None:
         self._data = self._backing.data
@@ -129,6 +141,15 @@ class MPQArchive:
         return match[0] if match is not None else None
 
     def _find_hash_match(self, name: str):
+        cache = self._resolve_cache
+        if name in cache:
+            return cache[name]
+        match = self._compute_hash_match(name)
+        if len(cache) < _RESOLVE_CACHE_LIMIT:
+            cache[name] = match
+        return match
+
+    def _compute_hash_match(self, name: str):
         legacy_codecs = getattr(self, "legacy_codecs", None)
         locale_id = getattr(self, "locale_id", 0)
         platform = getattr(self, "platform", 0)
@@ -185,8 +206,17 @@ class MPQArchive:
         bi = entry.block_index
         if bi >= len(self.block_table):       # 块表被截断/索引越界
             raise KeyError(name)
+        cache_key = (bi, candidate)
+        cached = self._payload_cache.get(cache_key)
+        if cached is not None:
+            return cached
         block = self.block_table[bi]
-        return self._read_block(block, real, name_bytes=candidate)
+        payload = self._read_block(block, real, name_bytes=candidate)
+        total = self._payload_cache_bytes + len(payload)
+        if total <= _PAYLOAD_CACHE_BUDGET:
+            self._payload_cache[cache_key] = payload
+            self._payload_cache_bytes = total
+        return payload
 
     def declared_file_size(self, name: str) -> int | None:
         try:

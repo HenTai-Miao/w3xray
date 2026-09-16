@@ -28,6 +28,8 @@ class MapExecutionRequest:
     cache_entries: tuple[DescriptionCacheEntry, ...]
     cache_diagnostics: tuple[str, ...]
     cache_manifest_sha256: str
+    # 父进程算好的依赖指纹；子进程直接复用，避免重扫游戏数据树。
+    dependency_fingerprint: str | None = None
 
     def context(self) -> MapLoadContext:
         """Rebuild mapping-backed cache state inside the child process."""
@@ -51,6 +53,8 @@ def build_execution_request(
     fingerprint: SourceFingerprint,
     options: BatchOptions,
     context: MapLoadContext,
+    *,
+    dependency_fingerprint: str | None = None,
 ) -> MapExecutionRequest:
     """Remove non-picklable mapping proxies from an immutable load context."""
     cache = context.description_cache
@@ -67,6 +71,7 @@ def build_execution_request(
         cache.entries,
         cache.diagnostics,
         context.description_cache_manifest_sha256,
+        dependency_fingerprint,
     )
 
 

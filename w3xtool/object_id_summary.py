@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 
@@ -10,7 +10,7 @@ from .api import GameObject, MapData
 from .base_names import BASE_NAMES
 from .knowledge_io import tsv
 from .object_id_usage import ObjectIdUsageReport, build_object_id_usage, code_decimal
-from .save_analysis import SaveReport, build_save_report
+from .save_analysis import SaveReport, SaveClue, build_save_report
 
 
 @dataclass(frozen=True, slots=True)
@@ -27,21 +27,33 @@ def format_object_id_usage_summary(md: MapData) -> str:
     preplaced = tuple(preplaced_code_uses(md))
     object_lookup = _object_lookup(md)
     codes = _summary_codes(object_lookup, usage, save_report, field_counts, preplaced)
+    # 每个 ID 的计数/详情原本要全量扫脚本条目、存档行、预放置各 2-3 遍，
+    # 千级 ID 时是千万次比较；先按码分组一次，行序保持原顺序。
+    script_counts = Counter(entry.code for entry in usage.entries)
+    save_rows_by_code: dict[str, list[SaveClue]] = defaultdict(list)
+    for row in save_report.rows:
+        for code in row.object_codes:
+            save_rows_by_code[code].append(row)
+    preplaced_by_code: dict[str, list[PreplacedCodeUse]] = defaultdict(list)
+    for use in preplaced:
+        preplaced_by_code[use.code].append(use)
     rows = ["ID\t10进制\t分类\t名称\t对象来源\t脚本引用\t存档/ID线索\t对象字段引用\t预放置引用\t状态\t详情"]
     for code in codes:
         obj = object_lookup.get(code)
+        save_rows = save_rows_by_code.get(code, ())
+        placed = preplaced_by_code.get(code, ())
         rows.append("\t".join((
             tsv(code),
             str(code_decimal(code)),
             tsv(_category(obj)),
             tsv(_name(obj, code)),
             tsv(_source(obj)),
-            str(_script_count(usage, code)),
-            str(_save_count(save_report, code)),
+            str(script_counts.get(code, 0)),
+            str(len(save_rows)),
             str(field_counts.get(code, 0)),
-            str(_preplaced_count(preplaced, code)),
-            tsv(_status(obj, code, usage, save_report, field_counts, preplaced)),
-            tsv(_detail(md, usage, save_report, preplaced, code)),
+            str(len(placed)),
+            tsv(_status(obj, script_counts.get(code, 0), len(save_rows), field_counts.get(code, 0), len(placed))),
+            tsv(_detail(md, usage, save_rows, placed, code)),
         )))
     return "\n".join(rows) + "\n"
 
@@ -108,31 +120,18 @@ def _source(obj: GameObject | None) -> str:
     return obj.ext
 
 
-def _script_count(usage: ObjectIdUsageReport, code: str) -> int:
-    return sum(1 for entry in usage.entries if entry.code == code)
-
-
-def _save_count(save_report: SaveReport, code: str) -> int:
-    return sum(1 for row in save_report.rows if code in row.object_codes)
-
-
-def _preplaced_count(preplaced: tuple[PreplacedCodeUse, ...], code: str) -> int:
-    return sum(1 for use in preplaced if use.code == code)
-
-
 def _status(
     obj: GameObject | None,
-    code: str,
-    usage: ObjectIdUsageReport,
-    save_report: SaveReport,
-    field_counts: dict[str, int],
-    preplaced: tuple[PreplacedCodeUse, ...],
+    script_count: int,
+    save_count: int,
+    field_count: int,
+    preplaced_count: int,
 ) -> str:
     used = (
-        _script_count(usage, code) > 0
-        or _save_count(save_report, code) > 0
-        or field_counts.get(code, 0) > 0
-        or _preplaced_count(preplaced, code) > 0
+        script_count > 0
+        or save_count > 0
+        or field_count > 0
+        or preplaced_count > 0
     )
     if obj is None:
         return "未在对象表中解析"
@@ -142,21 +141,20 @@ def _status(
 def _detail(
     md: MapData,
     usage: ObjectIdUsageReport,
-    save_report: SaveReport,
-    preplaced: tuple[PreplacedCodeUse, ...],
+    save_rows: tuple[SaveClue, ...] | list[SaveClue],
+    placed: tuple[PreplacedCodeUse, ...] | list[PreplacedCodeUse],
     code: str,
 ) -> str:
     parts: list[str] = []
     script = usage.details_for(code)
     if script:
         parts.append(f"脚本={';'.join(script)}")
-    save = tuple(f"{row.source}:{row.line}:{row.operation}" for row in save_report.rows if code in row.object_codes)
+    save = tuple(f"{row.source}:{row.line}:{row.operation}" for row in save_rows)
     if save:
         parts.append(f"存档/ID={';'.join(sorted(set(save)))}")
     fields = tuple(f"{owner}:{field}" for owner, _name, field in md.referenced_by.get(code, ()))
     if fields:
         parts.append(f"对象字段={';'.join(sorted(set(fields)))}")
-    placed = tuple(use.detail for use in preplaced if use.code == code)
     if placed:
-        parts.append(f"预放置={';'.join(sorted(set(placed)))}")
+        parts.append(f"预放置={';'.join(sorted(set(use.detail for use in placed)))}")
     return "；".join(parts)

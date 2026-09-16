@@ -119,6 +119,25 @@ class MapData:
     obj_identity_index: dict[tuple[str, str], GameObject] = field(default_factory=dict)
     icon_evidence: IconEvidenceIndex = field(default_factory=empty_icon_evidence_index)
     _closed: bool = field(default=False, init=False, repr=False)
+    # 脚本在加载完成后不再变化；函数范围索引是纯派生数据（实际类型
+    # ScriptFunctionIndex，用 object 注解避免与 script_function_index 成环），
+    # 多个扫描器（触发器注册/参数索引/局部变量等）共用一次构建结果。
+    _script_function_index_cache: object | None = field(
+        default=None, init=False, repr=False
+    )
+    # 资源引用报告同样是加载后不变的派生数据（实际类型 ResourceReport），
+    # 分析页、审计、资料包会各自构建一次，共用缓存。
+    _resource_report_cache: object | None = field(
+        default=None, init=False, repr=False
+    )
+    # 脚本调用目录（ScriptCallCatalog）与存档分析报告（SaveReport）
+    # 也是加载后不变的派生数据；多个索引导出/分析页会重复构建。
+    _script_call_catalog_cache: object | None = field(
+        default=None, init=False, repr=False
+    )
+    _save_report_cache: object | None = field(
+        default=None, init=False, repr=False
+    )
 
     def category_counts(self) -> dict[str, int]:
         """Return object counts by category in insertion order."""

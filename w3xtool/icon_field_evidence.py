@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from functools import lru_cache
 from typing import Final, assert_never
 
 from .object_candidates import ObjectSourceKind
@@ -41,6 +42,7 @@ _LEGACY_FALSE_ALIASES: Final = frozenset(
 _FILTERED_VALUE_TYPES: Final = frozenset(("model", "real"))
 
 
+@lru_cache(maxsize=131_072)
 def classify_icon_field(
     category: str,
     key: str,
@@ -48,7 +50,10 @@ def classify_icon_field(
     value_type: str,
     source_kind: ObjectSourceKind,
 ) -> IconFieldDecision:
-    """Return the exact icon eligibility decision for one object field."""
+    """Return the exact icon eligibility decision for one object field.
+
+    纯函数；同一字段签名在整个物化/图标链路里会被查询多次，记忆化。
+    """
     _ = label
     canonical_key = _canonical_key(key)
     normalized_type = value_type.casefold()

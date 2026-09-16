@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Final
 
@@ -55,6 +56,13 @@ class SaveCallContext:
     sync_prefix: str = ""
 
 
+_INTERESTING_RE: Final = re.compile(r"['\"(),]")
+_QUOTE_SCAN_BY_CHAR: Final = {
+    "'": re.compile(r"\\.|'"),
+    '"': re.compile(r'\\.|"'),
+}
+
+
 def structured_context(name: str, args: tuple[str, ...]) -> SaveCallContext:
     """Extract file/key/sync context from a matched save-style API call."""
     file_path = _arg_at(args, _FILE_ARG_INDEX.get(name))
@@ -92,44 +100,61 @@ def _arg_at(args: tuple[str, ...], index: int | None) -> str:
 
 
 def extract_call_args(line: str, start: int) -> tuple[str, ...]:
-    """Extract top-level comma-separated arguments from ``line[start:]``."""
+    """Extract top-level comma-separated arguments from ``line[start:]``.
+
+    这是全部脚本扫描里调用最多的热函数（单图几十万次）；逐字符的
+    Python 状态机会在每个字符上做列表追加，改成用预编译正则跳到
+    下一个引号/括号/逗号，普通字符段由 C 层扫描，参数用切片取出。
+    """
     args: list[str] = []
-    chunk: list[str] = []
+    chunk_start = start
     depth = 0
-    quote = ""
-    escaped = False
-    for index in range(start, len(line)):
+    index = start
+    search = _INTERESTING_RE.search
+    while True:
+        match = search(line, index)
+        if match is None:
+            return ()
+        index = match.start()
         char = line[index]
-        if quote:
-            chunk.append(char)
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == quote:
-                quote = ""
-            continue
-        if char in {"'", '"'}:
-            quote = char
-            chunk.append(char)
+        if char in "'\"":
+            index = _skip_quoted(line, index)
             continue
         if char == "(":
             depth += 1
-            chunk.append(char)
+            index += 1
             continue
         if char == ")":
             if depth == 0:
-                value = "".join(chunk).strip()
-                return tuple((*args, value)) if value or args else ()
+                value = line[chunk_start:index].strip()
+                if value or args:
+                    args.append(value)
+                    return tuple(args)
+                return ()
             depth -= 1
-            chunk.append(char)
+            index += 1
             continue
-        if char == "," and depth == 0:
-            args.append("".join(chunk).strip())
-            chunk = []
+        if char == ",":
+            if depth == 0:
+                args.append(line[chunk_start:index].strip())
+                chunk_start = index + 1
+            index += 1
             continue
-        chunk.append(char)
-    return ()
+        index += 1
+
+
+def _skip_quoted(line: str, start: int) -> int:
+    """Return the index just past the closing quote of ``line[start]``."""
+    pattern = _QUOTE_SCAN_BY_CHAR[line[start]]
+    index = start + 1
+    while True:
+        match = pattern.search(line, index)
+        if match is None:
+            return len(line)
+        if match.group(0).startswith("\\"):
+            index = match.end()
+            continue
+        return match.end()
 
 
 def clean_arg(arg: str) -> str:

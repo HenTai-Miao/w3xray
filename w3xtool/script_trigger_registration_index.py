@@ -10,9 +10,13 @@ from typing import Final
 from .map_data import MapData
 from .presentation_safety import tsv_cell as _tsv
 from .save_call_context import extract_call_args, unescape_arg
-from .script_function_index import ScriptFunction, build_script_function_index
+from .script_function_index import (
+    ScriptFunctionLookup,
+    build_function_lookup,
+    build_script_function_index,
+)
 from .script_sources import analysis_script_texts
-from .script_tokens import script_code_text
+from .script_tokens import script_code_text, strip_line_comment as _strip_comment
 
 _CALL_RE: Final = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 _EVENT_RE: Final = re.compile(r"\b[A-Z][A-Z0-9_]*EVENT[A-Z0-9_]*\b")
@@ -39,7 +43,7 @@ class ScriptTriggerRegistrationIndex:
 
 def build_script_trigger_registration_index(md: MapData) -> ScriptTriggerRegistrationIndex:
     """Return trigger, action, condition and timer registrations from script code."""
-    functions = build_script_function_index(md).functions
+    functions = build_function_lookup(build_script_function_index(md).functions)
     rows: list[ScriptTriggerRegistration] = []
     for source, text in analysis_script_texts(md):
         rows.extend(_registrations_for_script(source, text, functions))
@@ -69,7 +73,7 @@ def format_script_trigger_registration_index_tsv(
 def _registrations_for_script(
     source: str,
     text: str,
-    functions: tuple[ScriptFunction, ...],
+    functions: ScriptFunctionLookup,
 ) -> list[ScriptTriggerRegistration]:
     rows: list[ScriptTriggerRegistration] = []
     line_starts = _line_starts(text)
@@ -85,7 +89,7 @@ def _registrations_for_script(
         rows.append(ScriptTriggerRegistration(
             source=source,
             line=line,
-            function=_function_for(source, line, functions),
+            function=functions.name_for(source, line),
             registration_type=registration_type,
             handle=_handle(args),
             api=api,
@@ -171,38 +175,12 @@ def _clean_arg(arg: str) -> str:
     return value
 
 
-def _function_for(source: str, line: int, functions: tuple[ScriptFunction, ...]) -> str:
-    for item in functions:
-        if item.source == source and item.start_line <= line <= item.end_line:
-            return item.name
-    return ""
-
-
 def _summary(lines: list[str], line_no: int) -> str:
     if line_no > len(lines):
         return ""
     return _strip_comment(lines[line_no - 1]).strip()[:160]
 
 
-def _strip_comment(line: str) -> str:
-    index = 0
-    quote = ""
-    escaped = False
-    while index < len(line):
-        char = line[index]
-        if quote:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == quote:
-                quote = ""
-        elif char in {"'", '"'}:
-            quote = char
-        elif line.startswith("//", index) or line.startswith("--", index):
-            return line[:index]
-        index += 1
-    return line
 
 
 def _line_starts(text: str) -> list[int]:

@@ -9,10 +9,14 @@ from typing import Final
 
 from .api import MapData
 from .presentation_safety import tsv_cell as _tsv
-from .script_function_index import ScriptFunction, build_script_function_index
+from .script_function_index import (
+    ScriptFunctionLookup,
+    build_function_lookup,
+    build_script_function_index,
+)
 from .script_scan import _codes_in
 from .script_sources import analysis_script_texts
-from .script_tokens import script_code_text
+from .script_tokens import script_code_text, strip_line_comment as _strip_comment
 
 _VAR_RE: Final = re.compile(
     r"\b(?:udg|bj|gg_trg|gg_unit|gg_item|gg_dest|gg_rct|gg_cam|gg_snd)_[A-Za-z0-9_]+\b",
@@ -46,7 +50,7 @@ class ScriptVariableUsageIndex:
 
 def build_script_variable_usage_index(md: MapData) -> ScriptVariableUsageIndex:
     """Return udg_/gg_/bj_ variable reads and writes with script context."""
-    functions = build_script_function_index(md).functions
+    functions = build_function_lookup(build_script_function_index(md).functions)
     rows: list[ScriptVariableUsage] = []
     for source, text in analysis_script_texts(md):
         rows.extend(_usages_for_script(source, text, functions))
@@ -74,7 +78,7 @@ def format_script_variable_usage_index_tsv(index: ScriptVariableUsageIndex) -> s
 def _usages_for_script(
     source: str,
     text: str,
-    functions: tuple[ScriptFunction, ...],
+    functions: ScriptFunctionLookup,
 ) -> list[ScriptVariableUsage]:
     rows: list[ScriptVariableUsage] = []
     code_lines = script_code_text(text).splitlines()
@@ -92,7 +96,7 @@ def _usages_for_script(
             rows.append(ScriptVariableUsage(
                 source=source,
                 line=line_no,
-                function=_function_for(source, line_no, functions),
+                function=functions.name_for(source, line_no),
                 variable=variable,
                 access=_access(variable, write_target, code_line),
                 category=_category(variable),
@@ -152,32 +156,6 @@ def _line_call(line: str) -> str:
     return match.group(1) if match is not None else ""
 
 
-def _function_for(source: str, line: int, functions: tuple[ScriptFunction, ...]) -> str:
-    for item in functions:
-        if item.source == source and item.start_line <= line <= item.end_line:
-            return item.name
-    return ""
-
-
-def _strip_comment(line: str) -> str:
-    index = 0
-    quote = ""
-    escaped = False
-    while index < len(line):
-        char = line[index]
-        if quote:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == quote:
-                quote = ""
-        elif char in {"'", '"'}:
-            quote = char
-        elif line.startswith("//", index) or line.startswith("--", index):
-            return line[:index]
-        index += 1
-    return line
 
 
 def _unique_ordered(values: Iterable[str]) -> tuple[str, ...]:

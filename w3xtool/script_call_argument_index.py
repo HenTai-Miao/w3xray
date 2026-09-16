@@ -12,9 +12,14 @@ from .presentation_safety import tsv_cell as _tsv
 from .resources import RESOURCE_EXTS
 from .save_api_catalog import object_api_category, save_api_info
 from .save_call_context import extract_call_args, unescape_arg
-from .script_function_index import ScriptFunction, build_script_function_index
+from .script_function_index import (
+    ScriptFunctionLookup,
+    build_function_lookup,
+    build_script_function_index,
+)
 from .script_scan import _codes_in
 from .script_sources import analysis_script_texts
+from .script_tokens import is_lua_function_definition as _is_lua_function_definition
 from .script_tokens import script_code_text
 
 _CALL_RE: Final = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
@@ -44,7 +49,7 @@ class ScriptCallArgumentIndex:
 
 def build_script_call_argument_index(md: MapData) -> ScriptCallArgumentIndex:
     """Return each script call argument with save, resource and object-code clues."""
-    functions = build_script_function_index(md).functions
+    functions = build_function_lookup(build_script_function_index(md).functions)
     rows: list[ScriptCallArgument] = []
     for source, text in analysis_script_texts(md):
         rows.extend(_arguments_for_script(source, text, functions))
@@ -74,7 +79,7 @@ def format_script_call_argument_index_tsv(index: ScriptCallArgumentIndex) -> str
 def _arguments_for_script(
     source: str,
     text: str,
-    functions: tuple[ScriptFunction, ...],
+    functions: ScriptFunctionLookup,
 ) -> list[ScriptCallArgument]:
     rows: list[ScriptCallArgument] = []
     line_starts = _line_starts(text)
@@ -90,7 +95,7 @@ def _arguments_for_script(
         rows.extend(_argument_rows(
             source,
             line_no,
-            _function_for(source, line_no, functions),
+            functions.name_for(source, line_no),
             call,
             mechanism,
             raw_args,
@@ -211,19 +216,6 @@ def _looks_like_save_key(call: str, mechanism: str, value: str) -> bool:
     if any(word in lowered for word in ("save", "cache", "key", "load", "slot", "password")):
         return True
     return "." in value and not _looks_like_resource_path(value)
-
-
-def _function_for(source: str, line: int, functions: tuple[ScriptFunction, ...]) -> str:
-    for item in functions:
-        if item.source == source and item.start_line <= line <= item.end_line:
-            return item.name
-    return ""
-
-
-def _is_lua_function_definition(script: str, start: int) -> bool:
-    line_start = script.rfind("\n", 0, start) + 1
-    prefix = script[line_start:start]
-    return re.search(r"\bfunction\s+(?:[A-Za-z_][A-Za-z0-9_]*[.:]?)*$", prefix) is not None
 
 
 def _line_starts(text: str) -> list[int]:

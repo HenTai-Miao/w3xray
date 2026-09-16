@@ -15,7 +15,7 @@ from .save_call_context import unescape_arg
 from .script_function_index import ScriptFunction, build_script_function_index
 from .script_scan import _codes_in
 from .script_sources import analysis_script_texts
-from .script_tokens import script_code_text
+from .script_tokens import script_code_text, strip_line_comment as _strip_comment
 
 _LOOP_RE: Final = re.compile(r"^\s*loop\b", re.IGNORECASE)
 _EXITWHEN_RE: Final = re.compile(r"^\s*exitwhen\s+(?P<expr>.+?)\s*$", re.IGNORECASE)
@@ -206,25 +206,6 @@ def _function_for(source: str, line: int, functions: tuple[ScriptFunction, ...])
     return ""
 
 
-def _strip_comment(line: str) -> str:
-    index = 0
-    quote = ""
-    escaped = False
-    while index < len(line):
-        char = line[index]
-        if quote:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == quote:
-                quote = ""
-        elif char in {"'", '"'}:
-            quote = char
-        elif line.startswith("//", index) or line.startswith("--", index):
-            return line[:index]
-        index += 1
-    return line
 
 
 def _unique_ordered(values: Iterable[str]) -> tuple[str, ...]:

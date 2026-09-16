@@ -51,6 +51,8 @@ def load_map(
     _depth: int = 0,
     shared_index: Mapping[tuple[str, str], GameObject] | None = None,
     load_context: MapLoadContext | None = None,
+    *,
+    known_sha256: str | None = None,
 ) -> MapData:
     path = os.fspath(path)
     if load_context is None:
@@ -64,7 +66,10 @@ def load_map(
         md = _load_map_impl(archive, path, _depth, shared_index, load_context)
         md.archive_source = _root_archive_source(path, load_context)
         if isinstance(archive, InventoryArchive):
-            md.extraction_ledger = build_archive_inventory(archive, source_sha256(path))
+            md.extraction_ledger = build_archive_inventory(
+                archive,
+                known_sha256 if known_sha256 is not None else source_sha256(path),
+            )
         return md
 
 

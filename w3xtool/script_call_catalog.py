@@ -7,7 +7,7 @@ from bisect import bisect_right
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, cast
 
 from .map_data import MapData
 from .presentation_safety import tsv_cell as _tsv
@@ -15,6 +15,7 @@ from .save_api_catalog import object_api_category, save_api_info
 from .save_call_context import extract_call_args, unescape_arg
 from .script_scan import _codes_in
 from .script_sources import analysis_script_texts
+from .script_tokens import is_lua_function_definition as _is_lua_function_definition
 from .script_tokens import script_code_text
 
 _CALL_RE: Final = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
@@ -51,11 +52,23 @@ class ScriptCallCatalog:
 
 
 def build_script_call_catalog(md: MapData) -> ScriptCallCatalog:
-    """Return script calls grouped by function/native name."""
+    """Return script calls grouped by function/native name.
+
+    目录是加载后不变的派生数据；函数索引、对象码出现索引等会
+    重复构建，挂在 MapData 上共用一次扫描结果。
+    """
+    cached = getattr(md, "_script_call_catalog_cache", None)
+    if cached is not None:
+        return cast("ScriptCallCatalog", cached)
     calls: list[ScriptCall] = []
     for source, text in analysis_script_texts(md):
         calls.extend(_scan_script_calls(source, text))
-    return ScriptCallCatalog(calls=tuple(calls), rows=_group_calls(calls))
+    catalog = ScriptCallCatalog(calls=tuple(calls), rows=_group_calls(calls))
+    try:
+        md._script_call_catalog_cache = catalog
+    except AttributeError:  # 测试替身可能不是带槽的 MapData
+        pass
+    return catalog
 
 
 def format_script_call_catalog_tsv(catalog: ScriptCallCatalog) -> str:
@@ -178,12 +191,6 @@ def _read_quoted(text: str, start: int) -> tuple[str, int]:
             chars.append(char)
         index += 1
     return "".join(chars), len(text)
-
-
-def _is_lua_function_definition(script: str, start: int) -> bool:
-    line_start = script.rfind("\n", 0, start) + 1
-    prefix = script[line_start:start]
-    return re.search(r"\bfunction\s+(?:[A-Za-z_][A-Za-z0-9_]*[.:]?)*$", prefix) is not None
 
 
 def _line_starts(text: str) -> list[int]:

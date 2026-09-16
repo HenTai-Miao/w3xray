@@ -6,7 +6,7 @@ import re
 from bisect import bisect_right
 from collections import Counter
 from dataclasses import dataclass
-from typing import Final
+from typing import Final, cast
 
 from .api import MapData
 from .presentation_safety import tsv_cell as _tsv
@@ -74,10 +74,19 @@ class SaveReport:
 
 
 def build_save_report(md: MapData) -> SaveReport:
+    """扫描脚本构建存档读写线索；加载后不变，挂在 MapData 上共用。"""
+    cached = getattr(md, "_save_report_cache", None)
+    if cached is not None:
+        return cast("SaveReport", cached)
     rows: list[SaveClue] = []
     for source, text in analysis_script_texts(md):
         rows.extend(_scan_script(source, text))
-    return SaveReport(tuple(rows))
+    report = SaveReport(tuple(rows))
+    try:
+        md._save_report_cache = report
+    except AttributeError:  # 测试替身可能不是带槽的 MapData
+        pass
+    return report
 
 
 def format_save_report_tsv(report: SaveReport) -> str:

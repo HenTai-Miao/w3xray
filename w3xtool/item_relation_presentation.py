@@ -62,8 +62,81 @@ def _append_section(
     if not relations:
         return
     blocks = [f"【{title}】"]
-    blocks.extend(format_relation_evidence(relation) for relation in relations)
+    for group in _merge_shared_evidence(relations):
+        if len(group) == 1:
+            blocks.append(format_relation_evidence(group[0]))
+        else:
+            blocks.append(_format_merged_relations(group))
     sections.append("\n\n".join(blocks))
+
+
+def _merge_shared_evidence(
+    relations: tuple[ItemRelation, ...],
+) -> tuple[tuple[ItemRelation, ...], ...]:
+    """Fold adjacent relations that differ only in skill endpoint and ID.
+
+    一个多码字段（如 iabi="A0TU,A089,AIt9"）会拆出多条关系，每条携带
+    同一份整字段证据；相邻且上下文/证据一致时合并成一块，端点聚合展示。
+    """
+
+    def _merge_key(relation: ItemRelation) -> tuple[object, ...]:
+        return (
+            relation.kind,
+            relation.item,
+            relation.source,
+            relation.map_name,
+            relation.instance_serial,
+            relation.player,
+            relation.x,
+            relation.y,
+            relation.z,
+            relation.slot,
+            relation.group_index,
+            relation.entry_index,
+            relation.chance,
+            relation.ingredients,
+            relation.confidence,
+            relation.completeness,
+            relation.unresolved_reason,
+            relation.evidence,
+        )
+
+    groups: list[list[ItemRelation]] = []
+    previous_key: tuple[object, ...] | None = None
+    for relation in relations:
+        key = _merge_key(relation)
+        if key != previous_key or not groups:
+            groups.append([relation])
+            previous_key = key
+        else:
+            groups[-1].append(relation)
+    return tuple(tuple(group) for group in groups)
+
+
+def _format_merged_relations(group: tuple[ItemRelation, ...]) -> str:
+    first = group[0]
+    lines = [
+        f"关系：{first.kind.value}（{len(group)} 条，共享同一证据）",
+        f"装备：{_format_endpoint(first.item)}",
+        "关系 ID：" + "、".join(relation.relation_id for relation in group),
+    ]
+    if first.source is not None:
+        lines.append(f"来源对象：{_format_endpoint(first.source)}")
+    skills = tuple(
+        _format_endpoint(relation.skill)
+        for relation in group
+        if relation.skill is not None
+    )
+    if skills:
+        lines.append("技能：" + "、".join(skills))
+    _append_context(lines, first)
+    lines.append(
+        f"可信度：{first.confidence.value}｜完整性：{first.completeness.value}"
+    )
+    if first.unresolved_reason:
+        lines.append(f"未解析原因：{first.unresolved_reason}")
+    _append_evidence(lines, first)
+    return "\n".join(lines)
 
 
 def _append_context(lines: list[str], relation: ItemRelation) -> None:

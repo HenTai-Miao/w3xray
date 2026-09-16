@@ -104,7 +104,7 @@ def _export(
     objects: tuple[IconObjectReference, ...],
     resolution_layer: IconResolutionLayer | None,
 ) -> IconExportRecord:
-    original_path = collision_path(root, original_path, payload)
+    original_path = collision_path(root, original_path, payload, digest=digest)
     original = write_bytes_safely(root, original_path, payload)
     original_failure = _write_failure_state(original)
     if original_failure is not None:

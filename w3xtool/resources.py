@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Final, cast
 
 from .script_sources import analysis_script_texts
 
@@ -70,7 +70,14 @@ class ResourceReport:
 
 
 def build_resource_report(md: MapData) -> ResourceReport:
-    """构建资源引用报告；仅使用 MapData 已解析内容。"""
+    """构建资源引用报告；仅使用 MapData 已解析内容。
+
+    报告是加载完成后的纯派生数据；分析页、审计、资料包各自调用，
+    挂在 MapData 上的缓存让一次会话只构建一次。
+    """
+    cached = getattr(md, "_resource_report_cache", None)
+    if cached is not None:
+        return cast("ResourceReport", cached)
     refs: dict[str, list[ResourceRef]] = {}
     for obj in _all_objects(md):
         _collect_object_refs(refs, obj)
@@ -87,7 +94,12 @@ def build_resource_report(md: MapData) -> ResourceReport:
     )
     referenced = set(refs)
     unreferenced = tuple(path for path in archive_assets if path not in referenced)
-    return ResourceReport(nodes, archive_assets, unreferenced)
+    report = ResourceReport(nodes, archive_assets, unreferenced)
+    try:
+        md._resource_report_cache = report
+    except AttributeError:  # 测试替身可能不是带槽的 MapData
+        pass
+    return report
 
 
 def find_resource_paths(text: str) -> tuple[str, ...]:

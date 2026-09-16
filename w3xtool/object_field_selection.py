@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Final, assert_never
 
 from .icon_field_evidence import (
@@ -49,37 +51,134 @@ _BASE_LABEL_ALIASES: Final[Mapping[str, str]] = {
 }
 
 
+@dataclass(slots=True)
+class SelectionIndex:
+    """select_object_field 的标签加速索引，须与 ``selected`` 同步维护。
+
+    物化一个对象原本要对每个字段全量扫已选条目做标签优先级判定，
+    字段多的对象是平方级；这里按 casefold 标签维护非 BASE 计数和
+    BASE 条目映射，判定降为常数时间。不带索引调用时回退到原扫描。
+    """
+
+    non_base_counts: dict[str, int] = field(default_factory=dict)
+    base_entries: dict[str, dict[str, ObjectFieldValue]] = field(
+        default_factory=dict
+    )
+
+
+def build_selection_index() -> SelectionIndex:
+    """Return one fresh accelerator index for a materialization accumulator."""
+    return SelectionIndex()
+
+
 def select_object_field(
     selected: dict[str, ObjectFieldValue],
     value: ObjectFieldValue,
     category: str,
+    index: SelectionIndex | None = None,
 ) -> None:
     """Mutate the materialization accumulator with the winning field value."""
     identity = _field_identity(value, category)
     if not identity.startswith("display:"):
         label = value.label.casefold()
         if value.source_kind is ObjectSourceKind.BASE:
-            if any(
-                existing.source_kind is not ObjectSourceKind.BASE
-                and existing.label.casefold() == label
-                for existing in selected.values()
-            ):
+            if _blocked_by_non_base_label(selected, label, index):
                 return
         else:
-            for existing_identity, existing in tuple(selected.items()):
-                if (
-                    existing_identity != "display:icon"
-                    and existing.source_kind is ObjectSourceKind.BASE
-                    and existing.label.casefold() == label
-                ):
-                    del selected[existing_identity]
+            _remove_base_labeled(selected, label, index)
     previous = selected.get(identity)
     if previous is None or _field_rank(value, identity, category) > _field_rank(
         previous,
         identity,
         category,
     ):
-        selected[identity] = value
+        _store_selected(selected, identity, value, index)
+
+
+def _blocked_by_non_base_label(
+    selected: Mapping[str, ObjectFieldValue],
+    label: str,
+    index: SelectionIndex | None,
+) -> bool:
+    if index is not None:
+        return index.non_base_counts.get(label, 0) > 0
+    return any(
+        existing.source_kind is not ObjectSourceKind.BASE
+        and existing.label.casefold() == label
+        for existing in selected.values()
+    )
+
+
+def _remove_base_labeled(
+    selected: dict[str, ObjectFieldValue],
+    label: str,
+    index: SelectionIndex | None,
+) -> None:
+    if index is not None:
+        entries = index.base_entries.get(label)
+        if not entries:
+            return
+        for identity in tuple(entries):
+            if identity == "display:icon":
+                continue
+            del selected[identity]
+            del entries[identity]
+        if not entries:
+            del index.base_entries[label]
+        return
+    for existing_identity, existing in tuple(selected.items()):
+        if (
+            existing_identity != "display:icon"
+            and existing.source_kind is ObjectSourceKind.BASE
+            and existing.label.casefold() == label
+        ):
+            del selected[existing_identity]
+
+
+def _store_selected(
+    selected: dict[str, ObjectFieldValue],
+    identity: str,
+    value: ObjectFieldValue,
+    index: SelectionIndex | None,
+) -> None:
+    previous = selected.get(identity)
+    if previous is not None and index is not None:
+        _unregister_selected(index, identity, previous)
+    selected[identity] = value
+    if index is not None:
+        _register_selected(index, identity, value)
+
+
+def _register_selected(
+    index: SelectionIndex,
+    identity: str,
+    value: ObjectFieldValue,
+) -> None:
+    label = value.label.casefold()
+    if value.source_kind is ObjectSourceKind.BASE:
+        index.base_entries.setdefault(label, {})[identity] = value
+    else:
+        index.non_base_counts[label] = index.non_base_counts.get(label, 0) + 1
+
+
+def _unregister_selected(
+    index: SelectionIndex,
+    identity: str,
+    previous: ObjectFieldValue,
+) -> None:
+    label = previous.label.casefold()
+    if previous.source_kind is ObjectSourceKind.BASE:
+        entries = index.base_entries.get(label)
+        if entries is not None:
+            entries.pop(identity, None)
+            if not entries:
+                del index.base_entries[label]
+        return
+    remaining = index.non_base_counts.get(label, 0) - 1
+    if remaining > 0:
+        index.non_base_counts[label] = remaining
+    else:
+        index.non_base_counts.pop(label, None)
 
 
 def public_object_field_key(identity: str, value: ObjectFieldValue) -> str:
@@ -136,7 +235,13 @@ def object_field_source_priority(value: ObjectFieldValue, category: str) -> int:
     return int(value.source_kind)
 
 
+@lru_cache(maxsize=131_072)
 def _field_identity(value: ObjectFieldValue, category: str) -> str:
+    """Return the canonical public identity for one field value.
+
+    纯函数；select_object_field 与 _field_rank 会对同一值各算一次，
+    物化大地图时这里是百万级调用，记忆化后按不同值收敛。
+    """
     key = value.key.casefold()
     decision = classify_icon_field(
         category,

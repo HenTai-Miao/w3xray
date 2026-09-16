@@ -45,10 +45,26 @@ def redact_user_text(value: str, *, paths: Iterable[str] = ()) -> str:
 
 
 def _flatten_controls(value: str) -> str:
-    return "".join(
-        " " if unicodedata.category(char) in _CONTROL_CATEGORIES else char
-        for char in value
-    )
+    return value.translate(_FLATTEN_TABLE)
+
+
+class _ControlTranslateTable(dict):
+    """str.translate 映射：未见过的码点按 Unicode 类别惰性判定并记忆。
+
+    逐字符的 unicodedata.category 生成器在资料包导出中要跑上千万次；
+    translate 走 C 层字典查找，每个不同码点最多判定一次。
+    """
+
+    def __missing__(self, code_point: int) -> str:
+        char = chr(code_point)
+        replacement = (
+            " " if unicodedata.category(char) in _CONTROL_CATEGORIES else char
+        )
+        self[code_point] = replacement
+        return replacement
+
+
+_FLATTEN_TABLE: Final = _ControlTranslateTable()
 
 
 def format_user_exception(

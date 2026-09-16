@@ -119,7 +119,7 @@ def format_object_fields(obj: GameObject) -> str:
         if not items:
             continue
         lines.extend(("", f"── {group}（{len(items)}）──"))
-        lines.extend(f"{item.label}: {clean_text(item.value)}" for item in items)
+        lines.extend(_merged_field_lines(items))
     if defaults:
         lines.extend(("", f"── 未设置/默认字段（{len(defaults)}）──"))
         lines.extend(
@@ -140,6 +140,24 @@ def format_object_fields(obj: GameObject) -> str:
 def format_object_detail(obj: GameObject) -> str:
     """Return the legacy combined summary and materialized-field view."""
     return format_object_summary(obj) + format_object_fields(obj)
+
+
+def _merged_field_lines(items: list[ObjectDetailField]) -> list[str]:
+    """Merge fields sharing one readable value into a single labeled line.
+
+    同组内多个字段常承载同一文本（描述/提示文本成对重复），
+    合并后形如“描述｜提示文本：Tier 1…”，字段数计入组标题不变。
+    """
+    merged: list[list[str]] = []
+    index_by_value: dict[str, int] = {}
+    for item in items:
+        value = clean_text(item.value)
+        if value in index_by_value:
+            merged[index_by_value[value]][0] += f"｜{item.label}"
+            continue
+        index_by_value[value] = len(merged)
+        merged.append([item.label, value])
+    return [f"{labels}: {value}" for labels, value in merged]
 
 
 def _object_fields(obj: GameObject) -> tuple[ObjectDetailField, ...]:

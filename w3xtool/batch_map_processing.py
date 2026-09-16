@@ -29,6 +29,7 @@ from .batch_map_publication import (
 from .batch_models import MapBatchResult, SourceFingerprint
 from .batch_reports import (
     format_description_completeness,
+    format_description_groups_tsv,
     format_description_tsv,
     format_icon_index_tsv,
     format_map_summary,
@@ -68,10 +69,17 @@ def process_one_map(
     fingerprint: SourceFingerprint,
     options: BatchProcessingOptions,
     context: MapLoadContext,
+    *,
+    dependency_fingerprint: str | None = None,
 ) -> MapBatchResult:
     """Load, stream-export, report, and atomically publish one source."""
     started = monotonic_ns()
-    root = load_map(fingerprint.path, load_context=context)
+    # 父进程已对整图算过一次 sha256（fingerprint_source），台账直接复用。
+    root = load_map(
+        fingerprint.path,
+        load_context=context,
+        known_sha256=fingerprint.sha256,
+    )
     publication: MapPublicationStage | None = None
     game_source: GameDataSource | None = None
     try:
@@ -123,10 +131,14 @@ def process_one_map(
             source_coverage_gap_count=item_reports.source_coverage_gap_count,
         )
         elapsed_ms = max(0, (monotonic_ns() - started) // 1_000_000)
-        dependency = fingerprint_dependencies(
-            fingerprint,
-            options,
-            context.description_cache_manifest_sha256,
+        dependency = (
+            dependency_fingerprint
+            if dependency_fingerprint is not None
+            else fingerprint_dependencies(
+                fingerprint,
+                options,
+                context.description_cache_manifest_sha256,
+            )
         )
         result = build_map_result(
             fingerprint,
@@ -194,6 +206,7 @@ def _write_reports(
         ("图标索引.tsv", format_icon_index_tsv(icons)),
         ("图标未解析.tsv", format_unresolved_icon_tsv(icon_index)),
         ("对象描述.tsv", format_description_tsv(descriptions)),
+        ("描述分组视图.tsv", format_description_groups_tsv(descriptions)),
         (
             "图标完整性.txt",
             format_icon_integrity(icon_index, icons),

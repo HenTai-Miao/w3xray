@@ -17,6 +17,7 @@ from w3xtool.batch_icon_export import (
     IconKind,
 )
 from w3xtool.batch_reports import (
+    format_description_groups_tsv,
     format_description_tsv,
     format_icon_index_tsv,
     format_map_summary,
@@ -83,6 +84,51 @@ def test_description_tsv_keeps_raw_and_readable_columns_separate() -> None:
     row = next(csv.DictReader(io.StringIO(report), delimiter="\t"))
     assert row["原始说明"] == "|cffff0000说明|r|n第二行"
     assert row["可读说明"] == "说明\n第二行"
+
+
+def test_description_groups_collapses_identical_rows_with_ids_and_levels() -> None:
+    # Given: 三个对象共享同一提示与说明，等级分别为 1、1、2。
+    base = _description_record()
+    clone = replace(base, object_id="A002", level=2)
+
+    # When
+    report = format_description_groups_tsv((base, clone, replace(base)))
+
+    # Then
+    rows = list(csv.DictReader(io.StringIO(report), delimiter="\t"))
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["出现次数"] == "3"
+    assert row["可读提示"] == "提示"
+    assert row["可读说明"] == "说明\n第二行"
+    assert row["对象ID"] == "A001 A002"
+    assert row["等级"] == "1、2"
+    assert row["完整性状态"] == DescriptionState.MAP_VALUE.value
+
+
+def test_description_groups_sort_most_frequent_first_and_keep_state_split() -> None:
+    # Given: 同文本存在两种完整性状态时按状态分开，出现多的组排在前面。
+    rare = replace(
+        _description_record(state=DescriptionState.CLIENT_FILL),
+        readable_tip="补全提示",
+        readable_description="补全说明",
+    )
+    frequent = replace(
+        _description_record(),
+        readable_tip="地图提示",
+        readable_description="地图说明",
+    )
+
+    # When
+    report = format_description_groups_tsv(
+        (rare, frequent, replace(frequent), replace(frequent)),
+    )
+
+    # Then
+    rows = list(csv.DictReader(io.StringIO(report), delimiter="\t"))
+    assert [row["出现次数"] for row in rows] == ["3", "1"]
+    assert rows[0]["可读提示"] == "地图提示"
+    assert rows[1]["完整性状态"] == DescriptionState.CLIENT_FILL.value
 
 
 def test_description_tsv_preserves_a_leading_quote_without_merging_columns() -> None:

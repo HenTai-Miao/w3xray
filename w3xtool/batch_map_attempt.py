@@ -105,6 +105,7 @@ def attempt_map(
         timeout_seconds=options.map_timeout_seconds,
         max_memory_bytes=options.max_memory_bytes,
         cancellation=cancellation,
+        dependency_fingerprint=dependency,
     )
     match outcome:
         case MapExecutionSuccess(result=result, peak_rss_bytes=peak):

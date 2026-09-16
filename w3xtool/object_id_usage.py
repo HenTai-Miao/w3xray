@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from .script_scan import _codes_in, scan_all_referenced_codes, scan_object_refs
@@ -34,13 +34,28 @@ class ObjectIdUsage:
 @dataclass(frozen=True, slots=True)
 class ObjectIdUsageReport:
     entries: tuple[ObjectIdUsage, ...]
+    # 按码预聚合的详情；details_for 原来每个码全量扫 entries，
+    # 导出索引时对几千个码是平方级。
+    _details_by_code: Mapping[str, tuple[str, ...]] = field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
+
+    def __post_init__(self) -> None:
+        collected: dict[str, set[str]] = {}
+        for entry in self.entries:
+            collected.setdefault(entry.code, set()).add(entry.detail)
+        object.__setattr__(
+            self,
+            "_details_by_code",
+            {code: tuple(sorted(values)) for code, values in collected.items()},
+        )
 
     @property
     def codes(self) -> tuple[str, ...]:
         return tuple(sorted({entry.code for entry in self.entries}))
 
     def details_for(self, code: str) -> tuple[str, ...]:
-        return tuple(sorted({entry.detail for entry in self.entries if entry.code == code}))
+        return self._details_by_code.get(code, ())
 
 
 def build_object_id_usage(md: MapData) -> ObjectIdUsageReport:

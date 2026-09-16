@@ -23,6 +23,7 @@ __all__ = (
     "format_batch_state_json",
     "format_batch_summary_tsv",
     "format_description_completeness",
+    "format_description_groups_tsv",
     "format_description_tsv",
     "format_icon_completeness",
     "format_icon_index_tsv",
@@ -67,6 +68,65 @@ def format_description_tsv(records: Iterable[DescriptionRecord]) -> str:
                 record.readable_description,
                 record.description_source,
                 record.state.value,
+            )
+        )
+    return format_tsv_rows(rows)
+
+
+DESCRIPTION_GROUPS_HEADER: Final = (
+    "分类",
+    "出现次数",
+    "可读提示",
+    "可读说明",
+    "对象ID",
+    "名称",
+    "等级",
+    "完整性状态",
+)
+
+
+def format_description_groups_tsv(records: Iterable[DescriptionRecord]) -> str:
+    """Collapse identical tip+description rows into one browsable group each.
+
+    RPG 地图大量克隆技能/增益时，逐对象行会出现成百上千条可读内容完全
+    相同的记录；证据表保持逐行不变，这里按（分类, 可读提示, 可读说明,
+    完整性状态）折叠成一组，列出全部对象 ID 与等级方便人工浏览。
+    """
+    grouped: dict[
+        tuple[str, str, str, str],
+        list[DescriptionRecord],
+    ] = {}
+    for record in records:
+        key = (
+            record.category,
+            record.readable_tip,
+            record.readable_description,
+            record.state.value,
+        )
+        grouped.setdefault(key, []).append(record)
+
+    def _group_sort_key(
+        item: tuple[tuple[str, str, str, str], list[DescriptionRecord]],
+    ) -> tuple[int, str, str, str, str]:
+        (category, tip, description, state), members = item
+        return (-len(members), category.casefold(), tip, description, state)
+
+    rows: list[tuple[str, ...]] = [DESCRIPTION_GROUPS_HEADER]
+    for key, members in sorted(grouped.items(), key=_group_sort_key):
+        category, tip, description, state = key
+        ids = sorted({member.object_id for member in members})
+        names = sorted({member.object_name for member in members if member.object_name})
+        levels = sorted({member.level for member in members if member.level is not None})
+        rows.append(
+            (
+                category,
+                str(len(members)),
+                tip,
+                description,
+                " ".join(ids),
+                "、".join(names),
+                "、".join(str(level) for level in levels),
+                state,
             )
         )
     return format_tsv_rows(rows)

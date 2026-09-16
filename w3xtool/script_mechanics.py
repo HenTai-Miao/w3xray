@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 
 try:
     from .jass_natives import BJ_CODE_CONSTANTS, BJ_FEATURES, BJ_FUNC_CODES
 except ImportError:
     BJ_CODE_CONSTANTS, BJ_FEATURES, BJ_FUNC_CODES = {}, {}, {}
+
+# 单遍提取全部 ASCII 标识符；环视保证与 \bname\b 的 Unicode 词边界语义一致。
+_IDENTIFIER_TOKEN_RE = re.compile(r"(?<!\w)([A-Za-z_][A-Za-z0-9_]*)(?!\w)")
 
 _NEED_MARKS = {
     "ChooseRandomItem": ("随机物品池", "按物品等级/类别从暴雪默认随机物品表选择，不直接给出固定 4cc。"),
@@ -97,4 +101,16 @@ def format_script_mechanism_report(script: str) -> str:
 
 
 def _has_name(script: str, name: str) -> bool:
+    """Return whether ``name`` occurs as a whole identifier token.
+
+    BJ 特征表有近两千个函数名；逐名全文 re.search 是 O(名数×脚本长度)，
+    压缩单行脚本上单这一步就要数秒。先把脚本标识符提成集合再做成员判断。
+    """
+    if name.isascii() and name.isidentifier():
+        return name in _script_identifiers(script)
     return re.search(r"\b" + re.escape(name) + r"\b", script) is not None
+
+
+@lru_cache(maxsize=16)
+def _script_identifiers(script: str) -> frozenset[str]:
+    return frozenset(_IDENTIFIER_TOKEN_RE.findall(script))

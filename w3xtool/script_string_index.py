@@ -10,13 +10,18 @@ from .api import MapData
 from .presentation_safety import tsv_cell as _tsv
 from .resources import RESOURCE_EXTS
 from .save_api_catalog import save_api_info
-from .script_function_index import ScriptFunction, build_script_function_index
+from .script_function_index import (
+    ScriptFunctionLookup,
+    build_function_lookup,
+    build_script_function_index,
+)
 from .script_sources import analysis_script_texts
 from .wts import map_wts_table
 
 _CALL_RE: Final = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 _TRIGSTR_RE: Final = re.compile(r"^TRIGSTR_(\d+)$", re.IGNORECASE)
 _FOURCC_RE: Final = re.compile(r"[A-Za-z0-9]{4}")
+_TOKEN_SCAN_RE: Final = re.compile(r"//|--|['\"]")
 _CHAT_CALLS: Final = {"TriggerRegisterPlayerChatEvent", "TriggerRegisterPlayerChatEventBJ"}
 _DISPLAY_CALLS: Final = {
     "BJDebugMsg",
@@ -56,7 +61,7 @@ class _StringToken:
 def build_script_string_index(md: MapData) -> ScriptStringIndex:
     """Return script string literals with source, function and purpose clues."""
     trigstr_table = _trigstr_table(md)
-    functions = build_script_function_index(md).functions
+    functions = build_function_lookup(build_script_function_index(md).functions)
     entries: list[ScriptStringEntry] = []
     for source, text in analysis_script_texts(md):
         entries.extend(_entries_for_script(source, text, trigstr_table, functions))
@@ -84,7 +89,7 @@ def _entries_for_script(
     source: str,
     text: str,
     trigstr_table: dict[str, str],
-    functions: tuple[ScriptFunction, ...],
+    functions: ScriptFunctionLookup,
 ) -> list[ScriptStringEntry]:
     rows: list[ScriptStringEntry] = []
     for token in _iter_string_tokens(text):
@@ -92,7 +97,7 @@ def _entries_for_script(
         rows.append(ScriptStringEntry(
             source=source,
             line=token.line,
-            function=_function_for(source, token.line, functions),
+            function=functions.name_for(source, token.line),
             call=call,
             purpose=_purpose(call, token.value),
             value=token.value,
@@ -103,33 +108,34 @@ def _entries_for_script(
 
 
 def _iter_string_tokens(text: str) -> tuple[_StringToken, ...]:
+    """逐行提取字符串字面量。
+
+    原来逐字符前进并在每个位置做两次 startswith 注释判断（单图百万次）；
+    改为正则直接跳到下一个引号或注释标记，引号内的标记按原语义跳过。
+    """
     tokens: list[_StringToken] = []
     for line_no, line in enumerate(text.splitlines(), start=1):
         index = 0
-        while index < len(line):
-            if _starts_comment(line, index):
+        summary: str | None = None
+        while True:
+            match = _TOKEN_SCAN_RE.search(line, index)
+            if match is None:
                 break
-            char = line[index]
-            if char not in {"'", '"'}:
-                index += 1
-                continue
-            value, end = _read_quoted(line, index)
-            if not (char == "'" and _FOURCC_RE.fullmatch(value)):
+            marker = match.group(0)
+            if marker in ("//", "--"):
+                break
+            value, end = _read_quoted(line, match.start())
+            if not (marker == "'" and _FOURCC_RE.fullmatch(value)):
+                if summary is None:
+                    summary = line.strip()
                 tokens.append(_StringToken(
                     line=line_no,
-                    column=index,
+                    column=match.start(),
                     value=_unescape(value),
-                    summary=line.strip(),
+                    summary=summary,
                 ))
             index = end
     return tuple(tokens)
-
-
-def _starts_comment(line: str, index: int) -> bool:
-    return (
-        line.startswith("//", index)
-        or line.startswith("--", index)
-    )
 
 
 def _read_quoted(line: str, start: int) -> tuple[str, int]:
@@ -156,13 +162,6 @@ def _line_call(line: str, column: int) -> str:
     prefix = line[:column]
     match = _CALL_RE.search(prefix)
     return match.group(1) if match is not None else ""
-
-
-def _function_for(source: str, line: int, functions: tuple[ScriptFunction, ...]) -> str:
-    for item in functions:
-        if item.source == source and item.start_line <= line <= item.end_line:
-            return item.name
-    return ""
 
 
 def _purpose(call: str, value: str) -> str:
