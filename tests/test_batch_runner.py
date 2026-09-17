@@ -297,3 +297,46 @@ def test_no_retry_failed_reuses_an_unchanged_failed_result(
     # Then
     assert second == first
     assert calls == 1
+
+
+def test_duplicate_content_sources_keep_first_and_skip_the_rest(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: Blizzard republishes identical maps across season folders.
+    source_root = tmp_path / "Maps"
+    _write_map(source_root / "Season1" / "same.w3x", b"identical-bytes")
+    duplicate = _write_map(source_root / "Season9" / "same.w3x", b"identical-bytes")
+    _write_map(source_root / "Season9" / "other.w3x", b"distinct-bytes")
+    processed: list[str] = []
+    monkeypatch.setattr(
+        batch_runner, "build_map_load_context", lambda **_kwargs: MapLoadContext()
+    )
+    monkeypatch.setattr(
+        batch_map_attempt,
+        "fingerprint_dependencies",
+        lambda source, *_args: source.sha256,
+    )
+
+    def process(
+        index: int,
+        fingerprint: SourceFingerprint,
+        options: BatchOptions,
+        context: MapLoadContext,
+    ) -> MapBatchResult:
+        processed.append(fingerprint.path)
+        return _publish_fake_result(index, fingerprint, options, context)
+
+    monkeypatch.setattr(batch_runner, "process_one_map", process)
+
+    # When
+    state = run_batch(BatchOptions(str(source_root), str(tmp_path / "output")))
+
+    # Then: the duplicate never reaches the worker and the state stays unique.
+    assert len(processed) == 2
+    assert str(duplicate) not in processed
+    assert len(state.results) == 2
+    diagnostics_text = (tmp_path / "output" / "批量诊断.jsonl").read_text(
+        encoding="utf-8"
+    )
+    assert diagnostics_text.count("duplicate_source_skipped") == 1

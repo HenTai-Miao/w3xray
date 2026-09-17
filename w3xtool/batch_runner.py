@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
@@ -34,6 +35,7 @@ from .batch_resume import (
 )
 from .batch_runtime import (
     BatchAction,
+    BatchDiagnostic,
     BatchProgress,
     build_batch_progress,
     format_batch_diagnostics_jsonl,
@@ -100,6 +102,15 @@ def _run_batch_locked(
     paths = tuple(scan_map_sources(normalized.source_directory))
     results: list[MapBatchResult] = []
     diagnostics = list(startup_diagnostics(previous.diagnostics, recovery, len(paths)))
+    # 暴雪赛季目录会把相同地图原样复发布（Season1/Season9 大量字节级重复）。
+    # 状态契约要求源身份唯一，重复内容只处理首个；跳过的后续源记录诊断。
+    # 恢复状态下已处理的身份也要种进来，否则续跑时跨目录重复会再次入状态。
+    processed_identities: dict[tuple[str, int], str] = {}
+    if previous.state is not None:
+        for prior in previous.state.results:
+            processed_identities[
+                (prior.source.sha256, prior.source.size)
+            ] = prior.source.path
     if on_progress is not None:
         on_progress(
             build_batch_progress(
@@ -124,6 +135,47 @@ def _run_batch_locked(
                 f"{type(exc).__name__}: {exc}",
             )
         else:
+            identity = (fingerprint.sha256, fingerprint.size)
+            first_path = processed_identities.get(identity)
+            # 同路径同身份是断点续跑（走正常复用），不同路径的相同
+            # 内容才是跨目录重复源。
+            if first_path is not None and os.path.normcase(first_path) != os.path.normcase(path):
+                progress = build_batch_progress(
+                    completed=index,
+                    total=len(paths),
+                    source_path=path,
+                    action=BatchAction.REUSED,
+                    started_ns=started_ns,
+                    now_ns=monotonic_ns(),
+                    peak_rss_bytes=0,
+                    published_bytes=0,
+                    diagnostic_code="duplicate_source_skipped",
+                )
+                diagnostics.append(
+                    BatchDiagnostic(
+                        sequence=len(diagnostics) + 1,
+                        code="duplicate_source_skipped",
+                        detail=f"内容与已处理的源相同，已跳过：{first_path}",
+                        source_path=path,
+                        action=BatchAction.REUSED,
+                        completed=index,
+                        total=len(paths),
+                        elapsed_ms=0,
+                        peak_rss_bytes=0,
+                        published_bytes=0,
+                    )
+                )
+                publish_batch_checkpoint(
+                    normalized.output_root,
+                    checkpoint_state(tuple(results), previous, paths[offset + 1 :]),
+                    cache_text,
+                    format_batch_diagnostics_jsonl(tuple(diagnostics)),
+                    lease,
+                )
+                if on_progress is not None:
+                    on_progress(progress)
+                continue
+            processed_identities[identity] = path
             attempt = attempt_map(
                 index,
                 fingerprint,
