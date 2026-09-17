@@ -172,7 +172,10 @@ def _parse_main_header(data: ArchiveBytes, offset: int) -> MPQLayout:
         len(data),
         protected_classic=protected_classic,
     )
-    if shift > 20:
+    # 暴雪新版大容量官方地图（如 ORDR 系列下载图）会声明超大扇区
+    # （实测 shift=21，即 1GB 扇区）；扇区大小只参与切片数量计算，
+    # 实际读取始终被偏移表、文件大小与解压上限约束，这里放宽到 25。
+    if shift > 25:
         raise MPQLayoutError(f"MPQ 扇区大小非法：shift={shift}")
     if hashes <= 0 or hashes & (hashes - 1):
         raise MPQLayoutError(f"MPQ hash 表大小非法（应为 2 的幂）：{hashes}")
