@@ -45,11 +45,16 @@ class CompleteTextPresentationTest(GuiTestCase):
         all_evidence = format_complete_text_section(md, obj, ObjectTextView.ALL)
 
         # Then
+        assert "【完整文本】" in selected
+        assert "【完整文本：可读版】" not in selected
+        assert "【完整文本：原始版】" not in selected
         assert "地图当前值" in selected
         assert "SLK旧值" not in selected
+        assert "最高优先级唯一值" not in selected
         assert "地图当前值" in all_evidence
         assert "SLK旧值" in all_evidence
         assert "低优先级证据" in all_evidence
+        assert "非当前" in all_evidence
 
     def test_copy_text_payload_preserves_raw_newlines_tabs_and_color_codes(
         self,
@@ -65,9 +70,10 @@ class CompleteTextPresentationTest(GuiTestCase):
         # When
         payload = format_complete_text_section(md, obj, ObjectTextView.ALL)
 
-        # Then
-        assert raw in payload
+        # Then: the raw value trails its readable body as one delta line, still exact.
+        assert f"原始：{raw}" in payload
         assert "第一行\n第二行\t字段" in payload
+        assert payload.count("原始：") == 1
 
 
 def _text_record(

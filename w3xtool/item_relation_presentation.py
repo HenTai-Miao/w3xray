@@ -2,33 +2,44 @@
 
 from __future__ import annotations
 
+from textwrap import indent
 from typing import Final
 
-from .item_relation_models import ItemRelation, ItemRelationKind, RelationObject
+from .item_relation_models import (
+    ItemRelation,
+    ItemRelationKind,
+    RelationCompleteness,
+    RelationConfidence,
+    RelationObject,
+)
 from .map_data import GameObject, MapData
+from .textobj import clean_text
 
 _SKILL_KINDS: Final = frozenset(
     (ItemRelationKind.ITEM_ABILITY, ItemRelationKind.COOLDOWN_ABILITY)
 )
+_COMPACT_RAW_LIMIT: Final = 100
 
 
 def format_object_relation_sections(md: MapData, obj: GameObject) -> str:
-    """Render item, source, and skill reverse relations for one object."""
+    """Render compact item, source, and skill reverse relations for one object."""
     sections: list[str] = []
     item_rows = md.item_relations.for_item(obj.category, obj.obj_id)
     acquisitions = tuple(row for row in item_rows if row.kind not in _SKILL_KINDS)
     skills = tuple(row for row in item_rows if row.kind in _SKILL_KINDS)
-    _append_section(sections, "获取方式", acquisitions)
-    _append_section(sections, "装备技能", skills)
+    _append_section(sections, "获取方式", acquisitions, obj)
+    _append_section(sections, "装备技能", skills, obj)
     _append_section(
         sections,
         "掉落/可获取装备",
         md.item_relations.for_source(obj.category, obj.obj_id),
+        obj,
     )
     _append_section(
         sections,
         "由哪些装备提供",
         md.item_relations.for_skill(obj.category, obj.obj_id),
+        obj,
     )
     return "" if not sections else "\n" + "\n\n".join(sections) + "\n"
 
@@ -58,16 +69,144 @@ def _append_section(
     sections: list[str],
     title: str,
     relations: tuple[ItemRelation, ...],
+    anchor: GameObject,
 ) -> None:
     if not relations:
         return
     blocks = [f"【{title}】"]
     for group in _merge_shared_evidence(relations):
-        if len(group) == 1:
-            blocks.append(format_relation_evidence(group[0]))
-        else:
-            blocks.append(_format_merged_relations(group))
-    sections.append("\n\n".join(blocks))
+        blocks.append(_format_compact_relations(group, anchor))
+    sections.append("\n".join(blocks))
+
+
+def _format_compact_relations(
+    group: tuple[ItemRelation, ...],
+    anchor: GameObject,
+) -> str:
+    """One bullet per shared-evidence group for the object detail pane.
+
+    对象自己的端点（“装备：翡翠指环(I02T)”）、SHA-256 关系 ID、默认的
+    “已确认｜完整”结论都省略；完整哈希与全量证据仍由
+    format_relation_evidence 和导出报告承载。
+    """
+    first = group[0]
+    head = f"· {first.kind.value}" + (f"（{len(group)} 条）" if len(group) > 1 else "")
+    endpoints = _foreign_endpoints(group, anchor)
+    if endpoints:
+        head += "：" + "、".join(endpoints)
+    lines = [head]
+    context = _compact_context(first)
+    if context:
+        lines.append(f"  {context}")
+    lines.append(f"  {_compact_evidence(first)}")
+    if first.ingredients:
+        lines.append(
+            "  合成材料："
+            + "；".join(
+                f"{_format_endpoint(ingredient.item)}×{ingredient.count}"
+                for ingredient in first.ingredients
+            )
+        )
+    if first.unresolved_reason:
+        lines.append(f"  未解析原因：{first.unresolved_reason}")
+    if (
+        first.confidence is not RelationConfidence.CONFIRMED
+        or first.completeness is not RelationCompleteness.COMPLETE
+    ):
+        lines.append(
+            f"  可信度：{first.confidence.value}｜完整性：{first.completeness.value}"
+        )
+    return "\n".join(lines)
+
+
+def _foreign_endpoints(
+    group: tuple[ItemRelation, ...],
+    anchor: GameObject,
+) -> list[str]:
+    """List endpoints unlike the anchor object, deduplicated and ordered."""
+
+    def _is_self(endpoint: RelationObject) -> bool:
+        return (
+            endpoint.category == anchor.category and endpoint.object_id == anchor.obj_id
+        )
+
+    shown: list[str] = []
+
+    def _add(endpoint: RelationObject | None) -> None:
+        if endpoint is None or _is_self(endpoint):
+            return
+        text = _format_endpoint(endpoint)
+        if text not in shown:
+            shown.append(text)
+
+    first = group[0]
+    _add(first.source)
+    for relation in group:
+        _add(relation.skill)
+    _add(first.item)
+    return shown
+
+
+def _compact_context(relation: ItemRelation) -> str:
+    parts = [f"地图子图：{relation.map_name}"] if relation.map_name else []
+    if relation.instance_serial is not None:
+        parts.append(f"实例 {relation.instance_serial}")
+    if relation.player is not None:
+        parts.append(f"玩家 {relation.player}")
+    parts.extend(
+        f"{axis}={value!r}"
+        for axis, value in (("X", relation.x), ("Y", relation.y), ("Z", relation.z))
+        if value is not None
+    )
+    parts.extend(
+        value
+        for value in (
+            None if relation.group_index is None else f"掉落组 {relation.group_index}",
+            None
+            if relation.entry_index is None
+            else f"组内序号 {relation.entry_index}",
+            None if relation.chance is None else f"概率 {relation.chance}%",
+            None if relation.slot is None else f"槽位 {relation.slot}",
+        )
+        if value is not None
+    )
+    return " ｜ ".join(parts)
+
+
+def _compact_evidence(relation: ItemRelation) -> str:
+    evidence = relation.evidence
+    parts = [
+        value
+        for value in (
+            evidence.source,
+            f"字段 {evidence.field_key}" if evidence.field_key else "",
+            f"函数 {evidence.function}" if evidence.function else "",
+            f"触发 {evidence.trigger}" if evidence.trigger else "",
+        )
+        if value
+    ]
+    # location 常与 field_key 同值（如 SLK 列名），去重避免"字段 x｜位置：x"。
+    location = evidence.location or ""
+    positions = [
+        value
+        for value in (
+            f"行 {evidence.line}" if evidence.line else "",
+            f"偏移 {evidence.offset}" if evidence.offset else "",
+            location if location and location != evidence.field_key else "",
+        )
+        if value
+    ]
+    if positions:
+        parts.append("位置：" + "｜".join(positions))
+    if not parts:
+        parts.append("未记录")
+    line = "证据：" + "｜".join(parts)
+    raw = evidence.raw
+    if not raw:
+        return line
+    if "\n" in raw or len(raw) > _COMPACT_RAW_LIMIT:
+        return line + "\n  原始证据：\n" + indent(raw, "    ")
+    return line + f"｜原文 {raw}"
 
 
 def _merge_shared_evidence(
@@ -111,32 +250,6 @@ def _merge_shared_evidence(
         else:
             groups[-1].append(relation)
     return tuple(tuple(group) for group in groups)
-
-
-def _format_merged_relations(group: tuple[ItemRelation, ...]) -> str:
-    first = group[0]
-    lines = [
-        f"关系：{first.kind.value}（{len(group)} 条，共享同一证据）",
-        f"装备：{_format_endpoint(first.item)}",
-        "关系 ID：" + "、".join(relation.relation_id for relation in group),
-    ]
-    if first.source is not None:
-        lines.append(f"来源对象：{_format_endpoint(first.source)}")
-    skills = tuple(
-        _format_endpoint(relation.skill)
-        for relation in group
-        if relation.skill is not None
-    )
-    if skills:
-        lines.append("技能：" + "、".join(skills))
-    _append_context(lines, first)
-    lines.append(
-        f"可信度：{first.confidence.value}｜完整性：{first.completeness.value}"
-    )
-    if first.unresolved_reason:
-        lines.append(f"未解析原因：{first.unresolved_reason}")
-    _append_evidence(lines, first)
-    return "\n".join(lines)
 
 
 def _append_context(lines: list[str], relation: ItemRelation) -> None:
@@ -206,8 +319,6 @@ def _append_evidence(lines: list[str], relation: ItemRelation) -> None:
 
 
 def _format_endpoint(endpoint: RelationObject) -> str:
-    return (
-        f"{endpoint.name}({endpoint.object_id})"
-        if endpoint.name
-        else endpoint.object_id
-    )
+    """Readable endpoint label; Warcraft color codes never reach GUI text."""
+    name = clean_text(endpoint.name).replace("\n", " ")
+    return f"{name}({endpoint.object_id})" if name else endpoint.object_id

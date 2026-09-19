@@ -5,6 +5,9 @@ from __future__ import annotations
 from tests.gui_base import GuiTestCase
 from w3xtool.api import GameObject, MapData
 from w3xtool.gui_reports import build_analysis_blocks, format_blocks
+from w3xtool.icon_evidence_index import IconEvidenceIndex
+from w3xtool.icon_evidence_models import IconGapReason, UnresolvedIconEvidence
+from w3xtool.icon_resources import IconObjectReference
 from w3xtool.item_relation_models import (
     ItemRelation,
     ItemRelationIndex,
@@ -82,16 +85,18 @@ class ObjectPresentationTest(GuiTestCase):
         self.app._show_detail(item)
         text = self.app.detail.get("1.0", "end-1c")
 
-        # Then: both representations and their exact evidence survive without slicing.
-        assert "【完整文本：可读版】" in text
-        assert "【完整文本：原始版】" in text
+        # Then: both representations and their exact evidence survive without slicing,
+        # folded into one section where the raw value trails its readable body.
+        assert "【完整文本】" in text
+        assert "【完整文本：可读版】" not in text
+        assert "【完整文本：原始版】" not in text
         assert readable in text
-        assert raw in text
+        assert f"原始：{raw}" in text
         assert "扩展说明｜等级 2｜地图原值" in text
         assert "war3map.w3t" in text
-        assert "规范字段：ubertip" in text
-        assert "证据优先级：600｜当前值：是" in text
-        assert "选择原因：最高优先级唯一值" in text
+        assert "utub:2" in text
+        assert "优先级 600" in text
+        assert "最高优先级唯一值" not in text
         assert "……" not in text
 
     def test_item_detail_lists_acquisition_and_equipment_skills(self) -> None:
@@ -103,15 +108,17 @@ class ObjectPresentationTest(GuiTestCase):
         self.app._show_detail(item)
         text = self.app.detail.get("1.0", "end-1c")
 
-        # Then: acquisition, skill, probability, confidence, and evidence are visible.
+        # Then: acquisition, skill, probability, and evidence stay visible while the
+        # self endpoint, relation hashes, and default confidence verdicts are omitted.
         assert "【获取方式】" in text
-        assert "怪物直接掉落" in text
-        assert "掉落怪(n001)" in text
-        assert "概率：75%" in text
+        assert "怪物直接掉落：掉落怪(n001)" in text
+        assert "概率 75%" in text
         assert "【装备技能】" in text
-        assert "烈焰技能(A001)" in text
+        assert "装备技能：烈焰技能(A001)" in text
         assert "【掉落/可获取装备】" not in text
-        assert "可信度：已确认" in text
+        assert "烈焰剑(I001)" not in text.split("【装备技能】", 1)[1].split("【", 1)[0]
+        assert "关系 ID" not in text
+        assert "可信度：" not in text
         assert "war3mapUnits.doo" in text
         assert "偏移 128" in text
 
@@ -140,6 +147,39 @@ class ObjectPresentationTest(GuiTestCase):
         # Then: the skill-to-item reverse relation is available in its details.
         assert "【由哪些装备提供】" in text
         assert "烈焰剑(I001)" in text
+
+    def test_icon_evidence_section_compacts_each_row_to_one_line(self) -> None:
+        # Given: one item whose icon reference never resolved to bytes.
+        md, item, _unit, _skill = _map_with_item_intelligence("说明", "说明")
+        path = "ReplaceableTextures\\CommandButtons\\BTNFlame.blp"
+        md.icon_evidence = IconEvidenceIndex.build(
+            unresolved=(
+                UnresolvedIconEvidence(
+                    reference=IconObjectReference(
+                        category="物品",
+                        object_id="I001",
+                        object_name="烈焰剑",
+                        field_key="display:icon",
+                        field_label="图标",
+                        requested_path=path,
+                        normalized_path=path,
+                    ),
+                    reason=IconGapReason.NAMED_RESOURCE_MISSING,
+                    diagnostics=(),
+                    attempts=(),
+                ),
+            )
+        )
+
+        # When: the item detail is rendered.
+        self.app.map_data = md
+        self.app._show_detail(item)
+        text = self.app.detail.get("1.0", "end-1c")
+
+        # Then: the row is one readable line, not a four-line class dump.
+        assert f"· {path} —— 未解析（具名资源缺失） ｜ 字段 图标" in text
+        assert "UnresolvedIconEvidence" not in text
+        assert "请求路径：" not in text
 
     def test_copy_full_analysis_contains_every_trigger(self) -> None:
         # Given: more trigger headers than the old GUI summary limit.
