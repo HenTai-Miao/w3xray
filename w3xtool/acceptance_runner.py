@@ -15,7 +15,12 @@ from typing import override
 
 from .acceptance_batch import check_batch_publication
 from .api import load_map
-from .casclib_api import CtypesCascLibApi, MAX_CASC_FILE_SIZE, default_dll_path
+from .casclib_api import (
+    CascFileNotFoundError,
+    CtypesCascLibApi,
+    MAX_CASC_FILE_SIZE,
+    default_dll_path,
+)
 from .casclib_enumeration import CascNameType
 from .casclib_source import CascLibDataSource
 from .knowledge_pack import write_knowledge_pack_report
@@ -242,7 +247,19 @@ def _check_casc(war3_dir: Path) -> str:
         "ReplaceableTextures/CommandButtons/BTNSelectHeroOn.blp",
     )
     with CascLibDataSource(str(war3_dir)) as source:
-        sizes = [len(source.read_file(name)) for name in names]
+        # 官方客户端可按需精简 CASC 内容（如 3.0 模块化安装），探测文件集
+        # 只需命中其一即可证明真实读取链路；缺失项如实写入证据串。
+        found: list[tuple[str, int]] = []
+        missing: list[str] = []
+        for name in names:
+            try:
+                found.append((name, len(source.read_file(name))))
+            except CascFileNotFoundError:
+                missing.append(name)
+        if not found:
+            raise AcceptanceCheckError(
+                "真实安装 CASC 中找不到任何探测文件：" + "、".join(names)
+            )
         entries = source.iter_entries()
         first = None
         unknown = None
@@ -268,7 +285,8 @@ def _check_casc(war3_dir: Path) -> str:
         if len(unknown_payload) != unknown.size:
             raise AcceptanceCheckError("未知路径条目重开后大小不一致")
     return (
-        f"resources={sizes}; first_root_entry={first.name}; type={first.name_type.name}; "
+        f"resources={found}; missing={missing or '无'}; "
+        f"first_root_entry={first.name}; type={first.name_type.name}; "
         f"unknown_root_entry={unknown.name}; unknown_type={unknown.name_type.name}"
     )
 

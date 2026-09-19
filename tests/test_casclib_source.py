@@ -115,6 +115,32 @@ def test_missing_file_is_false_for_has_and_raises_for_read() -> None:
     assert api.open_handles == set()
 
 
+def test_plain_path_falls_back_to_modular_root_prefix() -> None:
+    # Given: a modular client (war3 3.0+) stores game data under war3.w3mod: only.
+    api = FakeCascLibApi({"war3.w3mod:UI\\TriggerData.txt": b"trigger-data"})
+
+    # When / Then: the legacy plain path resolves through the module prefix,
+    # while a genuinely absent file still reports missing after both lookups.
+    with CascLibDataSource("C:/Warcraft III", api=api) as source:
+        assert source.read_file("UI/TriggerData.txt") == b"trigger-data"
+        assert not source.has_file("UI\\TriggerStrings.txt")
+
+    assert api.open_handles == set()
+
+
+def test_prefixed_path_resolves_without_plain_name_retry() -> None:
+    # Given: the caller already uses the modular prefix.
+    api = FakeCascLibApi({"war3.w3mod:UI\\TriggerData.txt": b"trigger-data"})
+
+    # When
+    with CascLibDataSource("C:/Warcraft III", api=api) as source:
+        assert source.read_file("war3.w3mod:UI\\TriggerData.txt") == b"trigger-data"
+
+    # Then: no redundant plain-name attempt preceded the direct hit.
+    opens = [event for event in api.events if event.startswith("open_file:")]
+    assert opens == ["open_file:war3.w3mod:UI\\TriggerData.txt"]
+
+
 def test_exact_lookup_uses_the_full_internal_casclib_path() -> None:
     # Given
     api = FakeCascLibApi({"Icons\\BTNHero.blp": b"BLP1hero"})

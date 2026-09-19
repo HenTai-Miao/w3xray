@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Generator
 from dataclasses import dataclass
 from types import TracebackType
-from typing import override
+from typing import Final, override
 
 from .casclib_api import (
     CascFileNotFoundError,
@@ -56,10 +56,9 @@ class CascLibDataSource:
         self._storage: int | None = self._api.open_storage(root)
 
     def has_file(self, name: str) -> bool:
-        storage = self._open_storage_handle()
         file_handle: int | None = None
         try:
-            file_handle = self._api.open_file(storage, _internal_name(name))
+            file_handle = self._open_named_file(name)
             return True
         except CascFileNotFoundError:
             return False
@@ -68,15 +67,12 @@ class CascLibDataSource:
                 self._api.close_file(file_handle)
 
     def read_file(self, name: str) -> bytes:
-        storage = self._open_storage_handle()
-        file_handle: int | None = None
+        file_handle = self._open_named_file(name)
         try:
-            file_handle = self._api.open_file(storage, _internal_name(name))
             size = self._api.file_size(file_handle)
             return self._api.read_file(file_handle, size)
         finally:
-            if file_handle is not None:
-                self._api.close_file(file_handle)
+            self._api.close_file(file_handle)
 
     def has_exact_file(self, name: str) -> bool:
         return self.has_file(name)
@@ -120,6 +116,23 @@ class CascLibDataSource:
     ) -> None:
         self.close()
 
+    def _open_named_file(self, name: str) -> int:
+        """Open by plain path, falling back to the modular root prefix.
+
+        官方 3.0 起的模块化客户端把游戏数据挂到 `war3.w3mod:` 前缀下，
+        旧式裸路径（如 UI/TriggerData.txt）在 Root 里不再直接存在；
+        裸名解析失败时按主模块前缀重试一次，旧安装不受影响。
+        """
+        storage = self._open_storage_handle()
+        try:
+            return self._api.open_file(storage, _internal_name(name))
+        except CascFileNotFoundError:
+            if name.startswith(_MAIN_MODULE_PREFIX):
+                raise
+            return self._api.open_file(
+                storage, _internal_name(_MAIN_MODULE_PREFIX + name)
+            )
+
     def _open_storage_handle(self) -> int:
         if self._storage is None:
             raise CascSourceClosedError(root=self.root)
@@ -147,6 +160,9 @@ def probe_casclib(root: str) -> CascLibProbe:
             return CascLibProbe(is_available=True, reason="CascLib storage readable")
     except (CascLibLoadError, CascNativeError) as exc:
         return CascLibProbe(is_available=False, reason=str(exc))
+
+
+_MAIN_MODULE_PREFIX: Final = "war3.w3mod:"
 
 
 def _internal_name(name: str) -> str:
