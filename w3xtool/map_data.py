@@ -127,17 +127,13 @@ class MapData:
     )
     # 资源引用报告同样是加载后不变的派生数据（实际类型 ResourceReport），
     # 分析页、审计、资料包会各自构建一次，共用缓存。
-    _resource_report_cache: object | None = field(
-        default=None, init=False, repr=False
-    )
+    _resource_report_cache: object | None = field(default=None, init=False, repr=False)
     # 脚本调用目录（ScriptCallCatalog）与存档分析报告（SaveReport）
     # 也是加载后不变的派生数据；多个索引导出/分析页会重复构建。
     _script_call_catalog_cache: object | None = field(
         default=None, init=False, repr=False
     )
-    _save_report_cache: object | None = field(
-        default=None, init=False, repr=False
-    )
+    _save_report_cache: object | None = field(default=None, init=False, repr=False)
 
     def category_counts(self) -> dict[str, int]:
         """Return object counts by category in insertion order."""

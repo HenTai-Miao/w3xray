@@ -116,7 +116,9 @@ def format_description_groups_tsv(records: Iterable[DescriptionRecord]) -> str:
         category, tip, description, state = key
         ids = sorted({member.object_id for member in members})
         names = sorted({member.object_name for member in members if member.object_name})
-        levels = sorted({member.level for member in members if member.level is not None})
+        levels = sorted(
+            {member.level for member in members if member.level is not None}
+        )
         rows.append(
             (
                 category,

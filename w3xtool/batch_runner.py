@@ -108,9 +108,9 @@ def _run_batch_locked(
     processed_identities: dict[tuple[str, int], str] = {}
     if previous.state is not None:
         for prior in previous.state.results:
-            processed_identities[
-                (prior.source.sha256, prior.source.size)
-            ] = prior.source.path
+            processed_identities[(prior.source.sha256, prior.source.size)] = (
+                prior.source.path
+            )
     if on_progress is not None:
         on_progress(
             build_batch_progress(
@@ -139,7 +139,9 @@ def _run_batch_locked(
             first_path = processed_identities.get(identity)
             # 同路径同身份是断点续跑（走正常复用），不同路径的相同
             # 内容才是跨目录重复源。
-            if first_path is not None and os.path.normcase(first_path) != os.path.normcase(path):
+            if first_path is not None and os.path.normcase(
+                first_path
+            ) != os.path.normcase(path):
                 progress = build_batch_progress(
                     completed=index,
                     total=len(paths),

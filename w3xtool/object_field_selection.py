@@ -61,9 +61,7 @@ class SelectionIndex:
     """
 
     non_base_counts: dict[str, int] = field(default_factory=dict)
-    base_entries: dict[str, dict[str, ObjectFieldValue]] = field(
-        default_factory=dict
-    )
+    base_entries: dict[str, dict[str, ObjectFieldValue]] = field(default_factory=dict)
 
 
 def build_selection_index() -> SelectionIndex:
