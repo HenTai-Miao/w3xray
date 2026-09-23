@@ -14,6 +14,7 @@ from typing import Final
 
 from . import current_map_models as models
 from . import current_map_process
+from .current_map_inuse_probe import probe_in_use_files
 from .current_map_process import OpenMapProbeReport, ProcessProbeReport
 from .gameconfig import parse_game_configuration
 
@@ -30,10 +31,19 @@ _LOG_RELPATH: Final = ("Documents", "Warcraft III", "Logs", "War3Log.txt")
 _MAX_LOG_BYTES: Final = 1_048_576
 _OPENING_MAP_MARKER: Final = re.compile(r"opening map - ", re.IGNORECASE)
 _MAP_SUFFIXES: Final = frozenset({".w3x", ".w3m", ".w3n"})
+_MAX_PROBED_HINTS: Final = 16
+_HINT_EVIDENCE_KINDS: Final = frozenset(
+    {
+        models.EvidenceKind.RECENT_CACHE,
+        models.EvidenceKind.WGC_REFERENCE,
+        models.EvidenceKind.GAME_LOG,
+    }
+)
 
 
 type _ProcessProvider = Callable[[], ProcessProbeReport]
 type _OpenFileProvider = Callable[[Iterable[models.GameProcess]], OpenMapProbeReport]
+type _InUseProvider = Callable[[Iterable[Path]], tuple[Path, ...]]
 
 
 def discover_default_map_roots(extra_roots: Iterable[Path] = ()) -> tuple[Path, ...]:
@@ -61,6 +71,7 @@ def locate_current_map(
     *,
     process_provider: _ProcessProvider | None = None,
     open_file_provider: _OpenFileProvider | None = None,
+    in_use_provider: _InUseProvider | None = None,
 ) -> models.CurrentMapResolution:
     """Collect bounded direct and hint evidence, then call the pure resolver."""
     roots = discover_default_map_roots(extra_roots)
@@ -79,11 +90,25 @@ def locate_current_map(
         clock_ns = time.time_ns() if now_ns is None else now_ns
         evidence.extend(_scan_hint_evidence(roots, clock_ns))
         evidence.extend(_log_hint_evidence(Path.home(), roots, clock_ns))
+        evidence.extend(
+            _in_use_evidence(evidence, in_use_provider or probe_in_use_files)
+        )
         direct_probe_available = open_report.available
     else:
         direct_probe_available = True
 
     return models.resolve_current_map(processes, evidence, direct_probe_available=direct_probe_available)
+
+
+def _in_use_evidence(
+    evidence: list[models.MapEvidence],
+    provider: _InUseProvider,
+) -> tuple[models.MapEvidence, ...]:
+    """Probe bounded hint candidates newest-first for live file handles."""
+    hints = [item for item in evidence if item.kind in _HINT_EVIDENCE_KINDS]
+    hints.sort(key=lambda item: item.mtime_ns or 0, reverse=True)
+    hits = provider([item.path for item in hints[:_MAX_PROBED_HINTS]])
+    return tuple(models.MapEvidence(path, models.EvidenceKind.LIVE_FILE) for path in hits)
 
 
 def _known_map_roots(home: Path) -> tuple[Path, ...]:

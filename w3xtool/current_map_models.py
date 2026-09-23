@@ -16,6 +16,7 @@ class EvidenceKind(StrEnum):
 
     DIRECT_OPEN = "direct_open"
     EXPLICIT_ARGUMENT = "explicit_argument"
+    LIVE_FILE = "live_file"
     WGC_REFERENCE = "wgc_reference"
     RECENT_CACHE = "recent_cache"
     GAME_LOG = "game_log"
@@ -90,6 +91,9 @@ def resolve_current_map(
         )
         grouped.setdefault(path, []).append(normalized)
         match observation.kind:
+            case EvidenceKind.LIVE_FILE:
+                # In-use state is observed from the file itself right now.
+                direct_paths.add(path)
             case EvidenceKind.DIRECT_OPEN | EvidenceKind.EXPLICIT_ARGUMENT:
                 if observation.process_id in game_process_ids:
                     direct_paths.add(path)

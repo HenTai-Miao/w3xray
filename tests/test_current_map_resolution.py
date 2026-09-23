@@ -138,6 +138,40 @@ def test_hint_candidates_are_ordered_newest_observation_first(tmp_path: Path) ->
     )
 
 
+def test_live_file_observation_is_direct_evidence(tmp_path: Path) -> None:
+    # Given: one map file observed in use right now plus an older disk hint.
+    process = GameProcess(67, "Warcraft III", "war3")
+    in_use = tmp_path / "inuse.w3x"
+    evidence = (
+        MapEvidence(in_use, EvidenceKind.LIVE_FILE),
+        MapEvidence(tmp_path / "recent.w3x", EvidenceKind.RECENT_CACHE),
+    )
+
+    # When: the observations resolve with a live game.
+    resolution = resolve_current_map((process,), evidence)
+
+    # Then: the in-use map is selected automatically without confirmation.
+    assert resolution.status is ResolutionStatus.FOUND
+    assert tuple(candidate.path for candidate in resolution.candidates) == (
+        in_use.resolve(strict=False),
+    )
+
+
+def test_live_file_observation_needs_a_unique_hit(tmp_path: Path) -> None:
+    # Given: two files are simultaneously observed in use.
+    process = GameProcess(71, "Warcraft III", "war3")
+    evidence = (
+        MapEvidence(tmp_path / "first.w3x", EvidenceKind.LIVE_FILE),
+        MapEvidence(tmp_path / "second.w3x", EvidenceKind.LIVE_FILE),
+    )
+
+    # When: the observations resolve with a live game.
+    resolution = resolve_current_map((process,), evidence)
+
+    # Then: the result is ambiguous rather than a guess.
+    assert resolution.status is ResolutionStatus.AMBIGUOUS
+
+
 def test_treats_game_log_entries_as_suggestion_tier_hints(tmp_path: Path) -> None:
     # Given: a running game whose own log named one loaded map.
     process = GameProcess(43, "Warcraft III", "war3")

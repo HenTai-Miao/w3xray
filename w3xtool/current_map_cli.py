@@ -193,6 +193,8 @@ def _evidence_label(kind: EvidenceKind) -> str:
             return "游戏进程打开文件"
         case EvidenceKind.EXPLICIT_ARGUMENT:
             return "游戏启动参数"
+        case EvidenceKind.LIVE_FILE:
+            return "文件使用中"
         case EvidenceKind.WGC_REFERENCE:
             return "WGC 配置引用"
         case EvidenceKind.RECENT_CACHE:

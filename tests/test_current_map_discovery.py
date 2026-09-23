@@ -77,6 +77,7 @@ def _locate(
     open_report: OpenMapProbeReport | None = None,
     now_ns: int = _NOW_NS,
     log_home: Path | None = None,
+    in_use_provider=None,
 ) -> CurrentMapResolution:
     report = OpenMapProbeReport((), True) if open_report is None else open_report
     isolated_home = root / ".isolated-home" if log_home is None else log_home
@@ -87,6 +88,7 @@ def _locate(
             now_ns,
             process_provider=_ProcessProvider(ProcessProbeReport(processes, True)),
             open_file_provider=_OpenFileProvider(report),
+            in_use_provider=in_use_provider,
         )
 
 
@@ -388,6 +390,31 @@ def test_direct_process_evidence_always_outranks_recent_hints(tmp_path: Path) ->
     # Then: the unique process-linked map is the only returned candidate.
     assert resolution.status is ResolutionStatus.FOUND
     assert tuple(item.path for item in resolution.candidates) == (direct.resolve(),)
+
+
+def test_in_use_hint_promotes_to_the_found_map(tmp_path: Path) -> None:
+    # Given: two recency hints and a probe reporting the newest one in use.
+    root = tmp_path / "live"
+    newer = root / "newer.w3x"
+    older = root / "older.w3m"
+    _write_at(newer, b"m", _NOW_NS)
+    _write_at(older, b"m", _NOW_NS - 60_000_000_000)
+    received: list[list[Path]] = []
+
+    def provider(paths: list[Path]) -> list[Path]:
+        received.append(list(paths))
+        return paths[:1]
+
+    # When: full discovery runs with the in-use probe wired in.
+    resolution = _locate(root, in_use_provider=provider)
+
+    # Then: the in-use map is the automatically selected current map and
+    # candidates were offered newest-first.
+    assert resolution.status is ResolutionStatus.FOUND
+    assert tuple(item.path for item in resolution.candidates) == (
+        Path(os.path.normcase(newer.resolve())),
+    )
+    assert received and received[0][:2] == [newer, older]
 
 
 def test_log_hint_supplies_last_opening_map_as_suggestion(tmp_path: Path) -> None:
