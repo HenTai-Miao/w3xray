@@ -51,19 +51,16 @@ def format_complete_text_section(
 def _merge_identical_records(
     records: tuple[ObjectTextRecord, ...],
 ) -> tuple[tuple[ObjectTextRecord, ...], ...]:
-    """Fold adjacent records whose content and provenance are identical.
+    """Fold adjacent records whose displayed content and status are identical.
 
-    地图作者常把同一段文字同时写进多个字段（如 utub 与 ides）；
-    相邻且元数据一致时合并成一块，字段与证据序号聚合展示，不丢证据。
+    地图作者常把同一段文字同时写进多个字段（如 utub 与 ides、unam 与 utip）；
+    内容与状态一致时合并成一块，逐条证据（来源、字段、序号）仍全部保留。
     """
 
     def _merge_key(record: ObjectTextRecord) -> tuple[object, ...]:
         return (
             record.level,
             record.state,
-            record.source_kind,
-            record.source_path,
-            record.source_priority,
             record.is_current,
             record.selection_reason,
             record.placeholder,
@@ -87,8 +84,11 @@ def _merge_identical_records(
 def _format_text_record(records: tuple[ObjectTextRecord, ...]) -> str:
     first = records[0]
     level = "通用" if first.level is None else f"等级 {first.level}"
-    role = " + ".join(record.role for record in records)
-    lines = [f"── {role}｜{level}｜{first.state.value} ──"]
+    roles: list[str] = []
+    for record in records:
+        if record.role not in roles:
+            roles.append(record.role)
+    lines = [f"── {' + '.join(roles)}｜{level}｜{first.state.value} ──"]
     readable = first.readable_value
     lines.append(readable if readable else "（空文本）")
     if first.raw_value != readable:
@@ -102,26 +102,27 @@ def _format_text_record(records: tuple[ObjectTextRecord, ...]) -> str:
 
 
 def _format_evidence_line(records: tuple[ObjectTextRecord, ...]) -> str:
-    """Compress source, field keys, priority, ordinals, and selection into one line.
+    """Render one provenance chunk per retained record, joined into one line.
 
     “最高优先级唯一值”是默认当选原因，“当前值”在当前视图下必然成立，
     两者都不再单列；异常原因（冲突、低优先级等）与“非当前”仍然保留。
     """
-    first = records[0]
-    source = (
-        " · ".join(value for value in (first.source_kind, first.source_path) if value)
-        or "未记录"
-    )
-    parts = [source]
-    keys = "、".join(record.field_key for record in records if record.field_key)
-    if keys:
-        parts.append(keys)
-    parts.append(f"优先级 {first.source_priority}")
-    parts.append(
-        "序号 " + "、".join(str(record.evidence_ordinal) for record in records)
-    )
-    if not first.is_current:
-        parts.append("非当前")
-    if first.selection_reason is not TextSelectionReason.HIGHEST_PRIORITY_VALUE:
-        parts.append(first.selection_reason.value)
-    return "证据：" + " ｜ ".join(parts)
+    chunks: list[str] = []
+    for record in records:
+        source = (
+            " · ".join(
+                value for value in (record.source_kind, record.source_path) if value
+            )
+            or "未记录"
+        )
+        parts = [source]
+        if record.field_key:
+            parts.append(record.field_key)
+        parts.append(f"优先级 {record.source_priority}")
+        parts.append(f"序号 {record.evidence_ordinal}")
+        if not record.is_current:
+            parts.append("非当前")
+        if record.selection_reason is not TextSelectionReason.HIGHEST_PRIORITY_VALUE:
+            parts.append(record.selection_reason.value)
+        chunks.append(" ｜ ".join(parts))
+    return "证据：" + " · ".join(chunks)

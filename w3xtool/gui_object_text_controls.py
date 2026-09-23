@@ -15,7 +15,7 @@ class ObjectTextControlsMixin:
     def _build_object_text_controls(self, parent) -> None:
         controls = ctk.CTkFrame(parent, fg_color="transparent")
         controls.pack(fill="x", padx=10, pady=(8, 0))
-        self.object_text_view = ObjectTextView.CURRENT
+        self.object_text_view = ObjectTextView.ALL
         self.object_text_selector = ctk.CTkSegmentedButton(
             controls,
             values=[item.value for item in ObjectTextView],
@@ -24,7 +24,7 @@ class ObjectTextControlsMixin:
             selected_hover_color=ACCENT_HOVER,
             text_color=TEXT,
         )
-        self.object_text_selector.set(ObjectTextView.CURRENT.value)
+        self.object_text_selector.set(ObjectTextView.ALL.value)
         self.object_text_selector.pack(side="left")
         self.copy_complete_text_button = ctk.CTkButton(
             controls,
