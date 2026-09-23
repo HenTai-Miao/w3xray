@@ -197,5 +197,7 @@ def _evidence_label(kind: EvidenceKind) -> str:
             return "WGC 配置引用"
         case EvidenceKind.RECENT_CACHE:
             return "最近地图缓存"
+        case EvidenceKind.GAME_LOG:
+            return "游戏日志"
         case unreachable:
             assert_never(unreachable)

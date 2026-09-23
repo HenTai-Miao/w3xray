@@ -75,14 +75,18 @@ def _locate(
     processes: tuple[GameProcess, ...] = (_GAME,),
     open_report: OpenMapProbeReport | None = None,
     now_ns: int = _NOW_NS,
+    log_home: Path | None = None,
 ) -> CurrentMapResolution:
     report = OpenMapProbeReport((), True) if open_report is None else open_report
-    return locate_current_map(
-        (root,),
-        now_ns,
-        process_provider=_ProcessProvider(ProcessProbeReport(processes, True)),
-        open_file_provider=_OpenFileProvider(report),
-    )
+    isolated_home = root / ".isolated-home" if log_home is None else log_home
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(Path, "home", staticmethod(lambda: isolated_home))
+        return locate_current_map(
+            (root,),
+            now_ns,
+            process_provider=_ProcessProvider(ProcessProbeReport(processes, True)),
+            open_file_provider=_OpenFileProvider(report),
+        )
 
 
 def _write_at(path: Path, payload: bytes, mtime_ns: int) -> None:
@@ -383,3 +387,109 @@ def test_direct_process_evidence_always_outranks_recent_hints(tmp_path: Path) ->
     # Then: the unique process-linked map is the only returned candidate.
     assert resolution.status is ResolutionStatus.FOUND
     assert tuple(item.path for item in resolution.candidates) == (direct.resolve(),)
+
+
+def test_log_hint_supplies_last_opening_map_as_suggestion(tmp_path: Path) -> None:
+    # Given: the game log's latest opening line names an existing absolute map.
+    home = tmp_path / "home"
+    log = home.joinpath(*discovery._LOG_RELPATH)
+    log.parent.mkdir(parents=True)
+    map_file = tmp_path / "elsewhere" / "logmap.w3x"
+    _write_at(map_file, b"map", _NOW_NS - _WINDOW_NS - 1)
+    log_reference = os.fspath(map_file).replace("\\", "/")
+    _ = log.write_bytes(
+        (
+            "9/16 21:18:38.751  Opening map - C:/gone/older.w3x\n"
+            f"9/16 21:18:48.259  Opening map - {log_reference}\n"
+            f"9/16 21:18:48.259  Opening mod - {log_reference}\n"
+        ).encode()
+    )
+
+    # When: discovery runs with a live game and no platform open-file probe.
+    resolution = _locate(
+        tmp_path / "empty",
+        open_report=OpenMapProbeReport((), False),
+        log_home=home,
+    )
+
+    # Then: the latest log entry becomes the single suggested candidate.
+    assert resolution.status is ResolutionStatus.SUGGESTED
+    assert len(resolution.candidates) == 1
+    assert resolution.candidates[0].evidence[0].kind is EvidenceKind.GAME_LOG
+
+
+def test_log_hint_without_a_game_process_stays_not_found(tmp_path: Path) -> None:
+    # Given: a log naming an existing map but no detected game process.
+    home = tmp_path / "home"
+    log = home.joinpath(*discovery._LOG_RELPATH)
+    log.parent.mkdir(parents=True)
+    map_file = tmp_path / "elsewhere" / "logmap.w3x"
+    _write_at(map_file, b"map", _NOW_NS - _WINDOW_NS - 1)
+    _ = log.write_bytes(
+        ("Opening map - " + os.fspath(map_file).replace("\\", "/") + "\n").encode()
+    )
+
+    # When: discovery runs without any game process.
+    resolution = _locate(
+        tmp_path / "empty",
+        processes=(),
+        open_report=OpenMapProbeReport((), False),
+        log_home=home,
+    )
+
+    # Then: the stale log cannot propose a map on its own.
+    assert resolution.status is ResolutionStatus.NOT_FOUND
+
+
+def test_log_hint_reads_only_the_bounded_tail(tmp_path: Path) -> None:
+    # Given: an oversized log whose valid opening line sits inside the tail.
+    home = tmp_path
+    map_file = tmp_path / "tail.w3n"
+    _write_at(map_file, b"map", _NOW_NS - _WINDOW_NS - 1)
+    filler = "x" * 4096 + "\n"
+    payload = filler * 300 + "Opening map - " + os.fspath(map_file).replace("\\", "/") + "\n"
+    assert len(payload.encode()) > 1_048_576 // 2
+    log = home.joinpath(*discovery._LOG_RELPATH)
+    log.parent.mkdir(parents=True, exist_ok=True)
+    _ = log.write_bytes(payload.encode())
+
+    # When: the bounded log reader supplies hint evidence.
+    evidence = discovery._log_hint_evidence(home, ())
+
+    # Then: the tail entry still resolves and the read stays under the cap.
+    assert evidence == (MapEvidence(map_file, EvidenceKind.GAME_LOG),)
+
+
+def test_log_hint_skips_unresolvable_and_non_map_entries(tmp_path: Path) -> None:
+    # Given: log lines naming a missing campaign path and a non-map file.
+    home = tmp_path
+    log = home.joinpath(*discovery._LOG_RELPATH)
+    log.parent.mkdir(parents=True, exist_ok=True)
+    _ = log.write_bytes(
+        b"9/16 21:18:48.259  Opening map - Campaign/Classic/ROC/Prologue01.w3m\n"
+        b"9/16 21:18:48.385  Opening map - notes.txt\n"
+        b"garbage line without an opening\n"
+    )
+
+    # When: the bounded log reader classifies every line.
+    evidence = discovery._log_hint_evidence(home, (tmp_path / "Maps",))
+
+    # Then: nothing unresolvable becomes map evidence.
+    assert evidence == ()
+
+
+def test_log_hint_resolves_relative_paths_against_roots(tmp_path: Path) -> None:
+    # Given: a relative log entry that exists below one scanned root.
+    home = tmp_path / "home"
+    root = tmp_path / "library"
+    map_file = root / "Maps" / "Anime" / "relative.w3x"
+    _write_at(map_file, b"map", _NOW_NS - _WINDOW_NS - 1)
+    log = home.joinpath(*discovery._LOG_RELPATH)
+    log.parent.mkdir(parents=True)
+    _ = log.write_bytes(b"Opening map - Maps\\Anime\\relative.w3x\n")
+
+    # When: the bounded log reader resolves the entry against the roots.
+    evidence = discovery._log_hint_evidence(home, (root,))
+
+    # Then: the existing relative map becomes exactly one hint observation.
+    assert evidence == (MapEvidence(map_file, EvidenceKind.GAME_LOG),)

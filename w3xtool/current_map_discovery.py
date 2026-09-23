@@ -7,6 +7,7 @@ from collections.abc import Callable, Iterable
 from itertools import chain, islice
 import os
 from pathlib import Path, PureWindowsPath
+import re
 import stat
 import time
 from typing import Final
@@ -24,6 +25,9 @@ _MAX_WGC_FILES: Final = 64
 _MAX_WGC_BASES: Final = 24
 _MAX_ANCESTORS_PER_ROOT: Final = 8
 _HINT_WINDOW_NS: Final = 15 * 60 * 1_000_000_000
+_LOG_RELPATH: Final = ("Documents", "Warcraft III", "Logs", "War3Log.txt")
+_MAX_LOG_BYTES: Final = 1_048_576
+_OPENING_MAP_MARKER: Final = re.compile(r"opening map - ", re.IGNORECASE)
 _MAP_SUFFIXES: Final = frozenset({".w3x", ".w3m", ".w3n"})
 
 
@@ -73,6 +77,7 @@ def locate_current_map(
         evidence.extend(item for item in direct_evidence if _is_regular_map_file(item.path))
         clock_ns = time.time_ns() if now_ns is None else now_ns
         evidence.extend(_scan_hint_evidence(roots, clock_ns))
+        evidence.extend(_log_hint_evidence(Path.home(), roots))
         direct_probe_available = open_report.available
     else:
         direct_probe_available = True
@@ -128,6 +133,66 @@ def _scan_hint_evidence(roots: tuple[Path, ...], now_ns: int) -> tuple[models.Ma
                     parsed_configs += 1
                     evidence.update(_wgc_reference_evidence(path, roots, now_ns))
     return tuple(evidence)
+
+
+def _log_hint_evidence(home: Path, roots: tuple[Path, ...]) -> tuple[models.MapEvidence, ...]:
+    """Read the game's own log tail; its last opening line is a hint only.
+
+    Unlike ``.wgc`` configs the log is append-only history, so no file mtime
+    window applies: while a game process exists the last entry is the best
+    hint, and the suggestion flow requires explicit confirmation anyway.
+    """
+    payload = _read_bounded_log(home.joinpath(*_LOG_RELPATH))
+    if payload is None:
+        return ()
+    lines = payload.decode("utf-8", errors="replace").splitlines()
+    for line in reversed(lines):
+        raw = _opening_map_path(line)
+        if raw is None:
+            continue
+        resolved = _resolve_log_hint(raw, roots)
+        if resolved is not None:
+            return (models.MapEvidence(resolved, models.EvidenceKind.GAME_LOG),)
+    return ()
+
+
+def _read_bounded_log(path: Path) -> bytes | None:
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    try:
+        descriptor = os.open(path, flags)
+        with os.fdopen(descriptor, "rb") as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode):
+                return None
+            if metadata.st_size > _MAX_LOG_BYTES:
+                stream.seek(-_MAX_LOG_BYTES, os.SEEK_END)
+            return stream.read(_MAX_LOG_BYTES)
+    except OSError:
+        return None
+
+
+def _opening_map_path(line: str) -> str | None:
+    markers = list(_OPENING_MAP_MARKER.finditer(line))
+    if not markers:
+        return None
+    raw = line[markers[-1].end():].strip()
+    return raw or None
+
+
+def _resolve_log_hint(raw: str, roots: tuple[Path, ...]) -> Path | None:
+    windows_path = PureWindowsPath(raw)
+    normalized = raw.replace("\\", "/")
+    if windows_path.drive or windows_path.root:
+        candidate = Path(normalized)
+        return candidate if _is_regular_map_file(candidate) else None
+    parts = _relative_windows_map_parts(raw)
+    if parts is None:
+        return None
+    for base in roots:
+        candidate = _regular_descendant(base, parts)
+        if candidate is not None:
+            return candidate
+    return None
 
 
 def _wgc_reference_evidence(config_path: Path, roots: tuple[Path, ...], now_ns: int) -> tuple[models.MapEvidence, ...]:

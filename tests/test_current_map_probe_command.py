@@ -111,6 +111,40 @@ def test_windows_process_classification_uses_cim_executable_name() -> None:
     )
 
 
+def test_windows_parser_skips_kernel_pseudo_process_rows() -> None:
+    # Given: real CIM listings always open with the PID 0 and PID 4 kernel rows.
+    payload = (
+        '"ProcessId","Name","CommandLine"\r\n'
+        '"0","System Idle Process",\r\n'
+        '"4","System",\r\n'
+        '"301","Warcraft III.exe","""C:\\Games\\Warcraft III.exe"" -launch"\r\n'
+    ).encode()
+
+    # When: the Windows parser classifies the records.
+    processes = parse_windows_processes(payload)
+
+    # Then: kernel rows are skipped and the game record survives intact.
+    assert processes == (
+        GameProcess(301, "Warcraft III.exe", '"C:\\Games\\Warcraft III.exe" -launch'),
+    )
+
+
+def test_posix_parser_skips_kernel_task_record() -> None:
+    # Given: macOS ps output starts with the PID 0 kernel_task record.
+    commands = (
+        "     0 kernel_task",
+        " 311 /Applications/Warcraft III.app/Contents/MacOS/Warcraft III",
+    )
+
+    # When: the POSIX parser classifies the records.
+    processes = parse_posix_processes("\n".join(commands).encode())
+
+    # Then: the kernel record is skipped without rejecting the whole output.
+    assert processes == (
+        GameProcess(311, "Warcraft III", commands[1].lstrip().split(maxsplit=1)[1]),
+    )
+
+
 def test_bounded_command_times_out_without_exposing_the_command() -> None:
     # Given: an absolute executable whose child will outlive a tiny deadline.
     command = (str(Path(sys.executable).resolve()), "-c", "import time; time.sleep(10)")

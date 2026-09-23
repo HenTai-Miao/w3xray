@@ -145,7 +145,10 @@ def parse_posix_processes(payload: bytes) -> tuple[GameProcess, ...]:
         fields = raw_line.strip().split(maxsplit=1)
         if not fields:
             continue
-        pid = _parse_pid(fields[0], "ps")
+        try:
+            pid = _parse_pid(fields[0], "ps")
+        except ProbeParseError:
+            continue
         saw_record = True
         if len(fields) == 1 or len(fields[1]) > MAX_COMMAND_CHARS:
             continue
@@ -170,7 +173,11 @@ def parse_windows_processes(payload: bytes) -> tuple[GameProcess, ...]:
         command_line = row.get("CommandLine") or ""
         if pid_text is None or name is None:
             raise ProbeParseError("CIM")
-        pid = _parse_pid(pid_text, "CIM")
+        # Kernel pseudo-records (PID 0 and 4) are valid rows in every CIM listing.
+        try:
+            pid = _parse_pid(pid_text, "CIM")
+        except ProbeParseError:
+            continue
         if len(command_line) <= MAX_COMMAND_CHARS and _is_game_executable(name):
             processes.append(GameProcess(pid, name, command_line))
             if len(processes) >= MAX_PROCESS_RECORDS:

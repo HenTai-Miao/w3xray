@@ -115,6 +115,22 @@ def test_suggests_hint_only_paths_when_a_game_process_exists(tmp_path: Path) -> 
     )
 
 
+def test_treats_game_log_entries_as_suggestion_tier_hints(tmp_path: Path) -> None:
+    # Given: a running game whose own log named one loaded map.
+    process = GameProcess(43, "Warcraft III", "war3")
+    logged = tmp_path / "logged.w3x"
+    evidence = (MapEvidence(logged, EvidenceKind.GAME_LOG),)
+
+    # When: the log hint is resolved without any direct evidence.
+    resolution = resolve_current_map((process,), evidence)
+
+    # Then: the logged map is only ever suggested for confirmation.
+    assert resolution.status is ResolutionStatus.SUGGESTED
+    assert tuple(candidate.path for candidate in resolution.candidates) == (
+        logged.resolve(strict=False),
+    )
+
+
 def test_ignores_hint_only_paths_without_a_game_process(tmp_path: Path) -> None:
     # Given: a recently touched cache map but no detected game process.
     evidence = (MapEvidence(tmp_path / "recent.w3x", EvidenceKind.RECENT_CACHE),)

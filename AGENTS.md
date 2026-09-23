@@ -11,7 +11,7 @@
 - `w3xtool/cli_options.py`, `api.py`, `archive_source.py`: existing map CLI, load/export API, and archive boundary.
 - `w3xtool/current_map_models.py`: typed evidence and pure confidence resolution.
 - `w3xtool/current_map_process.py`, `current_map_probe_command.py`: bounded OS process/open-file probes.
-- `w3xtool/current_map_discovery.py`: bounded roots, recent cache/`.wgc` hints, and orchestration.
+- `w3xtool/current_map_discovery.py`: bounded roots, recent cache/`.wgc`/game-log hints, and orchestration.
 - `w3xtool/current_map_snapshot.py`, `current_map_snapshot_cleanup.py`: stable private copies and owned cleanup.
 - `w3xtool/current_map_cli.py`, `gui_current_map.py`, `gui_current_map_worker.py`, `gui_current_map_presenter.py`: CLI/GUI current-map entry, worker, and presentation.
 - `w3xtool/batch_cli.py`, `batch_runner.py`, `batch_map_processing.py`: sequential resumable map-directory extraction.
