@@ -12,6 +12,7 @@ wheels/
 
 # 杂项 / 本地产物
 .DS_Store
+.mimosa/
 BsodInfo.bin
 *.png
 third_party/CascLib/bin/win-x64/CascLib.dll
