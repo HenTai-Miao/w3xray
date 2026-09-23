@@ -121,7 +121,17 @@ def resolve_current_map(
         item for item in candidates if has_game_process and item.path in hint_paths
     )
     if hint_candidates:
-        return CurrentMapResolution(ResolutionStatus.SUGGESTED, hint_candidates)
+        # The live game's own log outranks disk-recency hints; weaker hints
+        # must never dilute a log-backed suggestion into "non-unique".
+        logged_candidates = tuple(
+            item
+            for item in hint_candidates
+            if any(e.kind is EvidenceKind.GAME_LOG for e in item.evidence)
+        )
+        return CurrentMapResolution(
+            ResolutionStatus.SUGGESTED,
+            logged_candidates or hint_candidates,
+        )
     if has_game_process and not direct_probe_available:
         return CurrentMapResolution(ResolutionStatus.UNAVAILABLE, ())
     return CurrentMapResolution(ResolutionStatus.NOT_FOUND, ())

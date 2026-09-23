@@ -131,6 +131,28 @@ def test_treats_game_log_entries_as_suggestion_tier_hints(tmp_path: Path) -> Non
     )
 
 
+def test_game_log_hint_outranks_weaker_disk_hints(tmp_path: Path) -> None:
+    # Given: the live game's log names one map while disk recency names two others.
+    process = GameProcess(47, "Warcraft III", "war3")
+    logged = tmp_path / "logged.w3x"
+    recent_a = tmp_path / "recent_a.w3x"
+    recent_b = tmp_path / "recent_b.w3m"
+    evidence = (
+        MapEvidence(recent_a, EvidenceKind.RECENT_CACHE),
+        MapEvidence(recent_b, EvidenceKind.RECENT_CACHE),
+        MapEvidence(logged, EvidenceKind.GAME_LOG),
+    )
+
+    # When: hints are resolved without any direct evidence.
+    resolution = resolve_current_map((process,), evidence)
+
+    # Then: the log-backed map is the only suggestion, never "non-unique".
+    assert resolution.status is ResolutionStatus.SUGGESTED
+    assert tuple(candidate.path for candidate in resolution.candidates) == (
+        logged.resolve(strict=False),
+    )
+
+
 def test_ignores_hint_only_paths_without_a_game_process(tmp_path: Path) -> None:
     # Given: a recently touched cache map but no detected game process.
     evidence = (MapEvidence(tmp_path / "recent.w3x", EvidenceKind.RECENT_CACHE),)

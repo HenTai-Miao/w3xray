@@ -418,6 +418,33 @@ def test_log_hint_supplies_last_opening_map_as_suggestion(tmp_path: Path) -> Non
     assert resolution.candidates[0].evidence[0].kind is EvidenceKind.GAME_LOG
 
 
+def test_log_hint_outlives_recent_hints_in_full_discovery(tmp_path: Path) -> None:
+    # Given: a fresh recent map under the root and a log naming a different map.
+    home = tmp_path / "home"
+    log = home.joinpath(*discovery._LOG_RELPATH)
+    log.parent.mkdir(parents=True)
+    recent = tmp_path / "empty" / "recent.w3x"
+    _write_at(recent, b"hint", _NOW_NS)
+    logged_map = tmp_path / "elsewhere" / "logmap.w3x"
+    _write_at(logged_map, b"map", _NOW_NS - _WINDOW_NS - 1)
+    _ = log.write_bytes(
+        ("Opening map - " + os.fspath(logged_map).replace("\\", "/") + "\n").encode()
+    )
+
+    # When: full discovery runs with a live game and no open-file probe.
+    resolution = _locate(
+        tmp_path / "empty",
+        open_report=OpenMapProbeReport((), False),
+        log_home=home,
+    )
+
+    # Then: only the log-backed map is suggested for confirmation.
+    assert resolution.status is ResolutionStatus.SUGGESTED
+    assert tuple(item.path for item in resolution.candidates) == (
+        Path(os.path.normcase(logged_map.resolve(strict=False))),
+    )
+
+
 def test_log_hint_without_a_game_process_stays_not_found(tmp_path: Path) -> None:
     # Given: a log naming an existing map but no detected game process.
     home = tmp_path / "home"
