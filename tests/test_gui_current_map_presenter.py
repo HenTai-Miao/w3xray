@@ -7,6 +7,7 @@ import pytest
 
 from tests.test_gui_current_map import _candidate, _harness, _snapshot
 from w3xtool import gui_current_map as current_gui
+from w3xtool import gui_current_map_presenter as presenter
 from w3xtool.current_map_models import CurrentMapResolution, EvidenceKind, ResolutionStatus
 
 
@@ -56,7 +57,7 @@ def test_single_suggestion_requires_confirmation_before_snapshot(
         (ResolutionStatus.SUGGESTED, EvidenceKind.RECENT_CACHE),
     ),
 )
-def test_non_unique_candidates_are_bounded_sanitized_and_never_guessed(
+def test_non_unique_candidates_offer_a_bounded_choice_that_never_guesses(
     status: ResolutionStatus,
     kind: EvidenceKind,
     tmp_path: Path,
@@ -68,22 +69,72 @@ def test_non_unique_candidates_are_bounded_sanitized_and_never_guessed(
         for index in range(10)
     )
     resolution = CurrentMapResolution(status, candidates)
-    warnings: list[str] = []
     monkeypatch.setattr(current_gui, "locate_current_map", lambda _roots: resolution)
+    offered: list[tuple[object, ...]] = []
+    snapshot = _snapshot(tmp_path / "private" / "current.w3x")
+    created: list[Path] = []
     monkeypatch.setattr(
-        current_gui.messagebox,
-        "showwarning",
-        lambda _title, message, **_options: warnings.append(message),
+        current_gui,
+        "create_current_map_snapshot",
+        lambda path: created.append(path) or snapshot,
     )
+
+    def chooser(choice_candidates: tuple[object, ...]) -> object:
+        offered.append(choice_candidates)
+        return choice_candidates[7].path  # type: ignore[attr-defined]
+
+    monkeypatch.setattr(presenter, "_candidate_chooser", chooser)
 
     harness.on_open_current_map()
     harness._poll_current_map_results()
 
-    assert len(warnings) == 1
-    assert "candidate-7" in warnings[0] and "candidate-8" not in warnings[0]
-    assert "另有 2 个" in warnings[0] and "\x1b" not in warnings[0]
+    assert len(offered) == 1 and len(offered[0]) == 10
+    assert created == [candidates[7].path]
+    assert harness.loaded == [str(snapshot.path)]
+    assert harness.button_state() == "normal"
+
+
+@pytest.mark.parametrize(
+    ("status", "kind"),
+    (
+        (ResolutionStatus.AMBIGUOUS, EvidenceKind.DIRECT_OPEN),
+        (ResolutionStatus.SUGGESTED, EvidenceKind.RECENT_CACHE),
+    ),
+)
+def test_declining_the_candidate_choice_loads_nothing(
+    status: ResolutionStatus,
+    kind: EvidenceKind,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    harness = _harness(monkeypatch)
+    candidates = tuple(_candidate(tmp_path / f"pick-{index}.w3x", kind) for index in range(3))
+    resolution = CurrentMapResolution(status, candidates)
+    monkeypatch.setattr(current_gui, "locate_current_map", lambda _roots: resolution)
+    monkeypatch.setattr(presenter, "_candidate_chooser", lambda _candidates: None)
+
+    harness.on_open_current_map()
+    harness._poll_current_map_results()
+
     assert harness.loaded == []
-    assert harness.status_text() == "当前地图候选不唯一"
+    assert harness.status_text() == "已取消获取当前地图"
+
+
+def test_candidate_choice_rows_are_bounded_and_sanitized(tmp_path: Path) -> None:
+    # Given: ten candidates whose paths contain control characters.
+    candidates = tuple(
+        _candidate(tmp_path / f"candidate-{index}\x1b\n.w3x", EvidenceKind.RECENT_CACHE)
+        for index in range(10)
+    )
+
+    # When: the pure chooser rows are rendered.
+    rows = presenter.candidate_choice_rows(candidates)
+    joined = "\n".join(rows)
+
+    # Then: at most eight sanitized rows are offered and the omission is stated.
+    assert len(rows) == 8
+    assert "candidate-7" in joined and "candidate-8" not in joined
+    assert "\x1b" not in joined
 
 
 @pytest.mark.parametrize(

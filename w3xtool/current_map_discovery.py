@@ -24,7 +24,8 @@ _MAX_WGC_BYTES: Final = 1_048_576
 _MAX_WGC_FILES: Final = 64
 _MAX_WGC_BASES: Final = 24
 _MAX_ANCESTORS_PER_ROOT: Final = 8
-_HINT_WINDOW_NS: Final = 15 * 60 * 1_000_000_000
+_HINT_WINDOW_NS: Final = 4 * 60 * 60 * 1_000_000_000
+_LOG_WINDOW_NS: Final = 15 * 60 * 1_000_000_000
 _LOG_RELPATH: Final = ("Documents", "Warcraft III", "Logs", "War3Log.txt")
 _MAX_LOG_BYTES: Final = 1_048_576
 _OPENING_MAP_MARKER: Final = re.compile(r"opening map - ", re.IGNORECASE)
@@ -77,7 +78,7 @@ def locate_current_map(
         evidence.extend(item for item in direct_evidence if _is_regular_map_file(item.path))
         clock_ns = time.time_ns() if now_ns is None else now_ns
         evidence.extend(_scan_hint_evidence(roots, clock_ns))
-        evidence.extend(_log_hint_evidence(Path.home(), roots))
+        evidence.extend(_log_hint_evidence(Path.home(), roots, clock_ns))
         direct_probe_available = open_report.available
     else:
         direct_probe_available = True
@@ -128,21 +129,30 @@ def _scan_hint_evidence(roots: tuple[Path, ...], now_ns: int) -> tuple[models.Ma
                 path = Path(entry.path)
                 suffix = path.suffix.casefold()
                 if suffix in _MAP_SUFFIXES:
-                    evidence.add(models.MapEvidence(path, models.EvidenceKind.RECENT_CACHE))
+                    evidence.add(
+                        models.MapEvidence(
+                            path,
+                            models.EvidenceKind.RECENT_CACHE,
+                            mtime_ns=metadata.st_mtime_ns,
+                        )
+                    )
                 elif suffix == ".wgc" and parsed_configs < _MAX_WGC_FILES:
                     parsed_configs += 1
                     evidence.update(_wgc_reference_evidence(path, roots, now_ns))
     return tuple(evidence)
 
 
-def _log_hint_evidence(home: Path, roots: tuple[Path, ...]) -> tuple[models.MapEvidence, ...]:
-    """Read the game's own log tail; its last opening line is a hint only.
+def _log_hint_evidence(
+    home: Path,
+    roots: tuple[Path, ...],
+    now_ns: int,
+) -> tuple[models.MapEvidence, ...]:
+    """Read the live game's freshly written log; its last opening line is a hint.
 
-    Unlike ``.wgc`` configs the log is append-only history, so no file mtime
-    window applies: while a game process exists the last entry is the best
-    hint, and the suggestion flow requires explicit confirmation anyway.
+    The log is append-only history: a last entry written long ago describes a
+    previous session's map, so only a log touched within the window counts.
     """
-    payload = _read_bounded_log(home.joinpath(*_LOG_RELPATH))
+    payload = _read_bounded_log(home.joinpath(*_LOG_RELPATH), now_ns)
     if payload is None:
         return ()
     lines = payload.decode("utf-8", errors="replace").splitlines()
@@ -156,13 +166,14 @@ def _log_hint_evidence(home: Path, roots: tuple[Path, ...]) -> tuple[models.MapE
     return ()
 
 
-def _read_bounded_log(path: Path) -> bytes | None:
+def _read_bounded_log(path: Path, now_ns: int) -> bytes | None:
     flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     try:
         descriptor = os.open(path, flags)
         with os.fdopen(descriptor, "rb") as stream:
             metadata = os.fstat(stream.fileno())
-            if not stat.S_ISREG(metadata.st_mode):
+            age_ns = now_ns - metadata.st_mtime_ns
+            if not stat.S_ISREG(metadata.st_mode) or not 0 <= age_ns <= _LOG_WINDOW_NS:
                 return None
             if metadata.st_size > _MAX_LOG_BYTES:
                 stream.seek(-_MAX_LOG_BYTES, os.SEEK_END)

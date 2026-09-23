@@ -24,7 +24,8 @@ from w3xtool.current_map_models import CurrentMapResolution, EvidenceKind, GameP
 from w3xtool.current_map_process import OpenMapProbeReport, ProcessProbeReport
 
 _NOW_NS = 1_800_000_000_000_000_000
-_WINDOW_NS = 15 * 60 * 1_000_000_000
+_WINDOW_NS = 4 * 60 * 60 * 1_000_000_000
+_LOG_WINDOW_NS = 15 * 60 * 1_000_000_000
 _NONBLOCK_FLAG = getattr(os, "O_NONBLOCK", 0)
 _GAME = GameProcess(73, "Warcraft III", "war3")
 
@@ -253,7 +254,7 @@ def test_recent_hint_window_includes_boundary_but_rejects_stale_and_future(tmp_p
     # When: the injected clock anchors hint discovery.
     resolution = _locate(root)
 
-    # Then: only an age in the closed fifteen-minute interval is useful.
+    # Then: only an age in the closed four-hour interval is useful.
     normalized_boundary = Path(os.path.normcase(os.fspath(boundary.resolve())))
     assert tuple(item.path for item in resolution.candidates) == (normalized_boundary,)
 
@@ -393,16 +394,17 @@ def test_log_hint_supplies_last_opening_map_as_suggestion(tmp_path: Path) -> Non
     # Given: the game log's latest opening line names an existing absolute map.
     home = tmp_path / "home"
     log = home.joinpath(*discovery._LOG_RELPATH)
-    log.parent.mkdir(parents=True)
     map_file = tmp_path / "elsewhere" / "logmap.w3x"
     _write_at(map_file, b"map", _NOW_NS - _WINDOW_NS - 1)
     log_reference = os.fspath(map_file).replace("\\", "/")
-    _ = log.write_bytes(
+    _write_at(
+        log,
         (
             "9/16 21:18:38.751  Opening map - C:/gone/older.w3x\n"
             f"9/16 21:18:48.259  Opening map - {log_reference}\n"
             f"9/16 21:18:48.259  Opening mod - {log_reference}\n"
-        ).encode()
+        ).encode(),
+        _NOW_NS,
     )
 
     # When: discovery runs with a live game and no platform open-file probe.
@@ -418,17 +420,37 @@ def test_log_hint_supplies_last_opening_map_as_suggestion(tmp_path: Path) -> Non
     assert resolution.candidates[0].evidence[0].kind is EvidenceKind.GAME_LOG
 
 
+def test_stale_log_does_not_participate(tmp_path: Path) -> None:
+    # Given: a log naming an existing map but last written in a previous session.
+    home = tmp_path / "home"
+    log = home.joinpath(*discovery._LOG_RELPATH)
+    map_file = tmp_path / "elsewhere" / "logmap.w3x"
+    _write_at(map_file, b"map", _NOW_NS - _WINDOW_NS - 1)
+    _write_at(
+        log,
+        ("Opening map - " + os.fspath(map_file).replace("\\", "/") + "\n").encode(),
+        _NOW_NS - _LOG_WINDOW_NS - 1,
+    )
+
+    # When: the bounded log reader runs against the stale log.
+    evidence = discovery._log_hint_evidence(home, (), _NOW_NS)
+
+    # Then: an old log entry cannot describe the live session's map.
+    assert evidence == ()
+
+
 def test_log_hint_outlives_recent_hints_in_full_discovery(tmp_path: Path) -> None:
     # Given: a fresh recent map under the root and a log naming a different map.
     home = tmp_path / "home"
     log = home.joinpath(*discovery._LOG_RELPATH)
-    log.parent.mkdir(parents=True)
     recent = tmp_path / "empty" / "recent.w3x"
     _write_at(recent, b"hint", _NOW_NS)
     logged_map = tmp_path / "elsewhere" / "logmap.w3x"
     _write_at(logged_map, b"map", _NOW_NS - _WINDOW_NS - 1)
-    _ = log.write_bytes(
-        ("Opening map - " + os.fspath(logged_map).replace("\\", "/") + "\n").encode()
+    _write_at(
+        log,
+        ("Opening map - " + os.fspath(logged_map).replace("\\", "/") + "\n").encode(),
+        _NOW_NS,
     )
 
     # When: full discovery runs with a live game and no open-file probe.
@@ -449,11 +471,12 @@ def test_log_hint_without_a_game_process_stays_not_found(tmp_path: Path) -> None
     # Given: a log naming an existing map but no detected game process.
     home = tmp_path / "home"
     log = home.joinpath(*discovery._LOG_RELPATH)
-    log.parent.mkdir(parents=True)
     map_file = tmp_path / "elsewhere" / "logmap.w3x"
     _write_at(map_file, b"map", _NOW_NS - _WINDOW_NS - 1)
-    _ = log.write_bytes(
-        ("Opening map - " + os.fspath(map_file).replace("\\", "/") + "\n").encode()
+    _write_at(
+        log,
+        ("Opening map - " + os.fspath(map_file).replace("\\", "/") + "\n").encode(),
+        _NOW_NS,
     )
 
     # When: discovery runs without any game process.
@@ -477,11 +500,10 @@ def test_log_hint_reads_only_the_bounded_tail(tmp_path: Path) -> None:
     payload = filler * 300 + "Opening map - " + os.fspath(map_file).replace("\\", "/") + "\n"
     assert len(payload.encode()) > 1_048_576 // 2
     log = home.joinpath(*discovery._LOG_RELPATH)
-    log.parent.mkdir(parents=True, exist_ok=True)
-    _ = log.write_bytes(payload.encode())
+    _write_at(log, payload.encode(), _NOW_NS)
 
     # When: the bounded log reader supplies hint evidence.
-    evidence = discovery._log_hint_evidence(home, ())
+    evidence = discovery._log_hint_evidence(home, (), _NOW_NS)
 
     # Then: the tail entry still resolves and the read stays under the cap.
     assert evidence == (MapEvidence(map_file, EvidenceKind.GAME_LOG),)
@@ -491,15 +513,16 @@ def test_log_hint_skips_unresolvable_and_non_map_entries(tmp_path: Path) -> None
     # Given: log lines naming a missing campaign path and a non-map file.
     home = tmp_path
     log = home.joinpath(*discovery._LOG_RELPATH)
-    log.parent.mkdir(parents=True, exist_ok=True)
-    _ = log.write_bytes(
+    _write_at(
+        log,
         b"9/16 21:18:48.259  Opening map - Campaign/Classic/ROC/Prologue01.w3m\n"
         b"9/16 21:18:48.385  Opening map - notes.txt\n"
-        b"garbage line without an opening\n"
+        b"garbage line without an opening\n",
+        _NOW_NS,
     )
 
     # When: the bounded log reader classifies every line.
-    evidence = discovery._log_hint_evidence(home, (tmp_path / "Maps",))
+    evidence = discovery._log_hint_evidence(home, (tmp_path / "Maps",), _NOW_NS)
 
     # Then: nothing unresolvable becomes map evidence.
     assert evidence == ()
@@ -512,11 +535,10 @@ def test_log_hint_resolves_relative_paths_against_roots(tmp_path: Path) -> None:
     map_file = root / "Maps" / "Anime" / "relative.w3x"
     _write_at(map_file, b"map", _NOW_NS - _WINDOW_NS - 1)
     log = home.joinpath(*discovery._LOG_RELPATH)
-    log.parent.mkdir(parents=True)
-    _ = log.write_bytes(b"Opening map - Maps\\Anime\\relative.w3x\n")
+    _write_at(log, b"Opening map - Maps\\Anime\\relative.w3x\n", _NOW_NS)
 
     # When: the bounded log reader resolves the entry against the roots.
-    evidence = discovery._log_hint_evidence(home, (root,))
+    evidence = discovery._log_hint_evidence(home, (root,), _NOW_NS)
 
     # Then: the existing relative map becomes exactly one hint observation.
     assert evidence == (MapEvidence(map_file, EvidenceKind.GAME_LOG),)

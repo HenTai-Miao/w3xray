@@ -48,6 +48,7 @@ class MapEvidence:
     path: Path
     kind: EvidenceKind
     process_id: int | None = None
+    mtime_ns: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,7 +85,9 @@ def resolve_current_map(
         path = Path(
             os.path.normcase(observation.path.expanduser().resolve(strict=False))
         )
-        normalized = MapEvidence(path, observation.kind, observation.process_id)
+        normalized = MapEvidence(
+            path, observation.kind, observation.process_id, observation.mtime_ns
+        )
         grouped.setdefault(path, []).append(normalized)
         match observation.kind:
             case EvidenceKind.DIRECT_OPEN | EvidenceKind.EXPLICIT_ARGUMENT:
@@ -128,10 +131,17 @@ def resolve_current_map(
             for item in hint_candidates
             if any(e.kind is EvidenceKind.GAME_LOG for e in item.evidence)
         )
-        return CurrentMapResolution(
-            ResolutionStatus.SUGGESTED,
-            logged_candidates or hint_candidates,
+        chosen = logged_candidates or hint_candidates
+        # Newest observation first so bounded choice dialogs lead with the
+        # most recently touched session map.
+        chosen = tuple(
+            sorted(
+                chosen,
+                key=lambda item: max(e.mtime_ns or 0 for e in item.evidence),
+                reverse=True,
+            )
         )
+        return CurrentMapResolution(ResolutionStatus.SUGGESTED, chosen)
     if has_game_process and not direct_probe_available:
         return CurrentMapResolution(ResolutionStatus.UNAVAILABLE, ())
     return CurrentMapResolution(ResolutionStatus.NOT_FOUND, ())

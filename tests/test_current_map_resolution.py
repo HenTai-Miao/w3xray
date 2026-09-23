@@ -115,6 +115,29 @@ def test_suggests_hint_only_paths_when_a_game_process_exists(tmp_path: Path) -> 
     )
 
 
+def test_hint_candidates_are_ordered_newest_observation_first(tmp_path: Path) -> None:
+    # Given: three recency hints with distinct observation times.
+    process = GameProcess(53, "Warcraft III", "war3")
+    older = tmp_path / "older.w3x"
+    middle = tmp_path / "middle.w3m"
+    newest = tmp_path / "newest.w3n"
+    evidence = (
+        MapEvidence(older, EvidenceKind.RECENT_CACHE, mtime_ns=1_000),
+        MapEvidence(newest, EvidenceKind.RECENT_CACHE, mtime_ns=3_000),
+        MapEvidence(middle, EvidenceKind.RECENT_CACHE, mtime_ns=2_000),
+    )
+
+    # When: the hints resolve without any direct evidence.
+    resolution = resolve_current_map((process,), evidence)
+
+    # Then: suggestions lead with the most recently touched session map.
+    assert tuple(candidate.path for candidate in resolution.candidates) == (
+        newest.resolve(strict=False),
+        middle.resolve(strict=False),
+        older.resolve(strict=False),
+    )
+
+
 def test_treats_game_log_entries_as_suggestion_tier_hints(tmp_path: Path) -> None:
     # Given: a running game whose own log named one loaded map.
     process = GameProcess(43, "Warcraft III", "war3")
