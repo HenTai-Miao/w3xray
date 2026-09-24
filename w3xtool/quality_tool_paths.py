@@ -157,7 +157,9 @@ w3xtool/quality_gate.py
 w3xtool/quality_paths.py
 w3xtool/quality_test_paths.py
 w3xtool/quality_tool_paths.py
+w3xtool/real_save_files.py
 w3xtool/save_call_context.py
+w3xtool/save_container.py
 w3xtool/script_function_index.py
 w3xtool/script_sources.py""".splitlines()
 )

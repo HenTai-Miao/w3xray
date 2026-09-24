@@ -105,9 +105,11 @@ tests/test_text_table_icon_fields.py
 tests/test_posix_package_assets.py
 tests/test_quality_gate.py
 tests/test_real_map_item_relation_acceptance.py
+tests/test_real_save_files.py
 tests/test_reference_id_reports.py
 tests/test_release_metadata.py
 tests/test_save_call_context.py
+tests/test_save_container.py
 tests/test_script_function_index.py
 tests/test_script_sources.py
 tests/test_windows_acceptance_assets.py

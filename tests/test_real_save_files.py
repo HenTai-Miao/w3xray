@@ -6,8 +6,10 @@ import hashlib
 import importlib
 import os
 from pathlib import Path
+import struct
 import subprocess
 import sys
+import zlib
 
 import pytest
 
@@ -37,12 +39,14 @@ def _map_with_save_contract() -> MapData:
     )
 
 
-def test_preload_save_matches_script_key_and_map_object_without_modifying_file(tmp_path: Path) -> None:
+def test_preload_save_matches_script_key_and_map_object_without_modifying_file(
+    tmp_path: Path,
+) -> None:
     # Given: a local Preload-style save containing one known key and object rawcode.
     save = tmp_path / "save" / "profile.pld"
     save.parent.mkdir()
     save.write_text(
-        'function PreloadFiles takes nothing returns nothing\n'
+        "function PreloadFiles takes nothing returns nothing\n"
         '    call Preload("hero.level=7;unit=H001")\n'
         "endfunction\n",
         encoding="utf-8",
@@ -77,6 +81,74 @@ def test_binary_save_is_inventoried_without_false_text_evidence(tmp_path: Path) 
     assert report.files[0].matched_keys == ()
     assert report.files[0].object_matches == ()
     assert "未解密" in report.files[0].diagnostic
+
+
+def _build_w3z_container(raw: bytes) -> bytes:
+    signature = b"Warcraft III recorded game\x1a\x00"
+    compressor = zlib.compressobj(level=1, wbits=15)
+    compressed = compressor.compress(raw) + compressor.flush(zlib.Z_SYNC_FLUSH)
+    header_crc = (
+        zlib.crc32(struct.pack("<III", len(compressed), len(raw), 0)) & 0xFFFFFFFF
+    )
+    data_crc = zlib.crc32(compressed) & 0xFFFFFFFF
+    checksum = (((data_crc >> 16) ^ (data_crc & 0xFFFF)) & 0xFFFF) << 16 | (
+        (header_crc >> 16) ^ (header_crc & 0xFFFF)
+    ) & 0xFFFF
+    header = signature + struct.pack(
+        "<5I", 48, 48 + 12 + len(compressed), 0, len(raw), 1
+    )
+    return (
+        header + struct.pack("<III", len(compressed), len(raw), checksum) + compressed
+    )
+
+
+def test_w3z_save_container_yields_decoded_binary_evidence(tmp_path: Path) -> None:
+    # Given: a recorded-save container holding binary state with one key, code, and string.
+    save = tmp_path / "profile.w3z"
+    raw = (
+        b"\x00\x01\x02hero.level\x00H001\x00"
+        b'"gold:900"\x00' + '"equipped:续命剑"'.encode("utf-8") + b"\x00\x03"
+    )
+    save.write_bytes(_build_w3z_container(raw))
+    before = hashlib.sha256(save.read_bytes()).hexdigest()
+    save_module = importlib.import_module("w3xtool.real_save_files")
+
+    # When: the container crosses the bounded read-only analyzer.
+    report = save_module.analyze_real_save_path(save, _map_with_save_contract())
+
+    # Then: decoded evidence is cross-referenced and the source stays unchanged.
+    record = report.files[0]
+    assert record.kind.value == "w3z"
+    assert record.matched_keys == ("hero.level",)
+    assert record.object_matches[0].code == "H001"
+    assert record.object_matches[0].name == "测试英雄"
+    assert "gold:900" in record.printable_strings
+    assert "equipped:续命剑" in record.printable_strings
+    assert "块共" in record.diagnostic
+    assert hashlib.sha256(save.read_bytes()).hexdigest() == before
+    text = save_module.format_real_save_report_tsv(report)
+    assert "profile.w3z\tw3z" in text
+    assert "H001:测试英雄" in text
+
+
+def test_w3z_corrupt_container_reports_failure_without_evidence(tmp_path: Path) -> None:
+    # Given: a recorded-save container whose compressed payload was damaged.
+    save = tmp_path / "broken.w3z"
+    container = bytearray(_build_w3z_container(b"state\x00payload"))
+    container[-1] ^= 0xFF
+    save.write_bytes(bytes(container))
+    save_module = importlib.import_module("w3xtool.real_save_files")
+
+    # When: the analyzer meets the corrupt container.
+    report = save_module.analyze_real_save_path(save, _map_with_save_contract())
+
+    # Then: only metadata survives and the failure reason is explicit.
+    record = report.files[0]
+    assert record.kind.value == "w3z"
+    assert record.matched_keys == ()
+    assert record.object_matches == ()
+    assert record.printable_strings == ()
+    assert "w3z 容器校验失败" in record.diagnostic
 
 
 def test_save_report_tsv_keeps_file_key_and_object_evidence(tmp_path: Path) -> None:

@@ -17,6 +17,11 @@ from .bounded_file import BoundedFileError, read_bounded_regular_file
 from .mpq import MPQArchive
 from .presentation_safety import tsv_cell as _tsv
 from .save_analysis import build_save_report
+from .save_container import (
+    SaveContainerError,
+    looks_like_save_container,
+    unpack_save_container,
+)
 
 if TYPE_CHECKING:
     from .api import MapData
@@ -28,6 +33,8 @@ MAX_MPQ_TEXT_FILES: Final = 500
 MAX_MPQ_TEXT_TOTAL_SIZE: Final = 8 * 1024 * 1024
 MAX_EVIDENCE_STRINGS: Final = 200
 _QUOTED_STRING_RE: Final = re.compile(r"['\"]([^'\"\r\n]{2,512})['\"]")
+_QUOTED_BYTES_RE: Final = re.compile(rb"['\"]([^'\"\x00\r\n]{2,512})['\"]")
+_KEY_ENCODINGS: Final = ("utf-8", "gb18030")
 
 
 class SaveFileKind(StrEnum):
@@ -36,6 +43,7 @@ class SaveFileKind(StrEnum):
     INI = "ini"
     TEXT = "text"
     MPQ = "mpq"
+    W3Z = "w3z"
     BINARY = "binary"
 
 
@@ -97,16 +105,20 @@ def format_real_save_report_tsv(report: RealSaveReport) -> str:
     lines = ["文件\t类型\t大小\tSHA256\t匹配存档键\t匹配对象\t可读字符串\t诊断"]
     for record in report.files:
         objects = ",".join(f"{item.code}:{item.name}" for item in record.object_matches)
-        lines.append("\t".join((
-            _tsv(record.relative_path),
-            record.kind.value,
-            str(record.size),
-            record.sha256,
-            _tsv(",".join(record.matched_keys)),
-            _tsv(objects),
-            _tsv(" | ".join(record.printable_strings)),
-            _tsv(record.diagnostic),
-        )))
+        lines.append(
+            "\t".join(
+                (
+                    _tsv(record.relative_path),
+                    record.kind.value,
+                    str(record.size),
+                    record.sha256,
+                    _tsv(",".join(record.matched_keys)),
+                    _tsv(objects),
+                    _tsv(" | ".join(record.printable_strings)),
+                    _tsv(record.diagnostic),
+                )
+            )
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -139,6 +151,8 @@ def _analyze_file(
     md: MapData,
 ) -> RealSaveFile:
     digest = hashlib.sha256(payload).hexdigest()
+    if looks_like_save_container(payload):
+        return _analyze_save_container(relative, payload, digest, expected_keys, md)
     if _looks_like_mpq(payload):
         text, diagnostic = _read_mpq_text(payload)
         kind = SaveFileKind.MPQ
@@ -147,14 +161,10 @@ def _analyze_file(
         kind = _classify_text(path, text)
         diagnostic = _diagnostic(kind)
     if text is None:
-        return RealSaveFile(relative, kind, len(payload), digest, (), (), (), diagnostic)
-    keys = tuple(key for key in expected_keys if key and key in text)
-    object_matches = tuple(
-        SaveObjectMatch(code, obj.name, obj.category)
-        for code, obj in sorted(md.obj_index.items())
-        if len(code) == 4 and code in text
-    )
-    strings = tuple(dict.fromkeys(_QUOTED_STRING_RE.findall(text)))[:MAX_EVIDENCE_STRINGS]
+        return RealSaveFile(
+            relative, kind, len(payload), digest, (), (), (), diagnostic
+        )
+    keys, object_matches, strings = _text_evidence(text, expected_keys, md)
     return RealSaveFile(
         relative,
         kind,
@@ -167,9 +177,120 @@ def _analyze_file(
     )
 
 
+def _analyze_save_container(
+    relative: str,
+    payload: bytes,
+    digest: str,
+    expected_keys: tuple[str, ...],
+    md: MapData,
+) -> RealSaveFile:
+    """Decode the recorded-save outer container without modifying the source."""
+    try:
+        unpacked = unpack_save_container(payload)
+    except SaveContainerError as exc:
+        return RealSaveFile(
+            relative,
+            SaveFileKind.W3Z,
+            len(payload),
+            digest,
+            (),
+            (),
+            (),
+            f"w3z 容器校验失败：{exc.reason}；仅记录哈希和大小",
+        )
+    raw = unpacked.raw
+    text = _decode_text(raw)
+    if text is not None:
+        keys, object_matches, strings = _text_evidence(text, expected_keys, md)
+    else:
+        keys, object_matches, strings = _binary_evidence(raw, expected_keys, md)
+    diagnostic = (
+        f"w3z 容器解压 {len(unpacked.blocks)} 块共 {len(raw)} 字节；"
+        "只读证据；未修改原文件"
+    )
+    return RealSaveFile(
+        relative,
+        SaveFileKind.W3Z,
+        len(payload),
+        digest,
+        keys,
+        object_matches,
+        strings,
+        diagnostic,
+    )
+
+
+def _text_evidence(
+    text: str,
+    expected_keys: tuple[str, ...],
+    md: MapData,
+) -> tuple[tuple[str, ...], tuple[SaveObjectMatch, ...], tuple[str, ...]]:
+    keys = tuple(key for key in expected_keys if key and key in text)
+    object_matches = tuple(
+        SaveObjectMatch(code, obj.name, obj.category)
+        for code, obj in sorted(md.obj_index.items())
+        if len(code) == 4 and code in text
+    )
+    strings = tuple(dict.fromkeys(_QUOTED_STRING_RE.findall(text)))[
+        :MAX_EVIDENCE_STRINGS
+    ]
+    return keys, object_matches, strings
+
+
+def _binary_evidence(
+    raw: bytes,
+    expected_keys: tuple[str, ...],
+    md: MapData,
+) -> tuple[tuple[str, ...], tuple[SaveObjectMatch, ...], tuple[str, ...]]:
+    keys = tuple(key for key in expected_keys if key and _key_in_raw(key, raw))
+    object_matches = tuple(
+        SaveObjectMatch(code, obj.name, obj.category)
+        for code, obj in sorted(md.obj_index.items())
+        if _code_in_raw(code, raw)
+    )
+    return keys, object_matches, _quoted_raw_strings(raw)
+
+
+def _key_in_raw(key: str, raw: bytes) -> bool:
+    for encoding in _KEY_ENCODINGS:
+        try:
+            if key.encode(encoding) in raw:
+                return True
+        except UnicodeEncodeError:
+            continue
+    return False
+
+
+def _code_in_raw(code: str, raw: bytes) -> bool:
+    if len(code) != 4:
+        return False
+    try:
+        return code.encode("ascii") in raw
+    except UnicodeEncodeError:
+        return False
+
+
+def _quoted_raw_strings(raw: bytes) -> tuple[str, ...]:
+    strings: list[str] = []
+    seen: set[str] = set()
+    for match in _QUOTED_BYTES_RE.finditer(raw):
+        value = match.group(1).decode("utf-8", errors="replace")
+        if value in seen:
+            continue
+        seen.add(value)
+        strings.append(value)
+        if len(strings) >= MAX_EVIDENCE_STRINGS:
+            break
+    return tuple(strings)
+
+
 def _expected_save_keys(md: MapData) -> tuple[str, ...]:
     report = build_save_report(md)
-    return tuple(dict.fromkeys((*report.keys, *report.sections, *report.local_files, *report.sync_prefixes)))
+    return tuple(
+        dict.fromkeys(
+            (*report.keys, *report.sections, *report.local_files, *report.sync_prefixes)
+        )
+    )
 
 
 def _decode_text(payload: bytes) -> str | None:
@@ -233,7 +354,7 @@ def _read_mpq_text_path(path: Path) -> tuple[str | None, str]:
                     continue
                 try:
                     payload = archive.read_file(name)
-                except (KeyError, OSError, ValueError):
+                except KeyError, OSError, ValueError:
                     continue
                 if len(payload) > remaining:
                     continue

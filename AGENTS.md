@@ -9,6 +9,7 @@
 - `main.py`: default GUI plus `description-cache`, `integrity`, `cli`, `current`, `casc`, `save`, `acceptance`, and `batch` dispatch.
 - `w3xtool/gui.py`, `gui_topbar.py`, `gui_lifecycle.py`: GUI composition, top-level actions, and shutdown.
 - `w3xtool/cli_options.py`, `api.py`, `archive_source.py`: existing map CLI, load/export API, and archive boundary.
+- `w3xtool/save_container.py`: bounded read-only `.w3z`/`.w3v` recorded-save container decoding (checksums verified, no repacking).
 - `w3xtool/current_map_models.py`: typed evidence and pure confidence resolution.
 - `w3xtool/current_map_process.py`, `current_map_probe_command.py`, `current_map_inuse_probe.py`: bounded OS process/open-file/in-use-file probes.
 - `w3xtool/current_map_discovery.py`: bounded roots, recent cache/`.wgc`/game-log hints, and orchestration.
