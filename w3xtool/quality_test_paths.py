@@ -52,7 +52,6 @@ tests/test_batch_soak.py
 tests/test_batch_state_reports.py
 tests/test_batch_status.py
 tests/test_campaign_shared_object_identity.py
-tests/test_companion_watch.py
 tests/test_description_cache.py
 tests/test_description_cache_manifest_binding.py
 tests/test_description_cache_retained_capture.py
@@ -65,7 +64,6 @@ tests/test_external_listfile_gui.py
 tests/test_gui_batch_status.py
 tests/test_gui_casc_browser.py
 tests/test_gui_casc_worker.py
-tests/test_gui_companion.py
 tests/test_gui_complete_text_presentation.py
 tests/test_gui_current_map.py
 tests/test_gui_current_map_lifecycle.py

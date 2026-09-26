@@ -67,7 +67,6 @@ w3xtool/batch_state_parser.py
 w3xtool/batch_state_validation.py
 w3xtool/batch_status.py
 w3xtool/campaign_child_loader.py
-w3xtool/companion_watch.py
 w3xtool/description_cache.py
 w3xtool/description_cache_models.py
 w3xtool/description_cache_retained_binding.py
@@ -92,7 +91,6 @@ w3xtool/gui.py
 w3xtool/gui_batch_status.py
 w3xtool/gui_batch_status_layout.py
 w3xtool/gui_casc_browser.py
-w3xtool/gui_companion.py
 w3xtool/gui_current_map.py
 w3xtool/gui_current_map_worker.py
 w3xtool/gui_export_actions.py

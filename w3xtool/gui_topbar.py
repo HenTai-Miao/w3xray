@@ -48,16 +48,6 @@ def build_topbar(app) -> None:
         **secondary_button_style(),
     )
     app.current_map_button.pack(side="left", padx=(0, 12))
-    app.companion_button = ctk.CTkButton(
-        bar,
-        text=app._companion_button_label(),
-        font=(FONT, 13, "bold"),
-        width=116,
-        height=36,
-        command=lambda: app.on_toggle_companion(),
-        **secondary_button_style(),
-    )
-    app.companion_button.pack(side="left", padx=(0, 12))
     app.map_label = ctk.CTkLabel(
         bar,
         text="未打开",
