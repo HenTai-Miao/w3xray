@@ -75,6 +75,9 @@ class _LifecycleHarness(GuiLifecycleMixin):
     def close(self) -> None:
         self._events.append("resolver")
 
+    def _shutdown_companion(self) -> None:
+        self._events.append("companion")
+
     def _shutdown_background_loader(self) -> None:
         self._events.append("loader")
 
@@ -202,7 +205,14 @@ def test_app_close_releases_snapshots_after_resolver_before_destroy() -> None:
     harness._on_close()
 
     # Then: delayed resolver reads end before snapshots are removed.
-    assert events == ["loader", "workers", "resolver", "snapshots", "destroy"]
+    assert events == [
+        "companion",
+        "loader",
+        "workers",
+        "resolver",
+        "snapshots",
+        "destroy",
+    ]
 
 
 def test_worker_finishing_after_shutdown_cleans_new_snapshot(

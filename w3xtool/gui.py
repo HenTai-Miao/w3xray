@@ -10,6 +10,7 @@ from .api import MapData
 from .gui_clipboard import ClipboardMixin
 from .gui_current_map import CurrentMapGuiMixin
 from .gui_casc_browser import CascBrowserMixin
+from .gui_companion import CompanionGuiMixin
 from .gui_data_refresh import DataRefreshMixin
 from .gui_data_tabs import DataTabLayoutMixin
 from .gui_export_actions import ExportActionsMixin
@@ -60,6 +61,7 @@ class App(
     ObjectDetailMixin,
     ObjectTextControlsMixin,
     CurrentMapGuiMixin,
+    CompanionGuiMixin,
     GuiLifecycleMixin,
     ClipboardMixin,
     ctk.CTk,
@@ -101,6 +103,7 @@ class App(
         self._casc_browser_dialog = None
 
         self._init_current_map_gui()
+        self._init_companion()
         self._init_load_options()
         self._init_background_loader()
         self._init_object_filter_runner()
@@ -115,6 +118,7 @@ class App(
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(300, self._restore_last_dir)
         self.after(500, self._restore_pane_sashes)
+        self.after(800, self._start_companion_watch_if_enabled)
 
     def _restore_window_geometry(self) -> None:
         geometry = self._load_config().get("geometry")

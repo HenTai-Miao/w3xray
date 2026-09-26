@@ -142,6 +142,7 @@ class GuiLifecycleMixin:
         dialog = getattr(self, "_casc_browser_dialog", None)
         if dialog is not None and dialog.winfo_exists():
             dialog.close()
+        self._shutdown_companion()
         self._shutdown_background_loader()
         self._shutdown_object_filter_runner()
         lingering = self._shutdown_gui_worker_host(timeout_seconds=1.5)
