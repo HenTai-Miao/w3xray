@@ -79,6 +79,27 @@ _TEXT_WORDS: Final = (
     "description",
 )
 _DEFAULT_VALUES: Final = frozenset(("-", "_"))
+_PLACEMENT_SHOWN_LIMIT: Final = 3
+
+
+def back_reference_note(
+    category: str | None,
+    placements: tuple[tuple[int, float, float], ...],
+) -> str:
+    """Explain where a referencing unit stands, or why no static spot exists.
+
+    ``placements`` holds (player, x, y) from the map's pre-placed instances of
+    the referencing object; only unit referents get a note, everything else
+    keeps the bare reference line.
+    """
+    if category != "单位":
+        return ""
+    if not placements:
+        return "未预放置，游戏内由脚本/触发创建（位置由触发逻辑决定）"
+    shown = placements[:_PLACEMENT_SHOWN_LIMIT]
+    parts = [f"玩家{player} ({x:g}, {y:g})" for player, x, y in shown]
+    tail = f" 等{len(placements)}处" if len(placements) > len(shown) else ""
+    return f"预放置 {len(placements)} 处：{'、'.join(parts)}{tail}"
 
 
 def object_detail_title(obj: GameObject) -> str:
@@ -102,8 +123,12 @@ def format_object_summary(obj: GameObject) -> str:
     return "\n".join(lines) + "\n"
 
 
-def format_object_fields(obj: GameObject) -> str:
-    """Return grouped readable text without dropping any materialized field."""
+def format_object_fields(obj: GameObject, detailed: bool = True) -> str:
+    """Return grouped readable text without dropping any materialized field.
+
+    ``detailed=False``（当前信息模式）只保留四组语义字段；其他字段大墙、
+    未设置/默认字段与数据来源属于核对细节，留给完整证据模式。
+    """
     lines: list[str] = []
 
     groups: dict[str, list[ObjectDetailField]] = {name: [] for name in _GROUP_ORDER}
@@ -115,19 +140,21 @@ def format_object_fields(obj: GameObject) -> str:
         else:
             groups[_field_group(field)].append(field)
     for group in _GROUP_ORDER:
+        if not detailed and group == "其他字段":
+            continue
         items = groups[group]
         if not items:
             continue
         lines.extend(("", f"── {group}（{len(items)}）──"))
         lines.extend(_merged_field_lines(items))
-    if defaults:
+    if detailed and defaults:
         lines.extend(("", f"── 未设置/默认字段（{len(defaults)}）──"))
         lines.extend(
             f"{item.label}：{'（已清空）' if not item.value else '（默认）'}"
             for item in defaults
         )
     sources = Counter(field.source for field in fields if field.source)
-    if sources:
+    if detailed and sources:
         lines.extend(("", f"── 数据来源（{len(sources)}）──"))
         lines.extend(
             f"{source}：{count} 个字段" for source, count in sorted(sources.items())

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from tests.gui_base import GuiTestCase
 from w3xtool.api import GameObject, MapData
+from w3xtool.doo_models import Unit
 from w3xtool.gui_reports import build_analysis_blocks, format_blocks
+from w3xtool.object_detail_presentation import back_reference_note
+from w3xtool.object_text_presentation import ObjectTextView
 from w3xtool.icon_evidence_index import IconEvidenceIndex
 from w3xtool.icon_evidence_models import IconGapReason, UnresolvedIconEvidence
 from w3xtool.icon_resources import IconObjectReference
@@ -28,6 +31,12 @@ from w3xtool.wtg_models import TriggerHeader, TriggerTreeSummary
 
 
 class ObjectPresentationTest(GuiTestCase):
+    def test_detail_panel_defaults_to_current_mode(self) -> None:
+        # Given: a freshly built app window.
+        # Then: the panel opens in the at-a-glance current mode, not full evidence.
+        assert self.app.object_text_view is ObjectTextView.CURRENT
+        assert self.app.object_text_selector.get() == ObjectTextView.CURRENT.value
+
     def test_object_detail_cleans_markup_groups_fields_and_keeps_sources(self) -> None:
         # Given: one extracted object mixes rich text, gameplay, resources and defaults.
         obj = GameObject(
@@ -58,7 +67,9 @@ class ObjectPresentationTest(GuiTestCase):
             },
         )
 
-        # When: the object detail panel renders the extracted model.
+        # When: the object detail panel renders the extracted model in the
+        # full-evidence view, where audit sections stay visible.
+        self.app._set_object_text_view(ObjectTextView.ALL.value)
         self.app.map_data = MapData("fixture.w3x", "fixture")
         self.app._show_detail(obj)
         text = self.app.detail.get("1.0", "end")
@@ -103,7 +114,9 @@ class ObjectPresentationTest(GuiTestCase):
         # Given: one item is dropped by a unit and provides one ability.
         md, item, _unit, _skill = _map_with_item_intelligence("说明", "说明")
 
-        # When: the item detail is rendered from immutable relation indexes.
+        # When: the item detail is rendered from immutable relation indexes in
+        # the full-evidence view.
+        self.app._set_object_text_view(ObjectTextView.ALL.value)
         self.app.map_data = md
         self.app._show_detail(item)
         text = self.app.detail.get("1.0", "end-1c")
@@ -121,6 +134,53 @@ class ObjectPresentationTest(GuiTestCase):
         assert "可信度：" not in text
         assert "war3mapUnits.doo" in text
         assert "偏移 128" in text
+
+    def test_current_mode_leaves_answers_and_hides_audit_detail(self) -> None:
+        # Given: one item with relations, an audit field wall, and default fields.
+        md, _item, _unit, _skill = _map_with_item_intelligence("说明", "说明")
+        audited = GameObject(
+            "物品",
+            "w3t",
+            "I001",
+            "ratf",
+            "烈焰剑",
+            True,
+            fields=[
+                ("护甲类型", "Wood"),
+                ("自定义标签", "Undefined"),
+                ("范围 (等级2)", "-"),
+            ],
+            field_values={"armor": "Wood", "tag": "Undefined", "Area2": "-"},
+            field_sources={
+                "armor": "ItemData.slk",
+                "tag": "ItemData.slk",
+                "Area2": "ItemData.slk",
+            },
+        )
+
+        # When: the default current mode renders the panel, then the full view.
+        self.app.map_data = md
+        self.app._show_detail(audited)
+        current_text = self.app.detail.get("1.0", "end-1c")
+        self.app._set_object_text_view(ObjectTextView.ALL.value)
+        full_text = self.app.detail.get("1.0", "end-1c")
+
+        # Then: current mode keeps the relation answers and readable fields but
+        # drops evidence lines and audit walls; the full view retains them all.
+        acquisition = current_text.split("【获取方式】", 1)[1].split("【装备技能】", 1)[
+            0
+        ]
+        assert "怪物直接掉落：掉落怪(n001)" in acquisition
+        assert "概率 75%" in acquisition
+        assert "证据：" not in acquisition
+        assert "护甲类型" in current_text
+        assert "其他字段" not in current_text
+        assert "未设置/默认字段" not in current_text
+        assert "数据来源" not in current_text
+        assert "war3mapUnits.doo" in full_text
+        assert "其他字段" in full_text
+        assert "未设置/默认字段" in full_text
+        assert "数据来源" in full_text
 
     def test_unit_detail_lists_every_item_from_source_reverse_index(self) -> None:
         # Given: one unit is the retained source endpoint of an item drop.
@@ -151,6 +211,7 @@ class ObjectPresentationTest(GuiTestCase):
     def test_icon_evidence_section_compacts_each_row_to_one_line(self) -> None:
         # Given: one item whose icon reference never resolved to bytes.
         md, item, _unit, _skill = _map_with_item_intelligence("说明", "说明")
+        self.app._set_object_text_view(ObjectTextView.ALL.value)
         path = "ReplaceableTextures\\CommandButtons\\BTNFlame.blp"
         md.icon_evidence = IconEvidenceIndex.build(
             unresolved=(
@@ -218,6 +279,61 @@ class ObjectPresentationTest(GuiTestCase):
         # Then: no extracted trigger disappears behind a preview-only slice.
         assert "T09" in text
         assert "T10" in text
+
+    def test_back_reference_note_marks_placement_or_script_origin(self) -> None:
+        # Given: the note must tell pre-placed spots from script-created absence.
+        assert back_reference_note("物品", ()) == ""
+        assert back_reference_note(None, ()) == ""
+        assert back_reference_note("单位", ()) == (
+            "未预放置，游戏内由脚本/触发创建（位置由触发逻辑决定）"
+        )
+        assert back_reference_note("单位", ((0, 3968.0, -3328.0),)) == (
+            "预放置 1 处：玩家0 (3968, -3328)"
+        )
+        many = ((0, 1.5, 2.5), (1, 3.0, 4.0), (2, 5.0, 6.0), (3, 7.0, 8.0))
+        assert back_reference_note("单位", many) == (
+            "预放置 4 处：玩家0 (1.5, 2.5)、玩家1 (3, 4)、玩家2 (5, 6) 等4处"
+        )
+
+    def test_back_references_show_unit_spots_or_script_origin(self) -> None:
+        # Given: one item is sold by a pre-placed shop and a script-created shop.
+        md, item, _unit, _skill = _map_with_item_intelligence("说明", "说明")
+        placed = GameObject("单位", "w3u", "n057", "n057", "装备图鉴-预放", True)
+        scripted = GameObject("单位", "w3u", "n058", "n058", "装备图鉴-脚本", True)
+        md.obj_index = {"n057": placed, "n058": scripted}
+        md.referenced_by = {
+            "I001": [
+                ("n057", "装备图鉴-预放", "出售物品"),
+                ("n058", "装备图鉴-脚本", "出售物品"),
+            ],
+        }
+        md.units = [
+            Unit(
+                type_id="n057",
+                variation=0,
+                x=3968.0,
+                y=-3328.0,
+                z=0.0,
+                angle=0.0,
+                player=1,
+            ),
+        ]
+
+        # When: the item detail renders its back references.
+        self.app.map_data = md
+        self.app._show_detail(item)
+        text = self.app.detail.get("1.0", "end-1c")
+
+        # Then: the placed shop line carries its spot; the script shop explains why
+        # no coordinates exist instead of staying silent.
+        assert (
+            "装备图鉴-预放(n057)  ·  出售物品  ·  预放置 1 处：玩家1 (3968, -3328)"
+            in text
+        )
+        assert (
+            "装备图鉴-脚本(n058)  ·  出售物品  ·  未预放置，游戏内由脚本/触发创建（位置由触发逻辑决定）"
+            in text
+        )
 
 
 def _map_with_item_intelligence(

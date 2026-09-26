@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 from .object_detail_presentation import (
+    back_reference_note,
     format_complete_text_section,
     format_object_fields,
     format_object_relation_sections,
     format_object_summary,
     object_detail_title,
 )
+from .object_text_presentation import ObjectTextView
 from .object_gallery import render_object_gallery
 from .icon_evidence_presentation import format_object_icon_evidence_section
 
@@ -64,15 +66,20 @@ class ObjectDetailMixin:
         self.detail.delete("1.0", "end")
         self.detail.insert("end", format_object_summary(obj))
         md = self.map_data
+        detailed = self.object_text_view is ObjectTextView.ALL
         if md is not None:
             self.detail.insert(
                 "end", format_complete_text_section(md, obj, self.object_text_view)
             )
-            self.detail.insert("end", format_object_icon_evidence_section(md, obj))
-        self.detail.insert("end", format_object_fields(obj))
+            # 关系情报（怎么获得、给什么）是玩家最常找的答案，紧跟正文；
+            # 字段明细与图标证据属于核对细节，沉到末尾并在当前信息模式收窄。
+            self.detail.insert(
+                "end", format_object_relation_sections(md, obj, detailed=detailed)
+            )
         self._insert_references(obj)
-        if md is not None:
-            self.detail.insert("end", format_object_relation_sections(md, obj))
+        self.detail.insert("end", format_object_fields(obj, detailed=detailed))
+        if md is not None and detailed:
+            self.detail.insert("end", format_object_icon_evidence_section(md, obj))
         self.detail.configure(state="disabled")
 
     def _insert_references(self, obj) -> None:
@@ -88,15 +95,29 @@ class ObjectDetailMixin:
         back_refs = (md.referenced_by or {}).get(obj.obj_id) or []
         if back_refs:
             self.detail.insert("end", "\n── 被引用（← 谁用到此对象）──\n")
+            placements = self._placements_by_unit_type(md)
             seen = set()
             for ref_id, ref_name, label in back_refs:
                 key = (ref_id, label)
                 if key in seen:
                     continue
                 seen.add(key)
-                self.detail.insert(
-                    "end", f"{_format_ref(ref_id, ref_name)}  ·  {label}\n"
+                line = f"{_format_ref(ref_id, ref_name)}  ·  {label}"
+                target = md.obj_index.get(ref_id)
+                note = back_reference_note(
+                    target.category if target is not None else None,
+                    tuple(placements.get(ref_id, ())),
                 )
+                if note:
+                    line += f"  ·  {note}"
+                self.detail.insert("end", line + "\n")
+
+    @staticmethod
+    def _placements_by_unit_type(md) -> dict[str, list[tuple[int, float, float]]]:
+        grouped: dict[str, list[tuple[int, float, float]]] = {}
+        for unit in getattr(md, "units", None) or []:
+            grouped.setdefault(unit.type_id, []).append((unit.player, unit.x, unit.y))
+        return grouped
 
 
 def _format_ref(code, name) -> str:

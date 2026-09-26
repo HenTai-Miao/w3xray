@@ -15,6 +15,7 @@ import unittest
 
 from w3xtool.gui import App
 from w3xtool.load_options import default_load_options
+from w3xtool.object_text_presentation import ObjectTextView
 
 _APP = None
 
@@ -62,6 +63,9 @@ class GuiTestCase(unittest.TestCase):
         app._dir_maps = []
         app._dir_campaigns = []
         app._node_map = {}
+        # 详情面板视图复位到 __init__ 默认（当前信息），避免上个用例留在完整证据
+        app.object_text_view = ObjectTextView.CURRENT
+        app.object_text_selector.set(ObjectTextView.CURRENT.value)
         # 清空所有 Treeview，避免上个用例的行/iid 残留
         for tv in (
             app.map_list,

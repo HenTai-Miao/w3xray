@@ -21,25 +21,35 @@ _SKILL_KINDS: Final = frozenset(
 _COMPACT_RAW_LIMIT: Final = 100
 
 
-def format_object_relation_sections(md: MapData, obj: GameObject) -> str:
-    """Render compact item, source, and skill reverse relations for one object."""
+def format_object_relation_sections(
+    md: MapData,
+    obj: GameObject,
+    detailed: bool = True,
+) -> str:
+    """Render compact item, source, and skill reverse relations for one object.
+
+    ``detailed=False``（当前信息模式）只保留结论行与位置/概率上下文，
+    证据行与原始证据留给完整证据模式。
+    """
     sections: list[str] = []
     item_rows = md.item_relations.for_item(obj.category, obj.obj_id)
     acquisitions = tuple(row for row in item_rows if row.kind not in _SKILL_KINDS)
     skills = tuple(row for row in item_rows if row.kind in _SKILL_KINDS)
-    _append_section(sections, "获取方式", acquisitions, obj)
-    _append_section(sections, "装备技能", skills, obj)
+    _append_section(sections, "获取方式", acquisitions, obj, detailed)
+    _append_section(sections, "装备技能", skills, obj, detailed)
     _append_section(
         sections,
         "掉落/可获取装备",
         md.item_relations.for_source(obj.category, obj.obj_id),
         obj,
+        detailed,
     )
     _append_section(
         sections,
         "由哪些装备提供",
         md.item_relations.for_skill(obj.category, obj.obj_id),
         obj,
+        detailed,
     )
     return "" if not sections else "\n" + "\n\n".join(sections) + "\n"
 
@@ -70,24 +80,26 @@ def _append_section(
     title: str,
     relations: tuple[ItemRelation, ...],
     anchor: GameObject,
+    detailed: bool,
 ) -> None:
     if not relations:
         return
     blocks = [f"【{title}】"]
     for group in _merge_shared_evidence(relations):
-        blocks.append(_format_compact_relations(group, anchor))
+        blocks.append(_format_compact_relations(group, anchor, detailed))
     sections.append("\n".join(blocks))
 
 
 def _format_compact_relations(
     group: tuple[ItemRelation, ...],
     anchor: GameObject,
+    detailed: bool,
 ) -> str:
     """One bullet per shared-evidence group for the object detail pane.
 
     对象自己的端点（“装备：翡翠指环(I02T)”）、SHA-256 关系 ID、默认的
     “已确认｜完整”结论都省略；完整哈希与全量证据仍由
-    format_relation_evidence 和导出报告承载。
+    format_relation_evidence 和导出报告承载。当前信息模式再省去证据行。
     """
     first = group[0]
     head = f"· {first.kind.value}" + (f"（{len(group)} 条）" if len(group) > 1 else "")
@@ -98,7 +110,8 @@ def _format_compact_relations(
     context = _compact_context(first)
     if context:
         lines.append(f"  {context}")
-    lines.append(f"  {_compact_evidence(first)}")
+    if detailed:
+        lines.append(f"  {_compact_evidence(first)}")
     if first.ingredients:
         lines.append(
             "  合成材料："

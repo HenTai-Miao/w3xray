@@ -9,10 +9,15 @@ from .object_text_models import ObjectTextRecord, TextSelectionReason
 
 
 class ObjectTextView(StrEnum):
-    """The two lossless evidence scopes selectable in object detail."""
+    """The two detail-panel scopes selectable above the object text.
 
-    CURRENT = "当前文本"
-    ALL = "全部证据"
+    「当前信息」只渲染一眼可读的答案（当前文本、关系结论、语义字段）；
+    「完整证据」保留全部证据明细（非当前文本、关系证据行、其他字段、
+    未设置/默认、数据来源、图标证据），想核对什么去完整模式里翻。
+    """
+
+    CURRENT = "当前信息"
+    ALL = "完整证据"
 
 
 def records_for_text_view(
@@ -51,18 +56,18 @@ def format_complete_text_section(
 def _merge_identical_records(
     records: tuple[ObjectTextRecord, ...],
 ) -> tuple[tuple[ObjectTextRecord, ...], ...]:
-    """Fold adjacent records whose displayed content and status are identical.
+    """Fold adjacent records whose displayed content is identical.
 
-    地图作者常把同一段文字同时写进多个字段（如 utub 与 ides、unam 与 utip）；
-    内容与状态一致时合并成一块，逐条证据（来源、字段、序号）仍全部保留。
+    地图作者常把同一段文字同时写进多个字段（如 utub 与 ides、unam 与 utip），
+    或同一段文字同时存于高低优先级来源（如 itemstrings.txt 与匿名文本块）。
+    只要正文与状态一致就合并成一块，正文只渲染一次；逐条证据（来源、字段、
+    优先级、非当前/低优先级标记）仍全部保留在证据行里。
     """
 
     def _merge_key(record: ObjectTextRecord) -> tuple[object, ...]:
         return (
             record.level,
             record.state,
-            record.is_current,
-            record.selection_reason,
             record.placeholder,
             record.conflict_group,
             record.raw_value,
