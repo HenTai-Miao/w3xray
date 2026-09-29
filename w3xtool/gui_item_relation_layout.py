@@ -148,7 +148,18 @@ class ItemRelationLayoutMixin(_ItemRelationHost):
             command=lambda _value: self._refresh_item_relations(),
         )
         self.item_relation_confidence.set(ALL_RELATIONS_LABEL)
-        self.item_relation_confidence.pack(side="left")
+        self.item_relation_confidence.pack(side="left", padx=(0, 6))
+        # 细类下拉：值随当前地图的关系动态刷新（见 _refresh_item_relations）
+        self.item_relation_fine = ctk.CTkComboBox(
+            controls,
+            values=[ALL_RELATIONS_LABEL],
+            width=110,
+            height=38,
+            state="readonly",
+            command=lambda _value: self._refresh_item_relations(),
+        )
+        self.item_relation_fine.set(ALL_RELATIONS_LABEL)
+        self.item_relation_fine.pack(side="left")
         self.item_relation_status = ctk.CTkLabel(
             parent,
             text="打开地图后这里列出装备掉落、获取方式与装备技能",

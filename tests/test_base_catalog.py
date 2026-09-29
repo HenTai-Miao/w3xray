@@ -120,6 +120,23 @@ def test_relation_filter_matches_english_name():
     assert filter_item_relations(records, "town hall") == ()
 
 
+def test_relation_filter_selects_by_fine_category():
+    relation = ItemRelation(
+        kind=ItemRelationKind.UNIT_DROP,
+        item=RelationObject("物品", "ckng", "国王之冠 +5", "神器"),
+        source=RelationObject("单位", "Hpal", "圣骑士", "英雄"),
+        evidence=RelationEvidence(source="war3mapUnits.doo", offset=8),
+        confidence=RelationConfidence.CONFIRMED,
+        completeness=RelationCompleteness.COMPLETE,
+    )
+    records = (relation,)
+    # 任一端点（装备或来源）命中细类即保留
+    assert filter_item_relations(records, "", fine_filter="神器") == records
+    assert filter_item_relations(records, "", fine_filter="英雄") == records
+    assert filter_item_relations(records, "", fine_filter="英雄技能") == ()
+    assert filter_item_relations(records, "") == records
+
+
 def test_relation_endpoints_carry_fine_category():
     from w3xtool.api import MapData
     from w3xtool.item_relation_endpoints import resolve_relation_object

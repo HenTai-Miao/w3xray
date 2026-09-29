@@ -49,6 +49,30 @@ class ItemRelationGuiTest(GuiTestCase):
             self.app.item_relation_rows[rows[0]].kind is ItemRelationKind.ITEM_ABILITY
         )
 
+    def test_relation_fine_filter_selects_and_resets_by_present_categories(
+        self,
+    ) -> None:
+        # Given: one drop endpoint carries the artifact fine category.
+        self.app._render_map(_map_with_relations(), [], [], None)
+
+        # When: the fine filter asks for artifacts only.
+        assert "神器" in self.app.item_relation_fine.cget("values")
+        self.app.item_relation_fine.set("神器")
+        self.app._refresh_item_relations()
+
+        # Then: only the artifact drop stays visible.
+        rows = self.app.item_relation_tree.get_children()
+        assert len(rows) == 1
+        assert self.app.item_relation_rows[rows[0]].kind is ItemRelationKind.UNIT_DROP
+
+        # When: a stale category no endpoint carries is selected programmatically.
+        self.app.item_relation_fine.set("英雄")
+        self.app._refresh_item_relations()
+
+        # Then: the picker resets to 全部 instead of hiding every row.
+        assert self.app.item_relation_fine.get() == "全部"
+        assert len(self.app.item_relation_tree.get_children()) == 3
+
     def test_selected_relation_shows_complete_evidence(self) -> None:
         # Given: a direct drop retains probability and binary offset evidence.
         self.app._render_map(_map_with_relations(), [], [], None)
@@ -216,7 +240,7 @@ def _map_with_relations() -> MapData:
         (
             ItemRelation(
                 kind=ItemRelationKind.UNIT_DROP,
-                item=RelationObject("物品", "I001", "烈焰剑"),
+                item=RelationObject("物品", "I001", "烈焰剑", "神器"),
                 source=RelationObject("单位", "n001", "掉落怪"),
                 group_index=0,
                 entry_index=1,

@@ -111,6 +111,17 @@ class DirectoryDataSource:
         query = _norm(name)
         if query in self._by_rel:
             return self._by_rel[query]
+        # CASC 冒号命名空间（war3.w3mod:_locales\zhcn.w3mod:...）在导出目录里
+        # 是嵌套文件夹形式：把冒号换成斜杠再做一次后缀/全等匹配。
+        if ":" in query:
+            flat = query.replace(":", "/")
+            flat_matches = [
+                rel
+                for rel in self._by_rel
+                if rel == flat or rel.endswith("/" + flat)
+            ]
+            if flat_matches:
+                return self._by_rel[min(flat_matches, key=len)]
         suffix_matches = [rel for rel in self._by_rel if rel.endswith("/" + query)]
         if suffix_matches:
             return self._by_rel[min(suffix_matches, key=len)]

@@ -112,6 +112,15 @@ class ItemRelation:
         object.__setattr__(self, "relation_id", hashlib.sha256(payload).hexdigest())
 
 
+def relation_endpoints(relation: "ItemRelation") -> tuple[RelationObject, ...]:
+    """Target item plus the source and skill endpoints that exist."""
+    return (relation.item,) + tuple(
+        endpoint
+        for endpoint in (relation.source, relation.skill)
+        if endpoint is not None
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class ItemRelationIndex:
     """Stable relations with immutable target, source, skill, and kind lookups."""

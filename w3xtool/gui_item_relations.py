@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 from .gui_item_relation_layout import ItemRelationLayoutMixin
-from .item_relation_models import ItemRelation, ItemRelationKind, RelationObject
+from .item_relation_models import (
+    ItemRelation,
+    ItemRelationKind,
+    RelationObject,
+    relation_endpoints,
+)
 from .item_relation_presentation import format_relation_evidence
-from .item_relation_query import filter_item_relations
+from .item_relation_query import ALL_RELATIONS_LABEL, filter_item_relations
 from .map_data import GameObject
 from .theme import CARD, ROW_ALT
 
@@ -21,11 +26,25 @@ class ItemRelationGuiMixin(ItemRelationLayoutMixin):
         self.item_relation_rows = {}
         md = self.map_data
         records = () if md is None else md.item_relations.records
+        # 细类下拉只列当前关系里出现过的细类，保留仍然有效的选择
+        present_fine = sorted(
+            {
+                endpoint.fine_category
+                for relation in records
+                for endpoint in relation_endpoints(relation)
+                if endpoint.fine_category
+            }
+        )
+        current_fine = self.item_relation_fine.get()
+        self.item_relation_fine.configure(values=[ALL_RELATIONS_LABEL, *present_fine])
+        if current_fine != ALL_RELATIONS_LABEL and current_fine not in present_fine:
+            self.item_relation_fine.set(ALL_RELATIONS_LABEL)
         visible = filter_item_relations(
             records,
             self.item_relation_search.get(),
             self.item_relation_kind.get(),
             self.item_relation_confidence.get(),
+            self.item_relation_fine.get(),
         )
         for relation in visible:
             iid = relation.relation_id

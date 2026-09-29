@@ -166,6 +166,31 @@ def test_client_snapshot_prefers_zhcn_locale_strings() -> None:
     }
 
 
+def test_client_snapshot_prefers_zhcn_from_exported_directory_layout(tmp_path) -> None:
+    # Given: a CASC export flattened the locale namespace into nested folders
+    # and both a zhCN and a neutral variant of the same strings file exist.
+    from w3xtool.game_data_source import DirectoryDataSource
+
+    zh_dir = tmp_path / "war3.w3mod" / "_locales" / "zhcn.w3mod" / "units"
+    zh_dir.mkdir(parents=True)
+    (zh_dir / "humanunitstrings.txt").write_text(
+        "[hX01]\nName=导出步兵\n", encoding="utf-8"
+    )
+    neutral_dir = tmp_path / "units"
+    neutral_dir.mkdir()
+    (neutral_dir / "humanunitstrings.txt").write_text(
+        "[hX01]\nName=Exported\n", encoding="utf-8"
+    )
+
+    # When: the client snapshot reads through the directory data source.
+    snapshot = snapshot_client_base_objects(DirectoryDataSource(str(tmp_path)))
+
+    # Then: the zhCN variant wins over the neutral-locale file.
+    assert snapshot.text_available is True
+    assert snapshot.objects
+    assert "导出步兵" in dict(snapshot.objects[0].fields).values()
+
+
 def _client_source() -> FakeClientSource:
     return FakeClientSource(
         {

@@ -76,6 +76,33 @@ class GameDataSourceTest(unittest.TestCase):
                 b"BLP1hero",
             )
 
+    def test_directory_source_resolves_casc_colon_namespace_as_folders(self) -> None:
+        # Given: an export flattened the CASC colon namespace into nested folders.
+        with tempfile.TemporaryDirectory() as root:
+            zh_dir = os.path.join(
+                root, "war3.w3mod", "_locales", "zhcn.w3mod", "units"
+            )
+            os.makedirs(zh_dir)
+            zh_path = os.path.join(zh_dir, "humanunitstrings.txt")
+            with open(zh_path, "wb") as handle:
+                handle.write("步兵".encode("utf-8"))
+
+            # When: a zhCN locale-module path is resolved through the directory tree.
+            source = DirectoryDataSource(root)
+
+            # Then: colon segments map onto the nested folder layout.
+            self.assertTrue(
+                source.has_file(
+                    "war3.w3mod:_locales\\zhcn.w3mod:Units\\HumanUnitStrings.txt"
+                )
+            )
+            self.assertEqual(
+                source.read_file(
+                    "war3.w3mod:_locales\\zhcn.w3mod:units\\humanunitstrings.txt"
+                ),
+                "步兵".encode("utf-8"),
+            )
+
     def test_probe_marks_native_casc_install_as_needing_export(self) -> None:
         # Given: a raw Reforged install uses CASC indexes rather than plain files.
         with tempfile.TemporaryDirectory() as root:
