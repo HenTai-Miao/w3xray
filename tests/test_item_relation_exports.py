@@ -65,9 +65,14 @@ def test_complete_text_tsv_round_trips_all_raw_characters_and_long_values() -> N
         "是否当前值",
         "选择原因",
         "证据序号",
+        "英文名",
+        "细类",
     ]
     assert rows[1][10] == raw
     assert rows[1][11] == "可读\n全文"
+    # 双语尾列按基础码回填（ratf = Claws of Attack +15 / 神器）
+    assert rows[1][21] == "Claws of Attack +15"
+    assert rows[1][22] == "神器"
 
 
 def test_complete_text_summary_lists_all_seven_states_in_enum_order() -> None:

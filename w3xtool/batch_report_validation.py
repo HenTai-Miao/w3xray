@@ -16,7 +16,10 @@ from .item_relation_exports import (
     EQUIPMENT_SKILL_REPORT_HEADER,
     EQUIPMENT_SKILL_REPORT_LEGACY_HEADERS,
 )
-from .object_text_exports import OBJECT_TEXT_REPORT_HEADER
+from .object_text_exports import (
+    OBJECT_TEXT_REPORT_HEADER,
+    OBJECT_TEXT_REPORT_LEGACY_HEADERS,
+)
 
 
 _TEXT_STATE_COLUMN: Final = OBJECT_TEXT_REPORT_HEADER.index("状态")
@@ -45,6 +48,7 @@ def validate_report_summaries(
         reports.content("对象完整描述.tsv"),
         "对象完整描述.tsv",
         OBJECT_TEXT_REPORT_HEADER,
+        OBJECT_TEXT_REPORT_LEGACY_HEADERS,
     )
     text_counts = Counter(row[_TEXT_STATE_COLUMN] for row in text_rows)
     if not _counts_match(summary.description_counts, text_counts):

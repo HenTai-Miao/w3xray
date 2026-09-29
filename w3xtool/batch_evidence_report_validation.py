@@ -13,7 +13,10 @@ from .item_relation_exports import (
     EQUIPMENT_SKILL_REPORT_LEGACY_HEADERS,
 )
 from .item_relation_models import RelationCompleteness
-from .object_text_exports import OBJECT_TEXT_REPORT_HEADER
+from .object_text_exports import (
+    OBJECT_TEXT_REPORT_HEADER,
+    OBJECT_TEXT_REPORT_LEGACY_HEADERS,
+)
 from .object_text_models import ObjectTextState
 
 
@@ -44,6 +47,7 @@ def _validate_current_text(
         reports.content("对象完整描述.tsv"),
         "对象完整描述.tsv",
         OBJECT_TEXT_REPORT_HEADER,
+        OBJECT_TEXT_REPORT_LEGACY_HEADERS,
     )
     for row in rows:
         if not _yes_no(row[_TEXT_CURRENT]):

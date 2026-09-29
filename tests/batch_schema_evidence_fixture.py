@@ -129,6 +129,9 @@ def _write_noncurrent_unavailable_text(root: Path) -> None:
         "",
         "否",
         "",
+        # 表头末尾的 证据序号/英文名/细类
+        "",
+        "",
         "",
     )
     (root / "对象完整描述.tsv").write_text(
