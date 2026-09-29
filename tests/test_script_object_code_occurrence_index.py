@@ -38,13 +38,34 @@ class ScriptObjectCodeOccurrenceIndexTest(unittest.TestCase):
 
         # When: the object-code occurrence index is built.
         text = _format_occurrences(md)
-
         # Then: every real object code occurrence is listed with readable context.
         self.assertIn("来源\t行号\t函数\t对象码\t10进制\t分类\t名称\t对象来源\t上下文\t机制\t摘要\t英文名\t细类", text)
         self.assertIn("war3map.j\t2\tInit\tH001\t1211117617\t单位\t圣骑士\tw3u\tCreateUnit\tObjectID:单位", text)
         self.assertIn("war3map.j\t3\tInit\tA001\t1093677105\t技能\t治疗术\tw3a\tudg_AbilityId\t赋值", text)
         self.assertIn("war3map.j\t4\tInit\tA001\t1093677105\t技能\t治疗术\tw3a\tSaveInteger\tHashtable:写整数", text)
         self.assertIn("war3map.j\t5\tInit\tI999\t1228486969\t物品\t\t未解析\tCreateItem\tObjectID:物品", text)
+
+    def test_indexes_ability_field_constants_as_skill_field_rows(self):
+        # Given: a script tweaks ability data through common.j field constants.
+        md = MapData(path="x.w3x", name="字段常量图")
+        md.scripts = {
+            "war3map.j": "\n".join((
+                "function Tweak takes nothing returns nothing",
+                "    call BlzSetAbilityRealLevelField(a, ABILITY_RLF_DAMAGE_PER_TARGET_EFK1, 250.0)",
+                "    set x = BlzGetAbilityIntegerLevelField(b, ABILITY_ILF_NUMBER_OF_WAVES)",
+                "endfunction",
+            )),
+        }
+
+        # When: the occurrence index is built.
+        text = _format_occurrences(md)
+
+        # Then: constants resolve to their field codes with labels and provenance.
+        self.assertIn("Efk1", text)
+        self.assertIn("\t技能字段\t", text)
+        self.assertIn("ABILITY_RLF_DAMAGE_PER_TARGET_EFK1", text)
+        self.assertIn("ABILITY_ILF_NUMBER_OF_WAVES", text)
+        self.assertIn("common.j 常量", text)
 
     def test_ignores_comments_and_ordinary_display_strings(self):
         # Given: comments and UI strings contain rawcode-like text while a decimal code is real.

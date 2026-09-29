@@ -63,6 +63,7 @@ def _ability_object() -> GameObject:
 def test_detail_fields_annotate_bounds_and_applicability_in_full_mode():
     text = format_object_fields(_ability_object(), detailed=True)
     assert "范围 ≥0，≤99999" in text
+    assert "常量 ABILITY_RLF_DAMAGE_PER_TARGET_EFK1" in text
     # Ocr6 的 useSpecific 是 AOcr/ACct/ANdb，基础 AEfk 未列出
     assert "基础技能未列出此字段" in text
 
@@ -71,6 +72,7 @@ def test_detail_fields_keep_current_mode_clean():
     text = format_object_fields(_ability_object(), detailed=False)
     assert "范围 ≥" not in text
     assert "基础技能未列出此字段" not in text
+    assert "常量 ABILITY_" not in text
 
 
 def _write(path, text):

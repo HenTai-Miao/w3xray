@@ -9,6 +9,8 @@ from typing import Final
 
 from .api import GameObject, MapData
 from .base_names import BASE_CATEGORIES, BASE_NAMES, BASE_NAMES_EN
+from .field_meta import GENERATED_FIELD_CONSTANTS
+from .fields import label_for
 from .object_id_usage import code_decimal
 from .presentation_safety import tsv_cell as _tsv
 from .script_call_catalog import ScriptCall, build_script_call_catalog
@@ -121,7 +123,39 @@ def _occurrences_for_script(
                 mechanism=mechanism,
                 summary=_summary(raw_lines, line_no),
             ))
+        # Blz 系技能字段常量（如 ABILITY_RLF_HOLY_BOLT_DAMAGE）也是对象码引用：
+        # 按 common.j 常量反查字段码，作为"技能字段"出现行保留。
+        for field_code, constant in _field_constants_in(code_line):
+            context, mechanism = _context_for(code_line, field_code, is_lua, calls_by_line.get(line_no, ()))
+            rows.append(ScriptObjectCodeOccurrence(
+                source=source,
+                line=line_no,
+                function=functions.name_for(source, line_no),
+                code=field_code,
+                decimal=code_decimal(field_code),
+                category="技能字段",
+                name=label_for(field_code),
+                object_source="common.j 常量",
+                context=constant,
+                mechanism=mechanism,
+                summary=_summary(raw_lines, line_no),
+            ))
     return rows
+
+
+_CONSTANT_TO_CODE: Final[dict[str, str]] = {
+    name: code for code, name in GENERATED_FIELD_CONSTANTS.items()
+}
+_IDENTIFIER_RE: Final = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+
+def _field_constants_in(line: str) -> tuple[tuple[str, str], ...]:
+    """识别一行内引用的 ability 字段常量，返回 (字段码, 常量名)。"""
+    return tuple(
+        (code, token)
+        for token in _IDENTIFIER_RE.findall(line)
+        if (code := _CONSTANT_TO_CODE.get(token)) is not None
+    )
 
 
 def _object_lookup(md: MapData) -> dict[str, GameObject]:

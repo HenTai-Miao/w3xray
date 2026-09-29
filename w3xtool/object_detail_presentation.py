@@ -8,7 +8,11 @@ from dataclasses import dataclass
 from typing import Final
 
 from .base_names import BASE_CATEGORIES, BASE_NAMES_EN
-from .fields import ability_field_applicable, ability_field_bounds
+from .fields import (
+    ability_field_applicable,
+    ability_field_bounds,
+    ability_field_constant,
+)
 from .item_relation_presentation import (
     format_object_relation_sections as format_object_relation_sections,
 )
@@ -206,6 +210,9 @@ def _field_annotation(field: ObjectDetailField, category: str, base_id: str) -> 
             ]
             if parts:
                 notes.append("范围 " + "，".join(parts))
+        constant = ability_field_constant(field.key)
+        if constant:
+            notes.append(f"常量 {constant}")
         if (
             category == "技能"
             and base_id
