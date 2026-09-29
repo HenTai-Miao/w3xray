@@ -13,6 +13,7 @@ from PIL import Image
 from .deferred_paned import add_deferred_pane, build_deferred_horizontal_paned
 from .gui_pane_state import OBJECT_EDITOR_PANE_KEY
 from .map_data import GameObject
+from .object_filter import ALL_OBJECTS_LABEL
 from .object_gallery import ObjectGallery, build_object_gallery
 from .theme import (
     BG,
@@ -33,6 +34,7 @@ class ObjectPanelHost(Protocol):
     """Shell members initialized by the object-browser and detail builders."""
 
     search_var: tk.StringVar
+    object_fine_filter: ctk.CTkComboBox
     paned: tk.PanedWindow
     col_trees: dict[str, ttk.Treeview]
     col_results: dict[str, list[GameObject]]
@@ -86,9 +88,20 @@ def build_object_tab(host: ObjectPanelHost, parent: ctk.CTkFrame) -> None:
         placeholder_text='回车搜索：名称 / ID / 字段内容    %词%=包含    ="…"=精准    && / ||',
         **entry_style(),
     )
-    search.pack(fill="x")
+    search.pack(side="left", fill="x", expand=True, padx=(0, 6))
     search.bind("<Return>", lambda *_: host._refresh_list())
     host._attach_ctx_menu(search, paste=True)
+    # 细类下拉：值随当前地图对象动态刷新（见 _sync_object_fine_choices）
+    host.object_fine_filter = ctk.CTkComboBox(
+        ctrl,
+        values=[ALL_OBJECTS_LABEL],
+        width=96,
+        height=38,
+        state="readonly",
+        command=lambda _value: host._refresh_list(),
+    )
+    host.object_fine_filter.set(ALL_OBJECTS_LABEL)
+    host.object_fine_filter.pack(side="left")
     body = ctk.CTkFrame(parent, fg_color=BG)
     body.pack(fill="both", expand=True)
     paned = build_deferred_horizontal_paned(body)
