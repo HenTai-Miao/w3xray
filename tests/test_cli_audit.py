@@ -240,7 +240,7 @@ class CliAuditTest(unittest.TestCase):
         # Then: terrain texture and grid metadata is visible.
         self.assertIn("  地形:", lines)
         self.assertTrue(any("65×33" in line and "L" in line for line in lines))
-        self.assertTrue(any("Ldrt" in line and "洛丹伦的夏天 - 泥地" in line for line in lines))
+        self.assertTrue(any("Ldrt" in line and "洛丹伦(夏) - 泥地" in line for line in lines))
         self.assertTrue(any("TerrainArt\\LordaeronSummer\\Lords_Dirt.blp" in line for line in lines))
 
     def test_cli_summary_includes_return_bug_compat_warning(self):

@@ -118,7 +118,7 @@ def test_relation_exports_fill_bilingual_columns_for_vanilla_ids() -> None:
     # Given: relations reference vanilla rawcodes known to the base catalog.
     drop = ItemRelation(
         kind=ItemRelationKind.UNIT_DROP,
-        item=RelationObject("物品", "ckng", "国王之冠 +5"),
+        item=RelationObject("物品", "ckng", "列王之冠+5"),
         source=RelationObject("单位", "nckb", "红龙"),
         evidence=RelationEvidence(source="war3mapUnits.doo", offset=64),
         confidence=RelationConfidence.CONFIRMED,

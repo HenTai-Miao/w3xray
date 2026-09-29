@@ -125,7 +125,7 @@ class TerrainTest(unittest.TestCase):
 
         # Then: both the localized editor label and texture path are returned.
         self.assertEqual(tile.tile_id, "Ldrt")
-        self.assertEqual(tile.label, "洛丹伦的夏天 - 泥地")
+        self.assertEqual(tile.label, "洛丹伦(夏) - 泥地")
         self.assertEqual(tile.path, "TerrainArt\\LordaeronSummer\\Lords_Dirt.blp")
 
     def test_format_terrain_tile_list_keeps_unknown_ids_visible(self):
@@ -134,7 +134,7 @@ class TerrainTest(unittest.TestCase):
         text = format_terrain_tile_list(("Ldrt", "????"))
 
         # Then: known ids are enriched and unknown ids remain inspectable.
-        self.assertIn("Ldrt(洛丹伦的夏天 - 泥地", text)
+        self.assertIn("Ldrt(洛丹伦(夏) - 泥地", text)
         self.assertIn("TerrainArt\\LordaeronSummer\\Lords_Dirt.blp", text)
         self.assertIn("????", text)
 

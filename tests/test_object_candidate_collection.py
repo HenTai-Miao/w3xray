@@ -231,7 +231,7 @@ def test_relation_rawcodes_survive_compatibility_display_expansion() -> None:
     )
 
     # Then: display names remain expanded while both rawcode relations survive.
-    assert "能提高英雄属性的物品(AIa1)" in item.field_values["iabi"]
+    assert "物品 - 英雄属性加成(AIa1)" in item.field_values["iabi"]
     assert {row.skill.object_id for row in rows if row.skill is not None} == {
         "AIa1",
         "AIa3",

@@ -29,7 +29,7 @@ import build_base_catalog as bbc
 
 def test_bilingual_names_spot_checks():
     # 中英名与 trainer 同源快照对账（中文来自本机游戏安装，英文来自 enUS 快照）
-    assert BASE_NAMES["ckng"] == "国王之冠 +5"
+    assert BASE_NAMES["ckng"] == "列王之冠+5"
     assert BASE_NAMES_EN["ckng"] == "Crown of Kings +5"
     assert BASE_NAMES_EN["AHhb"] == "Holy Light"
     assert BASE_NAMES_EN["Hpal"] == "Paladin"
@@ -103,7 +103,7 @@ def test_object_summary_without_catalog_entry_keeps_plain_lines():
 def _crown_drop_relation() -> ItemRelation:
     return ItemRelation(
         kind=ItemRelationKind.UNIT_DROP,
-        item=RelationObject("物品", "ckng", "国王之冠 +5"),
+        item=RelationObject("物品", "ckng", "列王之冠+5"),
         source=RelationObject("单位", "nckb", "红龙"),
         evidence=RelationEvidence(source="war3mapUnits.doo", offset=128),
         confidence=RelationConfidence.CONFIRMED,
@@ -114,7 +114,7 @@ def _crown_drop_relation() -> ItemRelation:
 def test_relation_filter_matches_english_name():
     records = (_crown_drop_relation(),)
     assert filter_item_relations(records, "crown") == records
-    assert filter_item_relations(records, "国王") == records
+    assert filter_item_relations(records, "列王") == records
     assert filter_item_relations(records, "kings") == records
     assert filter_item_relations(records, "sword") == ()
     assert filter_item_relations(records, "town hall") == ()
@@ -123,7 +123,7 @@ def test_relation_filter_matches_english_name():
 def test_relation_filter_selects_by_fine_category():
     relation = ItemRelation(
         kind=ItemRelationKind.UNIT_DROP,
-        item=RelationObject("物品", "ckng", "国王之冠 +5", "神器"),
+        item=RelationObject("物品", "ckng", "列王之冠+5", "神器"),
         source=RelationObject("单位", "Hpal", "圣骑士", "英雄"),
         evidence=RelationEvidence(source="war3mapUnits.doo", offset=8),
         confidence=RelationConfidence.CONFIRMED,
@@ -144,7 +144,7 @@ def test_relation_endpoints_carry_fine_category():
     md = MapData(path="x", name="x")
     crown, resolved = resolve_relation_object(md, "ckng", "物品")
     assert resolved
-    assert crown.name == "国王之冠 +5"
+    assert crown.name == "列王之冠+5"
     assert crown.fine_category == "神器"
     holy, resolved = resolve_relation_object(md, "AHhb", "技能")
     assert resolved
@@ -243,7 +243,7 @@ def test_merge_objectdata_preserves_chinese_and_appends_tables(tmp_path):
     bbc.merge_objectdata(objectdata_dir=str(root), out_dir=str(out))
     text = (out / "base_names.py").read_text(encoding="utf-8")
     # 中文名来自包内现有表，原样保留
-    assert "'ckng': \"国王之冠 +5\"" in text
+    assert "'ckng': \"列王之冠+5\"" in text
     assert "'hfoo': \"步兵\"" in text
     # 英文名/细类来自合成快照
     assert "'ckng': \"Crown of Kings +5\"" in text
