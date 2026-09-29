@@ -227,7 +227,7 @@ def test_merge_objectdata_preserves_chinese_and_appends_tables(tmp_path):
     _synthetic_objectdata(root)
     out = tmp_path / "out"
     out.mkdir()
-    bbc.merge_objectdata(str(root), out_dir=str(out))
+    bbc.merge_objectdata(objectdata_dir=str(root), out_dir=str(out))
     text = (out / "base_names.py").read_text(encoding="utf-8")
     # 中文名来自包内现有表，原样保留
     assert "'ckng': \"国王之冠 +5\"" in text
@@ -236,3 +236,51 @@ def test_merge_objectdata_preserves_chinese_and_appends_tables(tmp_path):
     assert "'ckng': \"Crown of Kings +5\"" in text
     assert "'ckng': ('神器', 'Artifact')" in text
     assert "'AHhb': ('英雄技能', 'Hero Ability')" in text
+
+
+def test_merge_keeps_existing_entries_and_only_fills_new_codes(tmp_path):
+    class FakeCasc:
+        """模拟 CASC 源：SLK 提供一个新码，strings 提供冲突的既有 EN 值。"""
+
+        def __init__(self) -> None:
+            self.files = {
+                "Units\\AbilityData.slk": (
+                    "ID;PWXL\nB;Y2;X3\n"
+                    'C;X1;Y1;K"alias"\nC;X2;Y1;K"hero"\nC;X3;Y1;K"item"\n'
+                    'C;X1;Y2;K"zy98"\nC;X2;Y2;K"0"\nC;X3;Y2;K"1"\nE\n'
+                ).encode("latin-1"),
+                "Units\\ItemData.slk": (
+                    "ID;PWXL\nB;Y2;X2\n"
+                    'C;X1;Y1;K"itemID"\nC;X2;Y1;K"class"\n'
+                    'C;X1;Y2;K"zy97"\nC;X2;Y2;K"Artifact"\nE\n'
+                ).encode("latin-1"),
+                "Units\\UnitBalance.slk": (
+                    "ID;PWXL\nB;Y2;X2\n"
+                    'C;X1;Y1;K"unitBalanceID"\nC;X2;Y1;K"Primary"\n'
+                    'C;X1;Y2;K"zz99"\nC;X2;Y2;K"STR"\nE\n'
+                ).encode("latin-1"),
+                "Units\\ItemStrings.txt": "[ckng]\nName=WRONG NAME\n".encode(),
+            }
+
+        def has_file(self, name: str) -> bool:
+            return name in self.files
+
+        def read_file(self, name: str):
+            return self.files[name]
+
+    out = tmp_path / "out"
+    out.mkdir()
+    # When: 用该源并入（直接注入解析入口，避免依赖真实 CascLib）
+    names, en_names, categories = bbc._load_current_tables()
+    fake = FakeCasc()
+    bbc._fill_en_names(fake, fake, en_names)
+    bbc._fill_categories_into(fake, categories, names)
+    en_names = bbc._prefer_existing_casing(en_names, names, "英文名")
+    categories = bbc._prefer_existing_casing(categories, names, "细类")
+
+    # Then: 既有英文条目不被覆盖，新码细类被补入
+    assert en_names["ckng"] == "Crown of Kings +5"
+    assert categories["zz99"] == ("英雄", "Hero")
+    assert categories["zy98"] == ("物品技能", "Item Ability")
+    assert categories["zy97"] == ("神器", "Artifact")
+    assert categories["ckng"] == ("神器", "Artifact")

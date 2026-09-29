@@ -56,39 +56,52 @@ def _enus_source(objectdata_dir: str) -> DirSource:
     return DirSource(str(pathlib.Path(objectdata_dir, "_locales", "enus.w3mod")))
 
 
+def _fill_en_names(strings_src, func_src, out: dict[str, str]) -> None:
+    """向 out 只补缺地填英文名：*Strings.txt 先于 *Func.txt。"""
+    for kind, src in (("Strings", strings_src), ("Func", func_src)):
+        for fn in FILES:
+            if kind not in fn:
+                continue
+            if src.has_file(fn):
+                try:
+                    parse_strings(
+                        src.read_file(fn).decode("utf-8", "replace"),
+                        out,
+                        fill_only=True,
+                    )
+                except Exception as e:
+                    print("  读取失败", fn, e)
+
+
 def parse_en_names(objectdata_dir: str) -> dict[str, str]:
-    """读 enUS 名称：enus 的 *Strings.txt 为主，快照根目录 *Func.txt 只补缺。"""
+    """读快照 enUS 名称：enus 的 *Strings.txt 为主，根目录 *Func.txt 只补缺。"""
     enus = _enus_source(objectdata_dir)
     try:
         root = DirSource(objectdata_dir)
     except FileNotFoundError:
         root = enus
     names_en: dict[str, str] = {}
-    for kind in ("Strings", "Func"):
-        for fn in FILES:
-            if kind not in fn:
-                continue
-            for src in (enus, root):
-                if src is root and kind == "Strings":
-                    continue  # 根目录没有语言相关 strings，只有无语言的 func/slk
-                if src.has_file(fn):
-                    try:
-                        parse_strings(
-                            src.read_file(fn).decode("utf-8", "replace"),
-                            names_en,
-                            fill_only=(kind == "Func"),
-                        )
-                    except Exception as e:
-                        print("  读取失败", fn, e)
-                    break
+    _fill_en_names(enus, root, names_en)
     return names_en
+
+
+def _fill_categories_into(
+    src, categories: dict[str, tuple[str, str]], names: dict[str, str]
+) -> None:
+    """解析 src 的三张 SLK 并按大小写归一后只补缺地并入 categories。"""
+    fresh = parse_object_categories_from_source(src)
+    for code, cat in _prefer_existing_casing(fresh, names, "细类").items():
+        categories.setdefault(code, cat)
 
 
 def parse_object_categories(objectdata_dir: str) -> dict[str, tuple[str, str]]:
     """从快照 SLK 推导细类：物品 class / 技能 hero+item / 单位 Primary+isbldg。"""
-    from w3xtool.slk import parse_slk
+    return parse_object_categories_from_source(DirSource(objectdata_dir))
 
-    src = DirSource(objectdata_dir)
+
+def parse_object_categories_from_source(src) -> dict[str, tuple[str, str]]:
+    """从一个 has_file/read_file 数据源解析三张 SLK 的细类表。"""
+    from w3xtool.slk import parse_slk
 
     def rows(fn: str) -> dict[str, dict[str, str]]:
         text = src.read_file("Units\\" + fn).decode("utf-8", "replace")
@@ -202,20 +215,46 @@ def write_base_names_module(
     print(f"已写出 {path}")
 
 
-def merge_objectdata(objectdata_dir: str, out_dir: str = "w3xtool") -> None:
-    """把 enUS 快照的英文名/细类并入 base_names.py，中文名原样保留。"""
-    names, _old_en, _old_categories = _load_current_tables()
+def merge_objectdata(
+    objectdata_dir: str | None = None,
+    casc_root: str | None = None,
+    out_dir: str = "w3xtool",
+) -> None:
+    """把 enUS 来源的英文名/细类只补缺地并入 base_names.py，中文名原样保留。
+
+    两个来源可任选或并用：社区快照（--objectdata-dir）与本机 Reforged CASC
+    （--casc-root）。现有条目一律保留，新码按现有 BASE_NAMES 的大小写归一后补入。
+    注意：中文区客户端通常只安装 zhCN 语言包，CASC 的 enUS 条目在 Root 清单里
+    存在但内容未安装（打开报 4350），因此英文名仍以社区快照为准；CASC 的
+    SLK（语言中立）比快照更全，主要价值是补齐细类覆盖。
+    """
+    names, en_names, categories = _load_current_tables()
     if not names:
         raise SystemExit(
             "当前 w3xtool/base_names.py 缺少 BASE_NAMES：先运行 build_base_names.py 完成中文名生成"
         )
-    names_en = _prefer_existing_casing(parse_en_names(objectdata_dir), names, "英文名")
-    categories = _prefer_existing_casing(
-        parse_object_categories(objectdata_dir), names, "细类"
-    )
-    write_base_names_module(names, names_en, categories, out_dir)
-    covered = sum(1 for code in names_en if code in names)
-    print(f"英文名 {len(names_en)} 条（其中 {covered} 条与现有中文名对应）")
+    if objectdata_dir:
+        enus = _enus_source(objectdata_dir)
+        try:
+            root = DirSource(objectdata_dir)
+        except FileNotFoundError:
+            root = enus
+        _fill_en_names(enus, root, en_names)
+        _fill_categories_into(root, categories, names)
+    if casc_root:
+        from w3xtool.casclib_source import CascLibDataSource
+
+        casc = CascLibDataSource(casc_root)
+        try:
+            _fill_en_names(casc, casc, en_names)
+            _fill_categories_into(casc, categories, names)
+        finally:
+            casc.close()
+    en_names = _prefer_existing_casing(en_names, names, "英文名")
+    categories = _prefer_existing_casing(categories, names, "细类")
+    write_base_names_module(names, en_names, categories, out_dir)
+    covered = sum(1 for code in en_names if code in names)
+    print(f"英文名 {len(en_names)} 条（其中 {covered} 条与现有中文名对应）")
     from collections import Counter
 
     dist = Counter(value[0] for value in categories.values())
@@ -226,13 +265,17 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="把社区 enUS 快照的英文名/细类并入 w3xtool/base_names.py"
+        description="把 enUS 来源的英文名/细类只补缺地并入 w3xtool/base_names.py"
     )
     parser.add_argument(
         "--objectdata-dir",
         dest="objectdata_dir",
-        required=True,
-        help="flowtsohg/war3-objectdata 检出的 objectdata 目录",
+        help="flowtsohg/war3-objectdata 检出的 objectdata 目录（社区快照）",
+    )
+    parser.add_argument(
+        "--casc-root",
+        dest="casc_root",
+        help="本机 Reforged CASC 安装根目录（中性路径即 enUS，SLK 覆盖更全）",
     )
     parser.add_argument(
         "--out-dir",
@@ -241,4 +284,6 @@ if __name__ == "__main__":
         help="base_names.py 所在目录（默认 w3xtool）",
     )
     args = parser.parse_args()
-    merge_objectdata(args.objectdata_dir, args.out_dir)
+    if not args.objectdata_dir and not args.casc_root:
+        parser.error("至少提供 --objectdata-dir 或 --casc-root 之一")
+    merge_objectdata(args.objectdata_dir, args.casc_root, args.out_dir)
