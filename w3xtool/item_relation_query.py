@@ -5,11 +5,25 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Final
 
+from .base_names import BASE_NAMES_EN
 from .item_relation_models import ItemRelation
 from .item_relation_presentation import format_relation_evidence
 from .search import compile_query
 
 ALL_RELATIONS_LABEL: Final = "全部"
+
+
+def _relation_search_text(relation: ItemRelation) -> str:
+    """Evidence text plus endpoint English names for bilingual search."""
+    endpoints = [relation.item] + ([relation.source] if relation.source else [])
+    english_names: list[str] = []
+    for endpoint in endpoints:
+        english = BASE_NAMES_EN.get(endpoint.object_id)
+        if english:
+            english_names.append(english)
+    extras = " ".join(dict.fromkeys(english_names))
+    text = format_relation_evidence(relation)
+    return f"{text}\n{extras}" if extras else text
 
 
 def filter_item_relations(
@@ -28,5 +42,5 @@ def filter_item_relations(
             confidence_filter == ALL_RELATIONS_LABEL
             or relation.confidence.value == confidence_filter
         )
-        and compiled.score(format_relation_evidence(relation)) is not None
+        and compiled.score(_relation_search_text(relation)) is not None
     )

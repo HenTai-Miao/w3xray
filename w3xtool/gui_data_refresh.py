@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from tkinter import font as tkfont
 
-from .base_names import BASE_NAMES
+from .base_names import BASE_NAMES, BASE_NAMES_EN
 from .map_info import format_map_info
 from .search import compile_query
 from .theme import CARD, FONT, ROW_ALT
@@ -76,7 +76,7 @@ class DataRefreshMixin:
         shown = 0
         for unit in units:
             name = self._item_name(unit.type_id)
-            if query and compiled.score(name + " " + unit.type_id) is None:
+            if query and compiled.score(self._search_blob(unit.type_id, name)) is None:
                 continue
             hp = "默认" if unit.hp < 0 else str(unit.hp)
             mana = "默认" if unit.mana < 0 else str(unit.mana)
@@ -95,7 +95,7 @@ class DataRefreshMixin:
         shown = 0
         for doodad in doodads:
             name = self._item_name(doodad.type_id)
-            if query and compiled.score(name + " " + doodad.type_id) is None:
+            if query and compiled.score(self._search_blob(doodad.type_id, name)) is None:
                 continue
             drops = "  ".join(f"{self._item_name(item)}×{count}%" for item, count in doodad.drops)
             scale = f"{doodad.scale[0]:.2g}" if doodad.scale else "1"
@@ -108,6 +108,12 @@ class DataRefreshMixin:
         self.doodad_tree.tag_configure("odd", background=ROW_ALT)
         self.doodad_tree.tag_configure("even", background=CARD)
         return shown
+
+    def _search_blob(self, code, name):
+        # 预放置搜索并入英文名（footman / town hall 等可直接命中）
+        blob = f"{name} {code}"
+        english = BASE_NAMES_EN.get(code, "")
+        return f"{blob} {english}" if english else blob
 
     def _item_name(self, code):
         if self.map_data:

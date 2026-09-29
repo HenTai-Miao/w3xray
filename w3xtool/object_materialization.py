@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Final
 
-from .base_names import BASE_NAMES
+from .base_names import BASE_CATEGORIES, BASE_NAMES, BASE_NAMES_EN
 from .map_data import GameObject, GameObjectFieldEvidence
 from .object_candidates import ObjectCandidate, ObjectFieldValue, ObjectSourceKind
 from .object_field_selection import (
@@ -156,8 +156,20 @@ def _materialize(
         category,
     )
     refs = _merge_refs(candidates)
+    # 搜索文本并入英文名与细类（对象浏览/关系工作区可用英文关键字命中）
+    en_name = BASE_NAMES_EN.get(representative.base_id) or BASE_NAMES_EN.get(obj_id)
+    fine = BASE_CATEGORIES.get(representative.base_id) or BASE_CATEGORIES.get(obj_id)
     search_text = " ".join(
-        (obj_id, representative.base_id, name, *(value for _label, value in fields))
+        value
+        for value in (
+            obj_id,
+            representative.base_id,
+            name,
+            *(value for _label, value in fields),
+            en_name,
+            *(fine or ()),
+        )
+        if value
     )
     return GameObject(
         category=category,

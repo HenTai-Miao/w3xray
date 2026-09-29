@@ -6,7 +6,7 @@ import os
 import struct
 from collections.abc import Mapping
 
-from .base_names import BASE_NAMES
+from .base_names import BASE_NAMES, BASE_NAMES_EN
 from .extraction_diagnostics import (
     read_component,
     record_component_parse_issue,
@@ -63,6 +63,8 @@ def _add_script_refs(
                 md.objects.setdefault(shared.category, []).append(obj)
             else:
                 name = BASE_NAMES.get(code) or code
+                # 搜索文本并入英文名，脚本引用对象可用英文关键字命中
+                english = BASE_NAMES_EN.get(code, "")
                 obj = GameObject(
                     category=cat,
                     ext="script",
@@ -71,7 +73,9 @@ def _add_script_refs(
                     name=name,
                     is_custom=(code not in BASE_NAMES),
                     fields=[("来源", "脚本引用（无对象数据，可能缺属性/名称）")],
-                    search_text=f"{code} {name}",
+                    search_text=" ".join(
+                        part for part in (code, name, english) if part
+                    ),
                 )
                 md.objects.setdefault(cat, []).append(obj)
             _ = md.obj_index.setdefault(code, obj)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Final
 
+from .base_names import BASE_CATEGORIES, BASE_NAMES_EN
 from .batch_tsv import format_tsv_rows
 from .item_relation_models import (
     ItemRelation,
@@ -44,6 +45,8 @@ ACQUISITION_REPORT_HEADER: Final = (
     "可信度",
     "完整性",
     "未解析原因",
+    "装备英文名",
+    "装备细类",
 )
 EQUIPMENT_SKILL_REPORT_HEADER: Final = (
     "关系ID",
@@ -57,6 +60,8 @@ EQUIPMENT_SKILL_REPORT_HEADER: Final = (
     "可信度",
     "完整性",
     "未解析原因",
+    "装备英文名",
+    "技能英文名",
 )
 
 
@@ -156,6 +161,8 @@ def _acquisition_row(relation: ItemRelation) -> tuple[str, ...]:
         relation.confidence.value,
         relation.completeness.value,
         relation.unresolved_reason,
+        _english_name(relation.item.object_id),
+        _fine_category(relation.item.object_id),
     )
 
 
@@ -173,7 +180,20 @@ def _skill_row(relation: ItemRelation) -> tuple[str, ...]:
         relation.confidence.value,
         relation.completeness.value,
         relation.unresolved_reason,
+        _english_name(relation.item.object_id),
+        "" if skill is None else _english_name(skill.object_id),
     )
+
+
+def _english_name(object_id: str) -> str:
+    """社区 enUS 快照英文名；未知返回空串（列保持对齐）。"""
+    return BASE_NAMES_EN.get(object_id, "")
+
+
+def _fine_category(object_id: str) -> str:
+    """标准化细类中文名（如 神器/英雄技能）；未知返回空串。"""
+    fine = BASE_CATEGORIES.get(object_id)
+    return "" if fine is None else fine[0]
 
 
 def _optional_int(value: int | None) -> str:

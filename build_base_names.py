@@ -6,10 +6,16 @@
     或 wc3tools/casc-extract 把 war3.w3mod 下的 units/* 等导到一个文件夹，再：
         python build_base_names.py --from-dir <该文件夹>
     匹配大小写/斜杠不敏感、容忍 war3.w3mod\\ 前缀；--from-dir 会打印找到/未找到清单。
+英文名/细类：--objectdata-dir 指向 flowtsohg/war3-objectdata（MIT）检出的
+    objectdata 目录（enUS 原始数据）。英文名取 _locales/enus.w3mod 的
+    *Strings.txt（根目录 *Func.txt 补缺）；细类从 ItemData.slk 的 class 列、
+    AbilityData.slk 的 hero/item 列、UnitBalance.slk 的 Primary/isbldg 列推导。
+    只重写 base_names.py（追加 BASE_NAMES_EN / BASE_CATEGORIES），中文名原样保留。
 重装/换语言/升级后可重跑本脚本刷新。
 """
 
 import os
+import pathlib
 import re
 import sys
 
@@ -45,7 +51,11 @@ class DirSource:
 
     @staticmethod
     def _norm(name):
-        return name.replace("\\", "/").lstrip("/").lower()
+        path = name.replace("\\", "/").lstrip("/")
+        # 拒绝 .. 段：查询永远不允许逃出 --from-dir 根目录
+        if any(part == ".." for part in path.split("/")):
+            raise FileNotFoundError(name)
+        return path.lower()
 
     def _resolve(self, name):
         q = self._norm(name)
@@ -188,6 +198,15 @@ def build_sources(args):
     return sources
 
 
+def _safe_output_path(out_dir: str, filename: str) -> str:
+    """输出文件路径：解析后必须仍在 out_dir 内，拒绝越界。"""
+    root = pathlib.Path(out_dir).resolve()
+    target = (root / filename).resolve()
+    if not target.is_relative_to(root):
+        raise ValueError(f"输出路径越界: {filename}")
+    return str(target)
+
+
 def _write_base_names(names: dict, out_dir: str):
     lines = [
         "# 自动生成：游戏原版对象 码→中文名。由 build_base_names.py 提取。",
@@ -199,7 +218,14 @@ def _write_base_names(names: dict, out_dir: str):
         nm = names[code].replace("\\", "\\\\").replace('"', '\\"')
         lines.append(f'    {code!r}: "{nm}",')
     lines.append("}")
-    with open(os.path.join(out_dir, "base_names.py"), "w", encoding="utf-8") as f:
+    # 保留已并入的英文名/细类表（build_base_catalog.py 生成），避免整表重写时丢失
+    try:
+        from build_base_catalog import append_extra_tables
+
+        append_extra_tables(lines)
+    except Exception:
+        pass
+    with open(_safe_output_path(out_dir, "base_names.py"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
 
 
@@ -273,20 +299,8 @@ def main(args):
                 except Exception as e:
                     print("  读取失败", fn, e)
     print(f"解析 {total_files} 个文件，共 {len(names)} 个名称")
-    # 写出 base_names.py
-    lines = [
-        "# 自动生成：游戏原版对象 码→中文名。由 build_base_names.py 提取。",
-        "# 重跑该脚本可刷新。请勿手改。",
-        "",
-        "BASE_NAMES = {",
-    ]
-    for code in sorted(names):
-        nm = names[code].replace("\\", "\\\\").replace('"', '\\"')
-        lines.append(f'    {code!r}: "{nm}",')
-    lines.append("}")
-    with open(os.path.join(out_dir, "base_names.py"), "w", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
-    print(f"已写出 {os.path.join(out_dir, 'base_names.py')}")
+    # 写出 base_names.py（_write_base_names 会带上已并入的英文名/细类表）
+    _write_base_names(names, out_dir)
     # 抽查
     for c in ("hfoo", "nckb", "Hblm", "ratf", "Rhme"):
         print(f"  {c} -> {names.get(c, '(无)')}")

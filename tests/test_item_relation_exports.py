@@ -102,6 +102,53 @@ def test_relation_exports_split_acquisition_and_equipment_skill_rows() -> None:
     assert "证据行号/偏移" in acquisition[0]
     assert "未解析原因" in acquisition[0]
     assert skills[1][4:6] == ["A001", "装备技能"]
+    # 追加的英文名/细类列在表头末尾，自定义 ID 对应空值。
+    assert acquisition[0][-2:] == ["装备英文名", "装备细类"]
+    assert acquisition[1][-2:] == ["", ""]
+    assert skills[0][-2:] == ["装备英文名", "技能英文名"]
+    assert skills[1][-2:] == ["", ""]
+
+
+def test_relation_exports_fill_bilingual_columns_for_vanilla_ids() -> None:
+    # Given: relations reference vanilla rawcodes known to the base catalog.
+    drop = ItemRelation(
+        kind=ItemRelationKind.UNIT_DROP,
+        item=RelationObject("物品", "ckng", "国王之冠 +5"),
+        source=RelationObject("单位", "nckb", "红龙"),
+        evidence=RelationEvidence(source="war3mapUnits.doo", offset=64),
+        confidence=RelationConfidence.CONFIRMED,
+        completeness=RelationCompleteness.COMPLETE,
+    )
+    equipment = ItemRelation(
+        kind=ItemRelationKind.ITEM_ABILITY,
+        item=RelationObject("物品", "amrc", "回忆护符"),
+        skill=RelationObject("技能", "AIat", "增加攻击力的物品"),
+        evidence=RelationEvidence(source="war3map.w3t", field_key="iabi"),
+        confidence=RelationConfidence.CONFIRMED,
+        completeness=RelationCompleteness.COMPLETE,
+    )
+
+    # When: both reports are parsed through the standard reader.
+    acquisition = list(
+        csv.DictReader(
+            io.StringIO(format_item_acquisition_tsv(ItemRelationIndex.build((drop,)))),
+            delimiter="\t",
+        )
+    )
+    skills = list(
+        csv.DictReader(
+            io.StringIO(
+                format_equipment_skills_tsv(ItemRelationIndex.build((equipment,)))
+            ),
+            delimiter="\t",
+        )
+    )
+
+    # Then: vanilla endpoints gain English names and the fine category.
+    assert acquisition[0]["装备英文名"] == "Crown of Kings +5"
+    assert acquisition[0]["装备细类"] == "神器"
+    assert skills[0]["装备英文名"] == "Amulet of Recall"
+    assert skills[0]["技能英文名"] == "Item Damage Bonus"
 
 
 def test_acquisition_export_keeps_coordinates_groups_materials_and_evidence() -> None:

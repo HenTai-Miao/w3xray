@@ -145,6 +145,9 @@ def _write_unresolved_relation(root: Path) -> None:
         ItemRelationKind.UNIT_DROP.value,
         *("" for _ in range(21)),
         RelationCompleteness.UNRESOLVED.value,
+        # 表头末尾的 未解析原因/装备英文名/装备细类
+        "",
+        "",
         "",
     )
     (root / "掉落与获取关系.tsv").write_text(

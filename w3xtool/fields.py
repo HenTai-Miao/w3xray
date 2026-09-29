@@ -7,10 +7,19 @@ MetaData.slk + westrings 离线生成）。两层都没有才显示原始 4 字�
 from __future__ import annotations
 
 try:
-    from .field_meta import GENERATED_FIELD_LABELS, FIELD_TYPES
+    from .field_meta import (
+        GENERATED_FIELD_APPLICABILITY,
+        GENERATED_FIELD_BOUNDS,
+        GENERATED_FIELD_CONSTANTS,
+        GENERATED_FIELD_LABELS,
+        FIELD_TYPES,
+    )
 except Exception:                       # 生成数据缺失时退化为仅精选表
     GENERATED_FIELD_LABELS = {}
     FIELD_TYPES = {}
+    GENERATED_FIELD_APPLICABILITY = {}
+    GENERATED_FIELD_BOUNDS = {}
+    GENERATED_FIELD_CONSTANTS = {}
 
 # 每类对象的"名称"字段码
 NAME_FIELD = {
@@ -81,3 +90,34 @@ def label_for(field_id: str) -> str:
 def field_type(field_id: str) -> str:
     """字段类型（int/real/string/abilityList…），来自 MetaData.slk；未知返回空串。"""
     return FIELD_TYPES.get(field_id, "")
+
+
+def ability_field_specificity(field_id: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """技能字段适用性：码 → (useSpecific, notSpecific) 基础技能码列表。"""
+    return GENERATED_FIELD_APPLICABILITY.get(field_id, ((), ()))
+
+
+def ability_field_bounds(field_id: str) -> tuple[str | None, str | None] | None:
+    """字段值域 (minVal, maxVal)；未知返回 None（原始字符串，可能非数值哨兵）。"""
+    return GENERATED_FIELD_BOUNDS.get(field_id)
+
+
+def ability_field_constant(field_id: str) -> str:
+    """common.j 常量名（如 'Hbz1' → ABILITY_ILF_NUMBER_OF_WAVES）；未知返回空串。"""
+    return GENERATED_FIELD_CONSTANTS.get(field_id, "")
+
+
+def ability_field_applicable(field_id: str, base_id: str) -> bool | None:
+    """判断字段对某基础技能是否适用；无元数据时返回 None（不做断言）。
+
+    元数据语义（同 trainer 的 ability_fields_for_effect_class）：
+    useSpecific 非空且不含该基础 → 不适用；notSpecific 含该基础 → 不适用。
+    """
+    use_specific, not_specific = ability_field_specificity(field_id)
+    if not use_specific and not not_specific:
+        return None
+    if base_id in not_specific:
+        return False
+    if use_specific and base_id not in use_specific:
+        return False
+    return True

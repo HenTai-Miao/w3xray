@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass
 from typing import Final
 
+from .base_names import BASE_CATEGORIES, BASE_NAMES_EN
+from .fields import ability_field_applicable, ability_field_bounds
 from .item_relation_presentation import (
     format_object_relation_sections as format_object_relation_sections,
 )
@@ -110,14 +113,24 @@ def object_detail_title(obj: GameObject) -> str:
 
 def format_object_summary(obj: GameObject) -> str:
     """Return the stable identity summary shown before all object evidence."""
+    english_name = BASE_NAMES_EN.get(obj.base_id) or BASE_NAMES_EN.get(obj.obj_id)
+    fine_category = BASE_CATEGORIES.get(obj.base_id) or BASE_CATEGORIES.get(obj.obj_id)
     lines = [
         "【对象摘要】",
         f"名称：{clean_text(obj.name) or obj.obj_id}",
-        f"分类：{obj.category}",
-        f"对象 ID：{obj.obj_id}（10进制 {obj.decimal}）",
-        f"基础 ID：{obj.base_id}",
-        f"类型：{'自定义' if obj.is_custom else '原始'}",
     ]
+    if english_name:
+        lines.append(f"英文名：{english_name}")
+    lines.append(f"分类：{obj.category}")
+    if fine_category is not None:
+        lines.append(f"细类：{fine_category[0]}（{fine_category[1]}）")
+    lines.extend(
+        [
+            f"对象 ID：{obj.obj_id}（10进制 {obj.decimal}）",
+            f"基础 ID：{obj.base_id}",
+            f"类型：{'自定义' if obj.is_custom else '原始'}",
+        ]
+    )
     if obj.icon:
         lines.append(f"图标路径：{obj.icon}")
     return "\n".join(lines) + "\n"
@@ -146,7 +159,11 @@ def format_object_fields(obj: GameObject, detailed: bool = True) -> str:
         if not items:
             continue
         lines.extend(("", f"── {group}（{len(items)}）──"))
-        lines.extend(_merged_field_lines(items))
+        lines.extend(
+            _merged_field_lines(
+                items, category=obj.category, base_id=obj.base_id, annotate=detailed
+            )
+        )
     if detailed and defaults:
         lines.extend(("", f"── 未设置/默认字段（{len(defaults)}）──"))
         lines.extend(
@@ -169,22 +186,66 @@ def format_object_detail(obj: GameObject) -> str:
     return format_object_summary(obj) + format_object_fields(obj)
 
 
-def _merged_field_lines(items: list[ObjectDetailField]) -> list[str]:
+_NUMERIC_BOUND: Final = re.compile(r"^-?\d+(?:\.\d+)?$")
+
+
+def _field_annotation(field: ObjectDetailField, category: str, base_id: str) -> str:
+    """完整证据模式的字段附注：元数据值域 + 技能字段适用性提示。"""
+    notes: list[str] = []
+    if field.key:
+        bounds = ability_field_bounds(field.key)
+        if bounds is not None:
+            parts = [
+                f"≥{low}"
+                for low in bounds[:1]
+                if low is not None and _NUMERIC_BOUND.match(low)
+            ] + [
+                f"≤{high}"
+                for high in bounds[1:]
+                if high is not None and _NUMERIC_BOUND.match(high)
+            ]
+            if parts:
+                notes.append("范围 " + "，".join(parts))
+        if (
+            category == "技能"
+            and base_id
+            and ability_field_applicable(field.key, base_id) is False
+        ):
+            notes.append("基础技能未列出此字段")
+    return "；".join(notes)
+
+
+def _merged_field_lines(
+    items: list[ObjectDetailField],
+    *,
+    category: str,
+    base_id: str,
+    annotate: bool,
+) -> list[str]:
     """Merge fields sharing one readable value into a single labeled line.
 
     同组内多个字段常承载同一文本（描述/提示文本成对重复），
     合并后形如“描述｜提示文本：Tier 1…”，字段数计入组标题不变。
+    合并项的附注只在完全一致时保留，避免张冠李戴。
     """
     merged: list[list[str]] = []
+    notes: list[str] = []
     index_by_value: dict[str, int] = {}
     for item in items:
         value = clean_text(item.value)
+        note = _field_annotation(item, category, base_id) if annotate else ""
         if value in index_by_value:
             merged[index_by_value[value]][0] += f"｜{item.label}"
+            if notes[index_by_value[value]] != note:
+                notes[index_by_value[value]] = ""
             continue
         index_by_value[value] = len(merged)
         merged.append([item.label, value])
-    return [f"{labels}: {value}" for labels, value in merged]
+        notes.append(note)
+    return [
+        f"{labels}: {value}" + (f"（{note}）" if note else "")
+        for [labels, value], note in zip(merged, notes, strict=True)
+    ]
 
 
 def _object_fields(obj: GameObject) -> tuple[ObjectDetailField, ...]:

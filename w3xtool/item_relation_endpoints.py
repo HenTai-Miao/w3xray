@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .base_names import BASE_NAMES
+from .base_names import BASE_NAMES, BASE_NAMES_EN
 from .base_objects import BASE_OBJECTS
 from .item_relation_models import (
     RelationCompleteness,
@@ -38,9 +38,11 @@ def resolve_relation_object(
         endpoint = RelationObject(resolved.category, resolved.obj_id, name)
         return endpoint, has_object_data
     base = BASE_OBJECTS.get(object_id)
-    name = (
-        BASE_NAMES.get(object_id) if base is not None and base[0] == category else None
-    )
+    if base is not None and base[0] == category:
+        # 中文名优先，缺失时回退英文名（社区 enUS 快照）
+        name = BASE_NAMES.get(object_id) or BASE_NAMES_EN.get(object_id)
+    else:
+        name = None
     return RelationObject(category, object_id, name or "未解析"), name is not None
 
 

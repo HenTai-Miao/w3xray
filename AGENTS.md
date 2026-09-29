@@ -51,7 +51,7 @@
 - Do not hand-edit caches/environments: `.venv/`, `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`.
 - Do not hand-edit packaging output: `build/`, `dist/`, `wheels/`, `*.egg-info/`.
 - Treat `third_party/` as vendored; CascLib DLL/hash under `third_party/CascLib/bin/win-x64/` are generated local artifacts.
-- Generated tables: `w3xtool/base_names.py`, `base_objects.py`, `westrings.py`, `jass_natives.py`, `field_meta.py`; update through their `build_*.py` generators.
+- Generated tables: `w3xtool/base_names.py`, `base_objects.py`, `westrings.py`, `jass_natives.py`, `field_meta.py`; update through their `build_*.py` generators. `base_names.py` additionally carries `BASE_NAMES_EN`/`BASE_CATEGORIES` (bilingual names and fine categories from the pinned war3-objectdata enUS snapshot), merged by `build_base_catalog.py --objectdata-dir`; rerun that merge after regenerating `BASE_NAMES`. `field_meta.py` additionally carries `GENERATED_FIELD_APPLICABILITY`/`GENERATED_FIELD_BOUNDS`/`GENERATED_FIELD_CONSTANTS` (ability-field useSpecific, min/max, common.j constant names); regenerate with `build_field_labels.py --meta-dir <metadata-slk dir> [--common-j <Reforged common.j>]` — labels/types are preserve-and-fill, the extra tables rebuild fully.
 - Keep current-map discovery bounded and evidence-based; never add memory reads, `Game.dll` loading, injection, elevation, or runtime decryption.
 - Keep `/Users/zhongerbing/Desktop/Maps`, `map-extract-output`, `map-extract-output-v2`, `map-extract-output-v4`, and `trusted-icon-cache-classic` read-only; never use a historical root as a new-run destination.
 - Generated caches, schema-6 batch outputs, logs, integrity snapshots, and acceptance reports belong outside the repository.
