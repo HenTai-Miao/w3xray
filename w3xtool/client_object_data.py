@@ -18,6 +18,21 @@ _RACES: Final[tuple[str, ...]] = (
     "Neutral",
     "Campaign",
 )
+# 官方 Reforged 的中文文本挂在主模块内的 zhCN 语言包命名空间；
+# 第二个前缀兼容部分导出工具的扁平布局。Func 等文件语言中立，不做变体。
+_ZH_CN_PATH_PREFIXES: Final[tuple[str, ...]] = (
+    "war3.w3mod:_locales\\zhcn.w3mod:",
+    "zhcn.w3mod:",
+)
+
+
+def _locale_candidates(name: str) -> tuple[str, ...]:
+    """zhCN 语言包优先的读取候选；非 Strings 文本原样返回。"""
+    if not name.casefold().endswith("strings.txt"):
+        return (name,)
+    return (*(prefix + name for prefix in _ZH_CN_PATH_PREFIXES), name)
+
+
 _CLIENT_TEXT_NAMES: Final[tuple[str, ...]] = tuple(
     sorted(
         {
@@ -74,9 +89,13 @@ class _ClientObjectArchive:
         self._data = b""
 
     def has_file(self, name: str) -> bool:
-        return self.source.has_file(name)
+        return any(self.source.has_file(path) for path in _locale_candidates(name))
 
     def read_file(self, name: str) -> bytes:
+        # 语言变体对采集器透明：请求名保持中立路径，优先读 zhCN 文本。
+        for path in _locale_candidates(name):
+            if self.source.has_file(path):
+                return self.source.read_file(path)
         return self.source.read_file(name)
 
     def list_files(self) -> list[str]:
@@ -98,7 +117,7 @@ def snapshot_client_base_objects(source: GameDataSource | None) -> ClientObjectS
     if source is None:
         return ClientObjectSnapshot((), False)
     archive = _ClientObjectArchive(source)
-    text_available = any(source.has_file(name) for name in _CLIENT_TEXT_NAMES)
+    text_available = any(archive.has_file(name) for name in _CLIENT_TEXT_NAMES)
     try:
         candidates = collect_object_candidates(archive, {})
     except OSError, ValueError:

@@ -138,6 +138,34 @@ def test_absent_client_source_has_no_text_availability() -> None:
     assert snapshot.text_available is False
 
 
+def test_client_snapshot_prefers_zhcn_locale_strings() -> None:
+    # Given: unit strings exist only inside the zhCN locale module namespace.
+    source = FakeClientSource(
+        {
+            "war3.w3mod:_locales\\zhcn.w3mod:Units\\HumanUnitStrings.txt":
+                "[hX01]\nName=步兵\n".encode("utf-8"),
+            "Units\\HumanUnitFunc.txt": b"[hX01]\nName=Internal\n",
+        },
+    )
+
+    # When: the client snapshot is built.
+    snapshot = snapshot_client_base_objects(source)
+
+    # Then: the localized name is read while evidence keeps neutral path names.
+    assert snapshot.text_available is True
+    assert snapshot.objects
+    fields = dict(snapshot.objects[0].fields)
+    assert "步兵" in fields.values()
+    assert {
+        field.source
+        for field in snapshot.objects[0].evidence_fields
+        if field.key.casefold() == "name"
+    } == {
+        "Units\\HumanUnitFunc.txt",
+        "Units\\HumanUnitStrings.txt",
+    }
+
+
 def _client_source() -> FakeClientSource:
     return FakeClientSource(
         {
