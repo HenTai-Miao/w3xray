@@ -63,6 +63,15 @@ EQUIPMENT_SKILL_REPORT_HEADER: Final = (
     "装备英文名",
     "技能英文名",
 )
+# 2026-09 起两份关系报告在表尾追加了双语列。历史批次产物的表头缺这些尾列，
+# 回读校验按 legacy 变体兼容：命中旧表头时数据行右侧补空对齐（见
+# batch_report_reader.read_report_rows_bytes）。
+ACQUISITION_REPORT_LEGACY_HEADERS: Final[tuple[tuple[str, ...], ...]] = (
+    ACQUISITION_REPORT_HEADER[:-2],
+)
+EQUIPMENT_SKILL_REPORT_LEGACY_HEADERS: Final[tuple[tuple[str, ...], ...]] = (
+    EQUIPMENT_SKILL_REPORT_HEADER[:-2],
+)
 
 
 def format_item_acquisition_tsv(index: ItemRelationIndex) -> str:

@@ -12,7 +12,9 @@ from .batch_report_reader import read_report_rows_bytes
 from .batch_reports import DESCRIPTION_REPORT_HEADER
 from .item_relation_exports import (
     ACQUISITION_REPORT_HEADER,
+    ACQUISITION_REPORT_LEGACY_HEADERS,
     EQUIPMENT_SKILL_REPORT_HEADER,
+    EQUIPMENT_SKILL_REPORT_LEGACY_HEADERS,
 )
 from .object_text_exports import OBJECT_TEXT_REPORT_HEADER
 
@@ -52,11 +54,13 @@ def validate_report_summaries(
         reports.content("掉落与获取关系.tsv"),
         "掉落与获取关系.tsv",
         ACQUISITION_REPORT_HEADER,
+        ACQUISITION_REPORT_LEGACY_HEADERS,
     )
     skill_rows = read_report_rows_bytes(
         reports.content("装备技能关系.tsv"),
         "装备技能关系.tsv",
         EQUIPMENT_SKILL_REPORT_HEADER,
+        EQUIPMENT_SKILL_REPORT_LEGACY_HEADERS,
     )
     relation_counts = Counter(row[2] for row in acquisition_rows)
     relation_counts.update(row[3] for row in skill_rows)

@@ -41,6 +41,7 @@ tests/test_batch_map_processing.py
 tests/test_batch_map_retirement.py
 tests/test_batch_map_retirement_safety.py
 tests/test_batch_publication_recovery.py
+tests/test_batch_report_reader.py
 tests/test_batch_reports.py
 tests/test_batch_result_parser.py
 tests/test_batch_resume.py

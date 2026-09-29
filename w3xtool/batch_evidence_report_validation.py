@@ -8,7 +8,9 @@ from .batch_manifest_models import ManifestResultSummary, VerifiedReportSet
 from .batch_report_reader import BatchReportValidationError, read_report_rows_bytes
 from .item_relation_exports import (
     ACQUISITION_REPORT_HEADER,
+    ACQUISITION_REPORT_LEGACY_HEADERS,
     EQUIPMENT_SKILL_REPORT_HEADER,
+    EQUIPMENT_SKILL_REPORT_LEGACY_HEADERS,
 )
 from .item_relation_models import RelationCompleteness
 from .object_text_exports import OBJECT_TEXT_REPORT_HEADER
@@ -62,13 +64,25 @@ def _validate_relation_completeness(
 ) -> str | None:
     partial = 0
     unresolved = 0
-    rows = (
-        (ACQUISITION_REPORT_HEADER, _ACQUISITION_COMPLETENESS),
-        (EQUIPMENT_SKILL_REPORT_HEADER, _SKILL_COMPLETENESS),
+    reports_specs = (
+        (
+            ACQUISITION_REPORT_HEADER,
+            ACQUISITION_REPORT_LEGACY_HEADERS,
+            _ACQUISITION_COMPLETENESS,
+        ),
+        (
+            EQUIPMENT_SKILL_REPORT_HEADER,
+            EQUIPMENT_SKILL_REPORT_LEGACY_HEADERS,
+            _SKILL_COMPLETENESS,
+        ),
     )
     paths = ("掉落与获取关系.tsv", "装备技能关系.tsv")
-    for path, (header, column) in zip(paths, rows, strict=True):
-        for row in read_report_rows_bytes(reports.content(path), path, header):
+    for path, (header, legacy_headers, column) in zip(
+        paths, reports_specs, strict=True
+    ):
+        for row in read_report_rows_bytes(
+            reports.content(path), path, header, legacy_headers
+        ):
             match _relation_completeness(row[column]):
                 case RelationCompleteness.PARTIAL | RelationCompleteness.CONFLICT:
                     partial += 1
