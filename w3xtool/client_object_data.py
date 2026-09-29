@@ -26,7 +26,7 @@ _ZH_CN_PATH_PREFIXES: Final[tuple[str, ...]] = (
 )
 
 
-def _locale_candidates(name: str) -> tuple[str, ...]:
+def locale_text_candidates(name: str) -> tuple[str, ...]:
     """zhCN 语言包优先的读取候选；非 Strings 文本原样返回。"""
     if not name.casefold().endswith("strings.txt"):
         return (name,)
@@ -89,11 +89,11 @@ class _ClientObjectArchive:
         self._data = b""
 
     def has_file(self, name: str) -> bool:
-        return any(self.source.has_file(path) for path in _locale_candidates(name))
+        return any(self.source.has_file(path) for path in locale_text_candidates(name))
 
     def read_file(self, name: str) -> bytes:
         # 语言变体对采集器透明：请求名保持中立路径，优先读 zhCN 文本。
-        for path in _locale_candidates(name):
+        for path in locale_text_candidates(name):
             if self.source.has_file(path):
                 return self.source.read_file(path)
         return self.source.read_file(name)

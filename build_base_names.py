@@ -2,10 +2,12 @@
 
 经典版（<=1.29，MPQ）：默认从 war3/{war3,War3x,War3Patch,War3xLocal}.mpq 读
     Units\\*Strings.txt / *Func.txt / *Data.slk。可用 --game 覆盖安装目录。
-重制版（1.30+，CASC）：游戏数据改为 CASC，本脚本不内置 CASC 读取。先用 CascView
-    或 wc3tools/casc-extract 把 war3.w3mod 下的 units/* 等导到一个文件夹，再：
-        python build_base_names.py --from-dir <该文件夹>
-    匹配大小写/斜杠不敏感、容忍 war3.w3mod\\ 前缀；--from-dir 会打印找到/未找到清单。
+重制版（1.30+，CASC）两种方式：
+    --from-casc <安装根目录>：直接经 CascLib 读本机 CASC（推荐，免导出）；
+        Strings 文本 zhCN 语言包优先，Func/SLK 走主模块前缀回退。
+    --from-dir <散文件夹>：先用 CascView 或 wc3tools/casc-extract 把 war3.w3mod
+        下的 units/* 等导到一个文件夹再指向它；匹配大小写/斜杠不敏感、容忍
+        war3.w3mod\\ 前缀，会打印找到/未找到清单。
 英文名/细类：--objectdata-dir 指向 flowtsohg/war3-objectdata（MIT）检出的
     objectdata 目录（enUS 原始数据）。英文名取 _locales/enus.w3mod 的
     *Strings.txt（根目录 *Func.txt 补缺）；细类从 ItemData.slk 的 class 列、
@@ -95,6 +97,38 @@ GAME = r"C:/Program Files (x86)/Warcraft III/war3"
 # 优先级从低到高（后者覆盖前者）：基础 < 资料片 < 补丁 < 本地化
 MPQS = ["war3.mpq", "War3x.mpq", "War3Patch.mpq", "War3xLocal.mpq"]
 
+
+class CascSource:
+    """把 CascLibDataSource 伪装成与 MPQArchive 同接口的数据源。
+
+    Strings 文本 zhCN 语言包优先（复用 client_object_data 的候选链），
+    Func/SLK 等语言中立文件按原路径读（CascLib 自带 war3.w3mod: 前缀回退）。
+    """
+
+    def __init__(self, root: str, source=None):
+        if source is None:
+            from w3xtool.casclib_source import CascLibDataSource
+
+            source = CascLibDataSource(root)
+        from w3xtool.client_object_data import locale_text_candidates
+
+        self._candidates = locale_text_candidates
+        self._source = source
+
+    def has_file(self, name):
+        return any(self._source.has_file(path) for path in self._candidates(name))
+
+    def read_file(self, name):
+        for path in self._candidates(name):
+            if self._source.has_file(path):
+                return self._source.read_file(path)
+        return self._source.read_file(name)
+
+    def close(self):
+        close = getattr(self._source, "close", None)
+        if close is not None:
+            close()
+
 RACES = ["Human", "Orc", "NightElf", "Undead", "Neutral", "Campaign"]
 FILES = []
 FILES += [f"Units\\{r}UnitStrings.txt" for r in RACES]
@@ -183,9 +217,12 @@ def report_dir_coverage(src):
 def build_sources(args):
     """按 CLI 参数返回数据源列表。
 
+    --from-casc: 单个 CascSource（直接读本机 CASC，zhCN Strings 优先）。
     --from-dir: 单个 DirSource（CASC 已是当前 build 最终态，无需多层覆盖）。
     否则: 经典 MPQ 列表（低->高优先级，后者覆盖前者）。
     """
+    if getattr(args, "from_casc", None):
+        return [CascSource(args.from_casc)]
     if getattr(args, "from_dir", None):
         return [DirSource(args.from_dir)]
     game = getattr(args, "game", None) or GAME
@@ -334,6 +371,14 @@ def main(args):
     print(f"已写出 {os.path.join(out_dir, 'westrings.py')}（{len(west)} 条）")
 
     build_base_objects(archives, out_dir)
+    # CASC 源持有本地存储句柄，收尾释放（经典 MPQ 无 close，忽略）
+    for a in archives:
+        close = getattr(a, "close", None)
+        if close is not None:
+            try:
+                close()
+            except Exception:
+                pass
 
 
 # ---- 基础对象字段库（解析游戏 *Data.slk，jass.slk 同款数据层）----
@@ -469,6 +514,12 @@ if __name__ == "__main__":
 
     p = argparse.ArgumentParser(
         description="从游戏数据生成原版对象内置数据（base_names/base_objects/westrings）"
+    )
+    p.add_argument(
+        "--from-casc",
+        dest="from_casc",
+        help="直接经 CascLib 读本机 Reforged CASC 安装根目录"
+        "（如 C:/Program Files (x86)/Warcraft III；Strings 文本 zhCN 优先）",
     )
     p.add_argument(
         "--from-dir",

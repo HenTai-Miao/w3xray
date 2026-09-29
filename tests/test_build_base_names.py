@@ -15,6 +15,35 @@ def test_module_imports():
     assert hasattr(bbn, "main")
 
 
+def test_casc_source_prefers_zhcn_strings_and_passes_neutral_files():
+    class FakeCasc:
+        def __init__(self):
+            self.files = {
+                "war3.w3mod:_locales\\zhcn.w3mod:Units\\ItemStrings.txt": b"[ckng]\nName=zh\n",
+                "Units\\ItemFunc.txt": b"[ckng]\nName=neutral\n",
+            }
+            self.closed = False
+
+        def has_file(self, name):
+            return name in self.files
+
+        def read_file(self, name):
+            return self.files[name]
+
+        def close(self):
+            self.closed = True
+
+    fake = FakeCasc()
+    src = bbn.CascSource("ignored-root", source=fake)
+    # Strings 文本解析到 zhCN 语言包变体；Func 原路径直通
+    assert src.has_file("Units\\ItemStrings.txt")
+    assert src.read_file("Units\\ItemStrings.txt") == b"[ckng]\nName=zh\n"
+    assert src.read_file("Units\\ItemFunc.txt") == b"[ckng]\nName=neutral\n"
+    assert not src.has_file("Units\\HumanUnitStrings.txt")
+    src.close()
+    assert fake.closed
+
+
 def test_parse_strings_name_priority():
     # 普通对象用 Name；buff 用 Bufftip；个别 buff 只有 EditorName。优先级 Name>Bufftip>EditorName
     out = {}
