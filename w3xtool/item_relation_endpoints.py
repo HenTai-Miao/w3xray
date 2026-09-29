@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .base_names import BASE_NAMES, BASE_NAMES_EN
+from .base_names import BASE_CATEGORIES, BASE_NAMES, BASE_NAMES_EN
 from .base_objects import BASE_OBJECTS
 from .item_relation_models import (
     RelationCompleteness,
@@ -25,6 +25,12 @@ def find_relation_game_object(
     return legacy if legacy is not None and legacy.category == category else None
 
 
+def _fine_category_for(base_id: str, object_id: str) -> str:
+    """细类中文名（按基础码优先），未知返回空串。"""
+    fine = BASE_CATEGORIES.get(base_id) or BASE_CATEGORIES.get(object_id)
+    return "" if fine is None else fine[0]
+
+
 def resolve_relation_object(
     md: MapData,
     object_id: str,
@@ -35,7 +41,12 @@ def resolve_relation_object(
     if resolved is not None:
         has_object_data = resolved.ext != "script"
         name = resolved.name if has_object_data else "未解析"
-        endpoint = RelationObject(resolved.category, resolved.obj_id, name)
+        endpoint = RelationObject(
+            resolved.category,
+            resolved.obj_id,
+            name,
+            _fine_category_for(resolved.base_id, resolved.obj_id),
+        )
         return endpoint, has_object_data
     base = BASE_OBJECTS.get(object_id)
     if base is not None and base[0] == category:
@@ -43,7 +54,15 @@ def resolve_relation_object(
         name = BASE_NAMES.get(object_id) or BASE_NAMES_EN.get(object_id)
     else:
         name = None
-    return RelationObject(category, object_id, name or "未解析"), name is not None
+    return (
+        RelationObject(
+            category,
+            object_id,
+            name or "未解析",
+            _fine_category_for("", object_id) if name is not None else "",
+        ),
+        name is not None,
+    )
 
 
 def relation_resolution(

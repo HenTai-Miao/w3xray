@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .api import MapData
-from .base_names import BASE_NAMES
+from .base_names import BASE_CATEGORIES, BASE_NAMES, BASE_NAMES_EN
 from .doo import Doodad, Unit
 from .doo_drops import DropSet
 from .knowledge_io import tsv
@@ -11,7 +11,7 @@ from .knowledge_io import tsv
 
 def format_preplaced_units_tsv(md: MapData) -> str:
     """Return parsed war3mapUnits.doo placements as TSV."""
-    rows = ["序号\t类型ID\t名称\t玩家\tX\tY\tZ\t角度\t生命\t魔法\t金矿\t英雄等级\t物品栏\t技能\t掉落"]
+    rows = ["序号\t类型ID\t名称\t玩家\tX\tY\tZ\t角度\t生命\t魔法\t金矿\t英雄等级\t物品栏\t技能\t掉落\t英文名\t细类"]
     for unit in md.units:
         rows.append("\t".join((
             str(unit.serial),
@@ -29,13 +29,15 @@ def format_preplaced_units_tsv(md: MapData) -> str:
             tsv(_format_unit_items(md, unit)),
             tsv(_format_unit_abilities(md, unit)),
             tsv(_format_drop_sets(md, unit.drop_sets)),
+            tsv(BASE_NAMES_EN.get(unit.type_id, "")),
+            tsv(_fine_category(unit.type_id)),
         )))
     return "\n".join(rows) + "\n"
 
 
 def format_preplaced_doodads_tsv(md: MapData) -> str:
     """Return parsed war3map.doo doodad/destructable placements as TSV."""
-    rows = ["序号\t类型ID\t名称\tX\tY\tZ\t角度\t缩放\t状态\t生命\t掉落"]
+    rows = ["序号\t类型ID\t名称\tX\tY\tZ\t角度\t缩放\t状态\t生命\t掉落\t英文名\t细类"]
     for doodad in md.doodads:
         rows.append("\t".join((
             str(doodad.serial),
@@ -49,8 +51,15 @@ def format_preplaced_doodads_tsv(md: MapData) -> str:
             str(doodad.flags),
             str(doodad.life),
             tsv(_format_drops(md, doodad)),
+            tsv(BASE_NAMES_EN.get(doodad.type_id, "")),
+            tsv(_fine_category(doodad.type_id)),
         )))
     return "\n".join(rows) + "\n"
+
+
+def _fine_category(code: str) -> str:
+    fine = BASE_CATEGORIES.get(code)
+    return "" if fine is None else fine[0]
 
 
 def _code_name(md: MapData, code: str) -> str:

@@ -120,6 +120,23 @@ def test_relation_filter_matches_english_name():
     assert filter_item_relations(records, "town hall") == ()
 
 
+def test_relation_endpoints_carry_fine_category():
+    from w3xtool.api import MapData
+    from w3xtool.item_relation_endpoints import resolve_relation_object
+
+    md = MapData(path="x", name="x")
+    crown, resolved = resolve_relation_object(md, "ckng", "物品")
+    assert resolved
+    assert crown.name == "国王之冠 +5"
+    assert crown.fine_category == "神器"
+    holy, resolved = resolve_relation_object(md, "AHhb", "技能")
+    assert resolved
+    assert holy.fine_category == "英雄技能"
+    unknown, resolved = resolve_relation_object(md, "I999", "物品")
+    assert not resolved
+    assert unknown.fine_category == ""
+
+
 # ---- 生成器（合成快照）----
 
 

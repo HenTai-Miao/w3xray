@@ -38,7 +38,7 @@ class ObjectIdSummaryTest(unittest.TestCase):
         summary = format_object_id_usage_summary(md)
 
         # Then: each source column is counted independently and unknown script IDs remain visible.
-        self.assertIn("ID\t10进制\t分类\t名称\t对象来源\t脚本引用\t存档/ID线索\t对象字段引用\t预放置引用\t状态\t详情", summary)
+        self.assertIn("ID\t10进制\t分类\t名称\t对象来源\t脚本引用\t存档/ID线索\t对象字段引用\t预放置引用\t状态\t详情\t英文名\t细类", summary)
         self.assertIn("H001\t1211117617\t单位\t圣骑士\tw3u\t1\t1\t0\t1\t已解析", summary)
         self.assertIn("A001\t1093677105\t技能\t治疗术\tw3a\t1\t1\t1\t1\t已解析", summary)
         self.assertIn("I001\t1227894833\t物品\t力量指环\tw3t\t0\t0\t0\t2\t已解析", summary)
@@ -47,6 +47,9 @@ class ObjectIdSummaryTest(unittest.TestCase):
         self.assertIn("I999\t1228486969\t未知\t\t未解析\t1\t1\t0\t0\t未在对象表中解析", summary)
         self.assertIn("脚本=war3map.j:3:物品", summary)
         self.assertIn("预放置=单位物品栏:0;装饰物掉落", summary)
+        # 英文名/细类按基础码优先（自定义 H001 基于 Hpal）。
+        self.assertIn("\tPaladin\t英雄", summary)
+        self.assertIn("\tHoly Light\t英雄技能", summary)
 
 
 if __name__ == "__main__":

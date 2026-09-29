@@ -156,11 +156,14 @@ def _relation_values(relation: ItemRelation) -> tuple[str, ...]:
 
 
 def _endpoint_label(endpoint: RelationObject) -> str:
-    return (
+    label = (
         f"{endpoint.name}({endpoint.object_id})"
         if endpoint.name
         else endpoint.object_id
     )
+    if endpoint.fine_category:
+        label = f"{label}·{endpoint.fine_category}"
+    return label
 
 
 def _is_skill_relation(relation: ItemRelation) -> bool:

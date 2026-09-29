@@ -52,6 +52,8 @@ class RelationObject:
     category: str
     object_id: str
     name: str
+    # 标准化细类（神器/英雄技能/建筑…），未知留空
+    fine_category: str = ""
 
 
 @dataclass(frozen=True, slots=True)

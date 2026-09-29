@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from .api import GameObject, MapData
-from .base_names import BASE_NAMES
+from .base_names import BASE_CATEGORIES, BASE_NAMES, BASE_NAMES_EN
 from .object_id_usage import code_decimal
 from .presentation_safety import tsv_cell as _tsv
 from .script_call_catalog import ScriptCall, build_script_call_catalog
@@ -70,8 +70,9 @@ def format_script_object_code_occurrence_index_tsv(
     index: ScriptObjectCodeOccurrenceIndex,
 ) -> str:
     """Format script object-code occurrences as TSV."""
-    rows = ["来源\t行号\t函数\t对象码\t10进制\t分类\t名称\t对象来源\t上下文\t机制\t摘要"]
+    rows = ["来源\t行号\t函数\t对象码\t10进制\t分类\t名称\t对象来源\t上下文\t机制\t摘要\t英文名\t细类"]
     for item in index.occurrences:
+        fine = BASE_CATEGORIES.get(item.code)
         rows.append("\t".join((
             _tsv(item.source),
             str(item.line),
@@ -84,6 +85,8 @@ def format_script_object_code_occurrence_index_tsv(
             _tsv(item.context),
             _tsv(item.mechanism),
             _tsv(item.summary),
+            _tsv(BASE_NAMES_EN.get(item.code, "")),
+            _tsv("" if fine is None else fine[0]),
         )))
     return "\n".join(rows) + "\n"
 

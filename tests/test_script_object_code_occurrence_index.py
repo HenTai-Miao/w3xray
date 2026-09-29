@@ -40,7 +40,7 @@ class ScriptObjectCodeOccurrenceIndexTest(unittest.TestCase):
         text = _format_occurrences(md)
 
         # Then: every real object code occurrence is listed with readable context.
-        self.assertIn("来源\t行号\t函数\t对象码\t10进制\t分类\t名称\t对象来源\t上下文\t机制\t摘要", text)
+        self.assertIn("来源\t行号\t函数\t对象码\t10进制\t分类\t名称\t对象来源\t上下文\t机制\t摘要\t英文名\t细类", text)
         self.assertIn("war3map.j\t2\tInit\tH001\t1211117617\t单位\t圣骑士\tw3u\tCreateUnit\tObjectID:单位", text)
         self.assertIn("war3map.j\t3\tInit\tA001\t1093677105\t技能\t治疗术\tw3a\tudg_AbilityId\t赋值", text)
         self.assertIn("war3map.j\t4\tInit\tA001\t1093677105\t技能\t治疗术\tw3a\tSaveInteger\tHashtable:写整数", text)

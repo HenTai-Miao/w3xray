@@ -7,7 +7,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from .api import GameObject, MapData
-from .base_names import BASE_NAMES
+from .base_names import BASE_CATEGORIES, BASE_NAMES, BASE_NAMES_EN
 from .knowledge_io import tsv
 from .object_id_usage import ObjectIdUsageReport, build_object_id_usage, code_decimal
 from .save_analysis import SaveReport, SaveClue, build_save_report
@@ -37,7 +37,10 @@ def format_object_id_usage_summary(md: MapData) -> str:
     preplaced_by_code: dict[str, list[PreplacedCodeUse]] = defaultdict(list)
     for use in preplaced:
         preplaced_by_code[use.code].append(use)
-    rows = ["ID\t10进制\t分类\t名称\t对象来源\t脚本引用\t存档/ID线索\t对象字段引用\t预放置引用\t状态\t详情"]
+    rows = [
+        "ID\t10进制\t分类\t名称\t对象来源\t脚本引用\t存档/ID线索\t对象字段引用"
+        "\t预放置引用\t状态\t详情\t英文名\t细类"
+    ]
     for code in codes:
         obj = object_lookup.get(code)
         save_rows = save_rows_by_code.get(code, ())
@@ -54,6 +57,8 @@ def format_object_id_usage_summary(md: MapData) -> str:
             str(len(placed)),
             tsv(_status(obj, script_counts.get(code, 0), len(save_rows), field_counts.get(code, 0), len(placed))),
             tsv(_detail(md, usage, save_rows, placed, code)),
+            tsv(_english_name(obj, code)),
+            tsv(_fine_category(obj, code)),
         )))
     return "\n".join(rows) + "\n"
 
@@ -111,7 +116,23 @@ def _category(obj: GameObject | None) -> str:
 def _name(obj: GameObject | None, code: str) -> str:
     if obj is not None:
         return obj.name
-    return BASE_NAMES.get(code) or ""
+    return BASE_NAMES.get(code) or BASE_NAMES_EN.get(code) or ""
+
+
+def _english_name(obj: GameObject | None, code: str) -> str:
+    """英文名按基础码优先（自定义对象显示其基底英文名）。"""
+    if obj is not None:
+        return BASE_NAMES_EN.get(obj.base_id) or BASE_NAMES_EN.get(code) or ""
+    return BASE_NAMES_EN.get(code) or ""
+
+
+def _fine_category(obj: GameObject | None, code: str) -> str:
+    fine = (
+        BASE_CATEGORIES.get(obj.base_id) or BASE_CATEGORIES.get(code)
+        if obj is not None
+        else BASE_CATEGORIES.get(code)
+    )
+    return "" if fine is None else fine[0]
 
 
 def _source(obj: GameObject | None) -> str:

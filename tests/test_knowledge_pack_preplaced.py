@@ -38,7 +38,7 @@ class KnowledgePackPreplacedTest(unittest.TestCase):
         rendered = format_preplaced_units_tsv(md)
 
         # Then: both groups remain visible instead of being flattened or omitted.
-        self.assertIn("\t技能\t掉落\n", rendered)
+        self.assertIn("\t技能\t掉落\t英文名\t细类\n", rendered)
         self.assertIn("组1[I001(I001):70%]；组2[I002(I002):100%]", rendered)
 
     def test_preplaced_doodad_export_keeps_nested_drop_groups(self):
@@ -65,6 +65,21 @@ class KnowledgePackPreplacedTest(unittest.TestCase):
 
         # Then: both groups and their probabilities remain visible.
         self.assertIn("组1[I001(I001):70%]；组2[I002(I002):100%]", rendered)
+
+    def test_preplaced_exports_append_bilingual_columns_for_vanilla_types(self):
+        # Given: a vanilla hero unit and a doodad placement.
+        md = MapData(path="x.w3x", name="预放置双语图")
+        md.units = [Unit("Hpal", 1, 0.0, 0.0, 0.0, 0.0)]
+        md.doodads = [Doodad("D000", 0, 1.0, 2.0, 0.0, 0.0)]
+
+        # When: both preplaced reports are rendered.
+        units_tsv = format_preplaced_units_tsv(md)
+        doodads_tsv = format_preplaced_doodads_tsv(md)
+
+        # Then: vanilla types gain the English name and fine category columns.
+        self.assertIn("\tPaladin\t英雄", units_tsv)
+        self.assertIn("英文名\t细类", doodads_tsv)
+        self.assertIn("\t\t\n", doodads_tsv)  # 装饰物无细类时两列留空对齐
 
     def test_pack_exports_preplaced_units_doodads_and_drops(self):
         # Given: a map with parsed preplaced units and doodads.
