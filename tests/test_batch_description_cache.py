@@ -13,6 +13,7 @@ from tests.batch_publication_fixture import (
     publish_client_fill_result,
     publish_empty_result,
 )
+from tests.symlink_capability import skip_if_symlinks_unsupported
 from tests.trusted_description_cache_fixture import published_cache
 import w3xtool.batch_runner as batch_runner
 import w3xtool.batch_map_attempt as batch_map_attempt
@@ -171,7 +172,14 @@ def test_no_retry_failed_reprocesses_when_description_cache_manifest_changes(
     assert second.results[0].dependency_fingerprint == cache_b_identity
 
 
-@pytest.mark.parametrize("kind", ("missing", "unowned", "symlink"))
+@pytest.mark.parametrize(
+    "kind",
+    (
+        "missing",
+        "unowned",
+        pytest.param("symlink", marks=skip_if_symlinks_unsupported),
+    ),
+)
 def test_batch_preflight_rejects_an_invalid_explicit_cache(
     tmp_path: Path,
     kind: InvalidCacheKind,

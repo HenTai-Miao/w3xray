@@ -6,6 +6,7 @@ import csv
 import io
 from pathlib import Path
 
+from tests.symlink_capability import skip_if_symlinks_unsupported
 from w3xtool.description_cache import (
     DescriptionCache,
     DescriptionCacheEntry,
@@ -48,6 +49,7 @@ def test_formatted_cache_round_trips_all_text_and_both_source_hashes(
     assert entry.source_manifest_sha256 == expected.source_manifest_sha256
 
 
+@skip_if_symlinks_unsupported
 def test_standalone_cache_rejects_legacy_schema_and_symlinks(tmp_path: Path) -> None:
     # Given: a pre-manifest cache and a symlinked explicit cache path.
     legacy = tmp_path / "legacy.tsv"

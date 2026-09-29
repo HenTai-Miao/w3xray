@@ -18,6 +18,7 @@ tests/conftest.py
 tests/gui_worker_fakes.py
 tests/quality_audit_gap_paths.py
 tests/retained_integrity_fixture.py
+tests/symlink_capability.py
 tests/test_acceptance_runner.py
 tests/test_base_catalog.py
 tests/test_batch_cli.py

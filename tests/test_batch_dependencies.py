@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 import w3xtool.batch_dependencies as batch_dependencies
+from tests.symlink_capability import skip_if_symlinks_unsupported
 from w3xtool.batch_models import SourceFingerprint
 from w3xtool.batch_runner import BatchOptions
 
@@ -118,6 +119,7 @@ def test_extracted_directory_inventory_changes_without_following_symlinks(
     assert second != first
 
 
+@skip_if_symlinks_unsupported
 def test_dependency_fingerprint_rejects_symlink_root_and_invalid_cache_hash(
     tmp_path: Path,
 ) -> None:

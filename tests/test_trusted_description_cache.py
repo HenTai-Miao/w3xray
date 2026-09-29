@@ -15,6 +15,7 @@ from tests.description_cache_migration_fixture import (
     legacy_client_fill,
 )
 from tests.source_parent_swap_fixture import swapping_open
+from tests.symlink_capability import skip_if_symlinks_unsupported
 from tests.trusted_description_cache_fixture import (
     published_cache,
     resign_source_evidence,
@@ -97,7 +98,14 @@ def test_trusted_cache_rejects_cache_manifest_and_marker_tampering(
         load_trusted_description_cache(root)
 
 
-@pytest.mark.parametrize("mutation", ("missing", "symlink", "extra"))
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "missing",
+        pytest.param("symlink", marks=skip_if_symlinks_unsupported),
+        "extra",
+    ),
+)
 def test_trusted_cache_rejects_partial_or_unsafe_payload_inventory(
     tmp_path: Path,
     mutation: str,
@@ -131,6 +139,7 @@ def test_trusted_cache_rehashes_original_source_report(tmp_path: Path) -> None:
         load_trusted_description_cache(root)
 
 
+@skip_if_symlinks_unsupported
 def test_trusted_cache_rejects_symlinked_source_report(tmp_path: Path) -> None:
     # Given: the bound source path is replaced by a symlink to identical bytes.
     root = published_cache(tmp_path)

@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from tests.symlink_capability import skip_if_symlinks_unsupported
 from w3xtool import archive_export, safe_output
 from w3xtool.knowledge_pack import write_knowledge_pack_report
 from w3xtool.knowledge_results import KnowledgeWriteStatus
@@ -47,6 +48,7 @@ def test_temp_extract_name_cannot_escape_cleanup_root(
     assert result.name == "map"
 
 
+@skip_if_symlinks_unsupported
 def test_symlinked_pack_root_cannot_write_into_target(tmp_path: Path) -> None:
     # Given: the requested publication root is a symlink to another directory.
     outside = tmp_path / "outside"

@@ -17,6 +17,7 @@ from tests.batch_schema_evidence_fixture import (
     batch_schema_evidence_result,
     write_batch_schema_evidence_reports,
 )
+from tests.symlink_capability import skip_if_symlinks_unsupported
 from w3xtool.batch_manifest_validation import build_map_manifest, verify_map_publication
 
 
@@ -88,6 +89,7 @@ def test_publication_validation_rejects_unlisted_regular_file(tmp_path: Path) ->
     assert validation.code == "artifact_set_mismatch"
 
 
+@skip_if_symlinks_unsupported
 def test_publication_validation_rejects_symlink_artifact(tmp_path: Path) -> None:
     # Given: a listed report is replaced by a symlink after publication.
     result = publish_manifest_fixture(tmp_path)

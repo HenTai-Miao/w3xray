@@ -12,6 +12,7 @@ from typing import BinaryIO
 
 import pytest
 
+from tests.symlink_capability import skip_if_symlinks_unsupported
 from w3xtool import safe_output
 from w3xtool.safe_output import (
     SafeWriteStatus,
@@ -57,6 +58,7 @@ def test_normalizes_safe_archive_separators(tmp_path: Path) -> None:
     )
 
 
+@skip_if_symlinks_unsupported
 def test_rejects_existing_parent_directory_symlink(tmp_path: Path) -> None:
     outside = tmp_path / "outside"
     outside.mkdir()
@@ -70,6 +72,7 @@ def test_rejects_existing_parent_directory_symlink(tmp_path: Path) -> None:
     assert not (outside / "x.bin").exists()
 
 
+@skip_if_symlinks_unsupported
 def test_rejects_output_root_symlink(tmp_path: Path) -> None:
     outside = tmp_path / "outside"
     outside.mkdir()
@@ -82,6 +85,7 @@ def test_rejects_output_root_symlink(tmp_path: Path) -> None:
     assert not (outside / "x.bin").exists()
 
 
+@skip_if_symlinks_unsupported
 def test_rejects_existing_destination_symlink(tmp_path: Path) -> None:
     outside = tmp_path / "outside.bin"
     outside.write_bytes(b"before")
@@ -377,6 +381,7 @@ def test_new_output_file_mode_is_0600(tmp_path: Path) -> None:
     assert stat.S_IMODE((tmp_path / "x.bin").stat().st_mode) == 0o600
 
 
+@skip_if_symlinks_unsupported
 def test_safe_destination_rejects_in_root_parent_symlink(tmp_path: Path) -> None:
     root = tmp_path / "out"
     actual = root / "actual"
@@ -388,6 +393,7 @@ def test_safe_destination_rejects_in_root_parent_symlink(tmp_path: Path) -> None
     assert destination is None
 
 
+@skip_if_symlinks_unsupported
 def test_safe_destination_rejects_in_root_destination_symlink(tmp_path: Path) -> None:
     root = tmp_path / "out"
     root.mkdir()
