@@ -18,19 +18,22 @@ from __future__ import annotations
 
 import pathlib
 import sys
+from collections.abc import Mapping
 
 try:
-    sys.stdout.reconfigure(encoding="utf-8")
+    _reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if _reconfigure is not None:
+        _reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-from build_base_names import FILES, DirSource, parse_strings
-
-
-OBJECTDATA_SOURCE_URL = (
-    "https://github.com/flowtsohg/war3-objectdata"
-    "/tree/dc5e2da21217dba8e5f750c1e867d691ab193ec1 (MIT)"
+from build_base_names import (
+    FILES,
+    OBJECTDATA_SOURCE_URL,
+    DirSource,
+    parse_strings,
 )
+
 
 ITEM_CLASS_CATEGORIES = {
     "Permanent": ("永久物品", "Permanent"),
@@ -114,13 +117,13 @@ def parse_object_categories(objectdata_dir: str) -> dict[str, tuple[str, str]]:
     return categories
 
 
-def _prefer_existing_casing(
-    table: dict, existing_names: dict[str, str], label: str
-) -> dict:
+def _prefer_existing_casing[T](
+    table: Mapping[str, T], existing_names: Mapping[str, str], label: str
+) -> dict[str, T]:
     """rawcode 大小写以现有 BASE_NAMES 为准，避免同码异形键。"""
     known = {code.casefold(): code for code in existing_names}
-    out: dict = {}
-    collisions = []
+    out: dict[str, T] = {}
+    collisions: list[str] = []
     for code, value in sorted(table.items()):
         key = known.get(code.casefold(), code)
         if key in out and out[key] != value:
@@ -141,52 +144,27 @@ def _safe_output_path(out_dir: str, filename: str) -> str:
     return str(target)
 
 
-def _load_current_tables() -> tuple[dict, dict, dict]:
+def _load_current_tables() -> tuple[
+    dict[str, str], dict[str, str], dict[str, tuple[str, str]]
+]:
     """读包内当前 base_names.py 的三张表（缺项返回空）。"""
     try:
         from w3xtool import base_names as module
     except Exception:
         return {}, {}, {}
-    names = dict(getattr(module, "BASE_NAMES", None) or {})
-    en_names = dict(getattr(module, "BASE_NAMES_EN", None) or {})
-    categories = {
+    names: dict[str, str] = dict(getattr(module, "BASE_NAMES", None) or {})
+    en_names: dict[str, str] = dict(getattr(module, "BASE_NAMES_EN", None) or {})
+    categories: dict[str, tuple[str, str]] = {
         code: tuple(value)
         for code, value in (getattr(module, "BASE_CATEGORIES", None) or {}).items()
     }
     return names, en_names, categories
 
 
-def append_extra_tables(lines: list[str]) -> None:
-    """把包内现有的 BASE_NAMES_EN / BASE_CATEGORIES 追加到待写模块行。
-
-    供 build_base_names.py 在整表重写 base_names.py 时调用，避免英文名/细类
-    在刷新中文名时被静默丢弃（无表时是空操作）。
-    """
-    _names, en_names, categories = _load_current_tables()
-    if en_names or categories:
-        lines += [
-            "",
-            "# 英文名与细类来自社区 enUS 快照（build_base_catalog.py --objectdata-dir）：",
-            f"# {OBJECTDATA_SOURCE_URL}",
-        ]
-    if en_names:
-        lines += ["", "BASE_NAMES_EN = {"]
-        for code in sorted(en_names):
-            nm = en_names[code].replace("\\", "\\\\").replace('"', '\\"')
-            lines.append(f'    {code!r}: "{nm}",')
-        lines.append("}")
-    if categories:
-        lines += ["", "BASE_CATEGORIES = {"]
-        for code in sorted(categories):
-            zh, en = categories[code]
-            lines.append(f"    {code!r}: ({zh!r}, {en!r}),")
-        lines.append("}")
-
-
 def write_base_names_module(
-    names: dict,
-    en_names: dict | None,
-    categories: dict | None,
+    names: dict[str, str],
+    en_names: dict[str, str] | None,
+    categories: dict[str, tuple[str, str]] | None,
     out_dir: str,
 ) -> None:
     """写出 base_names.py：BASE_NAMES 必有，英文名/细类表存在时一并写入。"""

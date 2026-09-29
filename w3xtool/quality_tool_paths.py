@@ -6,7 +6,11 @@ from typing import Final
 
 
 TOOL_STRICT_PATHS: Final = tuple(
-    """w3xtool/__init__.py
+    """build_base_catalog.py
+build_base_names.py
+build_field_labels.py
+build_jass_natives.py
+w3xtool/__init__.py
 w3xtool/acceptance_batch.py
 w3xtool/acceptance_runner.py
 w3xtool/batch_checkpoint_publication.py

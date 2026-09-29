@@ -158,7 +158,13 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
   uv run build_base_names.py                 # 默认硬编码安装目录
   uv run build_base_names.py --game "D:/Warcraft III/war3"
   ```
-- **重制版（1.30+，CASC）**：游戏数据改为 CASC。Windows 发行包已接入 CascLib 后端，可按已知路径读取，也可流式枚举 Root 的全部条目；无原路径的条目以 FileDataID/CKey/EKey 保留。无 CascLib 时可回退到带 `w3xray-casc-paths.tsv` 的 idx/data 非加密 BLTE 读取；所有平台也可读取 CascView/casc-extract 导出的散文件目录。本次 macOS 环境不能代替真实 Windows 魔兽安装验收，刷新内置数据仍可用散文件目录：
+- **重制版直读（Windows，推荐）**：经 CascLib 后端直接读本机 CASC 安装，`*Strings.txt` 自动优先 `zhcn.w3mod` 中文语言包，无需先导出散文件：
+  ```bash
+  uv run build_base_names.py --from-casc "C:/Program Files (x86)/Warcraft III"        # 三表整表再生
+  uv run build_base_names.py --merge-from-casc "C:/Program Files (x86)/Warcraft III"  # 只补缺失对象，现有条目逐字保留
+  ```
+- **配套生成器**：`build_base_catalog.py --objectdata-dir <war3-objectdata 快照>` 并入英文名/细类表（`BASE_NAMES_EN`/`BASE_CATEGORIES`）；`build_field_labels.py --meta-dir <MetaData 目录> [--common-j <Reforged common.j>]` 重建字段适用性/值域/常量表（标签为保留式合并）。
+- **重制版（1.30+，CASC，散文件回退）**：游戏数据改为 CASC。Windows 发行包已接入 CascLib 后端，可按已知路径读取，也可流式枚举 Root 的全部条目；无原路径的条目以 FileDataID/CKey/EKey 保留。无 CascLib 时可回退到带 `w3xray-casc-paths.tsv` 的 idx/data 非加密 BLTE 读取；所有平台也可读取 CascView/casc-extract 导出的散文件目录（zhCN 语言包的冒号命名空间会按嵌套文件夹布局解析）。本次 macOS 环境不能代替真实 Windows 魔兽安装验收，刷新内置数据仍可用散文件目录：
   1. 用 [CascView](http://www.zezula.net/en/casc/main.html)（GUI）或 `wc3tools/casc-extract`（CLI，如 `casc-extract war3.w3mod:units/*` ）把游戏 `units/` 下的 `*Strings.txt`/`*Func.txt`/`*Data.slk` 与 `ui/WorldEdit*Strings.txt` 导到一个文件夹。
   2. `uv run build_base_names.py --from-dir <该文件夹>`，按打印的「找到/未找到」清单确认覆盖。
 
@@ -183,7 +189,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
 - **CASC 客户端浏览**：选择可读的 Windows 原生游戏数据后，「数据工具」可分页浏览整个 Root（每页 200 条）、按 mask 重扫并导出所选；CLI `casc inventory` 输出含路径类型、FileDataID、CKey、EKey、大小和本地可用状态的 TSV，`casc extract` 按任一稳定标识导出单文件。
 - **作者明文补充包**：`cli <地图> --author-bundle <目录>` 或 GUI「数据工具」接入。补充包必须包含 `w3xray-author-bundle.tsv`，首行是 `W3XRAY-AUTHOR-BUNDLE<TAB>1`，第二行绑定源地图 SHA256，后续每行绑定内部路径和文件 SHA256；文件放在包内 `files/`，路径穿越、重复名、哈希不符和容量超限都会拒绝。
 - **真实存档只读分析**：GUI「数据工具」可选存档文件或目录；CLI 用 `main.py save --map <地图> --save <文件或目录> --output <报告.tsv>`。输出把真实文件证据与地图脚本声明的存档键、对象 ID/名称关联，不执行任何平台代码。
-- **对象信息**：解析对象编辑器数据，名称经 war3map.wts 还原为中文；字段标签全量化（1444 个字段码经 MetaData.slk + westrings 离线生成中文名，界面几乎不再出现裸 4 字符码）；多值字段（技能/单位/科技列表等）把逗号分隔的码逐项还原成「名字(码)」。对象数据三种载体都读：**二进制** `.w3u/.w3a/…`、**INI 文本档**（`*UnitFunc/Strings.txt`）、**内嵌 SLK**（`AbilityData.slk` 等，SLK 优化图的产物）；三者按对象码自动合并（如优化图里技能名来自 txt、字段与引用来自 SLK，合成一条完整记录）。SLK 字段做了可读化：等级后缀列（`Cast2`→「施法间隔(等级2)」、`BuffID1`→「buff效果(等级1)」），并按 `[AlwaysEmpty]` 隐藏 `comments/version/sort/code` 等编辑器噪声列
+- **对象信息**：解析对象编辑器数据，名称经 war3map.wts 还原为中文；字段标签全量化（1444 个字段码经 MetaData.slk + westrings 离线生成中文名，界面几乎不再出现裸 4 字符码）；多值字段（技能/单位/科技列表等）把逗号分隔的码逐项还原成「名字(码)」。详情面板显示**英文名与细类**（如 `Crown of Kings +5`/`神器`，自定义对象按其原版基底回填），「完整证据」模式的技能字段行附**值域**（`范围 ≥0，≤99999`）、**common.j 常量名**与**适用性提示**（该字段未被基础技能列出时标注）。对象数据三种载体都读：**二进制** `.w3u/.w3a/…`、**INI 文本档**（`*UnitFunc/Strings.txt`）、**内嵌 SLK**（`AbilityData.slk` 等，SLK 优化图的产物）；三者按对象码自动合并（如优化图里技能名来自 txt、字段与引用来自 SLK，合成一条完整记录）。SLK 字段做了可读化：等级后缀列（`Cast2`→「施法间隔(等级2)」、`BuffID1`→「buff效果(等级1)」），并按 `[AlwaysEmpty]` 隐藏 `comments/version/sort/code` 等编辑器噪声列
 - **地图信息**：独立标签页展示 war3map.w3i —— 真实地图名/作者/描述/推荐人数/尺寸/脚本语言(JASS/Lua)/各玩家(类型·种族·名字)/队伍(同盟·共享)；地图名优先取 w3i（比 HM3W 头权威，自动还原 TRIGSTR）。战役 `.w3n` 另解析 war3campaign.w3f 显示战役名/作者/难度/描述；同时解析 `war3map.w3r/.w3c/.w3s`，列出世界编辑器里的区域、镜头、声音数量与名称摘要；若包内或单独打开 `.wgc`，会显示 AI 测试/对局配置里的地图路径、游戏速度、关闭战争迷雾/胜负条件、玩家/电脑/观察者槽位和自定义 AI 脚本路径；若存在 `war3map.wtg`，会显示触发器树版本、分类、变量、触发器头和开局运行/禁用/自定义脚本等状态；若存在 `war3map.mmp`，会显示小地图上的玩家出生点、金矿、中立建筑标记数量和坐标摘要；若存在 `war3map.imp`，会显示导入资源数量、标准/自定义路径、扩展名分布和疑似缺失导入文件
 - **自定义脚本**：解析 war3map.wct，把作者手写的全局/各触发器自定义 JASS/Lua 代码解码成可读文本（原始 wct 是二进制），随「导出脚本」导出
 - **搜索**：按名称 / ID / 字段内容搜索，采用 **SQL 风格语法**（`LIKE` / `=` / `AND` / `OR` / 括号）
@@ -194,6 +200,8 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
   - `&&` = **且**、`||` = **或**、`( )` = **分组**；`&&` 优先级高于 `||`；相邻词缺运算符时默认 `&&`
   - 反斜杠转义：`\%` `\&` `\|` `\(` `\)` 表示对应字面量（如搜 `攻击+20\%`）
   - 例：`(%敏捷% || %全属性%) && ="等级:E"` —— （含「敏捷」或「全属性」）且 精准「等级:E」
+  - **双语命中**：对象 / 装备关系 / 预放置 / 脚本引用对象的搜索可同时用中文或英文关键字（英文名来自社区 enUS 快照，`holy light`↔`神圣之光`、`footman`↔`步兵`）
+  - **细类过滤**：对象编辑器和装备关系工作区各有「细类」下拉（神器 / 充能物品 / 英雄技能 / 物品技能 / 建筑 / 英雄…），值随当前地图动态出现，只看某一类是一步操作
 - **脚本**：提取 war3map.j / war3map.lua / wts 等
 - **战役**：打开 `.w3n` 后顶部出现「子地图▾」下拉，可切换浏览**战役共享对象**和**每张子图**的对象/指令/配方
 - **导出**：全部文件 / 脚本 / 各分类 ID 列表 / 资料包 —— **统一导到系统临时目录**(`%TEMP%/w3xtool提取/`)并自动打开（提取物都是临时文件）；战役会递归导出每张子图内部文件，CLI `--pack` 会自动生成 `子地图/001_名称/`，父包与全部子包的合并结果共同决定退出状态；外部 listfile 会参与“导出全部”和“资料包”的内部文件清单/资源扫描。资料包写入会区分完整、部分和失败，`组件诊断.tsv` 保留来源/阶段/异常类型，`资料包写入结果.tsv` 包含自身并保留每个相对路径的最终状态；GUI/CLI 不再把部分成功显示成完整成功。

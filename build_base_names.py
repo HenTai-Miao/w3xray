@@ -8,11 +8,9 @@
     --from-dir <散文件夹>：先用 CascView 或 wc3tools/casc-extract 把 war3.w3mod
         下的 units/* 等导到一个文件夹再指向它；匹配大小写/斜杠不敏感、容忍
         war3.w3mod\\ 前缀，会打印找到/未找到清单。
-英文名/细类：--objectdata-dir 指向 flowtsohg/war3-objectdata（MIT）检出的
-    objectdata 目录（enUS 原始数据）。英文名取 _locales/enus.w3mod 的
-    *Strings.txt（根目录 *Func.txt 补缺）；细类从 ItemData.slk 的 class 列、
-    AbilityData.slk 的 hero/item 列、UnitBalance.slk 的 Primary/isbldg 列推导。
-    只重写 base_names.py（追加 BASE_NAMES_EN / BASE_CATEGORIES），中文名原样保留。
+英文名/细类表（BASE_NAMES_EN / BASE_CATEGORIES）由 build_base_catalog.py
+    --objectdata-dir 从社区 enUS 快照单独并入；本脚本重写 base_names.py 时
+    会自动带过这两张表（见 append_extra_tables）。
 重装/换语言/升级后可重跑本脚本刷新。
 """
 
@@ -22,7 +20,9 @@ import re
 import sys
 
 try:
-    sys.stdout.reconfigure(encoding="utf-8")
+    _reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if _reconfigure is not None:
+        _reconfigure(encoding="utf-8")
 except Exception:
     pass
 from w3xtool.mpq import MPQArchive
@@ -129,15 +129,18 @@ class CascSource:
         if close is not None:
             close()
 
+
 RACES = ["Human", "Orc", "NightElf", "Undead", "Neutral", "Campaign"]
-FILES = []
-FILES += [f"Units\\{r}UnitStrings.txt" for r in RACES]
-FILES += [f"Units\\{r}UnitFunc.txt" for r in RACES]
-FILES += ["Units\\ItemStrings.txt", "Units\\ItemFunc.txt"]
-FILES += [f"Units\\{r}AbilityStrings.txt" for r in (RACES + ["Common", "Item"])]
-FILES += [f"Units\\{r}AbilityFunc.txt" for r in (RACES + ["Common", "Item"])]
-FILES += [f"Units\\{r}UpgradeStrings.txt" for r in RACES]
-FILES += [f"Units\\{r}UpgradeFunc.txt" for r in RACES]
+FILES = [
+    *[f"Units\\{r}UnitStrings.txt" for r in RACES],
+    *[f"Units\\{r}UnitFunc.txt" for r in RACES],
+    "Units\\ItemStrings.txt",
+    "Units\\ItemFunc.txt",
+    *[f"Units\\{r}AbilityStrings.txt" for r in (RACES + ["Common", "Item"])],
+    *[f"Units\\{r}AbilityFunc.txt" for r in (RACES + ["Common", "Item"])],
+    *[f"Units\\{r}UpgradeStrings.txt" for r in RACES],
+    *[f"Units\\{r}UpgradeFunc.txt" for r in RACES],
+]
 
 _COLOR = re.compile(r"\|c[0-9a-fA-F]{8}|\|r", re.IGNORECASE)
 
@@ -150,7 +153,7 @@ def clean(name: str) -> str:
     return name
 
 
-def parse_strings(text: str, out: dict, fill_only=False):
+def parse_strings(text: str, out: dict[str, str], fill_only: bool = False):
     text = text.lstrip("﻿")
     section = None
     cur_name = None
@@ -244,7 +247,48 @@ def _safe_output_path(out_dir: str, filename: str) -> str:
     return str(target)
 
 
-def _write_base_names(names: dict, out_dir: str):
+OBJECTDATA_SOURCE_URL = (
+    "https://github.com/flowtsohg/war3-objectdata"
+    "/tree/dc5e2da21217dba8e5f750c1e867d691ab193ec1 (MIT)"
+)
+
+
+def append_extra_tables(lines: list[str]) -> None:
+    """把包内现有的 BASE_NAMES_EN / BASE_CATEGORIES 追加到待写模块行。
+
+    整表重写 base_names.py 时调用，避免英文名/细类在刷新中文名时被
+    静默丢弃（无表时是空操作）。build_base_catalog.py 复用本函数。
+    """
+    try:
+        from w3xtool import base_names as module
+    except Exception:
+        return
+    en_names: dict[str, str] = dict(getattr(module, "BASE_NAMES_EN", None) or {})
+    categories: dict[str, tuple[str, str]] = {
+        code: tuple(value)
+        for code, value in (getattr(module, "BASE_CATEGORIES", None) or {}).items()
+    }
+    if en_names or categories:
+        lines += [
+            "",
+            "# 英文名与细类来自社区 enUS 快照（build_base_catalog.py --objectdata-dir）：",
+            f"# {OBJECTDATA_SOURCE_URL}",
+        ]
+    if en_names:
+        lines += ["", "BASE_NAMES_EN = {"]
+        for code in sorted(en_names):
+            nm = en_names[code].replace("\\", "\\\\").replace('"', '\\"')
+            lines.append(f'    {code!r}: "{nm}",')
+        lines.append("}")
+    if categories:
+        lines += ["", "BASE_CATEGORIES = {"]
+        for code in sorted(categories):
+            zh, en = categories[code]
+            lines.append(f"    {code!r}: ({zh!r}, {en!r}),")
+        lines.append("}")
+
+
+def _write_base_names(names: dict[str, str], out_dir: str):
     lines = [
         "# 自动生成：游戏原版对象 码→中文名。由 build_base_names.py 提取。",
         "# 重跑该脚本可刷新。请勿手改。",
@@ -257,8 +301,6 @@ def _write_base_names(names: dict, out_dir: str):
     lines.append("}")
     # 保留已并入的英文名/细类表（build_base_catalog.py 生成），避免整表重写时丢失
     try:
-        from build_base_catalog import append_extra_tables
-
         append_extra_tables(lines)
     except Exception:
         pass
@@ -273,11 +315,14 @@ def merge_names_from_dir(src_dir: str, out_dir: str):
     westrings.py / base_objects.py(那些需要 WorldEditStrings / MetaData，散包未必带)。
     现有名一律保留(fill_only)，只新增缺失码。
     """
+    current_names: dict[str, str]
     try:
         from w3xtool.base_names import BASE_NAMES
+
+        current_names = dict(BASE_NAMES)
     except Exception:
-        BASE_NAMES = {}
-    names = dict(BASE_NAMES)
+        current_names = {}
+    names = dict(current_names)
     before = len(names)
     src = DirSource(src_dir)
     # 先 Strings 后 Func，全程 fill_only：绝不覆盖已有名，只补缺
@@ -293,13 +338,13 @@ def merge_names_from_dir(src_dir: str, out_dir: str):
                 except Exception as e:
                     print("  读取失败", fn, e)
     _write_base_names(names, out_dir)
-    added = sorted(set(names) - set(BASE_NAMES))
+    added = sorted(set(names) - set(current_names))
     print(f"合并完成：{before} -> {len(names)}（新增 {len(added)} 个）")
     sample = [c for c in added if c[:1] in ("B", "X")][:12]
     print("  新增 buff 样例:", {c: names[c] for c in sample})
 
 
-def collect_westrings(archives):
+def collect_westrings(archives) -> dict[str, str]:
     """从数据源提取 WESTRING_ 编辑器字符串（后面的源覆盖前面的）。"""
     west = {}
     we_re = re.compile(r"^(WESTRING_\w+)\s*=\s*(.*)$")
@@ -317,7 +362,7 @@ def collect_westrings(archives):
     return west
 
 
-def write_westrings(west, out_dir):
+def write_westrings(west: dict[str, str], out_dir: str):
     wl = [
         "# 自动生成：游戏编辑器字符串 WESTRING_xxx→文本。由 build_base_names.py 提取。",
         "# 请勿手改。",
@@ -519,7 +564,7 @@ SLK_GROUPS = {
 }
 
 
-def collect_base_objects(archives):
+def collect_base_objects(archives) -> dict[str, tuple[str, list[tuple[str, str]]]]:
     """解析 *Data.slk 为 {码: (分类, [(标签, 值), ...])}，不写文件。"""
     from w3xtool.slk import parse_slk
 
@@ -551,7 +596,7 @@ def collect_base_objects(archives):
     return out
 
 
-def write_base_objects(out, out_dir):
+def write_base_objects(out: dict[str, tuple[str, list[tuple[str, str]]]], out_dir: str):
     lines = [
         "# 自动生成：游戏基础对象默认字段(来自 *Data.slk)。由 build_base_names.py 提取。",
         "# 请勿手改。",
@@ -563,7 +608,9 @@ def write_base_objects(out, out_dir):
         fl = ", ".join(f'("{lab}", {val!r})' for lab, val in fields)
         lines.append(f"    {code!r}: ({cat!r}, [{fl}]),")
     lines.append("}")
-    with open(_safe_output_path(out_dir, "base_objects.py"), "w", encoding="utf-8") as f:
+    with open(
+        _safe_output_path(out_dir, "base_objects.py"), "w", encoding="utf-8"
+    ) as f:
         f.write("\n".join(lines) + "\n")
     print(f"已写出 {os.path.join(out_dir, 'base_objects.py')}（{len(out)} 个基础对象）")
 

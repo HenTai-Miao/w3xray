@@ -11,26 +11,38 @@
     python build_jass_natives.py --src "D:/path/to/system"   # 目录含 ht/rb 或直接含 *.j
     python build_jass_natives.py                             # 用 DEFAULT_SRC（仅本机生成时方便）
 """
+
 import os
 import re
 import sys
 
 try:
-    sys.stdout.reconfigure(encoding="utf-8")
+    _reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if _reconfigure is not None:
+        _reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-DEFAULT_SRC = (r"C:/Users/zhongerbing/Downloads/魔兽ID拖入无反应解决方法/"
-               r"拖入无反应解决方法/优化2/bin/system")
+DEFAULT_SRC = (
+    r"C:/Users/zhongerbing/Downloads/魔兽ID拖入无反应解决方法/"
+    r"拖入无反应解决方法/优化2/bin/system"
+)
 
 # native 的整数参数名 → 对象分类（精确名白名单）。
 # 关键：order/orderId(命令串)、itemSlot(槽位号)、unitType(handle) 等是整数但非对象引用，不收。
 PARAM_CAT = {
-    "unitid": "单位", "unitId": "单位", "portraitUnitId": "单位",
-    "itemid": "物品", "itemId": "物品",
-    "abilcode": "技能", "abilityId": "技能", "abilid": "技能",
-    "techid": "科技", "techId": "科技",
-    "objectid": "可破坏物", "objectId": "可破坏物",
+    "unitid": "单位",
+    "unitId": "单位",
+    "portraitUnitId": "单位",
+    "itemid": "物品",
+    "itemId": "物品",
+    "abilcode": "技能",
+    "abilityId": "技能",
+    "abilid": "技能",
+    "techid": "科技",
+    "techId": "科技",
+    "objectid": "可破坏物",
+    "objectId": "可破坏物",
     "buffId": "增益",
 }
 
@@ -75,7 +87,8 @@ def _find_src_files(src):
 
 
 _NATIVE = re.compile(
-    r"(?:constant\s+)?native\s+(\w+)\s+takes\s+(.*?)\s+returns\b", re.DOTALL)
+    r"(?:constant\s+)?native\s+(\w+)\s+takes\s+(.*?)\s+returns\b", re.DOTALL
+)
 
 
 def parse_native_obj_funcs(common_texts):
@@ -115,8 +128,9 @@ def parse_bj_func_codes(blizzard_texts):
     for fname in CURATED_BJ:
         codes = []
         for text in blizzard_texts:
-            m = re.search(_FUNC_BODY.format(name=re.escape(fname)), text,
-                          re.DOTALL | re.MULTILINE)
+            m = re.search(
+                _FUNC_BODY.format(name=re.escape(fname)), text, re.DOTALL | re.MULTILINE
+            )
             if not m:
                 continue
             for cc in _RAWCC.findall(m.group(0)):
@@ -128,7 +142,8 @@ def parse_bj_func_codes(blizzard_texts):
 
 
 _BJ_CODE_CONST = re.compile(
-    r"constant\s+integer\s+(bj_\w*CODE\w*)\s*=\s*'([A-Za-z0-9]{4})'")
+    r"constant\s+integer\s+(bj_\w*CODE\w*)\s*=\s*'([A-Za-z0-9]{4})'"
+)
 
 
 def parse_bj_code_constants(blizzard_texts):
@@ -154,24 +169,33 @@ def main():
     commons = [_read(p) for p in files if os.path.basename(p).lower() == "common.j"]
     blizzards = [_read(p) for p in files if os.path.basename(p).lower() == "blizzard.j"]
     if not commons or not blizzards:
-        print(f"[build_jass_natives] 在 {src} 未找到 common.j / blizzard.j", file=sys.stderr)
+        print(
+            f"[build_jass_natives] 在 {src} 未找到 common.j / blizzard.j",
+            file=sys.stderr,
+        )
         print("  找到:", [os.path.basename(p) for p in files], file=sys.stderr)
         sys.exit(1)
 
     native_funcs = parse_native_obj_funcs(commons)
     bj_codes = parse_bj_func_codes(blizzards)
-    bj_features = dict(CURATED_BJ)               # 特征标签全保留（即便某 BJ 体内无 rawcode 也算特征命中）
+    bj_features = dict(
+        CURATED_BJ
+    )  # 特征标签全保留（即便某 BJ 体内无 rawcode 也算特征命中）
     bj_const = parse_bj_code_constants(blizzards)
 
     out_path = os.path.join("w3xtool", "jass_natives.py")
     with open(out_path, "w", encoding="utf-8") as f:
-        f.write("# 自动生成：从 common.j/blizzard.j 提取的 native 参数对象类别 & BJ 隐式引用码。\n")
+        f.write(
+            "# 自动生成：从 common.j/blizzard.j 提取的 native 参数对象类别 & BJ 隐式引用码。\n"
+        )
         f.write("# 由 build_jass_natives.py 生成，重跑可刷新。请勿手改。\n\n")
         f.write("# native名 → 对象分类（None=有对象码参数但多类/不确定）\n")
         f.write("NATIVE_OBJ_FUNCS = {\n")
         f.write(_fmt_dict(native_funcs, lambda v: repr(v)))
         f.write("\n}\n\n")
-        f.write("# 暴雪 BJ 函数 → 函数体里硬编码的对象码（脚本调用即隐式引用这些基础对象）\n")
+        f.write(
+            "# 暴雪 BJ 函数 → 函数体里硬编码的对象码（脚本调用即隐式引用这些基础对象）\n"
+        )
         f.write("BJ_FUNC_CODES = {\n")
         f.write(_fmt_dict(bj_codes, lambda v: repr(v)))
         f.write("\n}\n\n")
@@ -185,8 +209,10 @@ def main():
         f.write("\n}\n")
 
     print(f"[build_jass_natives] 写出 {out_path}")
-    print(f"  NATIVE_OBJ_FUNCS={len(native_funcs)}  BJ_FUNC_CODES={len(bj_codes)}"
-          f"  BJ_FEATURES={len(bj_features)}  BJ_CODE_CONSTANTS={len(bj_const)}")
+    print(
+        f"  NATIVE_OBJ_FUNCS={len(native_funcs)}  BJ_FUNC_CODES={len(bj_codes)}"
+        f"  BJ_FEATURES={len(bj_features)}  BJ_CODE_CONSTANTS={len(bj_const)}"
+    )
 
 
 if __name__ == "__main__":

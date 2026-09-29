@@ -18,6 +18,7 @@ objectdata 目录（WESTRING 键与语言无关，中文标签仍由 westrings.p
     units/{unit,ability,upgrade,misc,destructable,abilitybuff,upgradeeffect}metadata.slk
     doodads/DoodadMetaData.slk
 """
+
 from __future__ import annotations
 
 import argparse
@@ -28,18 +29,27 @@ import sys
 from w3xtool.slk import parse_slk
 
 try:
-    from w3xtool.westrings import WESTRINGS
+    from w3xtool import westrings as _west_module
 except Exception:
-    WESTRINGS = {}
+    _west_module = None
 
-_DEFAULT_META = ("C:/Users/zhongerbing/Desktop/KKWE插件/plugin/"
-                 "w3x2lni_zhCN_v2.7.3/script/meta")
+_WESTRINGS: dict[str, str] = (
+    dict(getattr(_west_module, "WESTRINGS", {})) if _west_module is not None else {}
+)
+
+_DEFAULT_META = (
+    "C:/Users/zhongerbing/Desktop/KKWE插件/plugin/w3x2lni_zhCN_v2.7.3/script/meta"
+)
 
 _META_FILES = [
-    "units/unitmetadata.slk", "units/abilitymetadata.slk",
-    "units/upgrademetadata.slk", "units/miscmetadata.slk",
-    "units/destructablemetadata.slk", "units/abilitybuffmetadata.slk",
-    "units/upgradeeffectmetadata.slk", "doodads/DoodadMetaData.slk",
+    "units/unitmetadata.slk",
+    "units/abilitymetadata.slk",
+    "units/upgrademetadata.slk",
+    "units/miscmetadata.slk",
+    "units/destructablemetadata.slk",
+    "units/abilitybuffmetadata.slk",
+    "units/upgradeeffectmetadata.slk",
+    "doodads/DoodadMetaData.slk",
 ]
 
 _CTRL = re.compile(r"[\x00-\x1f]+")
@@ -59,7 +69,7 @@ def resolve_westring(key: str) -> str:
     k = key
     while isinstance(k, str) and k.upper().startswith("WESTRING_") and k not in seen:
         seen.add(k)
-        nxt = WESTRINGS.get(k) or WESTRINGS.get(k.upper())
+        nxt = _WESTRINGS.get(k) or _WESTRINGS.get(k.upper())
         if nxt is None:
             break
         k = nxt
@@ -88,10 +98,11 @@ def build(meta_dir: str, common_j_path: str | None = None):
     """
     from w3xtool.field_meta import FIELD_TYPES, GENERATED_FIELD_LABELS
 
-    labels: dict = dict(GENERATED_FIELD_LABELS)
-    types: dict = dict(FIELD_TYPES)
+    labels: dict[str, str] = dict(GENERATED_FIELD_LABELS)
+    types: dict[str, str] = dict(FIELD_TYPES)
     applicability: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {}
     bounds: dict[str, tuple[str | None, str | None]] = {}
+    constants: dict[str, str] = {}
     found = unresolved = 0
     for rel in _META_FILES:
         path = os.path.join(meta_dir, rel)
