@@ -299,7 +299,85 @@ def merge_names_from_dir(src_dir: str, out_dir: str):
     print("  新增 buff 样例:", {c: names[c] for c in sample})
 
 
+def collect_westrings(archives):
+    """从数据源提取 WESTRING_ 编辑器字符串（后面的源覆盖前面的）。"""
+    west = {}
+    we_re = re.compile(r"^(WESTRING_\w+)\s*=\s*(.*)$")
+    for a in archives:
+        for fn in WESTRING_FILES:
+            if not a.has_file(fn):
+                continue
+            txt = a.read_file(fn).decode("utf-8", "replace")
+            for line in txt.replace("\r\n", "\n").split("\n"):
+                m = we_re.match(line.strip())
+                if m:
+                    v = clean(m.group(2))
+                    if v:
+                        west[m.group(1)] = v
+    return west
+
+
+def write_westrings(west, out_dir):
+    wl = [
+        "# 自动生成：游戏编辑器字符串 WESTRING_xxx→文本。由 build_base_names.py 提取。",
+        "# 请勿手改。",
+        "",
+        "WESTRINGS = {",
+    ]
+    for k in sorted(west):
+        v = west[k].replace("\\", "\\\\").replace('"', '\\"')
+        wl.append(f'    "{k}": "{v}",')
+    wl.append("}")
+    with open(_safe_output_path(out_dir, "westrings.py"), "w", encoding="utf-8") as f:
+        f.write("\n".join(wl) + "\n")
+    print(f"已写出 {os.path.join(out_dir, 'westrings.py')}（{len(west)} 条）")
+
+
+def merge_all_from_source(archives, out_dir):
+    """只补缺地把一个数据源的三张表并入现有生成表（现有条目全部保留）。
+
+    用于 --merge-from-casc：经典表条目原样保留，Reforged 里的新增对象/
+    字符串按需补进，避免整体替换译名（preserve-and-fill）。
+    """
+    from w3xtool.base_names import BASE_NAMES
+    from w3xtool.base_objects import BASE_OBJECTS
+    from w3xtool.westrings import WESTRINGS
+
+    names = dict(BASE_NAMES)
+    for kind in ("Strings", "Func"):
+        for a in archives:
+            for fn in [f for f in FILES if kind in f]:
+                if a.has_file(fn):
+                    try:
+                        parse_strings(
+                            a.read_file(fn).decode("utf-8", "replace"),
+                            names,
+                            fill_only=True,
+                        )
+                    except Exception as e:
+                        print("  读取失败", fn, e)
+    west = {**collect_westrings(archives), **WESTRINGS}
+    objects = {**collect_base_objects(archives), **BASE_OBJECTS}
+    _write_base_names(names, out_dir)
+    write_westrings(west, out_dir)
+    write_base_objects(objects, out_dir)
+    print(
+        f"合并完成：名称 {len(BASE_NAMES)} -> {len(names)}"
+        f"（新增 {len(names) - len(BASE_NAMES)}），"
+        f"WESTRING {len(WESTRINGS)} -> {len(west)}"
+        f"（新增 {len(west) - len(WESTRINGS)}），"
+        f"基础对象 {len(BASE_OBJECTS)} -> {len(objects)}"
+        f"（新增 {len(objects) - len(BASE_OBJECTS)}）"
+    )
+
+
 def main(args):
+    if getattr(args, "merge_from_casc", None):
+        merge_all_from_source(
+            [CascSource(args.merge_from_casc)],
+            getattr(args, "out_dir", None) or "w3xtool",
+        )
+        return
     if getattr(args, "merge_from_dir", None):
         merge_names_from_dir(
             args.merge_from_dir, getattr(args, "out_dir", None) or "w3xtool"
@@ -343,32 +421,8 @@ def main(args):
         print(f"  {c} -> {names.get(c, '(无)')}")
 
     # ---- 同时提取 WESTRING_ 编辑器字符串（地图对象常引用，如可破坏物名）----
-    west = {}
-    we_re = re.compile(r"^(WESTRING_\w+)\s*=\s*(.*)$")
-    for a in archives:  # 后面的(补丁/本地化)覆盖前面的
-        for fn in WESTRING_FILES:
-            if not a.has_file(fn):
-                continue
-            txt = a.read_file(fn).decode("utf-8", "replace")
-            for line in txt.replace("\r\n", "\n").split("\n"):
-                m = we_re.match(line.strip())
-                if m:
-                    v = clean(m.group(2))
-                    if v:
-                        west[m.group(1)] = v
-    wl = [
-        "# 自动生成：游戏编辑器字符串 WESTRING_xxx→文本。由 build_base_names.py 提取。",
-        "# 请勿手改。",
-        "",
-        "WESTRINGS = {",
-    ]
-    for k in sorted(west):
-        v = west[k].replace("\\", "\\\\").replace('"', '\\"')
-        wl.append(f'    "{k}": "{v}",')
-    wl.append("}")
-    with open(os.path.join(out_dir, "westrings.py"), "w", encoding="utf-8") as f:
-        f.write("\n".join(wl) + "\n")
-    print(f"已写出 {os.path.join(out_dir, 'westrings.py')}（{len(west)} 条）")
+    west = collect_westrings(archives)
+    write_westrings(west, out_dir)
 
     build_base_objects(archives, out_dir)
     # CASC 源持有本地存储句柄，收尾释放（经典 MPQ 无 close，忽略）
@@ -465,7 +519,8 @@ SLK_GROUPS = {
 }
 
 
-def build_base_objects(archives, out_dir):
+def collect_base_objects(archives):
+    """解析 *Data.slk 为 {码: (分类, [(标签, 值), ...])}，不写文件。"""
     from w3xtool.slk import parse_slk
 
     def read(fn):
@@ -493,6 +548,10 @@ def build_base_objects(archives, out_dir):
                     continue
                 fields.append((SLK_LABEL.get(k.lower(), k), str(v)))
             out[code] = (cat, fields)
+    return out
+
+
+def write_base_objects(out, out_dir):
     lines = [
         "# 自动生成：游戏基础对象默认字段(来自 *Data.slk)。由 build_base_names.py 提取。",
         "# 请勿手改。",
@@ -504,9 +563,13 @@ def build_base_objects(archives, out_dir):
         fl = ", ".join(f'("{lab}", {val!r})' for lab, val in fields)
         lines.append(f"    {code!r}: ({cat!r}, [{fl}]),")
     lines.append("}")
-    with open(os.path.join(out_dir, "base_objects.py"), "w", encoding="utf-8") as f:
+    with open(_safe_output_path(out_dir, "base_objects.py"), "w", encoding="utf-8") as f:
         f.write("\n".join(lines) + "\n")
     print(f"已写出 {os.path.join(out_dir, 'base_objects.py')}（{len(out)} 个基础对象）")
+
+
+def build_base_objects(archives, out_dir):
+    write_base_objects(collect_base_objects(archives), out_dir)
 
 
 if __name__ == "__main__":
@@ -520,6 +583,12 @@ if __name__ == "__main__":
         dest="from_casc",
         help="直接经 CascLib 读本机 Reforged CASC 安装根目录"
         "（如 C:/Program Files (x86)/Warcraft III；Strings 文本 zhCN 优先）",
+    )
+    p.add_argument(
+        "--merge-from-casc",
+        dest="merge_from_casc",
+        help="只补缺地把本机 Reforged CASC 的三张表并入现有生成表"
+        "（现有经典条目原样保留，仅新增缺失对象/字符串）",
     )
     p.add_argument(
         "--from-dir",
