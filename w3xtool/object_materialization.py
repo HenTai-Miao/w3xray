@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import replace
 from typing import Final
 
 from .base_names import BASE_CATEGORIES, BASE_NAMES, BASE_NAMES_EN
+from .base_objects import BASE_OBJECTS
 from .map_data import GameObject, GameObjectFieldEvidence
 from .object_candidates import ObjectCandidate, ObjectFieldValue, ObjectSourceKind
 from .object_field_selection import (
@@ -18,6 +20,48 @@ from .object_field_selection import (
 )
 
 BaseObjectTable = Mapping[str, tuple[str, Sequence[tuple[str, str]]]]
+
+# 物化结果按表对象缓存：模块常量表（BASE_OBJECTS）自动缓存；生命周期稳定的
+# 合并表（如同一客户端快照的 memo 结果）可显式注册。普通 dict 不支持弱引用，
+# 因此用 强引用槽位 + 上限 控制驻留：未注册的临时表一律不缓存，跨运行零增长。
+_MAX_CACHED_TABLES: Final = 2
+_table_cache_refs: dict[int, BaseObjectTable] = {}
+_table_caches: dict[
+    int, dict[tuple[tuple[str, str], tuple[ObjectCandidate, ...]], GameObject]
+] = {}
+_named_candidates_cache: dict[int, tuple[ObjectCandidate, ...]] = {}
+
+
+def register_base_table_for_caching(table: BaseObjectTable) -> None:
+    """注册一个生命周期稳定的表，使其物化结果可跨调用缓存（上限内）。"""
+    table_id = id(table)
+    if _table_cache_refs.get(table_id) is table:
+        return
+    if len(_table_cache_refs) >= _MAX_CACHED_TABLES:
+        for victim in [
+            key
+            for key, table_ref in _table_cache_refs.items()
+            if table_ref is not BASE_OBJECTS
+        ]:
+            if len(_table_cache_refs) < _MAX_CACHED_TABLES:
+                break
+            _table_cache_refs.pop(victim, None)
+            _table_caches.pop(victim, None)
+            _named_candidates_cache.pop(victim, None)
+        if len(_table_cache_refs) >= _MAX_CACHED_TABLES:
+            return
+    _table_cache_refs[table_id] = table
+
+
+def _table_is_cached(base_objects: BaseObjectTable) -> bool:
+    table_id = id(base_objects)
+    if _table_cache_refs.get(table_id) is base_objects:
+        return True
+    if base_objects is BASE_OBJECTS:
+        register_base_table_for_caching(base_objects)
+        return True
+    return False
+
 
 _EXT_RANK: Final[Mapping[str, int]] = {
     "base": 0,
@@ -55,7 +99,11 @@ def merge_object_candidates(
     candidates: Iterable[ObjectCandidate],
     base_objects: BaseObjectTable,
 ) -> tuple[GameObject, ...]:
-    """Merge every candidate by category and object id in deterministic order."""
+    """Merge every candidate by category and object id in deterministic order.
+
+    命中缓存的组返回浅拷贝（GameObject 是可变构建器，图标装配/战役改名
+    会改属性），缓存主对象永不外发；字段列表共享但全库无原地修改。
+    """
     grouped: dict[tuple[str, str], list[ObjectCandidate]] = {}
     for candidate in candidates:
         grouped.setdefault((candidate.category, candidate.obj_id), []).append(candidate)
@@ -63,11 +111,46 @@ def merge_object_candidates(
         grouped,
         key=lambda item: (item[0].casefold(), item[1].encode("latin-1", "replace")),
     )
-    return tuple(_materialize(key, tuple(grouped[key]), base_objects) for key in keys)
+    table_id = id(base_objects)
+    table_cache = None
+    if _table_is_cached(base_objects):
+        table_cache = _table_caches.get(table_id)
+        if table_cache is None:
+            table_cache = {}
+            _table_caches[table_id] = table_cache
+    results: list[GameObject] = []
+    for key in keys:
+        group = tuple(grouped[key])
+        cache_key = (key, group)
+        cached = None if table_cache is None else table_cache.get(cache_key)
+        if cached is None:
+            cached = _materialize(key, group, base_objects)
+            if table_cache is not None:
+                table_cache[cache_key] = cached
+        results.append(replace(cached))
+    return tuple(results)
 
 
 def named_base_candidates(base_objects: BaseObjectTable) -> tuple[ObjectCandidate, ...]:
-    """Build displayable candidates for bundled bases that have known names."""
+    """Build displayable candidates for bundled bases that have known names.
+
+    已注册（含模块常量）的表按身份缓存：候选为 frozen 元组，跨调用直接共享；
+    临时表每次重建，不驻留。
+    """
+    table_id = id(base_objects)
+    if _table_is_cached(base_objects):
+        cached = _named_candidates_cache.get(table_id)
+        if cached is not None:
+            return cached
+    result = _build_named_base_candidates(base_objects)
+    if _table_is_cached(base_objects):
+        _named_candidates_cache[table_id] = result
+    return result
+
+
+def _build_named_base_candidates(
+    base_objects: BaseObjectTable,
+) -> tuple[ObjectCandidate, ...]:
     result: list[ObjectCandidate] = []
     for code, (category, fields) in sorted(base_objects.items()):
         name = BASE_NAMES.get(code)

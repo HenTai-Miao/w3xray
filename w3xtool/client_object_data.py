@@ -163,7 +163,20 @@ def merge_client_base_objects(
     base_objects: BaseObjectTable,
     client_objects: tuple[ClientBaseObject, ...],
 ) -> dict[str, tuple[str, tuple[tuple[str, str], ...]]]:
-    """Fill missing bundled base fields from the selected client snapshot."""
+    """Fill missing bundled base fields from the selected client snapshot.
+
+    相同快照值返回同一个合并表对象（值键 memo，客户端对象为 frozen 可哈希），
+    并把稳定表注册给物化缓存复用；快照变化时旧表让位，驻留有界。
+    """
+    cache_key = client_objects
+    per_table = _MERGED_TABLE_CACHE.get(id(base_objects))
+    if per_table is not None and _MERGED_TABLE_REFS.get(id(base_objects)) is base_objects:
+        cached = per_table.get(cache_key)
+        if cached is not None:
+            from .object_materialization import register_base_table_for_caching
+
+            register_base_table_for_caching(cached)
+            return cached
     merged = {
         code: (category, tuple((str(label), str(value)) for label, value in fields))
         for code, (category, fields) in base_objects.items()
@@ -181,4 +194,26 @@ def merge_client_base_objects(
                 combined.append((label, value))
                 labels.add(label.casefold())
         merged[item.obj_id] = (category, tuple(combined))
+    if per_table is None:
+        per_table = {}
+        base_id = id(base_objects)
+        if len(_MERGED_TABLE_CACHE) >= _MERGED_CACHE_LIMIT:
+            _MERGED_TABLE_CACHE.clear()
+            _MERGED_TABLE_REFS.clear()
+        _MERGED_TABLE_CACHE[base_id] = per_table
+        _MERGED_TABLE_REFS[base_id] = base_objects
+    if len(per_table) >= _MERGED_CACHE_LIMIT:
+        per_table.clear()
+    per_table[cache_key] = merged
+    from .object_materialization import register_base_table_for_caching
+
+    register_base_table_for_caching(merged)
     return merged
+
+
+_MERGED_CACHE_LIMIT: Final = 4
+_MERGED_TABLE_CACHE: dict[
+    int,
+    dict[tuple[ClientBaseObject, ...], dict[str, tuple[str, tuple[tuple[str, str], ...]]]],
+] = {}
+_MERGED_TABLE_REFS: dict[int, BaseObjectTable] = {}

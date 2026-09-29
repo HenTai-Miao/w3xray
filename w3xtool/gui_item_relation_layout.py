@@ -55,6 +55,7 @@ if TYPE_CHECKING:
         item_relation_search: tk.StringVar = tk.StringVar()
         item_relation_kind: ctk.CTkComboBox = ctk.CTkComboBox(_typing_root)
         item_relation_confidence: ctk.CTkComboBox = ctk.CTkComboBox(_typing_root)
+        item_relation_fine: ctk.CTkComboBox = ctk.CTkComboBox(_typing_root)
         item_relation_status: ctk.CTkLabel = ctk.CTkLabel(_typing_root)
         item_relation_tree: ttk.Treeview = ttk.Treeview()
         item_relation_target_button: ctk.CTkButton = ctk.CTkButton(_typing_root)

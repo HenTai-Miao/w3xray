@@ -308,3 +308,46 @@ def test_final_display_values_and_provenance_use_canonical_keys() -> None:
     assert merged.field_sources["display:name"] == "fixture"
     assert {"Name", "Propernames", "Ubertip", "Art"}.isdisjoint(merged.field_values)
     assert merged.field_values["uhpm"] == "420"
+
+
+def test_warm_merge_reuses_materialization_with_isolated_copies() -> None:
+    # Given: one base-backed candidate merged twice against the same table.
+    table = {"hfoo": ("单位", (("生命", "420"),))}
+    footman = (
+        candidate(
+            "hfoo",
+            ObjectSourceKind.BASE,
+            (field("display:name", "名称", "步兵", ObjectSourceKind.BASE),),
+            base_id="hfoo",
+            ext="base",
+        ),
+    )
+    first = merge_object_candidates(footman, table)
+    second = merge_object_candidates(footman, table)
+
+    # Then: results are equal but independently mutable instances.
+    assert first == second
+    assert first[0] is not second[0]
+    second[0].icon = "MUTATED"
+    third = merge_object_candidates(footman, table)
+    assert third[0].icon != "MUTATED"
+
+
+def test_merge_cache_scopes_inheritance_by_table_object() -> None:
+    # Given: two different table objects define different inherited values.
+    base = (
+        candidate(
+            "A000",
+            ObjectSourceKind.BASE,
+            (field("display:name", "名称", "自定义", ObjectSourceKind.BASE),),
+            category="技能",
+            base_id="A000",
+            ext="base",
+        ),
+    )
+    rich = merge_object_candidates(base, {"A000": ("技能", (("伤害", "100"),))})
+    poor = merge_object_candidates(base, {"A000": ("技能", (("伤害", "1"),))})
+
+    # Then: each table's inheritance stays scoped to its own cache slot.
+    assert dict(rich[0].fields)["伤害"] == "100"
+    assert dict(poor[0].fields)["伤害"] == "1"
