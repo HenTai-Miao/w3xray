@@ -163,7 +163,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
   uv run build_base_names.py --from-casc "C:/Program Files (x86)/Warcraft III"        # 三表整表再生
   uv run build_base_names.py --merge-from-casc "C:/Program Files (x86)/Warcraft III"  # 只补缺失对象，现有条目逐字保留
   ```
-- **配套生成器**：`build_base_catalog.py --objectdata-dir <war3-objectdata 快照>` 并入英文名/细类表（`BASE_NAMES_EN`/`BASE_CATEGORIES`）；`build_field_labels.py --meta-dir <MetaData 目录> [--common-j <Reforged common.j>]` 重建字段适用性/值域/常量表（标签为保留式合并）。
+- **配套生成器**：`build_base_catalog.py --objectdata-dir <war3-objectdata 快照>` 并入英文名/细类表（`BASE_NAMES_EN`/`BASE_CATEGORIES`），也可 `--casc-root <安装根目录>` 用本机 CASC 的 SLK 补细类（preserve-and-fill，现有条目一律保留）；`build_field_labels.py --meta-dir <MetaData 目录> [--common-j <Reforged common.j>]` 重建字段适用性/值域/常量表（标签为保留式合并）。英文名覆盖有已知上限：中文区客户端只安装 zhCN 语言包（enUS 条目在 Root 清单存在但内容未下载），而 war3-objectdata 快照（无论锁定版还是 master）都不含物品技能变体码（`AA12` 一类）的英文——这类码有中文名和细类、暂无英文名，属数据源硬限制。
 - **重制版（1.30+，CASC，散文件回退）**：游戏数据改为 CASC。Windows 发行包已接入 CascLib 后端，可按已知路径读取，也可流式枚举 Root 的全部条目；无原路径的条目以 FileDataID/CKey/EKey 保留。无 CascLib 时可回退到带 `w3xray-casc-paths.tsv` 的 idx/data 非加密 BLTE 读取；所有平台也可读取 CascView/casc-extract 导出的散文件目录（zhCN 语言包的冒号命名空间会按嵌套文件夹布局解析）。本次 macOS 环境不能代替真实 Windows 魔兽安装验收，刷新内置数据仍可用散文件目录：
   1. 用 [CascView](http://www.zezula.net/en/casc/main.html)（GUI）或 `wc3tools/casc-extract`（CLI，如 `casc-extract war3.w3mod:units/*` ）把游戏 `units/` 下的 `*Strings.txt`/`*Func.txt`/`*Data.slk` 与 `ui/WorldEdit*Strings.txt` 导到一个文件夹。
   2. `uv run build_base_names.py --from-dir <该文件夹>`，按打印的「找到/未找到」清单确认覆盖。
