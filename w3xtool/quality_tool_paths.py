@@ -13,6 +13,7 @@ build_jass_natives.py
 w3xtool/__init__.py
 w3xtool/acceptance_batch.py
 w3xtool/acceptance_runner.py
+w3xtool/base_catalog.py
 w3xtool/batch_checkpoint_publication.py
 w3xtool/batch_cli.py
 w3xtool/batch_cli_options.py

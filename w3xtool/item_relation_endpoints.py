@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from .base_names import BASE_CATEGORIES, BASE_NAMES, BASE_NAMES_EN
+from .base_catalog import english_name_for, fine_category_for
+from .base_names import BASE_NAMES
 from .base_objects import BASE_OBJECTS
 from .item_relation_models import (
     RelationCompleteness,
@@ -27,8 +28,7 @@ def find_relation_game_object(
 
 def _fine_category_for(base_id: str, object_id: str) -> str:
     """细类中文名（按基础码优先），未知返回空串。"""
-    fine = BASE_CATEGORIES.get(base_id) or BASE_CATEGORIES.get(object_id)
-    return "" if fine is None else fine[0]
+    return fine_category_for(base_id, object_id)
 
 
 def resolve_relation_object(
@@ -51,7 +51,7 @@ def resolve_relation_object(
     base = BASE_OBJECTS.get(object_id)
     if base is not None and base[0] == category:
         # 中文名优先，缺失时回退英文名（社区 enUS 快照）
-        name = BASE_NAMES.get(object_id) or BASE_NAMES_EN.get(object_id)
+        name = BASE_NAMES.get(object_id) or english_name_for(object_id)
     else:
         name = None
     return (

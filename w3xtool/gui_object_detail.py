@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from .base_names import BASE_CATEGORIES
+from .base_catalog import fine_category_for
 from .object_detail_presentation import (
     back_reference_note,
     format_complete_text_section,
@@ -59,8 +59,8 @@ class ObjectDetailMixin:
         )
         self.detail_icon.configure(image=self.detail_icon_image, text="")
         self.detail_title.configure(text=object_detail_title(obj))
-        fine = BASE_CATEGORIES.get(obj.base_id) or BASE_CATEGORIES.get(obj.obj_id)
-        category_label = obj.category if fine is None else f"{obj.category}·{fine[0]}"
+        fine = fine_category_for(obj.base_id, obj.obj_id)
+        category_label = obj.category if not fine else f"{obj.category}·{fine}"
         self.detail_sub.configure(
             text=f"{category_label}  ·  ID {obj.obj_id}  ·  基础 {obj.base_id}"
             + ("  ·  自定义" if obj.is_custom else "  ·  原始")

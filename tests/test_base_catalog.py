@@ -154,6 +154,19 @@ def test_relation_endpoints_carry_fine_category():
     assert unknown.fine_category == ""
 
 
+def test_base_catalog_helpers_use_base_first_lookup():
+    from w3xtool.base_catalog import english_name_for, fine_category_for
+
+    # 基础码优先：自定义码无条目时回退其原版基底
+    assert english_name_for("ratf", "I001") == "Claws of Attack +15"
+    assert fine_category_for("ratf", "I001") == "神器"
+    # 未知码返回空串而不是 None
+    assert english_name_for("z999") == ""
+    assert fine_category_for("z999") == ""
+    assert english_name_for("") == ""
+    assert fine_category_for("") == ""
+
+
 # ---- 生成器（合成快照）----
 
 

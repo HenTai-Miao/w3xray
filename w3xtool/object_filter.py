@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .api import GameObject, MapData
-from .base_names import BASE_CATEGORIES
+from .base_catalog import fine_category_for
 from .search import compile_query
 from .theme import PARALLEL_CATS
 
@@ -22,8 +22,7 @@ class ObjectFilterResult:
 
 def object_fine_category(obj: GameObject) -> str:
     """对象的标准化细类（基础码优先），未知返回空串。"""
-    fine = BASE_CATEGORIES.get(obj.base_id) or BASE_CATEGORIES.get(obj.obj_id)
-    return "" if fine is None else fine[0]
+    return fine_category_for(obj.base_id, obj.obj_id)
 
 
 def filter_objects_by_query(

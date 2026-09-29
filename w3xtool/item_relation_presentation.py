@@ -61,6 +61,8 @@ def format_relation_evidence(relation: ItemRelation) -> str:
         f"装备：{_format_endpoint(relation.item)}",
         f"关系 ID：{relation.relation_id}",
     ]
+    if relation.item.fine_category:
+        lines.append(f"装备细类：{relation.item.fine_category}")
     if relation.source is not None:
         lines.append(f"来源对象：{_format_endpoint(relation.source)}")
     if relation.skill is not None:

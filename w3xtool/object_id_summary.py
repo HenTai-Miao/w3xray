@@ -7,7 +7,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 from .api import GameObject, MapData
-from .base_names import BASE_CATEGORIES, BASE_NAMES, BASE_NAMES_EN
+from .base_catalog import english_name_for, fine_category_for
+from .base_names import BASE_NAMES
 from .knowledge_io import tsv
 from .object_id_usage import ObjectIdUsageReport, build_object_id_usage, code_decimal
 from .save_analysis import SaveReport, SaveClue, build_save_report
@@ -116,23 +117,16 @@ def _category(obj: GameObject | None) -> str:
 def _name(obj: GameObject | None, code: str) -> str:
     if obj is not None:
         return obj.name
-    return BASE_NAMES.get(code) or BASE_NAMES_EN.get(code) or ""
+    return BASE_NAMES.get(code) or english_name_for(code) or ""
 
 
 def _english_name(obj: GameObject | None, code: str) -> str:
     """英文名按基础码优先（自定义对象显示其基底英文名）。"""
-    if obj is not None:
-        return BASE_NAMES_EN.get(obj.base_id) or BASE_NAMES_EN.get(code) or ""
-    return BASE_NAMES_EN.get(code) or ""
+    return english_name_for(obj.base_id if obj is not None else "", code)
 
 
 def _fine_category(obj: GameObject | None, code: str) -> str:
-    fine = (
-        BASE_CATEGORIES.get(obj.base_id) or BASE_CATEGORIES.get(code)
-        if obj is not None
-        else BASE_CATEGORIES.get(code)
-    )
-    return "" if fine is None else fine[0]
+    return fine_category_for(obj.base_id if obj is not None else "", code)
 
 
 def _source(obj: GameObject | None) -> str:
