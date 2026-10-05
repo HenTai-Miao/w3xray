@@ -1,4 +1,5 @@
 """版本兼容报告：面向 1.24E 的只读风险提示。"""
+
 import unittest
 from types import SimpleNamespace
 
@@ -7,7 +8,9 @@ from w3xtool.compat import CompatSeverity, build_compat_report
 
 
 def _w3i(version=25, script_type="JASS", large_map=False):
-    return SimpleNamespace(version=version, script_type=script_type, large_map=large_map)
+    return SimpleNamespace(
+        version=version, script_type=script_type, large_map=large_map
+    )
 
 
 class CompatReportTest(unittest.TestCase):
@@ -34,7 +37,9 @@ class CompatReportTest(unittest.TestCase):
         report = build_compat_report(md)
 
         # Then: the newer w3i format is flagged.
-        self.assertEqual(report.by_code["w3i.newer_format"].severity, CompatSeverity.WARNING)
+        self.assertEqual(
+            report.by_code["w3i.newer_format"].severity, CompatSeverity.WARNING
+        )
 
     def test_large_map_flag_warns_for_classic_target(self):
         # Given: map info marks the map as large.
@@ -51,7 +56,9 @@ class CompatReportTest(unittest.TestCase):
         # Given: a normal TFT JASS map.
         md = MapData(path="x.w3x", name="x")
         md.w3i = _w3i(version=25, script_type="JASS")
-        md.scripts = {"war3map.j": "function main takes nothing returns nothing\nendfunction"}
+        md.scripts = {
+            "war3map.j": "function main takes nothing returns nothing\nendfunction"
+        }
 
         # When: compatibility report is built.
         report = build_compat_report(md)

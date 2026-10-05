@@ -69,13 +69,17 @@ def format_ui_text_references_tsv(report: UiTextReport) -> str:
     """Format TRIGSTR references as TSV."""
     rows = ["来源\t行号\tTRIGSTR\t文本\t上下文"]
     for ref in report.references:
-        rows.append("\t".join((
-            _tsv(ref.source),
-            str(ref.line),
-            _tsv(ref.trigstr),
-            _tsv(ref.text),
-            _tsv(ref.context),
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    _tsv(ref.source),
+                    str(ref.line),
+                    _tsv(ref.trigstr),
+                    _tsv(ref.text),
+                    _tsv(ref.context),
+                )
+            )
+        )
     return "\n".join(rows) + "\n"
 
 

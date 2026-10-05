@@ -67,10 +67,14 @@ def format_knowledge_write_report(report: KnowledgeWriteReport) -> str:
     """Format final publication outcomes as TSV."""
     rows = ["路径\t状态\t字节\t错误"]
     for item in report.items:
-        rows.append("\t".join((
-            _tsv(item.path),
-            "已写入" if item.written else "失败",
-            str(item.size),
-            _tsv(item.error or ""),
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    _tsv(item.path),
+                    "已写入" if item.written else "失败",
+                    str(item.size),
+                    _tsv(item.error or ""),
+                )
+            )
+        )
     return "\n".join(rows) + "\n"

@@ -9,7 +9,14 @@ import struct
 from typing import Final, Protocol, TypeVar, override
 
 _T = TypeVar("_T")
-_COMPONENT_ERRORS = (KeyError, OSError, UnicodeError, ValueError, IndexError, struct.error)
+_COMPONENT_ERRORS = (
+    KeyError,
+    OSError,
+    UnicodeError,
+    ValueError,
+    IndexError,
+    struct.error,
+)
 _MAX_DIAGNOSTICS: Final = 256
 _MAX_DIAGNOSTIC_TEXT: Final = 512
 

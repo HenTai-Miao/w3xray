@@ -1,4 +1,5 @@
 """只读地图审计：把 MapData 汇总为可展示的健康提示。"""
+
 from __future__ import annotations
 
 from collections import Counter
@@ -38,7 +39,9 @@ class AuditReport:
 
     @property
     def warnings(self) -> tuple[AuditItem, ...]:
-        return tuple(item for item in self.items if item.severity == AuditSeverity.WARNING)
+        return tuple(
+            item for item in self.items if item.severity == AuditSeverity.WARNING
+        )
 
 
 def build_audit_report(md: MapData) -> AuditReport:
@@ -51,28 +54,34 @@ def build_audit_report(md: MapData) -> AuditReport:
     if script_item is not None:
         items.append(script_item)
     else:
-        items.append(AuditItem(
-            AuditSeverity.WARNING,
-            "script.missing",
-            "未发现主脚本",
-            "未解析到 war3map.j 或 war3map.lua，隐藏指令、合成与脚本引用分析会缺失。",
-        ))
+        items.append(
+            AuditItem(
+                AuditSeverity.WARNING,
+                "script.missing",
+                "未发现主脚本",
+                "未解析到 war3map.j 或 war3map.lua，隐藏指令、合成与脚本引用分析会缺失。",
+            )
+        )
 
     if getattr(md, "w3i", None) is None and getattr(md, "w3f", None) is None:
-        items.append(AuditItem(
-            AuditSeverity.WARNING,
-            "map_info.missing",
-            "缺少地图信息",
-            "未解析到 war3map.w3i，地图名、作者、玩家、队伍和脚本语言可能不完整。",
-        ))
+        items.append(
+            AuditItem(
+                AuditSeverity.WARNING,
+                "map_info.missing",
+                "缺少地图信息",
+                "未解析到 war3map.w3i，地图名、作者、玩家、队伍和脚本语言可能不完整。",
+            )
+        )
 
     if getattr(md, "ref_low_coverage", False):
-        items.append(AuditItem(
-            AuditSeverity.WARNING,
-            "reference.low_coverage",
-            "引用覆盖偏低",
-            "对象引用字段覆盖不足，孤立对象多为误报，仅适合作为人工排查线索。",
-        ))
+        items.append(
+            AuditItem(
+                AuditSeverity.WARNING,
+                "reference.low_coverage",
+                "引用覆盖偏低",
+                "对象引用字段覆盖不足，孤立对象多为误报，仅适合作为人工排查线索。",
+            )
+        )
 
     items.extend(_script_diagnostic_items(md))
     items.extend(_crash_items(md))
@@ -129,12 +138,14 @@ def _orphan_ratio_items(
         orphan_count = orphan_by_cat.get(category, 0)
         if total < MIN_CATEGORY_CUSTOM or orphan_count / total <= HIGH_ORPHAN_RATIO:
             continue
-        items.append(AuditItem(
-            AuditSeverity.WARNING,
-            f"orphan.high_ratio.{category}",
-            "孤立对象比例偏高",
-            f"{category} 自定义对象孤立 {orphan_count}/{total}，建议结合引用覆盖提示人工确认。",
-        ))
+        items.append(
+            AuditItem(
+                AuditSeverity.WARNING,
+                f"orphan.high_ratio.{category}",
+                "孤立对象比例偏高",
+                f"{category} 自定义对象孤立 {orphan_count}/{total}，建议结合引用覆盖提示人工确认。",
+            )
+        )
     return tuple(items)
 
 
@@ -154,87 +165,107 @@ def _gameplay_constant_items(md: MapData) -> tuple[AuditItem, ...]:
     files = {str(name).lower() for name in getattr(md, "all_files", []) or []}
     if "war3mapmisc.txt" not in files:
         return ()
-    return (AuditItem(
-        AuditSeverity.INFO,
-        "gameplay.constants",
-        "自定义游戏平衡常数",
-        "发现 war3mapMisc.txt，地图包含自定义游戏平衡常数；本工具只提示存在，不修改内容。",
-    ),)
+    return (
+        AuditItem(
+            AuditSeverity.INFO,
+            "gameplay.constants",
+            "自定义游戏平衡常数",
+            "发现 war3mapMisc.txt，地图包含自定义游戏平衡常数；本工具只提示存在，不修改内容。",
+        ),
+    )
 
 
 def _resource_items(md: MapData) -> tuple[AuditItem, ...]:
     from .resources import build_resource_report
+
     report = build_resource_report(md)
     if not report.unreferenced_assets:
         return ()
-    return (AuditItem(
-        AuditSeverity.WARNING,
-        "resources.unreferenced",
-        "发现未引用素材",
-        f"内部素材中有 {len(report.unreferenced_assets)} 个未被对象字段或脚本字面量引用。",
-    ),)
+    return (
+        AuditItem(
+            AuditSeverity.WARNING,
+            "resources.unreferenced",
+            "发现未引用素材",
+            f"内部素材中有 {len(report.unreferenced_assets)} 个未被对象字段或脚本字面量引用。",
+        ),
+    )
 
 
 def _script_diagnostic_items(md: MapData) -> tuple[AuditItem, ...]:
     from .diagnostics import build_script_diagnostics
+
     report = build_script_diagnostics(md)
     if not report.warnings:
         return ()
-    return (AuditItem(
-        AuditSeverity.WARNING,
-        "script.diagnostics",
-        "脚本诊断警告",
-        f"发现 {len(report.warnings)} 个异步/本地状态/JASS 风险调用提示。",
-    ),)
+    return (
+        AuditItem(
+            AuditSeverity.WARNING,
+            "script.diagnostics",
+            "脚本诊断警告",
+            f"发现 {len(report.warnings)} 个异步/本地状态/JASS 风险调用提示。",
+        ),
+    )
 
 
 def _crash_items(md: MapData) -> tuple[AuditItem, ...]:
     from .crash import build_crash_report
+
     report = build_crash_report(md)
     if not report.items:
         return ()
-    return (AuditItem(
-        AuditSeverity.WARNING,
-        "crash.risks",
-        "发现崩溃风险配置",
-        f"发现 {len(report.items)} 个已知崩溃风险配置，建议优先人工检查。",
-    ),)
+    return (
+        AuditItem(
+            AuditSeverity.WARNING,
+            "crash.risks",
+            "发现崩溃风险配置",
+            f"发现 {len(report.items)} 个已知崩溃风险配置，建议优先人工检查。",
+        ),
+    )
 
 
 def _cheat_items(md: MapData) -> tuple[AuditItem, ...]:
     from .cheats import build_cheat_report
+
     report = build_cheat_report(md)
     if not report.items:
         return ()
-    return (AuditItem(
-        AuditSeverity.WARNING,
-        "cheats.residue",
-        "发现秘籍/调试口令残留",
-        f"脚本中发现 {len(report.items)} 处官方秘籍或调试口令字符串，建议确认是否为遗留入口。",
-    ),)
+    return (
+        AuditItem(
+            AuditSeverity.WARNING,
+            "cheats.residue",
+            "发现秘籍/调试口令残留",
+            f"脚本中发现 {len(report.items)} 处官方秘籍或调试口令字符串，建议确认是否为遗留入口。",
+        ),
+    )
 
 
 def _order_items(md: MapData) -> tuple[AuditItem, ...]:
     from .orders import build_order_report
+
     report = build_order_report(md)
     if not report.collisions:
         return ()
-    return (AuditItem(
-        AuditSeverity.WARNING,
-        "orders.collisions",
-        "命令串冲突",
-        f"发现 {len(report.collisions)} 个重复命令串，可能导致技能施放互相抢命令。",
-    ),)
+    return (
+        AuditItem(
+            AuditSeverity.WARNING,
+            "orders.collisions",
+            "命令串冲突",
+            f"发现 {len(report.collisions)} 个重复命令串，可能导致技能施放互相抢命令。",
+        ),
+    )
 
 
 def _compat_items(md: MapData) -> tuple[AuditItem, ...]:
     from .compat import build_compat_report
+
     report = build_compat_report(md)
     if not report.warnings:
         return ()
-    return (AuditItem(
-        AuditSeverity.WARNING,
-        "compat.warnings",
-        "存在版本兼容风险",
-        f"按 {report.target_patch} 检查发现 {len(report.warnings)} 个兼容风险。",
-    ),)
+    return (
+        AuditItem(
+            AuditSeverity.WARNING,
+            "compat.warnings",
+            "存在版本兼容风险",
+            f"按 {report.target_patch} 检查发现 {len(report.warnings)} 个兼容风险。",
+        ),
+    )

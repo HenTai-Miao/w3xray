@@ -1,4 +1,5 @@
 """GUI 预放置标签页测试：列出 war3mapUnits.doo 单位与 war3map.doo 装饰物，可搜索。"""
+
 import unittest
 
 from tests.gui_base import GuiTestCase
@@ -9,14 +10,44 @@ from w3xtool.doo import Unit, Doodad
 def _md_with_preplaced():
     md = MapData(path="x", name="x")
     md.units = [
-        Unit(type_id="Hblm", variation=0, x=10.0, y=20.0, z=0.0, angle=0.0,
-             player=1, hp=500, mana=100, gold=0, hero_level=3),
-        Unit(type_id="hpea", variation=0, x=30.0, y=40.0, z=0.0, angle=0.0,
-             player=0, hp=-1, mana=-1, gold=0, hero_level=1),
+        Unit(
+            type_id="Hblm",
+            variation=0,
+            x=10.0,
+            y=20.0,
+            z=0.0,
+            angle=0.0,
+            player=1,
+            hp=500,
+            mana=100,
+            gold=0,
+            hero_level=3,
+        ),
+        Unit(
+            type_id="hpea",
+            variation=0,
+            x=30.0,
+            y=40.0,
+            z=0.0,
+            angle=0.0,
+            player=0,
+            hp=-1,
+            mana=-1,
+            gold=0,
+            hero_level=1,
+        ),
     ]
     md.doodads = [
-        Doodad(type_id="LTlt", variation=0, x=1.0, y=2.0, z=0.0, angle=0.0,
-               life=100, serial=1),
+        Doodad(
+            type_id="LTlt",
+            variation=0,
+            x=1.0,
+            y=2.0,
+            z=0.0,
+            angle=0.0,
+            life=100,
+            serial=1,
+        ),
     ]
     return md
 
@@ -46,7 +77,7 @@ class TestPreplacedTab(GuiTestCase):
 
     def test_no_map_is_noop(self):
         self.app.map_data = None
-        self.app._refresh_preplaced()   # 不应抛
+        self.app._refresh_preplaced()  # 不应抛
         self.assertEqual(len(self.app.unit_tree.get_children()), 0)
 
 

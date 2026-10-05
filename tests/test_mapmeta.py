@@ -1,4 +1,5 @@
 """地图内部结构文件摘要。"""
+
 import struct
 
 from w3xtool.mapmeta import (
@@ -35,9 +36,11 @@ def test_parse_counted_structure_rejects_bad_magic():
 def test_parse_structure_strings_extracts_readable_entries():
     # Given: a counted internal file that contains zero-terminated names.
     data = (
-        b"W3R!" + struct.pack("<ii", 5, 2)
+        b"W3R!"
+        + struct.pack("<ii", 5, 2)
         + struct.pack("<ffff", 0.0, 0.0, 128.0, 128.0)
-        + "出生区域".encode("utf-8") + b"\x00"
+        + "出生区域".encode("utf-8")
+        + b"\x00"
         + b"gg_rct_Start\x00"
     )
 
@@ -102,7 +105,7 @@ def test_parse_shd_summary_rejects_mismatched_pathing_size():
     pathing = PathingSummary(width=2, height=2, cells=4)
 
     # When / Then: the inconsistent shadow map is treated as absent.
-    assert parse_shd_summary(b"\xFF\x00", pathing) is None
+    assert parse_shd_summary(b"\xff\x00", pathing) is None
 
 
 def test_build_map_structure_report_counts_known_files():
@@ -112,7 +115,7 @@ def test_build_map_structure_report_counts_known_files():
         "war3map.w3c": b"W3C!" + struct.pack("<ii", 0, 4),
         "war3map.w3s": b"W3S!" + struct.pack("<ii", 1, 6),
         "war3map.wpm": b"MP3W" + struct.pack("<iii", 0, 5, 7) + b"\x00" * 35,
-        "war3map.shd": b"\xFF" * 10 + b"\x00" * 25,
+        "war3map.shd": b"\xff" * 10 + b"\x00" * 25,
     }
 
     # When: a structure report is built from payloads.
@@ -133,7 +136,9 @@ def test_build_map_structure_report_includes_readable_entry_summaries():
     files = {
         "war3map.w3r": b"W3R!" + struct.pack("<ii", 5, 1) + b"BossRoom\x00",
         "war3map.w3c": b"W3C!" + struct.pack("<ii", 0, 1) + b"IntroCam\x00",
-        "war3map.w3s": b"W3S!" + struct.pack("<ii", 1, 1) + b"war3mapImported\\boss.mp3\x00",
+        "war3map.w3s": b"W3S!"
+        + struct.pack("<ii", 1, 1)
+        + b"war3mapImported\\boss.mp3\x00",
     }
 
     # When: a structure report is built from payloads.

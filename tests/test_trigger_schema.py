@@ -16,7 +16,9 @@ from w3xtool.trigger_schema import (
 from w3xtool.triggerdata import load_trigger_schema_from_source
 
 
-_MINIMAL_TRIGGER_DATA: Final = b"[TriggerActions]\nDisplayTextToForce=0,force,StringExt\n"
+_MINIMAL_TRIGGER_DATA: Final = (
+    b"[TriggerActions]\nDisplayTextToForce=0,force,StringExt\n"
+)
 _MINIMAL_TRIGGER_STRINGS: Final = (
     b"[TriggerActionStrings]\n"
     b'DisplayTextToForce="Text Message (Auto-Timed)"\n'
@@ -39,7 +41,12 @@ class _Source:
 
 
 def _fixture(name: str) -> str:
-    return Path(__file__).with_name("fixtures").joinpath("trigger", name).read_text(encoding="utf-8")
+    return (
+        Path(__file__)
+        .with_name("fixtures")
+        .joinpath("trigger", name)
+        .read_text(encoding="utf-8")
+    )
 
 
 def test_real_trigger_data_signature_and_trigger_strings_template() -> None:
@@ -55,7 +62,9 @@ def test_real_trigger_data_signature_and_trigger_strings_template() -> None:
 
 
 def test_real_nothing_signatures_and_trigger_call_offsets() -> None:
-    schema = parse_trigger_schema(_fixture("TriggerData.txt"), _fixture("TriggerStrings.txt"))
+    schema = parse_trigger_schema(
+        _fixture("TriggerData.txt"), _fixture("TriggerStrings.txt")
+    )
 
     event = schema.require(TriggerFunctionKind.EVENT, "MapInitializationEvent")
     action = schema.require(TriggerFunctionKind.ACTION, "IfThenElseMultiple")
@@ -68,7 +77,9 @@ def test_real_nothing_signatures_and_trigger_call_offsets() -> None:
 
 
 def test_missing_trigger_strings_keeps_signature_without_fake_template() -> None:
-    schema = parse_trigger_schema("[TriggerActions]\nDisplayTextToForce=0,force,StringExt\n", "")
+    schema = parse_trigger_schema(
+        "[TriggerActions]\nDisplayTextToForce=0,force,StringExt\n", ""
+    )
 
     action = schema.require(TriggerFunctionKind.ACTION, "DisplayTextToForce")
     assert action.parameter_types == ("force", "StringExt")
@@ -76,7 +87,9 @@ def test_missing_trigger_strings_keeps_signature_without_fake_template() -> None
 
 
 def test_source_loading_keeps_signature_when_trigger_strings_is_missing() -> None:
-    schema = load_trigger_schema_from_source(_Source({"TriggerData.txt": _MINIMAL_TRIGGER_DATA}))
+    schema = load_trigger_schema_from_source(
+        _Source({"TriggerData.txt": _MINIMAL_TRIGGER_DATA})
+    )
 
     assert schema is not None
     action = schema.require(TriggerFunctionKind.ACTION, "DisplayTextToForce")

@@ -16,7 +16,9 @@ def parse_trigger_string_sections(text: str) -> dict[str, dict[str, tuple[str, .
     for section, key, value in _iter_lines(text):
         if section != current:
             if current:
-                sections[current] = {name: tuple(values) for name, values in grouped.items()}
+                sections[current] = {
+                    name: tuple(values) for name, values in grouped.items()
+                }
             current = section
             grouped = defaultdict(list)
         grouped[key].append(value)

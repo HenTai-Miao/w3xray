@@ -46,21 +46,33 @@ def format_object_id_usage_summary(md: MapData) -> str:
         obj = object_lookup.get(code)
         save_rows = save_rows_by_code.get(code, ())
         placed = preplaced_by_code.get(code, ())
-        rows.append("\t".join((
-            tsv(code),
-            str(code_decimal(code)),
-            tsv(_category(obj)),
-            tsv(_name(obj, code)),
-            tsv(_source(obj)),
-            str(script_counts.get(code, 0)),
-            str(len(save_rows)),
-            str(field_counts.get(code, 0)),
-            str(len(placed)),
-            tsv(_status(obj, script_counts.get(code, 0), len(save_rows), field_counts.get(code, 0), len(placed))),
-            tsv(_detail(md, usage, save_rows, placed, code)),
-            tsv(_english_name(obj, code)),
-            tsv(_fine_category(obj, code)),
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    tsv(code),
+                    str(code_decimal(code)),
+                    tsv(_category(obj)),
+                    tsv(_name(obj, code)),
+                    tsv(_source(obj)),
+                    str(script_counts.get(code, 0)),
+                    str(len(save_rows)),
+                    str(field_counts.get(code, 0)),
+                    str(len(placed)),
+                    tsv(
+                        _status(
+                            obj,
+                            script_counts.get(code, 0),
+                            len(save_rows),
+                            field_counts.get(code, 0),
+                            len(placed),
+                        )
+                    ),
+                    tsv(_detail(md, usage, save_rows, placed, code)),
+                    tsv(_english_name(obj, code)),
+                    tsv(_fine_category(obj, code)),
+                )
+            )
+        )
     return "\n".join(rows) + "\n"
 
 
@@ -142,12 +154,7 @@ def _status(
     field_count: int,
     preplaced_count: int,
 ) -> str:
-    used = (
-        script_count > 0
-        or save_count > 0
-        or field_count > 0
-        or preplaced_count > 0
-    )
+    used = script_count > 0 or save_count > 0 or field_count > 0 or preplaced_count > 0
     if obj is None:
         return "未在对象表中解析"
     return "已解析" if used else "仅对象表"
@@ -167,7 +174,9 @@ def _detail(
     save = tuple(f"{row.source}:{row.line}:{row.operation}" for row in save_rows)
     if save:
         parts.append(f"存档/ID={';'.join(sorted(set(save)))}")
-    fields = tuple(f"{owner}:{field}" for owner, _name, field in md.referenced_by.get(code, ()))
+    fields = tuple(
+        f"{owner}:{field}" for owner, _name, field in md.referenced_by.get(code, ())
+    )
     if fields:
         parts.append(f"对象字段={';'.join(sorted(set(fields)))}")
     if placed:

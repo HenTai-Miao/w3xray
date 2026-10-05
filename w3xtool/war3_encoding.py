@@ -6,16 +6,18 @@ import codecs
 import locale
 
 
-_MULTIBYTE_WINDOWS_CODECS = frozenset((
-    "big5",
-    "cp932",
-    "cp949",
-    "cp950",
-    "euc-kr",
-    "gb18030",
-    "gbk",
-    "shift-jis",
-))
+_MULTIBYTE_WINDOWS_CODECS = frozenset(
+    (
+        "big5",
+        "cp932",
+        "cp949",
+        "cp950",
+        "euc-kr",
+        "gb18030",
+        "gbk",
+        "shift-jis",
+    )
+)
 
 
 def default_legacy_codecs() -> tuple[str, ...]:
@@ -40,10 +42,12 @@ def decode_warcraft_string(
         return raw.decode("utf-8")
     except UnicodeDecodeError:
         pass
-    for encoding in legacy_codecs if legacy_codecs is not None else default_legacy_codecs():
+    for encoding in (
+        legacy_codecs if legacy_codecs is not None else default_legacy_codecs()
+    ):
         try:
             return raw.decode(encoding)
-        except (LookupError, UnicodeDecodeError):
+        except LookupError, UnicodeDecodeError:
             continue
     if allow_latin1:
         return raw.decode("latin-1")

@@ -12,7 +12,12 @@ from w3xtool.game_data_source import DirectoryDataSource
 
 
 def _idx_row(encoding_key: bytes, offset: int, size: int) -> bytes:
-    return encoding_key[:9] + b"\x00" + offset.to_bytes(4, "big") + size.to_bytes(4, "little")
+    return (
+        encoding_key[:9]
+        + b"\x00"
+        + offset.to_bytes(4, "big")
+        + size.to_bytes(4, "little")
+    )
 
 
 def _path_map_source(root: Path, paths: tuple[str, ...]) -> CascDataSource:
@@ -44,10 +49,15 @@ def test_directory_source_exposes_sorted_known_path_inventory(tmp_path: Path) ->
     # Then: real spelling is retained and no native identity is fabricated.
     assert [entry.name for entry in entries] == ["Units\\HumanUnitStrings.txt"]
     assert all(entry.name_type is CascNameType.FULL for entry in entries)
-    assert all(entry.file_data_id is None and not entry.ckey and not entry.ekey for entry in entries)
+    assert all(
+        entry.file_data_id is None and not entry.ckey and not entry.ekey
+        for entry in entries
+    )
 
 
-def test_path_map_source_exposes_deterministic_known_path_inventory(tmp_path: Path) -> None:
+def test_path_map_source_exposes_deterministic_known_path_inventory(
+    tmp_path: Path,
+) -> None:
     # Given: a path map is intentionally not ordered by logical path.
     source = _path_map_source(
         tmp_path,

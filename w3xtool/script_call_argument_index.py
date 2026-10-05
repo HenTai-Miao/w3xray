@@ -60,19 +60,23 @@ def format_script_call_argument_index_tsv(index: ScriptCallArgumentIndex) -> str
     """Format call arguments as TSV."""
     rows = ["来源\t行号\t函数\t调用\t参数序号\t参数\t字符串\t对象码\t机制\t用途\t摘要"]
     for item in index.arguments:
-        rows.append("\t".join((
-            _tsv(item.source),
-            str(item.line),
-            _tsv(item.function),
-            _tsv(item.call),
-            str(item.position),
-            _tsv(item.argument),
-            _tsv(item.string_value),
-            _tsv("; ".join(item.object_codes)),
-            _tsv(item.mechanism),
-            _tsv(item.purpose),
-            _tsv(item.summary),
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    _tsv(item.source),
+                    str(item.line),
+                    _tsv(item.function),
+                    _tsv(item.call),
+                    str(item.position),
+                    _tsv(item.argument),
+                    _tsv(item.string_value),
+                    _tsv("; ".join(item.object_codes)),
+                    _tsv(item.mechanism),
+                    _tsv(item.purpose),
+                    _tsv(item.summary),
+                )
+            )
+        )
     return "\n".join(rows) + "\n"
 
 
@@ -92,16 +96,18 @@ def _arguments_for_script(
         line_no = bisect_right(line_starts, match.start())
         call = match.group(1)
         mechanism = _mechanism(call)
-        rows.extend(_argument_rows(
-            source,
-            line_no,
-            functions.name_for(source, line_no),
-            call,
-            mechanism,
-            raw_args,
-            code_args,
-            _line_fragment(text, match.start())[:160],
-        ))
+        rows.extend(
+            _argument_rows(
+                source,
+                line_no,
+                functions.name_for(source, line_no),
+                call,
+                mechanism,
+                raw_args,
+                code_args,
+                _line_fragment(text, match.start())[:160],
+            )
+        )
     return rows
 
 
@@ -120,19 +126,21 @@ def _argument_rows(
         code_arg = code_args[index - 1] if index <= len(code_args) else raw_arg
         object_codes = tuple(sorted(set(_codes_in(code_arg))))
         string_value = _first_string(raw_arg)
-        rows.append(ScriptCallArgument(
-            source=source,
-            line=line_no,
-            function=function,
-            call=call,
-            position=index,
-            argument=raw_arg,
-            string_value=string_value,
-            object_codes=object_codes,
-            mechanism=mechanism,
-            purpose=_purpose(call, mechanism, string_value, object_codes),
-            summary=summary,
-        ))
+        rows.append(
+            ScriptCallArgument(
+                source=source,
+                line=line_no,
+                function=function,
+                call=call,
+                position=index,
+                argument=raw_arg,
+                string_value=string_value,
+                object_codes=object_codes,
+                mechanism=mechanism,
+                purpose=_purpose(call, mechanism, string_value, object_codes),
+                summary=summary,
+            )
+        )
     return rows
 
 
@@ -210,10 +218,18 @@ def _looks_like_resource_path(value: str) -> bool:
 
 
 def _looks_like_save_key(call: str, mechanism: str, value: str) -> bool:
-    if mechanism.split(":", 1)[0] in {"GameCache", "Hashtable", "PlatformSave", "HashKey", "Sync"}:
+    if mechanism.split(":", 1)[0] in {
+        "GameCache",
+        "Hashtable",
+        "PlatformSave",
+        "HashKey",
+        "Sync",
+    }:
         return bool(value)
     lowered = f"{call} {value}".lower()
-    if any(word in lowered for word in ("save", "cache", "key", "load", "slot", "password")):
+    if any(
+        word in lowered for word in ("save", "cache", "key", "load", "slot", "password")
+    ):
         return True
     return "." in value and not _looks_like_resource_path(value)
 

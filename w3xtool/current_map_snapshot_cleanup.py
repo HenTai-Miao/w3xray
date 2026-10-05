@@ -24,8 +24,10 @@ _FILE_OPEN_FLAGS: Final = (
     | getattr(os, "O_NOINHERIT", 0)
     | getattr(os, "O_NOFOLLOW", 0)
 )
-_MARKER_READ_FLAGS: Final = os.O_RDONLY | _FILE_OPEN_FLAGS | getattr(
-    os, "O_NONBLOCK", getattr(os, "O_NDELAY", 0)
+_MARKER_READ_FLAGS: Final = (
+    os.O_RDONLY
+    | _FILE_OPEN_FLAGS
+    | getattr(os, "O_NONBLOCK", getattr(os, "O_NDELAY", 0))
 )
 _MARKER_CREATE_FLAGS: Final = os.O_CREAT | os.O_EXCL | os.O_WRONLY | _FILE_OPEN_FLAGS
 
@@ -152,7 +154,11 @@ def _valid_owner_marker(directory: Path) -> bool:
         path_after = _file_identity(os.lstat(marker))
     except OSError:
         return False
-    return content == _OWNER_MARKER_CONTENT and held_after == expected and path_after == expected
+    return (
+        content == _OWNER_MARKER_CONTENT
+        and held_after == expected
+        and path_after == expected
+    )
 
 
 def _file_identity(details: os.stat_result) -> FileIdentity:
@@ -161,6 +167,5 @@ def _file_identity(details: os.stat_result) -> FileIdentity:
 
 def _private_to_current_user(details: os.stat_result) -> bool:
     return os.name != "posix" or (
-        stat.S_IMODE(details.st_mode) & 0o077 == 0
-        and details.st_uid == os.geteuid()
+        stat.S_IMODE(details.st_mode) & 0o077 == 0 and details.st_uid == os.geteuid()
     )

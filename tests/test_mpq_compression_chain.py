@@ -64,16 +64,12 @@ def _sparse_encode(data: bytes) -> bytes:
     return len(data).to_bytes(4, "big") + controls[:1] + controls[1:] + literal
 
 
-@pytest.mark.parametrize(
-    "fixture_name,fixture", CHAIN_FIXTURES.items()
-)
+@pytest.mark.parametrize("fixture_name,fixture", CHAIN_FIXTURES.items())
 def test_stormlib_combined_compression_fixture(
     fixture_name: str, fixture: tuple[int, str]
 ) -> None:
     requested_mask, expected_sha256 = fixture
-    compressed, expected = _read_fixture(
-        fixture_name, requested_mask, expected_sha256
-    )
+    compressed, expected = _read_fixture(fixture_name, requested_mask, expected_sha256)
 
     actual = decompress_mpq_sector(compressed, len(expected))
 
@@ -91,7 +87,7 @@ def test_reverse_chain_decodes_zlib_before_sparse() -> None:
 
 def test_dual_adpcm_bits_are_rejected() -> None:
     with pytest.raises(MPQCompressionError, match="ADPCM"):
-        decompress_mpq_sector(b"\xC0payload", 64)
+        decompress_mpq_sector(b"\xc0payload", 64)
 
 
 def test_unknown_compression_bits_are_rejected() -> None:

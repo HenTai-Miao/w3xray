@@ -52,8 +52,12 @@ Expected: 上述文件均显示为 `D`（deleted），`w3xtool/aicli/` 与 `prom
 删除这一整段：
 
 ```python
-from .aicli.config import load_config as load_ai_config, save_config as save_ai_config, \
-    get_active as get_active_ai, AIConfig
+from .aicli.config import (
+    load_config as load_ai_config,
+    save_config as save_ai_config,
+    get_active as get_active_ai,
+    AIConfig,
+)
 from .aicli.runner import AIProfile, run_ai
 from .aicli.improve import annotate as ai_annotate, attribute as ai_attribute
 from .audit import audit_loaded
@@ -64,9 +68,9 @@ from .audit import audit_loaded
 删除这三行：
 
 ```python
-        self._ai_config = load_ai_config()   # AI CLI 配置（命令模板/当前选择）
-        self._settings_win = None
-        self._ai_busy = False                # AI 任务进行中标志（防并发 git 操作互相破坏）
+self._ai_config = load_ai_config()  # AI CLI 配置（命令模板/当前选择）
+self._settings_win = None
+self._ai_busy = False  # AI 任务进行中标志（防并发 git 操作互相破坏）
 ```
 
 - [ ] **Step 3: 删除顶栏「⚙ 设置」按钮（当前 108–110 行）**
@@ -74,9 +78,17 @@ from .audit import audit_loaded
 删除这一段（设置对话框是纯 AI CLI 配置，按钮一并删）：
 
 ```python
-        ctk.CTkButton(bar, text="⚙ 设置", font=(FONT, 13), width=70, height=38,
-                      fg_color=SECONDARY, hover_color=SECONDARY_HOVER, text_color=TEXT,
-                      command=self._open_settings).pack(side="left", padx=4)
+ctk.CTkButton(
+    bar,
+    text="⚙ 设置",
+    font=(FONT, 13),
+    width=70,
+    height=38,
+    fg_color=SECONDARY,
+    hover_color=SECONDARY_HOVER,
+    text_color=TEXT,
+    command=self._open_settings,
+).pack(side="left", padx=4)
 ```
 
 - [ ] **Step 4: 删除顶栏「AI 质检」按钮（当前 113–115 行）**
@@ -84,9 +96,17 @@ from .audit import audit_loaded
 删除这一段：
 
 ```python
-        ctk.CTkButton(bar, text="AI 质检", font=(FONT, 13), width=84, height=34,
-                      fg_color=SECONDARY, hover_color=SECONDARY_HOVER, text_color=TEXT,
-                      command=self._on_ai_audit).pack(side="right", padx=6)
+ctk.CTkButton(
+    bar,
+    text="AI 质检",
+    font=(FONT, 13),
+    width=84,
+    height=34,
+    fg_color=SECONDARY,
+    hover_color=SECONDARY_HOVER,
+    text_color=TEXT,
+    command=self._on_ai_audit,
+).pack(side="right", padx=6)
 ```
 
 - [ ] **Step 5: 删除第一段连续 AI 方法块**
@@ -135,10 +155,10 @@ from .audit import audit_loaded
 删除这段：
 
 ```python
-        try:
-            save_ai_config(self._ai_config)   # AI 配置也一并落盘，下次启动自动恢复
-        except Exception:
-            pass
+try:
+    save_ai_config(self._ai_config)  # AI 配置也一并落盘，下次启动自动恢复
+except Exception:
+    pass
 ```
 
 - [ ] **Step 10: 校验 `gui.py` 无 AI 残留**
@@ -193,7 +213,7 @@ git commit -m "refactor: 删除全部 AI 调用层与本地诊断功能
 把：
 
 ```python
-datas = [('prompts', 'prompts')]   # AI 提示词模板，运行时 AI 质检要读
+datas = [("prompts", "prompts")]  # AI 提示词模板，运行时 AI 质检要读
 ```
 
 改成：

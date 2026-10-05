@@ -3,6 +3,7 @@
 格式参考 w3x2lni frontend_doo.lua（装饰物），单位 doo 经 61/62 张真实地图逐字节验证。
 单位记录是变长的（物品/技能/掉落数决定长度），损坏/老格式时优雅降级、保留已读对象。
 """
+
 import math
 import os
 import struct
@@ -37,10 +38,10 @@ def _doodad(
     b = tid.encode("latin-1") + _i(var)
     b += _f(pos[0]) + _f(pos[1]) + _f(pos[2]) + _f(angle_rad)
     b += _f(scale[0]) + _f(scale[1]) + _f(scale[2])
-    if skin is not None:                 # 重制版：scale 后多 4 字节皮肤码
+    if skin is not None:  # 重制版：scale 后多 4 字节皮肤码
         b += skin.encode("latin-1")
     b += bytes([vis]) + bytes([life])
-    b += _i(-1)                          # 掉落列表指针
+    b += _i(-1)  # 掉落列表指针
     # 掉落表是嵌套的（集合→物品）；旧调用的扁平值继续编码为一个集合。
     encoded_sets = drop_sets if drop_sets is not None else ([drops] if drops else [])
     if encoded_sets:
@@ -50,7 +51,7 @@ def _doodad(
             for did, chance in entries:
                 b += did.encode("latin-1") + _i(chance)
     else:
-        b += _i(0)                       # 无掉落集合
+        b += _i(0)  # 无掉落集合
     b += _i(serial)
     return b
 
@@ -58,20 +59,39 @@ def _doodad(
 def _build_doo(doodads, version=8):
     b = b"W3do" + _i(version) + _i(11)
     b += _i(len(doodads)) + b"".join(doodads)
-    b += _i(0)                           # special head version
-    b += _i(0)                           # special count
+    b += _i(0)  # special head version
+    b += _i(0)  # special count
     return b
 
 
-def _unit(tid, var, pos, rot, scale, flags, player, hp, mana,
-          gold, ta, hlev, items, abils, serial, dropsets=None,
-          rng=(0, (0,)), color=-1, waygate=-1, v7=False):
+def _unit(
+    tid,
+    var,
+    pos,
+    rot,
+    scale,
+    flags,
+    player,
+    hp,
+    mana,
+    gold,
+    ta,
+    hlev,
+    items,
+    abils,
+    serial,
+    dropsets=None,
+    rng=(0, (0,)),
+    color=-1,
+    waygate=-1,
+    v7=False,
+):
     b = tid.encode("latin-1") + _i(var)
     b += _f(pos[0]) + _f(pos[1]) + _f(pos[2]) + _f(rot)
     b += _f(scale[0]) + _f(scale[1]) + _f(scale[2])
     b += bytes([flags]) + _i(player) + b"\x00\x00"
     b += _i(hp) + _i(mana)
-    b += _i(-1)                          # dropped-item-set 指针
+    b += _i(-1)  # dropped-item-set 指针
     dropsets = dropsets or []
     b += _i(len(dropsets))
     for s in dropsets:
@@ -80,7 +100,7 @@ def _unit(tid, var, pos, rot, scale, flags, player, hp, mana,
             b += did.encode("latin-1") + _i(chance)
     b += _i(gold) + _f(ta) + _i(hlev)
     if not v7:
-        b += _i(0) + _i(0) + _i(0)       # hero str/agi/int（仅 TFT 版本 8）
+        b += _i(0) + _i(0) + _i(0)  # hero str/agi/int（仅 TFT 版本 8）
     b += _i(len(items))
     for slot, iid in items:
         b += _i(slot) + iid.encode("latin-1")
@@ -98,7 +118,7 @@ def _unit(tid, var, pos, rot, scale, flags, player, hp, mana,
         for rid, rchance in rdata:
             b += rid.encode("latin-1") + _i(rchance)
     if not v7:
-        b += _i(color) + _i(waygate)     # 自定义颜色/传送门（仅 TFT 版本 8）
+        b += _i(color) + _i(waygate)  # 自定义颜色/传送门（仅 TFT 版本 8）
     b += _i(serial)
     return b
 
@@ -109,8 +129,9 @@ def _build_units(units, version=8, sub=11):
 
 class TestParseDoodads(unittest.TestCase):
     def test_single_doodad(self):
-        d = _doodad("LTlt", 1, (832.0, -2368.0, 0.0), math.pi,
-                    (0.9, 0.9, 0.9), 2, 100, [], 5)
+        d = _doodad(
+            "LTlt", 1, (832.0, -2368.0, 0.0), math.pi, (0.9, 0.9, 0.9), 2, 100, [], 5
+        )
         objs = parse_doodads(_build_doo([d]))
         self.assertEqual(len(objs), 1)
         o = objs[0]
@@ -118,13 +139,22 @@ class TestParseDoodads(unittest.TestCase):
         self.assertEqual(o.variation, 1)
         self.assertAlmostEqual(o.x, 832.0, places=2)
         self.assertAlmostEqual(o.y, -2368.0, places=2)
-        self.assertAlmostEqual(o.angle, 180.0, places=2)   # 弧度→度
+        self.assertAlmostEqual(o.angle, 180.0, places=2)  # 弧度→度
         self.assertEqual(o.life, 100)
         self.assertEqual(o.serial, 5)
 
     def test_doodad_with_drops(self):
-        d = _doodad("YOl0", 0, (0.0, 0.0, 0.0), 0.0, (1, 1, 1),
-                    2, 100, [("ratf", 100), ("rde1", 50)], 7)
+        d = _doodad(
+            "YOl0",
+            0,
+            (0.0, 0.0, 0.0),
+            0.0,
+            (1, 1, 1),
+            2,
+            100,
+            [("ratf", 100), ("rde1", 50)],
+            7,
+        )
         objs = parse_doodads(_build_doo([d]))
         self.assertEqual(objs[0].drops, [("ratf", 100), ("rde1", 50)])
 
@@ -148,7 +178,10 @@ class TestParseDoodads(unittest.TestCase):
 
         # Then: nested semantics and the old flat view are both complete.
         self.assertEqual(
-            [[(row.item_id, row.chance) for row in group.entries] for group in doodad.drop_sets],
+            [
+                [(row.item_id, row.chance) for row in group.entries]
+                for group in doodad.drop_sets
+            ],
             [[("ratf", 70), ("rde1", 30)], [("rde2", 100)]],
         )
         self.assertEqual([group.group_index for group in doodad.drop_sets], [0, 1])
@@ -166,8 +199,10 @@ class TestParseDoodads(unittest.TestCase):
         self.assertEqual(doodad.drops, [("ratf", 70), ("rde1", 30), ("rde2", 100)])
 
     def test_multiple_doodads(self):
-        ds = [_doodad("LTlt", i, (float(i), 0.0, 0.0), 0.0, (1, 1, 1),
-                      2, 100, [], i) for i in range(3)]
+        ds = [
+            _doodad("LTlt", i, (float(i), 0.0, 0.0), 0.0, (1, 1, 1), 2, 100, [], i)
+            for i in range(3)
+        ]
         objs = parse_doodads(_build_doo(ds))
         self.assertEqual(len(objs), 3)
         self.assertEqual([o.serial for o in objs], [0, 1, 2])
@@ -178,15 +213,30 @@ class TestParseDoodads(unittest.TestCase):
 
     def test_truncated_keeps_objects_before_corruption(self):
         good = _doodad("LTlt", 0, (1.0, 2.0, 0.0), 0.0, (1, 1, 1), 2, 100, [], 1)
-        data = b"W3do" + _i(8) + _i(11) + _i(3) + good + b"\x00\x03tr"  # 声明3个，第2个截断
+        data = (
+            b"W3do" + _i(8) + _i(11) + _i(3) + good + b"\x00\x03tr"
+        )  # 声明3个，第2个截断
         objs = parse_doodads(data)
         self.assertEqual(len(objs), 1)
         self.assertEqual(objs[0].serial, 1)
 
     def test_reforged_skin_field_auto_detected(self):
         # 重制版每条 scale 后多 4 字节皮肤码（版本仍 8/11）→ 自动识别带 skin 的布局
-        ds = [_doodad("LTlt", i, (float(i), 0.0, 0.0), 0.0, (1, 1, 1),
-                      2, 100, [], i, skin="LTlt") for i in range(4)]
+        ds = [
+            _doodad(
+                "LTlt",
+                i,
+                (float(i), 0.0, 0.0),
+                0.0,
+                (1, 1, 1),
+                2,
+                100,
+                [],
+                i,
+                skin="LTlt",
+            )
+            for i in range(4)
+        ]
         data = b"W3do" + _i(8) + _i(11) + _i(len(ds)) + b"".join(ds) + _i(0) + _i(0)
         objs = parse_doodads(data)
         self.assertEqual(len(objs), 4)
@@ -194,8 +244,18 @@ class TestParseDoodads(unittest.TestCase):
         self.assertEqual(objs[0].type_id, "LTlt")
 
     def test_reforged_skin_with_drops(self):
-        d = _doodad("YOl0", 0, (0.0, 0.0, 0.0), 0.0, (1, 1, 1),
-                    2, 100, [("ratf", 100)], 7, skin=" B00")
+        d = _doodad(
+            "YOl0",
+            0,
+            (0.0, 0.0, 0.0),
+            0.0,
+            (1, 1, 1),
+            2,
+            100,
+            [("ratf", 100)],
+            7,
+            skin=" B00",
+        )
         data = b"W3do" + _i(8) + _i(11) + _i(1) + d + _i(0) + _i(0)
         objs = parse_doodads(data)
         self.assertEqual(len(objs), 1)
@@ -204,8 +264,23 @@ class TestParseDoodads(unittest.TestCase):
 
 class TestParseUnits(unittest.TestCase):
     def test_single_unit(self):
-        u = _unit("hpea", 0, (100.0, 200.0, 0.0), 0.0, (1, 1, 1),
-                  2, 0, -1, -1, 0, -1.0, 1, [], [], 1)
+        u = _unit(
+            "hpea",
+            0,
+            (100.0, 200.0, 0.0),
+            0.0,
+            (1, 1, 1),
+            2,
+            0,
+            -1,
+            -1,
+            0,
+            -1.0,
+            1,
+            [],
+            [],
+            1,
+        )
         units = parse_units(_build_units([u]))
         self.assertEqual(len(units), 1)
         self.assertEqual(units[0].type_id, "hpea")
@@ -214,9 +289,23 @@ class TestParseUnits(unittest.TestCase):
         self.assertEqual(units[0].serial, 1)
 
     def test_unit_with_items_and_abilities(self):
-        u = _unit("Hpal", 0, (0.0, 0.0, 0.0), 0.0, (1, 1, 1), 2, 1, 500, 200,
-                  0, -1.0, 3, [(0, "ratf"), (1, "rde1")],
-                  [("AHbz", 1, 2)], 9)
+        u = _unit(
+            "Hpal",
+            0,
+            (0.0, 0.0, 0.0),
+            0.0,
+            (1, 1, 1),
+            2,
+            1,
+            500,
+            200,
+            0,
+            -1.0,
+            3,
+            [(0, "ratf"), (1, "rde1")],
+            [("AHbz", 1, 2)],
+            9,
+        )
         units = parse_units(_build_units([u]))
         self.assertEqual(units[0].items, [(0, "ratf"), (1, "rde1")])
         self.assertEqual(units[0].abilities, [("AHbz", 1, 2)])
@@ -240,7 +329,7 @@ class TestParseUnits(unittest.TestCase):
             [],
             [],
             77,
-            dropsets=[[('ratf', 50)], [('rde1', 25), ('rde2', 75)]],
+            dropsets=[[("ratf", 50)], [("rde1", 25), ("rde2", 75)]],
         )
 
         # When: the unit table is parsed.
@@ -262,17 +351,67 @@ class TestParseUnits(unittest.TestCase):
         )
 
     def test_multiple_units_stay_in_sync(self):
-        us = [_unit("hpea", 0, (float(i), 0.0, 0.0), 0.0, (1, 1, 1),
-                    2, i % 2, -1, -1, 0, -1.0, 1, [], [], i) for i in range(4)]
+        us = [
+            _unit(
+                "hpea",
+                0,
+                (float(i), 0.0, 0.0),
+                0.0,
+                (1, 1, 1),
+                2,
+                i % 2,
+                -1,
+                -1,
+                0,
+                -1.0,
+                1,
+                [],
+                [],
+                i,
+            )
+            for i in range(4)
+        ]
         units = parse_units(_build_units(us))
         self.assertEqual(len(units), 4)
         self.assertEqual([u.serial for u in units], [0, 1, 2, 3])
 
     def test_random_flag_variants(self):
-        u0 = _unit("uDNR", 0, (0.0, 0.0, 0.0), 0.0, (1, 1, 1), 2, 0, -1, -1,
-                   0, -1.0, 1, [], [], 1, rng=(0, (0,)))
-        u2 = _unit("uDNR", 0, (0.0, 0.0, 0.0), 0.0, (1, 1, 1), 2, 0, -1, -1,
-                   0, -1.0, 1, [], [], 2, rng=(2, [("hfoo", 50), ("hkni", 50)]))
+        u0 = _unit(
+            "uDNR",
+            0,
+            (0.0, 0.0, 0.0),
+            0.0,
+            (1, 1, 1),
+            2,
+            0,
+            -1,
+            -1,
+            0,
+            -1.0,
+            1,
+            [],
+            [],
+            1,
+            rng=(0, (0,)),
+        )
+        u2 = _unit(
+            "uDNR",
+            0,
+            (0.0, 0.0, 0.0),
+            0.0,
+            (1, 1, 1),
+            2,
+            0,
+            -1,
+            -1,
+            0,
+            -1.0,
+            1,
+            [],
+            [],
+            2,
+            rng=(2, [("hfoo", 50), ("hkni", 50)]),
+        )
         units = parse_units(_build_units([u0, u2]))
         self.assertEqual(len(units), 2)
 
@@ -288,9 +427,24 @@ class TestParseUnits(unittest.TestCase):
 
     def test_version7_classic_layout(self):
         # 经典 RoC（版本 7）单位记录：无英雄三围、无自定义颜色/传送门
-        u = _unit("Hpal", 0, (100.0, 200.0, 0.0), 0.0, (1, 1, 1), 2, 1,
-                  500, 200, 0, -1.0, 3, [(0, "ratf")], [("AHbz", 1, 2)], 9,
-                  v7=True)
+        u = _unit(
+            "Hpal",
+            0,
+            (100.0, 200.0, 0.0),
+            0.0,
+            (1, 1, 1),
+            2,
+            1,
+            500,
+            200,
+            0,
+            -1.0,
+            3,
+            [(0, "ratf")],
+            [("AHbz", 1, 2)],
+            9,
+            v7=True,
+        )
         units = parse_units(_build_units([u], version=7, sub=9))
         self.assertEqual(len(units), 1)
         self.assertEqual(units[0].type_id, "Hpal")
@@ -302,7 +456,7 @@ class TestParseUnits(unittest.TestCase):
         # 真实地图 TheRiseOfEyes 的 war3mapUnits.doo —— 版本 7（RoC 布局），1 个 'sloc'。
         # 旧解析器按 TFT(版本 8) 读会错位 → 0/1；版本感知后应完整读出。
         data = open(os.path.join(FIX, "riseofeyes.units.v7.doo"), "rb").read()
-        self.assertEqual(struct.unpack_from("<i", data, 4)[0], 7)   # 确认确为版本 7
+        self.assertEqual(struct.unpack_from("<i", data, 4)[0], 7)  # 确认确为版本 7
         units = parse_units(data)
         self.assertEqual(len(units), 1)
         self.assertEqual(units[0].type_id, "sloc")
@@ -322,20 +476,42 @@ class _PreplacedArchive:
 class TestPreplacedIntegration(unittest.TestCase):
     def test_add_preplaced_fills_mapdata(self):
         from w3xtool.api import _add_preplaced, MapData
-        doo = _build_doo([_doodad("LTlt", 0, (1.0, 2.0, 0.0), 0.0,
-                                  (1, 1, 1), 2, 100, [], 1)])
-        udoo = _build_units([_unit("hpea", 0, (0.0, 0.0, 0.0), 0.0,
-                                   (1, 1, 1), 2, 0, -1, -1, 0, -1.0, 1,
-                                   [], [], 1)])
+
+        doo = _build_doo(
+            [_doodad("LTlt", 0, (1.0, 2.0, 0.0), 0.0, (1, 1, 1), 2, 100, [], 1)]
+        )
+        udoo = _build_units(
+            [
+                _unit(
+                    "hpea",
+                    0,
+                    (0.0, 0.0, 0.0),
+                    0.0,
+                    (1, 1, 1),
+                    2,
+                    0,
+                    -1,
+                    -1,
+                    0,
+                    -1.0,
+                    1,
+                    [],
+                    [],
+                    1,
+                )
+            ]
+        )
         md = MapData(path="x", name="x")
-        _add_preplaced(md, _PreplacedArchive(
-            {"war3map.doo": doo, "war3mapUnits.doo": udoo}))
+        _add_preplaced(
+            md, _PreplacedArchive({"war3map.doo": doo, "war3mapUnits.doo": udoo})
+        )
         self.assertEqual(len(md.doodads), 1)
         self.assertEqual(len(md.units), 1)
         self.assertEqual(md.units[0].type_id, "hpea")
 
     def test_add_preplaced_no_files_is_noop(self):
         from w3xtool.api import _add_preplaced, MapData
+
         md = MapData(path="x", name="x")
         _add_preplaced(md, _PreplacedArchive({}))
         self.assertEqual(md.doodads, [])

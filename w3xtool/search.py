@@ -15,6 +15,7 @@
 节点：('like', segs, anchored_start, anchored_end) | ('eq', needle)
       | ('and', lhs, rhs) | ('or', lhs, rhs)
 """
+
 from __future__ import annotations
 
 
@@ -46,7 +47,7 @@ def _eq_score(query: str, text: str):
         right_ok = not (tail_word and end < len(text) and _is_word_char(text[end]))
         if left_ok and right_ok:
             return 1000 - idx
-        start = idx + 1            # 这处粘进了更长的词，找下一处
+        start = idx + 1  # 这处粘进了更长的词，找下一处
 
 
 def _like_score(segs, anchored_start: bool, anchored_end: bool, text: str):
@@ -63,11 +64,11 @@ def _like_score(segs, anchored_start: bool, anchored_end: bool, text: str):
     for i, seg in enumerate(segs):
         last = i == n - 1
         if i == 0 and anchored_start:
-            if not text.startswith(seg):       # 首段须贴开头
+            if not text.startswith(seg):  # 首段须贴开头
                 return None
             idx = 0
         elif last and anchored_end:
-            tail = len(text) - len(seg)         # 末段须贴结尾，且在游标之后
+            tail = len(text) - len(seg)  # 末段须贴结尾，且在游标之后
             if tail < pos or not text.endswith(seg):
                 return None
             idx = tail
@@ -98,25 +99,34 @@ def _lex(query: str):
             i += 1
             continue
         if ch == "(":
-            toks.append(("lp",)); i += 1; continue
+            toks.append(("lp",))
+            i += 1
+            continue
         if ch == ")":
-            toks.append(("rp",)); i += 1; continue
+            toks.append(("rp",))
+            i += 1
+            continue
         if ch == "&" and i + 1 < n and query[i + 1] == "&":
-            toks.append(("and",)); i += 2; continue
+            toks.append(("and",))
+            i += 2
+            continue
         if ch == "|" and i + 1 < n and query[i + 1] == "|":
-            toks.append(("or",)); i += 2; continue
+            toks.append(("or",))
+            i += 2
+            continue
         if ch == "=" and i + 1 < n and query[i + 1] == '"':
             j = i + 2
             buf = []
-            while j < n and query[j] != '"':       # 引号内一切字面量
-                buf.append(query[j]); j += 1
-            if j < n:                                # 跳过闭合引号（未闭合则到行尾）
+            while j < n and query[j] != '"':  # 引号内一切字面量
+                buf.append(query[j])
+                j += 1
+            if j < n:  # 跳过闭合引号（未闭合则到行尾）
                 j += 1
             toks.append(("eq", "".join(buf)))
             i = j
             continue
         # 否则是一个 LIKE 词，读到下一个边界为止
-        parts = []          # 元素: ('pct',) 通配符 | ('lit', ch) 字面量
+        parts = []  # 元素: ('pct',) 通配符 | ('lit', ch) 字面量
         has_pct = False
         while i < n:
             c = query[i]
@@ -128,14 +138,20 @@ def _lex(query: str):
                 break
             if c == "=" and i + 1 < n and query[i + 1] == '"':
                 break
-            if c == "\\" and i + 1 < n:              # 转义：下一个字符取字面量
-                parts.append(("lit", query[i + 1])); i += 2; continue
+            if c == "\\" and i + 1 < n:  # 转义：下一个字符取字面量
+                parts.append(("lit", query[i + 1]))
+                i += 2
+                continue
             if c == "%":
-                parts.append(("pct",)); has_pct = True; i += 1; continue
-            parts.append(("lit", c)); i += 1
+                parts.append(("pct",))
+                has_pct = True
+                i += 1
+                continue
+            parts.append(("lit", c))
+            i += 1
         if not has_pct:
             needle = "".join(p[1] for p in parts)
-            if needle:                               # 裸词 → %词%（包含）
+            if needle:  # 裸词 → %词%（包含）
                 toks.append(("like", [needle.lower()], False, False))
             continue
         # 含 %：按 % 切成字面段
@@ -143,7 +159,8 @@ def _lex(query: str):
         for p in parts:
             if p[0] == "pct":
                 if cur:
-                    segs.append("".join(cur).lower()); cur = []
+                    segs.append("".join(cur).lower())
+                    cur = []
             else:
                 cur.append(p[1])
         if cur:
@@ -170,22 +187,22 @@ _PREC = {"and": 2, "or": 1}
 
 
 def _parse(toks):
-    out = []          # 操作数(AST 节点)栈
-    ops = []          # 运算符栈：'and' / 'or' / 'lp'
-    group_base = []   # 每遇 '(' 记录当时 out 的长度，用于判断该组是否产出了操作数
+    out = []  # 操作数(AST 节点)栈
+    ops = []  # 运算符栈：'and' / 'or' / 'lp'
+    group_base = []  # 每遇 '(' 记录当时 out 的长度，用于判断该组是否产出了操作数
     prev_value = False  # 上一个 token 是否产出了一个值(操作数或非空分组)
 
     def apply_op():
         op = ops.pop()
-        if len(out) < 2:                # 游离运算符(操作数不足)→ 丢弃，保留已有操作数
+        if len(out) < 2:  # 游离运算符(操作数不足)→ 丢弃，保留已有操作数
             return
         r = out.pop()
-        l = out.pop()
-        kids = list(l[1]) if isinstance(l, tuple) and l[0] == op else [l]
+        left = out.pop()
+        kids = list(left[1]) if isinstance(left, tuple) and left[0] == op else [left]
         kids += list(r[1]) if isinstance(r, tuple) and r[0] == op else [r]
         out.append((op, kids))
 
-    def push_op(op):                    # 左结合：弹出栈顶同/更高优先级运算符
+    def push_op(op):  # 左结合：弹出栈顶同/更高优先级运算符
         while ops and ops[-1] != "lp" and _PREC[ops[-1]] >= _PREC[op]:
             apply_op()
         ops.append(op)
@@ -193,32 +210,32 @@ def _parse(toks):
     for t in toks:
         k = t[0]
         if k in ("like", "eq"):
-            if prev_value:              # 相邻操作数 → 隐式 &&
+            if prev_value:  # 相邻操作数 → 隐式 &&
                 push_op("and")
             out.append(t)
             prev_value = True
         elif k in ("and", "or"):
-            if not prev_value:          # 缺左操作数的游离运算符 → 跳过
+            if not prev_value:  # 缺左操作数的游离运算符 → 跳过
                 continue
             push_op(k)
             prev_value = False
         elif k == "lp":
-            if prev_value:              # 分组前的相邻操作数 → 隐式 &&
+            if prev_value:  # 分组前的相邻操作数 → 隐式 &&
                 push_op("and")
             ops.append("lp")
             group_base.append(len(out))
             prev_value = False
         elif k == "rp":
-            if not group_base:          # 多余的 ')' → 忽略
+            if not group_base:  # 多余的 ')' → 忽略
                 continue
             while ops and ops[-1] != "lp":
                 apply_op()
             if ops and ops[-1] == "lp":
                 ops.pop()
             base = group_base.pop()
-            prev_value = len(out) > base   # 分组产出了操作数才算一个值
+            prev_value = len(out) > base  # 分组产出了操作数才算一个值
 
-    while ops:                          # 收尾：弹出剩余运算符，丢弃未配对的 '('
+    while ops:  # 收尾：弹出剩余运算符，丢弃未配对的 '('
         if ops[-1] == "lp":
             ops.pop()
             if group_base:
@@ -229,7 +246,7 @@ def _parse(toks):
     if not out:
         return None
     node = out[0]
-    for extra in out[1:]:               # 防御：多余残留操作数用 && 兜合(正常不会发生)
+    for extra in out[1:]:  # 防御：多余残留操作数用 && 兜合(正常不会发生)
         node = ("and", [node, extra])
     return node
 
@@ -240,20 +257,20 @@ def _eval(node, text: str, text_lower: str):
     # （_eval 曾是递归，约 1000 层交替括号即 RecursionError，违背本模块设计承诺）。
     if node is None:
         return 0
-    order = []                       # 前序：父在前、子在后
+    order = []  # 前序：父在前、子在后
     stack = [node]
     while stack:
         n = stack.pop()
         order.append(n)
         if n[0] in ("and", "or"):
-            stack.extend(n[1])       # 子节点稍后出栈 → 排在父之后
-    val = {}                         # id(节点) -> 分值（None 表示未命中）
-    for n in reversed(order):        # 逆序 = 后序：先算子、再算父
+            stack.extend(n[1])  # 子节点稍后出栈 → 排在父之后
+    val = {}  # id(节点) -> 分值（None 表示未命中）
+    for n in reversed(order):  # 逆序 = 后序：先算子、再算父
         tag = n[0]
         if tag == "like":
             val[id(n)] = _like_score(n[1], n[2], n[3], text_lower)
         elif tag == "eq":
-            val[id(n)] = _eq_score(n[1], text)         # 区分大小写：用原文
+            val[id(n)] = _eq_score(n[1], text)  # 区分大小写：用原文
         elif tag == "and":
             total, miss = 0, False
             for c in n[1]:

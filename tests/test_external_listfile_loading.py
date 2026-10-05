@@ -38,13 +38,17 @@ class _Archive:
         return
 
 
-def test_read_external_listfile_preserves_unc_name_for_unsafe_report(tmp_path: Path) -> None:
+def test_read_external_listfile_preserves_unc_name_for_unsafe_report(
+    tmp_path: Path,
+) -> None:
     # Given: a real listfile containing a forward-slash UNC path.
     listfile = tmp_path / "listfile.txt"
     listfile.write_text("//server/share/file.blp\n", encoding="utf-8")
 
     # When: names cross the real file parser and archive validation boundary.
-    report = validate_external_names(_Archive(set()), read_external_listfile(str(listfile)))
+    report = validate_external_names(
+        _Archive(set()), read_external_listfile(str(listfile))
+    )
 
     # Then: the path is reported as unsafe instead of disappearing as a comment.
     assert report.unsafe == ("//server/share/file.blp",)
@@ -115,13 +119,19 @@ def test_gui_loader_builds_schema_and_external_context_from_selected_sources() -
     assert captured[0].author_bundle_path == "author-bundle"
 
 
-def test_gui_loader_preserves_context_with_only_client_base_objects(monkeypatch) -> None:
+def test_gui_loader_preserves_context_with_only_client_base_objects(
+    monkeypatch,
+) -> None:
     # Given: selected game data yielded object tables but no TriggerData or listfile data.
     context = MapLoadContext(
-        client_base_objects=(ClientBaseObject("hX01", "单位", (("名称", "Client Base"),)),),
+        client_base_objects=(
+            ClientBaseObject("hX01", "单位", (("名称", "Client Base"),)),
+        ),
     )
     captured: list[MapLoadContext | None] = []
-    monkeypatch.setattr("w3xtool.gui_loader.build_map_load_context", lambda **_kwargs: context)
+    monkeypatch.setattr(
+        "w3xtool.gui_loader.build_map_load_context", lambda **_kwargs: context
+    )
 
     def load(path: str, *, load_context: MapLoadContext | None = None) -> MapData:
         captured.append(load_context)
@@ -137,7 +147,9 @@ def test_gui_loader_preserves_context_with_only_client_base_objects(monkeypatch)
         return LoadedMap(active, [], [], None, views, campaign_path)
 
     # When: the normal GUI path loader hands off the built context.
-    load_path_payload("fixture.w3x", load=load, prepare=prepare, game_data_path="client-data")
+    load_path_payload(
+        "fixture.w3x", load=load, prepare=prepare, game_data_path="client-data"
+    )
 
     # Then: object-only enrichment reaches the map loader unchanged.
     assert captured == [context]

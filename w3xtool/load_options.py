@@ -50,6 +50,8 @@ def normalize_load_options(raw: Mapping[str, bool] | None) -> dict[str, bool]:
     return {key: bool(raw.get(key, default)) for key, default in defaults.items()}
 
 
-def load_options_from_config(config: Mapping[str, Mapping[str, bool]]) -> dict[str, bool]:
+def load_options_from_config(
+    config: Mapping[str, Mapping[str, bool]],
+) -> dict[str, bool]:
     raw = config.get("load_options")
     return normalize_load_options(raw if isinstance(raw, Mapping) else None)

@@ -10,7 +10,11 @@ import unittest
 
 from w3xtool.api import GameObject, MapData
 from w3xtool.knowledge_pack import write_knowledge_pack
-from w3xtool.trigger_schema import TriggerFunctionKind, TriggerFunctionSchema, TriggerSchema
+from w3xtool.trigger_schema import (
+    TriggerFunctionKind,
+    TriggerFunctionSchema,
+    TriggerSchema,
+)
 from w3xtool.trigger_exports import format_trigger_eca_tsv, format_trigger_tree_tsv
 from w3xtool.wtg import TriggerParseFailure, UnknownTriggerFunction, parse_wtg
 from w3xtool.wtg_eca import TriggerEcaParameter
@@ -25,13 +29,7 @@ def _z(text: str) -> bytes:
 
 
 def _param(parameter_type: int, value: str, nested: bytes = b"") -> bytes:
-    return (
-        _i(parameter_type)
-        + _z(value)
-        + _i(1 if nested else 0)
-        + nested
-        + _i(0)
-    )
+    return _i(parameter_type) + _z(value) + _i(1 if nested else 0) + nested + _i(0)
 
 
 def _eca(
@@ -58,7 +56,14 @@ def _child_eca(
     enabled: int,
     params: tuple[bytes, ...],
 ) -> bytes:
-    return _i(function_type) + _i(branch) + _z(name) + _i(enabled) + b"".join(params) + _i(0)
+    return (
+        _i(function_type)
+        + _i(branch)
+        + _z(name)
+        + _i(enabled)
+        + b"".join(params)
+        + _i(0)
+    )
 
 
 def _trigger_header(name: str, eca_count: int) -> bytes:
@@ -120,8 +125,12 @@ class WtgEcaExportTest(unittest.TestCase):
         self.assertEqual(action.name, "CreateNUnitsAtLoc")
         self.assertEqual(action.function_type, 2)
         self.assertTrue(action.is_enabled)
-        self.assertEqual([param.value for param in action.parameters], ["1", "H001", "比较"])
-        self.assertEqual(action.parameters[2].nested_function.name, "OperatorCompareInteger")
+        self.assertEqual(
+            [param.value for param in action.parameters], ["1", "H001", "比较"]
+        )
+        self.assertEqual(
+            action.parameters[2].nested_function.name, "OperatorCompareInteger"
+        )
         self.assertEqual(action.children[0].name, "DisplayTextToForce")
         self.assertFalse(action.children[0].is_enabled)
 
@@ -133,24 +142,40 @@ class WtgEcaExportTest(unittest.TestCase):
         text = format_trigger_eca_tsv(summary)
 
         # Then: the report shows function rows, parameter rows and hierarchy depth.
-        self.assertIn("触发器\t深度\t行类型\t函数类型\t函数名\t启用\t参数序号\t参数类型\t参数值", text)
+        self.assertIn(
+            "触发器\t深度\t行类型\t函数类型\t函数名\t启用\t参数序号\t参数类型\t参数值",
+            text,
+        )
         self.assertIn("初始化\t0\t顶层函数\t动作\tCreateNUnitsAtLoc\t是", text)
-        self.assertIn("初始化\t0\t参数\t动作\tCreateNUnitsAtLoc\t是\t2\t函数\t比较", text)
+        self.assertIn(
+            "初始化\t0\t参数\t动作\tCreateNUnitsAtLoc\t是\t2\t函数\t比较", text
+        )
         self.assertIn("初始化\t1\t嵌套函数\t调用\tOperatorCompareInteger\t是", text)
         self.assertIn("初始化\t1\t子ECA\t动作\tDisplayTextToForce\t否", text)
 
-    def test_trigger_eca_tsv_exports_recursive_array_indexes_and_semantics(self) -> None:
+    def test_trigger_eca_tsv_exports_recursive_array_indexes_and_semantics(
+        self,
+    ) -> None:
         # Given: an ECA tree with ordinary parameters, nested/child functions,
         # and two recursively nested array-index parameters.
         summary = parse_wtg(_classic_wtg_with_eca(), _schema())
         final_index = TriggerEcaParameter(0, "3")
         nested_index = TriggerEcaParameter(
-            1, "Indexes", have_array_indexer=1, array_indexer=final_index,
+            1,
+            "Indexes",
+            have_array_indexer=1,
+            array_indexer=final_index,
         )
         array = TriggerEcaParameter(
-            1, "Numbers", have_array_indexer=1, array_indexer=nested_index,
+            1,
+            "Numbers",
+            have_array_indexer=1,
+            array_indexer=nested_index,
         )
-        action = replace(summary.eca_functions[0], parameters=summary.eca_functions[0].parameters + (array,))
+        action = replace(
+            summary.eca_functions[0],
+            parameters=summary.eca_functions[0].parameters + (array,),
+        )
         summary = replace(summary, eca_functions=(action,))
 
         # When: semantic context is supplied to the compatible TSV API.
@@ -219,24 +244,31 @@ class WtgEcaExportTest(unittest.TestCase):
             self.assertIn("开始游戏", text)
             self.assertIn("圣骑士(H001)", text)
 
+
 def _schema() -> TriggerSchema:
     entries = (
-        (TriggerFunctionKind.ACTION, "CreateNUnitsAtLoc", ("integer", "unitcode", "integer")),
+        (
+            TriggerFunctionKind.ACTION,
+            "CreateNUnitsAtLoc",
+            ("integer", "unitcode", "integer"),
+        ),
         (TriggerFunctionKind.CALL, "OperatorCompareInteger", ("integer", "integer")),
         (TriggerFunctionKind.ACTION, "DisplayTextToForce", ("StringExt",)),
     )
-    return TriggerSchema({
-        (kind, name.lower()): TriggerFunctionSchema(
-            kind=kind,
-            name=name,
-            category="",
-            return_type=None,
-            parameter_types=params,
-            display_name=name,
-            template=None,
-        )
-        for kind, name, params in entries
-    })
+    return TriggerSchema(
+        {
+            (kind, name.lower()): TriggerFunctionSchema(
+                kind=kind,
+                name=name,
+                category="",
+                return_type=None,
+                parameter_types=params,
+                display_name=name,
+                template=None,
+            )
+            for kind, name, params in entries
+        }
+    )
 
 
 if __name__ == "__main__":

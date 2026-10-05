@@ -75,16 +75,20 @@ def format_script_call_catalog_tsv(catalog: ScriptCallCatalog) -> str:
     """Format a grouped call catalog as TSV."""
     rows = ["函数\t次数\t来源\t行号\t机制\t对象码\t字符串参数\t示例"]
     for row in catalog.rows:
-        rows.append("\t".join((
-            _tsv(row.function),
-            str(row.count),
-            _tsv("; ".join(row.sources)),
-            _tsv("; ".join(row.lines)),
-            _tsv("; ".join(row.mechanisms)),
-            _tsv("; ".join(row.object_codes)),
-            _tsv("; ".join(row.string_args)),
-            _tsv(" | ".join(row.examples)),
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    _tsv(row.function),
+                    str(row.count),
+                    _tsv("; ".join(row.sources)),
+                    _tsv("; ".join(row.lines)),
+                    _tsv("; ".join(row.mechanisms)),
+                    _tsv("; ".join(row.object_codes)),
+                    _tsv("; ".join(row.string_args)),
+                    _tsv(" | ".join(row.examples)),
+                )
+            )
+        )
     return "\n".join(rows) + "\n"
 
 
@@ -100,15 +104,17 @@ def _scan_script_calls(source: str, text: str) -> list[ScriptCall]:
         code_args = extract_call_args(code_text, match.end())
         object_codes = tuple(sorted(set(_codes_in(" ".join(code_args)))))
         string_args = _string_args(args, object_codes)
-        rows.append(ScriptCall(
-            function=name,
-            source=source,
-            line=bisect_right(line_starts, match.start()),
-            mechanism=_mechanism(name, object_codes),
-            object_codes=object_codes,
-            string_args=string_args,
-            example=_line_fragment(text, match.start())[:160],
-        ))
+        rows.append(
+            ScriptCall(
+                function=name,
+                source=source,
+                line=bisect_right(line_starts, match.start()),
+                mechanism=_mechanism(name, object_codes),
+                object_codes=object_codes,
+                string_args=string_args,
+                example=_line_fragment(text, match.start())[:160],
+            )
+        )
     return rows
 
 
@@ -119,16 +125,24 @@ def _group_calls(calls: Iterable[ScriptCall]) -> tuple[ScriptCallRow, ...]:
     rows: list[ScriptCallRow] = []
     for function in sorted(grouped):
         items = grouped[function]
-        rows.append(ScriptCallRow(
-            function=function,
-            count=len(items),
-            sources=tuple(sorted({item.source for item in items})),
-            lines=_line_summary(items),
-            mechanisms=_unique_ordered(item.mechanism for item in items),
-            object_codes=tuple(sorted({code for item in items for code in item.object_codes})),
-            string_args=_unique_ordered(arg for item in items for arg in item.string_args),
-            examples=_unique_ordered(item.example for item in items if item.example)[:3],
-        ))
+        rows.append(
+            ScriptCallRow(
+                function=function,
+                count=len(items),
+                sources=tuple(sorted({item.source for item in items})),
+                lines=_line_summary(items),
+                mechanisms=_unique_ordered(item.mechanism for item in items),
+                object_codes=tuple(
+                    sorted({code for item in items for code in item.object_codes})
+                ),
+                string_args=_unique_ordered(
+                    arg for item in items for arg in item.string_args
+                ),
+                examples=_unique_ordered(
+                    item.example for item in items if item.example
+                )[:3],
+            )
+        )
     return tuple(rows)
 
 
@@ -150,10 +164,13 @@ def _mechanism(name: str, object_codes: tuple[str, ...]) -> str:
     return "普通调用"
 
 
-def _string_args(args: tuple[str, ...], object_codes: tuple[str, ...]) -> tuple[str, ...]:
+def _string_args(
+    args: tuple[str, ...], object_codes: tuple[str, ...]
+) -> tuple[str, ...]:
     code_set = set(object_codes)
     return _unique_ordered(
-        value for value in _quoted_values(" ".join(args))
+        value
+        for value in _quoted_values(" ".join(args))
         if value and value not in code_set
     )
 

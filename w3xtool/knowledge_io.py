@@ -31,9 +31,13 @@ class KnowledgeWriteRecorder:
     def record_relative(self, path: str, result: SafeWriteResult) -> None:
         """Record a result already anchored to this session's relative path."""
         written = result.status is SafeWriteStatus.WRITTEN
-        error = None if written else _clean_write_error(
-            result.error or result.status.value,
-            self._publication_root,
+        error = (
+            None
+            if written
+            else _clean_write_error(
+                result.error or result.status.value,
+                self._publication_root,
+            )
         )
         self._items[path] = KnowledgeWriteItem(path, written, result.size, error)
 
@@ -46,7 +50,9 @@ class KnowledgeWriteRecorder:
 
     def report(self) -> KnowledgeWriteReport:
         """Return an immutable, deterministic snapshot of this session."""
-        items = tuple(self._items[path] for path in sorted(self._items, key=str.casefold))
+        items = tuple(
+            self._items[path] for path in sorted(self._items, key=str.casefold)
+        )
         return KnowledgeWriteReport(items)
 
     @staticmethod
@@ -115,8 +121,7 @@ def safe_filename(name: str) -> str:
     """Return a filename safe on Windows and Unix-like filesystems."""
     display_name = single_line_text(name, max_chars=240)
     cleaned = "".join(
-        "_" if char in '<>:"/\\|?*' else char
-        for char in display_name
+        "_" if char in '<>:"/\\|?*' else char for char in display_name
     ).strip(" .")
     return cleaned or "未命名"
 
@@ -132,5 +137,7 @@ def format_lines(lines: Iterable[str]) -> str:
 
 
 def _clean_write_error(error: str, root: str) -> str:
-    cleaned = error.replace(os.path.realpath(root), "<output>").replace(root, "<output>")
+    cleaned = error.replace(os.path.realpath(root), "<output>").replace(
+        root, "<output>"
+    )
     return redact_user_text(cleaned)[:512]

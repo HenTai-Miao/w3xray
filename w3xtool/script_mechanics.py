@@ -15,14 +15,38 @@ except ImportError:
 _IDENTIFIER_TOKEN_RE = re.compile(r"(?<!\w)([A-Za-z_][A-Za-z0-9_]*)(?!\w)")
 
 _NEED_MARKS = {
-    "ChooseRandomItem": ("随机物品池", "按物品等级/类别从暴雪默认随机物品表选择，不直接给出固定 4cc。"),
-    "ChooseRandomItemBJ": ("随机物品池", "按物品等级/类别从暴雪默认随机物品表选择，不直接给出固定 4cc。"),
-    "ChooseRandomItemEx": ("随机物品池", "按物品等级/类别从暴雪默认随机物品表选择，不直接给出固定 4cc。"),
-    "ChooseRandomItemExBJ": ("随机物品池", "按物品等级/类别从暴雪默认随机物品表选择，不直接给出固定 4cc。"),
-    "ChooseRandomCreep": ("随机野怪池", "按等级从暴雪默认野怪池选择，不直接给出固定 4cc。"),
-    "ChooseRandomCreepBJ": ("随机野怪池", "按等级从暴雪默认野怪池选择，不直接给出固定 4cc。"),
-    "ChooseRandomNPBuilding": ("随机中立建筑池", "从暴雪默认中立建筑池选择，不直接给出固定 4cc。"),
-    "InitNeutralBuildings": ("中立建筑初始化", "初始化商店、酒馆等中立建筑库存，具体对象来自暴雪默认池。"),
+    "ChooseRandomItem": (
+        "随机物品池",
+        "按物品等级/类别从暴雪默认随机物品表选择，不直接给出固定 4cc。",
+    ),
+    "ChooseRandomItemBJ": (
+        "随机物品池",
+        "按物品等级/类别从暴雪默认随机物品表选择，不直接给出固定 4cc。",
+    ),
+    "ChooseRandomItemEx": (
+        "随机物品池",
+        "按物品等级/类别从暴雪默认随机物品表选择，不直接给出固定 4cc。",
+    ),
+    "ChooseRandomItemExBJ": (
+        "随机物品池",
+        "按物品等级/类别从暴雪默认随机物品表选择，不直接给出固定 4cc。",
+    ),
+    "ChooseRandomCreep": (
+        "随机野怪池",
+        "按等级从暴雪默认野怪池选择，不直接给出固定 4cc。",
+    ),
+    "ChooseRandomCreepBJ": (
+        "随机野怪池",
+        "按等级从暴雪默认野怪池选择，不直接给出固定 4cc。",
+    ),
+    "ChooseRandomNPBuilding": (
+        "随机中立建筑池",
+        "从暴雪默认中立建筑池选择，不直接给出固定 4cc。",
+    ),
+    "InitNeutralBuildings": (
+        "中立建筑初始化",
+        "初始化商店、酒馆等中立建筑库存，具体对象来自暴雪默认池。",
+    ),
 }
 
 
@@ -84,7 +108,11 @@ def merge_implicit_object_refs(out: dict[str, set[str]], script: str) -> None:
 def format_script_mechanism_report(script: str) -> str:
     features, implicit = scan_script_features(script)
     marks = scan_script_need_marks(script)
-    lines = [f"脚本特征：{len(features)}", f"隐式对象码：{len(implicit)}", f"运行时默认池：{len(marks)}"]
+    lines = [
+        f"脚本特征：{len(features)}",
+        f"隐式对象码：{len(implicit)}",
+        f"运行时默认池：{len(marks)}",
+    ]
     if features:
         lines.append("")
         lines.append("特征：")
@@ -96,7 +124,9 @@ def format_script_mechanism_report(script: str) -> str:
     if marks:
         lines.append("")
         lines.append("运行时默认池：")
-        lines.extend(f"- {mark.label}: {mark.function} · {mark.detail}" for mark in marks)
+        lines.extend(
+            f"- {mark.label}: {mark.function} · {mark.detail}" for mark in marks
+        )
     return "\n".join(lines) + "\n"
 
 

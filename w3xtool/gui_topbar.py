@@ -22,13 +22,24 @@ from .theme import (
 
 def build_topbar(app) -> None:
     """Build the always-visible top command bar."""
-    bar = ctk.CTkFrame(app, fg_color=TOPBAR, corner_radius=0, height=64, border_width=1, border_color=BORDER)
+    bar = ctk.CTkFrame(
+        app,
+        fg_color=TOPBAR,
+        corner_radius=0,
+        height=64,
+        border_width=1,
+        border_color=BORDER,
+    )
     bar.pack(fill="x", side="top")
     bar.pack_propagate(False)
     brand = ctk.CTkFrame(bar, fg_color="transparent")
     brand.pack(side="left", padx=(16, 14), pady=8)
-    ctk.CTkLabel(brand, text="W3XRAY", font=(TITLE_FONT, 21, "bold"), text_color=ACCENT).pack(anchor="w")
-    ctk.CTkLabel(brand, text="Warcraft III map workbench", font=(FONT, 11), text_color=SUBTLE).pack(anchor="w")
+    ctk.CTkLabel(
+        brand, text="W3XRAY", font=(TITLE_FONT, 21, "bold"), text_color=ACCENT
+    ).pack(anchor="w")
+    ctk.CTkLabel(
+        brand, text="Warcraft III map workbench", font=(FONT, 11), text_color=SUBTLE
+    ).pack(anchor="w")
     ctk.CTkButton(
         bar,
         text="打开地图 / 战役",
@@ -76,16 +87,30 @@ def build_topbar(app) -> None:
     _add_source_selector(source_tools, "游戏数据", app.on_pick_game_data_dir)
     app.game_data_label = _source_label(source_tools, "游戏数据: 未选")
     app.data_tools_menu = tk.Menu(app, tearoff=False)
-    app.data_tools_menu.add_command(label="浏览 CASC Root", command=app.on_browse_game_data)
+    app.data_tools_menu.add_command(
+        label="浏览 CASC Root", command=app.on_browse_game_data
+    )
     app.data_tools_menu.add_separator()
-    app.data_tools_menu.add_command(label="选择作者明文补充包", command=app.on_pick_author_bundle)
-    app.data_tools_menu.add_command(label="清除作者明文补充包", command=app.on_clear_author_bundle)
+    app.data_tools_menu.add_command(
+        label="选择作者明文补充包", command=app.on_pick_author_bundle
+    )
+    app.data_tools_menu.add_command(
+        label="清除作者明文补充包", command=app.on_clear_author_bundle
+    )
     app.data_tools_menu.add_separator()
-    app.data_tools_menu.add_command(label="选择可信描述缓存", command=app.on_pick_description_cache)
-    app.data_tools_menu.add_command(label="清除可信描述缓存", command=app.on_clear_description_cache)
+    app.data_tools_menu.add_command(
+        label="选择可信描述缓存", command=app.on_pick_description_cache
+    )
+    app.data_tools_menu.add_command(
+        label="清除可信描述缓存", command=app.on_clear_description_cache
+    )
     app.data_tools_menu.add_separator()
-    app.data_tools_menu.add_command(label="分析真实存档文件", command=app.on_analyze_real_save_file)
-    app.data_tools_menu.add_command(label="分析真实存档目录", command=app.on_analyze_real_save_directory)
+    app.data_tools_menu.add_command(
+        label="分析真实存档文件", command=app.on_analyze_real_save_file
+    )
+    app.data_tools_menu.add_command(
+        label="分析真实存档目录", command=app.on_analyze_real_save_directory
+    )
     app.data_tools_button = ctk.CTkButton(
         source_tools,
         text="数据工具",
@@ -128,11 +153,15 @@ def _add_source_selector(parent, text: str, command) -> None:
 
 
 def _source_label(parent, text: str):
-    label = ctk.CTkLabel(parent, text=text, font=(FONT, 10), text_color=SUBTLE, width=92, anchor="w")
+    label = ctk.CTkLabel(
+        parent, text=text, font=(FONT, 10), text_color=SUBTLE, width=92, anchor="w"
+    )
     label.pack(side="left", padx=(0, 6))
     return label
 
 
 def _popup_data_tools(app) -> None:
     button = app.data_tools_button
-    app.data_tools_menu.tk_popup(button.winfo_rootx(), button.winfo_rooty() + button.winfo_height())
+    app.data_tools_menu.tk_popup(
+        button.winfo_rootx(), button.winfo_rooty() + button.winfo_height()
+    )

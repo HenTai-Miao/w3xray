@@ -40,7 +40,9 @@ def write_knowledge_pack_report(
     publication_root: str | None = None,
 ) -> KnowledgeWriteReport:
     """Write a map knowledge pack and return final per-file outcomes."""
-    with knowledge_write_session(out_dir, publication_root=publication_root) as recorder:
+    with knowledge_write_session(
+        out_dir, publication_root=publication_root
+    ) as recorder:
         _count, capabilities = write_knowledge_pack_contents(
             md,
             out_dir,
@@ -58,13 +60,9 @@ def write_knowledge_pack_report(
             result_text = format_knowledge_write_report(recorder.report())
             _ = write_text(out_dir, "资料包写入结果.tsv", result_text)
             final_report = recorder.report()
-            if (
-                coverage_text
-                == format_requirement_coverage(
-                    md,
-                    replace(capabilities, write_report=final_report),
-                )
-                and result_text == format_knowledge_write_report(final_report)
-            ):
+            if coverage_text == format_requirement_coverage(
+                md,
+                replace(capabilities, write_report=final_report),
+            ) and result_text == format_knowledge_write_report(final_report):
                 return final_report
         return recorder.report()

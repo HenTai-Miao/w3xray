@@ -42,6 +42,5 @@ def format_script_index(md: MapData) -> str:
 def all_script_text(md: MapData) -> str:
     """Return labeled analysis texts joined for static clue scanners."""
     return "\n\n".join(
-        f"// ===== {name} =====\n{text}"
-        for name, text in analysis_script_texts(md)
+        f"// ===== {name} =====\n{text}" for name, text in analysis_script_texts(md)
     )

@@ -32,18 +32,32 @@ def write_resources(
     rows = ["路径\t类型\t引用来源\t引用字段"]
     for node in report.nodes:
         for ref in node.refs:
-            rows.append("\t".join((
-                tsv(node.path),
-                tsv(node.kind),
-                tsv(ref.source),
-                tsv(ref.detail),
-            )))
+            rows.append(
+                "\t".join(
+                    (
+                        tsv(node.path),
+                        tsv(node.kind),
+                        tsv(ref.source),
+                        tsv(ref.detail),
+                    )
+                )
+            )
     count = write_text(out_dir, "资源引用.tsv", "\n".join(rows) + "\n")
     count += write_text(out_dir, "内部素材.txt", format_lines(report.archive_assets))
-    count += write_text(out_dir, "未引用素材.txt", format_lines(report.unreferenced_assets))
-    count += write_text(out_dir, "资源内容引用.tsv", format_resource_content_references_tsv(content_refs))
-    count += write_text(out_dir, "资源资产索引.tsv", format_resource_inventory_tsv(inventory))
-    count += write_text(out_dir, "资源分类摘要.txt", format_resource_inventory_summary(inventory))
+    count += write_text(
+        out_dir, "未引用素材.txt", format_lines(report.unreferenced_assets)
+    )
+    count += write_text(
+        out_dir,
+        "资源内容引用.tsv",
+        format_resource_content_references_tsv(content_refs),
+    )
+    count += write_text(
+        out_dir, "资源资产索引.tsv", format_resource_inventory_tsv(inventory)
+    )
+    count += write_text(
+        out_dir, "资源分类摘要.txt", format_resource_inventory_summary(inventory)
+    )
     game_data_source = open_game_data_source(game_data_path)
     try:
         body_report = export_resource_bodies(
@@ -54,7 +68,9 @@ def write_resources(
         )
     finally:
         _close_game_data_source(game_data_source)
-    count += write_text(out_dir, "素材文件_manifest.tsv", format_asset_body_manifest(body_report))
+    count += write_text(
+        out_dir, "素材文件_manifest.tsv", format_asset_body_manifest(body_report)
+    )
     count += body_report.exported_count
     return count
 

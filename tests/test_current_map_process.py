@@ -142,7 +142,9 @@ def test_public_open_probe_falls_back_to_lsof_after_proc_denial(
         _processes: tuple[GameProcess, ...],
         _root: Path,
     ) -> OpenMapProbeReport:
-        partial = MapEvidence(Path("/tmp/partial.w3x"), EvidenceKind.DIRECT_OPEN, process.pid)
+        partial = MapEvidence(
+            Path("/tmp/partial.w3x"), EvidenceKind.DIRECT_OPEN, process.pid
+        )
         return OpenMapProbeReport((partial,), False, ProbeIssue.ACCESS_DENIED)
 
     def fixed_lsof(_candidates: tuple[Path, ...]) -> Path:
@@ -183,7 +185,9 @@ def test_resolves_quoted_map_argument_against_bounded_roots(tmp_path: Path) -> N
     map_path = second_root / "Maps" / "中文 对战.w3x"
     map_path.parent.mkdir(parents=True)
     _ = map_path.write_bytes(b"map")
-    process = GameProcess(501, "Warcraft III", 'war3.exe -loadfile "Maps\\中文 对战.w3x"')
+    process = GameProcess(
+        501, "Warcraft III", 'war3.exe -loadfile "Maps\\中文 对战.w3x"'
+    )
 
     # When: explicit arguments are resolved under the supplied roots.
     evidence = explicit_argument_evidence((process,), (first_root, second_root))
@@ -235,7 +239,9 @@ def test_nested_description_loadfile_text_is_not_an_argument(tmp_path: Path) -> 
     assert evidence == ()
 
 
-def test_resolves_unquoted_loadfile_but_ignores_ordinary_map_text(tmp_path: Path) -> None:
+def test_resolves_unquoted_loadfile_but_ignores_ordinary_map_text(
+    tmp_path: Path,
+) -> None:
     # Given: both paths exist, but only one follows the explicit -loadfile flag.
     maps = tmp_path / "Maps"
     maps.mkdir()
@@ -277,7 +283,8 @@ def test_explicit_argument_probe_caps_nonexistent_path_checks(
             "Warcraft III",
             "war3.exe "
             + " ".join(
-                f"-loadfile Maps\\missing-{process_index}-{item}.w3x" for item in range(40)
+                f"-loadfile Maps\\missing-{process_index}-{item}.w3x"
+                for item in range(40)
             ),
         )
         for process_index in range(2)
@@ -292,7 +299,9 @@ def test_explicit_argument_probe_caps_nonexistent_path_checks(
     assert calls == 64 * 8
 
 
-@pytest.mark.skipif(os.name != "posix", reason="requires the POSIX process-table adapter")
+@pytest.mark.skipif(
+    os.name != "posix", reason="requires the POSIX process-table adapter"
+)
 def test_real_posix_process_probe_reports_available_when_ps_exists() -> None:
     # Given: this POSIX host exposes one of the fixed absolute ps executables.
     if not any(Path(path).is_file() for path in ("/bin/ps", "/usr/bin/ps")):
@@ -313,9 +322,13 @@ def test_real_posix_adapter_finds_map_opened_by_only_the_injected_pid(
     # Given: this pytest PID holds a real temporary map descriptor open.
     pid = os.getpid()
     proc_capable = Path(f"/proc/{pid}/fd").is_dir()
-    lsof_capable = any(Path(path).is_file() for path in ("/usr/sbin/lsof", "/usr/bin/lsof"))
+    lsof_capable = any(
+        Path(path).is_file() for path in ("/usr/sbin/lsof", "/usr/bin/lsof")
+    )
     if not proc_capable and not lsof_capable:
-        pytest.skip("POSIX host exposes neither readable /proc PID fds nor fixed-path lsof")
+        pytest.skip(
+            "POSIX host exposes neither readable /proc PID fds nor fixed-path lsof"
+        )
     map_path = tmp_path / "真实 当前地图.w3x"
     _ = map_path.write_bytes(b"map")
     process = GameProcess(pid, "Warcraft III", "pytest injected PID")

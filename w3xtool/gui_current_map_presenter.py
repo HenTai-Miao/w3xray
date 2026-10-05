@@ -118,7 +118,9 @@ def _tk_choose_candidate(candidates: tuple[MapCandidate, ...]) -> Path | None:
     if len(candidates) > MAX_CANDIDATES:
         omitted = tk.Label(
             dialog,
-            text=CANDIDATE_CHOICE_OMITTED.format(omitted=len(candidates) - MAX_CANDIDATES),
+            text=CANDIDATE_CHOICE_OMITTED.format(
+                omitted=len(candidates) - MAX_CANDIDATES
+            ),
             anchor="w",
             justify="left",
         )
@@ -134,7 +136,9 @@ def _tk_choose_candidate(candidates: tuple[MapCandidate, ...]) -> Path | None:
         dialog.destroy()
 
     buttons = tk.Frame(dialog)
-    tk.Button(buttons, text="确定", width=10, command=confirm).pack(side="right", padx=6)
+    tk.Button(buttons, text="确定", width=10, command=confirm).pack(
+        side="right", padx=6
+    )
     tk.Button(buttons, text="取消", width=10, command=cancel).pack(side="right")
     buttons.pack(fill="x", padx=12, pady=(6, 12))
     listbox.bind("<Double-Button-1>", confirm)

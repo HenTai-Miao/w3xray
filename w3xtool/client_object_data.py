@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import mmap
+import os
+import pickle
+import sys
+import tempfile
+from pathlib import Path
 from typing import Final, final
 
 from .game_data_source import GameDataSource
 from .object_candidates import ObjectFieldValue, collect_object_candidates
 from .object_materialization import BaseObjectTable, merge_object_candidates
+
+# 客户端快照内容不变（同一份游戏导出数据反复解析是纯浪费），
+# 按全部输入文件的内容摘要做磁盘缓存；任何缓存异常都回退到现算。
+_SNAPSHOT_CACHE_TAG: Final = "w3xray-client-snapshot-v1"
 
 _RACES: Final[tuple[str, ...]] = (
     "Human",
@@ -113,11 +123,19 @@ def collect_client_base_objects(
 
 
 def snapshot_client_base_objects(source: GameDataSource | None) -> ClientObjectSnapshot:
-    """Snapshot every client text candidate before its source closes."""
+    """Snapshot every client text candidate before its source closes.
+
+    真实目录数据源默认启用内容寻址磁盘缓存；测试用假数据源不受影响。
+    """
     if source is None:
         return ClientObjectSnapshot((), False)
     archive = _ClientObjectArchive(source)
     text_available = any(archive.has_file(name) for name in _CLIENT_TEXT_NAMES)
+    cache_path = _snapshot_cache_path(archive)
+    if cache_path is not None:
+        cached = _load_snapshot_cache(cache_path)
+        if cached is not None:
+            return cached
     try:
         candidates = collect_object_candidates(archive, {})
     except OSError, ValueError:
@@ -146,7 +164,96 @@ def snapshot_client_base_objects(source: GameDataSource | None) -> ClientObjectS
         if len(item.obj_id) == 4
         and (item.fields or evidence_by_object.get((item.category, item.obj_id)))
     )
-    return ClientObjectSnapshot(snapshot, text_available)
+    result = ClientObjectSnapshot(snapshot, text_available)
+    if cache_path is not None:
+        _store_snapshot_cache(cache_path, result)
+    return result
+
+
+def _snapshot_cache_path(archive: _ClientObjectArchive) -> Path | None:
+    """内容寻址缓存键；仅真实盘上数据源且未显式禁用时启用。
+
+    W3XRAY_SNAPSHOT_CACHE=0 关闭；W3XRAY_CACHE_DIR 指定缓存根目录。
+    目录/CASC/MPQ 源的读取与内容摘要都很便宜（几 MB），
+    省下的是每次加载重复付出的解析与合并（且一次加载会算两遍）。
+    """
+    if os.environ.get("W3XRAY_SNAPSHOT_CACHE", "1") != "1":
+        return None
+    from .game_data_source import (
+        CascDataSource,
+        CascLibDataSource,
+        ClassicMpqDataSource,
+        DirectoryDataSource,
+        TrustedIconCacheDataSource,
+    )
+
+    if not isinstance(
+        archive.source,
+        (
+            CascDataSource,
+            CascLibDataSource,
+            ClassicMpqDataSource,
+            DirectoryDataSource,
+            TrustedIconCacheDataSource,
+        ),
+    ):
+        return None
+    digest = hashlib.sha256()
+    for name in _CLIENT_TEXT_NAMES:
+        for candidate in locale_text_candidates(name):
+            if not archive.source.has_file(candidate):
+                continue
+            digest.update(name.encode("utf-8"))
+            digest.update(b"\0")
+            digest.update(archive.source.read_file(candidate))
+            break
+    cache_root = os.environ.get("W3XRAY_CACHE_DIR")
+    if cache_root:
+        base = Path(cache_root)
+    elif sys.platform == "win32" and os.environ.get("LOCALAPPDATA"):
+        base = Path(os.environ["LOCALAPPDATA"]) / "w3xray" / "cache"
+    else:
+        base = Path(tempfile.gettempdir()) / "w3xray-cache"
+    return base / "client-snapshots" / f"{digest.hexdigest()}.pkl"
+
+
+def _load_snapshot_cache(path: Path) -> ClientObjectSnapshot | None:
+    """命中则返回快照；任何缺失/损坏/不识别都返回 None 走现算。"""
+    try:
+        blob = path.read_bytes()
+    except OSError:
+        return None
+    header, _, payload = blob.partition(b"\n")
+    if header != _SNAPSHOT_CACHE_TAG.encode("ascii"):
+        return None
+    try:
+        snapshot = pickle.loads(payload)
+    except Exception:  # noqa: BLE001 - 缓存边界，损坏即回退现算。
+        return None
+    if isinstance(snapshot, ClientObjectSnapshot):
+        return snapshot
+    return None
+
+
+def _store_snapshot_cache(path: Path, snapshot: ClientObjectSnapshot) -> None:
+    """尽力写入；失败静默（缓存只加速，不影响正确性）。"""
+    payload = pickle.dumps(snapshot, protocol=pickle.HIGHEST_PROTOCOL)
+    blob = _SNAPSHOT_CACHE_TAG.encode("ascii") + b"\n" + payload
+    temp_name: str | None = None
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handle, temp_name = tempfile.mkstemp(
+            dir=str(path.parent), prefix=path.name, suffix=".tmp"
+        )
+        with os.fdopen(handle, "wb") as temp_file:
+            temp_file.write(blob)
+        os.replace(temp_name, path)
+    except OSError:
+        if temp_name is not None:
+            try:
+                os.unlink(temp_name)
+            except OSError:
+                pass
 
 
 def _evidence_sort_key(field: ObjectFieldValue) -> tuple[str, str, str, int, str]:
@@ -170,7 +277,10 @@ def merge_client_base_objects(
     """
     cache_key = client_objects
     per_table = _MERGED_TABLE_CACHE.get(id(base_objects))
-    if per_table is not None and _MERGED_TABLE_REFS.get(id(base_objects)) is base_objects:
+    if (
+        per_table is not None
+        and _MERGED_TABLE_REFS.get(id(base_objects)) is base_objects
+    ):
         cached = per_table.get(cache_key)
         if cached is not None:
             from .object_materialization import register_base_table_for_caching
@@ -214,6 +324,8 @@ def merge_client_base_objects(
 _MERGED_CACHE_LIMIT: Final = 4
 _MERGED_TABLE_CACHE: dict[
     int,
-    dict[tuple[ClientBaseObject, ...], dict[str, tuple[str, tuple[tuple[str, str], ...]]]],
+    dict[
+        tuple[ClientBaseObject, ...], dict[str, tuple[str, tuple[tuple[str, str], ...]]]
+    ],
 ] = {}
 _MERGED_TABLE_REFS: dict[int, BaseObjectTable] = {}

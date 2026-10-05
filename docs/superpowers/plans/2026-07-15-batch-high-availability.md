@@ -475,7 +475,9 @@ Commit: `feat: publish validated global generations`
 - [x] **Step 1: Write failing reusable-partial and checkpoint-tail tests**
 
 ```python
-@pytest.mark.parametrize("state", (MapBatchState.COMPLETE, MapBatchState.PARTIAL, MapBatchState.RESTRICTED))
+@pytest.mark.parametrize(
+    "state", (MapBatchState.COMPLETE, MapBatchState.PARTIAL, MapBatchState.RESTRICTED)
+)
 def test_unchanged_manifest_verified_publication_is_reused(
     tmp_path: Path, state: MapBatchState
 ) -> None:
@@ -492,9 +494,17 @@ def test_unchanged_manifest_verified_publication_is_reused(
 
 
 def test_checkpoint_preserves_unvisited_previous_results() -> None:
-    previous = PreviousBatchState(BatchState(3, (_result("a"), _result("b"), _result("c"))), ())
-    checkpoint = checkpoint_state((_result("a", state=MapBatchState.FAILED),), previous, ("b", "c"))
-    assert [Path(item.source.path).name for item in checkpoint.results] == ["a", "b", "c"]
+    previous = PreviousBatchState(
+        BatchState(3, (_result("a"), _result("b"), _result("c"))), ()
+    )
+    checkpoint = checkpoint_state(
+        (_result("a", state=MapBatchState.FAILED),), previous, ("b", "c")
+    )
+    assert [Path(item.source.path).name for item in checkpoint.results] == [
+        "a",
+        "b",
+        "c",
+    ]
 ```
 
 Add tests for dependency changes, hash tampering, missing files, invalid global pointer/state, `--no-retry-failed`, deleted sources, and duplicate previous paths.
@@ -562,7 +572,9 @@ def test_cancellation_returns_explicit_cancelled_outcome() -> None:
     timer = threading.Timer(0.02, signal.set)
     timer.start()
     try:
-        outcome = execute_test_worker(_blocking_worker, timeout_seconds=2, cancellation=signal)
+        outcome = execute_test_worker(
+            _blocking_worker, timeout_seconds=2, cancellation=signal
+        )
     finally:
         timer.cancel()
     assert isinstance(outcome, MapExecutionCancelled)

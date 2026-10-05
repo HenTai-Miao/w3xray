@@ -57,7 +57,9 @@ def _write_chunks(
 
 def test_hash_table_overflow_is_reported_as_structure_damage(tmp_path: Path) -> None:
     # Given: an aligned MPQ header whose hash table extends past EOF.
-    path = _write_chunks(tmp_path / "hash-oob.w3x", ((0, _header(hash_count=2048)),), total_size=64)
+    path = _write_chunks(
+        tmp_path / "hash-oob.w3x", ((0, _header(hash_count=2048)),), total_size=64
+    )
 
     # When: the original file is diagnosed without opening an MPQArchive.
     diagnosis = diagnose_archive_open(str(path))
@@ -69,7 +71,9 @@ def test_hash_table_overflow_is_reported_as_structure_damage(tmp_path: Path) -> 
 
 def test_truncated_signature_is_table_damage(tmp_path: Path) -> None:
     # Given: an aligned MPQ signature without a complete 32-byte header.
-    path = _write_chunks(tmp_path / "truncated.w3x", ((512, b"MPQ\x1a\x00\x00"),), total_size=518)
+    path = _write_chunks(
+        tmp_path / "truncated.w3x", ((512, b"MPQ\x1a\x00\x00"),), total_size=518
+    )
 
     # When: the archive-open failure is diagnosed.
     diagnosis = diagnose_archive_open(str(path))
@@ -189,7 +193,9 @@ def test_directory_read_failure_is_conservative(tmp_path: Path) -> None:
 
 def test_probe_uses_only_bounded_header_reads(tmp_path: Path) -> None:
     # Given: a file with a valid header and a payload that must not be scanned.
-    path = _write_chunks(tmp_path / "bounded.w3x", ((0, _header()),), total_size=2 * 1024 * 1024)
+    path = _write_chunks(
+        tmp_path / "bounded.w3x", ((0, _header()),), total_size=2 * 1024 * 1024
+    )
     real_open = archive_diagnostics.open_regular_binary
     read_sizes: list[int] = []
 

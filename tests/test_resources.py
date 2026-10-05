@@ -1,4 +1,5 @@
 """资源依赖图：从对象字段、脚本和内部文件清单分析素材引用。"""
+
 import unittest
 
 from w3xtool.api import GameObject, MapData
@@ -37,7 +38,9 @@ class ResourceReportTest(unittest.TestCase):
 
         # Then: both resource paths are normalized and linked to the object.
         self.assertIn("war3mapimported\\hero.mdx", report.by_path)
-        self.assertIn("replaceabletextures\\commandbuttons\\btnhero.blp", report.by_path)
+        self.assertIn(
+            "replaceabletextures\\commandbuttons\\btnhero.blp", report.by_path
+        )
         node = report.by_path["war3mapimported\\hero.mdx"]
         self.assertEqual(node.refs[0].source, "对象 H001")
 
@@ -57,7 +60,9 @@ class ResourceReportTest(unittest.TestCase):
     def test_unreferenced_archive_assets_are_reported(self):
         # Given: one internal asset is referenced and another is not.
         md = MapData(path="x.w3x", name="x")
-        md.objects = {"单位": [_obj("H001", fields=[("模型", "war3mapImported\\used.mdx")])]}
+        md.objects = {
+            "单位": [_obj("H001", fields=[("模型", "war3mapImported\\used.mdx")])]
+        }
         md.all_files = [
             "war3mapImported\\used.mdx",
             "war3mapImported\\unused.blp",
@@ -100,7 +105,9 @@ class ResourceReportTest(unittest.TestCase):
         self.assertEqual(report.by_path["ui\\framedef\\animepanel.fdf"].kind, "UI/文本")
         self.assertEqual(report.by_path["war3mapimported\\loading.png"].kind, "图像")
         self.assertEqual(report.by_path["fonts\\title.otf"].kind, "字体")
-        self.assertEqual(report.by_path["war3mapimported\\savelayout.txt"].kind, "UI/文本")
+        self.assertEqual(
+            report.by_path["war3mapimported\\savelayout.txt"].kind, "UI/文本"
+        )
         self.assertEqual(report.by_path["ui\\framedef\\custom.toc"].kind, "UI/文本")
         self.assertEqual(report.archive_assets, ("war3mapimported\\objectdata.slk",))
 

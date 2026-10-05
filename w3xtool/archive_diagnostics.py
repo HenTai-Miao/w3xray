@@ -148,8 +148,10 @@ def _diagnose_readable(
             f"path={path}",
             f"searched_bytes={scan_end}",
             "alignment=512",
-        ) + _error_evidence(error),
+        )
+        + _error_evidence(error),
     )
+
 
 def _diagnosis(
     kind: ArchiveDiagnosisKind,
@@ -163,7 +165,9 @@ def _diagnosis(
         f"os_error={type(probe_error).__name__}",
         f"errno={probe_error.errno}",
     )
-    return ArchiveOpenDiagnosis(kind, message, evidence + _error_evidence(original_error))
+    return ArchiveOpenDiagnosis(
+        kind, message, evidence + _error_evidence(original_error)
+    )
 
 
 def _error_evidence(error: BaseException | None) -> tuple[str, ...]:
@@ -174,4 +178,7 @@ def _error_evidence(error: BaseException | None) -> tuple[str, ...]:
 
 def _is_permission_error(error: OSError) -> bool:
     permission_errnos = {errno.EACCES, errno.EPERM, errno.EBUSY, errno.ETXTBSY}
-    return error.errno in permission_errnos or getattr(error, "winerror", None) in {32, 33}
+    return error.errno in permission_errnos or getattr(error, "winerror", None) in {
+        32,
+        33,
+    }

@@ -101,14 +101,18 @@ def object_api_category(name: str) -> str | None:
 def is_hashtable_key_api(name: str) -> bool:
     """Return whether a save API uses hashtable parent/child key arguments."""
     info = save_api_info(name)
-    return info is not None and info.mechanism == "Hashtable" and not name.startswith("Flush")
+    return (
+        info is not None
+        and info.mechanism == "Hashtable"
+        and not name.startswith("Flush")
+    )
 
 
 def _generic_hashtable_info(name: str) -> ApiInfo | None:
     for prefix, verb in _PREFIX_OPERATIONS:
         if not name.startswith(prefix):
             continue
-        suffix = name[len(prefix):]
+        suffix = name[len(prefix) :]
         if not _is_hashtable_suffix(suffix):
             continue
         label = "句柄" if suffix.endswith("Handle") else _suffix_label(suffix)
@@ -117,7 +121,9 @@ def _generic_hashtable_info(name: str) -> ApiInfo | None:
 
 
 def _is_hashtable_suffix(suffix: str) -> bool:
-    return suffix in _PRIMITIVE_SUFFIXES or suffix == "Handle" or suffix.endswith("Handle")
+    return (
+        suffix in _PRIMITIVE_SUFFIXES or suffix == "Handle" or suffix.endswith("Handle")
+    )
 
 
 def _suffix_label(suffix: str) -> str:

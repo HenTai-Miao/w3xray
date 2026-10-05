@@ -51,14 +51,32 @@ def read_eca(
     kind = _kind_from_function_type(function_type, trigger_name, name, source_offset)
     function_schema = schema.get(kind, name)
     if function_schema is None:
-        raise EcaParseError(trigger_name, name, source_offset, "missing TriggerData schema")
+        raise EcaParseError(
+            trigger_name, name, source_offset, "missing TriggerData schema"
+        )
     parameters = tuple(
-        _read_parameter(reader, trigger_name, name, schema, type_name, version=version, depth=depth + 1)
+        _read_parameter(
+            reader,
+            trigger_name,
+            name,
+            schema,
+            type_name,
+            version=version,
+            depth=depth + 1,
+        )
         for type_name in function_schema.parameter_types
     )
     child_count = reader.bounded_count("child ECA") if version >= 7 else 0
     children = tuple(
-        read_eca(reader, trigger_name, schema, has_branch=True, version=version, depth=depth + 1, ordinal=index + 1)
+        read_eca(
+            reader,
+            trigger_name,
+            schema,
+            has_branch=True,
+            version=version,
+            depth=depth + 1,
+            ordinal=index + 1,
+        )
         for index in range(child_count)
     )
     return TriggerEcaFunction(
@@ -82,7 +100,9 @@ def function_type_label(value: int) -> str:
 
 def parameter_type_label(value: int) -> str:
     """Return a readable parameter type label."""
-    return {-1: "未定义", 0: "原始", 1: "变量", 2: "函数", 3: "字符串"}.get(value, str(value))
+    return {-1: "未定义", 0: "原始", 1: "变量", 2: "函数", 3: "字符串"}.get(
+        value, str(value)
+    )
 
 
 def _read_parameter(
@@ -98,19 +118,42 @@ def _read_parameter(
     source_offset = reader.offset
     parameter_type = reader.i32()
     if parameter_type < -1 or parameter_type > 3:
-        raise EcaParseError(trigger_name, function_name, source_offset, f"invalid parameter type {parameter_type}")
+        raise EcaParseError(
+            trigger_name,
+            function_name,
+            source_offset,
+            f"invalid parameter type {parameter_type}",
+        )
     value = reader.cstr()
     have_function = reader.i32()
     nested = None
     if have_function:
         if parameter_type != 2:
-            raise EcaParseError(trigger_name, function_name, source_offset, "nested function on non-function parameter")
-        nested = read_eca(reader, trigger_name, schema, has_branch=False, version=version, depth=depth, ordinal=0)
+            raise EcaParseError(
+                trigger_name,
+                function_name,
+                source_offset,
+                "nested function on non-function parameter",
+            )
+        nested = read_eca(
+            reader,
+            trigger_name,
+            schema,
+            has_branch=False,
+            version=version,
+            depth=depth,
+            ordinal=0,
+        )
     have_array = reader.i32()
     array_indexer = None
     if have_array:
         if parameter_type != 1:
-            raise EcaParseError(trigger_name, function_name, source_offset, "array indexer on non-variable parameter")
+            raise EcaParseError(
+                trigger_name,
+                function_name,
+                source_offset,
+                "array indexer on non-variable parameter",
+            )
         array_indexer = _read_parameter(
             reader,
             trigger_name,
@@ -149,4 +192,9 @@ def _kind_from_function_type(
         case 3:
             return TriggerFunctionKind.CALL
         case _:
-            raise EcaParseError(trigger_name, function_name, source_offset, f"invalid function type {value}")
+            raise EcaParseError(
+                trigger_name,
+                function_name,
+                source_offset,
+                f"invalid function type {value}",
+            )

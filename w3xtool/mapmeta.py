@@ -1,4 +1,5 @@
 """地图内部结构文件的只读摘要。"""
+
 from __future__ import annotations
 
 from collections import Counter
@@ -55,16 +56,19 @@ class MapStructureReport:
 
     @property
     def has_data(self) -> bool:
-        return any(value is not None for value in (
-            self.regions,
-            self.cameras,
-            self.sounds,
-            self.pathing,
-            self.shadow,
-            self.region_strings,
-            self.camera_strings,
-            self.sound_strings,
-        ))
+        return any(
+            value is not None
+            for value in (
+                self.regions,
+                self.cameras,
+                self.sounds,
+                self.pathing,
+                self.shadow,
+                self.region_strings,
+                self.camera_strings,
+                self.sound_strings,
+            )
+        )
 
 
 def parse_counted_structure(data: bytes, magic: bytes) -> int | None:
@@ -125,7 +129,9 @@ def parse_wpm_summary(data: bytes) -> PathingSummary | None:
     )
 
 
-def parse_shd_summary(data: bytes, pathing: PathingSummary | None = None) -> ShadowSummary | None:
+def parse_shd_summary(
+    data: bytes, pathing: PathingSummary | None = None
+) -> ShadowSummary | None:
     """解析 war3map.shd 阴影图，必要时用路径图尺寸校验。"""
     if not data:
         return None
@@ -200,6 +206,6 @@ def map_structure_report_from_map_path(path: str) -> MapStructureReport:
             for name in STRUCTURE_FILES:
                 if archive.has_file(name):
                     files[name] = archive.read_file(name)
-    except (OSError, ValueError, KeyError, struct.error):
+    except OSError, ValueError, KeyError, struct.error:
         return MapStructureReport()
     return build_map_structure_report(files)

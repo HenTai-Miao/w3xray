@@ -99,7 +99,9 @@ class ExtractionCompletenessTest(unittest.TestCase):
         self.assertIn("(listfile)：存在", text)
         self.assertIn("war3map.imp/war3campaign.imp：存在", text)
 
-    def test_report_falls_back_to_loaded_file_list_when_source_is_unreadable(self) -> None:
+    def test_report_falls_back_to_loaded_file_list_when_source_is_unreadable(
+        self,
+    ) -> None:
         # Given: parsed map data whose original archive is not available.
         md = MapData(path="/missing/map.w3x", name="离线图")
         md.all_files = ["war3map.j", "war3map.w3i"]
@@ -128,7 +130,9 @@ class ExtractionCompletenessTest(unittest.TestCase):
 
         # Then: the bounded helper classifies it before source reopening can begin.
         source_opener.assert_not_called()
-        self.assertEqual(report.archive_diagnosis_kind, ArchiveDiagnosisKind.MISSING.value)
+        self.assertEqual(
+            report.archive_diagnosis_kind, ArchiveDiagnosisKind.MISSING.value
+        )
 
     def test_report_reuses_typed_archive_diagnosis_for_unopened_source(self) -> None:
         # Given: an existing source file that has no MPQ header.
@@ -144,10 +148,14 @@ class ExtractionCompletenessTest(unittest.TestCase):
                 report = build_extraction_completeness_report(md)
 
         # Then: the existing diagnosis-kind data flow carries the typed result.
-        self.assertEqual(report.archive_diagnosis_kind, ArchiveDiagnosisKind.NO_HEADER.value)
+        self.assertEqual(
+            report.archive_diagnosis_kind, ArchiveDiagnosisKind.NO_HEADER.value
+        )
         self.assertTrue(any("MPQ 头" in warning for warning in report.warnings))
 
-    def test_report_flags_probable_data_level_protection_without_bypassing(self) -> None:
+    def test_report_flags_probable_data_level_protection_without_bypassing(
+        self,
+    ) -> None:
         # Given: a map whose anonymous encrypted blocks cannot be recovered statically.
         md = MapData(path="protected.w3x", name="保护图")
         archive = ProtectedArchive()

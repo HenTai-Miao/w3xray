@@ -24,26 +24,39 @@ def _z(text):
 
 def _player(slot=0, flags=0, ai_path="", ai_difficulty=1):
     return (
-        _i(slot) + _i(0) + _i(0x02) + _i(slot) + _i(90)
-        + _i(flags) + _i(ai_difficulty) + _z(ai_path)
+        _i(slot)
+        + _i(0)
+        + _i(0x02)
+        + _i(slot)
+        + _i(90)
+        + _i(flags)
+        + _i(ai_difficulty)
+        + _z(ai_path)
     )
 
 
 def _config(players):
     return (
-        _i(1) + _i(0x03) + _i(4)
+        _i(1)
+        + _i(0x03)
+        + _i(4)
         + _z("Maps\\Anime\\Test.w3x")
-        + _i(len(players)) + b"".join(players)
+        + _i(len(players))
+        + b"".join(players)
     )
 
 
 class GameConfigurationParseTest(unittest.TestCase):
     def test_parse_game_configuration_fields_and_players(self):
         # Given: a v1 .wgc payload with one human and one custom-AI computer.
-        data = _config((
-            _player(slot=0, flags=0x01),
-            _player(slot=1, flags=0x04, ai_path="AI Scripts\\rush.ai", ai_difficulty=2),
-        ))
+        data = _config(
+            (
+                _player(slot=0, flags=0x01),
+                _player(
+                    slot=1, flags=0x04, ai_path="AI Scripts\\rush.ai", ai_difficulty=2
+                ),
+            )
+        )
 
         # When: the payload is parsed.
         config = parse_game_configuration(data)
@@ -93,7 +106,9 @@ class GameConfigurationParseTest(unittest.TestCase):
 
 class GameConfigurationIntegrationTest(unittest.TestCase):
     def test_find_internal_game_config_names_dedupes_case_insensitively(self):
-        names = find_internal_game_config_names(["A.wgc", "a.WGC", "war3map.j", "B.wgc"])
+        names = find_internal_game_config_names(
+            ["A.wgc", "a.WGC", "war3map.j", "B.wgc"]
+        )
 
         self.assertEqual(names, ("A.wgc", "B.wgc"))
 

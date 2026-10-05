@@ -21,40 +21,52 @@ class ScriptAssignmentIndexTest(unittest.TestCase):
         # Given: JASS assignments update save keys, object IDs, arrays and switches.
         md = MapData(path="x.w3x", name="赋值图")
         md.scripts = {
-            "war3map.j": "\n".join((
-                "function Init takes nothing returns nothing",
-                "    set udg_HeroId = 'H001'",
-                '    set udg_SaveKey = "hero.level"',
-                "    set udg_PlayerGold[GetPlayerId(p)] = 1000",
-                "    set udg_DebugMode = true",
-                "endfunction",
-            )),
+            "war3map.j": "\n".join(
+                (
+                    "function Init takes nothing returns nothing",
+                    "    set udg_HeroId = 'H001'",
+                    '    set udg_SaveKey = "hero.level"',
+                    "    set udg_PlayerGold[GetPlayerId(p)] = 1000",
+                    "    set udg_DebugMode = true",
+                    "endfunction",
+                )
+            ),
         }
 
         # When: the assignment index is built.
         text = _format_assignments(md)
 
         # Then: assignments keep function context, written variable, value and static purpose.
-        self.assertIn("来源\t行号\t函数\t变量\t索引\t右值\t字符串\t对象码\t用途\t摘要", text)
+        self.assertIn(
+            "来源\t行号\t函数\t变量\t索引\t右值\t字符串\t对象码\t用途\t摘要", text
+        )
         self.assertIn("war3map.j\t2\tInit\tudg_HeroId\t\t'H001'\t\tH001\t对象码", text)
-        self.assertIn("war3map.j\t3\tInit\tudg_SaveKey\t\t\"hero.level\"\thero.level\t\t存档/键", text)
-        self.assertIn("war3map.j\t4\tInit\tudg_PlayerGold\tGetPlayerId(p)\t1000\t\t\t数组状态", text)
+        self.assertIn(
+            'war3map.j\t3\tInit\tudg_SaveKey\t\t"hero.level"\thero.level\t\t存档/键',
+            text,
+        )
+        self.assertIn(
+            "war3map.j\t4\tInit\tudg_PlayerGold\tGetPlayerId(p)\t1000\t\t\t数组状态",
+            text,
+        )
         self.assertIn("war3map.j\t5\tInit\tudg_DebugMode\t\ttrue\t\t\t开关", text)
 
     def test_ignores_comments_strings_and_globals_initializers(self):
         # Given: comments, display strings and globals declarations include assignment-looking text.
         md = MapData(path="x.w3x", name="去噪赋值图")
         md.scripts = {
-            "war3map.j": "\n".join((
-                "globals",
-                "    integer HERO_ID = 'H001'",
-                "endglobals",
-                "function Init takes nothing returns nothing",
-                '// set udg_Bad = "comment"',
-                '    call BJDebugMsg("set udg_Fake = true")',
-                '    set udg_Real = "ok"',
-                "endfunction",
-            )),
+            "war3map.j": "\n".join(
+                (
+                    "globals",
+                    "    integer HERO_ID = 'H001'",
+                    "endglobals",
+                    "function Init takes nothing returns nothing",
+                    '// set udg_Bad = "comment"',
+                    '    call BJDebugMsg("set udg_Fake = true")',
+                    '    set udg_Real = "ok"',
+                    "endfunction",
+                )
+            ),
         }
 
         # When: the assignment index is built.

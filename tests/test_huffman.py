@@ -3,6 +3,7 @@
 若 腐朽之渊 地图存在，则读取其 war3map.j（用 Huffman 压缩）并断言解出真实 JASS。
 地图不存在时跳过，保证无地图的 CI 也能通过。
 """
+
 import hashlib
 from pathlib import Path
 import random
@@ -21,7 +22,7 @@ class TestHuffmanSafety(unittest.TestCase):
     def test_output_never_exceeds_cap(self):
         # 小输入也不得解出超过 out_size 的数据（防解压炸弹）
         for n in (0, 5, 16):
-            data = bytes([0]) + bytes(n)            # data_type=0(稀疏) + 一堆 0 比特
+            data = bytes([0]) + bytes(n)  # data_type=0(稀疏) + 一堆 0 比特
             out = huff_decompress(data, 10)
             self.assertLessEqual(len(out), 10)
 
@@ -33,9 +34,9 @@ class TestHuffmanSafety(unittest.TestCase):
         for _ in range(300):
             data = bytes(rnd.randrange(256) for _ in range(rnd.randint(0, 40)))
             cap = rnd.randint(0, 200)
-            out = huff_decompress(data, cap)           # 不得抛异常 / 不得卡死
+            out = huff_decompress(data, cap)  # 不得抛异常 / 不得卡死
             self.assertIsInstance(out, (bytes, bytearray))
-            self.assertLessEqual(len(out), cap)        # 始终不超过硬上限
+            self.assertLessEqual(len(out), cap)  # 始终不超过硬上限
 
 
 def _decode_to_end(data):
@@ -46,12 +47,13 @@ def _decode_to_end(data):
     自适应树一旦与编码器失步(如新符号重复加权)就不可能在大量真实流上对齐。
     """
     from w3xtool.huffman import _InputStream, _HuffmannTree
+
     is_ = _InputStream(data)
     tree = _HuffmannTree()
     ok, dt = is_.get_8_bits()
     if not ok:
         return "EOF", 0, 0, 0
-    is_sparse = (dt == 0)
+    is_sparse = dt == 0
     if not tree.build_tree(dt):
         return "NOTREE", 0, 0, 0
     out = 0
@@ -62,7 +64,7 @@ def _decode_to_end(data):
             return "END", out, new_syms, len(data) - is_.pos
         if v == 0x1FF:
             return "ERR", out, new_syms, len(data) - is_.pos
-        if v == 0x101:                       # 新符号：审计曾怀疑此路径重复加权
+        if v == 0x101:  # 新符号：审计曾怀疑此路径重复加权
             new_syms += 1
             ok, v = is_.get_8_bits()
             if not ok:
@@ -88,6 +90,7 @@ class TestHuffmanRealStormLibStreams(unittest.TestCase):
     def test_real_huffman_sectors_decode_in_sync(self):
         import w3xtool.mpq as M
         from w3xtool.mpq import MPQArchive
+
         captured = []
         orig = M.huff_decompress
 
@@ -110,8 +113,11 @@ class TestHuffmanRealStormLibStreams(unittest.TestCase):
         new_sym_sectors = 0
         for data in captured:
             reason, out, ns, left = _decode_to_end(data)
-            self.assertEqual(reason, "END",
-                             "Huffman 扇区未在 0x100 处终止(树失步)：%s out=%d" % (reason, out))
+            self.assertEqual(
+                reason,
+                "END",
+                "Huffman 扇区未在 0x100 处终止(树失步)：%s out=%d" % (reason, out),
+            )
             self.assertLessEqual(left, 1, "END 时输入未读尽(失步)：剩 %d 字节" % left)
             perfect += 1
             if ns:

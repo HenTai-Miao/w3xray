@@ -21,47 +21,56 @@ class ScriptLoopIndexTest(unittest.TestCase):
         # Given: a JASS loop exits based on save data.
         md = MapData(path="x.w3x", name="循环图")
         md.scripts = {
-            "war3map.j": "\n".join((
-                "function Spawn takes nothing returns nothing",
-                "    loop",
-                "        exitwhen LoadInteger(udg_hash, StringHash(\"wave\"), StringHash(\"done\")) > 0",
-                "        call CreateUnit(Player(0), 'hfoo', 0, 0, 0)",
-                "    endloop",
-                "endfunction",
-            )),
+            "war3map.j": "\n".join(
+                (
+                    "function Spawn takes nothing returns nothing",
+                    "    loop",
+                    '        exitwhen LoadInteger(udg_hash, StringHash("wave"), StringHash("done")) > 0',
+                    "        call CreateUnit(Player(0), 'hfoo', 0, 0, 0)",
+                    "    endloop",
+                    "endfunction",
+                )
+            ),
         }
 
         # When: the loop index is built.
         text = _format_loops(md)
 
         # Then: the loop and its exit condition are indexed with function context.
-        self.assertIn("来源\t行号\t函数\t类型\t表达式\t调用\t变量\t字符串\t对象码\t用途\t摘要", text)
+        self.assertIn(
+            "来源\t行号\t函数\t类型\t表达式\t调用\t变量\t字符串\t对象码\t用途\t摘要",
+            text,
+        )
         self.assertIn("war3map.j\t2\tSpawn\tloop\t", text)
         self.assertIn(
             'war3map.j\t3\tSpawn\texitwhen\tLoadInteger(udg_hash, StringHash("wave"), StringHash("done")) > 0',
             text,
         )
-        self.assertIn("LoadInteger; StringHash\tudg_hash\twave; done\t\t存档循环条件", text)
+        self.assertIn(
+            "LoadInteger; StringHash\tudg_hash\twave; done\t\t存档循环条件", text
+        )
 
     def test_indexes_lua_loops_and_ignores_comments_and_strings(self):
         # Given: executable Lua loops and fake loop-looking text in comments/strings.
         md = MapData(path="x.w3x", name="Lua 循环图")
         md.scripts = {
-            "war3map.lua": "\n".join((
-                "function Tick()",
-                "    -- while LoadInteger(udg_hash, 1, 2) do",
-                '    BJDebugMsg("for i = 1, 3 do")',
-                "    while udg_Count < 10 do",
-                "        udg_Count = udg_Count + 1",
-                "    end",
-                "    for i = 1, 3 do",
-                "        UnitAddAbility(udg_Hero, FourCC(\"A001\"))",
-                "    end",
-                "    repeat",
-                "        udg_Done = true",
-                "    until GetUnitTypeId(udg_Hero) == 'H001'",
-                "end",
-            )),
+            "war3map.lua": "\n".join(
+                (
+                    "function Tick()",
+                    "    -- while LoadInteger(udg_hash, 1, 2) do",
+                    '    BJDebugMsg("for i = 1, 3 do")',
+                    "    while udg_Count < 10 do",
+                    "        udg_Count = udg_Count + 1",
+                    "    end",
+                    "    for i = 1, 3 do",
+                    '        UnitAddAbility(udg_Hero, FourCC("A001"))',
+                    "    end",
+                    "    repeat",
+                    "        udg_Done = true",
+                    "    until GetUnitTypeId(udg_Hero) == 'H001'",
+                    "end",
+                )
+            ),
         }
 
         # When: the loop index is built.
@@ -77,7 +86,7 @@ class ScriptLoopIndexTest(unittest.TestCase):
         )
         self.assertIn("GetUnitTypeId\tudg_Hero\t\tH001\t对象ID循环条件", text)
         self.assertNotIn("LoadInteger", text)
-        self.assertNotIn("for i = 1, 3 do\")", text)
+        self.assertNotIn('for i = 1, 3 do")', text)
 
 
 if __name__ == "__main__":

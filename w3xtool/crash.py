@@ -1,4 +1,5 @@
 """已知魔兽地图崩溃模式的只读静态检测。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -98,13 +99,15 @@ def _game_cache_script_risks(md: MapData) -> tuple[CrashRisk, ...]:
     for script_name, text in analysis_script_texts(md):
         if not _GAME_CACHE_RE.search(text):
             continue
-        out.append(CrashRisk(
-            code="crash.game_cache.api",
-            title="游戏缓存 API",
-            detail=(
-                "崩溃案例中包含旧版游戏缓存存储相关问题；发现 InitGameCache/"
-                "Store*/SaveGameCache 等调用，建议检查 MissionKey/缓存写入逻辑和目标版本。"
-            ),
-            source=f"脚本 {script_name}",
-        ))
+        out.append(
+            CrashRisk(
+                code="crash.game_cache.api",
+                title="游戏缓存 API",
+                detail=(
+                    "崩溃案例中包含旧版游戏缓存存储相关问题；发现 InitGameCache/"
+                    "Store*/SaveGameCache 等调用，建议检查 MissionKey/缓存写入逻辑和目标版本。"
+                ),
+                source=f"脚本 {script_name}",
+            )
+        )
     return tuple(out)

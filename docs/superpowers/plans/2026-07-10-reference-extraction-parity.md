@@ -54,7 +54,10 @@ def test_bytes_archive_source_reopens_and_closes() -> None:
     source = BytesArchiveSource("Maps\\Chapter01.w3x", _minimal_mpq_bytes())
 
     with source.open() as archive:
-        assert archive.read_file("war3map.j") == b"function main takes nothing returns nothing\nendfunction\n"
+        assert (
+            archive.read_file("war3map.j")
+            == b"function main takes nothing returns nothing\nendfunction\n"
+        )
 
     source.close()
     assert source.is_closed
@@ -155,20 +158,29 @@ git commit -m "refactor: split extraction models and sources"
 
 ```python
 def test_named_gbk_strings_file_is_decoded_below_anonymous_threshold() -> None:
-    archive = FakeArchive({
-        "Units\\HumanUnitStrings.txt": "[H001]\nName=圣骑士\nPropernames=光明使者\n".encode("gbk"),
-    })
+    archive = FakeArchive(
+        {
+            "Units\\HumanUnitStrings.txt": "[H001]\nName=圣骑士\nPropernames=光明使者\n".encode(
+                "gbk"
+            ),
+        }
+    )
 
     records = collect_text_object_records(archive)
 
-    assert [(record.obj_id, record.fields["Name"]) for record in records] == [("H001", "圣骑士")]
+    assert [(record.obj_id, record.fields["Name"]) for record in records] == [
+        ("H001", "圣骑士")
+    ]
 
 
 def test_func_and_strings_merge_by_field_role_not_archive_order() -> None:
-    archive = FakeArchive({
-        "Units\\HumanUnitStrings.txt": b"[H001]\nName=Localized\nUbertip=Readable\n",
-        "Units\\HumanUnitFunc.txt": b"[H001]\nName=Internal\nHP=1000\n",
-    }, reverse_listing=True)
+    archive = FakeArchive(
+        {
+            "Units\\HumanUnitStrings.txt": b"[H001]\nName=Localized\nUbertip=Readable\n",
+            "Units\\HumanUnitFunc.txt": b"[H001]\nName=Internal\nHP=1000\n",
+        },
+        reverse_listing=True,
+    )
 
     record = merge_text_object_records(collect_text_object_records(archive))[0]
 
@@ -211,9 +223,16 @@ Normalize and sort archive names case-insensitively, parse every trusted file wi
 - [x] **Step 4: Implement deterministic Func/Strings field merge**
 
 ```python
-_DISPLAY_FIELDS = frozenset({
-    "name", "propernames", "tip", "ubertip", "description", "editorsuffix",
-})
+_DISPLAY_FIELDS = frozenset(
+    {
+        "name",
+        "propernames",
+        "tip",
+        "ubertip",
+        "description",
+        "editorsuffix",
+    }
+)
 
 
 def _field_rank(kind: TextObjectSourceKind, field_name: str) -> int:
@@ -261,7 +280,9 @@ git commit -m "fix: recover Warcraft text object sources"
 def test_text_and_binary_candidates_coexist_without_category_suppression() -> None:
     merged = merge_object_candidates(
         (
-            candidate("单位", "H001", "hfoo", TEXT_STRINGS, {"display:name": "自定义步兵"}),
+            candidate(
+                "单位", "H001", "hfoo", TEXT_STRINGS, {"display:name": "自定义步兵"}
+            ),
             candidate("单位", "H002", "hfoo", BINARY, {"binary:uhpm": "2500"}),
         ),
         BASE_OBJECTS,
@@ -340,7 +361,9 @@ def merge_object_candidates(
     grouped = _group_candidates(candidates)
     return tuple(
         _materialize_object(key, grouped[key], base_objects)
-        for key in sorted(grouped, key=lambda item: (item[0], item[1].encode("latin-1", "replace")))
+        for key in sorted(
+            grouped, key=lambda item: (item[0], item[1].encode("latin-1", "replace"))
+        )
     )
 ```
 
@@ -381,8 +404,16 @@ git commit -m "fix: merge every object data source"
 ```python
 def test_unit_box_report_is_sorted_unique_and_includes_propernames() -> None:
     objects = (
-        game_object("H010", "后一个", {"display:propernames": "称谓乙", "display:description": "说明乙"}),
-        game_object("H001", "前一个", {"display:propernames": "称谓甲", "display:description": "说明甲"}),
+        game_object(
+            "H010",
+            "后一个",
+            {"display:propernames": "称谓乙", "display:description": "说明乙"},
+        ),
+        game_object(
+            "H001",
+            "前一个",
+            {"display:propernames": "称谓甲", "display:description": "说明甲"},
+        ),
         game_object("H001", "重复项", {}),
     )
 
@@ -406,7 +437,10 @@ def sorted_unique_objects(objects: Iterable[GameObject]) -> tuple[GameObject, ..
     by_id: dict[str, GameObject] = {}
     for obj in objects:
         by_id.setdefault(obj.obj_id, obj)
-    return tuple(by_id[key] for key in sorted(by_id, key=lambda code: code.encode("latin-1", "replace")))
+    return tuple(
+        by_id[key]
+        for key in sorted(by_id, key=lambda code: code.encode("latin-1", "replace"))
+    )
 ```
 
 Use this view in TSV and box writers. A unit block writes
@@ -448,7 +482,9 @@ git commit -m "fix: match reference object ID reports"
 
 ```python
 def test_mpq_user_data_header_points_to_real_archive() -> None:
-    path = write_fixture(_wrap_with_user_data(_minimal_mpq_bytes(), payload=b"author metadata"))
+    path = write_fixture(
+        _wrap_with_user_data(_minimal_mpq_bytes(), payload=b"author metadata")
+    )
 
     with MPQArchive(path) as archive:
         assert archive.read_file("war3map.j").startswith(b"function main")
@@ -554,11 +590,14 @@ input SHA256, output SHA256, compression mask, and license in
 cross-check, but fixture truth remains 9.25.
 
 ```python
-@pytest.mark.parametrize("fixture_name", (
-    "stormlib-compression-huffman-adpcm-mono.bin",
-    "stormlib-compression-huffman-adpcm-stereo.bin",
-    "stormlib-compression-zlib-sparse.bin",
-))
+@pytest.mark.parametrize(
+    "fixture_name",
+    (
+        "stormlib-compression-huffman-adpcm-mono.bin",
+        "stormlib-compression-huffman-adpcm-stereo.bin",
+        "stormlib-compression-zlib-sparse.bin",
+    ),
+)
 def test_stormlib_combined_compression_fixture(fixture_name: str) -> None:
     compressed, expected = read_compression_fixture(fixture_name)
 
@@ -658,7 +697,9 @@ def test_jass_and_lua_are_both_analyzed_but_wtg_and_raw_wct_are_not_text() -> No
     assert "war3map.lua" in md.scripts
     assert "war3map.wtg" not in md.scripts
     assert "war3map.wct" not in md.scripts
-    assert list(name for name in md.scripts if "wct" in name.casefold()) == ["war3map.wct(自定义代码).txt"]
+    assert list(name for name in md.scripts if "wct" in name.casefold()) == [
+        "war3map.wct(自定义代码).txt"
+    ]
 
 
 def test_eca_tsv_renders_wts_object_name_and_array_index() -> None:
@@ -694,7 +735,8 @@ def analysis_script_texts(md: MapData) -> tuple[tuple[str, str], ...]:
     return tuple(
         (name, text)
         for name, text in sorted(md.scripts.items())
-        if name.casefold().endswith((".j", ".lua", ".txt")) and not name.casefold().endswith(".wts")
+        if name.casefold().endswith((".j", ".lua", ".txt"))
+        and not name.casefold().endswith(".wts")
     )
 ```
 
@@ -827,7 +869,9 @@ def test_readable_fallback_sources_expose_known_path_inventory(source_factory) -
 
 
 def test_client_icon_used_by_object_is_exported_with_source_label() -> None:
-    report = export_referenced_client_assets(map_with_icon("ReplaceableTextures\\CommandButtons\\BTNHero.blp"), source)
+    report = export_referenced_client_assets(
+        map_with_icon("ReplaceableTextures\\CommandButtons\\BTNHero.blp"), source
+    )
 
     assert report.items[0].status == "已导出"
     assert report.items[0].source == "客户端数据"
@@ -848,7 +892,9 @@ class GameDataInventorySource(GameDataSource, Protocol):
         raise NotImplementedError
 
 
-def supports_inventory(source: GameDataSource | None) -> TypeGuard[GameDataInventorySource]:
+def supports_inventory(
+    source: GameDataSource | None,
+) -> TypeGuard[GameDataInventorySource]:
     return source is not None and callable(getattr(source, "iter_entries", None))
 ```
 
@@ -899,8 +945,12 @@ git commit -m "feat: unify Warcraft client data sources"
 - [x] **Step 1: Write failed-write and full reference-parity tests**
 
 ```python
-def test_pack_reports_partial_success_instead_of_counting_failed_file(monkeypatch, tmp_path) -> None:
-    monkeypatch.setattr("w3xtool.knowledge_io.write_text_safely", fail_only("对象ID/单位.tsv"))
+def test_pack_reports_partial_success_instead_of_counting_failed_file(
+    monkeypatch, tmp_path
+) -> None:
+    monkeypatch.setattr(
+        "w3xtool.knowledge_io.write_text_safely", fail_only("对象ID/单位.tsv")
+    )
 
     report = write_knowledge_pack_report(minimal_map_data(), str(tmp_path))
 
@@ -909,13 +959,17 @@ def test_pack_reports_partial_success_instead_of_counting_failed_file(monkeypatc
     assert report.items_by_path["对象ID/单位.tsv"].error
 
 
-def test_reference_extraction_fixture_produces_complete_sorted_four_category_reports(tmp_path) -> None:
+def test_reference_extraction_fixture_produces_complete_sorted_four_category_reports(
+    tmp_path,
+) -> None:
     md = load_map(str(REFERENCE_PARITY_MAP))
     report = write_knowledge_pack_report(md, str(tmp_path))
 
     assert report.failed_count == 0
     for category in ("单位", "物品", "技能", "科技"):
-        text = (tmp_path / "盒子兼容ID" / f"{category}ID.txt").read_text(encoding="utf-8")
+        text = (tmp_path / "盒子兼容ID" / f"{category}ID.txt").read_text(
+            encoding="utf-8"
+        )
         ids = re.findall(r"^ID：(....)$", text, re.MULTILINE)
         assert ids == sorted(set(ids), key=lambda code: code.encode("latin-1"))
         assert "TRIGSTR_" not in text

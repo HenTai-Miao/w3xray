@@ -80,9 +80,7 @@ def _detect_offtable_key(e0: int, e1: int, off0: int, max_off1: int) -> int | No
             ((~key1 & 0xFFFFFFFF) << 0x15) + 0x11111111 | (key1 >> 0x0B)
         ) & 0xFFFFFFFF
         next_seed = (off0 + key2 + (key2 << 5) + 3) & 0xFFFFFFFF
-        next_seed = (
-            next_seed + CRYPT_TABLE[0x400 + (next_key & 0xFF)]
-        ) & 0xFFFFFFFF
+        next_seed = (next_seed + CRYPT_TABLE[0x400 + (next_key & 0xFF)]) & 0xFFFFFFFF
         if off0 < (e1 ^ ((next_key + next_seed) & 0xFFFFFFFF)) <= max_off1:
             return key1
     return None

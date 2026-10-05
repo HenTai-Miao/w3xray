@@ -8,10 +8,12 @@ from w3xtool.knowledge_results import KnowledgeWriteItem, KnowledgeWriteReport
 
 def test_partial_pack_presentation_names_counts_and_first_failure() -> None:
     # Given: one artifact succeeded and one failed.
-    report = KnowledgeWriteReport((
-        KnowledgeWriteItem("地图信息.txt", True, 12, None),
-        KnowledgeWriteItem("对象ID/单位.tsv", False, 0, "disk full"),
-    ))
+    report = KnowledgeWriteReport(
+        (
+            KnowledgeWriteItem("地图信息.txt", True, 12, None),
+            KnowledgeWriteItem("对象ID/单位.tsv", False, 0, "disk full"),
+        )
+    )
 
     # When: GUI copy is built from the structured result.
     presentation = build_pack_export_presentation("C:/Temp/pack", report)
@@ -27,9 +29,9 @@ def test_partial_pack_presentation_names_counts_and_first_failure() -> None:
 
 def test_failed_pack_presentation_uses_error_state() -> None:
     # Given: every attempted artifact failed.
-    report = KnowledgeWriteReport((
-        KnowledgeWriteItem("地图信息.txt", False, 0, "read-only filesystem"),
-    ))
+    report = KnowledgeWriteReport(
+        (KnowledgeWriteItem("地图信息.txt", False, 0, "read-only filesystem"),)
+    )
 
     # When: GUI copy is built from the failed result.
     presentation = build_pack_export_presentation("C:/Temp/pack", report)

@@ -23,7 +23,9 @@ class CascLibDistError(RuntimeError):
         return f"CascLib Windows 打包校验失败：{self.reason}：{self.path}"
 
 
-def validate_casclib_dist_assets(project_root: Path, *, system: str | None = None) -> None:
+def validate_casclib_dist_assets(
+    project_root: Path, *, system: str | None = None
+) -> None:
     """Require a matching SHA256 and x64 PE DLL for Windows builds only."""
     current_system = system or platform.system()
     if current_system != "Windows":
@@ -48,7 +50,7 @@ def _is_x64_pe(path: Path) -> bool:
         return False
     pe_offset = int.from_bytes(data[0x3C:0x40], "little")
     header_end = pe_offset + 6
-    if header_end > len(data) or data[pe_offset:pe_offset + 4] != b"PE\0\0":
+    if header_end > len(data) or data[pe_offset : pe_offset + 4] != b"PE\0\0":
         return False
-    machine = int.from_bytes(data[pe_offset + 4:header_end], "little")
+    machine = int.from_bytes(data[pe_offset + 4 : header_end], "little")
     return machine == _AMD64_MACHINE

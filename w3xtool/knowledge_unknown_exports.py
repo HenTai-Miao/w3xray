@@ -41,7 +41,9 @@ class UnknownArchive(Protocol):
     def read_block_anon(self, block: UnknownBlock) -> bytes | None: ...
 
 
-def write_unknown_files(md: "MapData", out_dir: str, known_names: Sequence[str] = ()) -> int:
+def write_unknown_files(
+    md: "MapData", out_dir: str, known_names: Sequence[str] = ()
+) -> int:
     """Write anonymous blocks from a readable MPQ source into ``out_dir``."""
     try:
         with open_map_source(md) as archive:
@@ -87,14 +89,20 @@ def write_unknown_files_from_archive(
             break
         declared_size = max(1, block.file_size)
         if declared_size > remaining_bytes:
-            rows.append(_manifest_row(index, "Skipped", "", 0, block, "累计大小超过导出上限"))
+            rows.append(
+                _manifest_row(index, "Skipped", "", 0, block, "累计大小超过导出上限")
+            )
             continue
         data = archive.read_block_anon(block)
         if data is None:
             raw = _block_raw_payload(archive, block)
             consumed_bytes += max(declared_size, len(raw))
             if len(raw) > remaining_bytes:
-                rows.append(_manifest_row(index, "Skipped", "", 0, block, "累计大小超过导出上限"))
+                rows.append(
+                    _manifest_row(
+                        index, "Skipped", "", 0, block, "累计大小超过导出上限"
+                    )
+                )
                 continue
             relative_path, size, written = _write_raw_block(out_dir, index, raw)
             kind = "UnknownRaw"
@@ -102,7 +110,11 @@ def write_unknown_files_from_archive(
         else:
             consumed_bytes += max(declared_size, len(data))
             if len(data) > remaining_bytes:
-                rows.append(_manifest_row(index, "Skipped", "", 0, block, "累计大小超过导出上限"))
+                rows.append(
+                    _manifest_row(
+                        index, "Skipped", "", 0, block, "累计大小超过导出上限"
+                    )
+                )
                 continue
             relative_path, size, written = _write_unknown_block(out_dir, index, data)
             kind = "Unknown"
@@ -125,7 +137,9 @@ def _named_block_indexes(
     return indexes
 
 
-def _write_unknown_block(out_dir: str, index: int, data: bytes) -> tuple[str, int, bool]:
+def _write_unknown_block(
+    out_dir: str, index: int, data: bytes
+) -> tuple[str, int, bool]:
     ext = guess_extension(data)
     relative_path = f"Unknown/block_{index:06d}.{ext}"
     result = write_bytes(out_dir, relative_path, data)
@@ -160,13 +174,15 @@ def _manifest_row(
     block: UnknownBlock,
     status: str,
 ) -> str:
-    return "\t".join((
-        str(index),
-        kind,
-        relative_path,
-        str(size),
-        f"0x{block.flags:08X}",
-        str(block.file_size),
-        str(block.comp_size),
-        status,
-    ))
+    return "\t".join(
+        (
+            str(index),
+            kind,
+            relative_path,
+            str(size),
+            f"0x{block.flags:08X}",
+            str(block.file_size),
+            str(block.comp_size),
+            status,
+        )
+    )

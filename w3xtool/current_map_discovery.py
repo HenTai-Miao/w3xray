@@ -86,7 +86,9 @@ def locate_current_map(
         open_report = open_probe(processes)
         arguments = current_map_process.explicit_argument_evidence(processes, roots)
         direct_evidence = chain(open_report.evidence, arguments)
-        evidence.extend(item for item in direct_evidence if _is_regular_map_file(item.path))
+        evidence.extend(
+            item for item in direct_evidence if _is_regular_map_file(item.path)
+        )
         clock_ns = time.time_ns() if now_ns is None else now_ns
         evidence.extend(_scan_hint_evidence(roots, clock_ns))
         evidence.extend(_log_hint_evidence(Path.home(), roots, clock_ns))
@@ -97,7 +99,9 @@ def locate_current_map(
     else:
         direct_probe_available = True
 
-    return models.resolve_current_map(processes, evidence, direct_probe_available=direct_probe_available)
+    return models.resolve_current_map(
+        processes, evidence, direct_probe_available=direct_probe_available
+    )
 
 
 def _in_use_evidence(
@@ -108,7 +112,9 @@ def _in_use_evidence(
     hints = [item for item in evidence if item.kind in _HINT_EVIDENCE_KINDS]
     hints.sort(key=lambda item: item.mtime_ns or 0, reverse=True)
     hits = provider([item.path for item in hints[:_MAX_PROBED_HINTS]])
-    return tuple(models.MapEvidence(path, models.EvidenceKind.LIVE_FILE) for path in hits)
+    return tuple(
+        models.MapEvidence(path, models.EvidenceKind.LIVE_FILE) for path in hits
+    )
 
 
 def _known_map_roots(home: Path) -> tuple[Path, ...]:
@@ -116,16 +122,21 @@ def _known_map_roots(home: Path) -> tuple[Path, ...]:
     return (
         home / "Documents" / "Warcraft III" / "Maps",
         home / "Library/Application Support/Blizzard/Warcraft III/Maps",
-        home / "Library/Application Support/CrossOver/Bottles/Battle.net/drive_c"
+        home
+        / "Library/Application Support/CrossOver/Bottles/Battle.net/drive_c"
         / "users/crossover/Documents/Warcraft III/Maps",
         home / f".wine/drive_c/users/{user}/Documents/Warcraft III/Maps",
         home / ".wine/drive_c/Program Files (x86)/Warcraft III/Maps",
         Path("/Applications/Warcraft III/Maps"),
-        Path("/Volumes") / user / "Program Files (x86)/Warcraft III/Warcraft III Frozen Throne/Maps",
+        Path("/Volumes")
+        / user
+        / "Program Files (x86)/Warcraft III/Warcraft III Frozen Throne/Maps",
     )
 
 
-def _scan_hint_evidence(roots: tuple[Path, ...], now_ns: int) -> tuple[models.MapEvidence, ...]:
+def _scan_hint_evidence(
+    roots: tuple[Path, ...], now_ns: int
+) -> tuple[models.MapEvidence, ...]:
     pending = deque((root, 0) for root in roots)
     evidence: set[models.MapEvidence] = set()
     seen_entries = 0
@@ -149,7 +160,9 @@ def _scan_hint_evidence(roots: tuple[Path, ...], now_ns: int) -> tuple[models.Ma
                     if depth < _MAX_DEPTH:
                         pending.append((Path(entry.path), depth + 1))
                     continue
-                if not stat.S_ISREG(mode) or not _is_recent(metadata.st_mtime_ns, now_ns):
+                if not stat.S_ISREG(mode) or not _is_recent(
+                    metadata.st_mtime_ns, now_ns
+                ):
                     continue
                 path = Path(entry.path)
                 suffix = path.suffix.casefold()
@@ -192,7 +205,12 @@ def _log_hint_evidence(
 
 
 def _read_bounded_log(path: Path, now_ns: int) -> bytes | None:
-    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+    )
     try:
         descriptor = os.open(path, flags)
         with os.fdopen(descriptor, "rb") as stream:
@@ -211,7 +229,7 @@ def _opening_map_path(line: str) -> str | None:
     markers = list(_OPENING_MAP_MARKER.finditer(line))
     if not markers:
         return None
-    raw = line[markers[-1].end():].strip()
+    raw = line[markers[-1].end() :].strip()
     return raw or None
 
 
@@ -231,7 +249,9 @@ def _resolve_log_hint(raw: str, roots: tuple[Path, ...]) -> Path | None:
     return None
 
 
-def _wgc_reference_evidence(config_path: Path, roots: tuple[Path, ...], now_ns: int) -> tuple[models.MapEvidence, ...]:
+def _wgc_reference_evidence(
+    config_path: Path, roots: tuple[Path, ...], now_ns: int
+) -> tuple[models.MapEvidence, ...]:
     payload = _read_recent_wgc(config_path, now_ns)
     if payload is None:
         return ()
@@ -246,19 +266,30 @@ def _wgc_reference_evidence(config_path: Path, roots: tuple[Path, ...], now_ns: 
     for base in _wgc_bases(config_path, roots):
         candidate = _regular_descendant(base, parts)
         if candidate is not None:
-            evidence.add(models.MapEvidence(candidate, models.EvidenceKind.WGC_REFERENCE))
+            evidence.add(
+                models.MapEvidence(candidate, models.EvidenceKind.WGC_REFERENCE)
+            )
     return tuple(evidence)
 
 
 def _read_recent_wgc(path: Path, now_ns: int) -> bytes | None:
-    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_BINARY", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
+    )
     try:
         descriptor = os.open(path, flags)
         with os.fdopen(descriptor, "rb") as stream:
             metadata = os.fstat(stream.fileno())
             regular = stat.S_ISREG(metadata.st_mode)
             bounded = metadata.st_size <= _MAX_WGC_BYTES
-            if not regular or not bounded or not _is_recent(metadata.st_mtime_ns, now_ns):
+            if (
+                not regular
+                or not bounded
+                or not _is_recent(metadata.st_mtime_ns, now_ns)
+            ):
                 return None
             payload = stream.read(_MAX_WGC_BYTES + 1)
     except OSError:
@@ -271,7 +302,11 @@ def _relative_windows_map_parts(raw_path: str) -> tuple[str, ...] | None:
     if windows_path.drive or windows_path.root:
         return None
     parts = tuple(part for part in windows_path.parts if part not in {"", "."})
-    if not parts or ".." in parts or PureWindowsPath(parts[-1]).suffix.casefold() not in _MAP_SUFFIXES:
+    if (
+        not parts
+        or ".." in parts
+        or PureWindowsPath(parts[-1]).suffix.casefold() not in _MAP_SUFFIXES
+    ):
         return None
     return parts
 

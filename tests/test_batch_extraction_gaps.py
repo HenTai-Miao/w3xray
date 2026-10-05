@@ -83,22 +83,36 @@ class BatchExtractionGapsTest(unittest.TestCase):
             self.assertEqual(count, 3)
             with open(os.path.join(out, "Unknown", "block_000001.blp"), "rb") as handle:
                 self.assertEqual(handle.read(), b"BLP1texture")
-            with open(os.path.join(out, "UnknownRaw", "block_000002.raw"), "rb") as handle:
+            with open(
+                os.path.join(out, "UnknownRaw", "block_000002.raw"), "rb"
+            ) as handle:
                 self.assertEqual(handle.read(), b"RAW!!")
-            with open(os.path.join(out, "Unknown_manifest.tsv"), encoding="utf-8") as handle:
+            with open(
+                os.path.join(out, "Unknown_manifest.tsv"), encoding="utf-8"
+            ) as handle:
                 manifest = handle.read()
-            self.assertIn("block_index\tkind\trelative_path\tbytes\tflags\tfile_size\tcomp_size\tstatus", manifest)
+            self.assertIn(
+                "block_index\tkind\trelative_path\tbytes\tflags\tfile_size\tcomp_size\tstatus",
+                manifest,
+            )
             self.assertIn("1\tUnknown\tUnknown/block_000001.blp\t11", manifest)
             self.assertIn("2\tUnknownRaw\tUnknownRaw/block_000002.raw\t5", manifest)
 
     def test_resource_body_contents_add_second_level_references(self) -> None:
         # Given: a readable UI config file references a texture not present in object fields/scripts.
-        with tempfile.TemporaryDirectory() as source, tempfile.TemporaryDirectory() as out:
+        with (
+            tempfile.TemporaryDirectory() as source,
+            tempfile.TemporaryDirectory() as out,
+        ):
             os.makedirs(os.path.join(source, "UI", "FrameDef"), exist_ok=True)
             os.makedirs(os.path.join(source, "war3mapImported"), exist_ok=True)
-            with open(os.path.join(source, "UI", "FrameDef", "Main.fdf"), "wb") as handle:
+            with open(
+                os.path.join(source, "UI", "FrameDef", "Main.fdf"), "wb"
+            ) as handle:
                 handle.write(b'Backdrop "war3mapImported\\\\Panel.blp"\n')
-            with open(os.path.join(source, "war3mapImported", "Panel.blp"), "wb") as handle:
+            with open(
+                os.path.join(source, "war3mapImported", "Panel.blp"), "wb"
+            ) as handle:
                 handle.write(b"BLP1panel")
             md = MapData(path=source, name="二级资源图")
             md.all_files = ["UI\\FrameDef\\Main.fdf", "war3mapImported\\Panel.blp"]
@@ -110,20 +124,33 @@ class BatchExtractionGapsTest(unittest.TestCase):
             # Then: the texture is linked to the FDF body and treated as referenced.
             self.assertEqual(report.items[0].source_path, "ui\\framedef\\main.fdf")
             self.assertEqual(report.items[0].target_path, "war3mapimported\\panel.blp")
-            with open(os.path.join(out, "资源内容引用.tsv"), encoding="utf-8") as handle:
+            with open(
+                os.path.join(out, "资源内容引用.tsv"), encoding="utf-8"
+            ) as handle:
                 content_refs = handle.read()
-            self.assertIn("ui\\framedef\\main.fdf\twar3mapimported\\panel.blp", content_refs)
-            with open(os.path.join(out, "资源资产索引.tsv"), encoding="utf-8") as handle:
+            self.assertIn(
+                "ui\\framedef\\main.fdf\twar3mapimported\\panel.blp", content_refs
+            )
+            with open(
+                os.path.join(out, "资源资产索引.tsv"), encoding="utf-8"
+            ) as handle:
                 inventory = handle.read()
             self.assertIn("war3mapimported\\panel.blp\t图像\t存在/已引用", inventory)
 
     def test_terrain_and_pathing_exports_are_written_for_knowledge_pack(self) -> None:
         # Given: a readable source folder with W3E terrain and WPM pathing files.
-        with tempfile.TemporaryDirectory() as source, tempfile.TemporaryDirectory() as out:
+        with (
+            tempfile.TemporaryDirectory() as source,
+            tempfile.TemporaryDirectory() as out,
+        ):
             with open(os.path.join(source, "war3map.w3e"), "wb") as handle:
                 handle.write(_w3e_with_tiles())
             with open(os.path.join(source, "war3map.wpm"), "wb") as handle:
-                handle.write(b"MP3W" + struct.pack("<iii", 0, 2, 2) + bytes((0x02, 0x04, 0x08, 0x40)))
+                handle.write(
+                    b"MP3W"
+                    + struct.pack("<iii", 0, 2, 2)
+                    + bytes((0x02, 0x04, 0x08, 0x40))
+                )
             md = MapData(path=source, name="地形图")
 
             # When: terrain exports are written.

@@ -1,9 +1,14 @@
 """GUI 地图信息标签页：展示 war3map.w3i 解析出的名/作者/玩家/脚本语言等。"""
+
 import unittest
 
 from tests.gui_base import GuiTestCase
 from w3xtool.api import MapData
-from w3xtool.gameconfig import GameConfiguration, GameConfigPlayer, NamedGameConfiguration
+from w3xtool.gameconfig import (
+    GameConfiguration,
+    GameConfigPlayer,
+    NamedGameConfiguration,
+)
 from w3xtool.imp import ImportEntry, ImportSummary
 from w3xtool.mmp import PreviewIcon, PreviewIconSummary
 from w3xtool.w3i import W3iInfo, Player, Force
@@ -23,9 +28,17 @@ class TestInfoTab(GuiTestCase):
         return self.app.info_box.get("1.0", "end")
 
     def test_info_rendered(self):
-        info = W3iInfo(version=25, map_name="测试图", author="老王",
-                       description="一句话", recommended_players="1-4",
-                       width=128, height=128, melee=True, script_type="Lua")
+        info = W3iInfo(
+            version=25,
+            map_name="测试图",
+            author="老王",
+            description="一句话",
+            recommended_players="1-4",
+            width=128,
+            height=128,
+            melee=True,
+            script_type="Lua",
+        )
         info.players = [Player(0, 1, 1, 0, "玩家甲"), Player(1, 2, 2, 0, "电脑乙")]
         info.forces = [Force(name="队伍A", allied=True, players=[1, 2])]
         md = MapData(path="x", name="测试图")
@@ -42,15 +55,29 @@ class TestInfoTab(GuiTestCase):
         md = MapData(path="x", name="无信息图")
         md.w3i = None
         self.app.map_data = md
-        self.app._refresh_info()        # 不应抛
+        self.app._refresh_info()  # 不应抛
         self.assertIn("无", self._text())
 
     def test_world_metadata_rendered(self):
         md = MapData(path="x", name="世界数据图")
         md.regions = [Region(0, 0, 128, 128, "出生区", 1, "", "", (255, 0, 0), 255)]
         md.cameras = [Camera(0, 0, 0, 0, 304, 1650, 0, 70, 5000, 100, "开场镜头")]
-        md.sounds = [Sound("导入声", "war3mapImported\\voice.wav", "", 16, 0, 0, 127,
-                           1.0, 0, 100, 1000, 3000)]
+        md.sounds = [
+            Sound(
+                "导入声",
+                "war3mapImported\\voice.wav",
+                "",
+                16,
+                0,
+                0,
+                127,
+                1.0,
+                0,
+                100,
+                1000,
+                3000,
+            )
+        ]
         self.app.map_data = md
         self.app._refresh_info()
         txt = self._text()
@@ -69,7 +96,11 @@ class TestInfoTab(GuiTestCase):
                     flags=0x02,
                     base_speed=4,
                     map_path="Maps\\Anime\\Test.w3x",
-                    players=(GameConfigPlayer(0, 0, 0x02, 1, 90, 0x04, 2, "AI Scripts\\rush.ai"),),
+                    players=(
+                        GameConfigPlayer(
+                            0, 0, 0x02, 1, 90, 0x04, 2, "AI Scripts\\rush.ai"
+                        ),
+                    ),
                 ),
             )
         ]
@@ -93,10 +124,16 @@ class TestInfoTab(GuiTestCase):
             script_count=0,
             categories=(TriggerCategory(42, "系统"),),
             variables=(TriggerVariable("Count", "integer", 1, False, 1, True, "5"),),
-            triggers=(TriggerHeader("初始化", "", False, True, False, False, True, 42, 0),),
+            triggers=(
+                TriggerHeader("初始化", "", False, True, False, False, True, 42, 0),
+            ),
             has_unexpanded_functions=True,
-            missing_schema_functions=(UnknownTriggerFunction("初始化", "MissingAction", 2, 0x44),),
-            parse_failures=(TriggerParseFailure("初始化", "BadAction", 0x88, "bad bytes"),),
+            missing_schema_functions=(
+                UnknownTriggerFunction("初始化", "MissingAction", 2, 0x44),
+            ),
+            parse_failures=(
+                TriggerParseFailure("初始化", "BadAction", 0x88, "bad bytes"),
+            ),
         )
         self.app.map_data = md
         self.app._refresh_info()

@@ -7,6 +7,7 @@
 
 纯函数 fuzzy_score(query, text) 已从 GUI 抽到 w3xtool.search，可独立测试。
 """
+
 import unittest
 
 from w3xtool.search import compile_query, fuzzy_score
@@ -27,11 +28,11 @@ class TestLike(unittest.TestCase):
 
     def test_prefix(self):
         self.assertIsNotNone(fuzzy_score("abc%", "abcdef"))
-        self.assertIsNone(fuzzy_score("abc%", "xabcdef"))   # 不以 abc 开头
+        self.assertIsNone(fuzzy_score("abc%", "xabcdef"))  # 不以 abc 开头
 
     def test_suffix(self):
         self.assertIsNotNone(fuzzy_score("%def", "abcdef"))
-        self.assertIsNone(fuzzy_score("%def", "abcdefx"))   # 不以 def 结尾
+        self.assertIsNone(fuzzy_score("%def", "abcdefx"))  # 不以 def 结尾
 
     def test_suffix_picks_trailing_occurrence(self):
         # 文本里 ab 出现两次，%ab 仍应靠结尾命中
@@ -39,8 +40,8 @@ class TestLike(unittest.TestCase):
         self.assertIsNone(fuzzy_score("%ab", "abxabx"))
 
     def test_middle_wildcard(self):
-        self.assertIsNotNone(fuzzy_score("a%b", "axxxb"))    # a 开头 b 结尾
-        self.assertIsNone(fuzzy_score("a%b", "xayb"))        # 不以 a 开头
+        self.assertIsNotNone(fuzzy_score("a%b", "axxxb"))  # a 开头 b 结尾
+        self.assertIsNone(fuzzy_score("a%b", "xayb"))  # 不以 a 开头
 
     def test_bare_term_is_implicit_contains(self):
         # 裸词不带 % → 等价于 %词%（包含）
@@ -61,8 +62,7 @@ class TestLike(unittest.TestCase):
         self.assertIsNotNone(fuzzy_score("%", "随便什么"))
 
     def test_earlier_match_scores_higher(self):
-        self.assertGreater(fuzzy_score("%abc%", "abcxx"),
-                           fuzzy_score("%abc%", "xxabc"))
+        self.assertGreater(fuzzy_score("%abc%", "abcxx"), fuzzy_score("%abc%", "xxabc"))
 
 
 class TestEq(unittest.TestCase):
@@ -108,9 +108,9 @@ class TestAndOr(unittest.TestCase):
     def test_and_binds_tighter_than_or(self):
         # a && b || c == (a && b) || c：只命中 c 也应通过
         q = "%力量% && %巨剑% || %戒指%"
-        self.assertIsNotNone(fuzzy_score(q, "敏捷戒指"))          # 命中 c
-        self.assertIsNotNone(fuzzy_score(q, "力量巨剑"))          # 命中 a&&b
-        self.assertIsNone(fuzzy_score(q, "力量法杖"))             # a 命中但 b 不,且无 c
+        self.assertIsNotNone(fuzzy_score(q, "敏捷戒指"))  # 命中 c
+        self.assertIsNotNone(fuzzy_score(q, "力量巨剑"))  # 命中 a&&b
+        self.assertIsNone(fuzzy_score(q, "力量法杖"))  # a 命中但 b 不,且无 c
 
     def test_or_takes_best_of_branch(self):
         # OR 取较优分支，命中即非 None
@@ -123,20 +123,20 @@ class TestParens(unittest.TestCase):
         q = "(%剑% || %法杖%) && %智力%"
         self.assertIsNotNone(fuzzy_score(q, "智力法杖"))
         self.assertIsNotNone(fuzzy_score(q, "智力圣剑"))
-        self.assertIsNone(fuzzy_score(q, "力量圣剑"))            # 缺智力
-        self.assertIsNone(fuzzy_score(q, "智力指环"))            # 缺剑/法杖
+        self.assertIsNone(fuzzy_score(q, "力量圣剑"))  # 缺智力
+        self.assertIsNone(fuzzy_score(q, "智力指环"))  # 缺剑/法杖
 
     def test_nested_parens(self):
         q = "%装备% && (%剑% || (%法杖% && %奥术%))"
         self.assertIsNotNone(fuzzy_score(q, "装备 圣剑"))
         self.assertIsNotNone(fuzzy_score(q, "装备 奥术法杖"))
-        self.assertIsNone(fuzzy_score(q, "装备 普通法杖"))      # 法杖但非奥术,也无剑
+        self.assertIsNone(fuzzy_score(q, "装备 普通法杖"))  # 法杖但非奥术,也无剑
 
     def test_deep_nested_group_keeps_trailing_condition(self):
         # 深嵌套括号(超过旧 _MAX_DEPTH=100)后的 && 条件不该被静默丢弃
         q = "(" * 200 + "%a%" + ")" * 200 + " && %c%"
-        self.assertIsNone(fuzzy_score(q, "a"))        # 缺 c → && %c% 生效则 miss
-        self.assertIsNotNone(fuzzy_score(q, "a c"))   # a 与 c 都在 → 命中
+        self.assertIsNone(fuzzy_score(q, "a"))  # 缺 c → && %c% 生效则 miss
+        self.assertIsNotNone(fuzzy_score(q, "a c"))  # a 与 c 都在 → 命中
 
     def test_deep_nested_group_keeps_leading_condition(self):
         q = "%c% && " + "(" * 200 + "%a%" + ")" * 200
@@ -211,10 +211,18 @@ class TestRobustnessNoCrash(unittest.TestCase):
 
     def test_random_fuzz_never_crashes(self):
         import random
+
         rnd = random.Random(0xC0FFEE)
         alph = list('%&|()="\\ 智力剑abAB12:+')
-        texts = ["", " ", "智力圣剑 等级:E 攻击+20% (冷却:5)", "a" * 300,
-                 "I06Y 等级:EX", "&&||(())", '"q" || %z%']
+        texts = [
+            "",
+            " ",
+            "智力圣剑 等级:E 攻击+20% (冷却:5)",
+            "a" * 300,
+            "I06Y 等级:EX",
+            "&&||(())",
+            '"q" || %z%',
+        ]
         for _ in range(20_000):
             q = "".join(rnd.choice(alph) for _ in range(rnd.randint(0, 16)))
             t = rnd.choice(texts)
@@ -226,14 +234,31 @@ class TestCompiledQuery(unittest.TestCase):
     """compile_query().score() 必须与一次性 fuzzy_score() 完全等价（只是少解析几次）。"""
 
     QUERIES = [
-        "", "  ", "%剑%", "智力", "剑%", "%法杖", "a%b",
-        '="等级:E"', "%智力% && %圣剑%", "%剑% || %法杖%",
-        "(%敏捷% || %全属性%) && \"等级:E\"".replace('"', '="', 1),
-        r"攻击+20\%", "%ABC%", "%力量% && %巨剑% || %戒指%",
+        "",
+        "  ",
+        "%剑%",
+        "智力",
+        "剑%",
+        "%法杖",
+        "a%b",
+        '="等级:E"',
+        "%智力% && %圣剑%",
+        "%剑% || %法杖%",
+        '(%敏捷% || %全属性%) && "等级:E"'.replace('"', '="', 1),
+        r"攻击+20\%",
+        "%ABC%",
+        "%力量% && %巨剑% || %戒指%",
     ]
     TEXTS = [
-        "高级智力圣剑 等级:E 攻击+20%", "审判圣剑", "奥术法杖", "敏捷之靴",
-        "全属性指环 等级:EX", "ABCDEF", "力量巨剑", "敏捷戒指", "",
+        "高级智力圣剑 等级:E 攻击+20%",
+        "审判圣剑",
+        "奥术法杖",
+        "敏捷之靴",
+        "全属性指环 等级:EX",
+        "ABCDEF",
+        "力量巨剑",
+        "敏捷戒指",
+        "",
     ]
 
     def test_compiled_matches_fuzzy_score(self):
@@ -256,6 +281,7 @@ class TestLikeOracle(unittest.TestCase):
 
     def test_contains_matches_python_in(self):
         import random
+
         rnd = random.Random(7)
         for _ in range(8000):
             needle = "".join(rnd.choice("abcd") for _ in range(rnd.randint(1, 4)))
@@ -265,14 +291,21 @@ class TestLikeOracle(unittest.TestCase):
 
     def test_prefix_suffix_match_startswith_endswith(self):
         import random
+
         rnd = random.Random(11)
         for _ in range(8000):
             needle = "".join(rnd.choice("abcd") for _ in range(rnd.randint(1, 4)))
             text = "".join(rnd.choice("abcd") for _ in range(rnd.randint(0, 12)))
-            self.assertEqual(fuzzy_score(needle + "%", text) is not None,
-                             text.startswith(needle), ("prefix", needle, text))
-            self.assertEqual(fuzzy_score("%" + needle, text) is not None,
-                             text.endswith(needle), ("suffix", needle, text))
+            self.assertEqual(
+                fuzzy_score(needle + "%", text) is not None,
+                text.startswith(needle),
+                ("prefix", needle, text),
+            )
+            self.assertEqual(
+                fuzzy_score("%" + needle, text) is not None,
+                text.endswith(needle),
+                ("suffix", needle, text),
+            )
 
 
 class TestDeepNestingNoStackBlow(unittest.TestCase):
@@ -290,8 +323,8 @@ class TestDeepNestingNoStackBlow(unittest.TestCase):
 
     def test_alternating_3000_levels_evaluates(self):
         cq = compile_query(self._nest(("&&", "||"), 3000))
-        self.assertIsNotNone(cq.score("aaaa"))   # 命中：不抛 RecursionError
-        self.assertIsNone(cq.score("zzz"))       # 未命中：最外层为 && 链，缺 a 即 None
+        self.assertIsNotNone(cq.score("aaaa"))  # 命中：不抛 RecursionError
+        self.assertIsNone(cq.score("zzz"))  # 未命中：最外层为 && 链，缺 a 即 None
 
     def test_deep_nesting_preserves_and_or_semantics(self):
         # ((%a% && %b%) || %z%) 反复嵌套，外层交替 || / &&

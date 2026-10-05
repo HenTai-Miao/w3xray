@@ -52,7 +52,9 @@ def test_rejects_non_relative_output_names(name: str) -> None:
 
 
 def test_normalizes_safe_archive_separators(tmp_path: Path) -> None:
-    assert safe_relative_path(r"scripts\war3map.j") == PurePosixPath("scripts/war3map.j")
+    assert safe_relative_path(r"scripts\war3map.j") == PurePosixPath(
+        "scripts/war3map.j"
+    )
     assert safe_destination(str(tmp_path), r"scripts\war3map.j") == str(
         tmp_path / "scripts" / "war3map.j",
     )

@@ -1,4 +1,5 @@
 """脚本诊断：异步/本地状态/JASS 风险调用的只读检测。"""
+
 import unittest
 
 from w3xtool.api import MapData
@@ -63,7 +64,9 @@ class ScriptDiagnosticsTest(unittest.TestCase):
     def test_plain_script_has_no_warnings(self):
         # Given: a simple deterministic script.
         md = MapData(path="x.w3x", name="x")
-        md.scripts = {"war3map.j": "function main takes nothing returns nothing\nendfunction"}
+        md.scripts = {
+            "war3map.j": "function main takes nothing returns nothing\nendfunction"
+        }
 
         # When: diagnostics are built.
         report = build_script_diagnostics(md)

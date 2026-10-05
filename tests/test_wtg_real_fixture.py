@@ -34,7 +34,11 @@ def test_wc3libs_real_wtg_never_silently_accepts_bad_parameter_values() -> None:
     assert not summary.parse_failures
     assert not summary.missing_schema_functions
     assert summary.eca_functions
-    assert all(0 <= param.parameter_type <= 3 for node in _walk_eca(summary.eca_functions) for param in node.parameters)
+    assert all(
+        0 <= param.parameter_type <= 3
+        for node in _walk_eca(summary.eca_functions)
+        for param in node.parameters
+    )
     first = summary.eca_functions[0]
     assert first.name == "KillUnit"
     assert first.parameters[0].value == "gg_unit_uKoM_0115"
@@ -56,7 +60,9 @@ def test_wtg_without_schema_keeps_headers_and_reports_missing_schema() -> None:
     assert not summary.parse_failures
 
 
-def test_war3net_reforged_real_wtg_parses_nested_functions_children_and_variables() -> None:
+def test_war3net_reforged_real_wtg_parses_nested_functions_children_and_variables() -> (
+    None
+):
     # Given: a real Reforged WTG with variables, code/bool params, and child groups.
     raw = REFORGED_FIXTURE.read_bytes()
     schema = _load_fixture_schema()
@@ -105,10 +111,14 @@ def test_array_indexer_parameter_reads_recursive_index_parameter() -> None:
     assert param.array_indexer.value == "3"
 
 
-def test_invalid_parameter_type_records_parse_failure_with_trigger_function_and_offset() -> None:
+def test_invalid_parameter_type_records_parse_failure_with_trigger_function_and_offset() -> (
+    None
+):
     # Given: a schema-known function whose parameter type is outside the WTG enum.
     schema = _schema_for_action("BadParam", ("integer",))
-    raw = _classic_wtg_with_action("BadParam", _i(999) + _z("bad") + _i(0) + _i(0) + _i(0))
+    raw = _classic_wtg_with_action(
+        "BadParam", _i(999) + _z("bad") + _i(0) + _i(0) + _i(0)
+    )
 
     # When: the malformed function is parsed.
     summary = parse_wtg(raw, schema)
@@ -131,7 +141,9 @@ def test_classic_v4_nested_function_uses_parent_wtg_version() -> None:
     )
     nested = _i(3) + _z("InnerValue") + _i(1)
     parameter = _i(2) + _z("value") + _i(1) + nested + _i(0)
-    raw = _classic_wtg_with_functions(4, ((_i(2) + _z("UseNested") + _i(1) + parameter),))
+    raw = _classic_wtg_with_functions(
+        4, ((_i(2) + _z("UseNested") + _i(1) + parameter),)
+    )
 
     # When: the v4 trigger body is parsed.
     summary = parse_wtg(raw, schema)
@@ -221,29 +233,46 @@ def _schema_for_action(name: str, parameters: tuple[str, ...]) -> TriggerSchema:
 def _schema_for_functions(
     *functions: tuple[TriggerFunctionKind, str, tuple[str, ...]],
 ) -> TriggerSchema:
-    return TriggerSchema({
-        (kind, name.lower()): TriggerFunctionSchema(
-            kind=kind,
-            name=name,
-            category="",
-            return_type=None,
-            parameter_types=parameters,
-            display_name=name,
-            template=None,
-        )
-        for kind, name, parameters in functions
-    })
+    return TriggerSchema(
+        {
+            (kind, name.lower()): TriggerFunctionSchema(
+                kind=kind,
+                name=name,
+                category="",
+                return_type=None,
+                parameter_types=parameters,
+                display_name=name,
+                template=None,
+            )
+            for kind, name, parameters in functions
+        }
+    )
 
 
 def _classic_wtg_with_action(name: str, parameter: bytes) -> bytes:
     return (
-        b"WTG!" + _i(7)
-        + _i(1) + _i(42) + _z("System") + _i(0)
+        b"WTG!"
+        + _i(7)
+        + _i(1)
+        + _i(42)
+        + _z("System")
+        + _i(0)
         + _i(0)
         + _i(0)
         + _i(1)
-        + _z("Test") + _z("") + _i(0) + _i(1) + _i(0) + _i(0) + _i(0) + _i(42) + _i(1)
-        + _i(2) + _z(name) + _i(1) + parameter
+        + _z("Test")
+        + _z("")
+        + _i(0)
+        + _i(1)
+        + _i(0)
+        + _i(0)
+        + _i(0)
+        + _i(42)
+        + _i(1)
+        + _i(2)
+        + _z(name)
+        + _i(1)
+        + parameter
     )
 
 
@@ -260,7 +289,17 @@ def _classic_wtg_with_functions(version: int, functions: tuple[bytes, ...]) -> b
         + _i(42)
         + _i(len(functions))
     )
-    return b"WTG!" + _i(version) + _i(1) + category + _i(0) + _i(0) + _i(1) + trigger + b"".join(functions)
+    return (
+        b"WTG!"
+        + _i(version)
+        + _i(1)
+        + category
+        + _i(0)
+        + _i(0)
+        + _i(1)
+        + trigger
+        + b"".join(functions)
+    )
 
 
 def _i(value: int) -> bytes:

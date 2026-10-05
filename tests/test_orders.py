@@ -1,4 +1,5 @@
 """控制命令 / Order 分析：检测技能命令串与脚本命令引用。"""
+
 import unittest
 
 from w3xtool.api import GameObject, MapData

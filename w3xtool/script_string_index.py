@@ -22,7 +22,10 @@ _CALL_RE: Final = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 _TRIGSTR_RE: Final = re.compile(r"^TRIGSTR_(\d+)$", re.IGNORECASE)
 _FOURCC_RE: Final = re.compile(r"[A-Za-z0-9]{4}")
 _TOKEN_SCAN_RE: Final = re.compile(r"//|--|['\"]")
-_CHAT_CALLS: Final = {"TriggerRegisterPlayerChatEvent", "TriggerRegisterPlayerChatEventBJ"}
+_CHAT_CALLS: Final = {
+    "TriggerRegisterPlayerChatEvent",
+    "TriggerRegisterPlayerChatEventBJ",
+}
 _DISPLAY_CALLS: Final = {
     "BJDebugMsg",
     "DisplayTextToPlayer",
@@ -72,16 +75,20 @@ def format_script_string_index_tsv(index: ScriptStringIndex) -> str:
     """Format script string literals as TSV."""
     rows = ["来源\t行号\t函数\t调用\t用途\t字符串\t解析文本\t摘要"]
     for entry in index.entries:
-        rows.append("\t".join((
-            _tsv(entry.source),
-            str(entry.line),
-            _tsv(entry.function),
-            _tsv(entry.call),
-            _tsv(entry.purpose),
-            _tsv(entry.value),
-            _tsv(entry.resolved),
-            _tsv(entry.summary),
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    _tsv(entry.source),
+                    str(entry.line),
+                    _tsv(entry.function),
+                    _tsv(entry.call),
+                    _tsv(entry.purpose),
+                    _tsv(entry.value),
+                    _tsv(entry.resolved),
+                    _tsv(entry.summary),
+                )
+            )
+        )
     return "\n".join(rows) + "\n"
 
 
@@ -94,16 +101,18 @@ def _entries_for_script(
     rows: list[ScriptStringEntry] = []
     for token in _iter_string_tokens(text):
         call = _line_call(token.summary, token.column)
-        rows.append(ScriptStringEntry(
-            source=source,
-            line=token.line,
-            function=functions.name_for(source, token.line),
-            call=call,
-            purpose=_purpose(call, token.value),
-            value=token.value,
-            resolved=_resolve_string(token.value, trigstr_table),
-            summary=token.summary[:160],
-        ))
+        rows.append(
+            ScriptStringEntry(
+                source=source,
+                line=token.line,
+                function=functions.name_for(source, token.line),
+                call=call,
+                purpose=_purpose(call, token.value),
+                value=token.value,
+                resolved=_resolve_string(token.value, trigstr_table),
+                summary=token.summary[:160],
+            )
+        )
     return rows
 
 
@@ -128,12 +137,14 @@ def _iter_string_tokens(text: str) -> tuple[_StringToken, ...]:
             if not (marker == "'" and _FOURCC_RE.fullmatch(value)):
                 if summary is None:
                     summary = line.strip()
-                tokens.append(_StringToken(
-                    line=line_no,
-                    column=match.start(),
-                    value=_unescape(value),
-                    summary=summary,
-                ))
+                tokens.append(
+                    _StringToken(
+                        line=line_no,
+                        column=match.start(),
+                        value=_unescape(value),
+                        summary=summary,
+                    )
+                )
             index = end
     return tuple(tokens)
 
@@ -176,7 +187,12 @@ def _purpose(call: str, value: str) -> str:
     if call in _DISPLAY_CALLS:
         return "显示文本"
     api = save_api_info(call)
-    if api is not None and api.mechanism in {"GameCache", "Hashtable", "PlatformSave", "HashKey"}:
+    if api is not None and api.mechanism in {
+        "GameCache",
+        "Hashtable",
+        "PlatformSave",
+        "HashKey",
+    }:
         return "存档/键"
     if value.startswith("-"):
         return "聊天指令"

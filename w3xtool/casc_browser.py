@@ -32,7 +32,9 @@ class CascEntryExportError(OSError):
 class CascBrowserModel:
     """Own a bounded page cursor over a potentially huge CASC root."""
 
-    def __init__(self, source: GameDataInventorySource, *, page_size: int = 200) -> None:
+    def __init__(
+        self, source: GameDataInventorySource, *, page_size: int = 200
+    ) -> None:
         if page_size < 1:
             raise CascEntryExportError(str(page_size), "page size must be positive")
         self._source: GameDataInventorySource = source
@@ -99,7 +101,10 @@ class CascBrowserModel:
 
 
 def _export_relative_name(entry: CascEntry) -> str:
-    if entry.name_type is CascNameType.FULL and safe_relative_path(entry.name) is not None:
+    if (
+        entry.name_type is CascNameType.FULL
+        and safe_relative_path(entry.name) is not None
+    ):
         return entry.name
     fallback = entry.name if safe_relative_path(entry.name) is not None else entry.ckey
     return f"UnknownCASC/{fallback}"

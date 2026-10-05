@@ -188,7 +188,9 @@ def test_snapshot_nonblocking_open_rejects_fifo_swap(
     real_open = os.open
     swapped = False
 
-    def swapping_open(path: str | os.PathLike[str], flags: int, mode: int = 0o777) -> int:
+    def swapping_open(
+        path: str | os.PathLike[str], flags: int, mode: int = 0o777
+    ) -> int:
         nonlocal swapped
         if Path(path) == source:
             source.unlink()
@@ -230,7 +232,9 @@ def test_snapshot_rejects_source_changed_during_copy(
             os.utime(source, ns=(changed_mtime, changed_mtime))
         real_fsync(descriptor)
 
-    monkeypatch.setattr("w3xtool.current_map_snapshot.os.fsync", fsync_after_source_change)
+    monkeypatch.setattr(
+        "w3xtool.current_map_snapshot.os.fsync", fsync_after_source_change
+    )
 
     # When/Then: the inconsistent snapshot is rejected and its directory is removed.
     with pytest.raises(CurrentMapSnapshotError, match="changed"):

@@ -1,4 +1,5 @@
 """war3mapMisc.txt 游戏平衡常数解析。"""
+
 from w3xtool.gameplay import GameplayConstant, parse_gameplay_constants
 
 
@@ -35,6 +36,4 @@ def test_parse_gameplay_constants_ignores_comments_and_blank_lines():
     constants = parse_gameplay_constants(text)
 
     # Then: only valid key/value settings are reported.
-    assert constants == (
-        GameplayConstant(section="", key="MaxUnitLevel", value="10"),
-    )
+    assert constants == (GameplayConstant(section="", key="MaxUnitLevel", value="10"),)

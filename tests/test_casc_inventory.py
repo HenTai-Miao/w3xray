@@ -73,7 +73,9 @@ def test_inventory_writes_bounded_chunks_while_root_is_still_enumerating(
     assert not tuple(tmp_path.glob(".w3xray-stage-*.tmp"))
 
 
-def test_inventory_tsv_preserves_resolved_paths_ids_and_content_keys(tmp_path: Path) -> None:
+def test_inventory_tsv_preserves_resolved_paths_ids_and_content_keys(
+    tmp_path: Path,
+) -> None:
     # Given: a root path plus an unknown-path entry addressable by FileDataID.
     entries = (
         _entry("UI\\TriggerData.txt", CascNameType.FULL),
@@ -95,9 +97,13 @@ def test_inventory_tsv_preserves_resolved_paths_ids_and_content_keys(tmp_path: P
     assert "ab" * 16 in text
 
 
-def test_inventory_limit_is_explicitly_reported_not_silently_complete(tmp_path: Path) -> None:
+def test_inventory_limit_is_explicitly_reported_not_silently_complete(
+    tmp_path: Path,
+) -> None:
     # Given: more root entries than the caller's diagnostic preview limit.
-    entries = tuple(_entry(f"File{index:08d}", CascNameType.FILE_DATA_ID) for index in range(3))
+    entries = tuple(
+        _entry(f"File{index:08d}", CascNameType.FILE_DATA_ID) for index in range(3)
+    )
     module = importlib.import_module("w3xtool.casc_inventory")
 
     # When: inventory is intentionally limited to two rows.

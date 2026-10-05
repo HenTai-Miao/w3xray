@@ -1,4 +1,5 @@
 """资源依赖图：从对象字段、脚本和文件清单汇总素材引用。"""
+
 from __future__ import annotations
 
 import re
@@ -11,32 +12,53 @@ if TYPE_CHECKING:
     from .api import GameObject, MapData
 
 _IMAGE_EXTS: Final = {
-    "blp", "dds", "tga", "png", "jpg", "jpeg", "bmp",
+    "blp",
+    "dds",
+    "tga",
+    "png",
+    "jpg",
+    "jpeg",
+    "bmp",
 }
 _MODEL_EXTS: Final = {
-    "mdx", "mdl",
+    "mdx",
+    "mdl",
 }
 _AUDIO_EXTS: Final = {
-    "wav", "mp3", "ogg",
+    "wav",
+    "mp3",
+    "ogg",
 }
 _FONT_EXTS: Final = {
-    "ttf", "otf",
+    "ttf",
+    "otf",
 }
 _UI_TEXT_EXTS: Final = {
-    "txt", "ini", "fdf", "toc",
+    "txt",
+    "ini",
+    "fdf",
+    "toc",
 }
 _TABLE_EXTS: Final = {
     "slk",
 }
 _CONFIG_EXTS: Final = {
-    "json", "plist", "skin",
+    "json",
+    "plist",
+    "skin",
 }
 _AI_EXTS: Final = {
     "ai",
 }
 RESOURCE_EXTS: Final = (
-    _IMAGE_EXTS | _MODEL_EXTS | _AUDIO_EXTS | _FONT_EXTS | _UI_TEXT_EXTS
-    | _TABLE_EXTS | _CONFIG_EXTS | _AI_EXTS
+    _IMAGE_EXTS
+    | _MODEL_EXTS
+    | _AUDIO_EXTS
+    | _FONT_EXTS
+    | _UI_TEXT_EXTS
+    | _TABLE_EXTS
+    | _CONFIG_EXTS
+    | _AI_EXTS
 )
 _PATH_RE: Final = re.compile(
     r"(?i)([A-Za-z0-9_ .()\\/\-]{1,240}\."
@@ -84,10 +106,15 @@ def build_resource_report(md: MapData) -> ResourceReport:
     for script_name, text in analysis_script_texts(md):
         _collect_text_refs(refs, f"脚本 {script_name}", "字符串字面量", text)
 
-    archive_assets = tuple(sorted(
-        path for path in (_normalize(name) for name in getattr(md, "all_files", []) or [])
-        if _is_asset(path)
-    ))
+    archive_assets = tuple(
+        sorted(
+            path
+            for path in (
+                _normalize(name) for name in getattr(md, "all_files", []) or []
+            )
+            if _is_asset(path)
+        )
+    )
     nodes = tuple(
         ResourceNode(path=path, kind=_kind_for(path), refs=tuple(items))
         for path, items in sorted(refs.items())
@@ -141,7 +168,9 @@ def _collect_text_refs(
         _add_ref(refs, match.group(1), ResourceRef(source, detail))
 
 
-def _add_ref(refs: dict[str, list[ResourceRef]], raw_path: str, ref: ResourceRef) -> None:
+def _add_ref(
+    refs: dict[str, list[ResourceRef]], raw_path: str, ref: ResourceRef
+) -> None:
     path = _normalize(raw_path)
     if not _is_asset(path):
         return

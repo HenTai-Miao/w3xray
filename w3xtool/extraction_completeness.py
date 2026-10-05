@@ -88,6 +88,8 @@ def build_extraction_completeness_report(
             diagnosis.message,
             diagnosis.kind.value,
         )
+
+
 def build_extraction_completeness_from_archive(
     md: MapExtractionInput,
     archive: ExtractionArchive,
@@ -110,7 +112,8 @@ def build_extraction_completeness_from_archive(
     )
     raw_fallback = len(anonymous_blocks) - recoverable
     encrypted_raw = sum(
-        1 for _idx, block in anonymous_blocks
+        1
+        for _idx, block in anonymous_blocks
         if block.flags & FLAG_ENCRYPTED and not _can_export_unknown(archive, block)
     )
     return ExtractionCompletenessReport(
@@ -126,7 +129,9 @@ def build_extraction_completeness_from_archive(
         import_table_present=(
             archive.has_file("war3map.imp") or archive.has_file("war3campaign.imp")
         ),
-        warnings=_warnings(len(blocks), len(anonymous_blocks), raw_fallback, encrypted_raw),
+        warnings=_warnings(
+            len(blocks), len(anonymous_blocks), raw_fallback, encrypted_raw
+        ),
         notes=_notes(recoverable, raw_fallback, encrypted_raw),
     )
 
@@ -143,15 +148,17 @@ def format_extraction_completeness_report(
     if report.block_count is None:
         lines.append("命名覆盖：无法计算")
     else:
-        lines.extend((
-            f"MPQ 块：{report.block_count}",
-            _format_coverage(report),
-            f"无名块：{report.anonymous_block_count or 0}",
-            f"Unknown 可解包：{report.recoverable_anonymous_count or 0}",
-            f"UnknownRaw 兜底：{report.raw_fallback_count or 0}",
-            f"(listfile)：{_presence(report.listfile_present)}",
-            f"war3map.imp/war3campaign.imp：{_presence(report.import_table_present)}",
-        ))
+        lines.extend(
+            (
+                f"MPQ 块：{report.block_count}",
+                _format_coverage(report),
+                f"无名块：{report.anonymous_block_count or 0}",
+                f"Unknown 可解包：{report.recoverable_anonymous_count or 0}",
+                f"UnknownRaw 兜底：{report.raw_fallback_count or 0}",
+                f"(listfile)：{_presence(report.listfile_present)}",
+                f"war3map.imp/war3campaign.imp：{_presence(report.import_table_present)}",
+            )
+        )
     if report.warnings:
         lines.append("")
         lines.append("警告：")
@@ -181,7 +188,9 @@ def _fallback_report(
         listfile_present=None,
         import_table_present=None,
         warnings=(warning,),
-        notes=("只能根据已加载的内部文件清单展示结果；重新选择原始地图可得到块覆盖诊断。",),
+        notes=(
+            "只能根据已加载的内部文件清单展示结果；重新选择原始地图可得到块覆盖诊断。",
+        ),
         archive_diagnosis_kind=archive_diagnosis_kind,
     )
 
@@ -202,22 +211,36 @@ def _warnings(
     if block_count == 0:
         warnings.append("块表没有可导出的有效块。")
     if anonymous_count:
-        warnings.append(f"仍有 {anonymous_count} 个块没有可靠文件名，知识包会放入 未知文件/Unknown/ 或 未知文件/UnknownRaw/。")
+        warnings.append(
+            f"仍有 {anonymous_count} 个块没有可靠文件名，知识包会放入 未知文件/Unknown/ 或 未知文件/UnknownRaw/。"
+        )
     if raw_fallback:
-        warnings.append(f"{raw_fallback} 个无名块无法按内容解包，只能保留原始 MPQ 负载。")
+        warnings.append(
+            f"{raw_fallback} 个无名块无法按内容解包，只能保留原始 MPQ 负载。"
+        )
     if _looks_protected(block_count, raw_fallback, encrypted_raw):
-        warnings.append("疑似数据级加密或运行时解密保护：大量匿名加密块无法通过静态 MPQ 表恢复。")
+        warnings.append(
+            "疑似数据级加密或运行时解密保护：大量匿名加密块无法通过静态 MPQ 表恢复。"
+        )
     return tuple(warnings)
 
 
-def _notes(recoverable: int, raw_fallback: int, encrypted_raw: int = 0) -> tuple[str, ...]:
+def _notes(
+    recoverable: int, raw_fallback: int, encrypted_raw: int = 0
+) -> tuple[str, ...]:
     notes = ["命名文件来自 (listfile)、固定地图文件名和地图/战役导入表的并集。"]
     if recoverable:
-        notes.append("未知文件/Unknown/ 里的文件是可按块直接解出的无名资源，扩展名按文件头推断。")
+        notes.append(
+            "未知文件/Unknown/ 里的文件是可按块直接解出的无名资源，扩展名按文件头推断。"
+        )
     if raw_fallback:
-        notes.append("未知文件/UnknownRaw/ 保留无法解密或无法识别的原始块，避免静默丢数据。")
+        notes.append(
+            "未知文件/UnknownRaw/ 保留无法解密或无法识别的原始块，避免静默丢数据。"
+        )
     if encrypted_raw:
-        notes.append("对真正数据级加密地图，工具只做静态诊断；请提供未保护文件、作者给出的明文/listfile/key，不执行运行时内存 dump 或绕过。")
+        notes.append(
+            "对真正数据级加密地图，工具只做静态诊断；请提供未保护文件、作者给出的明文/listfile/key，不执行运行时内存 dump 或绕过。"
+        )
     return tuple(notes)
 
 

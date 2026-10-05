@@ -52,14 +52,18 @@ def test_classic_source_reads_the_highest_priority_archive(tmp_path: Path) -> No
         (tmp_path / name).touch()
 
     # When
-    source = ClassicMpqDataSource(str(tmp_path), archive_factory=lambda path: archives[Path(path).name])
+    source = ClassicMpqDataSource(
+        str(tmp_path), archive_factory=lambda path: archives[Path(path).name]
+    )
 
     # Then
     assert source.read_file("Units/HumanUnitStrings.txt") == b"patch"
     source.close()
 
 
-def test_game_data_probe_prefers_classic_mpqs_over_generic_files(tmp_path: Path) -> None:
+def test_game_data_probe_prefers_classic_mpqs_over_generic_files(
+    tmp_path: Path,
+) -> None:
     # Given
     (tmp_path / "war3.mpq").write_bytes(b"container")
 
@@ -67,7 +71,11 @@ def test_game_data_probe_prefers_classic_mpqs_over_generic_files(tmp_path: Path)
     probe = probe_game_data_path(str(tmp_path))
 
     # Then
-    assert (probe.kind, probe.is_readable, probe.backend) == ("classic_mpq", True, "mpq")
+    assert (probe.kind, probe.is_readable, probe.backend) == (
+        "classic_mpq",
+        True,
+        "mpq",
+    )
 ```
 
 - [ ] **Step 2: Run the tests and confirm the new imports/classification fail**
@@ -97,9 +105,13 @@ def classic_mpq_paths(root: str) -> tuple[str, ...]:
 
 @final
 class ClassicMpqDataSource:
-    def __init__(self, root: str, *, archive_factory: ArchiveFactory = MPQArchive) -> None:
+    def __init__(
+        self, root: str, *, archive_factory: ArchiveFactory = MPQArchive
+    ) -> None:
         paths = classic_mpq_paths(root)
-        if not paths or not any(Path(path).name.casefold() == "war3.mpq" for path in paths):
+        if not paths or not any(
+            Path(path).name.casefold() == "war3.mpq" for path in paths
+        ):
             raise FileNotFoundError(root)
         self.root = root
         self._archives = tuple(archive_factory(path) for path in paths)
@@ -162,15 +174,31 @@ def test_audit_preserves_raw_levels_and_cleans_markup() -> None:
     # Given
     item = game_object(
         category="技能",
-        field_values={"atp1:1": "一级", "aub1:1": "|cffffcc00伤害|r|n100", "aub1:2": ""},
-        field_sources={"atp1:1": "war3map.w3a", "aub1:1": "war3map.w3a", "aub1:2": "war3map.w3a"},
+        field_values={
+            "atp1:1": "一级",
+            "aub1:1": "|cffffcc00伤害|r|n100",
+            "aub1:2": "",
+        },
+        field_sources={
+            "atp1:1": "war3map.w3a",
+            "aub1:1": "war3map.w3a",
+            "aub1:2": "war3map.w3a",
+        },
     )
 
     # When
     records = audit_object_descriptions((item,))
 
     # Then
-    assert [(record.level, record.raw_description, record.readable_description, record.state) for record in records] == [
+    assert [
+        (
+            record.level,
+            record.raw_description,
+            record.readable_description,
+            record.state,
+        )
+        for record in records
+    ] == [
         (1, "|cffffcc00伤害|r|n100", "伤害\n100", DescriptionState.MAP_VALUE),
         (2, "", "", DescriptionState.MAP_EXPLICIT_EMPTY),
     ]
@@ -179,7 +207,10 @@ def test_audit_preserves_raw_levels_and_cleans_markup() -> None:
 ```python
 def test_audit_marks_inherited_client_text_without_fabricating_missing_text() -> None:
     # Given
-    inherited = game_object(field_values={"display:description": "客户端说明"}, field_sources={"display:description": "base:A000"})
+    inherited = game_object(
+        field_values={"display:description": "客户端说明"},
+        field_sources={"display:description": "base:A000"},
+    )
     missing = game_object(obj_id="A001", field_values={}, field_sources={})
 
     # When
@@ -224,7 +255,9 @@ class DescriptionRecord:
     state: DescriptionState
 
 
-def audit_object_descriptions(objects: Iterable[GameObject]) -> tuple[DescriptionRecord, ...]:
+def audit_object_descriptions(
+    objects: Iterable[GameObject],
+) -> tuple[DescriptionRecord, ...]:
     records = tuple(record for item in objects for record in _records_for_object(item))
     return tuple(sorted(records, key=_record_sort_key))
 ```
@@ -265,8 +298,16 @@ git commit -m "feat: audit object description sources"
 def test_named_icon_collection_deduplicates_paths_and_keeps_all_references() -> None:
     # Given
     objects = (
-        game_object(category="单位", obj_id="H001", icon="ReplaceableTextures/CommandButtons/BTNHero.blp"),
-        game_object(category="技能", obj_id="A001", icon="replaceabletextures\\commandbuttons\\BTNHero.blp"),
+        game_object(
+            category="单位",
+            obj_id="H001",
+            icon="ReplaceableTextures/CommandButtons/BTNHero.blp",
+        ),
+        game_object(
+            category="技能",
+            obj_id="A001",
+            icon="replaceabletextures\\commandbuttons\\BTNHero.blp",
+        ),
     )
 
     # When
@@ -274,14 +315,19 @@ def test_named_icon_collection_deduplicates_paths_and_keeps_all_references() -> 
 
     # Then
     assert len(references) == 1
-    assert {(ref.category, ref.object_id) for ref in references[0].objects} == {("单位", "H001"), ("技能", "A001")}
+    assert {(ref.category, ref.object_id) for ref in references[0].objects} == {
+        ("单位", "H001"),
+        ("技能", "A001"),
+    }
 ```
 
 ```python
 def test_anonymous_blp_name_uses_block_and_payload_digest() -> None:
     # Given
     archive = FakeArchive(blocks={17: b"BLP1payload"})
-    ledger = ledger_with_entry(block_index=17, internal_path="__unknown__/block_000017.blp")
+    ledger = ledger_with_entry(
+        block_index=17, internal_path="__unknown__/block_000017.blp"
+    )
 
     # When
     resources = tuple(iter_anonymous_blps(archive, ledger))
@@ -365,7 +411,9 @@ def test_export_keeps_original_when_png_decode_fails(tmp_path: Path) -> None:
     record = export_anonymous_icon(str(tmp_path), resource)
 
     # Then
-    assert (tmp_path / "图标/原始/匿名" / f"{resource.basename}.blp").read_bytes() == b"BLP1broken"
+    assert (
+        tmp_path / "图标/原始/匿名" / f"{resource.basename}.blp"
+    ).read_bytes() == b"BLP1broken"
     assert record.original_written is True
     assert record.png_written is False
     assert record.state is IconExportState.PNG_FAILED
@@ -441,7 +489,9 @@ git commit -m "feat: export original and png icons safely"
 ```python
 def test_description_tsv_keeps_raw_and_readable_columns_separate() -> None:
     # Given
-    record = description_record(raw_description="|cffff0000说明|r|n第二行", readable_description="说明\n第二行")
+    record = description_record(
+        raw_description="|cffff0000说明|r|n第二行", readable_description="说明\n第二行"
+    )
 
     # When
     report = format_description_tsv((record,))
@@ -540,7 +590,9 @@ git commit -m "feat: format extraction completeness reports"
 - [ ] **Step 1: Write failing scan, continuation, resume, and source-integrity tests**
 
 ```python
-def test_scan_map_sources_includes_campaigns_in_stable_path_order(tmp_path: Path) -> None:
+def test_scan_map_sources_includes_campaigns_in_stable_path_order(
+    tmp_path: Path,
+) -> None:
     # Given
     for name in ("z.w3n", "A.w3x", "nested/b.w3m"):
         path = tmp_path / name
@@ -551,22 +603,45 @@ def test_scan_map_sources_includes_campaigns_in_stable_path_order(tmp_path: Path
     sources = scan_map_sources(str(tmp_path))
 
     # Then
-    assert tuple(Path(path).relative_to(tmp_path).as_posix() for path in sources) == ("A.w3x", "nested/b.w3m", "z.w3n")
+    assert tuple(Path(path).relative_to(tmp_path).as_posix() for path in sources) == (
+        "A.w3x",
+        "nested/b.w3m",
+        "z.w3n",
+    )
 ```
 
 ```python
-def test_batch_continues_after_one_map_fails_and_does_not_modify_sources(tmp_path: Path) -> None:
+def test_batch_continues_after_one_map_fails_and_does_not_modify_sources(
+    tmp_path: Path,
+) -> None:
     # Given
     good = write_fake_map(tmp_path / "good.w3x")
     bad = write_fake_map(tmp_path / "bad.w3x")
-    before = {path: (path.stat().st_size, path.stat().st_mtime_ns, hashlib.sha256(path.read_bytes()).hexdigest()) for path in (good, bad)}
+    before = {
+        path: (
+            path.stat().st_size,
+            path.stat().st_mtime_ns,
+            hashlib.sha256(path.read_bytes()).hexdigest(),
+        )
+        for path in (good, bad)
+    }
 
     # When
     state = run_batch(batch_options(tmp_path, loader=loader_failing_only_for(bad)))
 
     # Then
-    assert [result.state for result in state.results] == [MapBatchState.FAILED, MapBatchState.COMPLETE]
-    assert {path: (path.stat().st_size, path.stat().st_mtime_ns, hashlib.sha256(path.read_bytes()).hexdigest()) for path in (good, bad)} == before
+    assert [result.state for result in state.results] == [
+        MapBatchState.FAILED,
+        MapBatchState.COMPLETE,
+    ]
+    assert {
+        path: (
+            path.stat().st_size,
+            path.stat().st_mtime_ns,
+            hashlib.sha256(path.read_bytes()).hexdigest(),
+        )
+        for path in (good, bad)
+    } == before
 ```
 
 ```python
@@ -610,7 +685,11 @@ def run_batch(options: BatchOptions) -> BatchState:
     for index, path in enumerate(scan_map_sources(options.source_directory), start=1):
         fingerprint = fingerprint_source(path)
         reusable = _reusable_result(previous, fingerprint, options.output_root)
-        result = reusable if reusable is not None else _process_one_map(index, fingerprint, options)
+        result = (
+            reusable
+            if reusable is not None
+            else _process_one_map(index, fingerprint, options)
+        )
         results.append(result)
         _publish_global_reports(options.output_root, BatchState(1, tuple(results)))
     return BatchState(1, tuple(results))
@@ -659,11 +738,16 @@ def test_parse_batch_cli_uses_documented_default_output() -> None:
     options = parse_batch_cli_options(args)
 
     # Then
-    assert options.output_root == "/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output"
+    assert (
+        options.output_root
+        == "/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output"
+    )
 ```
 
 ```python
-def test_batch_e2e_writes_original_png_descriptions_and_global_summary(tmp_path: Path) -> None:
+def test_batch_e2e_writes_original_png_descriptions_and_global_summary(
+    tmp_path: Path,
+) -> None:
     # Given
     maps = tmp_path / "Maps"
     output = tmp_path / "output"

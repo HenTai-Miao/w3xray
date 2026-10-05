@@ -148,8 +148,12 @@ class _RecoveredArchive:
         ]
         self.hash_table = [
             (
-                archive_export_recovery._hash(name, archive_export_recovery.HASH_NAME_A),
-                archive_export_recovery._hash(name, archive_export_recovery.HASH_NAME_B),
+                archive_export_recovery._hash(
+                    name, archive_export_recovery.HASH_NAME_A
+                ),
+                archive_export_recovery._hash(
+                    name, archive_export_recovery.HASH_NAME_B
+                ),
                 0,
                 0,
                 index,

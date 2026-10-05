@@ -23,5 +23,5 @@ def configure_cli_output() -> None:
             continue
         try:
             stream.reconfigure(encoding="utf-8", errors="replace")
-        except (AttributeError, OSError, ValueError):
+        except AttributeError, OSError, ValueError:
             continue

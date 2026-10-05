@@ -20,8 +20,14 @@ def _z(s):
 
 def _region(name="区域A"):
     return (
-        _f(-128.0) + _f(-64.0) + _f(128.0) + _f(64.0)
-        + _z(name) + _i(7) + b"RLhr" + _z("Sound\\Rain.wav")
+        _f(-128.0)
+        + _f(-64.0)
+        + _f(128.0)
+        + _f(64.0)
+        + _z(name)
+        + _i(7)
+        + b"RLhr"
+        + _z("Sound\\Rain.wav")
         + bytes([30, 20, 10, 255])
     )
 
@@ -35,23 +41,61 @@ def _camera(name="镜头A", local=False):
 
 def _sound_v1(name="击杀声"):
     return (
-        _z(name) + _z("Sound\\kill.wav") + _z("DefaultEAXON")
-        + _i(1 | 2 | 8) + _i(100) + _i(200) + _i(127)
-        + _f(1.0) + _i(0) + _i(0) + _i(0)
-        + _f(100.0) + _f(1000.0) + _f(3000.0)
-        + _i(0) + _i(0) + _i(0) + _i(0) + _i(0) + _i(0)
+        _z(name)
+        + _z("Sound\\kill.wav")
+        + _z("DefaultEAXON")
+        + _i(1 | 2 | 8)
+        + _i(100)
+        + _i(200)
+        + _i(127)
+        + _f(1.0)
+        + _i(0)
+        + _i(0)
+        + _i(0)
+        + _f(100.0)
+        + _f(1000.0)
+        + _f(3000.0)
+        + _i(0)
+        + _i(0)
+        + _i(0)
+        + _i(0)
+        + _i(0)
+        + _i(0)
     )
 
 
 def _sound_v3(name="导入声"):
     return (
-        _z(name) + _z("war3mapImported\\voice.wav") + _z("DefaultEAXON")
-        + _i(16 | 8) + _i(10) + _i(20) + _i(100)
-        + _f(1.0) + _f(0.25) + _i(5) + _i(2)
-        + _f(200.0) + _f(900.0) + _f(1800.0)
-        + _i(0) + _i(0) + _i(127) + _i(0) + _i(0) + _i(0)
-        + _z("gg_snd_voice") + _z("") + _z("war3mapImported\\voice.wav")
-        + _i(-1) + bytes([0]) + _i(-1) + _i(0) + _i(0) + bytes([0]) + _i(1)
+        _z(name)
+        + _z("war3mapImported\\voice.wav")
+        + _z("DefaultEAXON")
+        + _i(16 | 8)
+        + _i(10)
+        + _i(20)
+        + _i(100)
+        + _f(1.0)
+        + _f(0.25)
+        + _i(5)
+        + _i(2)
+        + _f(200.0)
+        + _f(900.0)
+        + _f(1800.0)
+        + _i(0)
+        + _i(0)
+        + _i(127)
+        + _i(0)
+        + _i(0)
+        + _i(0)
+        + _z("gg_snd_voice")
+        + _z("")
+        + _z("war3mapImported\\voice.wav")
+        + _i(-1)
+        + bytes([0])
+        + _i(-1)
+        + _i(0)
+        + _i(0)
+        + bytes([0])
+        + _i(1)
     )
 
 
@@ -125,12 +169,15 @@ class TestWorldMetadataIntegration(unittest.TestCase):
     def test_add_world_metadata_fills_mapdata(self):
         from w3xtool.api import MapData
         from w3xtool.map_extras import add_world_metadata
+
         md = MapData(path="x", name="x")
-        arch = _FakeArchive({
-            "war3map.w3r": _i(5) + _i(1) + _region(),
-            "war3map.w3c": _i(0) + _i(1) + _camera(),
-            "war3map.w3s": _i(1) + _i(1) + _sound_v1(),
-        })
+        arch = _FakeArchive(
+            {
+                "war3map.w3r": _i(5) + _i(1) + _region(),
+                "war3map.w3c": _i(0) + _i(1) + _camera(),
+                "war3map.w3s": _i(1) + _i(1) + _sound_v1(),
+            }
+        )
         add_world_metadata(md, arch, {})
         self.assertEqual(len(md.regions), 1)
         self.assertEqual(len(md.cameras), 1)

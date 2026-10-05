@@ -1,4 +1,5 @@
 """官方秘籍/调试口令残留的只读检测。"""
+
 from __future__ import annotations
 
 import re
@@ -10,30 +11,32 @@ from .script_sources import analysis_script_texts
 if TYPE_CHECKING:
     from .api import MapData
 
-_CHEAT_PHRASES: Final = frozenset({
-    "allyourbasearebelongtous",
-    "daylightsavings",
-    "greedisgood",
-    "iocainepowder",
-    "iseedeadpeople",
-    "itvexesme",
-    "keysersoze",
-    "leafittome",
-    "lightsout",
-    "motherland",
-    "pointbreak",
-    "riseandshine",
-    "sharpandshiny",
-    "somebodysetusupthebomb",
-    "strengthandhonor",
-    "synergy",
-    "tenthleveltaurenchieftain",
-    "thedudeabides",
-    "thereisnospoon",
-    "warpten",
-    "whoisjohngalt",
-    "whosyourdaddy",
-})
+_CHEAT_PHRASES: Final = frozenset(
+    {
+        "allyourbasearebelongtous",
+        "daylightsavings",
+        "greedisgood",
+        "iocainepowder",
+        "iseedeadpeople",
+        "itvexesme",
+        "keysersoze",
+        "leafittome",
+        "lightsout",
+        "motherland",
+        "pointbreak",
+        "riseandshine",
+        "sharpandshiny",
+        "somebodysetusupthebomb",
+        "strengthandhonor",
+        "synergy",
+        "tenthleveltaurenchieftain",
+        "thedudeabides",
+        "thereisnospoon",
+        "warpten",
+        "whoisjohngalt",
+        "whosyourdaddy",
+    }
+)
 _CHEAT_RE: Final = re.compile(
     r"\b(" + "|".join(sorted(_CHEAT_PHRASES, key=len, reverse=True)) + r")\b",
     re.IGNORECASE,
@@ -67,7 +70,9 @@ def build_cheat_report(md: MapData) -> CheatReport:
         for command in scan_chat_commands(text):
             phrase = _normalize_phrase(command.command)
             if phrase in _CHEAT_PHRASES:
-                _append_unique(items, seen, phrase, "聊天指令", script_name, command.command)
+                _append_unique(
+                    items, seen, phrase, "聊天指令", script_name, command.command
+                )
         for match in _CHEAT_RE.finditer(text):
             phrase = match.group(1).lower()
             _append_unique(items, seen, phrase, "脚本文本", script_name, match.group(0))
@@ -90,9 +95,11 @@ def _append_unique(
     if key in seen:
         return
     seen.add(key)
-    items.append(CheatResidue(
-        phrase=phrase,
-        source=source,
-        script=script,
-        detail=detail,
-    ))
+    items.append(
+        CheatResidue(
+            phrase=phrase,
+            source=source,
+            script=script,
+            detail=detail,
+        )
+    )

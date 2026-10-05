@@ -9,14 +9,24 @@ from tkinter import ttk
 class ClipboardMixin:
     """Attach compact context menus to text inputs and tables."""
 
-    def _attach_ctx_menu(self, ctk_widget, paste: bool = False, copy_all: bool = False) -> None:
-        inner = getattr(ctk_widget, "_entry", None) or getattr(ctk_widget, "_textbox", None) or ctk_widget
+    def _attach_ctx_menu(
+        self, ctk_widget, paste: bool = False, copy_all: bool = False
+    ) -> None:
+        inner = (
+            getattr(ctk_widget, "_entry", None)
+            or getattr(ctk_widget, "_textbox", None)
+            or ctk_widget
+        )
         menu = tk.Menu(self, tearoff=0)
         if copy_all:
-            menu.add_command(label="复制全部", command=lambda: self._copy_all_text(ctk_widget))
+            menu.add_command(
+                label="复制全部", command=lambda: self._copy_all_text(ctk_widget)
+            )
         menu.add_command(label="复制", command=lambda: inner.event_generate("<<Copy>>"))
         if paste:
-            menu.add_command(label="粘贴", command=lambda: inner.event_generate("<<Paste>>"))
+            menu.add_command(
+                label="粘贴", command=lambda: inner.event_generate("<<Paste>>")
+            )
 
         def popup(event) -> None:
             try:
@@ -57,7 +67,9 @@ class ClipboardMixin:
         lines = []
         for iid in selection:
             text = str(tree.item(iid, "text")).strip()
-            values = [str(value) for value in tree.item(iid, "values") if str(value).strip()]
+            values = [
+                str(value) for value in tree.item(iid, "values") if str(value).strip()
+            ]
             parts = ([text] if text else []) + values
             lines.append("\t".join(parts))
         if lines:

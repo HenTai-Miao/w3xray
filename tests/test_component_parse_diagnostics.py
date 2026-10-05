@@ -45,14 +45,16 @@ class _TextObjectParseError(ValueError):
 
 def test_tolerant_parsers_diagnose_malformed_present_components() -> None:
     # Given: readable members are malformed in six independently tolerant formats.
-    archive = _Archive({
-        "war3map.wts": b"STRING 1\n{\nunterminated",
-        "war3map.w3u": b"\x02\x00\x00\x00\x01",
-        "UnitData.slk": b"not an slk",
-        "Units\\HumanUnitStrings.txt": b"[H001]\n",
-        "war3map.imp": b"broken",
-        "war3map.doo": b"broken",
-    })
+    archive = _Archive(
+        {
+            "war3map.wts": b"STRING 1\n{\nunterminated",
+            "war3map.w3u": b"\x02\x00\x00\x00\x01",
+            "UnitData.slk": b"not an slk",
+            "Units\\HumanUnitStrings.txt": b"[H001]\n",
+            "war3map.imp": b"broken",
+            "war3map.doo": b"broken",
+        }
+    )
 
     # When: the normal loader keeps extracting independent components.
     md = _load_map_impl(archive, archive.path, 0, None, MapLoadContext())
@@ -84,7 +86,12 @@ def test_wct_read_failure_emits_exactly_one_diagnostic() -> None:
 
 def test_truncated_w3f_model_diagnostic_reaches_map_diagnostics() -> None:
     # Given: a real W3F body is truncated after its parser has accepted the header.
-    fixture = Path(__file__).parent / "fixtures" / "reference" / "stormlib-reference-parity-campaign.w3n"
+    fixture = (
+        Path(__file__).parent
+        / "fixtures"
+        / "reference"
+        / "stormlib-reference-parity-campaign.w3n"
+    )
     with MPQArchive(str(fixture)) as source:
         payload = source.read_file("war3campaign.w3f")
     archive = _Archive({"war3campaign.w3f": payload[:-8]}, path="fixture.w3n")
@@ -122,7 +129,12 @@ def test_text_object_parser_exception_is_captured_at_parse_stage(
 
 def test_missing_declared_campaign_child_reaches_loader_diagnostics() -> None:
     # Given: a real W3F declaration exists but its child member is absent.
-    fixture = Path(__file__).parent / "fixtures" / "reference" / "stormlib-reference-parity-campaign.w3n"
+    fixture = (
+        Path(__file__).parent
+        / "fixtures"
+        / "reference"
+        / "stormlib-reference-parity-campaign.w3n"
+    )
     with MPQArchive(str(fixture)) as source:
         payload = source.read_file("war3campaign.w3f")
     archive = _Archive({"war3campaign.w3f": payload}, path="fixture.w3n")
@@ -142,7 +154,9 @@ def test_failed_campaign_child_does_not_consume_retained_byte_budget(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Given: one malformed child precedes a valid child that fits the retained-byte budget by itself.
-    fixture = Path(__file__).parent / "fixtures" / "reference" / "stormlib-huffman-map.w3x"
+    fixture = (
+        Path(__file__).parent / "fixtures" / "reference" / "stormlib-huffman-map.w3x"
+    )
     valid_child = fixture.read_bytes()
     malformed_child = b"bad!"
     archive = _Archive(
@@ -185,7 +199,9 @@ def test_nonempty_wts_without_string_header_is_diagnosed() -> None:
 def test_unsupported_doo_version_is_diagnosed_even_when_empty() -> None:
     # Given: a present placement table has the right magic but an unsupported header pair.
     payload = b"W3do" + (99).to_bytes(4, "little", signed=True)
-    payload += (77).to_bytes(4, "little", signed=True) + (0).to_bytes(4, "little", signed=True)
+    payload += (77).to_bytes(4, "little", signed=True) + (0).to_bytes(
+        4, "little", signed=True
+    )
     archive = _Archive({"war3map.doo": payload})
 
     # When: the normal loader parses the empty placement table.
@@ -200,7 +216,9 @@ def test_unsupported_doo_version_is_diagnosed_even_when_empty() -> None:
 
 def test_truncated_w3i_retains_partial_model_with_diagnostic() -> None:
     # Given: a recognized W3I version is truncated after its first complete field.
-    payload = (28).to_bytes(4, "little", signed=True) + (1).to_bytes(4, "little", signed=True)
+    payload = (28).to_bytes(4, "little", signed=True) + (1).to_bytes(
+        4, "little", signed=True
+    )
     archive = _Archive({"war3map.w3i": payload})
 
     # When: the normal loader reads map metadata.
@@ -227,18 +245,17 @@ def test_truncated_world_records_are_diagnosed() -> None:
     md = _load_map_impl(archive, archive.path, 0, None, MapLoadContext())
 
     # Then: every incomplete source is retained as a component warning.
-    assert {
-        item.source
-        for item in md.diagnostics
-        if item.component == "world"
-    } == {"war3map.w3r", "war3map.w3c", "war3map.w3s"}
+    assert {item.source for item in md.diagnostics if item.component == "world"} == {
+        "war3map.w3r",
+        "war3map.w3c",
+        "war3map.w3s",
+    }
 
 
 def test_unterminated_slk_retains_rows_with_diagnostic() -> None:
     # Given: a valid SLK row is present but the file terminator is missing.
     text = (
-        'ID;P\nC;X1;Y1;K"unitID"\nC;X2;Y1;K"race"\n'
-        'C;X1;Y2;K"hfoo"\nC;X2;Y2;K"human"\n'
+        'ID;P\nC;X1;Y1;K"unitID"\nC;X2;Y1;K"race"\nC;X1;Y2;K"hfoo"\nC;X2;Y2;K"human"\n'
     )
     archive = _Archive({"UnitData.slk": text.encode("ascii")})
     md = MapData(archive.path, "fixture")

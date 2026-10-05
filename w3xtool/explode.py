@@ -3,6 +3,7 @@
 MPQ 里压缩类型 0x08 用的就是 PKWARE DCL implode，Python 标准库没有，
 这里移植自 zlib contrib 的 blast.c（Mark Adler，zlib 许可，公有逻辑）。
 """
+
 from __future__ import annotations
 
 MAXBITS = 13
@@ -12,13 +13,108 @@ _BASE = (3, 2, 4, 5, 6, 7, 8, 9, 10, 12, 16, 24, 40, 72, 136, 264)
 _EXTRA = (0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8)
 
 # 三张 Huffman 码表（紧凑游程表示：每字节 高4位+1=重复次数, 低4位=码长）
-_LITLEN = bytes((
-    11, 124, 8, 7, 28, 7, 188, 13, 76, 4, 10, 8, 12, 10, 12, 10, 8, 23, 8,
-    9, 7, 6, 7, 8, 7, 6, 55, 8, 23, 24, 12, 11, 7, 9, 11, 12, 6, 7, 22, 5,
-    7, 24, 6, 11, 9, 6, 7, 22, 7, 11, 38, 7, 9, 8, 25, 11, 8, 11, 9, 12,
-    8, 12, 5, 38, 5, 38, 5, 11, 7, 5, 6, 21, 6, 10, 53, 8, 7, 24, 10, 27,
-    44, 253, 253, 253, 252, 252, 252, 13, 12, 45, 12, 45, 12, 61, 12, 45,
-    44, 173))
+_LITLEN = bytes(
+    (
+        11,
+        124,
+        8,
+        7,
+        28,
+        7,
+        188,
+        13,
+        76,
+        4,
+        10,
+        8,
+        12,
+        10,
+        12,
+        10,
+        8,
+        23,
+        8,
+        9,
+        7,
+        6,
+        7,
+        8,
+        7,
+        6,
+        55,
+        8,
+        23,
+        24,
+        12,
+        11,
+        7,
+        9,
+        11,
+        12,
+        6,
+        7,
+        22,
+        5,
+        7,
+        24,
+        6,
+        11,
+        9,
+        6,
+        7,
+        22,
+        7,
+        11,
+        38,
+        7,
+        9,
+        8,
+        25,
+        11,
+        8,
+        11,
+        9,
+        12,
+        8,
+        12,
+        5,
+        38,
+        5,
+        38,
+        5,
+        11,
+        7,
+        5,
+        6,
+        21,
+        6,
+        10,
+        53,
+        8,
+        7,
+        24,
+        10,
+        27,
+        44,
+        253,
+        253,
+        253,
+        252,
+        252,
+        252,
+        13,
+        12,
+        45,
+        12,
+        45,
+        12,
+        61,
+        12,
+        45,
+        44,
+        173,
+    )
+)
 _LENLEN = bytes((2, 35, 36, 53, 38, 23))
 _DISTLEN = bytes((2, 20, 53, 230, 247, 151, 248))
 
@@ -84,7 +180,7 @@ def _decode(s: _State, h) -> int:
         bit = s.bitbuf & 1
         s.bitbuf >>= 1
         s.bitcnt -= 1
-        code |= bit ^ 1            # DCL 码是反相的
+        code |= bit ^ 1  # DCL 码是反相的
         c = count[length]
         if code < first + c:
             return symbol[index + (code - first)]
@@ -104,7 +200,7 @@ def _copy_match(out: bytearray, start: int, length: int) -> None:
     重叠（RLE，如 dist=1 重复末字节）时必须逐字节边写边读，故走慢路径。
     两条路径输出完全一致，仅前者更快。"""
     if len(out) - start >= length:
-        out += out[start:start + length]
+        out += out[start : start + length]
     else:
         for i in range(length):
             out.append(out[start + i])
@@ -133,7 +229,7 @@ def explode(data: bytes, max_output: int | None = None) -> bytes:
             if _bits(s, 1):
                 sym = _decode(s, _LENCODE)
                 length = _BASE[sym] + _bits(s, _EXTRA[sym])
-                if length == 519:      # 结束标记
+                if length == 519:  # 结束标记
                     break
                 dist_bits = 2 if length == 2 else dict_bits
                 dist = (_decode(s, _DISTCODE) << dist_bits) + _bits(s, dist_bits) + 1

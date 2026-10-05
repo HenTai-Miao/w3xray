@@ -61,19 +61,23 @@ def format_script_condition_branch_index_tsv(index: ScriptConditionBranchIndex) 
     """Format branch conditions as TSV."""
     rows = ["来源\t行号\t函数\t分支\t条件\t调用\t变量\t字符串\t对象码\t用途\t摘要"]
     for item in index.branches:
-        rows.append("\t".join((
-            _tsv(item.source),
-            str(item.line),
-            _tsv(item.function),
-            _tsv(item.branch),
-            _tsv(item.condition),
-            _tsv("; ".join(item.calls)),
-            _tsv("; ".join(item.variables)),
-            _tsv("; ".join(item.strings)),
-            _tsv("; ".join(item.object_codes)),
-            _tsv(item.purpose),
-            _tsv(item.summary),
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    _tsv(item.source),
+                    str(item.line),
+                    _tsv(item.function),
+                    _tsv(item.branch),
+                    _tsv(item.condition),
+                    _tsv("; ".join(item.calls)),
+                    _tsv("; ".join(item.variables)),
+                    _tsv("; ".join(item.strings)),
+                    _tsv("; ".join(item.object_codes)),
+                    _tsv(item.purpose),
+                    _tsv(item.summary),
+                )
+            )
+        )
     return "\n".join(rows) + "\n"
 
 
@@ -93,23 +97,29 @@ def _branches_for_script(
         start, end = match.span("condition")
         condition = raw_line[start:end].strip()
         code_condition = code_line[start:end]
-        calls = _unique_ordered(item.group(1) for item in _CALL_RE.finditer(code_condition))
-        variables = _unique_ordered(item.group(0) for item in _VAR_RE.finditer(code_condition))
+        calls = _unique_ordered(
+            item.group(1) for item in _CALL_RE.finditer(code_condition)
+        )
+        variables = _unique_ordered(
+            item.group(0) for item in _VAR_RE.finditer(code_condition)
+        )
         strings = _strings_in(condition)
         object_codes = tuple(sorted(set(_codes_in(code_condition))))
-        rows.append(ScriptConditionBranch(
-            source=source,
-            line=line_no,
-            function=_function_for(source, line_no, functions),
-            branch=match.group("branch").lower(),
-            condition=condition,
-            calls=calls,
-            variables=variables,
-            strings=strings,
-            object_codes=object_codes,
-            purpose=_purpose(calls, variables, strings, object_codes),
-            summary=raw_line.strip()[:160],
-        ))
+        rows.append(
+            ScriptConditionBranch(
+                source=source,
+                line=line_no,
+                function=_function_for(source, line_no, functions),
+                branch=match.group("branch").lower(),
+                condition=condition,
+                calls=calls,
+                variables=variables,
+                strings=strings,
+                object_codes=object_codes,
+                purpose=_purpose(calls, variables, strings, object_codes),
+                summary=raw_line.strip()[:160],
+            )
+        )
     return rows
 
 
@@ -182,8 +192,6 @@ def _function_for(source: str, line: int, functions: tuple[ScriptFunction, ...])
         if item.source == source and item.start_line <= line <= item.end_line:
             return item.name
     return ""
-
-
 
 
 def _unique_ordered(values: Iterable[str]) -> tuple[str, ...]:

@@ -69,9 +69,10 @@ def test_user_data_bounds_are_rejected(
     user_size: int, header_offset: int, user_header_size: int
 ) -> None:
     # Given: one UserData size relationship or target bound is invalid.
-    data = struct.pack(
-        "<4sIII", b"MPQ\x1b", user_size, header_offset, user_header_size
-    ) + b"\x00" * 64
+    data = (
+        struct.pack("<4sIII", b"MPQ\x1b", user_size, header_offset, user_header_size)
+        + b"\x00" * 64
+    )
 
     # When/Then: validation rejects it before any unbounded scan or table read.
     with pytest.raises(ValueError, match="UserData"):

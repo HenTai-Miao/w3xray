@@ -14,7 +14,10 @@ from w3xtool.extraction_ledger import (
     ExtractionStatus,
     build_extraction_ledger,
 )
-from w3xtool.extraction_ledger_format import format_extraction_json, format_extraction_tsv
+from w3xtool.extraction_ledger_format import (
+    format_extraction_json,
+    format_extraction_tsv,
+)
 
 
 _SHA256 = "a" * 64

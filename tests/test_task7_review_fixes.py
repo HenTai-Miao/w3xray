@@ -54,23 +54,25 @@ def _map_with_forbidden_sources(payload: str) -> MapData:
 
 
 def _index_payload() -> str:
-    return "\n".join((
-        "globals",
-        "integer udg_Forbidden = 'F001'",
-        "endglobals",
-        "function Forbidden takes nothing returns integer",
-        "    local integer value = 1",
-        "    set udg_Forbidden = value",
-        "    if GetLocalPlayer() == Player(0) then",
-        '        call SaveInteger(udg_hash, 1, 2, 3)',
-        "    endif",
-        "    loop",
-        "        exitwhen true",
-        "    endloop",
-        '    call TriggerRegisterPlayerChatEvent(gg_trg_X, Player(0), "-x", true)',
-        "    return 'F001'",
-        "endfunction",
-    ))
+    return "\n".join(
+        (
+            "globals",
+            "integer udg_Forbidden = 'F001'",
+            "endglobals",
+            "function Forbidden takes nothing returns integer",
+            "    local integer value = 1",
+            "    set udg_Forbidden = value",
+            "    if GetLocalPlayer() == Player(0) then",
+            "        call SaveInteger(udg_hash, 1, 2, 3)",
+            "    endif",
+            "    loop",
+            "        exitwhen true",
+            "    endloop",
+            '    call TriggerRegisterPlayerChatEvent(gg_trg_X, Player(0), "-x", true)',
+            "    return 'F001'",
+            "endfunction",
+        )
+    )
 
 
 def test_every_script_index_excludes_wts_and_raw_binary_named_sources() -> None:
@@ -94,10 +96,7 @@ def test_every_script_index_excludes_wts_and_raw_binary_named_sources() -> None:
     )
 
     # Then: no index row can originate from WTS, WTG, or raw WCT.
-    assert all(
-        {item.source for item in group} <= _ANALYSIS_SOURCES
-        for group in groups
-    )
+    assert all({item.source for item in group} <= _ANALYSIS_SOURCES for group in groups)
 
 
 def test_call_save_and_object_analyzers_exclude_forbidden_sources() -> None:
@@ -122,12 +121,14 @@ def test_call_save_and_object_analyzers_exclude_forbidden_sources() -> None:
 
 def test_resource_diagnostic_gui_and_ui_reports_exclude_forbidden_sources() -> None:
     # Given: forbidden sources contain reportable resource, sync, mechanic, and TRIGSTR clues.
-    payload = "\n".join((
-        'call BlzLoadTOCFile("UI\\\\Forbidden.toc")',
-        "call GetLocalPlayer()",
-        "call ChooseRandomItemBJ(3)",
-        "TRIGSTR_999",
-    ))
+    payload = "\n".join(
+        (
+            'call BlzLoadTOCFile("UI\\\\Forbidden.toc")',
+            "call GetLocalPlayer()",
+            "call ChooseRandomItemBJ(3)",
+            "TRIGSTR_999",
+        )
+    )
     md = _map_with_forbidden_sources(payload)
 
     # When: representative reports are built.
@@ -146,14 +147,16 @@ def test_resource_diagnostic_gui_and_ui_reports_exclude_forbidden_sources() -> N
 
 def test_crash_cheat_order_and_compat_analyzers_exclude_forbidden_sources() -> None:
     # Given: forbidden sources contain known crash, cheat, order, and return-bug patterns.
-    payload = "\n".join((
-        'call InitGameCache("Forbidden.w3v")',
-        'call BJDebugMsg("whosyourdaddy")',
-        'call IssueImmediateOrder(u, "stop")',
-        "function H2I takes handle h returns integer",
-        "    return h",
-        "endfunction",
-    ))
+    payload = "\n".join(
+        (
+            'call InitGameCache("Forbidden.w3v")',
+            'call BJDebugMsg("whosyourdaddy")',
+            'call IssueImmediateOrder(u, "stop")',
+            "function H2I takes handle h returns integer",
+            "    return h",
+            "endfunction",
+        )
+    )
     md = _map_with_forbidden_sources(payload)
     md.w3i = SimpleNamespace(version=25, script_type="JASS", large_map=False)
 
@@ -170,12 +173,14 @@ def test_command_hints_do_not_cross_same_named_language_sources() -> None:
         path="x.w3x",
         name="x",
         scripts={
-            "war3map.j": "\n".join((
-                'call TriggerRegisterPlayerChatEvent(gg_trg_Shared, Player(0), "-jass", true)',
-                "function Trig_Shared_Actions takes nothing returns nothing",
-                '    call BJDebugMsg("JASS hint")',
-                "endfunction",
-            )),
+            "war3map.j": "\n".join(
+                (
+                    'call TriggerRegisterPlayerChatEvent(gg_trg_Shared, Player(0), "-jass", true)',
+                    "function Trig_Shared_Actions takes nothing returns nothing",
+                    '    call BJDebugMsg("JASS hint")',
+                    "endfunction",
+                )
+            ),
             "war3map.lua": (
                 'TriggerRegisterPlayerChatEvent(gg_trg_Shared, Player(0), "-lua", true)'
             ),
@@ -196,12 +201,14 @@ def test_command_hints_prefer_retained_byte_parsed_wts() -> None:
         path="x.w3x",
         name="x",
         scripts={
-            "war3map.j": "\n".join((
-                'call TriggerRegisterPlayerChatEvent(gg_trg_X, Player(0), "-x", true)',
-                "function Trig_X_Actions takes nothing returns nothing",
-                '    call BJDebugMsg("TRIGSTR_001")',
-                "endfunction",
-            )),
+            "war3map.j": "\n".join(
+                (
+                    'call TriggerRegisterPlayerChatEvent(gg_trg_X, Player(0), "-x", true)',
+                    "function Trig_X_Actions takes nothing returns nothing",
+                    '    call BJDebugMsg("TRIGSTR_001")',
+                    "endfunction",
+                )
+            ),
             "war3map.wts": "STRING 1\n{\n损坏的重编码文本\n}\n",
         },
         ui_strings={1: "保留的混合编码提示"},
@@ -222,11 +229,13 @@ def test_partial_recipes_do_not_combine_across_sources() -> None:
         path="x.w3x",
         name="x",
         scripts={
-            "war3map.j": "\n".join((
-                "function Partial takes nothing returns nothing",
-                "    call RemoveItem(CreateItem('I001', 0, 0))",
-                "    call RemoveItem(CreateItem('I002', 0, 0))",
-            )),
+            "war3map.j": "\n".join(
+                (
+                    "function Partial takes nothing returns nothing",
+                    "    call RemoveItem(CreateItem('I001', 0, 0))",
+                    "    call RemoveItem(CreateItem('I002', 0, 0))",
+                )
+            ),
             "war3map.lua": 'UnitAddItemById(u, FourCC("I003"))',
         },
     )

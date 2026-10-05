@@ -57,9 +57,7 @@ class _ControlTranslateTable(dict):
 
     def __missing__(self, code_point: int) -> str:
         char = chr(code_point)
-        replacement = (
-            " " if unicodedata.category(char) in _CONTROL_CATEGORIES else char
-        )
+        replacement = " " if unicodedata.category(char) in _CONTROL_CATEGORIES else char
         self[code_point] = replacement
         return replacement
 

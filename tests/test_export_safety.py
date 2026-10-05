@@ -4,6 +4,7 @@
 拼接输出路径时可能写到 out_dir 之外，造成任意文件写入。
 _safe_export_path 必须把这类名字拒绝（返回 None），普通名字正常拼接。
 """
+
 import os
 import tempfile
 import unittest
@@ -20,7 +21,14 @@ from w3xtool.knowledge_assets import export_resource_bodies
 from w3xtool.knowledge_object_exports import write_object_ids
 from w3xtool.knowledge_script_exports import write_readable_scripts
 from w3xtool.knowledge_unknown_exports import write_unknown_files_from_archive
-from w3xtool.mpq import FLAG_ENCRYPTED, FLAG_EXISTS, HASH_NAME_A, HASH_NAME_B, _Block, _hash
+from w3xtool.mpq import (
+    FLAG_ENCRYPTED,
+    FLAG_EXISTS,
+    HASH_NAME_A,
+    HASH_NAME_B,
+    _Block,
+    _hash,
+)
 
 
 class TestSafeExportPath(unittest.TestCase):
@@ -37,15 +45,14 @@ class TestSafeExportPath(unittest.TestCase):
 
     def test_windows_absolute_path_rejected(self):
         self.assertIsNone(
-            _safe_export_path(self.out, "C:\\Windows\\System32\\evil.dll"))
+            _safe_export_path(self.out, "C:\\Windows\\System32\\evil.dll")
+        )
 
     def test_parent_traversal_rejected(self):
-        self.assertIsNone(
-            _safe_export_path(self.out, "..\\..\\..\\evil.bat"))
+        self.assertIsNone(_safe_export_path(self.out, "..\\..\\..\\evil.bat"))
 
     def test_embedded_traversal_rejected(self):
-        self.assertIsNone(
-            _safe_export_path(self.out, "scripts\\..\\..\\evil"))
+        self.assertIsNone(_safe_export_path(self.out, "scripts\\..\\..\\evil"))
 
     def test_empty_name_rejected(self):
         self.assertIsNone(_safe_export_path(self.out, ""))
@@ -166,12 +173,17 @@ class TestRecoveredNamedExport(unittest.TestCase):
             self.assertIn(1, exported_blocks)
             with open(os.path.join(out, "Textures", "foo.blp"), "rb") as f:
                 self.assertEqual(f.read(), b"BLP1texture")
-            self.assertTrue(os.path.exists(os.path.join(out, "RecoveredNames", "manifest.tsv")))
+            self.assertTrue(
+                os.path.exists(os.path.join(out, "RecoveredNames", "manifest.tsv"))
+            )
 
 
 class TestUnifiedSinkSafety(unittest.TestCase):
     def test_resource_body_does_not_follow_body_directory_symlink(self):
-        with tempfile.TemporaryDirectory() as source, tempfile.TemporaryDirectory() as root:
+        with (
+            tempfile.TemporaryDirectory() as source,
+            tempfile.TemporaryDirectory() as root,
+        ):
             source_path = Path(source)
             (source_path / "Assets").mkdir()
             (source_path / "Assets" / "Panel.blp").write_bytes(b"BLP1panel")
@@ -189,7 +201,10 @@ class TestUnifiedSinkSafety(unittest.TestCase):
             self.assertFalse((outside / "assets" / "panel.blp").exists())
 
     def test_resource_body_does_not_follow_nested_directory_symlink(self):
-        with tempfile.TemporaryDirectory() as source, tempfile.TemporaryDirectory() as root:
+        with (
+            tempfile.TemporaryDirectory() as source,
+            tempfile.TemporaryDirectory() as root,
+        ):
             source_path = Path(source)
             (source_path / "Assets").mkdir()
             (source_path / "Assets" / "Panel.blp").write_bytes(b"BLP1panel")
@@ -260,7 +275,9 @@ class TestUnifiedSinkSafety(unittest.TestCase):
 
     def test_script_file_does_not_follow_destination_symlink(self):
         md = MapData(path="x.w3x", name="脚本安全图")
-        md.scripts = {"war3map.j": "function main takes nothing returns nothing\nendfunction\n"}
+        md.scripts = {
+            "war3map.j": "function main takes nothing returns nothing\nendfunction\n"
+        }
         with tempfile.TemporaryDirectory() as root:
             output = Path(root) / "scripts"
             output.mkdir()
@@ -274,7 +291,9 @@ class TestUnifiedSinkSafety(unittest.TestCase):
 
     def test_script_parent_traversal_is_rejected_before_flattening(self):
         md = MapData(path="x.w3x", name="脚本路径安全图")
-        md.scripts = {"../escape.j": "function escape takes nothing returns nothing\nendfunction\n"}
+        md.scripts = {
+            "../escape.j": "function escape takes nothing returns nothing\nendfunction\n"
+        }
         with tempfile.TemporaryDirectory() as root:
             output = Path(root) / "scripts"
 

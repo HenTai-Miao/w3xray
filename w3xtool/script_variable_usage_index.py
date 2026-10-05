@@ -61,17 +61,21 @@ def format_script_variable_usage_index_tsv(index: ScriptVariableUsageIndex) -> s
     """Format script variable usage rows as TSV."""
     rows = ["来源\t行号\t函数\t变量\t访问\t类别\t调用\t对象码\t摘要"]
     for item in index.usages:
-        rows.append("\t".join((
-            _tsv(item.source),
-            str(item.line),
-            _tsv(item.function),
-            _tsv(item.variable),
-            _tsv(item.access),
-            _tsv(item.category),
-            _tsv(item.call),
-            _tsv("; ".join(item.object_codes)),
-            _tsv(item.summary),
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    _tsv(item.source),
+                    str(item.line),
+                    _tsv(item.function),
+                    _tsv(item.variable),
+                    _tsv(item.access),
+                    _tsv(item.category),
+                    _tsv(item.call),
+                    _tsv("; ".join(item.object_codes)),
+                    _tsv(item.summary),
+                )
+            )
+        )
     return "\n".join(rows) + "\n"
 
 
@@ -85,7 +89,9 @@ def _usages_for_script(
     raw_lines = text.splitlines()
     is_lua = source.lower().endswith(".lua")
     for line_no, code_line in enumerate(code_lines, start=1):
-        variables = _unique_ordered(match.group(0) for match in _VAR_RE.finditer(code_line))
+        variables = _unique_ordered(
+            match.group(0) for match in _VAR_RE.finditer(code_line)
+        )
         if not variables:
             continue
         write_target = _write_target(code_line, is_lua)
@@ -93,17 +99,19 @@ def _usages_for_script(
         call = _line_call(code_line)
         summary = _strip_comment(raw_lines[line_no - 1]).strip()[:160]
         for variable in variables:
-            rows.append(ScriptVariableUsage(
-                source=source,
-                line=line_no,
-                function=functions.name_for(source, line_no),
-                variable=variable,
-                access=_access(variable, write_target, code_line),
-                category=_category(variable),
-                call=call if variable != write_target else "",
-                object_codes=object_codes,
-                summary=summary,
-            ))
+            rows.append(
+                ScriptVariableUsage(
+                    source=source,
+                    line=line_no,
+                    function=functions.name_for(source, line_no),
+                    variable=variable,
+                    access=_access(variable, write_target, code_line),
+                    category=_category(variable),
+                    call=call if variable != write_target else "",
+                    object_codes=object_codes,
+                    summary=summary,
+                )
+            )
     return rows
 
 
@@ -124,7 +132,7 @@ def _access(variable: str, write_target: str, line: str) -> str:
     if variable != write_target:
         return "读取"
     eq_index = line.find("=")
-    if eq_index >= 0 and re.search(rf"\b{re.escape(variable)}\b", line[eq_index + 1:]):
+    if eq_index >= 0 and re.search(rf"\b{re.escape(variable)}\b", line[eq_index + 1 :]):
         return "读写"
     return "写入"
 
@@ -154,8 +162,6 @@ def _category(variable: str) -> str:
 def _line_call(line: str) -> str:
     match = _CALL_RE.search(line)
     return match.group(1) if match is not None else ""
-
-
 
 
 def _unique_ordered(values: Iterable[str]) -> tuple[str, ...]:

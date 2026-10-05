@@ -373,7 +373,9 @@ def test_source_swap_immediately_before_retention_preserves_both_directories(
         os.close(descriptor)
 
     assert _identity(displaced) == expected
-    assert _identity(names.path(retention.RetainedCacheRole.RECOVERY)) == foreign_identity
+    assert (
+        _identity(names.path(retention.RetainedCacheRole.RECOVERY)) == foreign_identity
+    )
     assert not names.path(retention.RetainedCacheRole.PREVIOUS).exists()
     assert len(raised.value.retained) == 1
     assert raised.value.retained[0].role is retention.RetainedCacheRole.RECOVERY
@@ -960,9 +962,7 @@ def retain_object(
                 rename_noreplace,
             )
         except PublicationCommitContextError as recovery_error:
-            recovery_error.replace_transient(
-                (*recovery_error.transient, *collision)
-            )
+            recovery_error.replace_transient((*recovery_error.transient, *collision))
             recovery_error.replace_failures(
                 merge_failures(prior_failures, recovery_error.failures)
             )
@@ -1279,12 +1279,7 @@ def move_object_to_recovery(
         () if move_error is None else (move_error,),
         proof.failures,
     )
-    if (
-        move_error is None
-        and proof.complete
-        and proof.retained
-        and not proof.transient
-    ):
+    if move_error is None and proof.complete and proof.retained and not proof.transient:
         return proof.retained[0]
     detail = (
         "recovery move completed but its callable raised; NEEDS_CONTEXT"
@@ -1345,11 +1340,7 @@ def _reprove_recovery_move(
         or (proof.identity is not None and proof.identity != allowed)
     )
     return _RecoveryMoveProof(
-        bool(
-            retained
-            and source_proof.readable
-            and source_proof.identity is None
-        ),
+        bool(retained and source_proof.readable and source_proof.identity is None),
         retained,
         transient,
         merge_failures(source_proof.failures, recovery_proof.failures),
@@ -1568,9 +1559,7 @@ def transient_publication_paths(output: Path) -> tuple[Path, ...]:
 
 
 def retained_publication_paths(output: Path) -> tuple[Path, ...]:
-    return tuple(
-        output.parent.glob(".w3xray-description-cache-retained-*-*")
-    )
+    return tuple(output.parent.glob(".w3xray-description-cache-retained-*-*"))
 
 
 def test_replacement_retains_exact_previous_inode_without_rmtree(
@@ -1591,12 +1580,18 @@ def test_replacement_retains_exact_previous_inode_without_rmtree(
     retained = result.retained[0]
     assert retained.role.value == "previous"
     assert retained.identity == previous_identity == _identity(retained.path)
-    assert load_trusted_description_cache(retained.path).cache.lookup(
-        "物品", "ratf", "扩展提示", None
-    )[0].raw_value == "first"
-    assert load_trusted_description_cache(root).cache.lookup(
-        "物品", "ratf", "扩展提示", None
-    )[0].raw_value == "second"
+    assert (
+        load_trusted_description_cache(retained.path)
+        .cache.lookup("物品", "ratf", "扩展提示", None)[0]
+        .raw_value
+        == "first"
+    )
+    assert (
+        load_trusted_description_cache(root)
+        .cache.lookup("物品", "ratf", "扩展提示", None)[0]
+        .raw_value
+        == "second"
+    )
     assert not transient_publication_paths(root)
 
 
@@ -1674,7 +1669,9 @@ def test_retention_race_returns_needs_context_and_preserves_every_object(
             )
         original(parent_descriptor, source_name, destination_name)
 
-    monkeypatch.setattr(publication, "_rename_noreplace", race_before_previous_retention)
+    monkeypatch.setattr(
+        publication, "_rename_noreplace", race_before_previous_retention
+    )
     with pytest.raises(
         PublicationCommitContextError,
         match="NEEDS_CONTEXT",
@@ -1693,8 +1690,7 @@ def test_retention_race_returns_needs_context_and_preserves_every_object(
     assert len(recovery) == 1
     assert _identity(recovery[0]) == decoy_identity
     assert any(
-        record.role.value == "recovery"
-        and record.identity == decoy_identity
+        record.role.value == "recovery" and record.identity == decoy_identity
         for record in raised.value.retained
     )
     assert not transient_publication_paths(root)
@@ -1978,9 +1974,7 @@ def test_stage_io_unsupported_fails_before_any_publication_effect(
 ) -> None:
     legacy_output, legacy_cache = replacement_inputs(tmp_path, "first")
     output = tmp_path / "trusted"
-    stage_io = importlib.import_module(
-        "w3xtool.description_cache_publication_stage_io"
-    )
+    stage_io = importlib.import_module("w3xtool.description_cache_publication_stage_io")
     calls = _instrument_preflight_effects(monkeypatch)
     monkeypatch.setattr(stage_io, "_STAGE_IO_AVAILABLE", False)
 
@@ -2031,9 +2025,12 @@ def test_previous_role_collision_restores_active_and_retains_failed_stage(
         )
 
     assert _identity(root) == original_identity
-    assert load_trusted_description_cache(root).cache.lookup(
-        "物品", "ratf", "扩展提示", None
-    )[0].raw_value == "first"
+    assert (
+        load_trusted_description_cache(root)
+        .cache.lookup("物品", "ratf", "扩展提示", None)[0]
+        .raw_value
+        == "first"
+    )
     assert len(collisions) == 1
     collision, collision_identity = collisions[0]
     assert _identity(collision) == collision_identity
@@ -2043,21 +2040,17 @@ def test_previous_role_collision_restores_active_and_retains_failed_stage(
         if path.name.endswith("-failed-stage")
     )
     assert len(failed) == 1
-    assert load_trusted_description_cache(failed[0]).cache.lookup(
-        "物品", "ratf", "扩展提示", None
-    )[0].raw_value == "second"
-    assert any(
-        record.role.value == "failed-stage"
-        for record in raised.value.retained
+    assert (
+        load_trusted_description_cache(failed[0])
+        .cache.lookup("物品", "ratf", "扩展提示", None)[0]
+        .raw_value
+        == "second"
     )
+    assert any(record.role.value == "failed-stage" for record in raised.value.retained)
     assert all(
-        _identity(record.path) == record.identity
-        for record in raised.value.retained
+        _identity(record.path) == record.identity for record in raised.value.retained
     )
-    assert not any(
-        record.role.value == "recovery"
-        for record in raised.value.retained
-    )
+    assert not any(record.role.value == "recovery" for record in raised.value.retained)
     assert not transient_publication_paths(root)
 
 
@@ -2077,12 +2070,9 @@ def test_recovery_role_collision_preserves_transient_without_overwrite(
         destination_name: str,
     ) -> None:
         exchange_in_parent(parent_descriptor, source_name, destination_name)
-        transaction_id = source_name.removeprefix(
-            ".w3xray-description-cache-stage-"
-        )
+        transaction_id = source_name.removeprefix(".w3xray-description-cache-stage-")
         collision = root.parent / (
-            ".w3xray-description-cache-retained-"
-            f"{transaction_id}-recovery"
+            f".w3xray-description-cache-retained-{transaction_id}-recovery"
         )
         collision.mkdir()
         (collision / "foreign.txt").write_text("foreign", encoding="utf-8")
@@ -2107,18 +2097,24 @@ def test_recovery_role_collision_preserves_transient_without_overwrite(
         )
 
     assert (root / "foreign.txt").read_text(encoding="utf-8") == "winner"
-    assert load_trusted_description_cache(displaced_new).cache.lookup(
-        "物品", "ratf", "扩展提示", None
-    )[0].raw_value == "second"
+    assert (
+        load_trusted_description_cache(displaced_new)
+        .cache.lookup("物品", "ratf", "扩展提示", None)[0]
+        .raw_value
+        == "second"
+    )
     assert len(collisions) == 1
     collision, collision_identity = collisions[0]
     assert _identity(collision) == collision_identity
     transient = transient_publication_paths(root)
     assert len(transient) == 1
     assert _identity(transient[0]) == previous_identity
-    assert load_trusted_description_cache(transient[0]).cache.lookup(
-        "物品", "ratf", "扩展提示", None
-    )[0].raw_value == "first"
+    assert (
+        load_trusted_description_cache(transient[0])
+        .cache.lookup("物品", "ratf", "扩展提示", None)[0]
+        .raw_value
+        == "first"
+    )
 ```
 
 Add `sys`, `AtomicRenameUnavailableError`, and `exchange_in_parent` to the respective focused test imports. Add two real primitive/lifecycle cases in the collision file for an occupied `failed-output` target and an occupied `failed-stage` target while `recovery` remains free: each must preserve the foreign collision, move the exact source inode to the same transaction's `recovery` name, raise typed `NEEDS_CONTEXT` carrying that recovery record, and leave zero stage/backup names. These cases use captured `(device, inode)` values rather than name-only assertions.
@@ -2187,9 +2183,7 @@ than collection failure:
 def test_stage_io_support_preflight_rejects_incomplete_host_without_transaction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    stage_io = importlib.import_module(
-        "w3xtool.description_cache_publication_stage_io"
-    )
+    stage_io = importlib.import_module("w3xtool.description_cache_publication_stage_io")
     calls = {
         "uuid4": 0,
         "rename_noreplace": 0,
@@ -2501,9 +2495,7 @@ def _synchronize_installed_error(
             "NEEDS_CONTEXT",
             installed_error.retained,
             installed_error.transient,
-            merge_failures(
-                (*installed_error.failures, installed_error), (sync_error,)
-            ),
+            merge_failures((*installed_error.failures, installed_error), (sync_error,)),
         )
         finalized = finalize_error_evidence(
             parent_descriptor,
@@ -2678,8 +2670,7 @@ class ParentBoundValidator:
         """Validate one cache only while its parent remains exactly bound."""
         if path.parent != self.parent:
             raise PublicationCommitContextError(
-                "cache validation escaped the held publication parent; "
-                "NEEDS_CONTEXT"
+                "cache validation escaped the held publication parent; NEEDS_CONTEXT"
             )
         self.require_current_parent()
         try:
@@ -2919,26 +2910,16 @@ def _reprove_absent_install(
         stage,
     )
     output_identity = (
-        output_evidence.transient[0].identity
-        if output_evidence.transient
-        else None
+        output_evidence.transient[0].identity if output_evidence.transient else None
     )
     stage_identity = (
-        stage_evidence.transient[0].identity
-        if stage_evidence.transient
-        else None
+        stage_evidence.transient[0].identity if stage_evidence.transient else None
     )
-    installed = bool(
-        output_identity == expected
-        and stage_identity != expected
-    )
+    installed = bool(output_identity == expected and stage_identity != expected)
     return installed, PublicationCommitContextError(
-        "absent-output rename completion required namespace reproof; "
-        "NEEDS_CONTEXT",
+        "absent-output rename completion required namespace reproof; NEEDS_CONTEXT",
         transient=tuple(
-            dict.fromkeys(
-                (*output_evidence.transient, *stage_evidence.transient)
-            )
+            dict.fromkeys((*output_evidence.transient, *stage_evidence.transient))
         ),
         failures=merge_failures(
             output_evidence.failures,
@@ -3106,9 +3087,7 @@ def normalize_recovery_failure(
         )
         records = retained_proof.retained
         failures = merge_failures(failures, retained_proof.failures)
-        transient = tuple(
-            dict.fromkeys((*transient, *retained_proof.transient))
-        )
+        transient = tuple(dict.fromkeys((*transient, *retained_proof.transient)))
     try:
         sync_parent(parent_descriptor)
     except Exception as sync_error:  # noqa: BROAD_EXCEPT_OK - rollback durability
@@ -3347,11 +3326,7 @@ live_proof = reprove_retained(
     parent_identity,
     (retained,),
 )
-if (
-    live_proof.retained != (retained,)
-    or live_proof.transient
-    or live_proof.failures
-):
+if live_proof.retained != (retained,) or live_proof.transient or live_proof.failures:
     raise PublicationCommitContextError(
         "retained previous generation cannot be re-proved; NEEDS_CONTEXT",
         live_proof.retained,
@@ -3443,6 +3418,7 @@ def close_publication_descriptors(
 ) -> None:
     """Attempt every close without replacing an in-flight typed failure."""
     failures: list[tuple[str, Exception]] = []
+
     def attempt(index: int) -> None:
         if index == len(descriptors):
             return
@@ -3581,9 +3557,7 @@ def create_stage_and_capture(
             collision_error = DescriptionCacheConcurrentDestinationError(
                 "private stage name was acquired concurrently",
                 transient=collision_evidence.transient,
-                failures=merge_failures(
-                    (exc,), collision_evidence.failures
-                ),
+                failures=merge_failures((exc,), collision_evidence.failures),
             )
             finalized = finalize_error_evidence(
                 parent_descriptor,
@@ -3638,8 +3612,7 @@ def create_stage_and_capture(
                     "stage collision lost its parent identity; NEEDS_CONTEXT"
                 ) from ordinary_error
             collision_failure = PublicationCommitContextError(
-                "stage-collision evidence raised an ordinary exception; "
-                "NEEDS_CONTEXT",
+                "stage-collision evidence raised an ordinary exception; NEEDS_CONTEXT",
                 failures=(ordinary_error,),
             )
             finalized = finalize_error_evidence(
@@ -4177,13 +4150,9 @@ def locate_consumed_stage(
         )
     )
     matching_records = tuple(
-        record
-        for state in matches
-        if (record := _retained_match(state)) is not None
+        record for state in matches if (record := _retained_match(state)) is not None
     )
-    held_record = (
-        _retained_match(matches[0]) if len(matches) == 1 else None
-    )
+    held_record = _retained_match(matches[0]) if len(matches) == 1 else None
     clean = bool(
         detail is None
         and not locations_changed
@@ -4239,9 +4208,8 @@ def locate_consumed_stage(
     failures = merge_failures(failures, missing_held_evidence.failures)
     if locations_changed:
         reason = "stage-location names changed between complete scans"
-    elif (
-        prior.retained != expected_records
-        or not _known_records_match(after, retained)
+    elif prior.retained != expected_records or not _known_records_match(
+        after, retained
     ):
         reason = "known retained evidence changed during stage-location proof"
     elif len(matches) != 1:
@@ -4403,11 +4371,7 @@ def _snapshot_as_transient(
             state.path.name,
             bound.parent_identity,
             state.identity,
-            (
-                bound.stage_identity
-                if state.identity == bound.stage_identity
-                else None
-            ),
+            (bound.stage_identity if state.identity == bound.stage_identity else None),
         )
         for state in states
         if not state.readable or state.identity is not None
@@ -4437,8 +4401,6 @@ known set before the stage attempt starts; the same recovery path/inode can ther
 be emitted once as retained and again as an unrelated transient:
 
 ```python
-
-
 def finalize_private_artifacts(
     bound: BoundDescriptionCacheStage,
     backup: Path,
@@ -4460,7 +4422,7 @@ def finalize_private_artifacts(
             names,
             rename_noreplace,
             sync_parent,
-        )
+        ),
     )
     stage_known_retained = merge_retained(
         known_retained,
@@ -4476,9 +4438,7 @@ def finalize_private_artifacts(
                 backup_error.retained,
             )
             stage_known_transient = tuple(
-                dict.fromkeys(
-                    (*stage_known_transient, *backup_error.transient)
-                )
+                dict.fromkeys((*stage_known_transient, *backup_error.transient))
             )
         case unreachable:
             assert_never(unreachable)
@@ -4494,7 +4454,7 @@ def finalize_private_artifacts(
             sync_parent,
             stage_known_retained,
             stage_known_transient,
-        )
+        ),
     )
     records = merge_retained(
         record_tuple(backup_attempt.record),
@@ -4511,9 +4471,7 @@ def finalize_private_artifacts(
         failures: tuple[Exception, ...] = ()
         for error in errors:
             retained = merge_retained(retained, error.retained)
-            transient = tuple(
-                dict.fromkeys((*transient, *error.transient))
-            )
+            transient = tuple(dict.fromkeys((*transient, *error.transient)))
             failures = merge_failures(
                 failures,
                 (*error.failures, error),
@@ -4536,7 +4494,6 @@ def finalize_private_artifacts(
         bound.parent_identity,
         records,
     )
-
 ```
 
 Create `w3xtool/description_cache_publication_private_attempt.py` for the ordinary-exception
@@ -5175,9 +5132,7 @@ def require_live_result_evidence(
                 output,
             ),
         )
-        finalized.replace_failures(
-            merge_failures(finalized.failures, (exc,))
-        )
+        finalized.replace_failures(merge_failures(finalized.failures, (exc,)))
         raise finalized
     return result
 
@@ -5259,9 +5214,7 @@ Export all three proof models beside the existing payload/error/result models.
 Create `w3xtool/description_cache_publication_stage_io.py` for the only stage-file writer. The allowed set is exactly the three payload names, manifest, and marker. `write_stage_text()` rejects every other or non-leaf name, uses `O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC`, writes and fsyncs through `write_chunks_to_descriptor()`, compares regular-file mode, `(device, inode)`, and final byte count through both `fstat()` and no-follow `stat(..., dir_fd=stage_descriptor)`, and returns the exact identity/size/SHA-256 proof. It never opens, creates, resolves, or writes `display_root`:
 
 ```python
-_ALLOWED_STAGE_FILES: Final = frozenset(
-    TRUSTED_DESCRIPTION_CACHE_OWNED_INVENTORY
-)
+_ALLOWED_STAGE_FILES: Final = frozenset(TRUSTED_DESCRIPTION_CACHE_OWNED_INVENTORY)
 _FILE_CREATE_FLAGS: Final = (
     os.O_WRONLY
     | os.O_CREAT
@@ -5422,10 +5375,7 @@ def _stable_generation_state(
         state.directory.st_dev,
         state.directory.st_ino,
         state.directory.st_mode,
-        tuple(
-            (leaf.name, *_stable_file_state(leaf.details))
-            for leaf in state.leaves
-        ),
+        tuple((leaf.name, *_stable_file_state(leaf.details)) for leaf in state.leaves),
     )
 ```
 
@@ -5777,11 +5727,7 @@ After the existing CLI success summary, print records in result order:
 
 ```python
 for retained in result.retained:
-    print(
-        single_line_text(
-            f"保留对象：{retained.role.value} -> {retained.path}"
-        )
-    )
+    print(single_line_text(f"保留对象：{retained.role.value} -> {retained.path}"))
 ```
 
 Catch `DescriptionCachePublicationError` before the existing generic `OSError` boundary and print its retained tuple to stderr before returning code `2`. The complete revised boundary is:
@@ -5808,9 +5754,7 @@ def run_description_cache_cli(argv: tuple[str, ...]) -> int:
         print(f"可信描述缓存迁移失败：{detail}", file=sys.stderr)
         for retained in exc.retained:
             print(
-                single_line_text(
-                    f"保留对象：{retained.role.value} -> {retained.path}"
-                ),
+                single_line_text(f"保留对象：{retained.role.value} -> {retained.path}"),
                 file=sys.stderr,
             )
         for transient in exc.transient:
@@ -5858,11 +5802,7 @@ def run_description_cache_cli(argv: tuple[str, ...]) -> int:
         )
     )
     for retained in result.retained:
-        print(
-            single_line_text(
-                f"保留对象：{retained.role.value} -> {retained.path}"
-            )
-        )
+        print(single_line_text(f"保留对象：{retained.role.value} -> {retained.path}"))
     return 0
 ```
 
@@ -5894,9 +5834,7 @@ def transient_publication_paths(output: Path) -> tuple[Path, ...]:
 
 
 def retained_publication_paths(output: Path) -> tuple[Path, ...]:
-    return tuple(
-        output.parent.glob(".w3xray-description-cache-retained-*-*")
-    )
+    return tuple(output.parent.glob(".w3xray-description-cache-retained-*-*"))
 
 
 def assert_live_retained_records(
@@ -6215,25 +6153,17 @@ def test_retained_integrity_separates_valid_partial_and_transient_objects(
     active = published_cache(tmp_path / "active-source", raw="active")
     old = published_cache(tmp_path / "old-source", raw="previous")
     previous = active.parent / (
-        ".w3xray-description-cache-retained-"
-        f"{'1' * 32}-previous"
+        f".w3xray-description-cache-retained-{'1' * 32}-previous"
     )
     old.rename(previous)
     failed = active.parent / (
-        ".w3xray-description-cache-retained-"
-        f"{'2' * 32}-failed-stage"
+        f".w3xray-description-cache-retained-{'2' * 32}-failed-stage"
     )
     failed.mkdir()
     (failed / "partial.bin").write_bytes(b"partial")
-    transient = active.parent / (
-        ".w3xray-description-cache-stage-"
-        f"{'3' * 32}"
-    )
+    transient = active.parent / (f".w3xray-description-cache-stage-{'3' * 32}")
     transient.write_bytes(b"transient")
-    unsafe = active.parent / (
-        ".w3xray-description-cache-retained-"
-        f"{'4' * 32}-recovery"
-    )
+    unsafe = active.parent / (f".w3xray-description-cache-retained-{'4' * 32}-recovery")
     unsafe.symlink_to(tmp_path / "outside", target_is_directory=True)
 
     report = inspect_retained_description_caches(active)
@@ -6252,12 +6182,18 @@ def test_retained_integrity_separates_valid_partial_and_transient_objects(
     assert len(report.transient) == 1
     assert report.transient[0].path == transient
     assert report.transient[0].kind is CacheArtifactKind.REGULAR_FILE
-    assert load_trusted_description_cache(active).cache.lookup(
-        "物品", "ratf", "扩展提示", None
-    )[0].raw_value == "active"
-    assert parse_description_cache_retention_report(
-        format_description_cache_retention_report(report)
-    ) == report
+    assert (
+        load_trusted_description_cache(active)
+        .cache.lookup("物品", "ratf", "扩展提示", None)[0]
+        .raw_value
+        == "active"
+    )
+    assert (
+        parse_description_cache_retention_report(
+            format_description_cache_retention_report(report)
+        )
+        == report
+    )
 ```
 
 Before implementing the scanner, add focused RED cases for: an exact-limit regular file and one-byte-oversized file; exact and exceeded total-tree byte limits; exact and exceeded file-count and entry-count limits; a retained root at depth `0`, an accepted child at depth `64`, and a rejected child at depth `65`; a file replaced or mutated between pre/post `fstat`; an unreadable entry retained with `kind=unknown` and `identity=None`; symlinks at both top level and inside a retained directory; an active-root symlink and a mid-scan active-root replacement rejected with code `2`; special objects; every exact closed reason code and rejection of an unknown reason; malformed retained/stage/backup leaves; canonical field-set/order/format/parse round-trip; and parser rejection of unknown states, unsafe problem paths, unsorted rows, or inconsistent totals/digests. For retained `previous`, separately remove one owned regular leaf, add one extra ordinary file, add one nested directory entry, and create exact-role top-level regular-file, symlink, and special-object siblings. The three stable inventory mismatches must be `invalid-previous`; every non-directory case must be `unsafe-object`; all six produce report/CLI code `1` and none may be `valid-cache` or `partial-evidence`. Add deterministic hooks between the initial relevant-sibling snapshot and final snapshot: insert a stage leaf, insert a malformed retained-prefix leaf, remove an existing backup leaf, and replace an existing retained leaf. Each must exit `2` and must never emit a clean report. Separately, mutate an already-read early child in place with the same inode and size while a later retained artifact is being scanned; the terminal whole-set round must return `unstable`/code `1`. For `previous`, inject distinct valid bytes if any second loader read occurs, require validation of the first round's captured bytes, and prove both the public and held-parent pathname loaders are never called. Replacing the top-level `previous` sibling with a different valid cache inode during either round is relevant-sibling instability: require command-boundary code `2` and no report, never `unstable`/code `1` or `valid-cache`. Only mutation below a still-exact held top-level sibling produces the per-artifact `unstable`/code `1` result. Use injected read/stat seams or real descriptor operations, never sleeps. Add CLI tests in the dedicated new CLI file for all three exit codes and assert the JSON output exists for codes `0` and `1`; code `0` covers only `valid-cache` plus ordinary `partial-evidence`, code `1` covers every per-artifact violation plus transient/malformed, and code `2` is reserved for command/report boundary failure, including unstable relevant-sibling enumeration.

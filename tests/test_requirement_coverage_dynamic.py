@@ -9,7 +9,10 @@ from w3xtool.archive_source import PathArchiveSource
 from w3xtool.extraction_diagnostics import read_component
 from w3xtool.external_listfile import ExternalListfileReport
 from w3xtool.knowledge_pack import write_knowledge_pack
-from w3xtool.knowledge_requirements import ExtractionCapabilities, format_requirement_coverage
+from w3xtool.knowledge_requirements import (
+    ExtractionCapabilities,
+    format_requirement_coverage,
+)
 from w3xtool.w3f import CampaignMapEntry, W3fInfo
 from w3xtool.wtg_diagnostics import UnknownTriggerFunction
 from w3xtool.wtg_models import TriggerHeader, TriggerTreeSummary
@@ -21,7 +24,9 @@ def test_requirement_coverage_uses_map_results() -> None:
     md.trigger_summary = _summary_with_missing_schema()
 
     # When: coverage is formatted without a readable game-data source.
-    text = format_requirement_coverage(md, ExtractionCapabilities(game_data_kind="missing"))
+    text = format_requirement_coverage(
+        md, ExtractionCapabilities(game_data_kind="missing")
+    )
 
     # Then: the matrix states actual partial/missing/static-only boundaries.
     assert "WTG ECA\t部分提取" in text
@@ -71,7 +76,9 @@ def test_requirement_coverage_downgrades_fixed_rows_for_empty_map() -> None:
     assert "分析物品/技能/单位 ID\t未发现数据" in text
 
 
-def test_requirement_coverage_derives_archive_diagnosis_from_map(tmp_path: Path) -> None:
+def test_requirement_coverage_derives_archive_diagnosis_from_map(
+    tmp_path: Path,
+) -> None:
     # Given: a map whose original archive is missing and no capabilities override.
     md = MapData(path=str(tmp_path / "missing.w3x"), name="missing")
 
@@ -89,7 +96,9 @@ def test_requirement_coverage_consumes_archive_diagnosis_kind() -> None:
     capabilities = ExtractionCapabilities(archive_diagnosis_kind="table_damage")
 
     # When: dynamic coverage is formatted.
-    text = format_requirement_coverage(MapData(path="broken.w3x", name="broken"), capabilities)
+    text = format_requirement_coverage(
+        MapData(path="broken.w3x", name="broken"), capabilities
+    )
 
     # Then: the diagnosis is visible rather than stored in an unused field.
     assert "归档诊断\t结构损坏" in text
@@ -119,10 +128,12 @@ def test_requirement_coverage_uses_all_runtime_extraction_facts() -> None:
         "war3map.lua": 'print("TRIGSTR_002")',
     }
     md.ui_strings = {1: "resolved"}
-    md.w3f = W3fInfo(maps=[
-        CampaignMapEntry("Map01.w3x", "One", "Chapter 1", True),
-        CampaignMapEntry("Map02.w3x", "Two", "Chapter 2", True),
-    ])
+    md.w3f = W3fInfo(
+        maps=[
+            CampaignMapEntry("Map01.w3x", "One", "Chapter 1", True),
+            CampaignMapEntry("Map02.w3x", "Two", "Chapter 2", True),
+        ]
+    )
     md.sub_maps = [
         MapData(
             "Map01.w3x",
@@ -167,7 +178,9 @@ def _summary_with_missing_schema() -> TriggerTreeSummary:
         categories=(),
         variables=(),
         triggers=(TriggerHeader("初始化", "", False, True, False, False, True, 0, 1),),
-        missing_schema_functions=(UnknownTriggerFunction("初始化", "MissingAction", 2, 0x20),),
+        missing_schema_functions=(
+            UnknownTriggerFunction("初始化", "MissingAction", 2, 0x20),
+        ),
         has_unexpanded_functions=True,
     )
 

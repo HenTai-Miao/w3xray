@@ -24,10 +24,10 @@ packages = ["w3xtool"]
 
 [dependency-groups]
 dev = [
-    "basedpyright>=1.39.9,<2",
+    "basedpyright>=1.39.9",
     "pyinstaller>=6.20.0",
     "pytest>=9.0.3",
-    "ruff>=0.15.21,<0.16",
+    "ruff>=0.16",
 ]
 
 [tool.basedpyright]

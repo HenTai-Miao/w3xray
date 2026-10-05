@@ -81,7 +81,7 @@ class _Reader:
     def bytes(self, size: int) -> bytes:
         if self.remaining < size:
             raise _TruncatedRead
-        value = self.data[self.position:self.position + size]
+        value = self.data[self.position : self.position + size]
         self.position += size
         return value
 
@@ -89,7 +89,7 @@ class _Reader:
         end = self.data.find(b"\x00", self.position)
         if end < 0:
             raise _TruncatedRead
-        raw = self.data[self.position:end]
+        raw = self.data[self.position : end]
         self.position = end + 1
         return decode_warcraft_string(raw)
 
@@ -167,12 +167,14 @@ def _parse_map_entries(
             chapter_name = _display(reader, strings)
             display_name = _display(reader, strings)
             path = reader.cstr()
-            buttons.append(CampaignMapEntry(
-                path=path,
-                display_name=display_name,
-                chapter_name=chapter_name,
-                initially_visible=initially_visible,
-            ))
+            buttons.append(
+                CampaignMapEntry(
+                    path=path,
+                    display_name=display_name,
+                    chapter_name=chapter_name,
+                    initially_visible=initially_visible,
+                )
+            )
     except _TruncatedRead:
         info.maps[:] = buttons
         info.diagnostic = W3fDiagnostic.TRUNCATED
@@ -216,12 +218,14 @@ def _combine_map_entries(
         if button is None:
             combined.append(CampaignMapEntry(path, path, "", True))
         else:
-            combined.append(CampaignMapEntry(
-                path=path,
-                display_name=button.display_name,
-                chapter_name=button.chapter_name,
-                initially_visible=button.initially_visible,
-            ))
+            combined.append(
+                CampaignMapEntry(
+                    path=path,
+                    display_name=button.display_name,
+                    chapter_name=button.chapter_name,
+                    initially_visible=button.initially_visible,
+                )
+            )
     for button in buttons:
         key = _path_key(button.path)
         if key not in used:

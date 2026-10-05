@@ -3,6 +3,7 @@
 抓 TriggerRegisterPlayerChatEvent(trig, player, "指令", 精确?) 的指令字符串，
 并尽量在同名触发的动作函数里找一句提示文本作为说明。
 """
+
 from __future__ import annotations
 
 import re
@@ -20,18 +21,21 @@ from .script_mechanics import (
 from .script_tokens import iter_native_call_chunks, script_code_text
 
 _CHAT = re.compile(
-    r'TriggerRegisterPlayerChatEvent\s*\(\s*([A-Za-z0-9_]+)\s*,[^,]+,\s*"((?:[^"\\]|\\.)*)"\s*,\s*(true|false)')
+    r'TriggerRegisterPlayerChatEvent\s*\(\s*([A-Za-z0-9_]+)\s*,[^,]+,\s*"((?:[^"\\]|\\.)*)"\s*,\s*(true|false)'
+)
 # GUI 触发器常用 BJ 封装：TriggerRegisterPlayerChatEventBJ(trig, "cmd", exactMatch, player)
 # 注意参数顺序不同：字符串在第 2 位、exactMatch 在第 3 位
 _CHAT_BJ = re.compile(
-    r'TriggerRegisterPlayerChatEventBJ\s*\(\s*([A-Za-z0-9_]+)\s*,\s*"((?:[^"\\]|\\.)*)"\s*,\s*(true|false)')
+    r'TriggerRegisterPlayerChatEventBJ\s*\(\s*([A-Za-z0-9_]+)\s*,\s*"((?:[^"\\]|\\.)*)"\s*,\s*(true|false)'
+)
 # Lua 写法：TriggerRegisterPlayerChatEvent(trig, player, "cmd", true)
 _CHAT_LUA = _CHAT
 
 # 提示文本类调用里的字符串
 _DISPLAY = re.compile(
-    r'(?:DisplayTextToPlayer|DisplayTimedTextToPlayer|DisplayTextToForce|'
-    r'BJDebugMsg|DisplayTimedTextToForce)\s*\([^"]*"((?:[^"\\]|\\.)*)"')
+    r"(?:DisplayTextToPlayer|DisplayTimedTextToPlayer|DisplayTextToForce|"
+    r'BJDebugMsg|DisplayTimedTextToForce)\s*\([^"]*"((?:[^"\\]|\\.)*)"'
+)
 
 
 @dataclass
@@ -54,19 +58,24 @@ def scan_chat_commands(script: str) -> list[ChatCommand]:
             seen.add(key)
             cmds.append(ChatCommand(cmd, exact, trig, _find_hint(script, trig)))
     # 按指令排序，空串/单字符靠后
-    cmds.sort(key=lambda c: (len(c.command) == 0, not c.command.startswith("-"), c.command))
+    cmds.sort(
+        key=lambda c: (len(c.command) == 0, not c.command.startswith("-"), c.command)
+    )
     return cmds
 
 
 def _find_hint(script: str, trigger: str) -> str:
     """根据触发变量名(gg_trg_Xxx)找对应动作函数里的第一句提示文本。"""
     # gg_trg_Xxx → 函数 Trig_Xxx_Actions
-    m = re.search(r'gg_trg_(\w+)', trigger)
+    m = re.search(r"gg_trg_(\w+)", trigger)
     if not m:
         return ""
     base = m.group(1)
-    fn = re.search(r'function\s+Trig_' + re.escape(base) + r'_Actions\b(.*?)\nendfunction',
-                   script, re.DOTALL)
+    fn = re.search(
+        r"function\s+Trig_" + re.escape(base) + r"_Actions\b(.*?)\nendfunction",
+        script,
+        re.DOTALL,
+    )
     if not fn:
         return ""
     body = fn.group(1)
@@ -79,8 +88,8 @@ def _find_hint(script: str, trigger: str) -> str:
 
 @dataclass
 class Recipe:
-    ingredients: list[str]      # 材料物品码
-    result: str                  # 成品物品码
+    ingredients: list[str]  # 材料物品码
+    result: str  # 成品物品码
     func: str = ""
     source: str = ""
     line: int = 0
@@ -95,7 +104,7 @@ _FOURCC_FN = re.compile(r"""FourCC\s*\(\s*["']([A-Za-z0-9]{4})["']\s*\)""")
 # 整数形式的码：JASS 里 'hpea' 常写成 1752196449 或 0x68706561（借鉴 w3x2lni searchjass）
 _HEXINT = re.compile(r"0[xX]([0-9A-Fa-f]{8})\b")
 _DECINT = re.compile(r"(?<![\w.])(\d{10})(?![\w.])")
-_CODE_MIN = 0x41303030          # 'A000'：阈值以下当普通数字（伤害/金钱），不当码
+_CODE_MIN = 0x41303030  # 'A000'：阈值以下当普通数字（伤害/金钱），不当码
 
 
 def _int_to_code(v: int) -> str | None:
@@ -129,6 +138,8 @@ def _codes_in(s: str) -> list[str]:
         if cc:
             out.append(cc)
     return out
+
+
 _REMOVE = re.compile(r"RemoveItem|GetItemOfType|UnitRemoveItem|YDWEGetItemOfType")
 _ADD = re.compile(r"UnitAddItemById|CreateItemLoc|CreateItem\b|UnitAddItemByIdSwapped")
 _FUNCTION_START = re.compile(r"^\s*(?:local\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)\b")
@@ -182,7 +193,7 @@ def scan_recipes(script: str, *, source: str = "") -> list[Recipe]:
                     evidence=source_line,
                 ),
             )
-        ingredients = []                  # 结算后清空，下一配方重新积累
+        ingredients = []  # 结算后清空，下一配方重新积累
     return recipes
 
 
@@ -191,20 +202,28 @@ def scan_recipes(script: str, *, source: str = "") -> list[Recipe]:
 # 而不只是早期手列的 物品/单位 两类。生成数据缺失时退化为空表（scan 退回只认下方少量回退名）。
 try:
     from .jass_natives import NATIVE_OBJ_FUNCS as _native_obj_funcs
-except ImportError:                     # 生成数据缺失：表置空，scan_* 仍可跑(覆盖变窄)
+except ImportError:  # 生成数据缺失：表置空，scan_* 仍可跑(覆盖变窄)
     _native_obj_funcs = {}
 NATIVE_OBJ_FUNCS: Final[Mapping[str, str | None]] = _native_obj_funcs
 _CATS = ("单位", "物品", "技能", "科技", "可破坏物", "增益")
 
 # 把所有"带对象码参数"的 native 名编成一个词边界正则，一次扫一行。
 _NATIVE_NAMES = sorted(NATIVE_OBJ_FUNCS, key=len, reverse=True)
-_NATIVE_RE = re.compile(r"\b(" + "|".join(re.escape(n) for n in _NATIVE_NAMES) + r")\b") \
-    if _NATIVE_NAMES else None
+_NATIVE_RE = (
+    re.compile(r"\b(" + "|".join(re.escape(n) for n in _NATIVE_NAMES) + r")\b")
+    if _NATIVE_NAMES
+    else None
+)
 # 生成表缺失时的最小回退（保持老行为：物品/单位仍能提到一些）
 _FALLBACK_CAT = {
-    "CreateUnit": "单位", "CreateUnitAtLoc": "单位", "BlzCreateUnit": "单位",
-    "ReplaceUnitBJ": "单位", "SetUnitTypeId": "单位",
-    "CreateItem": "物品", "CreateItemLoc": "物品", "UnitAddItemById": "物品",
+    "CreateUnit": "单位",
+    "CreateUnitAtLoc": "单位",
+    "BlzCreateUnit": "单位",
+    "ReplaceUnitBJ": "单位",
+    "SetUnitTypeId": "单位",
+    "CreateItem": "物品",
+    "CreateItemLoc": "物品",
+    "UnitAddItemById": "物品",
     "UnitAddAbility": "技能",
 }
 
@@ -222,7 +241,7 @@ def scan_object_refs(script: str) -> dict[str, set[str]]:
     """
     out: dict[str, set[str]] = {category: set() for category in _CATS}
     names_re = _NATIVE_RE
-    if names_re is None:                # 无生成表：用最小回退名集
+    if names_re is None:  # 无生成表：用最小回退名集
         names_re = re.compile(r"\b(" + "|".join(_FALLBACK_CAT) + r")\b")
     code_script = script_code_text(script)
     for call in iter_native_call_chunks(code_script, names_re):

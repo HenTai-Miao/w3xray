@@ -9,13 +9,21 @@ import zlib
 from w3xtool.api import GameObject, MapData
 from w3xtool.imp import ImportEntry, ImportSummary
 from w3xtool.knowledge_pack import write_knowledge_pack
-from w3xtool.wtg import TriggerCategory, TriggerHeader, TriggerTreeSummary, TriggerVariable
+from w3xtool.wtg import (
+    TriggerCategory,
+    TriggerHeader,
+    TriggerTreeSummary,
+    TriggerVariable,
+)
 
 
 class KnowledgePackTest(unittest.TestCase):
     def test_pack_exports_resource_file_bodies_when_source_is_readable(self):
         # Given: a readable source folder mirroring map-internal file paths.
-        with tempfile.TemporaryDirectory() as source, tempfile.TemporaryDirectory() as out:
+        with (
+            tempfile.TemporaryDirectory() as source,
+            tempfile.TemporaryDirectory() as out,
+        ):
             os.makedirs(os.path.join(source, "war3mapImported"), exist_ok=True)
             with open(os.path.join(source, "war3mapImported", "Hero.mdx"), "wb") as f:
                 f.write(b"MDLXhero")
@@ -40,7 +48,9 @@ class KnowledgePackTest(unittest.TestCase):
                 self.assertEqual(f.read(), b"MDLXhero")
             with open(os.path.join(out, "资源", "素材文件", "war3map.wts"), "rb") as f:
                 self.assertIn("测试".encode("utf-8"), f.read())
-            with open(os.path.join(out, "资源", "素材文件_manifest.tsv"), encoding="utf-8") as f:
+            with open(
+                os.path.join(out, "资源", "素材文件_manifest.tsv"), encoding="utf-8"
+            ) as f:
                 manifest = f.read()
             self.assertIn(
                 "war3mapimported\\hero.mdx\t素材文件/war3mapimported/hero.mdx\t8\t已导出",
@@ -52,7 +62,10 @@ class KnowledgePackTest(unittest.TestCase):
     def test_pack_exports_readable_map_file_identity_hashes(self):
         # Given: the original map file is readable from disk.
         raw = b"HM3W-map-identity"
-        with tempfile.TemporaryDirectory() as source, tempfile.TemporaryDirectory() as out:
+        with (
+            tempfile.TemporaryDirectory() as source,
+            tempfile.TemporaryDirectory() as out,
+        ):
             map_path = os.path.join(source, "identity.w3x")
             with open(map_path, "wb") as f:
                 f.write(raw)
@@ -106,7 +119,10 @@ class KnowledgePackTest(unittest.TestCase):
             # Then: trigger folder/name/state and global variables are exported as TSV.
             with open(os.path.join(out, "触发器树.tsv"), encoding="utf-8") as f:
                 triggers = f.read()
-            self.assertIn("类型\tID\t父ID\t名称\t分类\t启用\t自定义脚本\t初始关闭\t初始化运行\t说明", triggers)
+            self.assertIn(
+                "类型\tID\t父ID\t名称\t分类\t启用\t自定义脚本\t初始关闭\t初始化运行\t说明",
+                triggers,
+            )
             self.assertIn("分类\t42\t0\t系统", triggers)
             self.assertIn("触发器\t\t42\t初始化\t系统\t是\t否\t否\t是\t开局", triggers)
             self.assertIn("触发器\t\t42\t脚本块\t系统\t否\t是\t是\t否", triggers)
@@ -153,12 +169,14 @@ class KnowledgePackTest(unittest.TestCase):
         }
         md.scripts = {"war3map.j": 'call PlaySound("war3mapImported\\\\voice.mp3")'}
         md.scripts["war3map.j"] += "\ncall ChooseRandomItemBJ(3)"
-        md.scripts["save.j"] = "\n".join((
-            'set udg_cache = InitGameCache("AnimeSave.w3v")',
-            'call StoreInteger(udg_cache, "hero", "level", 1)',
-            'call PreloadGenEnd("save\\hero.txt")',
-            "call UnitAddAbility(u, 'A001')",
-        ))
+        md.scripts["save.j"] = "\n".join(
+            (
+                'set udg_cache = InitGameCache("AnimeSave.w3v")',
+                'call StoreInteger(udg_cache, "hero", "level", 1)',
+                'call PreloadGenEnd("save\\hero.txt")',
+                "call UnitAddAbility(u, 'A001')",
+            )
+        )
         md.scripts["war3map.wts"] = "STRING 7\n{\n界面提示\n}\n"
         md.scripts["trigger.j"] = 'call BJDebugMsg("TRIGSTR_007")'
         md.all_files = [
@@ -201,21 +219,31 @@ class KnowledgePackTest(unittest.TestCase):
             with open(os.path.join(out, "UI文本引用.tsv"), encoding="utf-8") as f:
                 ui_refs = f.read()
             self.assertIn("trigger.j\t1\tTRIGSTR_007\t界面提示", ui_refs)
-            with open(os.path.join(out, "脚本可读文本", "trigger.j"), encoding="utf-8") as f:
+            with open(
+                os.path.join(out, "脚本可读文本", "trigger.j"), encoding="utf-8"
+            ) as f:
                 readable_script = f.read()
             self.assertIn('call BJDebugMsg("界面提示")', readable_script)
             with open(os.path.join(out, "资源", "资源引用.tsv"), encoding="utf-8") as f:
                 resources = f.read()
             self.assertIn("war3mapimported\\hero.mdx", resources)
             self.assertIn("对象 H001", resources)
-            with open(os.path.join(out, "资源", "未引用素材.txt"), encoding="utf-8") as f:
+            with open(
+                os.path.join(out, "资源", "未引用素材.txt"), encoding="utf-8"
+            ) as f:
                 self.assertIn("war3mapimported\\unused.blp", f.read())
-            with open(os.path.join(out, "资源", "资源资产索引.tsv"), encoding="utf-8") as f:
+            with open(
+                os.path.join(out, "资源", "资源资产索引.tsv"), encoding="utf-8"
+            ) as f:
                 asset_index = f.read()
             self.assertIn("war3map.wts\tUI/文本\t存在/未引用", asset_index)
             self.assertIn("war3mapimported\\hero.mdx\t模型\t存在/已引用", asset_index)
-            self.assertIn("replaceabletextures\\missing.blp\t图像\t导入缺失", asset_index)
-            with open(os.path.join(out, "盒子兼容ID", "技能ID.txt"), encoding="utf-8") as f:
+            self.assertIn(
+                "replaceabletextures\\missing.blp\t图像\t导入缺失", asset_index
+            )
+            with open(
+                os.path.join(out, "盒子兼容ID", "技能ID.txt"), encoding="utf-8"
+            ) as f:
                 box_ids = f.read()
             self.assertIn("ID：A001\n名字：治疗术\n描述：长说明", box_ids)
             with open(os.path.join(out, "存档读写线索.tsv"), encoding="utf-8") as f:

@@ -142,8 +142,9 @@ def test_client_snapshot_prefers_zhcn_locale_strings() -> None:
     # Given: unit strings exist only inside the zhCN locale module namespace.
     source = FakeClientSource(
         {
-            "war3.w3mod:_locales\\zhcn.w3mod:Units\\HumanUnitStrings.txt":
-                "[hX01]\nName=步兵\n".encode("utf-8"),
+            "war3.w3mod:_locales\\zhcn.w3mod:Units\\HumanUnitStrings.txt": "[hX01]\nName=步兵\n".encode(
+                "utf-8"
+            ),
             "Units\\HumanUnitFunc.txt": b"[hX01]\nName=Internal\n",
         },
     )

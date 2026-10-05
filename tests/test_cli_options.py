@@ -80,7 +80,9 @@ def test_cli_parse_failure_returns_nonzero(capsys) -> None:
     assert captured.out == ""
 
 
-def test_run_cli_reuses_listfile_context_and_pack_writer(tmp_path: Path, monkeypatch, capsys) -> None:
+def test_run_cli_reuses_listfile_context_and_pack_writer(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
     # Given: all optional inputs and fakes at the existing shared boundaries.
     options = CliOptions(
         map_path="fixture.w3x",
@@ -100,12 +102,17 @@ def test_run_cli_reuses_listfile_context_and_pack_writer(tmp_path: Path, monkeyp
     monkeypatch.setattr(
         "w3xtool.cli_options.build_map_load_context",
         lambda *, external_names, game_data_path, author_bundle_path: (
-            calls.append(("context", (external_names, game_data_path, author_bundle_path))) or context
+            calls.append(
+                ("context", (external_names, game_data_path, author_bundle_path))
+            )
+            or context
         ),
     )
     monkeypatch.setattr(
         "w3xtool.cli_options.load_map",
-        lambda path, *, load_context: calls.append(("load", (path, load_context))) or md,
+        lambda path, *, load_context: (
+            calls.append(("load", (path, load_context))) or md
+        ),
     )
     monkeypatch.setattr(
         "w3xtool.cli_options.iter_cli_summary_lines",
@@ -115,10 +122,12 @@ def test_run_cli_reuses_listfile_context_and_pack_writer(tmp_path: Path, monkeyp
         "w3xtool.cli_options.write_knowledge_pack_report",
         lambda _md, out, external_names=(), game_data_path=None: (
             calls.append(("pack", (out, external_names, game_data_path)))
-            or KnowledgeWriteReport(tuple(
-                KnowledgeWriteItem(f"file-{index}.txt", True, index, None)
-                for index in range(7)
-            ))
+            or KnowledgeWriteReport(
+                tuple(
+                    KnowledgeWriteItem(f"file-{index}.txt", True, index, None)
+                    for index in range(7)
+                )
+            )
         ),
     )
 
@@ -143,18 +152,20 @@ def test_run_cli_reuses_listfile_context_and_pack_writer(tmp_path: Path, monkeyp
     ("report", "expected_code", "stdout_text", "stderr_text"),
     (
         (
-            KnowledgeWriteReport((
-                KnowledgeWriteItem("地图信息.txt", True, 10, None),
-                KnowledgeWriteItem("对象ID/单位.tsv", False, 0, "disk full"),
-            )),
+            KnowledgeWriteReport(
+                (
+                    KnowledgeWriteItem("地图信息.txt", True, 10, None),
+                    KnowledgeWriteItem("对象ID/单位.tsv", False, 0, "disk full"),
+                )
+            ),
             0,
             "资料包: 部分完成，成功 1，失败 1",
             "首个失败: 对象ID/单位.tsv: disk full",
         ),
         (
-            KnowledgeWriteReport((
-                KnowledgeWriteItem("地图信息.txt", False, 0, "read-only filesystem"),
-            )),
+            KnowledgeWriteReport(
+                (KnowledgeWriteItem("地图信息.txt", False, 0, "read-only filesystem"),)
+            ),
             2,
             "",
             "资料包写入失败，成功 0，失败 1",
@@ -194,7 +205,9 @@ def test_cli_reports_partial_and_failed_pack_results(
     assert stderr_text in captured.err
 
 
-def test_cli_summary_failure_returns_two_without_archive_diagnosis(monkeypatch, capsys) -> None:
+def test_cli_summary_failure_returns_two_without_archive_diagnosis(
+    monkeypatch, capsys
+) -> None:
     # Given: a map that opened successfully but whose summary renderer fails.
     md = MapData(path="fixture.w3x", name="CLI fixture")
     monkeypatch.setattr("w3xtool.cli_options.read_external_listfile", lambda _path: ())

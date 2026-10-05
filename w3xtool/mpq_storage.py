@@ -41,7 +41,7 @@ class MPQBackingStore:
         if isinstance(self.data, MMap):
             try:
                 self.data.close()
-            except (BufferError, OSError):
+            except BufferError, OSError:
                 return
             except ValueError:
                 self.data = b""
@@ -70,7 +70,7 @@ def open_mpq_backing(path: str) -> MPQBackingStore:
         return _open_path(path, temporary_path=None)
     except MPQStorageError:
         raise
-    except (OSError, ValueError):
+    except OSError, ValueError:
         descriptor, temporary_path = tempfile.mkstemp(
             suffix=os.path.splitext(path)[1] or ".w3x",
         )

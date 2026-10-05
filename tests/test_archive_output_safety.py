@@ -60,7 +60,9 @@ class _RawArchive(_AnonymousArchive):
         return None
 
 
-def test_named_archive_file_does_not_follow_in_root_parent_symlink(tmp_path: Path) -> None:
+def test_named_archive_file_does_not_follow_in_root_parent_symlink(
+    tmp_path: Path,
+) -> None:
     output = tmp_path / "out"
     actual = output / "actual"
     actual.mkdir(parents=True)
@@ -71,7 +73,9 @@ def test_named_archive_file_does_not_follow_in_root_parent_symlink(tmp_path: Pat
     assert not (actual / "Panel.blp").exists()
 
 
-def test_anonymous_archive_file_does_not_follow_directory_symlink(tmp_path: Path) -> None:
+def test_anonymous_archive_file_does_not_follow_directory_symlink(
+    tmp_path: Path,
+) -> None:
     output = tmp_path / "out"
     output.mkdir()
     outside = tmp_path / "outside"
@@ -83,7 +87,9 @@ def test_anonymous_archive_file_does_not_follow_directory_symlink(tmp_path: Path
     assert not (outside / "File000000.blp").exists()
 
 
-def test_raw_archive_file_and_manifest_do_not_follow_directory_symlink(tmp_path: Path) -> None:
+def test_raw_archive_file_and_manifest_do_not_follow_directory_symlink(
+    tmp_path: Path,
+) -> None:
     output = tmp_path / "out"
     output.mkdir()
     outside = tmp_path / "outside"

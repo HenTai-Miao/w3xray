@@ -1,4 +1,5 @@
 """脚本诊断：异步/本地状态/JASS 风险调用的静态提示。"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -37,7 +38,9 @@ class ScriptDiagnosticReport:
 
     @property
     def warnings(self) -> tuple[ScriptDiagnostic, ...]:
-        return tuple(item for item in self.items if item.severity == DiagnosticSeverity.WARNING)
+        return tuple(
+            item for item in self.items if item.severity == DiagnosticSeverity.WARNING
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,7 +68,9 @@ _RULES: Final = (
         "script.local_state.mouse",
         "读取本地鼠标状态",
         "发现鼠标位置/事件相关调用；鼠标状态通常是本地输入，参与同步逻辑时需要人工确认。",
-        re.compile(r"\b(?:DzGetMouse|DzTriggerRegisterMouse)[A-Za-z0-9_]*\s*\(", re.IGNORECASE),
+        re.compile(
+            r"\b(?:DzGetMouse|DzTriggerRegisterMouse)[A-Za-z0-9_]*\s*\(", re.IGNORECASE
+        ),
     ),
     _Rule(
         "script.dz_api",
@@ -92,34 +97,40 @@ def build_script_diagnostics(md: MapData) -> ScriptDiagnosticReport:
     analysis_scripts = dict(analysis_script_texts(md))
     for rule in _RULES:
         matched_scripts = tuple(
-            name for name, text in sorted(analysis_scripts.items())
+            name
+            for name, text in sorted(analysis_scripts.items())
             if text and rule.pattern.search(text)
         )
         if not matched_scripts:
             continue
-        items.append(ScriptDiagnostic(
-            DiagnosticSeverity.WARNING,
-            rule.code,
-            rule.title,
-            rule.detail,
-            matched_scripts,
-        ))
+        items.append(
+            ScriptDiagnostic(
+                DiagnosticSeverity.WARNING,
+                rule.code,
+                rule.title,
+                rule.detail,
+                matched_scripts,
+            )
+        )
     mutation_scripts = _scripts_with_local_sync_mutations(analysis_scripts)
     if mutation_scripts:
-        items.append(ScriptDiagnostic(
-            DiagnosticSeverity.WARNING,
-            "script.get_local_player.sync_mutation",
-            "本地分支修改同步状态",
-            "发现 GetLocalPlayer 分支内调用 CreateUnit/SetUnit*/SetPlayerState 等同步状态修改函数，"
-            "这类写法通常会导致联机异步或掉线。",
-            mutation_scripts,
-        ))
+        items.append(
+            ScriptDiagnostic(
+                DiagnosticSeverity.WARNING,
+                "script.get_local_player.sync_mutation",
+                "本地分支修改同步状态",
+                "发现 GetLocalPlayer 分支内调用 CreateUnit/SetUnit*/SetPlayerState 等同步状态修改函数，"
+                "这类写法通常会导致联机异步或掉线。",
+                mutation_scripts,
+            )
+        )
     return ScriptDiagnosticReport(tuple(items))
 
 
 def _scripts_with_local_sync_mutations(scripts: Mapping[str, str]) -> tuple[str, ...]:
     return tuple(
-        name for name, text in sorted(scripts.items())
+        name
+        for name, text in sorted(scripts.items())
         if text and _has_local_sync_mutation(text)
     )
 

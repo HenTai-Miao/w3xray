@@ -21,24 +21,30 @@ class ScriptLocalIndexTest(unittest.TestCase):
         # Given: JASS locals declare object IDs, save keys and flags.
         md = MapData(path="x.w3x", name="局部变量图")
         md.scripts = {
-            "war3map.j": "\n".join((
-                "function SetupHero takes nothing returns nothing",
-                "    local integer heroId = 'H001'",
-                "    local string saveKey = \"hero.level\"",
-                "    local boolean enabled = true",
-                "    call BJDebugMsg(\"local integer fakeId = 'H002'\")",
-                "endfunction",
-            )),
+            "war3map.j": "\n".join(
+                (
+                    "function SetupHero takes nothing returns nothing",
+                    "    local integer heroId = 'H001'",
+                    '    local string saveKey = "hero.level"',
+                    "    local boolean enabled = true",
+                    "    call BJDebugMsg(\"local integer fakeId = 'H002'\")",
+                    "endfunction",
+                )
+            ),
         }
 
         # When: the local index is built.
         text = _format_locals(md)
 
         # Then: executable local declarations keep function context and clues.
-        self.assertIn("来源\t行号\t函数\t名称\t类型\t初值\t字符串\t对象码\t用途\t摘要", text)
-        self.assertIn("war3map.j\t2\tSetupHero\theroId\tinteger\t'H001'\t\tH001\t对象码", text)
         self.assertIn(
-            "war3map.j\t3\tSetupHero\tsaveKey\tstring\t\"hero.level\"\thero.level\t\t存档/键",
+            "来源\t行号\t函数\t名称\t类型\t初值\t字符串\t对象码\t用途\t摘要", text
+        )
+        self.assertIn(
+            "war3map.j\t2\tSetupHero\theroId\tinteger\t'H001'\t\tH001\t对象码", text
+        )
+        self.assertIn(
+            'war3map.j\t3\tSetupHero\tsaveKey\tstring\t"hero.level"\thero.level\t\t存档/键',
             text,
         )
         self.assertIn("war3map.j\t4\tSetupHero\tenabled\tboolean\ttrue\t\t\t开关", text)
@@ -48,23 +54,27 @@ class ScriptLocalIndexTest(unittest.TestCase):
         # Given: Lua locals include FourCC and resource-path values.
         md = MapData(path="x.w3x", name="Lua 局部变量图")
         md.scripts = {
-            "war3map.lua": "\n".join((
-                "function setup()",
-                "    -- local ignored = FourCC(\"A003\")",
-                "    BJDebugMsg(\"local fake = FourCC(\\\"A002\\\")\")",
-                "    local abilityId = FourCC(\"A001\")",
-                "    local path = \"ui\\\\panel.fdf\"",
-                "end",
-            )),
+            "war3map.lua": "\n".join(
+                (
+                    "function setup()",
+                    '    -- local ignored = FourCC("A003")',
+                    '    BJDebugMsg("local fake = FourCC(\\"A002\\")")',
+                    '    local abilityId = FourCC("A001")',
+                    '    local path = "ui\\\\panel.fdf"',
+                    "end",
+                )
+            ),
         }
 
         # When: the local index is built.
         text = _format_locals(md)
 
         # Then: only executable Lua locals are indexed.
-        self.assertIn("war3map.lua\t4\tsetup\tabilityId\t\tFourCC(\"A001\")\t\tA001\t对象码", text)
         self.assertIn(
-            "war3map.lua\t5\tsetup\tpath\t\t\"ui\\\\panel.fdf\"\tui\\panel.fdf\t\t资源路径",
+            'war3map.lua\t4\tsetup\tabilityId\t\tFourCC("A001")\t\tA001\t对象码', text
+        )
+        self.assertIn(
+            'war3map.lua\t5\tsetup\tpath\t\t"ui\\\\panel.fdf"\tui\\panel.fdf\t\t资源路径',
             text,
         )
         self.assertNotIn("A002", text)

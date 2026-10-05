@@ -28,7 +28,9 @@ def _read_fixture() -> tuple[bytes, bytes]:
     raw = FIXTURE_PATH.read_bytes()
     assert hashlib.sha256(raw).hexdigest() == FIXTURE_SHA256
     assert len(raw) >= 16
-    magic, requested_mask, compressed_len, expected_len = struct.unpack_from("<4sIII", raw)
+    magic, requested_mask, compressed_len, expected_len = struct.unpack_from(
+        "<4sIII", raw
+    )
     assert magic == b"W3CF"
     assert requested_mask == 0x12
     assert len(raw) == 16 + compressed_len + expected_len
@@ -65,7 +67,9 @@ def test_lzma_decode_does_not_depend_on_format_alone_container(
             raise lzma.LZMAError("platform rejects assembled ALONE container")
         return original(format=format, filters=filters)
 
-    monkeypatch.setattr("w3xtool.mpq_compression.lzma.LZMADecompressor", platform_decoder)
+    monkeypatch.setattr(
+        "w3xtool.mpq_compression.lzma.LZMADecompressor", platform_decoder
+    )
     expected = b"cross-platform raw LZMA" * 8
 
     # When/Then: MPQ properties drive a RAW decoder instead of container inference.
@@ -84,7 +88,7 @@ def test_lzma_filter_and_properties_are_validated() -> None:
         decompress_mpq_sector(sector[:1] + b"\x01" + sector[2:], 4)
 
     with pytest.raises(MPQCompressionError, match="properties"):
-        decompress_mpq_sector(sector[:2] + b"\xFF" + sector[3:], 4)
+        decompress_mpq_sector(sector[:2] + b"\xff" + sector[3:], 4)
 
 
 def test_lzma_dictionary_is_bounded_before_decoder_allocation() -> None:

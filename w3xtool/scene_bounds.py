@@ -42,7 +42,11 @@ def build_scene_bounds_report(
     terrain_info: TerrainInfo | None = None,
 ) -> SceneBoundsReport | None:
     """Check preplaced units and doodads against terrain coordinate bounds."""
-    info = terrain_info if terrain_info is not None else terrain_info_from_map_path(md.path)
+    info = (
+        terrain_info
+        if terrain_info is not None
+        else terrain_info_from_map_path(md.path)
+    )
     if info is None or info.bounds is None:
         return None
     issues = []

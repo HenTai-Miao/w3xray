@@ -116,9 +116,7 @@ class DirectoryDataSource:
         if ":" in query:
             flat = query.replace(":", "/")
             flat_matches = [
-                rel
-                for rel in self._by_rel
-                if rel == flat or rel.endswith("/" + flat)
+                rel for rel in self._by_rel if rel == flat or rel.endswith("/" + flat)
             ]
             if flat_matches:
                 return self._by_rel[min(flat_matches, key=len)]

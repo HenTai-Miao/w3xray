@@ -9,7 +9,12 @@ import re
 from typing import Protocol, TYPE_CHECKING
 
 from .casc_source import CascUnsupportedError
-from .trigger_schema import TriggerFunctionKind, TriggerFunctionSchema, TriggerSchema, parse_trigger_schema
+from .trigger_schema import (
+    TriggerFunctionKind,
+    TriggerFunctionSchema,
+    TriggerSchema,
+    parse_trigger_schema,
+)
 from .war3_encoding import decode_warcraft_string
 from .wts import resolve as resolve_wts
 
@@ -19,7 +24,11 @@ if TYPE_CHECKING:
 _POSITION_RE = re.compile(r"%(\d+)")
 _BRACE_RE = re.compile(r"\{([^{}]+)\}")
 _TRIGGER_DATA_NAMES = ("UI/TriggerData.txt", "ui/TriggerData.txt", "TriggerData.txt")
-_TRIGGER_STRING_NAMES = ("UI/TriggerStrings.txt", "ui/TriggerStrings.txt", "TriggerStrings.txt")
+_TRIGGER_STRING_NAMES = (
+    "UI/TriggerStrings.txt",
+    "ui/TriggerStrings.txt",
+    "TriggerStrings.txt",
+)
 
 
 class TriggerDataSource(Protocol):
@@ -48,27 +57,31 @@ def parse_trigger_data(text: str) -> TriggerDataTable:
     return _parse_legacy_trigger_data(text)
 
 
-def load_trigger_schema_from_source(source: TriggerDataSource | None) -> TriggerSchema | None:
+def load_trigger_schema_from_source(
+    source: TriggerDataSource | None,
+) -> TriggerSchema | None:
     """Load TriggerData/TriggerStrings from an exported or CASC-backed source."""
     if source is None:
         return None
     try:
         data = _read_first(source, _TRIGGER_DATA_NAMES)
-    except (FileNotFoundError, OSError, ValueError, CascUnsupportedError):
+    except FileNotFoundError, OSError, ValueError, CascUnsupportedError:
         return None
     if data is None:
         return None
     try:
         strings = _read_first(source, _TRIGGER_STRING_NAMES)
-    except (FileNotFoundError, OSError, ValueError, CascUnsupportedError):
+    except FileNotFoundError, OSError, ValueError, CascUnsupportedError:
         strings = None
     try:
         return parse_trigger_schema(_decode(data), _decode(strings or b""))
-    except (csv.Error, UnicodeError, ValueError):
+    except csv.Error, UnicodeError, ValueError:
         return None
 
 
-def load_trigger_data_from_source(source: TriggerDataSource | None) -> TriggerDataTable | None:
+def load_trigger_data_from_source(
+    source: TriggerDataSource | None,
+) -> TriggerDataTable | None:
     """Backward-compatible alias for loading trigger schemas from a source."""
     return load_trigger_schema_from_source(source)
 
@@ -127,7 +140,9 @@ def _store_legacy(
     functions: dict[tuple[TriggerFunctionKind, str], TriggerFunctionSchema],
     template: _LegacyTemplate,
 ) -> None:
-    positional_template = _legacy_template_to_positional(template.template, template.arg_names)
+    positional_template = _legacy_template_to_positional(
+        template.template, template.arg_names
+    )
     for kind in TriggerFunctionKind:
         functions[(kind, template.function_name.lower())] = TriggerFunctionSchema(
             kind=kind,
@@ -235,7 +250,9 @@ def _lookup_schema(
     schema: TriggerSchema,
     function: TriggerEcaFunction,
 ) -> TriggerFunctionSchema | None:
-    by_kind = schema.get(_kind_from_function_type(function.function_type), function.name)
+    by_kind = schema.get(
+        _kind_from_function_type(function.function_type), function.name
+    )
     if by_kind is not None:
         return by_kind
     normalized_name = function.name.lower()
@@ -250,7 +267,15 @@ def _lookup_schema(
 
 
 def _looks_like_real_trigger_schema(text: str) -> bool:
-    return any(section in text for section in ("[TriggerEvents]", "[TriggerConditions]", "[TriggerActions]", "[TriggerCalls]"))
+    return any(
+        section in text
+        for section in (
+            "[TriggerEvents]",
+            "[TriggerConditions]",
+            "[TriggerActions]",
+            "[TriggerCalls]",
+        )
+    )
 
 
 def _read_first(source: TriggerDataSource, names: tuple[str, ...]) -> bytes | None:

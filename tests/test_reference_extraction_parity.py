@@ -29,7 +29,9 @@ def test_reference_parity_fixture_hashes_are_pinned() -> None:
     assert actual == _HASHES
 
 
-def test_reference_map_produces_complete_sorted_four_category_reports(tmp_path: Path) -> None:
+def test_reference_map_produces_complete_sorted_four_category_reports(
+    tmp_path: Path,
+) -> None:
     # Given: one real MPQ combines GBK text, binary objects, SLK, WTS, JASS, Lua, WTG, and WCT.
     md = load_map(str(_MAP))
 

@@ -3,6 +3,7 @@
 格式：version(i32) + 原始表 + 自定义表；每表 count(i32) 个对象，
 每对象 oldId(4)+newId(4)+numMods(i32)+mods；带等级类型(w3a/w3q/w3d)每个 mod 多 level+dataPtr 两个 i32。
 """
+
 import struct
 import unittest
 from unittest.mock import patch
@@ -17,14 +18,14 @@ def _tag(s):
 def _mod(field_id, var_type, value, level=None):
     b = _tag(field_id) + struct.pack("<i", var_type)
     if level is not None:
-        b += struct.pack("<i", level) + struct.pack("<i", 0)   # level + data ptr(忽略)
+        b += struct.pack("<i", level) + struct.pack("<i", 0)  # level + data ptr(忽略)
     if var_type == 0:
         b += struct.pack("<i", value)
     elif var_type in (1, 2):
         b += struct.pack("<f", value)
     elif var_type == 3:
         b += value.encode("utf-8") + b"\x00"
-    b += struct.pack("<I", 0)                                  # 末尾校验，忽略
+    b += struct.pack("<I", 0)  # 末尾校验，忽略
     return b
 
 
@@ -52,7 +53,9 @@ def _build(original, custom, version=2):
 
 class TestParseObjectData(unittest.TestCase):
     def test_original_and_custom_tables(self):
-        original = [_obj("hpea", "hpea", [_mod("unam", 3, "Peasant"), _mod("uhpm", 0, 100)])]
+        original = [
+            _obj("hpea", "hpea", [_mod("unam", 3, "Peasant"), _mod("uhpm", 0, 100)])
+        ]
         custom = [_obj("hpea", "x000", [_mod("unam", 3, "My Peasant")])]
         objs = parse_object_data(_build(original, custom), "w3u")
         self.assertEqual(len(objs), 2)
@@ -60,8 +63,10 @@ class TestParseObjectData(unittest.TestCase):
         base = objs[0]
         self.assertFalse(base.is_custom)
         self.assertEqual(base.old_id, "hpea")
-        self.assertEqual([(m.field_id, m.value) for m in base.mods],
-                         [("unam", "Peasant"), ("uhpm", 100)])
+        self.assertEqual(
+            [(m.field_id, m.value) for m in base.mods],
+            [("unam", "Peasant"), ("uhpm", 100)],
+        )
 
         cust = objs[1]
         self.assertTrue(cust.is_custom)
@@ -88,7 +93,7 @@ class TestParseObjectData(unittest.TestCase):
         # 一个好对象 + 一个坏对象(未知类型)。坏对象之前的应保留，而非整文件丢弃。
         good = _obj("hpea", "hpea", [_mod("unam", 3, "Peasant")])
         bad = _obj("hfoo", "hfoo", [_mod("unam", 99, 0)])
-        objs = parse_object_data(_build([good, bad], []), "w3u")   # count=2
+        objs = parse_object_data(_build([good, bad], []), "w3u")  # count=2
         self.assertEqual(len(objs), 1)
         self.assertEqual(objs[0].old_id, "hpea")
         self.assertEqual(objs[0].mods[0].value, "Peasant")
@@ -96,8 +101,12 @@ class TestParseObjectData(unittest.TestCase):
     def test_recovers_later_object_after_corrupt_record(self):
         # Given: 一个坏对象夹在表内，后面还有完整对象。
         bad = (
-            _tag("hbad") + _tag("xbad") + struct.pack("<i", 1)
-            + _tag("unam") + struct.pack("<i", 99) + b"corrupt bytes"
+            _tag("hbad")
+            + _tag("xbad")
+            + struct.pack("<i", 1)
+            + _tag("unam")
+            + struct.pack("<i", 99)
+            + b"corrupt bytes"
         )
         good = _obj("hfoo", "hfoo", [_mod("unam", 3, "Footman")])
 
@@ -111,13 +120,15 @@ class TestParseObjectData(unittest.TestCase):
 
     def test_absurd_count_does_not_hang(self):
         # 注水的超大 count(远超剩余字节)应立即判损坏，而非进入数十亿次循环
-        data = struct.pack("<iii", 2, 0x7FFFFFFF, 0)   # version, 原始表 count=21亿, 自定义表空
+        data = struct.pack(
+            "<iii", 2, 0x7FFFFFFF, 0
+        )  # version, 原始表 count=21亿, 自定义表空
         self.assertEqual(parse_object_data(data, "w3u"), [])
 
     def test_gbk_string_value_decoded(self):
         # 老地图(1.20~1.27)的字符串可能是 GBK 编码；UTF-8 解会乱码 → 应回退 GBK
-        gbk = "测试".encode("gbk")          # b'\xb2\xe2\xca\xd4'，非法 UTF-8（首字节是续字节）
-        self.assertRaises(UnicodeDecodeError, gbk.decode, "utf-8")   # 确认确实非法 UTF-8
+        gbk = "测试".encode("gbk")  # b'\xb2\xe2\xca\xd4'，非法 UTF-8（首字节是续字节）
+        self.assertRaises(UnicodeDecodeError, gbk.decode, "utf-8")  # 确认确实非法 UTF-8
         mod = _tag("unam") + struct.pack("<i", 3) + gbk + b"\x00" + struct.pack("<I", 0)
         obj = _tag("hpea") + _tag("hpea") + struct.pack("<i", 1) + mod
         objs = parse_object_data(_build([obj], []), "w3u")
@@ -130,7 +141,9 @@ class TestParseObjectData(unittest.TestCase):
         obj = _tag("hpea") + _tag("hpea") + struct.pack("<i", 1) + mod
 
         # When: the active Windows ACP is cp950.
-        with patch("w3xtool.war3_encoding.default_legacy_codecs", return_value=("cp950", "gbk")):
+        with patch(
+            "w3xtool.war3_encoding.default_legacy_codecs", return_value=("cp950", "gbk")
+        ):
             objs = parse_object_data(_build([obj], []), "w3u")
 
         # Then: the string is not mis-decoded as GBK.
@@ -138,13 +151,17 @@ class TestParseObjectData(unittest.TestCase):
 
     def test_version3_extra_header_fields(self):
         # 1.32+/新编辑器存的格式版本 3：每个对象头多两个 uint32
-        original = [_obj_v3("hpea", "hpea", [_mod("unam", 3, "Peasant"), _mod("uhpm", 0, 100)])]
+        original = [
+            _obj_v3("hpea", "hpea", [_mod("unam", 3, "Peasant"), _mod("uhpm", 0, 100)])
+        ]
         custom = [_obj_v3("hpea", "x000", [_mod("unam", 3, "村民")])]
         data = _build(original, custom, version=3)
         objs = parse_object_data(data, "w3u")
         self.assertEqual(len(objs), 2)
-        self.assertEqual([(m.field_id, m.value) for m in objs[0].mods],
-                         [("unam", "Peasant"), ("uhpm", 100)])
+        self.assertEqual(
+            [(m.field_id, m.value) for m in objs[0].mods],
+            [("unam", "Peasant"), ("uhpm", 100)],
+        )
         self.assertEqual(objs[1].new_id, "x000")
         self.assertEqual(objs[1].mods[0].value, "村民")
 
@@ -181,13 +198,15 @@ class _FakeArchive:
 class TestBuildObjectsRobust(unittest.TestCase):
     def test_malformed_object_file_returns_empty_not_crash(self):
         from w3xtool.api import _build_objects
+
         # 截断/畸形的 w3u：声明 1 个对象但数据不够 → 解析中途出错
-        bad = struct.pack("<ii", 2, 1) + b"shor"   # version, count=1, 残缺
+        bad = struct.pack("<ii", 2, 1) + b"shor"  # version, count=1, 残缺
         arch = _FakeArchive("war3map.w3u", bad)
-        self.assertEqual(_build_objects(arch, "w3u", {}), [])   # 优雅返回空，不抛
+        self.assertEqual(_build_objects(arch, "w3u", {}), [])  # 优雅返回空，不抛
 
     def test_missing_file_returns_empty(self):
         from w3xtool.api import _build_objects
+
         arch = _FakeArchive("war3map.w3t", b"")
         self.assertEqual(_build_objects(arch, "w3u", {}), [])
 

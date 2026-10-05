@@ -3,6 +3,7 @@
 游戏 war3.mpq 等是几十~上百 MB 的大档且不随地图变化，
 每次打开地图都重开会重复扫头+解密表，缓存后复用同一实例。
 """
+
 import os
 import struct
 import tempfile
@@ -16,7 +17,7 @@ _WAR3 = r"C:\Program Files (x86)\Warcraft III\war3\war3.mpq"
 def _write_min_mpq():
     hdr = struct.pack("<4sIIHHIIII", b"MPQ\x1a", 0x20, 0, 0, 3, 32, 96, 4, 1)
     buf = bytearray(112)
-    buf[0:len(hdr)] = hdr
+    buf[0 : len(hdr)] = hdr
     fd, path = tempfile.mkstemp(suffix=".w3x")
     os.close(fd)
     with open(path, "wb") as f:
@@ -30,7 +31,7 @@ class TestGameMpqCache(unittest.TestCase):
         a = _open_game_mpq(_WAR3)
         b = _open_game_mpq(_WAR3)
         self.assertIsNotNone(a)
-        self.assertIs(a, b)               # 第二次命中缓存，复用同一实例
+        self.assertIs(a, b)  # 第二次命中缓存，复用同一实例
         self.assertIn(_WAR3, _GAME_MPQ_CACHE)
 
 
@@ -51,7 +52,7 @@ class TestIconResolverLifecycle(unittest.TestCase):
         try:
             r = IconResolver(path, extra_paths=[path])
             r.close()
-            r.close()                      # 幂等
+            r.close()  # 幂等
         finally:
             os.remove(path)
 

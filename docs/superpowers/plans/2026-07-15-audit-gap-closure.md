@@ -45,6 +45,7 @@ def test_exact_identity_index_keeps_same_rawcode_in_two_categories() -> None:
         ("物品", "X001"): item,
     }
 
+
 def test_materialization_retains_equal_priority_field_conflicts() -> None:
     merged = merge_object_candidates((first_sellitems, second_sellitems), {})[0]
     assert {row.value for row in merged.field_evidence} == {"I001", "I002"}
@@ -94,7 +95,10 @@ Run: `uv run python -m pytest -q tests/test_object_pipeline.py tests/test_object
 
 ```python
 def test_metadata_confirmed_unknown_string_uses_raw_field_role() -> None:
-    assert classify_text_field("科技", "gco1", "效果 1 - %s", "string") == TextRoleMatch("gco1", None)
+    assert classify_text_field(
+        "科技", "gco1", "效果 1 - %s", "string"
+    ) == TextRoleMatch("gco1", None)
+
 
 def test_mixed_ability_strings_classifies_buff_section_separately() -> None:
     records = collect_text_object_records(archive_with_a001_and_b001)
@@ -138,8 +142,13 @@ def test_relation_endpoint_resolves_requested_category_when_rawcodes_collide() -
     endpoint, resolved = resolve_relation_object(md, "X001", "物品")
     assert resolved and endpoint.category == "物品"
 
+
 def test_equal_priority_sellitems_conflicts_keep_both_rows() -> None:
-    rows = tuple(row for row in object_field_relations(md) if row.kind is ItemRelationKind.SHOP_SELL)
+    rows = tuple(
+        row
+        for row in object_field_relations(md)
+        if row.kind is ItemRelationKind.SHOP_SELL
+    )
     assert {row.item.object_id for row in rows} == {"I001", "I002"}
     assert {row.completeness for row in rows} == {RelationCompleteness.CONFLICT}
 ```
@@ -180,6 +189,7 @@ def test_recovered_drop_from_partial_doo_is_marked_partial() -> None:
     (row,) = build_structural_item_relations(md)
     assert row.completeness is RelationCompleteness.PARTIAL
     assert "recovered 1 of 2" in row.unresolved_reason
+
 
 def test_object_field_failure_does_not_remove_unit_drop(monkeypatch) -> None:
     monkeypatch.setattr(builder, "object_field_relations", fail)

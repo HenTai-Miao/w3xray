@@ -101,7 +101,7 @@ class _Reader:
     def raw(self, size: int) -> bytes:
         if self.p + size > len(self.d):
             raise IndexError("raw 越界")
-        value = self.d[self.p:self.p + size]
+        value = self.d[self.p : self.p + size]
         self.p += size
         return value
 
@@ -109,7 +109,7 @@ class _Reader:
         end = self.d.find(b"\x00", self.p)
         if end < 0:
             raise IndexError("cstr 缺少终止符")
-        raw = self.d[self.p:end]
+        raw = self.d[self.p : end]
         self.p = end + 1
         return decode_warcraft_string(raw)
 
@@ -137,10 +137,22 @@ def parse_regions(data: bytes, wts: dict | None = None) -> list[Region]:
             green = reader.u8()
             red = reader.u8()
             alpha = reader.u8()
-            regions.append(Region(left, bottom, right, top, name, region_id,
-                                  weather, sound, (red, green, blue), alpha))
+            regions.append(
+                Region(
+                    left,
+                    bottom,
+                    right,
+                    top,
+                    name,
+                    region_id,
+                    weather,
+                    sound,
+                    (red, green, blue),
+                    alpha,
+                )
+            )
         return regions
-    except (struct.error, IndexError):
+    except struct.error, IndexError:
         return []
 
 
@@ -152,7 +164,9 @@ def parse_cameras(data: bytes) -> list[Camera]:
     return []
 
 
-def _parse_cameras_variant(data: bytes, include_local_rotation: bool) -> list[Camera] | None:
+def _parse_cameras_variant(
+    data: bytes, include_local_rotation: bool
+) -> list[Camera] | None:
     try:
         reader = _Reader(data)
         if reader.i32() != 0:
@@ -171,7 +185,7 @@ def _parse_cameras_variant(data: bytes, include_local_rotation: bool) -> list[Ca
             name = reader.cstr()
             cameras.append(Camera(*values, name, local_pitch, local_yaw, local_roll))
         return cameras if reader.p == len(data) else None
-    except (struct.error, IndexError):
+    except struct.error, IndexError:
         return None
 
 
@@ -182,7 +196,7 @@ def parse_sounds(data: bytes) -> list[Sound]:
         count = reader.i32()
         if count < 0 or count > len(data):
             return []
-    except (struct.error, IndexError):
+    except struct.error, IndexError:
         return []
     match version:
         case 1:
@@ -193,12 +207,14 @@ def parse_sounds(data: bytes) -> list[Sound]:
             return []
 
 
-def _parse_sound_records(reader: _Reader, count: int, include_v3_tail: bool) -> list[Sound]:
+def _parse_sound_records(
+    reader: _Reader, count: int, include_v3_tail: bool
+) -> list[Sound]:
     sounds: list[Sound] = []
     for _ in range(count):
         try:
             sounds.append(_read_sound(reader, include_v3_tail))
-        except (struct.error, IndexError):
+        except struct.error, IndexError:
             break
     return sounds
 
@@ -235,5 +251,20 @@ def _read_sound(reader: _Reader, include_v3_tail: bool) -> Sound:
         reader.i32()
         reader.u8()
         reader.i32()
-    return Sound(name, path, eax, flags, fade_in, fade_out, volume, pitch,
-                 channel, min_dist, max_dist, cutoff, pitch_var, priority, variable)
+    return Sound(
+        name,
+        path,
+        eax,
+        flags,
+        fade_in,
+        fade_out,
+        volume,
+        pitch,
+        channel,
+        min_dist,
+        max_dist,
+        cutoff,
+        pitch_var,
+        priority,
+        variable,
+    )

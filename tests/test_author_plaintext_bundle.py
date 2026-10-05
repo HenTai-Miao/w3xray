@@ -24,10 +24,14 @@ def _write_bundle(root: Path, source: Path, files: dict[str, bytes]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(payload)
         lines.append(f"file\t{name}\t{hashlib.sha256(payload).hexdigest()}")
-    (root / "w3xray-author-bundle.tsv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (root / "w3xray-author-bundle.tsv").write_text(
+        "\n".join(lines) + "\n", encoding="utf-8"
+    )
 
 
-def test_valid_bundle_loads_script_when_source_archive_is_unreadable(tmp_path: Path) -> None:
+def test_valid_bundle_loads_script_when_source_archive_is_unreadable(
+    tmp_path: Path,
+) -> None:
     # Given: a protected source that is not a readable MPQ and an author-bound plaintext script.
     source = tmp_path / "protected.w3x"
     source.write_bytes(b"protected-container")
@@ -48,7 +52,9 @@ def test_valid_bundle_loads_script_when_source_archive_is_unreadable(tmp_path: P
     assert loaded.author_bundle_files == ("war3map.j",)
 
 
-def test_bundle_can_supply_real_slk_object_data_without_executing_map_code(tmp_path: Path) -> None:
+def test_bundle_can_supply_real_slk_object_data_without_executing_map_code(
+    tmp_path: Path,
+) -> None:
     # Given: an unreadable container and a verified real legacy AbilityData SLK payload.
     source = tmp_path / "protected.w3x"
     source.write_bytes(b"protected-container")
@@ -95,11 +101,14 @@ def test_bundle_rejects_unsafe_internal_path(tmp_path: Path) -> None:
     bundle_root.mkdir()
     source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
     (bundle_root / "w3xray-author-bundle.tsv").write_text(
-        "\n".join((
-            "W3XRAY-AUTHOR-BUNDLE\t1",
-            f"source_sha256\t{source_hash}",
-            f"file\t../evil.j\t{hashlib.sha256(b'evil').hexdigest()}",
-        )) + "\n",
+        "\n".join(
+            (
+                "W3XRAY-AUTHOR-BUNDLE\t1",
+                f"source_sha256\t{source_hash}",
+                f"file\t../evil.j\t{hashlib.sha256(b'evil').hexdigest()}",
+            )
+        )
+        + "\n",
         encoding="utf-8",
     )
     bundle_module = importlib.import_module("w3xtool.author_plaintext_bundle")
@@ -125,11 +134,14 @@ def test_bundle_rejects_symlinked_payload_root(tmp_path: Path) -> None:
         pytest.skip(f"symlink unavailable: {exc}")
     source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
     (bundle_root / "w3xray-author-bundle.tsv").write_text(
-        "\n".join((
-            "W3XRAY-AUTHOR-BUNDLE\t1",
-            f"source_sha256\t{source_hash}",
-            f"file\twar3map.j\t{hashlib.sha256(payload).hexdigest()}",
-        )) + "\n",
+        "\n".join(
+            (
+                "W3XRAY-AUTHOR-BUNDLE\t1",
+                f"source_sha256\t{source_hash}",
+                f"file\twar3map.j\t{hashlib.sha256(payload).hexdigest()}",
+            )
+        )
+        + "\n",
         encoding="utf-8",
     )
     bundle_module = importlib.import_module("w3xtool.author_plaintext_bundle")
@@ -139,7 +151,9 @@ def test_bundle_rejects_symlinked_payload_root(tmp_path: Path) -> None:
         bundle_module.load_author_plaintext_bundle(bundle_root, source)
 
 
-def test_bundle_rejects_payload_replaced_by_symlink_after_validation(tmp_path: Path) -> None:
+def test_bundle_rejects_payload_replaced_by_symlink_after_validation(
+    tmp_path: Path,
+) -> None:
     # Given: a valid payload is replaced with a same-content external symlink.
     source = tmp_path / "protected.w3x"
     source.write_bytes(b"source")

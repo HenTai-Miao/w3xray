@@ -21,24 +21,33 @@ class ScriptGlobalIndexTest(unittest.TestCase):
         # Given: JASS globals include object IDs, save keys, arrays and switches.
         md = MapData(path="x.w3x", name="全局变量图")
         md.scripts = {
-            "war3map.j": "\n".join((
-                "globals",
-                "    constant integer HERO_ID = 'H001'",
-                '    string SAVE_KEY = "hero.level"',
-                "    integer array PlayerGold",
-                "    boolean DebugMode = true",
-                '    string IconPath = "ReplaceableTextures\\\\CommandButtons\\\\BTNHero.blp"',
-                "endglobals",
-            )),
+            "war3map.j": "\n".join(
+                (
+                    "globals",
+                    "    constant integer HERO_ID = 'H001'",
+                    '    string SAVE_KEY = "hero.level"',
+                    "    integer array PlayerGold",
+                    "    boolean DebugMode = true",
+                    '    string IconPath = "ReplaceableTextures\\\\CommandButtons\\\\BTNHero.blp"',
+                    "endglobals",
+                )
+            ),
         }
 
         # When: the globals index is built.
         text = _format_globals(md)
 
         # Then: each global keeps source line, shape, initial value and static purpose.
-        self.assertIn("来源\t行号\t名称\t类型\t数组\t常量\t初值\t字符串\t对象码\t用途\t摘要", text)
-        self.assertIn("war3map.j\t2\tHERO_ID\tinteger\t否\t是\t'H001'\t\tH001\t对象码", text)
-        self.assertIn("war3map.j\t3\tSAVE_KEY\tstring\t否\t否\t\"hero.level\"\thero.level\t\t存档/键", text)
+        self.assertIn(
+            "来源\t行号\t名称\t类型\t数组\t常量\t初值\t字符串\t对象码\t用途\t摘要", text
+        )
+        self.assertIn(
+            "war3map.j\t2\tHERO_ID\tinteger\t否\t是\t'H001'\t\tH001\t对象码", text
+        )
+        self.assertIn(
+            'war3map.j\t3\tSAVE_KEY\tstring\t否\t否\t"hero.level"\thero.level\t\t存档/键',
+            text,
+        )
         self.assertIn("war3map.j\t4\tPlayerGold\tinteger\t是\t否\t\t\t\t数组状态", text)
         self.assertIn("war3map.j\t5\tDebugMode\tboolean\t否\t否\ttrue\t\t\t开关", text)
         self.assertIn("war3map.j\t6\tIconPath\tstring\t否\t否", text)
@@ -48,16 +57,18 @@ class ScriptGlobalIndexTest(unittest.TestCase):
         # Given: comments and function locals look like globals but are not in a globals block.
         md = MapData(path="x.w3x", name="去噪全局变量图")
         md.scripts = {
-            "war3map.j": "\n".join((
-                "// globals",
-                '// string BAD = "comment"',
-                "globals",
-                '    string Real = "yes" // string Comment = "no"',
-                "endglobals",
-                "function Init takes nothing returns nothing",
-                "    local integer NotGlobal = 'H999'",
-                "endfunction",
-            )),
+            "war3map.j": "\n".join(
+                (
+                    "// globals",
+                    '// string BAD = "comment"',
+                    "globals",
+                    '    string Real = "yes" // string Comment = "no"',
+                    "endglobals",
+                    "function Init takes nothing returns nothing",
+                    "    local integer NotGlobal = 'H999'",
+                    "endfunction",
+                )
+            ),
         }
 
         # When: the globals index is built.

@@ -17,13 +17,32 @@ from .mpq import MPQArchive, guess_extension
 from .safe_output import SafeWriteStatus, write_bytes_safely, write_text_safely
 
 KNOWN_EXPORT_FILES = [
-    "war3map.w3u", "war3map.w3t", "war3map.w3a", "war3map.w3q",
-    "war3map.w3b", "war3map.w3d", "war3map.w3h", "war3map.j",
-    "war3map.lua", "war3map.wts", "war3map.wtg", "war3map.wct",
-    "war3map.w3i", "war3map.w3e",
-    "war3map.w3r", "war3map.w3c", "war3map.w3s", "war3map.wgc",
-    "war3mapUnits.doo", "war3map.doo", "war3map.shd", "war3map.mmp",
-    "war3mapMap.blp", "war3map.wpm", "testconfig.wgc", "(listfile)",
+    "war3map.w3u",
+    "war3map.w3t",
+    "war3map.w3a",
+    "war3map.w3q",
+    "war3map.w3b",
+    "war3map.w3d",
+    "war3map.w3h",
+    "war3map.j",
+    "war3map.lua",
+    "war3map.wts",
+    "war3map.wtg",
+    "war3map.wct",
+    "war3map.w3i",
+    "war3map.w3e",
+    "war3map.w3r",
+    "war3map.w3c",
+    "war3map.w3s",
+    "war3map.wgc",
+    "war3mapUnits.doo",
+    "war3map.doo",
+    "war3map.shd",
+    "war3map.mmp",
+    "war3mapMap.blp",
+    "war3map.wpm",
+    "testconfig.wgc",
+    "(listfile)",
 ]
 _MAX_NAMED_EXPORT_BYTES: Final = 512 * 1024 * 1024
 _MAX_UNKNOWN_EXPORT_BYTES: Final = 512 * 1024 * 1024
@@ -71,8 +90,12 @@ def tmp_extract_dir(name: str, *sub: str, clean: bool = False) -> str:
 
 
 def _safe_temp_segment(value: str) -> str:
-    cleaned = "".join(char if char not in '\\/:*?"<>|' else "_" for char in (value or "map")).strip()
+    cleaned = "".join(
+        char if char not in '\\/:*?"<>|' else "_" for char in (value or "map")
+    ).strip()
     return "map" if cleaned in {"", ".", ".."} else cleaned
+
+
 def export_all_files(
     path: str,
     out_dir: str | None = None,
@@ -178,7 +201,7 @@ def _export_named_file(
         return 0
     try:
         data = archive.read_file(name)
-    except (KeyError, OSError, ValueError):
+    except KeyError, OSError, ValueError:
         return declared_size
     consumed_bytes = max(declared_size, len(data))
     if len(data) > remaining_bytes:
@@ -249,7 +272,9 @@ def _export_raw_block(
     return len(raw)
 
 
-def _export_sub_maps(out_dir: str, sub_maps: list[str], external_names: Sequence[str]) -> None:
+def _export_sub_maps(
+    out_dir: str, sub_maps: list[str], external_names: Sequence[str]
+) -> None:
     for name in sub_maps:
         inner_dir = _safe_export_path(out_dir, os.path.splitext(name)[0])
         if inner_dir is None:
@@ -259,7 +284,7 @@ def _export_sub_maps(out_dir: str, sub_maps: list[str], external_names: Sequence
             continue
         try:
             export_all_files(blob, inner_dir, 1, external_names=external_names)
-        except (OSError, ValueError):
+        except OSError, ValueError:
             continue
 
 
@@ -269,6 +294,6 @@ def _archive_name(archive: ExportArchive) -> str:
         if data[:4] == b"HM3W":
             end = data.index(b"\x00", 8)
             return data[8:end].decode("utf-8", "replace")
-    except (AttributeError, ValueError, IndexError, UnicodeDecodeError):
+    except AttributeError, ValueError, IndexError, UnicodeDecodeError:
         return os.path.basename(getattr(archive, "path", "map"))
     return os.path.basename(getattr(archive, "path", "map"))

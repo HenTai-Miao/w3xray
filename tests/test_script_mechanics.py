@@ -11,11 +11,13 @@ from w3xtool.script_mechanics import (
 class ScriptMechanicsTest(unittest.TestCase):
     def test_need_marks_report_runtime_default_pools(self) -> None:
         # Given: a script using BJ helpers that select objects from Blizzard runtime pools.
-        script = "\n".join((
-            "call ChooseRandomItemBJ(3)",
-            "call ChooseRandomCreep(5)",
-            "call InitNeutralBuildings()",
-        ))
+        script = "\n".join(
+            (
+                "call ChooseRandomItemBJ(3)",
+                "call ChooseRandomCreep(5)",
+                "call InitNeutralBuildings()",
+            )
+        )
 
         # When: script need marks are scanned.
         marks = scan_script_need_marks(script)

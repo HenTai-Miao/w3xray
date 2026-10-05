@@ -27,7 +27,9 @@ MAX_PATH_CHARS: Final = 4096
 MAX_COMMAND_CHARS: Final = 32768
 MAP_SUFFIXES: Final = frozenset({".w3x", ".w3m", ".w3n"})
 _WINDOWS_CREATE_NO_WINDOW: Final = 0x08000000
-_WINE_EXECUTABLES: Final = frozenset({"wine", "wine64", "wine-preloader", "wine64-preloader"})
+_WINE_EXECUTABLES: Final = frozenset(
+    {"wine", "wine64", "wine-preloader", "wine64-preloader"}
+)
 _MAC_GAME_COMMAND = re.compile(
     r'^"?/[^"\r\n]*\.app/Contents/MacOS/(?:Warcraft III|war3)(?:\.exe)?"?(?=$|\s+-)',
     re.IGNORECASE,
@@ -205,7 +207,9 @@ def parse_lsof_open_maps(
         elif field[:1] == b"n" and current_pid is not None:
             path = Path(os.fsdecode(field[1:]))
             if is_map_path(path):
-                evidence.append(MapEvidence(path, EvidenceKind.DIRECT_OPEN, current_pid))
+                evidence.append(
+                    MapEvidence(path, EvidenceKind.DIRECT_OPEN, current_pid)
+                )
                 if len(evidence) >= MAX_OPEN_PATHS:
                     break
     return ordered_evidence(evidence)
@@ -215,7 +219,11 @@ def ordered_evidence(evidence: Iterable[MapEvidence]) -> tuple[MapEvidence, ...]
     return tuple(
         sorted(
             set(evidence),
-            key=lambda item: (str(item.path).casefold(), str(item.path), item.process_id or -1),
+            key=lambda item: (
+                str(item.path).casefold(),
+                str(item.path),
+                item.process_id or -1,
+            ),
         )
     )
 

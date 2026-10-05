@@ -25,8 +25,10 @@ def iter_terrain_summary_lines(md: "MapData") -> Iterator[str]:
         return
     custom = "是" if info.custom_tilesets else "否"
     yield "  地形:"
-    yield (f"    网格: {info.width}×{info.height}  基础地形: {info.base_tileset}"
-           f"  自定义地形集: {custom}")
+    yield (
+        f"    网格: {info.width}×{info.height}  基础地形: {info.base_tileset}"
+        f"  自定义地形集: {custom}"
+    )
     if info.bounds is not None:
         yield _bounds_line(info.bounds)
     if info.ground_tiles:
@@ -47,7 +49,9 @@ def iter_terrain_summary_lines(md: "MapData") -> Iterator[str]:
                 info.cliff_tiles,
             )
         if info.point_summary.cliff_level_counts:
-            yield "    悬崖层级: " + _format_plain_counts(info.point_summary.cliff_level_counts)
+            yield "    悬崖层级: " + _format_plain_counts(
+                info.point_summary.cliff_level_counts
+            )
     report = build_scene_bounds_report(md, info)
     if report is not None and report.issues:
         yield (
@@ -81,8 +85,12 @@ def _point_flag_line(summary: terrain.TerrainPointSummary) -> str:
     )
 
 
-def _format_index_counts(counts: tuple[tuple[int, int], ...], labels: tuple[str, ...]) -> str:
-    return "、".join(f"{_label_for_index(index, labels)}:{count}" for index, count in counts[:8])
+def _format_index_counts(
+    counts: tuple[tuple[int, int], ...], labels: tuple[str, ...]
+) -> str:
+    return "、".join(
+        f"{_label_for_index(index, labels)}:{count}" for index, count in counts[:8]
+    )
 
 
 def _format_plain_counts(counts: tuple[tuple[int, int], ...]) -> str:

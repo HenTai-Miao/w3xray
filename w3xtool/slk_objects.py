@@ -7,12 +7,17 @@
 只负责"找文件 + 解析 + 合并"，返回 {对象码: {SLK列名: 值}}；统一对象候选管线负责
 构建、取名和并入 MapData。
 """
+
 from __future__ import annotations
 
 import re
 from typing import TYPE_CHECKING, Protocol
 
-from .extraction_diagnostics import ComponentParseError, read_component, record_component_parse_issue
+from .extraction_diagnostics import (
+    ComponentParseError,
+    read_component,
+    record_component_parse_issue,
+)
 from .slk import parse_slk
 from .war3_encoding import decode_warcraft_string
 
@@ -25,6 +30,7 @@ class SlkArchive(Protocol):
 
     def read_file(self, name: str) -> bytes: ...
 
+
 # 分类 → 该类的 SLK 文件（单位跨多文件，按对象码合并列）。
 SLK_CATEGORY_FILES = {
     "技能": ["AbilityData.slk"],
@@ -33,8 +39,13 @@ SLK_CATEGORY_FILES = {
     "可破坏物": ["DestructableData.slk"],
     "科技": ["UpgradeData.slk"],
     "装饰物": ["Doodads.slk"],
-    "单位": ["UnitData.slk", "UnitBalance.slk", "UnitUI.slk",
-             "UnitWeapons.slk", "UnitAbilities.slk"],
+    "单位": [
+        "UnitData.slk",
+        "UnitBalance.slk",
+        "UnitUI.slk",
+        "UnitWeapons.slk",
+        "UnitAbilities.slk",
+    ],
 }
 
 # SLK 文件在 MPQ 里可能裸放或在 Units\ / Doodads\ 下（不区分大小写）。
@@ -42,21 +53,51 @@ _PREFIXES = ["", "Units\\", "Doodads\\"]
 
 # 常用 SLK 列名（无等级后缀）→ 中文标签。带等级后缀的列(Cast2/BuffID1…)交给 SLK_BASE_LABELS。
 SLK_COL_LABELS = {
-    "Name": "名称", "Tip": "提示", "Ubertip": "说明", "Hotkey": "快捷键",
-    "Art": "图标", "art": "图标", "race": "种族", "levels": "等级数",
-    "Cooldown": "冷却", "Requires": "依赖", "Name1": "名称",
-    "HP": "生命", "hitPoints": "生命", "manaN": "魔法上限", "def": "护甲",
-    "goldcost": "金币", "lumbercost": "木材", "Level": "等级", "ico": "图标",
+    "Name": "名称",
+    "Tip": "提示",
+    "Ubertip": "说明",
+    "Hotkey": "快捷键",
+    "Art": "图标",
+    "art": "图标",
+    "race": "种族",
+    "levels": "等级数",
+    "Cooldown": "冷却",
+    "Requires": "依赖",
+    "Name1": "名称",
+    "HP": "生命",
+    "hitPoints": "生命",
+    "manaN": "魔法上限",
+    "def": "护甲",
+    "goldcost": "金币",
+    "lumbercost": "木材",
+    "Level": "等级",
+    "ico": "图标",
 }
 
 # 带等级后缀的列：去掉末位数字后的"基名" → 中文标签（Cast2→施法间隔(等级2)）。
 SLK_BASE_LABELS = {
-    "Cast": "施法间隔", "Cool": "冷却", "Cost": "魔法消耗", "Dur": "持续时间",
-    "HeroDur": "英雄持续", "Area": "作用范围", "Rng": "施法距离",
-    "BuffID": "buff效果", "EfctID": "效果", "UnitID": "召唤/创建单位",
-    "DataA": "数据A", "DataB": "数据B", "DataC": "数据C", "DataD": "数据D",
-    "DataE": "数据E", "DataF": "数据F", "DataG": "数据G", "DataH": "数据H", "DataI": "数据I",
-    "targs": "目标类型", "Requires": "依赖", "dmgplus": "攻击力加成",
+    "Cast": "施法间隔",
+    "Cool": "冷却",
+    "Cost": "魔法消耗",
+    "Dur": "持续时间",
+    "HeroDur": "英雄持续",
+    "Area": "作用范围",
+    "Rng": "施法距离",
+    "BuffID": "buff效果",
+    "EfctID": "效果",
+    "UnitID": "召唤/创建单位",
+    "DataA": "数据A",
+    "DataB": "数据B",
+    "DataC": "数据C",
+    "DataD": "数据D",
+    "DataE": "数据E",
+    "DataF": "数据F",
+    "DataG": "数据G",
+    "DataH": "数据H",
+    "DataI": "数据I",
+    "targs": "目标类型",
+    "Requires": "依赖",
+    "dmgplus": "攻击力加成",
 }
 
 # 编辑器噪声列（来自工具包 Config.ini [AlwaysEmpty]，按分类）+ 冗余 code。展示时跳过。
@@ -67,13 +108,17 @@ _ALWAYS_EMPTY = {
     "可破坏物": "comments,EditorSuffix,InBeta,version",
     "装饰物": "comment,InBeta,version",
     "科技": "comments,sort,version,InBeta",
-    "单位": ("sort,comment,comments,InBeta,version,sortBalance,sort2,"
-            "sortUI,inEditor,hiddenInEditor,sortWeap,sortAbil"),
+    "单位": (
+        "sort,comment,comments,InBeta,version,sortBalance,sort2,"
+        "sortUI,inEditor,hiddenInEditor,sortWeap,sortAbil"
+    ),
 }
 SLK_NOISE_COLS = {cat: set(s.split(",")) | {"code"} for cat, s in _ALWAYS_EMPTY.items()}
 
 
-_LEVEL_SUFFIX = re.compile(r"^(.*?)(\d+)$")    # 去掉整段末尾数字(支持多位等级，如 DataA10)
+_LEVEL_SUFFIX = re.compile(
+    r"^(.*?)(\d+)$"
+)  # 去掉整段末尾数字(支持多位等级，如 DataA10)
 
 
 def slk_col_label(col: str) -> str:
@@ -102,7 +147,9 @@ def _find_name(archive: SlkArchive, name: str) -> str | None:
     return None
 
 
-def _read_text(archive: SlkArchive, name: str, md: MapData | None = None) -> tuple[str, str] | None:
+def _read_text(
+    archive: SlkArchive, name: str, md: MapData | None = None
+) -> tuple[str, str] | None:
     """在 MPQ 里找并读出该 SLK 文本；找不到/解码失败返回 None。"""
     fn = _find_name(archive, name)
     if fn is None:
@@ -117,7 +164,7 @@ def _read_text(archive: SlkArchive, name: str, md: MapData | None = None) -> tup
         return (fn, text) if text is not None else None
     try:
         return fn, decode_warcraft_string(archive.read_file(fn))
-    except (KeyError, OSError, UnicodeError, ValueError):
+    except KeyError, OSError, UnicodeError, ValueError:
         return None
 
 
@@ -145,7 +192,9 @@ def parse_category_objects(
             continue
         source, text = source_text
         if md is not None:
-            parsed = read_component(md, "slk", source, lambda: _parse_slk_component(text), stage="parse")
+            parsed = read_component(
+                md, "slk", source, lambda: _parse_slk_component(text), stage="parse"
+            )
             if parsed is None:
                 continue
             rows = parsed

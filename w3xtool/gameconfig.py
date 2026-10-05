@@ -17,9 +17,30 @@ _RACE_NAMES = {
     0x20: "随机",
 }
 _COLOR_NAMES = (
-    "红", "蓝", "青", "紫", "黄", "橙", "绿", "粉",
-    "灰", "浅蓝", "深绿", "棕", "栗", "海军蓝", "绿松石", "紫罗兰",
-    "小麦", "桃", "薄荷", "薰衣草", "煤黑", "雪白", "祖母绿", "花生",
+    "红",
+    "蓝",
+    "青",
+    "紫",
+    "黄",
+    "橙",
+    "绿",
+    "粉",
+    "灰",
+    "浅蓝",
+    "深绿",
+    "棕",
+    "栗",
+    "海军蓝",
+    "绿松石",
+    "紫罗兰",
+    "小麦",
+    "桃",
+    "薄荷",
+    "薰衣草",
+    "煤黑",
+    "雪白",
+    "祖母绿",
+    "花生",
 )
 _AI_DIFFICULTY = {0: "简单", 1: "普通", 2: "困难"}
 
@@ -96,11 +117,17 @@ class GameConfiguration:
 
     @property
     def human_count(self) -> int:
-        return sum(1 for player in self.players if player.is_user and not player.is_observer)
+        return sum(
+            1 for player in self.players if player.is_user and not player.is_observer
+        )
 
     @property
     def computer_count(self) -> int:
-        return sum(1 for player in self.players if not player.is_user and not player.is_observer)
+        return sum(
+            1
+            for player in self.players
+            if not player.is_user and not player.is_observer
+        )
 
     @property
     def observer_count(self) -> int:
@@ -129,7 +156,7 @@ class _Reader:
         end = self._data.find(b"\x00", self._pos)
         if end < 0:
             raise IndexError("cstr 缺少终止符")
-        raw = self._data[self._pos:end]
+        raw = self._data[self._pos : end]
         self._pos = end + 1
         return _decode_string(raw)
 

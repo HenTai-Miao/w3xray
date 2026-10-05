@@ -13,11 +13,13 @@ class KnowledgePackScriptStringIndexTest(unittest.TestCase):
         # Given: a parsed map with UI and save-related script strings.
         md = MapData(path="x.w3x", name="字符串索引图")
         md.scripts = {
-            "war3map.j": "\n".join((
-                "function Init takes nothing returns nothing",
-                '    call BlzSendSyncData("SAVE", I2S(level))',
-                "endfunction",
-            )),
+            "war3map.j": "\n".join(
+                (
+                    "function Init takes nothing returns nothing",
+                    '    call BlzSendSyncData("SAVE", I2S(level))',
+                    "endfunction",
+                )
+            ),
         }
 
         # When: the user exports the knowledge pack.
@@ -32,7 +34,9 @@ class KnowledgePackScriptStringIndexTest(unittest.TestCase):
 
             with open(os.path.join(out, "资料包目录.tsv"), encoding="utf-8") as f:
                 manifest = f.read()
-            self.assertIn("脚本\t脚本字符串索引.tsv\t脚本字符串字面量、用途和函数上下文", manifest)
+            self.assertIn(
+                "脚本\t脚本字符串索引.tsv\t脚本字符串字面量、用途和函数上下文", manifest
+            )
 
 
 if __name__ == "__main__":

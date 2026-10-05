@@ -20,10 +20,7 @@ def format_extraction_json(ledger: ExtractionLedger) -> str:
         "source_path": _safe_text(ledger.source_path),
         "source_sha256": ledger.source_sha256,
         "status": ledger.status.value,
-        "counts": {
-            state.value: ledger.count(state)
-            for state in BlockState
-        },
+        "counts": {state.value: ledger.count(state) for state in BlockState},
         "warnings": [_safe_text(warning) for warning in ledger.warnings],
         "entries": [_json_entry(entry) for entry in ledger.entries],
     }

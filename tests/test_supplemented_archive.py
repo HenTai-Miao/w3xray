@@ -86,7 +86,9 @@ def _supplemental_file(tmp_path: Path, payload: bytes) -> SupplementalFile:
     )
 
 
-def test_plaintext_explicitly_overrides_named_member_and_records_conflict(tmp_path: Path) -> None:
+def test_plaintext_explicitly_overrides_named_member_and_records_conflict(
+    tmp_path: Path,
+) -> None:
     # Given: verified compatibility plaintext differs from a readable archive member.
     item = _supplemental_file(tmp_path, b"override")
     evidence = SupplementalEvidence("a" * 64, files=(item,))
@@ -141,7 +143,9 @@ def test_wrong_compatibility_key_digest_rejects_complete_bundle() -> None:
 
 def test_key_path_must_match_hash_table_block_evidence() -> None:
     # Given: a key claims a named path that maps to another source block.
-    key = SupplementalKey(2, 0x1234_5678, hashlib.sha256(b"key-plain").hexdigest(), "war3map.j")
+    key = SupplementalKey(
+        2, 0x1234_5678, hashlib.sha256(b"key-plain").hexdigest(), "war3map.j"
+    )
 
     # When/Then: the false name-to-block claim is rejected before use.
     with pytest.raises(SupplementalEvidenceError, match="path does not match block"):

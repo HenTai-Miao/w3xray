@@ -72,8 +72,13 @@ class AuthorPlaintextBundle:
                 raise AuthorBundleError(
                     f"plaintext changed after validation: {item.name} ({exc.reason})",
                 ) from exc
-            if len(payload) != item.size or hashlib.sha256(payload).hexdigest() != item.sha256:
-                raise AuthorBundleError(f"plaintext changed after validation: {item.name}")
+            if (
+                len(payload) != item.size
+                or hashlib.sha256(payload).hexdigest() != item.sha256
+            ):
+                raise AuthorBundleError(
+                    f"plaintext changed after validation: {item.name}"
+                )
             return payload
         raise FileNotFoundError(name)
 
@@ -148,9 +153,13 @@ def load_author_plaintext_bundle(
     bundle_root = Path(root)
     manifest_path = bundle_root / MANIFEST_NAME
     try:
-        manifest, _identity = read_bounded_regular_file(manifest_path, MAX_MANIFEST_SIZE)
+        manifest, _identity = read_bounded_regular_file(
+            manifest_path, MAX_MANIFEST_SIZE
+        )
     except BoundedFileError as exc:
-        raise AuthorBundleError(f"missing or oversized {MANIFEST_NAME}: {exc.reason}") from exc
+        raise AuthorBundleError(
+            f"missing or oversized {MANIFEST_NAME}: {exc.reason}"
+        ) from exc
     try:
         lines = manifest.decode("utf-8").splitlines()
     except UnicodeDecodeError as exc:
@@ -192,18 +201,24 @@ def _parse_file_rows(root: Path, lines: list[str]) -> tuple[AuthorBundleFile, ..
             payload_root = _resolve_payload_root(root)
         path = _resolve_payload_file(payload_root, relative.parts)
         if path is None:
-            raise AuthorBundleError(f"plaintext file missing or escapes root: {parts[1]}")
+            raise AuthorBundleError(
+                f"plaintext file missing or escapes root: {parts[1]}"
+            )
         try:
             actual_hash, identity = sha256_regular_file(path, MAX_BUNDLE_FILE_SIZE)
         except BoundedFileError as exc:
-            raise AuthorBundleError(f"plaintext file unsafe: {parts[1]} ({exc.reason})") from exc
+            raise AuthorBundleError(
+                f"plaintext file unsafe: {parts[1]} ({exc.reason})"
+            ) from exc
         size = identity.size
         total_size += size
         if size > MAX_BUNDLE_FILE_SIZE or total_size > MAX_BUNDLE_TOTAL_SIZE:
             raise AuthorBundleError(f"plaintext size limit exceeded: {parts[1]}")
         if actual_hash != expected_hash:
             raise AuthorBundleError(f"file SHA256 mismatch: {parts[1]}")
-        files.append(AuthorBundleFile(str(relative), path, expected_hash, size, identity))
+        files.append(
+            AuthorBundleFile(str(relative), path, expected_hash, size, identity)
+        )
         seen.add(key)
     return tuple(files)
 

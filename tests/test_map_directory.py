@@ -1,9 +1,12 @@
 """地图目录扫描测试。"""
+
 from __future__ import annotations
 
 import os
 import threading
+from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -38,6 +41,46 @@ class TestMapDirectory(unittest.TestCase):
                 [
                     (str(nested_map), "地图:new"),
                     (str(old_map), "地图:old"),
+                ],
+            )
+
+    def test_scan_battle_maps_prefers_download_time_over_preserved_mtime(self):
+        # Given: a newer download can preserve an older source modification time.
+        with TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            old_download = root / "older-download.w3x"
+            new_download = root / "new-download.w3x"
+            old_download.write_text("a", encoding="utf-8")
+            new_download.write_text("b", encoding="utf-8")
+            timestamps = {
+                str(old_download): (20, 100),
+                str(new_download): (10, 300),
+            }
+
+            def fake_getmtime(path: str) -> float:
+                return timestamps[path][0]
+
+            def fake_stat(path: str, **_kwargs: object) -> SimpleNamespace:
+                mtime, ctime = timestamps[str(path)]
+                return SimpleNamespace(st_mtime=mtime, st_ctime=ctime)
+
+            # When: sorting files whose metadata was preserved during download.
+            with (
+                patch.object(os.path, "getmtime", side_effect=fake_getmtime),
+                patch.object(os, "stat", side_effect=fake_stat),
+            ):
+                result = scan_battle_maps(
+                    tmp,
+                    name_loader=lambda path: Path(path).stem,
+                    max_workers=1,
+                )
+
+            # Then: the most recently downloaded map is first.
+            self.assertEqual(
+                result,
+                [
+                    (str(new_download), "new-download"),
+                    (str(old_download), "older-download"),
                 ],
             )
 

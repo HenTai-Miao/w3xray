@@ -37,27 +37,59 @@ class FileListingArchive(Protocol):
 # 借鉴 w3x2lni core/info.lua 的 impignore 清单；只有 has_file 验证存在的才会被收。
 STATIC_MAP_FILES: Final[tuple[str, ...]] = (
     # 脚本 / 字符串
-    "war3map.j", "war3map.lua", "war3map.wts",
+    "war3map.j",
+    "war3map.lua",
+    "war3map.wts",
     # 对象数据
-    "war3map.w3u", "war3map.w3t", "war3map.w3a", "war3map.w3q",
-    "war3map.w3b", "war3map.w3d", "war3map.w3h",
+    "war3map.w3u",
+    "war3map.w3t",
+    "war3map.w3a",
+    "war3map.w3q",
+    "war3map.w3b",
+    "war3map.w3d",
+    "war3map.w3h",
     # 触发器
-    "war3map.wtg", "war3map.wct",
+    "war3map.wtg",
+    "war3map.wct",
     # 地图信息 / 地形 / 预览
-    "war3map.w3i", "war3map.w3e", "war3map.w3r", "war3map.w3c",
-    "war3map.w3s", "war3map.wgc", "war3map.shd", "war3map.wpm", "war3map.mmp",
-    "war3map.imp", "war3mapMap.blp", "war3mapMap.tga", "war3mapPath.tga",
-    "war3mapPreview.tga", "war3mapPreview.blp",
-    "war3mapUnits.doo", "war3map.doo",
+    "war3map.w3i",
+    "war3map.w3e",
+    "war3map.w3r",
+    "war3map.w3c",
+    "war3map.w3s",
+    "war3map.wgc",
+    "war3map.shd",
+    "war3map.wpm",
+    "war3map.mmp",
+    "war3map.imp",
+    "war3mapMap.blp",
+    "war3mapMap.tga",
+    "war3mapPath.tga",
+    "war3mapPreview.tga",
+    "war3mapPreview.blp",
+    "war3mapUnits.doo",
+    "war3map.doo",
     "testconfig.wgc",
     # 文本档
-    "war3mapExtra.txt", "war3mapMisc.txt", "war3mapSkin.txt", "war3map.txt.ini",
+    "war3mapExtra.txt",
+    "war3mapMisc.txt",
+    "war3mapSkin.txt",
+    "war3map.txt.ini",
     # MPQ 内部表
-    "(listfile)", "(attributes)", "(signature)",
+    "(listfile)",
+    "(attributes)",
+    "(signature)",
     # 战役级
-    "war3campaign.w3f", "war3campaign.imp", "war3campaign.wts",
-    "war3campaign.w3u", "war3campaign.w3t", "war3campaign.w3a",
-    "war3campaign.w3q", "war3campaign.w3b", "war3campaign.w3d", "war3campaign.w3h",
+    "war3campaign.w3f",
+    "war3campaign.imp",
+    "war3campaign.wts",
+    "war3campaign.w3u",
+    "war3campaign.w3t",
+    "war3campaign.w3a",
+    "war3campaign.w3q",
+    "war3campaign.w3b",
+    "war3campaign.w3d",
+    "war3campaign.w3h",
 )
 IMPORT_TABLE_FILES: Final[tuple[str, ...]] = ("war3map.imp", "war3campaign.imp")
 
@@ -106,7 +138,7 @@ def import_tables_from_archive(
         else:
             try:
                 tables.append(parse_import_table(archive.read_file(table_name)))
-            except (KeyError, OSError, ValueError):
+            except KeyError, OSError, ValueError:
                 continue
     return tuple(tables)
 
@@ -148,7 +180,7 @@ def _add_listfile_names(
             return
     try:
         payload = archive.read_file("(listfile)")
-    except (KeyError, OSError, ValueError):
+    except KeyError, OSError, ValueError:
         return
     if len(payload) > _MAX_LISTFILE_BYTES:
         return

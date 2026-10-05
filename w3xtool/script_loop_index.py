@@ -63,19 +63,23 @@ def format_script_loop_index_tsv(index: ScriptLoopIndex) -> str:
     """Format loop rows as TSV."""
     rows = ["来源\t行号\t函数\t类型\t表达式\t调用\t变量\t字符串\t对象码\t用途\t摘要"]
     for item in index.loops:
-        rows.append("\t".join((
-            _tsv(item.source),
-            str(item.line),
-            _tsv(item.function),
-            _tsv(item.loop_type),
-            _tsv(item.expression),
-            _tsv("; ".join(item.calls)),
-            _tsv("; ".join(item.variables)),
-            _tsv("; ".join(item.strings)),
-            _tsv("; ".join(item.object_codes)),
-            _tsv(item.purpose),
-            _tsv(item.summary),
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    _tsv(item.source),
+                    str(item.line),
+                    _tsv(item.function),
+                    _tsv(item.loop_type),
+                    _tsv(item.expression),
+                    _tsv("; ".join(item.calls)),
+                    _tsv("; ".join(item.variables)),
+                    _tsv("; ".join(item.strings)),
+                    _tsv("; ".join(item.object_codes)),
+                    _tsv(item.purpose),
+                    _tsv(item.summary),
+                )
+            )
+        )
     return "\n".join(rows) + "\n"
 
 
@@ -95,23 +99,29 @@ def _loops_for_script(
         raw_line = _strip_comment(raw_lines[line_no - 1])
         expression = raw_line[start:end].strip() if start != end else ""
         code_expression = code_line[start:end]
-        calls = _unique_ordered(match.group(1) for match in _CALL_RE.finditer(code_expression))
-        variables = _unique_ordered(match.group(0) for match in _VAR_RE.finditer(code_expression))
+        calls = _unique_ordered(
+            match.group(1) for match in _CALL_RE.finditer(code_expression)
+        )
+        variables = _unique_ordered(
+            match.group(0) for match in _VAR_RE.finditer(code_expression)
+        )
         strings = _strings_in(expression)
         object_codes = tuple(sorted(set(_codes_in(code_expression))))
-        rows.append(ScriptLoop(
-            source=source,
-            line=line_no,
-            function=_function_for(source, line_no, functions),
-            loop_type=loop_type,
-            expression=expression,
-            calls=calls,
-            variables=variables,
-            strings=strings,
-            object_codes=object_codes,
-            purpose=_purpose(loop_type, calls, variables, strings, object_codes),
-            summary=raw_line.strip()[:160],
-        ))
+        rows.append(
+            ScriptLoop(
+                source=source,
+                line=line_no,
+                function=_function_for(source, line_no, functions),
+                loop_type=loop_type,
+                expression=expression,
+                calls=calls,
+                variables=variables,
+                strings=strings,
+                object_codes=object_codes,
+                purpose=_purpose(loop_type, calls, variables, strings, object_codes),
+                summary=raw_line.strip()[:160],
+            )
+        )
     return rows
 
 
@@ -204,8 +214,6 @@ def _function_for(source: str, line: int, functions: tuple[ScriptFunction, ...])
         if item.source == source and item.start_line <= line <= item.end_line:
             return item.name
     return ""
-
-
 
 
 def _unique_ordered(values: Iterable[str]) -> tuple[str, ...]:

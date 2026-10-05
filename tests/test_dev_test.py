@@ -1,4 +1,5 @@
 """Windows-safe test runner command tests."""
+
 from __future__ import annotations
 
 import subprocess

@@ -1,4 +1,5 @@
 """war3mapMisc.txt 游戏平衡常数解析。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -52,7 +53,7 @@ def gameplay_constants_from_map_path(path: str) -> tuple[GameplayConstant, ...]:
     try:
         with MPQArchive(path) as archive:
             return gameplay_constants_from_archive(archive)
-    except (OSError, ValueError, KeyError, UnicodeError):
+    except OSError, ValueError, KeyError, UnicodeError:
         return ()
 
 
@@ -63,7 +64,7 @@ def gameplay_constants_from_map(md: MapData) -> tuple[GameplayConstant, ...]:
     try:
         with open_map_source(md) as archive:
             return gameplay_constants_from_archive(archive)
-    except (OSError, ValueError, KeyError, UnicodeError):
+    except OSError, ValueError, KeyError, UnicodeError:
         return ()
 
 

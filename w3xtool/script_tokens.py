@@ -19,7 +19,9 @@ class NativeCallChunk:
 # r"\bfunction\s+(?:[A-Za-z_][A-Za-z0-9_]*[.:]?)*$"，压缩单行脚本会让其每次
 # 匹配回溯数秒）。
 _IDENT_START: Final = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_")
-_IDENT_CHARS: Final = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_")
+_IDENT_CHARS: Final = frozenset(
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_"
+)
 _NAME_CHAIN_CHARS: Final = _IDENT_CHARS | frozenset(".:")
 _FOURCC_PREFIX_RE: Final = re.compile(r"FourCC\s*\(\s*$", re.IGNORECASE)
 _COMMENT_OR_QUOTE_RE: Final = re.compile(r"//|--|['\"]")
@@ -75,7 +77,7 @@ def is_lua_function_definition(script: str, start: int) -> bool:
     keyword_end = index + 1
     if keyword_end == chain_start:
         return False  # function 与名字链之间缺少空白
-    if keyword_end < 8 or prefix[keyword_end - 8:keyword_end] != "function":
+    if keyword_end < 8 or prefix[keyword_end - 8 : keyword_end] != "function":
         return False
     before = prefix[keyword_end - 9] if keyword_end > 8 else ""
     if before and before in _IDENT_CHARS:
@@ -149,7 +151,7 @@ def iter_native_call_chunks(
         end = _call_end(script, open_index)
         if end is None:
             continue
-        yield NativeCallChunk(match.group(1), script[match.start():end])
+        yield NativeCallChunk(match.group(1), script[match.start() : end])
 
 
 def _call_open(script: str, start: int) -> int | None:
@@ -198,7 +200,7 @@ def _quoted_end(script: str, start: int) -> int:
 
 
 def _is_fourcc_quote(script: str, quote_index: int) -> bool:
-    prefix = script[max(0, quote_index - 24):quote_index]
+    prefix = script[max(0, quote_index - 24) : quote_index]
     return _FOURCC_PREFIX_RE.search(prefix) is not None
 
 

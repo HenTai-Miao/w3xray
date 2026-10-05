@@ -83,16 +83,20 @@ def format_map_object_id_index(md: MapData) -> str:
     rows.extend(_map_summary_rows(md))
     for category, objects in _ordered_objects(md):
         for obj in objects:
-            rows.append(_object_row(
-                category,
-                obj,
-                id_usage.details_for(obj.obj_id),
-                obj.obj_id in save_codes,
-                obj.obj_id in referenced_codes,
-                obj.obj_id in preplaced_codes,
-            ))
+            rows.append(
+                _object_row(
+                    category,
+                    obj,
+                    id_usage.details_for(obj.obj_id),
+                    obj.obj_id in save_codes,
+                    obj.obj_id in referenced_codes,
+                    obj.obj_id in preplaced_codes,
+                )
+            )
     for code in sorted(code for code in id_usage.codes if code not in object_lookup):
-        rows.append(_unknown_script_row(code, id_usage.details_for(code), code in save_codes))
+        rows.append(
+            _unknown_script_row(code, id_usage.details_for(code), code in save_codes)
+        )
     return "\n".join(rows) + "\n"
 
 
@@ -118,18 +122,27 @@ def _map_summary_rows(md: MapData) -> list[str]:
     counts = md.category_counts()
     object_count = sum(counts.values())
     rows = [
-        _map_summary_row("内部文件数", str(len({name.lower() for name in md.all_files})), "内部文件清单"),
+        _map_summary_row(
+            "内部文件数",
+            str(len({name.lower() for name in md.all_files})),
+            "内部文件清单",
+        ),
         _map_summary_row("脚本文件数", str(len(md.scripts)), "脚本"),
         _map_summary_row("对象总数", str(object_count), "对象表"),
     ]
     identity = build_map_identity(md)
     if identity.readable:
-        rows.extend((
-            _map_summary_row("文件字节", str(identity.size), "源文件"),
-            _map_summary_row("CRC32", identity.crc32, "源文件"),
-            _map_summary_row("SHA1", identity.sha1, "源文件"),
-        ))
-    rows.extend(_map_summary_row(f"{category}数量", str(count), "对象表") for category, count in counts.items())
+        rows.extend(
+            (
+                _map_summary_row("文件字节", str(identity.size), "源文件"),
+                _map_summary_row("CRC32", identity.crc32, "源文件"),
+                _map_summary_row("SHA1", identity.sha1, "源文件"),
+            )
+        )
+    rows.extend(
+        _map_summary_row(f"{category}数量", str(count), "对象表")
+        for category, count in counts.items()
+    )
     return rows
 
 
@@ -157,31 +170,37 @@ def _object_row(
     preplaced: bool,
 ) -> str:
     usages = _usage_labels(bool(script_details), in_save_report, referenced, preplaced)
-    return "\t".join((
-        "对象",
-        _tsv(category),
-        _tsv(obj.obj_id),
-        str(obj.decimal),
-        _tsv(obj.name),
-        _tsv(obj.ext),
-        _tsv(",".join(usages)),
-        _tsv(",".join(script_details)),
-    ))
+    return "\t".join(
+        (
+            "对象",
+            _tsv(category),
+            _tsv(obj.obj_id),
+            str(obj.decimal),
+            _tsv(obj.name),
+            _tsv(obj.ext),
+            _tsv(",".join(usages)),
+            _tsv(",".join(script_details)),
+        )
+    )
 
 
-def _unknown_script_row(code: str, details: tuple[str, ...], in_save_report: bool) -> str:
+def _unknown_script_row(
+    code: str, details: tuple[str, ...], in_save_report: bool
+) -> str:
     usages = _usage_labels(True, in_save_report, False, False)
     detail = ",".join(details) + "；未在对象表中解析"
-    return "\t".join((
-        "脚本引用",
-        "未知",
-        _tsv(code),
-        str(code_decimal(code)),
-        "",
-        _tsv(_source_names(details)),
-        _tsv(",".join(usages)),
-        _tsv(detail),
-    ))
+    return "\t".join(
+        (
+            "脚本引用",
+            "未知",
+            _tsv(code),
+            str(code_decimal(code)),
+            "",
+            _tsv(_source_names(details)),
+            _tsv(",".join(usages)),
+            _tsv(detail),
+        )
+    )
 
 
 def _usage_labels(
@@ -218,6 +237,8 @@ def _preplaced_codes(md: MapData) -> set[str]:
 
 def _source_names(details: tuple[str, ...]) -> str:
     return ",".join(sorted({detail.split(":", 1)[0] for detail in details}))
+
+
 def _extension(path: str) -> str:
     if "." not in path:
         return ""

@@ -2,6 +2,7 @@
 
 返回统一的对象列表：每个对象含 old_id / new_id / 是否自定义 / 字段修改。
 """
+
 from __future__ import annotations
 
 import struct
@@ -18,6 +19,7 @@ def _decode_str(b: bytes) -> str:
     """字符串解码：UTF-8 后按系统 ACP/GBK 兼容老图。"""
     return decode_warcraft_string(b)
 
+
 # 文件扩展名 → 中文分类名
 EXT_CATEGORY = {
     "w3u": "单位",
@@ -33,8 +35,8 @@ EXT_CATEGORY = {
 @dataclass(frozen=True, slots=True)
 class Modification:
     field_id: str
-    var_type: int          # 0 int / 1 real / 2 unreal / 3 string
-    level: int             # 仅 w3a/w3q/w3d 有意义，否则 0
+    var_type: int  # 0 int / 1 real / 2 unreal / 3 string
+    level: int  # 仅 w3a/w3q/w3d 有意义，否则 0
     value: int | float | str
 
 
@@ -42,8 +44,8 @@ class Modification:
 class W3Object:
     """Mutable object accumulator populated while parsing one table entry."""
 
-    old_id: str            # 基础对象 4 字符码
-    new_id: str            # 自定义新码（原始表为空）
+    old_id: str  # 基础对象 4 字符码
+    new_id: str  # 自定义新码（原始表为空）
     is_custom: bool
     mods: list[Modification] = field(default_factory=list)
 
@@ -71,7 +73,7 @@ class _Reader:
         end = self.p + 4
         if end > len(self.d):
             raise struct.error("truncated float")
-        v = c_float.from_buffer_copy(self.d[self.p:end]).value
+        v = c_float.from_buffer_copy(self.d[self.p : end]).value
         self.p = end
         return v
 
@@ -79,21 +81,21 @@ class _Reader:
         end = self.p + 4
         if end > len(self.d):
             raise struct.error("truncated integer")
-        value = int.from_bytes(self.d[self.p:end], "little", signed=signed)
+        value = int.from_bytes(self.d[self.p : end], "little", signed=signed)
         self.p = end
         return value
 
     def tag(self) -> str:
-        b = self.d[self.p:self.p + 4]
+        b = self.d[self.p : self.p + 4]
         self.p += 4
         # 4 字符码，按 latin-1 还原（魔兽里都是 ASCII）
         return b.decode("latin-1")
 
     def cstr(self) -> str:
         end = self.d.find(b"\x00", self.p)
-        if end < 0:                       # 缺终止符(尾部截断)：读到结尾兜底，不抛异常
+        if end < 0:  # 缺终止符(尾部截断)：读到结尾兜底，不抛异常
             end = len(self.d)
-        s = _decode_str(self.d[self.p:end])
+        s = _decode_str(self.d[self.p : end])
         self.p = end + 1
         return s
 
@@ -101,7 +103,9 @@ class _Reader:
         return self.p >= len(self.d)
 
 
-def _parse_one_object(r: _Reader, is_custom: bool, version: int, has_level: bool) -> W3Object:
+def _parse_one_object(
+    r: _Reader, is_custom: bool, version: int, has_level: bool
+) -> W3Object:
     """解析单个对象。出错(截断/错位/未知类型)时抛 struct.error/IndexError/ValueError，
     由 parse_object_data 统一兜住——保留之前已成功的对象。"""
     old_id = r.tag()
@@ -113,7 +117,7 @@ def _parse_one_object(r: _Reader, is_custom: bool, version: int, has_level: bool
     num_sets = r.u32() if version >= 3 else 1
     for _ in range(num_sets):
         if version >= 3:
-            _ = r.u32()              # setsFlag 位掩码，只读提取无需用到
+            _ = r.u32()  # setsFlag 位掩码，只读提取无需用到
         num_mods = r.i32()
         for _ in range(num_mods):
             field_id = r.tag()
@@ -121,7 +125,7 @@ def _parse_one_object(r: _Reader, is_custom: bool, version: int, has_level: bool
             level = 0
             if has_level:
                 level = r.i32()
-                _ = r.i32()          # data pointer（列），忽略
+                _ = r.i32()  # data pointer（列），忽略
             if var_type == 0:
                 value = r.i32()
             elif var_type in (1, 2):
@@ -130,7 +134,7 @@ def _parse_one_object(r: _Reader, is_custom: bool, version: int, has_level: bool
                 value = r.cstr()
             else:
                 raise ValueError("未知字段类型 %d @ %d" % (var_type, r.p))
-            _ = r.u32()              # 末尾校验（=oldId/newId），跳过
+            _ = r.u32()  # 末尾校验（=oldId/newId），跳过
             obj.mods.append(Modification(field_id, var_type, level, value))
     return obj
 
@@ -153,13 +157,16 @@ def _recover_next_object(
     """坏对象后尝试重新同步到下一个可完整解析的对象头。"""
     limit = len(r.d) - _min_object_size(version) + 1
     for pos in range(start_p + 1, max(start_p + 1, limit)):
-        if not (_looks_like_tag(r.d[pos:pos + 4]) and _looks_like_tag(r.d[pos + 4:pos + 8])):
+        if not (
+            _looks_like_tag(r.d[pos : pos + 4])
+            and _looks_like_tag(r.d[pos + 4 : pos + 8])
+        ):
             continue
         trial = _Reader(r.d)
         trial.p = pos
         try:
             obj = _parse_one_object(trial, is_custom, version, has_level)
-        except (struct.error, IndexError, ValueError):
+        except struct.error, IndexError, ValueError:
             continue
         if not obj.mods:
             continue
@@ -185,15 +192,15 @@ def parse_object_data_report(data: bytes, ext: str) -> ObjectParseReport:
     issues: list[str] = []
     try:
         version = r.i32()  # 1=RoC 2=TFT 3=1.32+/重制版（对象头改成 sets 分组）
-    except (struct.error, IndexError):
+    except struct.error, IndexError:
         return ObjectParseReport((), ("truncated object header",))
     if version not in {1, 2, 3}:
         return ObjectParseReport((), (f"unsupported object version: {version}",))
-    for table_idx in range(2):           # 0=原始表 1=自定义表
+    for table_idx in range(2):  # 0=原始表 1=自定义表
         is_custom = table_idx == 1
         try:
             count = r.i32()
-        except (struct.error, IndexError):
+        except struct.error, IndexError:
             issues.append(f"truncated object table {table_idx}")
             break
         # 每个对象至少有对象头：count 远超剩余字节即为损坏/注水，立即停止（防超大循环）。
@@ -208,15 +215,21 @@ def parse_object_data_report(data: bytes, ext: str) -> ObjectParseReport:
             start_p = r.p
             try:
                 obj = _parse_one_object(r, is_custom, version, has_level)
-            except (struct.error, IndexError, ValueError):
-                recovered = _recover_next_object(r, is_custom, version, has_level, start_p)
+            except struct.error, IndexError, ValueError:
+                recovered = _recover_next_object(
+                    r, is_custom, version, has_level, start_p
+                )
                 if recovered is not None:
                     obj, recovered_p = recovered
-                    issues.append(f"skipped damaged {ext} object at {start_p}, resumed at {recovered_p}")
+                    issues.append(
+                        f"skipped damaged {ext} object at {start_p}, resumed at {recovered_p}"
+                    )
                     objects.append(obj)
                     parsed_in_table = min(count, parsed_in_table + 2)
                     continue
-                issues.append(f"truncated {ext} object at {start_p}; recovered {len(objects)} objects")
+                issues.append(
+                    f"truncated {ext} object at {start_p}; recovered {len(objects)} objects"
+                )
                 return ObjectParseReport(tuple(objects), tuple(issues))
             objects.append(obj)
             parsed_in_table += 1

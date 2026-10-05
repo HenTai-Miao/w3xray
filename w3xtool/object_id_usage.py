@@ -67,7 +67,9 @@ def build_object_id_usage(md: MapData) -> ObjectIdUsageReport:
         entries.extend(line_entries)
         explicit_codes = {entry.code for entry in line_entries}
         entries.extend(_implicit_entries(source, category_map, explicit_codes))
-        entries.extend(_unclassified_entries(source, text, explicit_codes, set(category_map)))
+        entries.extend(
+            _unclassified_entries(source, text, explicit_codes, set(category_map))
+        )
     return ObjectIdUsageReport(_dedupe(entries))
 
 

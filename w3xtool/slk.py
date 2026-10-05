@@ -6,6 +6,7 @@ SLK 记录：
   C;X<col>;Y<row>;K<值>  单元格(K 为值；X/Y 可省略沿用)
 返回 {行键(第1列值): {列名(第1行值): 值}}。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

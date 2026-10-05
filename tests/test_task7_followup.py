@@ -15,13 +15,15 @@ from w3xtool.wts import map_wts_table
 
 def test_map_loading_isolates_malformed_source_object_reference_state() -> None:
     # Given: malformed JASS precedes valid object references in Lua and WCT.
-    archive = _MemoryArchive({
-        "war3map.j": b'call BJDebugMsg("unterminated\n',
-        "war3map.lua": b'CreateItem(FourCC("I001"), 0, 0)\nInitNeutralBuildings()\n',
-        "war3map.wct": _classic_wct(
-            "call UnitAddAbility(null, 'A001')\ncall ChooseRandomItemBJ(1)"
-        ),
-    })
+    archive = _MemoryArchive(
+        {
+            "war3map.j": b'call BJDebugMsg("unterminated\n',
+            "war3map.lua": b'CreateItem(FourCC("I001"), 0, 0)\nInitNeutralBuildings()\n',
+            "war3map.wct": _classic_wct(
+                "call UnitAddAbility(null, 'A001')\ncall ChooseRandomItemBJ(1)"
+            ),
+        }
+    )
 
     # When: the normal map loader analyzes every readable source.
     md = _load_map_impl(archive, "memory.w3x", 0, None, MapLoadContext())
@@ -56,15 +58,19 @@ def test_scan_commands_parses_original_mixed_encoding_wts_bytes() -> None:
     # falls back because entry 2 uses another encoding.
     raw_wts = "STRING 1\n{\n保留提示\n}\nSTRING 2\n{\n".encode()
     raw_wts += "测试".encode("gbk") + "\n}\n".encode()
-    archive = _MemoryArchive({
-        "war3map.j": "\n".join((
-            'call TriggerRegisterPlayerChatEvent(gg_trg_X, Player(0), "-x", true)',
-            "function Trig_X_Actions takes nothing returns nothing",
-            '    call BJDebugMsg("TRIGSTR_001")',
-            "endfunction",
-        )).encode(),
-        "war3map.wts": raw_wts,
-    })
+    archive = _MemoryArchive(
+        {
+            "war3map.j": "\n".join(
+                (
+                    'call TriggerRegisterPlayerChatEvent(gg_trg_X, Player(0), "-x", true)',
+                    "function Trig_X_Actions takes nothing returns nothing",
+                    '    call BJDebugMsg("TRIGSTR_001")',
+                    "endfunction",
+                )
+            ).encode(),
+            "war3map.wts": raw_wts,
+        }
+    )
 
     # When: the standalone path API collects and scans the archive.
     with patch("w3xtool.api.MPQArchive", return_value=nullcontext(archive)):
@@ -96,12 +102,14 @@ def test_commands_from_map_survives_malformed_legacy_wts() -> None:
         "x.w3x",
         "x",
         scripts={
-            "war3map.j": "\n".join((
-                'call TriggerRegisterPlayerChatEvent(gg_trg_X, Player(0), "-x", true)',
-                "function Trig_X_Actions takes nothing returns nothing",
-                '    call BJDebugMsg("TRIGSTR_001")',
-                "endfunction",
-            )),
+            "war3map.j": "\n".join(
+                (
+                    'call TriggerRegisterPlayerChatEvent(gg_trg_X, Player(0), "-x", true)',
+                    "function Trig_X_Actions takes nothing returns nothing",
+                    '    call BJDebugMsg("TRIGSTR_001")',
+                    "endfunction",
+                )
+            ),
             "war3map.wts": malformed,
         },
     )

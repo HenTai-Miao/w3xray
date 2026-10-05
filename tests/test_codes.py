@@ -3,6 +3,7 @@
 借鉴 w3x2lni backend_searchjass：JASS 里 'hpea' 常被写成等值整数 1752196449 或 0x68706561。
 阈值 0x41303030('A000') + 全字节可打印 过滤掉伤害/金钱等普通数字。
 """
+
 import unittest
 
 from w3xtool.script_scan import _codes_in, scan_object_refs

@@ -10,7 +10,9 @@ from w3xtool.api import MapData
 def _format_registrations(md: MapData) -> str:
     spec = importlib.util.find_spec("w3xtool.script_trigger_registration_index")
     if spec is None:
-        raise AssertionError("w3xtool.script_trigger_registration_index module is missing")
+        raise AssertionError(
+            "w3xtool.script_trigger_registration_index module is missing"
+        )
     module = importlib.import_module("w3xtool.script_trigger_registration_index")
     index = module.build_script_trigger_registration_index(md)
     return module.format_script_trigger_registration_index_tsv(index)
@@ -21,25 +23,29 @@ class ScriptTriggerRegistrationIndexTest(unittest.TestCase):
         # Given: script initialization wires triggers, events, handlers and a timer callback.
         md = MapData(path="x.w3x", name="触发注册图")
         md.scripts = {
-            "war3map.j": "\n".join((
-                "function InitTrig_Save takes nothing returns nothing",
-                "    set gg_trg_Save = CreateTrigger()",
-                "    call TriggerRegisterPlayerEvent(gg_trg_Save, Player(0), EVENT_PLAYER_LEAVE)",
-                "    call TriggerRegisterPlayerChatEvent(gg_trg_Save, Player(0), \"-save\", true)",
-                "    call TriggerAddCondition(gg_trg_Save, Condition(function Trig_Save_Conditions))",
-                "    call TriggerAddAction(gg_trg_Save, function Trig_Save_Actions)",
-                "endfunction",
-                "function InitTimer takes nothing returns nothing",
-                "    call TimerStart(udg_SaveTimer, 5.00, true, function SaveTick)",
-                "endfunction",
-            )),
+            "war3map.j": "\n".join(
+                (
+                    "function InitTrig_Save takes nothing returns nothing",
+                    "    set gg_trg_Save = CreateTrigger()",
+                    "    call TriggerRegisterPlayerEvent(gg_trg_Save, Player(0), EVENT_PLAYER_LEAVE)",
+                    '    call TriggerRegisterPlayerChatEvent(gg_trg_Save, Player(0), "-save", true)',
+                    "    call TriggerAddCondition(gg_trg_Save, Condition(function Trig_Save_Conditions))",
+                    "    call TriggerAddAction(gg_trg_Save, function Trig_Save_Actions)",
+                    "endfunction",
+                    "function InitTimer takes nothing returns nothing",
+                    "    call TimerStart(udg_SaveTimer, 5.00, true, function SaveTick)",
+                    "endfunction",
+                )
+            ),
         }
 
         # When: the trigger registration index is built.
         text = _format_registrations(md)
 
         # Then: control-flow entry points are visible with function context.
-        self.assertIn("来源\t行号\t函数\t注册类型\t句柄\tAPI\t目标\t字符串参数\t摘要", text)
+        self.assertIn(
+            "来源\t行号\t函数\t注册类型\t句柄\tAPI\t目标\t字符串参数\t摘要", text
+        )
         self.assertIn(
             "war3map.j\t3\tInitTrig_Save\t事件\tgg_trg_Save\tTriggerRegisterPlayerEvent\tEVENT_PLAYER_LEAVE",
             text,
@@ -65,13 +71,15 @@ class ScriptTriggerRegistrationIndexTest(unittest.TestCase):
         # Given: comments and player-facing strings contain registration-like text.
         md = MapData(path="x.w3x", name="触发注册去噪图")
         md.scripts = {
-            "war3map.j": "\n".join((
-                "function Init takes nothing returns nothing",
-                "    // call TriggerAddAction(gg_trg_Fake, function Bad_Actions)",
-                '    call BJDebugMsg("TriggerRegisterPlayerEvent(gg_trg_Fake, Player(0), EVENT_PLAYER_LEAVE)")',
-                "    call TriggerAddAction(gg_trg_Real, function Real_Actions)",
-                "endfunction",
-            )),
+            "war3map.j": "\n".join(
+                (
+                    "function Init takes nothing returns nothing",
+                    "    // call TriggerAddAction(gg_trg_Fake, function Bad_Actions)",
+                    '    call BJDebugMsg("TriggerRegisterPlayerEvent(gg_trg_Fake, Player(0), EVENT_PLAYER_LEAVE)")',
+                    "    call TriggerAddAction(gg_trg_Real, function Real_Actions)",
+                    "endfunction",
+                )
+            ),
         }
 
         # When: the trigger registration index is built.

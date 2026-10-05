@@ -81,8 +81,10 @@ def export_resource_bodies(
         return _export_items(resolved_inventory, resource_dir, None, game_data_source)
     try:
         with source_context as source:
-            return _export_items(resolved_inventory, resource_dir, source, game_data_source)
-    except (OSError, ValueError, struct.error):
+            return _export_items(
+                resolved_inventory, resource_dir, source, game_data_source
+            )
+    except OSError, ValueError, struct.error:
         return _export_items(resolved_inventory, resource_dir, None, game_data_source)
 
 
@@ -90,13 +92,17 @@ def format_asset_body_manifest(report: AssetBodyExportReport) -> str:
     """Format copied body status as TSV."""
     rows = ["路径\t导出相对路径\t字节\t状态\t来源"]
     for item in report.items:
-        rows.append("\t".join((
-            _tsv(item.path),
-            _tsv(item.exported_path),
-            str(item.size),
-            _tsv(item.status),
-            _tsv(item.source),
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    _tsv(item.path),
+                    _tsv(item.exported_path),
+                    str(item.size),
+                    _tsv(item.status),
+                    _tsv(item.source),
+                )
+            )
+        )
     return "\n".join(rows) + "\n"
 
 
@@ -148,16 +154,18 @@ def _export_one(
         return AssetBodyExport(path, "", 0, "源不可读", source_label)
     try:
         data = source.read_file(path)
-    except (FileNotFoundError, KeyError):
+    except FileNotFoundError, KeyError:
         return AssetBodyExport(path, "", 0, "源内缺失", source_label)
-    except (OSError, ValueError, struct.error):
+    except OSError, ValueError, struct.error:
         return AssetBodyExport(path, "", 0, "读取失败", source_label)
     result = write_bytes(resource_dir, f"{_BODY_DIR}/{rel}", data)
     if result.status is SafeWriteStatus.UNSAFE:
         return AssetBodyExport(path, "", 0, "路径不安全", source_label)
     if result.status is SafeWriteStatus.FAILED:
         return AssetBodyExport(path, "", 0, "写入失败", source_label)
-    return AssetBodyExport(path, f"{_BODY_DIR}/{rel}", len(data), "已导出", source_label)
+    return AssetBodyExport(
+        path, f"{_BODY_DIR}/{rel}", len(data), "已导出", source_label
+    )
 
 
 def _is_referenced_object_icon(item: ResourceInventoryItem) -> bool:
@@ -169,7 +177,7 @@ def _open_source(md: MapData) -> ContextManager[_ReadableSource] | None:
         return nullcontext(_DirectorySource(md.path))
     try:
         return open_map_source(md)
-    except (OSError, ValueError, struct.error):
+    except OSError, ValueError, struct.error:
         return None
 
 

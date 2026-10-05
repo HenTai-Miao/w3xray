@@ -35,7 +35,10 @@ def _encode_tsv_cell(value: str) -> str:
 
 def _starts_spreadsheet_formula(value: str) -> bool:
     for character in value:
-        if character.isspace() or unicodedata.category(character) in _IGNORABLE_CATEGORIES:
+        if (
+            character.isspace()
+            or unicodedata.category(character) in _IGNORABLE_CATEGORIES
+        ):
             continue
         return character in _FORMULA_PREFIXES
     return False

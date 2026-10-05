@@ -1,4 +1,5 @@
 """对象浏览筛选的后台计算层测试。"""
+
 import unittest
 
 from w3xtool.api import GameObject, MapData
@@ -55,8 +56,12 @@ class TestObjectFilter(unittest.TestCase):
         result = filter_objects_by_query(md, "")
 
         # Then: missing categories are represented as empty lists for the GUI.
-        self.assertEqual([obj.name for obj in result.results_by_category["物品"]], ["木头"])
-        self.assertEqual([obj.name for obj in result.results_by_category["可破坏物"]], ["树木"])
+        self.assertEqual(
+            [obj.name for obj in result.results_by_category["物品"]], ["木头"]
+        )
+        self.assertEqual(
+            [obj.name for obj in result.results_by_category["可破坏物"]], ["树木"]
+        )
         self.assertEqual(result.results_by_category["技能"], [])
         self.assertEqual(result.results_by_category["装饰物"], [])
         self.assertEqual(result.results_by_category["增益"], [])

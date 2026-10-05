@@ -24,15 +24,17 @@ class _WtgSignature:
     item_position: int
 
 
-_WTG_SIGNATURES: Final[Mapping[str, _WtgSignature]] = MappingProxyType({
-    "createitem": _WtgSignature(0),
-    "createitemloc": _WtgSignature(0),
-    "unitadditembyid": _WtgSignature(1),
-    "unitadditembyidswapped": _WtgSignature(0),
-    "unitadditemtoslotbyid": _WtgSignature(1),
-    "additemtostock": _WtgSignature(1),
-    "additemtoallstock": _WtgSignature(0),
-})
+_WTG_SIGNATURES: Final[Mapping[str, _WtgSignature]] = MappingProxyType(
+    {
+        "createitem": _WtgSignature(0),
+        "createitemloc": _WtgSignature(0),
+        "unitadditembyid": _WtgSignature(1),
+        "unitadditembyidswapped": _WtgSignature(0),
+        "unitadditemtoslotbyid": _WtgSignature(1),
+        "additemtostock": _WtgSignature(1),
+        "additemtoallstock": _WtgSignature(0),
+    }
+)
 
 
 def build_wtg_item_relations(md: MapData) -> tuple[ItemRelation, ...]:
@@ -77,7 +79,9 @@ def build_wtg_item_relations(md: MapData) -> tuple[ItemRelation, ...]:
     return tuple(rows)
 
 
-def _walk_functions(nodes: Iterable[TriggerEcaFunction]) -> Iterator[TriggerEcaFunction]:
+def _walk_functions(
+    nodes: Iterable[TriggerEcaFunction],
+) -> Iterator[TriggerEcaFunction]:
     for node in nodes:
         yield node
         for parameter in node.parameters:
@@ -85,7 +89,9 @@ def _walk_functions(nodes: Iterable[TriggerEcaFunction]) -> Iterator[TriggerEcaF
         yield from _walk_functions(node.children)
 
 
-def _parameter_functions(parameter: TriggerEcaParameter) -> Iterator[TriggerEcaFunction]:
+def _parameter_functions(
+    parameter: TriggerEcaParameter,
+) -> Iterator[TriggerEcaFunction]:
     if parameter.nested_function is not None:
         yield from _walk_functions((parameter.nested_function,))
     if parameter.array_indexer is not None:
@@ -93,7 +99,10 @@ def _parameter_functions(parameter: TriggerEcaParameter) -> Iterator[TriggerEcaF
 
 
 def _fixed_item_code(parameter: TriggerEcaParameter) -> str | None:
-    if parameter.parameter_type != 0 or parameter.expected_type.casefold() != "itemcode":
+    if (
+        parameter.parameter_type != 0
+        or parameter.expected_type.casefold() != "itemcode"
+    ):
         return None
     if parameter.nested_function is not None or parameter.array_indexer is not None:
         return None

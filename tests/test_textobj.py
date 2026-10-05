@@ -2,6 +2,7 @@
 
 依据特征字段 + 代码首字母投票判类型；无单位/技能/科技信号则默认"物品"。
 """
+
 import unittest
 
 from w3xtool.textobj import classify, parse_text_objects

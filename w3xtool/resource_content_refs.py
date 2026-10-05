@@ -16,7 +16,19 @@ from .war3_encoding import decode_warcraft_string
 if TYPE_CHECKING:
     from .api import MapData
 
-_TEXT_BODY_EXTS: Final = {"txt", "ini", "wts", "fdf", "toc", "slk", "json", "plist", "skin", "ai", "mdl"}
+_TEXT_BODY_EXTS: Final = {
+    "txt",
+    "ini",
+    "wts",
+    "fdf",
+    "toc",
+    "slk",
+    "json",
+    "plist",
+    "skin",
+    "ai",
+    "mdl",
+}
 _MAX_SCAN_BYTES: Final = 2 * 1024 * 1024
 
 
@@ -66,21 +78,27 @@ def build_resource_content_references(md: "MapData") -> ResourceContentReference
         with source_context as source:
             for path in _text_body_paths(tuple(getattr(md, "all_files", ()) or ())):
                 _scan_one_body(source, path, refs, seen)
-    except (OSError, ValueError, struct.error):
+    except OSError, ValueError, struct.error:
         return ResourceContentReferenceReport(())
     return ResourceContentReferenceReport(tuple(refs))
 
 
-def format_resource_content_references_tsv(report: ResourceContentReferenceReport) -> str:
+def format_resource_content_references_tsv(
+    report: ResourceContentReferenceReport,
+) -> str:
     """Format second-level resource references as TSV."""
     rows = ["来源文件\t引用路径\t引用类型\t说明"]
     for item in report.items:
-        rows.append("\t".join((
-            _tsv(item.source_path),
-            _tsv(item.target_path),
-            _tsv(item.target_kind),
-            _tsv(item.detail),
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    _tsv(item.source_path),
+                    _tsv(item.target_path),
+                    _tsv(item.target_kind),
+                    _tsv(item.detail),
+                )
+            )
+        )
     return "\n".join(rows) + "\n"
 
 
@@ -92,7 +110,7 @@ def _scan_one_body(
 ) -> None:
     try:
         raw = source.read_file(path)[:_MAX_SCAN_BYTES]
-    except (KeyError, OSError, ValueError, struct.error):
+    except KeyError, OSError, ValueError, struct.error:
         return
     text = decode_warcraft_string(raw, allow_latin1=True)
     for target in find_resource_paths(text):
@@ -102,14 +120,16 @@ def _scan_one_body(
         if key in seen:
             continue
         seen.add(key)
-        refs.append(ResourceContentReference(path, target, resource_kind(target), "素材/配置文本内容"))
+        refs.append(
+            ResourceContentReference(
+                path, target, resource_kind(target), "素材/配置文本内容"
+            )
+        )
 
 
 def _text_body_paths(names: tuple[str, ...]) -> tuple[str, ...]:
     paths = {
-        _normalize_path(name)
-        for name in names
-        if _extension(name) in _TEXT_BODY_EXTS
+        _normalize_path(name) for name in names if _extension(name) in _TEXT_BODY_EXTS
     }
     return tuple(sorted(paths))
 
@@ -119,7 +139,7 @@ def _open_source(md: MapData) -> ContextManager[_ReadableSource] | None:
         return nullcontext(_DirectorySource(md.path))
     try:
         return open_map_source(md)
-    except (OSError, ValueError, struct.error):
+    except OSError, ValueError, struct.error:
         return None
 
 

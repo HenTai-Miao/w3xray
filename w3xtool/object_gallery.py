@@ -45,36 +45,55 @@ def build_object_gallery(
     on_category: Callable[[str], None],
 ) -> ObjectGallery:
     container = ctk.CTkFrame(
-        parent, width=620, fg_color=CARD, corner_radius=18,
-        border_width=1, border_color=BORDER,
+        parent,
+        width=620,
+        fg_color=CARD,
+        corner_radius=18,
+        border_width=1,
+        border_color=BORDER,
     )
     header = ctk.CTkFrame(container, fg_color="transparent")
     header.pack(fill="x", padx=14, pady=(10, 6))
     title_box = ctk.CTkFrame(header, fg_color="transparent")
     title_box.pack(side="left", fill="x", expand=True)
     ctk.CTkLabel(
-        title_box, text="对象档案馆", font=(FONT, 15, "bold"),
-        text_color=TEXT_STRONG, anchor="w",
+        title_box,
+        text="对象档案馆",
+        font=(FONT, 15, "bold"),
+        text_color=TEXT_STRONG,
+        anchor="w",
     ).pack(fill="x")
     ctk.CTkLabel(
-        title_box, text="单位 · 物品 · 技能 · 科技 · 可破坏物等",
-        font=(FONT, 10), text_color=SUBTLE, anchor="w",
+        title_box,
+        text="单位 · 物品 · 技能 · 科技 · 可破坏物等",
+        font=(FONT, 10),
+        text_color=SUBTLE,
+        anchor="w",
     ).pack(fill="x", pady=(1, 0))
     hint = ctk.CTkLabel(header, text="等待加载地图", font=(FONT, 11), text_color=SUBTLE)
     hint.pack(side="right")
 
     buttons: dict[str, ctk.CTkButton] = {}
     cat_bar = ctk.CTkFrame(
-        container, fg_color=PANEL, corner_radius=18,
-        border_width=1, border_color=BORDER,
+        container,
+        fg_color=PANEL,
+        corner_radius=18,
+        border_width=1,
+        border_color=BORDER,
     )
     cat_bar.pack(fill="x", padx=14, pady=(0, 7))
     for index, cat in enumerate(PARALLEL_CATS):
         btn = ctk.CTkButton(
-            cat_bar, text=cat, height=26, width=76,
-            font=(FONT, 12, "bold"), fg_color="transparent", hover_color=CARD_RAISED,
+            cat_bar,
+            text=cat,
+            height=26,
+            width=76,
+            font=(FONT, 12, "bold"),
+            fg_color="transparent",
+            hover_color=CARD_RAISED,
             text_color=CATEGORY_COLORS.get(cat, TEXT),
-            corner_radius=13, command=lambda category=cat: on_category(category),
+            corner_radius=13,
+            command=lambda category=cat: on_category(category),
         )
         btn.grid(row=index // 4, column=index % 4, sticky="ew", padx=3, pady=3)
         cat_bar.grid_columnconfigure(index % 4, weight=1, uniform="object_category")

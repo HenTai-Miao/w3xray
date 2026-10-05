@@ -56,19 +56,23 @@ def format_script_global_index_tsv(index: ScriptGlobalIndex) -> str:
     """Format JASS global variables as TSV."""
     rows = ["来源\t行号\t名称\t类型\t数组\t常量\t初值\t字符串\t对象码\t用途\t摘要"]
     for item in index.globals:
-        rows.append("\t".join((
-            _tsv(item.source),
-            str(item.line),
-            _tsv(item.name),
-            _tsv(item.value_type),
-            _yes_no(item.is_array),
-            _yes_no(item.is_constant),
-            _tsv(item.initial),
-            _tsv(item.string_value),
-            _tsv("; ".join(item.object_codes)),
-            _tsv(item.purpose),
-            _tsv(item.summary),
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    _tsv(item.source),
+                    str(item.line),
+                    _tsv(item.name),
+                    _tsv(item.value_type),
+                    _yes_no(item.is_array),
+                    _yes_no(item.is_constant),
+                    _tsv(item.initial),
+                    _tsv(item.string_value),
+                    _tsv("; ".join(item.object_codes)),
+                    _tsv(item.purpose),
+                    _tsv(item.summary),
+                )
+            )
+        )
     return "\n".join(rows) + "\n"
 
 
@@ -116,8 +120,6 @@ def _parse_global(source: str, line_no: int, line: str) -> ScriptGlobal | None:
         purpose=_purpose(name, value_type, is_array, string_value, object_codes),
         summary=line[:160],
     )
-
-
 
 
 def _first_string(value: str) -> str:
@@ -178,7 +180,9 @@ def _looks_like_resource_path(value: str) -> bool:
 
 def _looks_like_save_key(name: str, value: str) -> bool:
     lowered = f"{name} {value}".lower()
-    if any(word in lowered for word in ("save", "cache", "key", "load", "slot", "password")):
+    if any(
+        word in lowered for word in ("save", "cache", "key", "load", "slot", "password")
+    ):
         return True
     return "." in value and not _looks_like_resource_path(value)
 

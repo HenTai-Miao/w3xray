@@ -108,12 +108,16 @@ def format_resource_inventory_tsv(inventory: ResourceInventory) -> str:
     """Format resource inventory as TSV for spreadsheets and diff reviews."""
     rows = ["路径\t类型\t状态\t来源"]
     for item in inventory.items:
-        rows.append("\t".join((
-            _tsv(item.path),
-            _tsv(item.kind),
-            _tsv(item.status),
-            _tsv(_SOURCE_JOIN.join(item.sources)),
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    _tsv(item.path),
+                    _tsv(item.kind),
+                    _tsv(item.status),
+                    _tsv(_SOURCE_JOIN.join(item.sources)),
+                )
+            )
+        )
     return "\n".join(rows) + "\n"
 
 
@@ -140,8 +144,12 @@ def _add_import_sources(
     for entry in summary.entries:
         candidates = tuple(_normalize_path(path) for path in entry.candidate_paths)
         selected = next((path for path in candidates if path in resolved), None)
-        selected_path = selected or (candidates[0] if candidates else _normalize_path(entry.path))
-        sources_by_path.setdefault(selected_path, set()).add(f"导入表 {entry.type_label}")
+        selected_path = selected or (
+            candidates[0] if candidates else _normalize_path(entry.path)
+        )
+        sources_by_path.setdefault(selected_path, set()).add(
+            f"导入表 {entry.type_label}"
+        )
 
     for path in summary.missing_paths:
         normalized = _normalize_path(path)
@@ -203,9 +211,8 @@ def _kind_for_path(path: str) -> str:
 
 
 def _looks_like_icon(path: str, name: str) -> bool:
-    return (
-        "\\commandbuttons\\" in path
-        or name.startswith(("btn", "disbtn", "pasbtn", "upg"))
+    return "\\commandbuttons\\" in path or name.startswith(
+        ("btn", "disbtn", "pasbtn", "upg")
     )
 
 

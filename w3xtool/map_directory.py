@@ -69,12 +69,15 @@ def _sorted_existing_paths(paths: Iterable[str]) -> list[str]:
     existing = []
     for path in set(paths):
         try:
-            modified_at = os.path.getmtime(path)
+            details = os.stat(path)
         except OSError:
             continue
-        existing.append((modified_at, path))
+        # Downloads can preserve an older source mtime. Prefer the file-system
+        # arrival time (st_birthtime where available, st_ctime on Windows).
+        downloaded_at = getattr(details, "st_birthtime", details.st_ctime)
+        existing.append((downloaded_at, path))
     existing.sort(key=lambda item: (-item[0], item[1]))
-    return [path for _modified_at, path in existing]
+    return [path for _downloaded_at, path in existing]
 
 
 def _worker_count(file_count: int, configured: int | None) -> int:

@@ -122,7 +122,9 @@ def test_temp_cleanup_cannot_race_component_check_with_symlink_swap(
     marker = target / "keep.txt"
     marker.write_text("keep", encoding="utf-8")
     base = temp_root / "w3xtool提取"
-    original_check = getattr(archive_export, "_reject_unsafe_temp_component", lambda _path: None)
+    original_check = getattr(
+        archive_export, "_reject_unsafe_temp_component", lambda _path: None
+    )
     swapped = False
 
     def swap_after_check(path: str) -> None:

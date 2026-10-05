@@ -1,4 +1,5 @@
 """Project-local PyInstaller dist builder."""
+
 from __future__ import annotations
 
 import os
@@ -86,10 +87,9 @@ def find_project_root(start: Path) -> Path:
     """Find the repository root that owns the PyInstaller spec."""
     first = start if start.is_dir() else start.parent
     for candidate in (first, *first.parents):
-        if (
-            (candidate / SPEC_FILE).is_file()
-            and (candidate / "pyproject.toml").is_file()
-        ):
+        if (candidate / SPEC_FILE).is_file() and (
+            candidate / "pyproject.toml"
+        ).is_file():
             return candidate
     raise ProjectRootNotFoundError(start=start)
 
@@ -133,7 +133,9 @@ def build_pyinstaller_command(
     )
 
 
-def expected_artifact_path(config: DistBuildConfig, *, system: str | None = None) -> Path:
+def expected_artifact_path(
+    config: DistBuildConfig, *, system: str | None = None
+) -> Path:
     """Return the executable path users should launch after a successful build."""
     match config.format:
         case DistFormat.ONEFILE:

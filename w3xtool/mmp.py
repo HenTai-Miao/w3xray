@@ -68,7 +68,7 @@ class _Reader:
     def color_bgra(self) -> tuple[tuple[int, int, int], int]:
         if self._pos + 4 > len(self._data):
             raise IndexError("color 越界")
-        blue, green, red, alpha = self._data[self._pos:self._pos + 4]
+        blue, green, red, alpha = self._data[self._pos : self._pos + 4]
         self._pos += 4
         return (red, green, blue), alpha
 

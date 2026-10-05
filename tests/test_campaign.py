@@ -36,7 +36,12 @@ def test_reference_campaign_fixture_hash_is_pinned() -> None:
 def test_campaign_loads_shared_objects_and_nested_real_map(campaign: MapData) -> None:
     # Given: the StormLib campaign contains a shared w3a and one nested map.
     # When: the normal high-level loader parses all campaign layers.
-    shared = [obj for values in campaign.objects.values() for obj in values if obj.ext == "w3a"]
+    shared = [
+        obj
+        for values in campaign.objects.values()
+        for obj in values
+        if obj.ext == "w3a"
+    ]
 
     # Then: both the top-level shared layer and nested map are available.
     assert [obj.obj_id for obj in shared] == ["Amls"]
@@ -45,7 +50,9 @@ def test_campaign_loads_shared_objects_and_nested_real_map(campaign: MapData) ->
     assert campaign.sub_maps[0].obj_index["AHwe"].name == "召唤水元素"
 
 
-def test_campaign_nested_map_keeps_real_slk_fields_and_references(campaign: MapData) -> None:
+def test_campaign_nested_map_keeps_real_slk_fields_and_references(
+    campaign: MapData,
+) -> None:
     # Given: the nested map contains a real wc3libs AbilityData SLK table.
     ability = campaign.sub_maps[0].obj_index["AHwe"]
 
@@ -78,7 +85,9 @@ def test_campaign_recursive_export_includes_shared_and_nested_files(
     assert (output / "Maps" / "Chapter1" / "Units" / "AbilityData.slk").is_file()
 
 
-def test_campaign_child_identity_and_terrain_reopen_owned_archive(campaign: MapData) -> None:
+def test_campaign_child_identity_and_terrain_reopen_owned_archive(
+    campaign: MapData,
+) -> None:
     # Given: a loaded child whose logical path does not exist on the host filesystem.
     child = campaign.sub_maps[0]
 
@@ -133,7 +142,9 @@ def test_campaign_child_loading_does_not_reenter_path_loader() -> None:
     load_from_path = map_loader.load_map
 
     # When: recursive path loading is rejected while the campaign is parsed.
-    with patch.object(map_loader, "load_map", side_effect=AssertionError("path reentry")):
+    with patch.object(
+        map_loader, "load_map", side_effect=AssertionError("path reentry")
+    ):
         loaded = load_from_path(str(_CAMPAIGN))
 
     # Then: child bytes are parsed directly through their retained source.

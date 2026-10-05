@@ -1,4 +1,5 @@
 """地图智能审计：把已解析 MapData 转成只读告警/提示。"""
+
 import unittest
 from types import SimpleNamespace
 
@@ -69,7 +70,9 @@ class AuditReportTest(unittest.TestCase):
             "单位": [_obj("单位", "H001"), _obj("单位", "hpea", custom=False)],
             "技能": [_obj("技能", "A001")],
         }
-        md.scripts = {"war3map.j": "function main takes nothing returns nothing\nendfunction"}
+        md.scripts = {
+            "war3map.j": "function main takes nothing returns nothing\nendfunction"
+        }
         md.all_files = ["war3map.w3i", "war3map.j", "war3map.w3u"]
 
         # When: the audit report is built.
@@ -91,8 +94,12 @@ class AuditReportTest(unittest.TestCase):
         report = build_audit_report(md)
 
         # Then: A/B/C risks are available in one audit surface.
-        self.assertEqual(report.by_code["resources.unreferenced"].severity, AuditSeverity.WARNING)
-        self.assertEqual(report.by_code["compat.warnings"].severity, AuditSeverity.WARNING)
+        self.assertEqual(
+            report.by_code["resources.unreferenced"].severity, AuditSeverity.WARNING
+        )
+        self.assertEqual(
+            report.by_code["compat.warnings"].severity, AuditSeverity.WARNING
+        )
 
     def test_summarizes_order_collisions(self):
         # Given: duplicated object order strings.
@@ -124,7 +131,9 @@ class AuditReportTest(unittest.TestCase):
         report = build_audit_report(md)
 
         # Then: the order collision is surfaced as a warning.
-        self.assertEqual(report.by_code["orders.collisions"].severity, AuditSeverity.WARNING)
+        self.assertEqual(
+            report.by_code["orders.collisions"].severity, AuditSeverity.WARNING
+        )
 
     def test_summarizes_script_diagnostics(self):
         # Given: a script with a local-player risk.
@@ -135,7 +144,9 @@ class AuditReportTest(unittest.TestCase):
         report = build_audit_report(md)
 
         # Then: script diagnostics are summarized.
-        self.assertEqual(report.by_code["script.diagnostics"].severity, AuditSeverity.WARNING)
+        self.assertEqual(
+            report.by_code["script.diagnostics"].severity, AuditSeverity.WARNING
+        )
 
     def test_summarizes_crash_risks(self):
         # Given: an object contains a known crash-prone Chain Lightning setup.
@@ -173,7 +184,9 @@ class AuditReportTest(unittest.TestCase):
         report = build_audit_report(md)
 
         # Then: cheat/debug residue is summarized.
-        self.assertEqual(report.by_code["cheats.residue"].severity, AuditSeverity.WARNING)
+        self.assertEqual(
+            report.by_code["cheats.residue"].severity, AuditSeverity.WARNING
+        )
 
     def test_reports_custom_gameplay_constants_file(self):
         # Given: a map includes gameplay constants overrides.

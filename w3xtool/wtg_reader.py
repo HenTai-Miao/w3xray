@@ -39,7 +39,7 @@ class WtgReader:
         end = self._data.find(b"\x00", self._pos)
         if end < 0:
             raise WtgReadError(self._pos, "missing string terminator")
-        raw = self._data[self._pos:end]
+        raw = self._data[self._pos : end]
         self._pos = end + 1
         return decode_warcraft_string(raw, allow_latin1=True)
 

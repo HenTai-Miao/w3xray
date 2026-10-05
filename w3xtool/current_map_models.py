@@ -97,7 +97,11 @@ def resolve_current_map(
             case EvidenceKind.DIRECT_OPEN | EvidenceKind.EXPLICIT_ARGUMENT:
                 if observation.process_id in game_process_ids:
                     direct_paths.add(path)
-            case EvidenceKind.WGC_REFERENCE | EvidenceKind.RECENT_CACHE | EvidenceKind.GAME_LOG:
+            case (
+                EvidenceKind.WGC_REFERENCE
+                | EvidenceKind.RECENT_CACHE
+                | EvidenceKind.GAME_LOG
+            ):
                 hint_paths.add(path)
             case unreachable:
                 assert_never(unreachable)

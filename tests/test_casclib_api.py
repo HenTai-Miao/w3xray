@@ -45,7 +45,9 @@ class FakeNativeLibrary:
         self.CascGetFileSize64 = NativeFunction(self._file_size)
         self.CascReadFile = NativeFunction(self._read_file)
         self.CascCloseFile = NativeFunction(lambda _handle: self.close_ok)
-        self.CascFindFirstFile = NativeFunction(lambda _storage, _mask, _data, _listfile: -1)
+        self.CascFindFirstFile = NativeFunction(
+            lambda _storage, _mask, _data, _listfile: -1
+        )
         self.CascFindNextFile = NativeFunction(lambda _search, _data: False)
         self.CascFindClose = NativeFunction(lambda _search: self.close_ok)
         self.GetCascError = NativeFunction(lambda: self.error)
@@ -165,7 +167,9 @@ def test_open_storage_failure_includes_native_error() -> None:
     ("error_code", "error_type"),
     [(2, CascFileNotFoundError), (1005, CascNativeError)],
 )
-def test_open_file_distinguishes_missing_from_native_failure(error_code: int, error_type: type[OSError]) -> None:
+def test_open_file_distinguishes_missing_from_native_failure(
+    error_code: int, error_type: type[OSError]
+) -> None:
     # Given: CascOpenFile rejects an internal path.
     dll = FakeNativeLibrary()
     dll.open_file_ok = False

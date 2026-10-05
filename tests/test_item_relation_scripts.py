@@ -18,21 +18,27 @@ def _item(object_id: str, name: str) -> GameObject:
     return GameObject("物品", "w3t", object_id, object_id, name, True)
 
 
-def _map_with_items(*items: GameObject, scripts: dict[str, str] | None = None) -> MapData:
+def _map_with_items(
+    *items: GameObject, scripts: dict[str, str] | None = None
+) -> MapData:
     md = MapData(path="x.w3x", name="奖励图", scripts=scripts or {})
     md.objects = {"物品": list(items)}
     md.obj_index = {item.obj_id: item for item in items}
     return md
 
 
-def test_fixed_reward_calls_keep_item_source_function_line_recipient_and_location() -> None:
+def test_fixed_reward_calls_keep_item_source_function_line_recipient_and_location() -> (
+    None
+):
     # Given: fixed JASS recipient and coordinate reward calls.
-    script = "\n".join((
-        "function Reward takes nothing returns nothing",
-        "    call UnitAddItemById(GetTriggerUnit(), 'I001')",
-        "    call CreateItem('I002', 128.0, -64.0)",
-        "endfunction",
-    ))
+    script = "\n".join(
+        (
+            "function Reward takes nothing returns nothing",
+            "    call UnitAddItemById(GetTriggerUnit(), 'I001')",
+            "    call CreateItem('I002', 128.0, -64.0)",
+            "endfunction",
+        )
+    )
     md = _map_with_items(
         _item("I001", "单位奖励"),
         _item("I002", "地面奖励"),
@@ -43,7 +49,9 @@ def test_fixed_reward_calls_keep_item_source_function_line_recipient_and_locatio
     rows = build_script_item_relations(md)
 
     # Then: item identity, source, line, recipient, and static coordinates survive.
-    assert {(row.item.object_id, row.evidence.source, row.evidence.line) for row in rows} == {
+    assert {
+        (row.item.object_id, row.evidence.source, row.evidence.line) for row in rows
+    } == {
         ("I001", "war3map.j", 2),
         ("I002", "war3map.j", 3),
     }
@@ -56,12 +64,14 @@ def test_fixed_reward_calls_keep_item_source_function_line_recipient_and_locatio
 
 def test_lua_fourcc_reward_is_confirmed_without_treating_strings_as_calls() -> None:
     # Given: one real Lua call and one call-shaped display string.
-    script = "\n".join((
-        "function Reward()",
-        '    UnitAddItemById(GetTriggerUnit(), FourCC("I003"))',
-        '    BJDebugMsg("CreateItem(FourCC(\\"I999\\"), 0, 0)")',
-        "end",
-    ))
+    script = "\n".join(
+        (
+            "function Reward()",
+            '    UnitAddItemById(GetTriggerUnit(), FourCC("I003"))',
+            '    BJDebugMsg("CreateItem(FourCC(\\"I999\\"), 0, 0)")',
+            "end",
+        )
+    )
     md = _map_with_items(_item("I003", "Lua奖励"), scripts={"war3map.lua": script})
 
     # When: script reward evidence is indexed.
@@ -74,15 +84,17 @@ def test_lua_fourcc_reward_is_confirmed_without_treating_strings_as_calls() -> N
 
 def test_death_event_context_is_inferred_not_claimed_as_direct_monster_drop() -> None:
     # Given: a reward action is exactly joined to a death-event trigger handle.
-    script = "\n".join((
-        "function Reward takes nothing returns nothing",
-        "    call UnitAddItemById(GetTriggerUnit(), 'I001')",
-        "endfunction",
-        "function InitReward takes nothing returns nothing",
-        "    call TriggerRegisterAnyUnitEventBJ(t, EVENT_PLAYER_UNIT_DEATH)",
-        "    call TriggerAddAction(t, function Reward)",
-        "endfunction",
-    ))
+    script = "\n".join(
+        (
+            "function Reward takes nothing returns nothing",
+            "    call UnitAddItemById(GetTriggerUnit(), 'I001')",
+            "endfunction",
+            "function InitReward takes nothing returns nothing",
+            "    call TriggerRegisterAnyUnitEventBJ(t, EVENT_PLAYER_UNIT_DEATH)",
+            "    call TriggerAddAction(t, function Reward)",
+            "endfunction",
+        )
+    )
     md = _map_with_items(_item("I001", "死亡奖励"), scripts={"war3map.j": script})
 
     # When: registration context and reward calls are joined.
@@ -96,12 +108,14 @@ def test_death_event_context_is_inferred_not_claimed_as_direct_monster_drop() ->
 
 def test_dynamic_or_unrelated_item_calls_never_become_confirmed_rewards() -> None:
     # Given: comments, a handle-based API, an unknown variable, and a dynamic expression.
-    script = "\n".join((
-        "// call UnitAddItemById(u, 'I001')",
-        "call UnitAddItem(u, CreateItem('I002', 0, 0))",
-        "call UnitAddItemById(u, rewardType)",
-        "call UnitAddItemById(u, PickItem('I003'))",
-    ))
+    script = "\n".join(
+        (
+            "// call UnitAddItemById(u, 'I001')",
+            "call UnitAddItem(u, CreateItem('I002', 0, 0))",
+            "call UnitAddItemById(u, rewardType)",
+            "call UnitAddItemById(u, PickItem('I003'))",
+        )
+    )
     md = _map_with_items(_item("I003", "动态线索"), scripts={"war3map.j": script})
 
     # When: bounded call signatures are applied.
@@ -122,7 +136,9 @@ def test_wtg_fixed_item_parameter_keeps_recursive_trigger_ordinal_and_offset() -
         name="CreateItemLoc",
         is_enabled=True,
         parameters=(
-            TriggerEcaParameter(0, "I777", expected_type="itemcode", source_offset=0x128),
+            TriggerEcaParameter(
+                0, "I777", expected_type="itemcode", source_offset=0x128
+            ),
             TriggerEcaParameter(2, "GetRectCenter", expected_type="location"),
         ),
         children=(),

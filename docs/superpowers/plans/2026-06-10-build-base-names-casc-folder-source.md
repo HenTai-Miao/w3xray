@@ -37,6 +37,7 @@
 
 只用合成数据，不读真实游戏文件，因此在经典 1.27（甚至无游戏）环境下也能跑。
 """
+
 import os
 
 import pytest
@@ -178,8 +179,8 @@ class DirSource:
         if not os.path.isdir(root):
             raise FileNotFoundError(f"--from-dir 目录不存在: {root}")
         self.root = root
-        self._by_rel = {}        # 规范化相对路径 -> 实际磁盘绝对路径
-        self._by_base = {}       # 文件名(小写) -> [规范化相对路径, ...]
+        self._by_rel = {}  # 规范化相对路径 -> 实际磁盘绝对路径
+        self._by_base = {}  # 文件名(小写) -> [规范化相对路径, ...]
         for dirpath, _dirs, files in os.walk(root):
             for fn in files:
                 full = os.path.join(dirpath, fn)
@@ -210,7 +211,9 @@ class DirSource:
         if bcands:
             best = min(bcands, key=len)
             if len(bcands) > 1:
-                print(f"  [warning] {name} 按文件名有 {len(bcands)} 个候选，取最短: {best}")
+                print(
+                    f"  [warning] {name} 按文件名有 {len(bcands)} 个候选，取最短: {best}"
+                )
             return self._by_rel[best]
         return None
 
@@ -373,13 +376,21 @@ if __name__ == "__main__":
     import argparse
 
     p = argparse.ArgumentParser(
-        description="从游戏数据生成原版对象内置数据（base_names/base_objects/westrings）")
-    p.add_argument("--from-dir", dest="from_dir",
-                   help="从已提取的散文件夹读（CASC/重制版：先用 CascView 或 "
-                        "casc-extract 导出，再指向该文件夹）")
+        description="从游戏数据生成原版对象内置数据（base_names/base_objects/westrings）"
+    )
+    p.add_argument(
+        "--from-dir",
+        dest="from_dir",
+        help="从已提取的散文件夹读（CASC/重制版：先用 CascView 或 "
+        "casc-extract 导出，再指向该文件夹）",
+    )
     p.add_argument("--game", help="经典 MPQ 安装目录（默认硬编码 GAME 路径）")
-    p.add_argument("--out-dir", dest="out_dir", default="w3xtool",
-                   help="生成的 .py 写到哪个目录（默认 w3xtool）")
+    p.add_argument(
+        "--out-dir",
+        dest="out_dir",
+        default="w3xtool",
+        help="生成的 .py 写到哪个目录（默认 w3xtool）",
+    )
     main(p.parse_args())
 ```
 
@@ -410,7 +421,13 @@ git commit -m "feat: build_base_names 加 --from-dir/--game/--out-dir 与数据�
 
 ```python
 SLK_GROUPS = {
-    "单位": ["UnitData.slk", "UnitBalance.slk", "UnitUI.slk", "UnitWeapons.slk", "UnitAbilities.slk"],
+    "单位": [
+        "UnitData.slk",
+        "UnitBalance.slk",
+        "UnitUI.slk",
+        "UnitWeapons.slk",
+        "UnitAbilities.slk",
+    ],
     "物品": ["ItemData.slk"],
     "技能": ["AbilityData.slk"],
     "科技": ["UpgradeData.slk"],
@@ -446,8 +463,11 @@ WESTRING_FILES = [r"UI\WorldEditStrings.txt", r"UI\WorldEditGameStrings.txt"]
 def report_dir_coverage(src):
     """文件夹模式：打印关键文件找到/未找到清单，便于排查重制版布局差异。"""
     slk = ["Units\\" + f for fs in SLK_GROUPS.values() for f in fs]
-    groups = [("名称(Strings/Func)", FILES), ("基础字段(SLK)", slk),
-              ("编辑器字符串", WESTRING_FILES)]
+    groups = [
+        ("名称(Strings/Func)", FILES),
+        ("基础字段(SLK)", slk),
+        ("编辑器字符串", WESTRING_FILES),
+    ]
     print("\n[--from-dir 覆盖报告]")
     for label, files in groups:
         missing = [f for f in files if not src.has_file(f)]
@@ -514,16 +534,17 @@ def test_folder_mode_end_to_end(tmp_path):
     # 合成一个最小的「游戏数据文件夹」
     units = tmp_path / "src" / "Units"
     units.mkdir(parents=True)
-    (units / "HumanUnitStrings.txt").write_text(
-        "[hfoo]\nName=步兵\n", encoding="utf-8")
+    (units / "HumanUnitStrings.txt").write_text("[hfoo]\nName=步兵\n", encoding="utf-8")
     (units / "ItemData.slk").write_text(
         'ID;PWIDTH\nID;Y;K"code";X\nC;Y2;K"ratf"\nID;Y;K"goldcost";X\nC;X2;K200\nE\n',
-        encoding="utf-8")
+        encoding="utf-8",
+    )
 
     out = tmp_path / "out"
     out.mkdir()
     args = types.SimpleNamespace(
-        from_dir=str(tmp_path / "src"), game=None, out_dir=str(out))
+        from_dir=str(tmp_path / "src"), game=None, out_dir=str(out)
+    )
     bbn.main(args)
 
     names_py = (out / "base_names.py").read_text(encoding="utf-8")

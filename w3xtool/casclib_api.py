@@ -62,7 +62,9 @@ class CascFileNotFoundError(FileNotFoundError):
 
     @override
     def __str__(self) -> str:
-        return f"CASC file not found: {self.name} (native error={self.native_error_code})"
+        return (
+            f"CASC file not found: {self.name} (native error={self.native_error_code})"
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,7 +105,11 @@ class CascLibLoadError(OSError):
 
     @override
     def __str__(self) -> str:
-        suffix = f" (native error={self.native_error_code})" if self.native_error_code else ""
+        suffix = (
+            f" (native error={self.native_error_code})"
+            if self.native_error_code
+            else ""
+        )
         return f"{self.reason}: {self.path}{suffix}"
 
 
@@ -133,7 +139,11 @@ class CtypesCascLibApi:
 
     def _bind_signatures(self) -> None:
         handle_pointer = ctypes.POINTER(ctypes.c_void_p)
-        self._library.CascOpenStorage.argtypes = [ctypes.c_wchar_p, ctypes.c_uint32, handle_pointer]
+        self._library.CascOpenStorage.argtypes = [
+            ctypes.c_wchar_p,
+            ctypes.c_uint32,
+            handle_pointer,
+        ]
         self._library.CascOpenStorage.restype = ctypes.c_bool
         self._library.CascCloseStorage.argtypes = [ctypes.c_void_p]
         self._library.CascCloseStorage.restype = ctypes.c_bool
@@ -186,12 +196,16 @@ class CtypesCascLibApi:
             error_code = self._native_error()
             if error_code == ERROR_FILE_NOT_FOUND:
                 raise CascFileNotFoundError(name=name, native_error_code=error_code)
-            raise CascNativeError(operation="CascOpenFile", native_error_code=error_code)
+            raise CascNativeError(
+                operation="CascOpenFile", native_error_code=error_code
+            )
         return _handle_value(handle, "CascOpenFile", self._native_error())
 
     def file_size(self, handle: int) -> int:
         size = ctypes.c_uint64()
-        if not self._library.CascGetFileSize64(ctypes.c_void_p(handle), ctypes.byref(size)):
+        if not self._library.CascGetFileSize64(
+            ctypes.c_void_p(handle), ctypes.byref(size)
+        ):
             raise self._error("CascGetFileSize64")
         if size.value > MAX_CASC_FILE_SIZE:
             raise CascFileTooLargeError(size=size.value, limit=MAX_CASC_FILE_SIZE)
@@ -215,7 +229,7 @@ class CtypesCascLibApi:
                 actual=bytes_read.value,
                 native_error_code=self._native_error(),
             )
-        return buffer.raw[:bytes_read.value]
+        return buffer.raw[: bytes_read.value]
 
     def close_file(self, handle: int) -> None:
         if not self._library.CascCloseFile(ctypes.c_void_p(handle)):
@@ -259,7 +273,9 @@ class CtypesCascLibApi:
         return self._get_casc_error()
 
     def _error(self, operation: str) -> CascNativeError:
-        return CascNativeError(operation=operation, native_error_code=self._native_error())
+        return CascNativeError(
+            operation=operation, native_error_code=self._native_error()
+        )
 
 
 def default_dll_path() -> Path:
@@ -273,15 +289,21 @@ def default_dll_path() -> Path:
 
 def _load_library(path: Path) -> ctypes.CDLL:
     if sys.platform != "win32":
-        raise CascLibLoadError(path=path, reason="CascLib 仅支持 Windows", native_error_code=0)
+        raise CascLibLoadError(
+            path=path, reason="CascLib 仅支持 Windows", native_error_code=0
+        )
     if not path.is_file():
-        raise CascLibLoadError(path=path, reason="CascLib.dll 不存在", native_error_code=2)
+        raise CascLibLoadError(
+            path=path, reason="CascLib.dll 不存在", native_error_code=2
+        )
     try:
         return ctypes.WinDLL(str(path))
     except OSError as exc:
         code = getattr(exc, "winerror", None) or exc.errno or 0
         reason = "CascLib.dll 架构错误" if code == 193 else "CascLib.dll 加载失败"
-        raise CascLibLoadError(path=path, reason=reason, native_error_code=code) from exc
+        raise CascLibLoadError(
+            path=path, reason=reason, native_error_code=code
+        ) from exc
 
 
 def _handle_value(handle: ctypes.c_void_p, operation: str, error_code: int) -> int:

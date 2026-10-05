@@ -98,7 +98,9 @@ class KnowledgePackPreplacedTest(unittest.TestCase):
                 GameObject("可破坏物", "w3b", "D001", "LTlt", "木桶", True),
             ],
         }
-        md.obj_index = {obj.obj_id: obj for objects in md.objects.values() for obj in objects}
+        md.obj_index = {
+            obj.obj_id: obj for objects in md.objects.values() for obj in objects
+        }
         md.units = [
             Unit(
                 type_id="H001",
@@ -150,8 +152,13 @@ class KnowledgePackPreplacedTest(unittest.TestCase):
             )
             with open(os.path.join(out, "预放置装饰物.tsv"), encoding="utf-8") as f:
                 doodads = f.read()
-            self.assertIn("序号\t类型ID\t名称\tX\tY\tZ\t角度\t缩放\t状态\t生命\t掉落", doodads)
-            self.assertIn("7\tD001\t木桶\t32\t48\t0\t180\t1,1.25,0.75\t2\t80\tI001(力量指环):100%", doodads)
+            self.assertIn(
+                "序号\t类型ID\t名称\tX\tY\tZ\t角度\t缩放\t状态\t生命\t掉落", doodads
+            )
+            self.assertIn(
+                "7\tD001\t木桶\t32\t48\t0\t180\t1,1.25,0.75\t2\t80\tI001(力量指环):100%",
+                doodads,
+            )
 
 
 if __name__ == "__main__":

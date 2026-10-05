@@ -32,7 +32,9 @@ class TestLoadOptions(unittest.TestCase):
         # Then: only object browsing remains enabled.
         self.assertTrue(options[OBJECT_BROWSER_KEY])
         self.assertTrue(any(default_load_options().values()))
-        self.assertFalse(any(value for key, value in options.items() if key != OBJECT_BROWSER_KEY))
+        self.assertFalse(
+            any(value for key, value in options.items() if key != OBJECT_BROWSER_KEY)
+        )
 
 
 if __name__ == "__main__":

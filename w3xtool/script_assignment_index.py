@@ -59,18 +59,22 @@ def format_script_assignment_index_tsv(index: ScriptAssignmentIndex) -> str:
     """Format script assignments as TSV."""
     rows = ["来源\t行号\t函数\t变量\t索引\t右值\t字符串\t对象码\t用途\t摘要"]
     for item in index.assignments:
-        rows.append("\t".join((
-            _tsv(item.source),
-            str(item.line),
-            _tsv(item.function),
-            _tsv(item.variable),
-            _tsv(item.index),
-            _tsv(item.value),
-            _tsv(item.string_value),
-            _tsv("; ".join(item.object_codes)),
-            _tsv(item.purpose),
-            _tsv(item.summary),
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    _tsv(item.source),
+                    str(item.line),
+                    _tsv(item.function),
+                    _tsv(item.variable),
+                    _tsv(item.index),
+                    _tsv(item.value),
+                    _tsv(item.string_value),
+                    _tsv("; ".join(item.object_codes)),
+                    _tsv(item.purpose),
+                    _tsv(item.summary),
+                )
+            )
+        )
     return "\n".join(rows) + "\n"
 
 
@@ -129,8 +133,6 @@ def _assignment_row(
         purpose=_purpose(variable, index, value, string_value, object_codes),
         summary=_strip_comment(match.string).strip()[:160],
     )
-
-
 
 
 def _first_string(value: str) -> str:
@@ -195,7 +197,9 @@ def _looks_like_resource_path(value: str) -> bool:
 
 def _looks_like_save_key(variable: str, value: str) -> bool:
     lowered = f"{variable} {value}".lower()
-    if any(word in lowered for word in ("save", "cache", "key", "load", "slot", "password")):
+    if any(
+        word in lowered for word in ("save", "cache", "key", "load", "slot", "password")
+    ):
         return True
     return "." in value and not _looks_like_resource_path(value)
 

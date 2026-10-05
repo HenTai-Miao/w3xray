@@ -81,7 +81,9 @@ class ResourceInventoryTest(unittest.TestCase):
         # Given: a map has a custom UI TOC file and script code that loads it.
         md = MapData(path="x.w3x", name="x")
         md.all_files = ["UI\\FrameDef\\Custom.toc"]
-        md.scripts = {"war3map.j": 'call BlzLoadTOCFile("UI\\\\FrameDef\\\\Custom.toc")'}
+        md.scripts = {
+            "war3map.j": 'call BlzLoadTOCFile("UI\\\\FrameDef\\\\Custom.toc")'
+        }
 
         # When: the resource inventory is built.
         inventory = build_resource_inventory(md)
@@ -114,7 +116,9 @@ class ResourceInventoryTest(unittest.TestCase):
         # Then: configuration and AI bodies are visible to the knowledge pack.
         by_path = {item.path: item for item in inventory.items}
         self.assertEqual(by_path["war3mapimported\\settings.json"].kind, "配置")
-        self.assertEqual(by_path["war3mapimported\\settings.json"].status, "存在/已引用")
+        self.assertEqual(
+            by_path["war3mapimported\\settings.json"].status, "存在/已引用"
+        )
         self.assertEqual(by_path["war3mapimported\\profile.plist"].kind, "配置")
         self.assertEqual(by_path["ui\\skin\\anime.skin"].kind, "配置")
         self.assertEqual(by_path["ai scripts\\rush.ai"].kind, "AI脚本")

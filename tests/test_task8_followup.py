@@ -22,7 +22,9 @@ from w3xtool.map_identity import build_map_identity
 class _Archive:
     path = "attached.w3x"
 
-    def __init__(self, files: dict[str, bytes], raw: bytes = b"attached archive") -> None:
+    def __init__(
+        self, files: dict[str, bytes], raw: bytes = b"attached archive"
+    ) -> None:
         self.files = files
         self._data = raw
 

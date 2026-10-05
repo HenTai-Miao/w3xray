@@ -74,7 +74,9 @@ def _source(tmp_path: Path, name: str = "source.w3x") -> Path:
     return source
 
 
-def _write_owner_marker(directory: Path, content: bytes = _OWNER_MARKER_CONTENT) -> Path:
+def _write_owner_marker(
+    directory: Path, content: bytes = _OWNER_MARKER_CONTENT
+) -> Path:
     marker = directory / _OWNER_MARKER_NAME
     _ = marker.write_bytes(content)
     if os.name == "posix":
@@ -259,7 +261,9 @@ def test_stale_scan_does_not_fetch_entry_beyond_limit(
             captured = iter(tuple(entries))
         return _CountingScandir(captured, fetched)
 
-    monkeypatch.setattr("w3xtool.current_map_snapshot_cleanup.os.scandir", counting_scandir)
+    monkeypatch.setattr(
+        "w3xtool.current_map_snapshot_cleanup.os.scandir", counting_scandir
+    )
 
     # When: session-start cleanup performs its bounded stale scan.
     snapshot_module.cleanup_stale_current_map_snapshots()
@@ -300,7 +304,9 @@ def test_initial_temp_lstat_failure_removes_just_created_empty_directory(
             raise PermissionError("injected temp lstat failure")
         return real_lstat(path)
 
-    monkeypatch.setattr("w3xtool.current_map_snapshot_cleanup.os.lstat", failing_temp_lstat)
+    monkeypatch.setattr(
+        "w3xtool.current_map_snapshot_cleanup.os.lstat", failing_temp_lstat
+    )
 
     # When/Then: creation fails without relying on a captured directory identity.
     with pytest.raises(CurrentMapSnapshotError, match="create snapshot"):

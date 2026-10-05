@@ -75,8 +75,17 @@ def probe_game_processes() -> ProcessProbeReport:
         parser = posix_process_report
     else:
         tool = _find_absolute_tool(_POWERSHELL_PATHS)
-        command = () if tool is None else (
-            str(tool), "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", _POWERSHELL_SCRIPT,
+        command = (
+            ()
+            if tool is None
+            else (
+                str(tool),
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                _POWERSHELL_SCRIPT,
+            )
         )
         parser = windows_process_report
     if not command:
@@ -93,7 +102,9 @@ def probe_game_processes() -> ProcessProbeReport:
 
 def probe_open_map_files(processes: Iterable[GameProcess]) -> OpenMapProbeReport:
     """Find map files opened by at most eight supplied game process IDs."""
-    selected = tuple(islice((item for item in processes if item.pid > 0), MAX_PROBE_PIDS))
+    selected = tuple(
+        islice((item for item in processes if item.pid > 0), MAX_PROBE_PIDS)
+    )
     if not selected:
         return OpenMapProbeReport((), True)
     if os.name != "posix":
@@ -107,7 +118,14 @@ def probe_open_map_files(processes: Iterable[GameProcess]) -> OpenMapProbeReport
     tool = _find_absolute_tool(_LSOF_PATHS)
     if tool is None:
         return proc_report or OpenMapProbeReport((), False, ProbeIssue.TOOL_UNAVAILABLE)
-    command = (str(tool), "-nP", "-a", "-p", ",".join(str(item.pid) for item in selected), "-F0pn")
+    command = (
+        str(tool),
+        "-nP",
+        "-a",
+        "-p",
+        ",".join(str(item.pid) for item in selected),
+        "-F0pn",
+    )
     result = run_bounded_command(
         command,
         timeout_seconds=COMMAND_TIMEOUT_SECONDS,
@@ -116,7 +134,9 @@ def probe_open_map_files(processes: Iterable[GameProcess]) -> OpenMapProbeReport
     if result.issue is not None:
         return OpenMapProbeReport((), False, result.issue)
     try:
-        evidence = parse_lsof_open_maps(result.stdout, frozenset(item.pid for item in selected))
+        evidence = parse_lsof_open_maps(
+            result.stdout, frozenset(item.pid for item in selected)
+        )
     except ProbeParseError:
         return OpenMapProbeReport((), False, ProbeIssue.MALFORMED_OUTPUT)
     return OpenMapProbeReport(evidence, True)
@@ -135,7 +155,7 @@ def probe_proc_open_maps(
         fd_dir = proc_root / str(process.pid) / "fd"
         try:
             entries = os.scandir(fd_dir)
-        except (FileNotFoundError, NotADirectoryError):
+        except FileNotFoundError, NotADirectoryError:
             continue
         except PermissionError:
             denied = True
@@ -153,7 +173,9 @@ def probe_proc_open_maps(
                 if not path.is_absolute():
                     path = (fd_dir / path).resolve(strict=False)
                 if is_map_path(path):
-                    evidence.append(MapEvidence(path, EvidenceKind.DIRECT_OPEN, process.pid))
+                    evidence.append(
+                        MapEvidence(path, EvidenceKind.DIRECT_OPEN, process.pid)
+                    )
                     if len(evidence) >= MAX_OPEN_PATHS:
                         break
         if len(evidence) >= MAX_OPEN_PATHS:
@@ -187,8 +209,10 @@ def explicit_argument_evidence(
                 continue
             raw_path = tokens[index + 1]
             argument = Path(raw_path.replace("\\", os.sep))
-            candidates = (argument,) if argument.is_absolute() else tuple(
-                root / argument for root in resolved_roots
+            candidates = (
+                (argument,)
+                if argument.is_absolute()
+                else tuple(root / argument for root in resolved_roots)
             )
             for candidate in candidates:
                 try:
@@ -211,14 +235,16 @@ def explicit_argument_evidence(
 def posix_process_report(payload: bytes) -> ProcessProbeReport:
     try:
         return ProcessProbeReport(parse_posix_processes(payload)[:MAX_PROBE_PIDS], True)
-    except (UnicodeDecodeError, ProbeParseError):
+    except UnicodeDecodeError, ProbeParseError:
         return ProcessProbeReport((), False, ProbeIssue.MALFORMED_OUTPUT)
 
 
 def windows_process_report(payload: bytes) -> ProcessProbeReport:
     try:
-        return ProcessProbeReport(parse_windows_processes(payload)[:MAX_PROBE_PIDS], True)
-    except (UnicodeDecodeError, csv.Error, ProbeParseError):
+        return ProcessProbeReport(
+            parse_windows_processes(payload)[:MAX_PROBE_PIDS], True
+        )
+    except UnicodeDecodeError, csv.Error, ProbeParseError:
         return ProcessProbeReport((), False, ProbeIssue.MALFORMED_OUTPUT)
 
 

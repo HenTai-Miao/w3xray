@@ -1,9 +1,18 @@
 """GUI 总览/分析报告的纯数据格式化。"""
+
 import unittest
 
 from w3xtool.api import GameObject, MapData
-from w3xtool.gameconfig import GameConfiguration, GameConfigPlayer, NamedGameConfiguration
-from w3xtool.gui_reports import build_analysis_blocks, build_overview_blocks, format_blocks
+from w3xtool.gameconfig import (
+    GameConfiguration,
+    GameConfigPlayer,
+    NamedGameConfiguration,
+)
+from w3xtool.gui_reports import (
+    build_analysis_blocks,
+    build_overview_blocks,
+    format_blocks,
+)
 from w3xtool.imp import ImportEntry, ImportSummary
 from w3xtool.mmp import PreviewIcon, PreviewIconSummary
 from w3xtool.wtg import (
@@ -33,7 +42,9 @@ class GuiReportTest(unittest.TestCase):
             ],
             "技能": [],
         }
-        md.scripts = {"war3map.j": "function main takes nothing returns nothing\nendfunction"}
+        md.scripts = {
+            "war3map.j": "function main takes nothing returns nothing\nendfunction"
+        }
         md.script_features = ["对战开局"]
 
         # When: overview blocks are built for the editor-style dashboard.
@@ -90,7 +101,11 @@ class GuiReportTest(unittest.TestCase):
                     flags=0x01,
                     base_speed=4,
                     map_path="Maps\\Anime\\Test.w3x",
-                    players=(GameConfigPlayer(1, 0, 0x02, 1, 90, 0x04, 2, "AI Scripts\\rush.ai"),),
+                    players=(
+                        GameConfigPlayer(
+                            1, 0, 0x02, 1, 90, 0x04, 2, "AI Scripts\\rush.ai"
+                        ),
+                    ),
                 ),
             )
         ]
@@ -118,10 +133,16 @@ class GuiReportTest(unittest.TestCase):
             script_count=1,
             categories=(TriggerCategory(1, "系统"),),
             variables=(TriggerVariable("Count", "integer", 1, False, 1, True, "5"),),
-            triggers=(TriggerHeader("初始化", "", False, True, False, False, True, 1, 0),),
+            triggers=(
+                TriggerHeader("初始化", "", False, True, False, False, True, 1, 0),
+            ),
             has_unexpanded_functions=True,
-            missing_schema_functions=(UnknownTriggerFunction("初始化", "MissingAction", 2, 0x24),),
-            parse_failures=(TriggerParseFailure("初始化", "BadAction", 0x48, "bad bytes"),),
+            missing_schema_functions=(
+                UnknownTriggerFunction("初始化", "MissingAction", 2, 0x24),
+            ),
+            parse_failures=(
+                TriggerParseFailure("初始化", "BadAction", 0x48, "bad bytes"),
+            ),
         )
 
         # When: overview and analysis blocks are formatted.
@@ -168,12 +189,14 @@ class GuiReportTest(unittest.TestCase):
             ]
         }
         md.scripts = {
-            "war3map.j": "\n".join((
-                'set udg_cache = InitGameCache("AnimeSave.w3v")',
-                'call StoreInteger(udg_cache, "hero", "level", 1)',
-                'call PreloadGenEnd("save\\hero.txt")',
-                "call UnitAddAbility(u, 'A001')",
-            )),
+            "war3map.j": "\n".join(
+                (
+                    'set udg_cache = InitGameCache("AnimeSave.w3v")',
+                    'call StoreInteger(udg_cache, "hero", "level", 1)',
+                    'call PreloadGenEnd("save\\hero.txt")',
+                    "call UnitAddAbility(u, 'A001')",
+                )
+            ),
         }
 
         # When: analysis blocks are formatted.
@@ -228,8 +251,7 @@ class GuiReportTest(unittest.TestCase):
         md.scripts = {
             "war3map.wts": "STRING 1\n{\n开始游戏\n}\n",
             "war3map.j": (
-                'call BJDebugMsg("TRIGSTR_001")\n'
-                'call BJDebugMsg("TRIGSTR_999")\n'
+                'call BJDebugMsg("TRIGSTR_001")\ncall BJDebugMsg("TRIGSTR_999")\n'
             ),
         }
 
@@ -259,7 +281,9 @@ class GuiReportTest(unittest.TestCase):
     def test_reports_include_script_mechanism_need_marks(self):
         # Given: script helpers that depend on Blizzard runtime object pools.
         md = MapData(path="x.w3x", name="机制图")
-        md.scripts = {"war3map.j": "call ChooseRandomItemBJ(3)\ncall InitNeutralBuildings()\n"}
+        md.scripts = {
+            "war3map.j": "call ChooseRandomItemBJ(3)\ncall InitNeutralBuildings()\n"
+        }
 
         # When: analysis blocks are formatted.
         analysis = format_blocks(build_analysis_blocks(md))

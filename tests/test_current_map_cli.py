@@ -13,7 +13,13 @@ import pytest
 
 from w3xtool import current_map_cli as cli
 from w3xtool.cli_options import CliOptions
-from w3xtool.current_map_models import CurrentMapResolution, EvidenceKind, MapCandidate, MapEvidence, ResolutionStatus
+from w3xtool.current_map_models import (
+    CurrentMapResolution,
+    EvidenceKind,
+    MapCandidate,
+    MapEvidence,
+    ResolutionStatus,
+)
 from w3xtool.current_map_snapshot import CurrentMapSnapshotError
 
 
@@ -26,7 +32,9 @@ def _candidate(path: Path, kind: EvidenceKind) -> MapCandidate:
     return MapCandidate(path, (MapEvidence(path, kind, 73),))
 
 
-def _provide_resolution(_roots: Iterable[Path], *, resolution: CurrentMapResolution) -> CurrentMapResolution:
+def _provide_resolution(
+    _roots: Iterable[Path], *, resolution: CurrentMapResolution
+) -> CurrentMapResolution:
     return resolution
 
 
@@ -46,7 +54,9 @@ def _raise_boom(_options: CliOptions) -> Never:
     raise CurrentMapSnapshotError(Path("delegate.w3x"), "boom")
 
 
-def _patch_resolution(monkeypatch: pytest.MonkeyPatch, resolution: CurrentMapResolution) -> None:
+def _patch_resolution(
+    monkeypatch: pytest.MonkeyPatch, resolution: CurrentMapResolution
+) -> None:
     monkeypatch.setattr(cli, "cleanup_stale_current_map_snapshots", lambda: None)
     provider = partial(_provide_resolution, resolution=resolution)
     monkeypatch.setattr(cli, "locate_current_map", provider)
@@ -55,7 +65,9 @@ def _patch_resolution(monkeypatch: pytest.MonkeyPatch, resolution: CurrentMapRes
 def _patch_found_snapshot(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> _Snapshot:
     source = tmp_path / "source.w3x"
     snapshot = _Snapshot(tmp_path / "snapshot.w3x")
-    resolution = CurrentMapResolution(ResolutionStatus.FOUND, (_candidate(source, EvidenceKind.DIRECT_OPEN),))
+    resolution = CurrentMapResolution(
+        ResolutionStatus.FOUND, (_candidate(source, EvidenceKind.DIRECT_OPEN),)
+    )
     _patch_resolution(monkeypatch, resolution)
     provider = partial(_provide_snapshot, snapshot=snapshot)
     monkeypatch.setattr(cli, "create_current_map_snapshot", provider)
@@ -65,8 +77,18 @@ def _patch_found_snapshot(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> _S
 def test_parser_forwards_sources_and_preserves_repeated_roots() -> None:
     # Given: repeated discovery roots plus every existing map-CLI option.
     argv = (
-        "--root", "maps-a", "--listfile", "names.txt", "--root", "maps-b",
-        "--game-data", "game-data", "--author-bundle", "bundle", "--pack", "pack",
+        "--root",
+        "maps-a",
+        "--listfile",
+        "names.txt",
+        "--root",
+        "maps-b",
+        "--game-data",
+        "game-data",
+        "--author-bundle",
+        "bundle",
+        "--pack",
+        "pack",
         "--accept-suggestion",
     )
 
@@ -81,11 +103,20 @@ def test_parser_forwards_sources_and_preserves_repeated_roots() -> None:
     )
 
 
-@pytest.mark.parametrize("argv", (
-    ("map.w3x",), ("--unknown",), ("--root",), ("--listfile",),
-    ("--pack", "one", "--pack", "two"), ("--accept-suggestion", "--accept-suggestion"),
-))
-def test_parser_rejects_positional_unknown_missing_and_duplicate_options(argv: tuple[str, ...]) -> None:
+@pytest.mark.parametrize(
+    "argv",
+    (
+        ("map.w3x",),
+        ("--unknown",),
+        ("--root",),
+        ("--listfile",),
+        ("--pack", "one", "--pack", "two"),
+        ("--accept-suggestion", "--accept-suggestion"),
+    ),
+)
+def test_parser_rejects_positional_unknown_missing_and_duplicate_options(
+    argv: tuple[str, ...],
+) -> None:
     # Given: an invalid current-map argument sequence.
     # When/Then: a stable typed boundary error rejects it.
     with pytest.raises(cli.CurrentMapCliOptionError):
@@ -106,15 +137,20 @@ def test_parser_error_sanitizes_untrusted_option_text() -> None:
     assert "forged" in rendered
 
 
-@pytest.mark.parametrize(("status", "accept_suggestion", "kind"), (
-    (ResolutionStatus.FOUND, False, EvidenceKind.DIRECT_OPEN),
-    (ResolutionStatus.SUGGESTED, True, EvidenceKind.WGC_REFERENCE),
-))
+@pytest.mark.parametrize(
+    ("status", "accept_suggestion", "kind"),
+    (
+        (ResolutionStatus.FOUND, False, EvidenceKind.DIRECT_OPEN),
+        (ResolutionStatus.SUGGESTED, True, EvidenceKind.WGC_REFERENCE),
+    ),
+)
 def test_unique_authorized_candidate_snapshots_delegates_and_cleans(
     status: ResolutionStatus,
     accept_suggestion: bool,
     kind: EvidenceKind,
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     # Given: one authorized candidate and tracked acquisition boundaries.
     source = tmp_path / "source\x1b\nmap.w3x"
@@ -122,6 +158,7 @@ def test_unique_authorized_candidate_snapshots_delegates_and_cleans(
     resolution = CurrentMapResolution(status, (_candidate(source, kind),))
     events: list[str] = []
     delegated: list[CliOptions] = []
+
     def cleanup_stale() -> None:
         events.append("stale")
 
@@ -157,18 +194,31 @@ def test_unique_authorized_candidate_snapshots_delegates_and_cleans(
 
     # Then: stale cleanup precedes acquisition and the private snapshot is always removed.
     assert code == 0
-    assert events == ["stale", "locate:1", f"snapshot:{source.name}", "delegate", "cleanup:snapshot.w3x"]
-    assert delegated == [CliOptions(str(snapshot.path), "names.txt", "data", "pack", "bundle")]
+    assert events == [
+        "stale",
+        "locate:1",
+        f"snapshot:{source.name}",
+        "delegate",
+        "cleanup:snapshot.w3x",
+    ]
+    assert delegated == [
+        CliOptions(str(snapshot.path), "names.txt", "data", "pack", "bundle")
+    ]
     diagnostic = capsys.readouterr().err
     assert "\x1b" not in diagnostic
     assert "来源" in diagnostic and kind.value not in diagnostic
 
 
 def test_single_suggestion_requires_explicit_acceptance(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     # Given: one hint-only candidate without explicit acceptance.
-    resolution = CurrentMapResolution(ResolutionStatus.SUGGESTED, (_candidate(tmp_path / "hint.w3x", EvidenceKind.RECENT_CACHE),))
+    resolution = CurrentMapResolution(
+        ResolutionStatus.SUGGESTED,
+        (_candidate(tmp_path / "hint.w3x", EvidenceKind.RECENT_CACHE),),
+    )
     _patch_resolution(monkeypatch, resolution)
     monkeypatch.setattr(cli, "create_current_map_snapshot", _reject_snapshot)
 
@@ -180,14 +230,19 @@ def test_single_suggestion_requires_explicit_acceptance(
     assert "--accept-suggestion" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize(("status", "kind"), (
-    (ResolutionStatus.SUGGESTED, EvidenceKind.RECENT_CACHE),
-    (ResolutionStatus.AMBIGUOUS, EvidenceKind.DIRECT_OPEN),
-))
+@pytest.mark.parametrize(
+    ("status", "kind"),
+    (
+        (ResolutionStatus.SUGGESTED, EvidenceKind.RECENT_CACHE),
+        (ResolutionStatus.AMBIGUOUS, EvidenceKind.DIRECT_OPEN),
+    ),
+)
 def test_multiple_candidates_return_three_with_bounded_sanitized_paths(
     status: ResolutionStatus,
     kind: EvidenceKind,
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     # Given: ten candidates, including terminal controls, that must not be guessed.
     candidates = tuple(
@@ -209,9 +264,13 @@ def test_multiple_candidates_return_three_with_bounded_sanitized_paths(
     assert "\x1b" not in diagnostic
 
 
-@pytest.mark.parametrize("status", (ResolutionStatus.NOT_FOUND, ResolutionStatus.UNAVAILABLE))
+@pytest.mark.parametrize(
+    "status", (ResolutionStatus.NOT_FOUND, ResolutionStatus.UNAVAILABLE)
+)
 def test_no_usable_candidate_returns_two(
-    status: ResolutionStatus, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    status: ResolutionStatus,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     # Given: discovery cannot supply a usable current map.
     _patch_resolution(monkeypatch, CurrentMapResolution(status, ()))
@@ -225,11 +284,15 @@ def test_no_usable_candidate_returns_two(
 
 
 def test_snapshot_failure_returns_two_with_sanitized_diagnostic(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     # Given: direct discovery succeeds but stable copying fails.
     source = tmp_path / "source.w3x"
-    resolution = CurrentMapResolution(ResolutionStatus.FOUND, (_candidate(source, EvidenceKind.EXPLICIT_ARGUMENT),))
+    resolution = CurrentMapResolution(
+        ResolutionStatus.FOUND, (_candidate(source, EvidenceKind.EXPLICIT_ARGUMENT),)
+    )
     _patch_resolution(monkeypatch, resolution)
 
     def fail_snapshot(path: Path) -> _Snapshot:
@@ -248,7 +311,9 @@ def test_snapshot_failure_returns_two_with_sanitized_diagnostic(
     assert str(source) not in diagnostic.splitlines()[-1]
 
 
-def test_snapshot_cleanup_runs_when_delegate_returns(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_snapshot_cleanup_runs_when_delegate_returns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # Given: an acquired snapshot and a downstream map-parser failure.
     snapshot = _patch_found_snapshot(monkeypatch, tmp_path)
     cleaned: list[_Snapshot] = []
@@ -263,7 +328,9 @@ def test_snapshot_cleanup_runs_when_delegate_returns(tmp_path: Path, monkeypatch
     assert cleaned == [snapshot]
 
 
-def test_snapshot_cleanup_runs_when_delegate_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_snapshot_cleanup_runs_when_delegate_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # Given: an acquired snapshot and an unexpected downstream exception.
     snapshot = _patch_found_snapshot(monkeypatch, tmp_path)
     cleaned: list[_Snapshot] = []

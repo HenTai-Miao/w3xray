@@ -62,18 +62,22 @@ def format_script_return_index_tsv(index: ScriptReturnIndex) -> str:
     """Format script return rows as TSV."""
     rows = ["来源\t行号\t函数\t表达式\t调用\t变量\t字符串\t对象码\t用途\t摘要"]
     for item in index.returns:
-        rows.append("\t".join((
-            _tsv(item.source),
-            str(item.line),
-            _tsv(item.function),
-            _tsv(item.expression),
-            _tsv("; ".join(item.calls)),
-            _tsv("; ".join(item.variables)),
-            _tsv("; ".join(item.strings)),
-            _tsv("; ".join(item.object_codes)),
-            _tsv(item.purpose),
-            _tsv(item.summary),
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    _tsv(item.source),
+                    str(item.line),
+                    _tsv(item.function),
+                    _tsv(item.expression),
+                    _tsv("; ".join(item.calls)),
+                    _tsv("; ".join(item.variables)),
+                    _tsv("; ".join(item.strings)),
+                    _tsv("; ".join(item.object_codes)),
+                    _tsv(item.purpose),
+                    _tsv(item.summary),
+                )
+            )
+        )
     return "\n".join(rows) + "\n"
 
 
@@ -93,22 +97,28 @@ def _returns_for_script(
         start, end = match.span("expr")
         expression = raw_line[start:end].strip()
         code_expression = code_line[start:end]
-        calls = _unique_ordered(item.group(1) for item in _CALL_RE.finditer(code_expression))
-        variables = _unique_ordered(item.group(0) for item in _VAR_RE.finditer(code_expression))
+        calls = _unique_ordered(
+            item.group(1) for item in _CALL_RE.finditer(code_expression)
+        )
+        variables = _unique_ordered(
+            item.group(0) for item in _VAR_RE.finditer(code_expression)
+        )
         strings = _strings_in(expression)
         object_codes = tuple(sorted(set(_codes_in(code_expression))))
-        rows.append(ScriptReturn(
-            source=source,
-            line=line_no,
-            function=functions.name_for(source, line_no),
-            expression=expression,
-            calls=calls,
-            variables=variables,
-            strings=strings,
-            object_codes=object_codes,
-            purpose=_purpose(expression, calls, variables, strings, object_codes),
-            summary=raw_line.strip()[:160],
-        ))
+        rows.append(
+            ScriptReturn(
+                source=source,
+                line=line_no,
+                function=functions.name_for(source, line_no),
+                expression=expression,
+                calls=calls,
+                variables=variables,
+                strings=strings,
+                object_codes=object_codes,
+                purpose=_purpose(expression, calls, variables, strings, object_codes),
+                summary=raw_line.strip()[:160],
+            )
+        )
     return rows
 
 
@@ -183,8 +193,6 @@ def _read_quoted(text: str, start: int) -> tuple[str, int]:
             chars.append(char)
         index += 1
     return "".join(chars), len(text)
-
-
 
 
 def _unique_ordered(values: Iterable[str]) -> tuple[str, ...]:

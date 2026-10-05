@@ -63,18 +63,22 @@ def format_script_local_index_tsv(index: ScriptLocalIndex) -> str:
     """Format local variable declarations as TSV."""
     rows = ["来源\t行号\t函数\t名称\t类型\t初值\t字符串\t对象码\t用途\t摘要"]
     for item in index.locals:
-        rows.append("\t".join((
-            _tsv(item.source),
-            str(item.line),
-            _tsv(item.function),
-            _tsv(item.name),
-            _tsv(item.value_type),
-            _tsv(item.initial),
-            _tsv(item.string_value),
-            _tsv("; ".join(item.object_codes)),
-            _tsv(item.purpose),
-            _tsv(item.summary),
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    _tsv(item.source),
+                    str(item.line),
+                    _tsv(item.function),
+                    _tsv(item.name),
+                    _tsv(item.value_type),
+                    _tsv(item.initial),
+                    _tsv(item.string_value),
+                    _tsv("; ".join(item.object_codes)),
+                    _tsv(item.purpose),
+                    _tsv(item.summary),
+                )
+            )
+        )
     return "\n".join(rows) + "\n"
 
 
@@ -93,9 +97,11 @@ def _locals_for_script(
             continue
         raw_line = _strip_comment(raw_lines[line_no - 1])
         value_start = code_line.find("=", match.start())
-        initial = "" if value_start < 0 else raw_line[value_start + 1:].strip()
-        code_initial = "" if value_start < 0 else code_line[value_start + 1:].strip()
-        rows.append(_local_row(source, line_no, match, initial, code_initial, functions))
+        initial = "" if value_start < 0 else raw_line[value_start + 1 :].strip()
+        code_initial = "" if value_start < 0 else code_line[value_start + 1 :].strip()
+        rows.append(
+            _local_row(source, line_no, match, initial, code_initial, functions)
+        )
     return rows
 
 
@@ -131,8 +137,6 @@ def _local_row(
         purpose=_purpose(name, value_type, initial, string_value, object_codes),
         summary=_strip_comment(match.string).strip()[:160],
     )
-
-
 
 
 def _first_string(value: str) -> str:
@@ -201,7 +205,9 @@ def _looks_like_resource_path(value: str) -> bool:
 
 def _looks_like_save_key(name: str, value: str) -> bool:
     lowered = f"{name} {value}".lower()
-    if any(word in lowered for word in ("save", "cache", "key", "load", "slot", "password")):
+    if any(
+        word in lowered for word in ("save", "cache", "key", "load", "slot", "password")
+    ):
         return True
     return "." in value and not _looks_like_resource_path(value)
 

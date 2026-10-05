@@ -23,7 +23,9 @@ class PaneStateMixin:
 
     def _register_paned_window(self, name: str, paned: PaneWidget) -> None:
         self._paned_windows[name] = paned
-        paned.bind("<ButtonRelease-1>", lambda _event: self._save_layout_state(), add="+")
+        paned.bind(
+            "<ButtonRelease-1>", lambda _event: self._save_layout_state(), add="+"
+        )
 
     def _restore_pane_sashes(self) -> None:
         cfg = self._load_config()
@@ -70,7 +72,7 @@ def _int_positions(raw) -> list[int]:
     for item in raw:
         try:
             positions.append(int(item))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return []
     return positions
 

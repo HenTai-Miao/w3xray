@@ -49,7 +49,9 @@ def _parser() -> argparse.ArgumentParser:
     inventory.add_argument("--mask", default="*")
     inventory.add_argument("--listfile")
     inventory.add_argument("--limit", type=_positive_int)
-    extract = commands.add_parser("extract", help="按路径、FileDataID、CKey 或 EKey 导出单文件")
+    extract = commands.add_parser(
+        "extract", help="按路径、FileDataID、CKey 或 EKey 导出单文件"
+    )
     extract.add_argument("--game-dir", required=True, type=Path)
     extract.add_argument("--entry", required=True)
     extract.add_argument("--output-dir", required=True, type=Path)
@@ -69,7 +71,11 @@ def _run_inventory(args: argparse.Namespace) -> int:
     finally:
         source.close()
     completeness = "截断预览" if summary.was_limited else "完整"
-    view = "完整 Root" if source.inventory_view is GameDataInventoryView.FULL_ROOT else "已知路径"
+    view = (
+        "完整 Root"
+        if source.inventory_view is GameDataInventoryView.FULL_ROOT
+        else "已知路径"
+    )
     print(
         f"CASC {view} {completeness}：{summary.total} 条，"
         f"真实路径 {summary.resolved_paths}，未知路径 {summary.unknown_paths}；"
@@ -82,7 +88,9 @@ def _run_extract(args: argparse.Namespace) -> int:
     relative = safe_relative_path(args.entry)
     if relative is None:
         raise CascCliError("unsafe CASC entry name")
-    relative_name = str(relative) if len(relative.parts) > 1 else f"UnknownCASC/{relative}"
+    relative_name = (
+        str(relative) if len(relative.parts) > 1 else f"UnknownCASC/{relative}"
+    )
     source = _open_source(args.game_dir)
     try:
         payload = source.read_file(args.entry)

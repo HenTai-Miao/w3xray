@@ -7,14 +7,16 @@ from w3xtool.script_scan import scan_recipes
 
 def test_recipe_keeps_source_function_result_line_and_duplicate_materials() -> None:
     # Given: one function consumes two copies of one item plus another material.
-    script = "\n".join((
-        "function Forge takes nothing returns nothing",
-        "    call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I001'))",
-        "    call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I001'))",
-        "    call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I002'))",
-        "    call UnitAddItemById(u, 'I999')",
-        "endfunction",
-    ))
+    script = "\n".join(
+        (
+            "function Forge takes nothing returns nothing",
+            "    call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I001'))",
+            "    call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I001'))",
+            "    call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I002'))",
+            "    call UnitAddItemById(u, 'I999')",
+            "endfunction",
+        )
+    )
 
     # When: the source is scanned.
     (recipe,) = scan_recipes(script, source="war3map.j")
@@ -33,11 +35,13 @@ def test_recipe_keeps_source_function_result_line_and_duplicate_materials() -> N
 
 def test_recipe_scanner_ignores_calls_inside_comments_and_strings() -> None:
     # Given: every apparent recipe operation is non-code text.
-    script = "\n".join((
-        "// call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I001'))",
-        "// call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I002'))",
-        'call BJDebugMsg("call UnitAddItemById(u, \'I999\')")',
-    ))
+    script = "\n".join(
+        (
+            "// call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I001'))",
+            "// call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I002'))",
+            "call BJDebugMsg(\"call UnitAddItemById(u, 'I999')\")",
+        )
+    )
 
     # When/Then: no synthetic recipe is emitted.
     assert scan_recipes(script, source="war3map.j") == []
@@ -45,13 +49,15 @@ def test_recipe_scanner_ignores_calls_inside_comments_and_strings() -> None:
 
 def test_same_recipe_from_two_sources_retains_both_evidence_rows() -> None:
     # Given: identical recipe code exists in two independently named sources.
-    script = "\n".join((
-        "function Forge takes nothing returns nothing",
-        "call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I001'))",
-        "call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I002'))",
-        "call UnitAddItemById(u, 'I999')",
-        "endfunction",
-    ))
+    script = "\n".join(
+        (
+            "function Forge takes nothing returns nothing",
+            "call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I001'))",
+            "call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I002'))",
+            "call UnitAddItemById(u, 'I999')",
+            "endfunction",
+        )
+    )
     md = MapData(
         path="x.w3x",
         name="配方图",

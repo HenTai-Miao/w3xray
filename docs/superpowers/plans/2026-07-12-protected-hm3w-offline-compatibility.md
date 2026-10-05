@@ -93,11 +93,15 @@ def test_non_hm3w_archive_does_not_normalize_large_header(tmp_path: Path) -> Non
         MPQArchive(str(path))
 
 
-def test_hm3w_nonclassic_version_does_not_normalize_large_header(tmp_path: Path) -> None:
-    source = bytearray(_with_hm3w_header_size(
-        build_archive_bytes(b"war3map.j", ((0, b"script"),)),
-        _A801_HEADER_SIZE,
-    ))
+def test_hm3w_nonclassic_version_does_not_normalize_large_header(
+    tmp_path: Path,
+) -> None:
+    source = bytearray(
+        _with_hm3w_header_size(
+            build_archive_bytes(b"war3map.j", ((0, b"script"),)),
+            _A801_HEADER_SIZE,
+        )
+    )
     struct.pack_into("<H", source, _HM3W_HEADER_OFFSET + 12, 1)
     path = tmp_path / "nonclassic.w3x"
     path.write_bytes(source)
@@ -151,8 +155,7 @@ def normalize_classic_header_size(
 ) -> int:
     """Return the bounded effective header size for one classic candidate."""
     if stored_header_size < MPQ_HEADER_SIZE_V1 or (
-        not protected_classic
-        and archive_offset + stored_header_size > file_size
+        not protected_classic and archive_offset + stored_header_size > file_size
     ):
         raise MPQLayoutError(f"MPQ 头大小非法：{stored_header_size}")
     return MPQ_HEADER_SIZE_V1 if protected_classic else stored_header_size
@@ -542,7 +545,7 @@ class MPQBackingStore:
         if isinstance(self.data, mmap.mmap):
             try:
                 self.data.close()
-            except (BufferError, OSError):
+            except BufferError, OSError:
                 return
             except ValueError:
                 pass
@@ -568,7 +571,7 @@ def open_mpq_backing(path: str) -> MPQBackingStore:
     """Open the source, falling back to an owned copy for OS open failures."""
     try:
         return _open_path(path, temporary_path=None)
-    except (OSError, ValueError):
+    except OSError, ValueError:
         descriptor, temporary_path = tempfile.mkstemp(
             suffix=os.path.splitext(path)[1] or ".w3x",
         )
@@ -576,7 +579,7 @@ def open_mpq_backing(path: str) -> MPQBackingStore:
         try:
             shutil.copyfile(path, temporary_path)
             store = _open_path(temporary_path, temporary_path=temporary_path)
-        except (OSError, ValueError):
+        except OSError, ValueError:
             try:
                 os.remove(temporary_path)
             except OSError:
@@ -605,7 +608,7 @@ def _open_path(path: str, *, temporary_path: str | None) -> MPQBackingStore:
         return MPQBackingStore(data=data, handle=None, temporary_path=temporary_path)
     try:
         data = mmap.mmap(handle.fileno(), 0, access=mmap.ACCESS_READ)
-    except (OSError, ValueError):
+    except OSError, ValueError:
         handle.close()
         raise
     return MPQBackingStore(data=data, handle=handle, temporary_path=temporary_path)
@@ -636,6 +639,7 @@ def close(self) -> None:
     """Release the owned backing store; repeated calls are harmless."""
     self._backing.close()
     self._sync_backing()
+
 
 def _sync_backing(self) -> None:
     self._data = self._backing.data

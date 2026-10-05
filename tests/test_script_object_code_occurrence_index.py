@@ -10,7 +10,9 @@ from w3xtool.api import GameObject, MapData
 def _format_occurrences(md: MapData) -> str:
     spec = importlib.util.find_spec("w3xtool.script_object_code_occurrence_index")
     if spec is None:
-        raise AssertionError("w3xtool.script_object_code_occurrence_index module is missing")
+        raise AssertionError(
+            "w3xtool.script_object_code_occurrence_index module is missing"
+        )
     module = importlib.import_module("w3xtool.script_object_code_occurrence_index")
     index = module.build_script_object_code_occurrence_index(md)
     return module.format_script_object_code_occurrence_index_tsv(index)
@@ -24,37 +26,58 @@ class ScriptObjectCodeOccurrenceIndexTest(unittest.TestCase):
             "单位": [GameObject("单位", "w3u", "H001", "Hpal", "圣骑士", True)],
             "技能": [GameObject("技能", "w3a", "A001", "AHhb", "治疗术", True)],
         }
-        md.obj_index = {obj.obj_id: obj for objects in md.objects.values() for obj in objects}
+        md.obj_index = {
+            obj.obj_id: obj for objects in md.objects.values() for obj in objects
+        }
         md.scripts = {
-            "war3map.j": "\n".join((
-                "function Init takes nothing returns nothing",
-                "    call CreateUnit(Player(0), 'H001', 0, 0, 0)",
-                "    set udg_AbilityId = FourCC(\"A001\")",
-                "    call SaveInteger(udg_hash, StringHash(\"hero\"), StringHash(\"ability\"), 'A001')",
-                "    call CreateItem('I999', 0, 0)",
-                "endfunction",
-            )),
+            "war3map.j": "\n".join(
+                (
+                    "function Init takes nothing returns nothing",
+                    "    call CreateUnit(Player(0), 'H001', 0, 0, 0)",
+                    '    set udg_AbilityId = FourCC("A001")',
+                    '    call SaveInteger(udg_hash, StringHash("hero"), StringHash("ability"), \'A001\')',
+                    "    call CreateItem('I999', 0, 0)",
+                    "endfunction",
+                )
+            ),
         }
 
         # When: the object-code occurrence index is built.
         text = _format_occurrences(md)
         # Then: every real object code occurrence is listed with readable context.
-        self.assertIn("来源\t行号\t函数\t对象码\t10进制\t分类\t名称\t对象来源\t上下文\t机制\t摘要\t英文名\t细类", text)
-        self.assertIn("war3map.j\t2\tInit\tH001\t1211117617\t单位\t圣骑士\tw3u\tCreateUnit\tObjectID:单位", text)
-        self.assertIn("war3map.j\t3\tInit\tA001\t1093677105\t技能\t治疗术\tw3a\tudg_AbilityId\t赋值", text)
-        self.assertIn("war3map.j\t4\tInit\tA001\t1093677105\t技能\t治疗术\tw3a\tSaveInteger\tHashtable:写整数", text)
-        self.assertIn("war3map.j\t5\tInit\tI999\t1228486969\t物品\t\t未解析\tCreateItem\tObjectID:物品", text)
+        self.assertIn(
+            "来源\t行号\t函数\t对象码\t10进制\t分类\t名称\t对象来源\t上下文\t机制\t摘要\t英文名\t细类",
+            text,
+        )
+        self.assertIn(
+            "war3map.j\t2\tInit\tH001\t1211117617\t单位\t圣骑士\tw3u\tCreateUnit\tObjectID:单位",
+            text,
+        )
+        self.assertIn(
+            "war3map.j\t3\tInit\tA001\t1093677105\t技能\t治疗术\tw3a\tudg_AbilityId\t赋值",
+            text,
+        )
+        self.assertIn(
+            "war3map.j\t4\tInit\tA001\t1093677105\t技能\t治疗术\tw3a\tSaveInteger\tHashtable:写整数",
+            text,
+        )
+        self.assertIn(
+            "war3map.j\t5\tInit\tI999\t1228486969\t物品\t\t未解析\tCreateItem\tObjectID:物品",
+            text,
+        )
 
     def test_indexes_ability_field_constants_as_skill_field_rows(self):
         # Given: a script tweaks ability data through common.j field constants.
         md = MapData(path="x.w3x", name="字段常量图")
         md.scripts = {
-            "war3map.j": "\n".join((
-                "function Tweak takes nothing returns nothing",
-                "    call BlzSetAbilityRealLevelField(a, ABILITY_RLF_DAMAGE_PER_TARGET_EFK1, 250.0)",
-                "    set x = BlzGetAbilityIntegerLevelField(b, ABILITY_ILF_NUMBER_OF_WAVES)",
-                "endfunction",
-            )),
+            "war3map.j": "\n".join(
+                (
+                    "function Tweak takes nothing returns nothing",
+                    "    call BlzSetAbilityRealLevelField(a, ABILITY_RLF_DAMAGE_PER_TARGET_EFK1, 250.0)",
+                    "    set x = BlzGetAbilityIntegerLevelField(b, ABILITY_ILF_NUMBER_OF_WAVES)",
+                    "endfunction",
+                )
+            ),
         }
 
         # When: the occurrence index is built.
@@ -73,22 +96,29 @@ class ScriptObjectCodeOccurrenceIndexTest(unittest.TestCase):
         md.objects = {
             "技能": [GameObject("技能", "w3a", "A001", "AHhb", "治疗术", True)],
         }
-        md.obj_index = {obj.obj_id: obj for objects in md.objects.values() for obj in objects}
+        md.obj_index = {
+            obj.obj_id: obj for objects in md.objects.values() for obj in objects
+        }
         md.scripts = {
-            "war3map.j": "\n".join((
-                "function Init takes nothing returns nothing",
-                "    // call CreateUnit(Player(0), 'H999', 0, 0, 0)",
-                '    call BJDebugMsg("CreateUnit(\\\'H888\\\')")',
-                "    call UnitAddAbility(u, 1093677105)",
-                "endfunction",
-            )),
+            "war3map.j": "\n".join(
+                (
+                    "function Init takes nothing returns nothing",
+                    "    // call CreateUnit(Player(0), 'H999', 0, 0, 0)",
+                    "    call BJDebugMsg(\"CreateUnit(\\'H888\\')\")",
+                    "    call UnitAddAbility(u, 1093677105)",
+                    "endfunction",
+                )
+            ),
         }
 
         # When: the object-code occurrence index is built.
         text = _format_occurrences(md)
 
         # Then: only executable code contributes object-code rows.
-        self.assertIn("war3map.j\t4\tInit\tA001\t1093677105\t技能\t治疗术\tw3a\tUnitAddAbility\tObjectID:技能", text)
+        self.assertIn(
+            "war3map.j\t4\tInit\tA001\t1093677105\t技能\t治疗术\tw3a\tUnitAddAbility\tObjectID:技能",
+            text,
+        )
         self.assertNotIn("H999", text)
         self.assertNotIn("H888", text)
 

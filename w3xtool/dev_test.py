@@ -1,4 +1,5 @@
 """Windows-safe project test runner."""
+
 from __future__ import annotations
 
 import subprocess

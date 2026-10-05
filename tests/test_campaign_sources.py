@@ -12,10 +12,12 @@ from w3xtool.w3f import CampaignMapEntry, W3fInfo
 
 def test_campaign_inner_maps_prefers_w3f_order_and_archive_spelling() -> None:
     # Given: W3F order disagrees with the archive's listfile order and path spelling.
-    w3f = W3fInfo(maps=[
-        CampaignMapEntry("Maps\\B.w3x", "B", "", True),
-        CampaignMapEntry("Maps\\A.w3m", "A", "", True),
-    ])
+    w3f = W3fInfo(
+        maps=[
+            CampaignMapEntry("Maps\\B.w3x", "B", "", True),
+            CampaignMapEntry("Maps\\A.w3m", "A", "", True),
+        ]
+    )
     archive_names = ("maps/a.W3M", "MAPS/b.W3X", "Maps\\C.w3x", "notes.txt")
 
     # When: the campaign sources are ordered.
@@ -45,10 +47,12 @@ def test_loader_campaign_discovery_accepts_w3f_declared_order() -> None:
         def has_file(self, _name: str) -> bool:
             return False
 
-    w3f = W3fInfo(maps=[
-        CampaignMapEntry("Maps\\B.w3x", "B", "", True),
-        CampaignMapEntry("Maps\\A.w3x", "A", "", True),
-    ])
+    w3f = W3fInfo(
+        maps=[
+            CampaignMapEntry("Maps\\B.w3x", "B", "", True),
+            CampaignMapEntry("Maps\\A.w3x", "A", "", True),
+        ]
+    )
 
     # When: the compatibility wrapper discovers campaign children.
     names = _campaign_inner_maps(Archive(), (), w3f)

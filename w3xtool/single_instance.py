@@ -9,6 +9,7 @@
 核心决策 _decide() 为纯函数（注入存活/映像查询），便于测试；Windows 的进程
 查询/终止用 ctypes（本工具仅 Windows）。
 """
+
 from __future__ import annotations
 
 import json
@@ -43,11 +44,11 @@ def _decide(my_pid, my_image, lock_data, *, alive, image_of):
     if not isinstance(old_pid, int) or old_pid == my_pid:
         return None
     if not _same_image(old_image, my_image):
-        return None                       # 锁记录的是别的可执行体（含同名不同目录），不动它
+        return None  # 锁记录的是别的可执行体（含同名不同目录），不动它
     if not alive(old_pid):
-        return None                       # 旧实例已退出
+        return None  # 旧实例已退出
     if not _same_image(image_of(old_pid), old_image):
-        return None                       # pid 已被复用成别的进程，别误杀
+        return None  # pid 已被复用成别的进程，别误杀
     return old_pid
 
 
@@ -55,12 +56,17 @@ def _decide(my_pid, my_image, lock_data, *, alive, image_of):
 def _kernel32():
     import ctypes
     from ctypes import wintypes
+
     k = ctypes.WinDLL("kernel32", use_last_error=True)
     k.OpenProcess.restype = wintypes.HANDLE
     k.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
     k.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
     k.QueryFullProcessImageNameW.argtypes = (
-        wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD))
+        wintypes.HANDLE,
+        wintypes.DWORD,
+        wintypes.LPWSTR,
+        ctypes.POINTER(wintypes.DWORD),
+    )
     k.TerminateProcess.argtypes = (wintypes.HANDLE, wintypes.UINT)
     k.TerminateProcess.restype = wintypes.BOOL
     k.CloseHandle.argtypes = (wintypes.HANDLE,)
@@ -88,7 +94,7 @@ def _pid_alive(pid: int) -> bool:
         if not h:
             return False
         try:
-            return k.WaitForSingleObject(h, 0) == _WAIT_TIMEOUT   # 仍在运行
+            return k.WaitForSingleObject(h, 0) == _WAIT_TIMEOUT  # 仍在运行
         finally:
             k.CloseHandle(h)
     except Exception:
@@ -117,12 +123,16 @@ def _terminate(pid: int, expected_image: str, timeout: float = 3.0) -> None:
     即使 _decide 之后旧实例恰好退出、pid 被别的程序占用，也不会误杀。"""
     try:
         k, ctypes, wintypes = _kernel32()
-        h = k.OpenProcess(_PROCESS_TERMINATE | _PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        h = k.OpenProcess(
+            _PROCESS_TERMINATE | _PROCESS_QUERY_LIMITED_INFORMATION, False, pid
+        )
         if not h:
             return
         try:
-            if not _same_image(_image_via_handle(k, ctypes, wintypes, h), expected_image):
-                return                        # 句柄指向的已不是目标程序（pid 复用/篡改）→ 不杀
+            if not _same_image(
+                _image_via_handle(k, ctypes, wintypes, h), expected_image
+            ):
+                return  # 句柄指向的已不是目标程序（pid 复用/篡改）→ 不杀
             k.TerminateProcess(h, 1)
         finally:
             k.CloseHandle(h)
@@ -150,7 +160,7 @@ def _read_lock(path: str):
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
         return data if isinstance(data, dict) else None
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return None
 
 
@@ -170,10 +180,11 @@ def ensure_single_instance():
         path = _lock_path()
         my_pid = os.getpid()
         my_image = _self_image()
-        victim = _decide(my_pid, my_image, _read_lock(path),
-                         alive=_pid_alive, image_of=_image_path)
+        victim = _decide(
+            my_pid, my_image, _read_lock(path), alive=_pid_alive, image_of=_image_path
+        )
         if victim is not None:
-            _terminate(victim, my_image)      # 复核映像须与本程序一致(同一可执行体)
+            _terminate(victim, my_image)  # 复核映像须与本程序一致(同一可执行体)
         _write_lock(path, my_pid, my_image)
         return victim
     except Exception:

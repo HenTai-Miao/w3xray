@@ -1,4 +1,5 @@
 """Warcraft III numeric order-id lookup table."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping

@@ -79,9 +79,7 @@ class GameDataSourceTest(unittest.TestCase):
     def test_directory_source_resolves_casc_colon_namespace_as_folders(self) -> None:
         # Given: an export flattened the CASC colon namespace into nested folders.
         with tempfile.TemporaryDirectory() as root:
-            zh_dir = os.path.join(
-                root, "war3.w3mod", "_locales", "zhcn.w3mod", "units"
-            )
+            zh_dir = os.path.join(root, "war3.w3mod", "_locales", "zhcn.w3mod", "units")
             os.makedirs(zh_dir)
             zh_path = os.path.join(zh_dir, "humanunitstrings.txt")
             with open(zh_path, "wb") as handle:

@@ -23,7 +23,9 @@ def test_real_install_reads_trigger_schema_and_icon() -> None:
     with CascLibDataSource(root) as source:
         trigger_data = source.read_file("UI/TriggerData.txt")
         trigger_strings = source.read_file("UI/TriggerStrings.txt")
-        icon = source.read_file("ReplaceableTextures/CommandButtons/BTNSelectHeroOn.blp")
+        icon = source.read_file(
+            "ReplaceableTextures/CommandButtons/BTNSelectHeroOn.blp"
+        )
         entries = source.iter_entries()
         unknown = None
         try:

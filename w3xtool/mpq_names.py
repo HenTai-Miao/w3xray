@@ -25,9 +25,7 @@ def encoded_name_candidates(
 ) -> tuple[bytes, ...]:
     """Encode a name in configured order and remove duplicate byte sequences."""
     encodings = (
-        ("utf-8", *default_legacy_codecs())
-        if legacy_codecs is None
-        else legacy_codecs
+        ("utf-8", *default_legacy_codecs()) if legacy_codecs is None else legacy_codecs
     )
     candidates: list[bytes] = []
     seen: set[bytes] = set()
@@ -53,7 +51,11 @@ def select_hash_entry(
     """Apply StormLib 9.25 exact-then-last-neutral hash selection."""
     best: HashEntry | None = None
     for entry in entries:
-        if (locale_id or platform) and entry.locale == locale_id and entry.platform == platform:
+        if (
+            (locale_id or platform)
+            and entry.locale == locale_id
+            and entry.platform == platform
+        ):
             return entry
         if entry.locale in (0, locale_id) and entry.platform in (0, platform):
             best = entry

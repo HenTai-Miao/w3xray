@@ -7,6 +7,7 @@ w3i 是地图的"信息卡"：真实地图名/作者/描述、推荐人数、尺
 本工具只取到玩家/队伍段（head 须读穿载入屏/雾/环境才能到玩家段）；之后的升级/科技/随机段不暴露、不解析。
 不可信文件：任一段解析出错即停，保留已解析部分；版本不认/空数据返回 None。
 """
+
 from __future__ import annotations
 
 import struct
@@ -49,7 +50,7 @@ class Force:
     allied_victory: bool = False
     share_vision: bool = False
     share_control: bool = False
-    players: list = field(default_factory=list)   # 玩家序号(1基) 列表
+    players: list = field(default_factory=list)  # 玩家序号(1基) 列表
 
 
 @dataclass  # noqa: MUTABLE_OK  # noqa: SLOTS_OK - mutable extraction builder compatibility model.
@@ -61,7 +62,7 @@ class W3iInfo:
     recommended_players: str = ""
     width: int = 0
     height: int = 0
-    script_type: str = ""                          # 'JASS'/'Lua'/''(版本<28未记)
+    script_type: str = ""  # 'JASS'/'Lua'/''(版本<28未记)
     # 配置标志
     disable_preview: bool = False
     custom_ally: bool = False
@@ -105,7 +106,7 @@ class _Reader:
         end = self.d.find(b"\x00", self.p)
         if end < 0:
             end = len(self.d)
-        b = self.d[self.p:end]
+        b = self.d[self.p : end]
         self.p = end + 1
         return decode_warcraft_string(b)
 
@@ -116,21 +117,21 @@ def parse_w3i(data: bytes, wts: dict | None = None) -> "W3iInfo | None":
         return None
     r = _Reader(data)
 
-    def rs():                                       # 读 z 串并还原 TRIGSTR
+    def rs():  # 读 z 串并还原 TRIGSTR
         return str(resolve(r.cstr(), wts))
 
     try:
         version = r.i32()
-    except (struct.error, IndexError):
+    except struct.error, IndexError:
         return None
     if version not in (18, 25, 28, 31):
         return None
     info = W3iInfo(version=version)
     try:
-        r.i32()                                      # map_version
-        r.i32()                                      # we_version
+        r.i32()  # map_version
+        r.i32()  # we_version
         if version >= 28:
-            r.i32()                                   # war3 版本 4 段
+            r.i32()  # war3 版本 4 段
             r.i32()
             r.i32()
             r.i32()
@@ -138,8 +139,8 @@ def parse_w3i(data: bytes, wts: dict | None = None) -> "W3iInfo | None":
         info.author = rs()
         info.description = rs()
         info.recommended_players = rs()
-        r.skip(8 * 4)                                # 镜头边界 8f
-        r.skip(4 * 4)                                # 镜头补足 4i
+        r.skip(8 * 4)  # 镜头边界 8f
+        r.skip(4 * 4)  # 镜头补足 4i
         info.width = r.i32()
         info.height = r.i32()
         flag = r.u32()
@@ -151,45 +152,45 @@ def parse_w3i(data: bytes, wts: dict | None = None) -> "W3iInfo | None":
         info.custom_techtree = bool(flag & 0x80)
         info.custom_ability = bool(flag & 0x100)
         info.custom_upgrade = bool(flag & 0x200)
-        r.skip(1)                                    # c1 主地表
+        r.skip(1)  # c1 主地表
 
         if version >= 25:
-            r.i32()                                  # 载入屏 id + 4z
+            r.i32()  # 载入屏 id + 4z
             rs()
             rs()
             rs()
             rs()
-            r.i32()                                  # game_data_set
-            rs()                                     # 序章 4z
+            r.i32()  # game_data_set
+            rs()  # 序章 4z
             rs()
             rs()
             rs()
-            r.i32()                                  # 雾 type+3f+4B
+            r.i32()  # 雾 type+3f+4B
             r.f32()
             r.f32()
             r.f32()
             r.skip(4)
-            r.skip(4)                                # 环境 weather c4 + sound z + light c1 + water 4B
+            r.skip(4)  # 环境 weather c4 + sound z + light c1 + water 4B
             rs()
             r.skip(1)
             r.skip(4)
             if version >= 28:
                 info.script_type = "Lua" if r.i32() == 1 else "JASS"
             if version >= 31:
-                r.i32()                              # 1.32 未知 8 字节
+                r.i32()  # 1.32 未知 8 字节
                 r.i32()
         elif version == 18:
-            r.i32()                                  # 载入屏 id + 3z
+            r.i32()  # 载入屏 id + 3z
             rs()
             rs()
             rs()
-            r.i32()                                  # 序章 id + 3z
+            r.i32()  # 序章 id + 3z
             rs()
             rs()
             rs()
-    except (struct.error, IndexError):
+    except struct.error, IndexError:
         info.parse_issue = "truncated W3I metadata header"
-        return info                                  # head 半截：返回已得字段
+        return info  # head 半截：返回已得字段
 
     # 玩家段
     try:
@@ -205,13 +206,13 @@ def parse_w3i(data: bytes, wts: dict | None = None) -> "W3iInfo | None":
             name = rs()
             sx = r.f32()
             sy = r.f32()
-            r.u32()                              # ally low/high
+            r.u32()  # ally low/high
             r.u32()
             if version >= 31:
-                r.i32()                          # 1.32 未知
+                r.i32()  # 1.32 未知
                 r.i32()
             info.players.append(Player(pid, ptype, race, fixed, name, sx, sy))
-    except (struct.error, IndexError):
+    except struct.error, IndexError:
         info.parse_issue = "truncated W3I player data"
         return info
 
@@ -226,14 +227,17 @@ def parse_w3i(data: bytes, wts: dict | None = None) -> "W3iInfo | None":
             mask = r.u32()
             fname = rs()
             players = [i + 1 for i in range(32) if mask & (1 << i)]
-            info.forces.append(Force(
-                name=fname,
-                allied=bool(fflag & 0x1),
-                allied_victory=bool(fflag & 0x2),
-                share_vision=bool(fflag & 0x8),
-                share_control=bool(fflag & 0x10),
-                players=players))
-    except (struct.error, IndexError):
+            info.forces.append(
+                Force(
+                    name=fname,
+                    allied=bool(fflag & 0x1),
+                    allied_victory=bool(fflag & 0x2),
+                    share_vision=bool(fflag & 0x8),
+                    share_control=bool(fflag & 0x10),
+                    players=players,
+                )
+            )
+    except struct.error, IndexError:
         info.parse_issue = "truncated W3I force data"
         return info
 

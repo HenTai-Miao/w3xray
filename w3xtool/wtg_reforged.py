@@ -4,19 +4,33 @@ from __future__ import annotations
 
 from .trigger_schema import TriggerSchema
 from .wtg_classic import _read_missing_function
-from .wtg_diagnostics import EcaParseError, TriggerParseFailure, UnknownTriggerFunction, WtgReadError
+from .wtg_diagnostics import (
+    EcaParseError,
+    TriggerParseFailure,
+    UnknownTriggerFunction,
+    WtgReadError,
+)
 from .wtg_eca import parse_eca_functions
-from .wtg_models import TriggerCategory, TriggerHeader, TriggerTreeSummary, TriggerVariable
+from .wtg_models import (
+    TriggerCategory,
+    TriggerHeader,
+    TriggerTreeSummary,
+    TriggerVariable,
+)
 from .wtg_reader import WtgReader
 
 _ITEM_TYPES = (1, 2, 4, 8, 16, 32, 64, 128)
 
 
-def parse_reforged(reader: WtgReader, schema: TriggerSchema | None) -> TriggerTreeSummary:
+def parse_reforged(
+    reader: WtgReader, schema: TriggerSchema | None
+) -> TriggerTreeSummary:
     version = reader.i32()
     type_counts = _read_type_counts(reader)
     reader.i32()
-    variables = tuple(_read_variable(reader) for _ in range(reader.bounded_count("variable")))
+    variables = tuple(
+        _read_variable(reader) for _ in range(reader.bounded_count("variable"))
+    )
     object_count = reader.bounded_count("trigger item")
     categories: list[TriggerCategory] = []
     triggers: list[TriggerHeader] = []
@@ -30,12 +44,18 @@ def parse_reforged(reader: WtgReader, schema: TriggerSchema | None) -> TriggerTr
         elif object_type in (8, 16, 32):
             trigger = _read_trigger(reader, object_type)
             triggers.append(trigger)
-            if not _read_trigger_functions(reader, trigger, schema, version, eca_functions, missing, failures):
+            if not _read_trigger_functions(
+                reader, trigger, schema, version, eca_functions, missing, failures
+            ):
                 break
         elif object_type == 64:
             _read_variable_tree_item(reader)
         else:
-            failures.append(TriggerParseFailure("", "", reader.offset - 4, f"unsupported item type {object_type}"))
+            failures.append(
+                TriggerParseFailure(
+                    "", "", reader.offset - 4, f"unsupported item type {object_type}"
+                )
+            )
             break
     return TriggerTreeSummary(
         version=version,
@@ -75,7 +95,17 @@ def _read_variable(reader: WtgReader) -> TriggerVariable:
     initial_value = reader.cstr()
     object_id = reader.i32()
     parent_id = reader.i32()
-    return TriggerVariable(name, type_name, category, is_array, array_size, is_initialized, initial_value, object_id, parent_id)
+    return TriggerVariable(
+        name,
+        type_name,
+        category,
+        is_array,
+        array_size,
+        is_initialized,
+        initial_value,
+        object_id,
+        parent_id,
+    )
 
 
 def _read_category(reader: WtgReader) -> TriggerCategory:
@@ -98,7 +128,19 @@ def _read_trigger(reader: WtgReader, object_type: int) -> TriggerHeader:
     run_on_init = bool(reader.i32())
     parent_id = reader.i32()
     function_count = reader.bounded_count("trigger function")
-    return TriggerHeader(name, description, is_comment, enabled, custom, initially_off, run_on_init, parent_id, function_count, object_type, object_id)
+    return TriggerHeader(
+        name,
+        description,
+        is_comment,
+        enabled,
+        custom,
+        initially_off,
+        run_on_init,
+        parent_id,
+        function_count,
+        object_type,
+        object_id,
+    )
 
 
 def _read_trigger_functions(
@@ -114,17 +156,31 @@ def _read_trigger_functions(
         return True
     if schema is None:
         try:
-            missing.append(_read_missing_function(reader, trigger.name, has_branch=False))
+            missing.append(
+                _read_missing_function(reader, trigger.name, has_branch=False)
+            )
         except WtgReadError as exc:
-            failures.append(TriggerParseFailure(trigger.name, "", exc.offset, exc.reason))
+            failures.append(
+                TriggerParseFailure(trigger.name, "", exc.offset, exc.reason)
+            )
         return False
     try:
-        eca_functions.extend(parse_eca_functions(reader, trigger.name, trigger.function_count, schema, version=version))
+        eca_functions.extend(
+            parse_eca_functions(
+                reader, trigger.name, trigger.function_count, schema, version=version
+            )
+        )
     except EcaParseError as exc:
         if exc.reason == "missing TriggerData schema":
-            missing.append(UnknownTriggerFunction(trigger.name, exc.function_name, 0, exc.offset))
+            missing.append(
+                UnknownTriggerFunction(trigger.name, exc.function_name, 0, exc.offset)
+            )
         else:
-            failures.append(TriggerParseFailure(trigger.name, exc.function_name, exc.offset, exc.reason))
+            failures.append(
+                TriggerParseFailure(
+                    trigger.name, exc.function_name, exc.offset, exc.reason
+                )
+            )
         return False
     except WtgReadError as exc:
         failures.append(TriggerParseFailure(trigger.name, "", exc.offset, exc.reason))

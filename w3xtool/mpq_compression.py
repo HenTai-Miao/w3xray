@@ -159,13 +159,15 @@ def _decode_lzma(data: bytes, output_size: int, mask: int) -> bytes:
         raise MPQCompressionError(mask, "LZMA declared size exceeds output contract")
     remainder, lc = divmod(prop, 9)
     pb, lp = divmod(remainder, 5)
-    filters = [{
-        "id": lzma.FILTER_LZMA1,
-        "dict_size": max(4096, dictionary_size),
-        "lc": lc,
-        "lp": lp,
-        "pb": pb,
-    }]
+    filters = [
+        {
+            "id": lzma.FILTER_LZMA1,
+            "dict_size": max(4096, dictionary_size),
+            "lc": lc,
+            "lp": lp,
+            "pb": pb,
+        }
+    ]
     try:
         decoder = lzma.LZMADecompressor(format=lzma.FORMAT_RAW, filters=filters)
         result = decoder.decompress(data[_LZMA_HEADER_SIZE:], max_length=declared + 1)
@@ -219,7 +221,9 @@ def decompress_mpq_sector(data: bytes, output_size: int) -> bytes:
     if marker == MPQ_COMPRESSION_LZMA:
         return _decode_lzma(payload, output_size, marker)
     if marker & COMP_ADPCM_MONO and marker & COMP_ADPCM_STEREO:
-        raise MPQCompressionError(marker, "mono and stereo ADPCM flags are mutually exclusive")
+        raise MPQCompressionError(
+            marker, "mono and stereo ADPCM flags are mutually exclusive"
+        )
     remaining = marker
     for flag, decoder in _STORMLIB_REVERSE_ORDER:
         if remaining & flag:

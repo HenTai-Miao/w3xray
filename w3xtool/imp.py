@@ -8,6 +8,7 @@
   每条: 1 字节标志 + \\0 结尾的路径字符串
 不可信文件：count 注水/数据截断时返回已成功读到的部分，绝不抛、不死循环。
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -24,9 +24,11 @@ def test_all_decoded_entries_are_complete() -> None:
     ledger = build_ledger((_entry(BlockState.DECODED),))
     assert ledger.status is ExtractionStatus.COMPLETE
 
+
 def test_only_unresolved_encrypted_entries_are_encrypted_blocked() -> None:
     ledger = build_ledger((_entry(BlockState.ENCRYPTED_BLOCKED, encrypted=True),))
     assert ledger.status is ExtractionStatus.ENCRYPTED_BLOCKED
+
 
 def test_damage_precedes_partial_and_encryption() -> None:
     ledger = build_ledger((_entry(BlockState.RAW_ONLY), _entry(BlockState.DAMAGED)))

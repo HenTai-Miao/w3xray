@@ -2,6 +2,7 @@
 - 对战图：左侧扁平地图列表（文件夹里的 .w3x/.w3m）
 - 战役图：左侧树形——目录里的 .w3n 为父节点，展开显示其子地图(★共享+各关卡)
 """
+
 import unittest
 
 from tests.gui_base import GuiTestCase
@@ -27,7 +28,8 @@ class TestModeAndLeftList(GuiTestCase):
         self.app.mode = "campaign"
         self.app._dir_campaigns = [
             {"path": "a.w3n", "name": "战役A", "loaded": False, "views": None},
-            {"path": "b.w3n", "name": "战役B", "loaded": False, "views": None}]
+            {"path": "b.w3n", "name": "战役B", "loaded": False, "views": None},
+        ]
         self.app._populate_left()
         self.assertEqual([self._label(i) for i in self._roots()], ["战役A", "战役B"])
 
@@ -36,8 +38,9 @@ class TestModeAndLeftList(GuiTestCase):
         s1 = MapData(path="x.w3x", name="XSHZ-1")
         views = [("★共享", top), ("XSHZ-1", s1)]
         self.app.mode = "campaign"
-        self.app._dir_campaigns = [{"path": "a.w3n", "name": "战役A",
-                                    "loaded": True, "views": views}]
+        self.app._dir_campaigns = [
+            {"path": "a.w3n", "name": "战役A", "loaded": True, "views": views}
+        ]
         self.app._populate_left()
         root = self._roots()[0]
         children = self.app.map_list.get_children(root)
@@ -57,16 +60,18 @@ class TestModeAndLeftList(GuiTestCase):
         self.assertEqual([self._label(c) for c in children], ["★共享", "XSHZ-1"])
 
     def test_picking_battle_dir_keeps_campaign_list(self):
-        self.app._dir_campaigns = [{"path": "a.w3n", "name": "战役A",
-                                    "loaded": False, "views": None}]
+        self.app._dir_campaigns = [
+            {"path": "a.w3n", "name": "战役A", "loaded": False, "views": None}
+        ]
         self.app._fill_battle([("p.w3x", "地图甲")])
-        self.assertEqual(len(self.app._dir_campaigns), 1)   # 战役列表没被清
+        self.assertEqual(len(self.app._dir_campaigns), 1)  # 战役列表没被清
         self.assertEqual(self.app._dir_maps, [("p.w3x", "地图甲")])
 
     def test_picking_campaign_dir_keeps_battle_list(self):
         self.app._dir_maps = [("p.w3x", "地图甲")]
-        self.app._fill_campaign([{"path": "a.w3n", "name": "战役A",
-                                  "loaded": False, "views": None}])
+        self.app._fill_campaign(
+            [{"path": "a.w3n", "name": "战役A", "loaded": False, "views": None}]
+        )
         self.assertEqual(self.app._dir_maps, [("p.w3x", "地图甲")])  # 对战列表没被清
         self.assertEqual(len(self.app._dir_campaigns), 1)
 

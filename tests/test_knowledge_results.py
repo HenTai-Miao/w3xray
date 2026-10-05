@@ -14,7 +14,10 @@ from w3xtool.knowledge_results import (
     KnowledgeWriteReport,
     KnowledgeWriteStatus,
 )
-from w3xtool.knowledge_requirements import ExtractionCapabilities, format_requirement_coverage
+from w3xtool.knowledge_requirements import (
+    ExtractionCapabilities,
+    format_requirement_coverage,
+)
 from w3xtool.map_data import GameObject, MapData
 from w3xtool.map_archive_reader import MapArchiveReader
 from w3xtool.safe_output_models import SafeWriteResult, SafeWriteStatus
@@ -98,10 +101,12 @@ def test_binary_resource_body_is_recorded_in_write_report(tmp_path: Path) -> Non
 
 def test_requirement_coverage_reports_partial_publication() -> None:
     # Given: one artifact succeeded and one failed in the current publication.
-    report = KnowledgeWriteReport((
-        KnowledgeWriteItem("地图信息.txt", True, 12, None),
-        KnowledgeWriteItem("对象ID/单位.tsv", False, 0, "disk full"),
-    ))
+    report = KnowledgeWriteReport(
+        (
+            KnowledgeWriteItem("地图信息.txt", True, 12, None),
+            KnowledgeWriteItem("对象ID/单位.tsv", False, 0, "disk full"),
+        )
+    )
 
     # When: dynamic requirement coverage is formatted with the publication result.
     text = format_requirement_coverage(
@@ -136,7 +141,9 @@ def test_persisted_publication_metadata_matches_final_report(tmp_path: Path) -> 
     report = write_knowledge_pack_report(_minimal_map(), str(pack_dir))
 
     # Then: report rows and coverage counts match the returned final state exactly.
-    result_lines = (pack_dir / "资料包写入结果.tsv").read_text(encoding="utf-8").splitlines()
+    result_lines = (
+        (pack_dir / "资料包写入结果.tsv").read_text(encoding="utf-8").splitlines()
+    )
     coverage = (pack_dir / "需求覆盖.tsv").read_text(encoding="utf-8")
     assert len(result_lines) - 1 == len(report.items)
     assert any(line.startswith("资料包写入结果.tsv\t已写入\t") for line in result_lines)
@@ -204,6 +211,8 @@ def test_unknown_source_failure_is_recorded_in_pack_report(tmp_path: Path) -> No
 
 def _minimal_map(path: Path | None = None) -> MapData:
     obj = GameObject("单位", "w3u", "H001", "hfoo", "Unit", True)
-    md = MapData(path=str(path or "missing.w3x"), name="write report", objects={"单位": [obj]})
+    md = MapData(
+        path=str(path or "missing.w3x"), name="write report", objects={"单位": [obj]}
+    )
     md.obj_index = {obj.obj_id: obj}
     return md

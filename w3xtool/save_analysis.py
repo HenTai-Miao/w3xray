@@ -19,6 +19,7 @@ from .script_tokens import script_code_text
 _STRING_RE: Final = re.compile(r'"((?:[^"\\]|\\.)*)"')
 _CALL_RE: Final = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 
+
 @dataclass(frozen=True, slots=True)
 class SaveClue:
     source: str
@@ -35,7 +36,9 @@ class SaveClue:
     @property
     def summary(self) -> str:
         codes = f" · 对象码 {','.join(self.object_codes)}" if self.object_codes else ""
-        context = "".join(f" · {label} {value}" for label, value in _context_parts(self))
+        context = "".join(
+            f" · {label} {value}" for label, value in _context_parts(self)
+        )
         detail = f" · {self.detail}" if self.detail else ""
         return f"{self.source}:{self.line} {self.mechanism}/{self.operation}{context}{detail}{codes}"
 
@@ -90,21 +93,27 @@ def build_save_report(md: MapData) -> SaveReport:
 
 
 def format_save_report_tsv(report: SaveReport) -> str:
-    rows = ["来源\t行号\t机制\t操作\t详情\t存档文件\t区段/父键\t键/子键\t同步前缀\t对象码\t摘要"]
+    rows = [
+        "来源\t行号\t机制\t操作\t详情\t存档文件\t区段/父键\t键/子键\t同步前缀\t对象码\t摘要"
+    ]
     for clue in report.rows:
-        rows.append("\t".join((
-            _tsv(clue.source),
-            str(clue.line),
-            _tsv(clue.mechanism),
-            _tsv(clue.operation),
-            _tsv(clue.detail),
-            _tsv(clue.file_path),
-            _tsv(clue.section),
-            _tsv(clue.key),
-            _tsv(clue.sync_prefix),
-            _tsv(",".join(clue.object_codes)),
-            _tsv(clue.summary),
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    _tsv(clue.source),
+                    str(clue.line),
+                    _tsv(clue.mechanism),
+                    _tsv(clue.operation),
+                    _tsv(clue.detail),
+                    _tsv(clue.file_path),
+                    _tsv(clue.section),
+                    _tsv(clue.key),
+                    _tsv(clue.sync_prefix),
+                    _tsv(",".join(clue.object_codes)),
+                    _tsv(clue.summary),
+                )
+            )
+        )
     return "\n".join(rows) + "\n"
 
 
@@ -122,31 +131,35 @@ def _scan_script(source: str, text: str) -> list[SaveClue]:
             detail = _call_detail(text, match.start(), args)
             if api_info.mechanism in {"Hashtable", "PlatformSave"}:
                 detail = f"{name} · {detail}" if detail else name
-            rows.append(SaveClue(
-                source=source,
-                line=line_no,
-                mechanism=api_info.mechanism,
-                operation=api_info.operation,
-                detail=detail,
-                file_path=context.file_path,
-                section=context.section,
-                key=context.key,
-                sync_prefix=context.sync_prefix,
-            ))
+            rows.append(
+                SaveClue(
+                    source=source,
+                    line=line_no,
+                    mechanism=api_info.mechanism,
+                    operation=api_info.operation,
+                    detail=detail,
+                    file_path=context.file_path,
+                    section=context.section,
+                    key=context.key,
+                    sync_prefix=context.sync_prefix,
+                )
+            )
         object_category = object_api_category(name)
         if object_category is None:
             continue
         codes = tuple(sorted(set(_codes_in(" ".join(args)))))
         if not codes:
             continue
-        rows.append(SaveClue(
-            source=source,
-            line=line_no,
-            mechanism="ObjectID",
-            operation=object_category,
-            detail=_call_detail(text, match.start(), args),
-            object_codes=codes,
-        ))
+        rows.append(
+            SaveClue(
+                source=source,
+                line=line_no,
+                mechanism="ObjectID",
+                operation=object_category,
+                detail=_call_detail(text, match.start(), args),
+                object_codes=codes,
+            )
+        )
     return rows
 
 

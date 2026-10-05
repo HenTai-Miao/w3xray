@@ -53,14 +53,20 @@ def test_inventory_uses_common_known_path_source(
     # Given: the common opener selects a known-path fallback source.
     source = _KnownPathSource()
     output = tmp_path / "inventory.tsv"
-    monkeypatch.setattr("w3xtool.casc_cli.open_game_data_source", lambda _path: source, raising=False)
+    monkeypatch.setattr(
+        "w3xtool.casc_cli.open_game_data_source", lambda _path: source, raising=False
+    )
 
     # When: the CLI writes an inventory.
-    code = run_casc_cli((
-        "inventory",
-        "--game-dir", str(tmp_path),
-        "--output", str(output),
-    ))
+    code = run_casc_cli(
+        (
+            "inventory",
+            "--game-dir",
+            str(tmp_path),
+            "--output",
+            str(output),
+        )
+    )
 
     # Then: fallback scope is explicit and its source is closed.
     assert code == 0
@@ -72,15 +78,22 @@ def test_inventory_uses_common_known_path_source(
 def test_extract_uses_common_known_path_source(tmp_path: Path, monkeypatch) -> None:
     # Given: the common opener selects a readable fallback source.
     source = _KnownPathSource()
-    monkeypatch.setattr("w3xtool.casc_cli.open_game_data_source", lambda _path: source, raising=False)
+    monkeypatch.setattr(
+        "w3xtool.casc_cli.open_game_data_source", lambda _path: source, raising=False
+    )
 
     # When: one real logical path is extracted.
-    code = run_casc_cli((
-        "extract",
-        "--game-dir", str(tmp_path),
-        "--entry", "UI\\Test.txt",
-        "--output-dir", str(tmp_path / "out"),
-    ))
+    code = run_casc_cli(
+        (
+            "extract",
+            "--game-dir",
+            str(tmp_path),
+            "--entry",
+            "UI\\Test.txt",
+            "--output-dir",
+            str(tmp_path / "out"),
+        )
+    )
 
     # Then: data comes from the common source and lifecycle closes once.
     assert code == 0

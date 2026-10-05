@@ -191,9 +191,7 @@ def decompress_unencrypted_block(
         return None
 
 
-def read_mpq_block_anonymous(
-    storage: MPQBlockStorage, block: _Block
-) -> bytes | None:
+def read_mpq_block_anonymous(storage: MPQBlockStorage, block: _Block) -> bytes | None:
     """Read a block without a filename, recovering its key when possible."""
     try:
         if block.flags & FLAG_ENCRYPTED:
@@ -221,7 +219,9 @@ def peek_mpq_block(storage: MPQBlockStorage, block: _Block, size: int = 64) -> b
             if compressed and block.comp_size < block.file_size:
                 raw = decompress_mpq_block(raw, block.file_size, block.flags)
             return raw[:size]
-        sector_count = (block.file_size + storage.sector_size - 1) // storage.sector_size
+        sector_count = (
+            block.file_size + storage.sector_size - 1
+        ) // storage.sector_size
         offset_count = sector_count + 1 + bool(block.flags & FLAG_SECTOR_CRC)
         offsets = parse_sector_offsets(raw, offset_count, None)
         sector = raw[offsets[0] : offsets[1]]

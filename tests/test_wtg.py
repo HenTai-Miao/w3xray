@@ -21,19 +21,42 @@ def _z(text):
 
 def _classic_trigger(name, enabled=1, custom=0, off=0, init=0, eca_count=0):
     return (
-        _z(name) + _z("说明") + _i(0) + _i(enabled) + _i(custom)
-        + _i(off) + _i(init) + _i(42) + _i(eca_count)
+        _z(name)
+        + _z("说明")
+        + _i(0)
+        + _i(enabled)
+        + _i(custom)
+        + _i(off)
+        + _i(init)
+        + _i(42)
+        + _i(eca_count)
     )
 
 
 def _classic_wtg():
     return (
-        b"WTG!" + _i(7)
-        + _i(1) + _i(42) + _z("系统") + _i(0)
+        b"WTG!"
+        + _i(7)
+        + _i(1)
+        + _i(42)
+        + _z("系统")
+        + _i(0)
         + _i(0)
         + _i(2)
-        + _z("Count") + _z("integer") + _i(1) + _i(0) + _i(1) + _i(1) + _z("5")
-        + _z("Players") + _z("player") + _i(1) + _i(1) + _i(12) + _i(0) + _z("")
+        + _z("Count")
+        + _z("integer")
+        + _i(1)
+        + _i(0)
+        + _i(1)
+        + _i(1)
+        + _z("5")
+        + _z("Players")
+        + _z("player")
+        + _i(1)
+        + _i(1)
+        + _i(12)
+        + _i(0)
+        + _z("")
         + _i(2)
         + _classic_trigger("初始化", enabled=1, init=1)
         + _classic_trigger("禁用脚本", enabled=0, custom=1, off=1, eca_count=1)
@@ -46,29 +69,65 @@ def _type_info(total):
 
 def _reforged_trigger_object(name, object_type, object_id, enabled=1, custom=0):
     return (
-        _i(object_type) + _z(name) + _z("")
+        _i(object_type)
+        + _z(name)
+        + _z("")
         + _i(1 if object_type == 16 else 0)
-        + _i(object_id) + _i(enabled) + _i(custom)
-        + _i(0) + _i(0) + _i(0x02000000) + _i(0)
+        + _i(object_id)
+        + _i(enabled)
+        + _i(custom)
+        + _i(0)
+        + _i(0)
+        + _i(0x02000000)
+        + _i(0)
     )
 
 
 def _reforged_wtg():
     return (
-        b"WTG!" + _u(0x80000004) + _i(7)
-        + _type_info(1) + _type_info(0) + _type_info(1)
-        + _type_info(1) + _type_info(1) + _type_info(1) + _type_info(1)
-        + _i(0) + _i(0) + _i(1)
+        b"WTG!"
+        + _u(0x80000004)
+        + _i(7)
+        + _type_info(1)
+        + _type_info(0)
+        + _type_info(1)
+        + _type_info(1)
+        + _type_info(1)
+        + _type_info(1)
+        + _type_info(1)
+        + _i(0)
+        + _i(0)
         + _i(1)
-        + _z("loc1") + _z("location") + _i(1) + _i(0) + _i(1)
-        + _i(0) + _z("") + _i(0x06000001) + _i(0x02000000)
+        + _i(1)
+        + _z("loc1")
+        + _z("location")
+        + _i(1)
+        + _i(0)
+        + _i(1)
+        + _i(0)
+        + _z("")
+        + _i(0x06000001)
+        + _i(0x02000000)
         + _i(6)
-        + _i(1) + _i(0) + _z("Map") + _i(0) + _i(0) + _i(-1)
-        + _i(4) + _i(0x02000000) + _z("Folder") + _i(1) + _i(1) + _i(0)
+        + _i(1)
+        + _i(0)
+        + _z("Map")
+        + _i(0)
+        + _i(0)
+        + _i(-1)
+        + _i(4)
+        + _i(0x02000000)
+        + _z("Folder")
+        + _i(1)
+        + _i(1)
+        + _i(0)
         + _reforged_trigger_object("Init", 8, 0x03000001)
         + _reforged_trigger_object("Note", 16, 0x04000001)
         + _reforged_trigger_object("ScriptA", 32, 0x05000001, enabled=0, custom=1)
-        + _i(64) + _i(0x06000001) + _z("loc1") + _i(0x02000000)
+        + _i(64)
+        + _i(0x06000001)
+        + _z("loc1")
+        + _i(0x02000000)
     )
 
 
@@ -109,9 +168,13 @@ class WtgParseTest(unittest.TestCase):
         self.assertEqual(summary.trigger_count, 1)
         self.assertEqual(summary.comment_count, 1)
         self.assertEqual(summary.script_count, 1)
-        self.assertEqual([category.name for category in summary.categories], ["Map", "Folder"])
+        self.assertEqual(
+            [category.name for category in summary.categories], ["Map", "Folder"]
+        )
         self.assertEqual(summary.variables[0].name, "loc1")
-        self.assertEqual([trigger.name for trigger in summary.triggers], ["Init", "Note", "ScriptA"])
+        self.assertEqual(
+            [trigger.name for trigger in summary.triggers], ["Init", "Note", "ScriptA"]
+        )
 
     def test_add_trigger_summary_fills_mapdata(self):
         # Given: an archive exposing war3map.wtg.

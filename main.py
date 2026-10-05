@@ -74,6 +74,19 @@ def main() -> None:
         for line in iter_game_config_summary_lines(sys.argv[2], config):
             print(line)
         return
+    if len(sys.argv) >= 2 and sys.argv[1] == "guide":
+        from w3xtool.guide_cli import (
+            GuideCliOptionError,
+            parse_guide_cli_options,
+            run_guide_cli,
+        )
+
+        try:
+            options = parse_guide_cli_options(tuple(sys.argv[2:]))
+        except GuideCliOptionError as exc:
+            print(f"攻略参数错误：{exc}", file=sys.stderr)
+            raise SystemExit(2) from None
+        raise SystemExit(run_guide_cli(options))
     if len(sys.argv) >= 2 and sys.argv[1] == "cli":
         try:
             options = parse_cli_options(tuple(sys.argv[2:]))

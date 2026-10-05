@@ -3,6 +3,7 @@
 格式：L 版本(>1 则==0x80000004 重制，再读真版本==1)；全局块 cstr 注释 + i32 size + (size!=0: cstr 代码)；
 经典：i32 count + 每块 u32 size(0=空，否则 size-1 字节代码 + 1 字节 NUL)；重制：无 count 读到 EOF。
 """
+
 import struct
 import unittest
 
@@ -48,8 +49,12 @@ class TestParseWct(unittest.TestCase):
 
     def test_truncated_returns_partial(self):
         # 触发器块声明 3 个但数据只够 1 个 → 保留已读，不抛
-        data = struct.pack("<I", 1) + b"\x00" + struct.pack("<i", 0)  # ver, 空注释, 全局 size=0
-        data += struct.pack("<i", 3) + _block("ok") + struct.pack("<I", 99)  # count=3, 1好 + 截断
+        data = (
+            struct.pack("<I", 1) + b"\x00" + struct.pack("<i", 0)
+        )  # ver, 空注释, 全局 size=0
+        data += (
+            struct.pack("<i", 3) + _block("ok") + struct.pack("<I", 99)
+        )  # count=3, 1好 + 截断
         w = parse_wct(data)
         self.assertEqual(w.triggers, ["ok"])
         self.assertIs(w.diagnostic, WctDiagnostic.TRUNCATED)
@@ -132,11 +137,14 @@ class _FakeArchive:
 class TestWctIntegration(unittest.TestCase):
     def test_decoded_wct_added_to_scripts(self):
         from w3xtool.api import _add_wct, MapData
+
         wct = _wct("", "globals\n integer g\nendglobals", ["call Foo()", ""])
         md = MapData(path="x", name="x")
         _add_wct(md, _FakeArchive({"war3map.wct": wct}))
         # 解码后的可读代码作为一个脚本条目加入，供"导出脚本"/查看
-        key = next((k for k in md.scripts if k.endswith(".txt") and "wct" in k.lower()), None)
+        key = next(
+            (k for k in md.scripts if k.endswith(".txt") and "wct" in k.lower()), None
+        )
         self.assertIsNotNone(key)
         text = md.scripts[key]
         self.assertIn("endglobals", text)
@@ -144,6 +152,7 @@ class TestWctIntegration(unittest.TestCase):
 
     def test_no_wct_is_noop(self):
         from w3xtool.api import _add_wct, MapData
+
         md = MapData(path="x", name="x")
         _add_wct(md, _FakeArchive({}))
         self.assertEqual(md.scripts, {})

@@ -3,6 +3,7 @@
 合法 MPQ 的 hash 表大小是 2 的幂且整表在文件内；block 表允许声明尾部注水，
 但起点必须在文件内，实际可读项受固定物化预算限制。
 """
+
 import os
 import mmap
 import struct
@@ -18,7 +19,7 @@ from w3xtool.mpq_layout import MPQLayoutError, locate_mpq_layout
 
 def _write_mpq(hdr_bytes, total_size):
     buf = bytearray(total_size)
-    buf[0:len(hdr_bytes)] = hdr_bytes
+    buf[0 : len(hdr_bytes)] = hdr_bytes
     fd, path = tempfile.mkstemp(suffix=".w3x")
     os.close(fd)
     with open(path, "wb") as f:
@@ -27,14 +28,24 @@ def _write_mpq(hdr_bytes, total_size):
 
 
 def _hdr(hash_count, block_count, hash_pos=32, block_pos=32, shift=3):
-    return struct.pack("<4sIIHHIIII", b"MPQ\x1a", 0x20, 0, 0, shift,
-                       hash_pos, block_pos, hash_count, block_count)
+    return struct.pack(
+        "<4sIIHHIIII",
+        b"MPQ\x1a",
+        0x20,
+        0,
+        0,
+        shift,
+        hash_pos,
+        block_pos,
+        hash_count,
+        block_count,
+    )
 
 
 def _write_chunks(chunks, total_size):
     buf = bytearray(total_size)
     for off, b in chunks:
-        buf[off:off + len(b)] = b
+        buf[off : off + len(b)] = b
     fd, path = tempfile.mkstemp(suffix=".w3x")
     os.close(fd)
     with open(path, "wb") as f:
@@ -42,7 +53,9 @@ def _write_chunks(chunks, total_size):
     return path
 
 
-def _write_sparse_mpq(path: Path, header: bytes, total_size: int, offset: int = 0) -> Path:
+def _write_sparse_mpq(
+    path: Path, header: bytes, total_size: int, offset: int = 0
+) -> Path:
     with path.open("wb") as handle:
         handle.truncate(total_size)
         handle.seek(offset)
@@ -58,11 +71,14 @@ def test_main_header_discovery_stops_at_sixteen_mib_budget(tmp_path: Path) -> No
         header_offset + 112,
         header_offset,
     )
-    with path.open("rb") as handle, mmap.mmap(
-        handle.fileno(),
-        0,
-        access=mmap.ACCESS_READ,
-    ) as data:
+    with (
+        path.open("rb") as handle,
+        mmap.mmap(
+            handle.fileno(),
+            0,
+            access=mmap.ACCESS_READ,
+        ) as data,
+    ):
         with pytest.raises(MPQLayoutError, match="没找到 MPQ 头"):
             locate_mpq_layout(data)
 
@@ -75,11 +91,14 @@ def test_hash_table_entry_budget_rejects_sparse_archive(tmp_path: Path) -> None:
         _hdr(hash_count, 0, hash_pos=32, block_pos=block_position),
         block_position,
     )
-    with path.open("rb") as handle, mmap.mmap(
-        handle.fileno(),
-        0,
-        access=mmap.ACCESS_READ,
-    ) as data:
+    with (
+        path.open("rb") as handle,
+        mmap.mmap(
+            handle.fileno(),
+            0,
+            access=mmap.ACCESS_READ,
+        ) as data,
+    ):
         with pytest.raises(MPQLayoutError, match="hash 表过大"):
             locate_mpq_layout(data)
 
@@ -92,11 +111,14 @@ def test_block_table_entry_budget_rejects_sparse_archive(tmp_path: Path) -> None
         _hdr(4, block_count, hash_pos=32, block_pos=block_position),
         block_position + block_count * 16,
     )
-    with path.open("rb") as handle, mmap.mmap(
-        handle.fileno(),
-        0,
-        access=mmap.ACCESS_READ,
-    ) as data:
+    with (
+        path.open("rb") as handle,
+        mmap.mmap(
+            handle.fileno(),
+            0,
+            access=mmap.ACCESS_READ,
+        ) as data,
+    ):
         with pytest.raises(MPQLayoutError, match="block 表过大"):
             locate_mpq_layout(data)
 
@@ -132,7 +154,7 @@ class TestMpqHeader(unittest.TestCase):
         # 文件只有 112 字节 → block 表尾越界 32 字节，但起点(96)在文件内。
         path = _write_mpq(_hdr(4, 4, hash_pos=32, block_pos=96), 112)
         try:
-            a = MPQArchive(path)                       # 不应抛异常
+            a = MPQArchive(path)  # 不应抛异常
             self.assertEqual(a.archive_offset, 0)
             self.assertLessEqual(len(a.block_table), 4)  # 只读到实际存在的条目
         finally:
@@ -143,8 +165,8 @@ class TestDecoyHeader(unittest.TestCase):
     def test_skips_decoy_header_and_finds_real(self):
         # 头部混淆图（如 _w3p 打包）：在 512 处放一个非法的诱饵 MPQ 头，
         # 真头挪到 1024。扫描应跳过校验不过的诱饵，定位到真头。
-        decoy = _hdr(1000, 1)                          # hash_count 非 2 的幂 → 非法
-        real = _hdr(4, 1, hash_pos=32, block_pos=96)   # 合法，表都在文件内
+        decoy = _hdr(1000, 1)  # hash_count 非 2 的幂 → 非法
+        real = _hdr(4, 1, hash_pos=32, block_pos=96)  # 合法，表都在文件内
         path = _write_chunks([(512, decoy), (1024, real)], 4096)
         try:
             a = MPQArchive(path)

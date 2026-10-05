@@ -42,11 +42,13 @@ class InvestigationExportsTest(unittest.TestCase):
             ],
         }
         md.scripts = {
-            "war3map.j": "\n".join((
-                "call CreateUnit(Player(0), 'H001', 0, 0, 0)",
-                "call UnitAddAbility(u, 'A001')",
-                "call UnitAddAbility(u, 'A999')",
-            )),
+            "war3map.j": "\n".join(
+                (
+                    "call CreateUnit(Player(0), 'H001', 0, 0, 0)",
+                    "call UnitAddAbility(u, 'A001')",
+                    "call UnitAddAbility(u, 'A999')",
+                )
+            ),
             "save.j": "call UnitAddAbility(u, 'A001')",
         }
 
@@ -57,7 +59,9 @@ class InvestigationExportsTest(unittest.TestCase):
         self.assertIn("对象\t单位\tH001\t1211117617\t圣骑士\tw3u\t脚本引用", index)
         self.assertIn("war3map.j:1:单位", index)
         self.assertIn("对象\t单位\tH002\t1211117618\t未使用单位\tw3u\t对象表", index)
-        self.assertIn("对象\t技能\tA001\t1093677105\t治疗术\tw3a\t脚本引用,存档/ID线索", index)
+        self.assertIn(
+            "对象\t技能\tA001\t1093677105\t治疗术\tw3a\t脚本引用,存档/ID线索", index
+        )
         self.assertIn("save.j:1:技能", index)
         self.assertIn("war3map.j:2:技能", index)
         self.assertIn("脚本引用\t未知\tA999\t1094269241\t\twar3map.j\t脚本引用", index)
@@ -72,8 +76,12 @@ class InvestigationExportsTest(unittest.TestCase):
             "技能": [GameObject("技能", "w3a", "A001", "AHhb", "治疗术", True)],
             "物品": [GameObject("物品", "w3t", "I001", "ratf", "力量指环", True)],
         }
-        md.obj_index = {obj.obj_id: obj for objects in md.objects.values() for obj in objects}
-        md.units = [Unit("H001", 0, 0, 0, 0, 0, items=[(0, "I001")], abilities=[("A001", 1, 2)])]
+        md.obj_index = {
+            obj.obj_id: obj for objects in md.objects.values() for obj in objects
+        }
+        md.units = [
+            Unit("H001", 0, 0, 0, 0, 0, items=[(0, "I001")], abilities=[("A001", 1, 2)])
+        ]
         md.doodads = [Doodad("D001", 0, 0, 0, 0, 0, drops=[("I001", 100)])]
 
         # When: the ID index is formatted for the knowledge pack.

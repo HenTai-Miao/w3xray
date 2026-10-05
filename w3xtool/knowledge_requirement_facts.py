@@ -86,10 +86,18 @@ def _script_source_row(md: MapData | None) -> RequirementCoverage:
 
 
 def _campaign_row(md: MapData | None) -> RequirementCoverage:
-    declared = len(tuple(getattr(getattr(md, "w3f", None), "maps", ()) or ())) if md is not None else 0
+    declared = (
+        len(tuple(getattr(getattr(md, "w3f", None), "maps", ()) or ()))
+        if md is not None
+        else 0
+    )
     children = tuple(md.sub_maps) if md is not None else ()
     readable = sum(_child_source_readable(child) for child in children)
-    failed = sum(item.component == "campaign-child" for item in md.diagnostics) if md is not None else 0
+    failed = (
+        sum(item.component == "campaign-child" for item in md.diagnostics)
+        if md is not None
+        else 0
+    )
     if declared == 0 and not children and failed == 0:
         status = "未发现"
     elif failed or readable < max(declared, len(children)):

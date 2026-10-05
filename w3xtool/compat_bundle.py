@@ -7,7 +7,11 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Final
 
-from .bounded_file import BoundedFileError, read_bounded_regular_file, sha256_regular_file
+from .bounded_file import (
+    BoundedFileError,
+    read_bounded_regular_file,
+    sha256_regular_file,
+)
 from .extraction_ledger import BlockSource
 from .safe_output import safe_relative_path
 from .supplemental_evidence import (

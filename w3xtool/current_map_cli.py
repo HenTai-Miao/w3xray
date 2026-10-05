@@ -70,7 +70,11 @@ def parse_current_map_cli_options(argv: Sequence[str]) -> CurrentMapCliOptions:
         if option in values:
             raise CurrentMapCliOptionError(f"参数不能重复：{option}")
         value_index = index + 1
-        if value_index >= len(argv) or not argv[value_index] or argv[value_index].startswith("--"):
+        if (
+            value_index >= len(argv)
+            or not argv[value_index]
+            or argv[value_index].startswith("--")
+        ):
             raise CurrentMapCliOptionError(f"参数缺少路径值：{option}")
         value = argv[value_index]
         if option == _ROOT_OPTION:
@@ -99,7 +103,9 @@ def run_current_map_cli(options: CurrentMapCliOptions) -> int:
         case ResolutionStatus.FOUND:
             if len(resolution.candidates) != 1:
                 if resolution.candidates:
-                    _print_candidates("直接证据结果不唯一，不能自动选择。", resolution.candidates)
+                    _print_candidates(
+                        "直接证据结果不唯一，不能自动选择。", resolution.candidates
+                    )
                     return 3
                 print("当前地图定位结果不完整，未创建快照。", file=sys.stderr)
                 return 2
@@ -109,11 +115,15 @@ def run_current_map_cli(options: CurrentMapCliOptions) -> int:
                 "已根据直接证据定位当前地图",
             )
         case ResolutionStatus.AMBIGUOUS:
-            _print_candidates("发现多个直接证据候选，不能自动选择。", resolution.candidates)
+            _print_candidates(
+                "发现多个直接证据候选，不能自动选择。", resolution.candidates
+            )
             return 3
         case ResolutionStatus.SUGGESTED:
             if len(resolution.candidates) != 1:
-                _print_candidates("提示候选不唯一，不能自动选择。", resolution.candidates)
+                _print_candidates(
+                    "提示候选不唯一，不能自动选择。", resolution.candidates
+                )
                 return 3 if resolution.candidates else 2
             if not options.accept_suggestion:
                 _print_candidates(

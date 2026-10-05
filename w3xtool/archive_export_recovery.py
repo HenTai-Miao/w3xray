@@ -62,15 +62,21 @@ def _export_recovered_named_files(
             break
     by_hash: dict[tuple[int, int], list[str]] = {}
     for name in candidates:
-        by_hash.setdefault((_hash(name, HASH_NAME_A), _hash(name, HASH_NAME_B)), []).append(name)
+        by_hash.setdefault(
+            (_hash(name, HASH_NAME_A), _hash(name, HASH_NAME_B)), []
+        ).append(name)
     manifest: list[str] = []
     count = 0
     exported_bytes = 0
-    for name_a, name_b, _locale, _platform, block_index in getattr(archive, "hash_table", []):
+    for name_a, name_b, _locale, _platform, block_index in getattr(
+        archive, "hash_table", []
+    ):
         remaining_bytes = _MAX_RECOVERY_EXPORT_BYTES - exported_bytes
         if remaining_bytes <= 0:
             break
-        if block_index in (0xFFFFFFFF, 0xFFFFFFFE) or block_index >= len(archive.block_table):
+        if block_index in (0xFFFFFFFF, 0xFFFFFFFE) or block_index >= len(
+            archive.block_table
+        ):
             continue
         if block_index in exported_blocks:
             continue
@@ -135,28 +141,41 @@ def _try_export_recovered_hit(
     remaining_bytes: int,
     declared_size: int,
 ) -> tuple[int, int]:
-    ordered = sorted(set(hits), key=lambda item: (item.lower().startswith("war3mapimported\\"), len(item), item.lower()))
+    ordered = sorted(
+        set(hits),
+        key=lambda item: (
+            item.lower().startswith("war3mapimported\\"),
+            len(item),
+            item.lower(),
+        ),
+    )
     consumed_bytes = 0
     for name in ordered:
         available_bytes = remaining_bytes - consumed_bytes
         if declared_size > available_bytes:
-            manifest.append(f"SKIP\tblock={block_index}\tname={name}\treason=size-limit")
+            manifest.append(
+                f"SKIP\tblock={block_index}\tname={name}\treason=size-limit"
+            )
             break
         try:
             data = archive.read_file(name)
-        except (KeyError, OSError, ValueError):
+        except KeyError, OSError, ValueError:
             consumed_bytes += declared_size
             continue
         consumed_bytes += max(declared_size, len(data))
         if len(data) > available_bytes:
-            manifest.append(f"SKIP\tblock={block_index}\tname={name}\treason=size-limit")
+            manifest.append(
+                f"SKIP\tblock={block_index}\tname={name}\treason=size-limit"
+            )
             return 0, consumed_bytes
         result = write_bytes_safely(out_dir, name, data)
         if result.status is SafeWriteStatus.UNSAFE:
             manifest.append(f"UNSAFE\tblock={block_index}\tname={name}")
             return 0, consumed_bytes
         if result.status is SafeWriteStatus.FAILED:
-            manifest.append(f"FAIL\tblock={block_index}\tname={name}\thits={len(ordered)}")
+            manifest.append(
+                f"FAIL\tblock={block_index}\tname={name}\thits={len(ordered)}"
+            )
             return 0, consumed_bytes
         exported_blocks.add(block_index)
         manifest.append(
@@ -164,5 +183,7 @@ def _try_export_recovered_hit(
             f"type={guess_extension(data)}\thits={len(ordered)}"
         )
         return 1, consumed_bytes
-    manifest.append(f"FAIL\tblock={block_index}\tname={ordered[0]}\thits={len(ordered)}")
+    manifest.append(
+        f"FAIL\tblock={block_index}\tname={ordered[0]}\thits={len(ordered)}"
+    )
     return 0, consumed_bytes

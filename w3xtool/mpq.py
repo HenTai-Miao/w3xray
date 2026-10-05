@@ -1,4 +1,5 @@
 """Warcraft III MPQ archive lookup and compatibility facade."""
+
 from __future__ import annotations
 
 import struct
@@ -122,7 +123,9 @@ class MPQArchive:
         layout = locate_mpq_layout(self._data)
         self.archive_offset = layout.archive_offset
         self.header_size = layout.header_size
-        self.archive_size = struct.unpack_from("<I", self._data, layout.archive_offset + 8)[0]
+        self.archive_size = struct.unpack_from(
+            "<I", self._data, layout.archive_offset + 8
+        )[0]
         self.format_version = layout.format_version
         self.sector_size_shift = layout.sector_shift
         self.sector_size = 512 << self.sector_size_shift
@@ -155,9 +158,7 @@ class MPQArchive:
         platform = getattr(self, "platform", 0)
         for candidate in encoded_name_candidates(name, legacy_codecs):
             entries = self._matching_hash_entries(candidate)
-            entry = select_hash_entry(
-                entries, locale_id=locale_id, platform=platform
-            )
+            entry = select_hash_entry(entries, locale_id=locale_id, platform=platform)
             if entry is not None:
                 return entry, candidate
         return None
@@ -169,7 +170,9 @@ class MPQArchive:
         matches: list[HashEntry] = []
         for count in range(self.hash_count):
             raw_entry = self.hash_table[(index + count) & (self.hash_count - 1)]
-            entry = raw_entry if isinstance(raw_entry, HashEntry) else HashEntry(*raw_entry)
+            entry = (
+                raw_entry if isinstance(raw_entry, HashEntry) else HashEntry(*raw_entry)
+            )
             if entry.block_index == 0xFFFFFFFF:
                 break
             if (
@@ -204,7 +207,7 @@ class MPQArchive:
         if entry is None:
             raise KeyError(name)
         bi = entry.block_index
-        if bi >= len(self.block_table):       # 块表被截断/索引越界
+        if bi >= len(self.block_table):  # 块表被截断/索引越界
             raise KeyError(name)
         cache_key = (bi, candidate)
         cached = self._payload_cache.get(cache_key)

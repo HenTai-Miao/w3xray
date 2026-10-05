@@ -8,7 +8,11 @@ import pytest
 from tests.test_gui_current_map import _candidate, _harness, _snapshot
 from w3xtool import gui_current_map as current_gui
 from w3xtool import gui_current_map_presenter as presenter
-from w3xtool.current_map_models import CurrentMapResolution, EvidenceKind, ResolutionStatus
+from w3xtool.current_map_models import (
+    CurrentMapResolution,
+    EvidenceKind,
+    ResolutionStatus,
+)
 
 
 @pytest.mark.parametrize("accepted", (True, False))
@@ -108,7 +112,9 @@ def test_declining_the_candidate_choice_loads_nothing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     harness = _harness(monkeypatch)
-    candidates = tuple(_candidate(tmp_path / f"pick-{index}.w3x", kind) for index in range(3))
+    candidates = tuple(
+        _candidate(tmp_path / f"pick-{index}.w3x", kind) for index in range(3)
+    )
     resolution = CurrentMapResolution(status, candidates)
     monkeypatch.setattr(current_gui, "locate_current_map", lambda _roots: resolution)
     monkeypatch.setattr(presenter, "_candidate_chooser", lambda _candidates: None)

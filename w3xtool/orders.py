@@ -1,4 +1,5 @@
 """控制命令 / Order 分析：检测命令串引用与冲突。"""
+
 from __future__ import annotations
 
 import re
@@ -22,6 +23,7 @@ _ISSUE_ORDER_ID_RE: Final = re.compile(
 )
 _ORDER_ID_RE: Final = re.compile(r"\b(85\d{4})\b")
 _EMPTY_ORDERS: Final = {"", "_", "none", "null", "0", "0000"}
+
 
 @dataclass(frozen=True, slots=True)
 class OrderUse:
@@ -57,7 +59,9 @@ def build_order_report(md: MapData) -> OrderReport:
         uses.extend(_object_order_uses(obj))
     for script_name, text in analysis_script_texts(md):
         uses.extend(_script_order_uses(script_name, text))
-    ordered_uses = tuple(sorted(uses, key=lambda use: (use.order, use.source, use.detail)))
+    ordered_uses = tuple(
+        sorted(uses, key=lambda use: (use.order, use.source, use.detail))
+    )
     return OrderReport(ordered_uses, _collisions(ordered_uses))
 
 
@@ -73,7 +77,9 @@ def _object_order_uses(obj: GameObject) -> tuple[OrderUse, ...]:
         order = _normalize_order(str(value))
         if order in _EMPTY_ORDERS:
             continue
-        out.append(OrderUse(order, f"对象 {obj.obj_id}", f"{obj.name} · {label}", obj.obj_id))
+        out.append(
+            OrderUse(order, f"对象 {obj.obj_id}", f"{obj.name} · {label}", obj.obj_id)
+        )
     return tuple(out)
 
 

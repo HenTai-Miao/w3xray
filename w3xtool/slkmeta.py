@@ -1,4 +1,5 @@
 """地图内嵌 SLK 文件的只读清单摘要。"""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -51,7 +52,7 @@ def slk_inventory_from_map_path(path: str) -> SlkInventoryReport:
     try:
         with MPQArchive(path) as archive:
             return slk_inventory_from_archive(archive)
-    except (OSError, ValueError, KeyError, UnicodeDecodeError):
+    except OSError, ValueError, KeyError, UnicodeDecodeError:
         return SlkInventoryReport(())
 
 
@@ -62,7 +63,7 @@ def slk_inventory_from_map(md: MapData) -> SlkInventoryReport:
     try:
         with open_map_source(md) as archive:
             return slk_inventory_from_archive(archive)
-    except (OSError, ValueError, KeyError, UnicodeDecodeError):
+    except OSError, ValueError, KeyError, UnicodeDecodeError:
         return SlkInventoryReport(())
 
 

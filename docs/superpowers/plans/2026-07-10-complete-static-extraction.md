@@ -69,7 +69,9 @@ def test_real_trigger_data_signature_and_trigger_strings_template() -> None:
 
 
 def test_missing_trigger_strings_keeps_signature_without_fake_template() -> None:
-    schema = parse_trigger_schema("[TriggerActions]\nDisplayTextToForce=0,force,StringExt\n", "")
+    schema = parse_trigger_schema(
+        "[TriggerActions]\nDisplayTextToForce=0,force,StringExt\n", ""
+    )
 
     action = schema.require(TriggerFunctionKind.ACTION, "DisplayTextToForce")
     assert action.parameter_types == ("force", "StringExt")
@@ -108,8 +110,12 @@ class TriggerSchema:
     functions: Mapping[tuple[TriggerFunctionKind, str], TriggerFunctionSchema]
     has_trigger_strings: bool = False
 
-    def get(self, kind: TriggerFunctionKind, name: str) -> TriggerFunctionSchema | None: ...
-    def require(self, kind: TriggerFunctionKind, name: str) -> TriggerFunctionSchema: ...
+    def get(
+        self, kind: TriggerFunctionKind, name: str
+    ) -> TriggerFunctionSchema | None: ...
+    def require(
+        self, kind: TriggerFunctionKind, name: str
+    ) -> TriggerFunctionSchema: ...
 ```
 
 Parse `[TriggerEvents]`, `[TriggerConditions]`, `[TriggerActions]`, and `[TriggerCalls]` as comma-separated signatures. Preserve repeated TriggerStrings keys as ordered values instead of collapsing the section into a dictionary. Never treat the TriggerData signature itself as display text.
@@ -117,13 +123,15 @@ Parse `[TriggerEvents]`, `[TriggerConditions]`, `[TriggerActions]`, and `[Trigge
 - [ ] **Step 4: Implement resilient source loading and semantic fallback**
 
 ```python
-def load_trigger_schema_from_source(source: TriggerDataSource | None) -> TriggerSchema | None:
+def load_trigger_schema_from_source(
+    source: TriggerDataSource | None,
+) -> TriggerSchema | None:
     if source is None:
         return None
     try:
         data = _read_first(source, _TRIGGER_DATA_NAMES)
         strings = _read_first(source, _TRIGGER_STRING_NAMES)
-    except (FileNotFoundError, OSError, ValueError, CascUnsupportedError):
+    except FileNotFoundError, OSError, ValueError, CascUnsupportedError:
         return None
     if data is None:
         return None
@@ -210,7 +218,11 @@ def test_wc3libs_real_wtg_never_silently_accepts_bad_parameter_values() -> None:
 
     assert not summary.parse_failures
     assert summary.eca_functions
-    assert all(0 <= param.parameter_type <= 3 for node in walk_eca(summary) for param in node.parameters)
+    assert all(
+        0 <= param.parameter_type <= 3
+        for node in walk_eca(summary)
+        for param in node.parameters
+    )
 
 
 def test_wtg_without_schema_keeps_headers_and_reports_missing_schema() -> None:
@@ -251,16 +263,38 @@ Keep `w3xtool.wtg` as the compatibility facade and move version-specific layouts
 - [ ] **Step 4: Implement schema-counted normal parameters and special forms**
 
 ```python
-def read_eca(reader: WtgReader, trigger_name: str, schema: TriggerSchema, *, has_branch: bool, depth: int) -> TriggerEcaFunction:
+def read_eca(
+    reader: WtgReader,
+    trigger_name: str,
+    schema: TriggerSchema,
+    *,
+    has_branch: bool,
+    depth: int,
+) -> TriggerEcaFunction:
     kind = read_function_kind(reader.i32())
     branch = reader.i32() if has_branch else 0
     name = reader.cstr()
     enabled = bool(reader.i32())
     function_schema = schema.require(kind, name)
-    params = tuple(read_parameter(reader, schema, type_name, depth=depth + 1) for type_name in function_schema.parameter_types)
+    params = tuple(
+        read_parameter(reader, schema, type_name, depth=depth + 1)
+        for type_name in function_schema.parameter_types
+    )
     child_count = reader.bounded_count("child ECA")
-    children = tuple(read_eca(reader, trigger_name, schema, has_branch=True, depth=depth + 1) for _ in range(child_count))
-    return TriggerEcaFunction(trigger_name, kind.value, name, enabled, params, children, depth=depth, branch=branch)
+    children = tuple(
+        read_eca(reader, trigger_name, schema, has_branch=True, depth=depth + 1)
+        for _ in range(child_count)
+    )
+    return TriggerEcaFunction(
+        trigger_name,
+        kind.value,
+        name,
+        enabled,
+        params,
+        children,
+        depth=depth,
+        branch=branch,
+    )
 ```
 
 Implement version 4 and version 7 parameter layouts, nested begin-function records, array indexes, bool/code special parameters, branch/group fields, recursion limits, and exact offset diagnostics from the referenced wc3libs reader.
@@ -399,7 +433,9 @@ class ExtractionCapabilities:
 ```python
 def test_load_map_confirms_external_names_before_listing(monkeypatch) -> None:
     archive = FakeArchive(existing={"hidden/config.json"})
-    context = MapLoadContext(external_names=("hidden/config.json", "ghost.blp", "../escape"))
+    context = MapLoadContext(
+        external_names=("hidden/config.json", "ghost.blp", "../escape")
+    )
 
     md = load_map_with_archive(archive, context)
 
@@ -416,7 +452,9 @@ def test_requirement_coverage_uses_map_results() -> None:
     md = MapData(path="x.w3x", name="x")
     md.trigger_summary = summary_with_missing_schema()
 
-    text = format_requirement_coverage(md, ExtractionCapabilities(game_data_kind="missing"))
+    text = format_requirement_coverage(
+        md, ExtractionCapabilities(game_data_kind="missing")
+    )
 
     assert "WTG ECA\t部分提取" in text
     assert "原生 CASC\t源数据缺失" in text
@@ -747,12 +785,17 @@ or the binary is not x64 PE. Non-Windows tests and builds do not require it.
 - [ ] **Step 6: Add opt-in real Windows integration**
 
 ```python
-@unittest.skipUnless(sys.platform == "win32" and os.getenv("W3XRAY_WAR3_DIR"), "需要 Windows Warcraft III CASC 安装")
+@unittest.skipUnless(
+    sys.platform == "win32" and os.getenv("W3XRAY_WAR3_DIR"),
+    "需要 Windows Warcraft III CASC 安装",
+)
 def test_real_install_reads_trigger_schema_and_icon() -> None:
     with CascLibDataSource(os.environ["W3XRAY_WAR3_DIR"]) as source:
         assert source.read_file("UI/TriggerData.txt")
         assert source.read_file("UI/TriggerStrings.txt")
-        assert source.read_file("ReplaceableTextures/CommandButtons/BTNSelectHeroOn.blp")
+        assert source.read_file(
+            "ReplaceableTextures/CommandButtons/BTNSelectHeroOn.blp"
+        )
 ```
 
 - [ ] **Step 7: Run cross-platform CascLib and packaging tests**
@@ -798,7 +841,9 @@ def test_real_format_trigger_listfile_pack_workflow(tmp_path: Path) -> None:
     assert written > 0
     assert tuple(md.all_files) == before
     assert "本地化" in (tmp_path / "pack" / "触发器ECA.tsv").read_text(encoding="utf-8")
-    assert "部分提取" in (tmp_path / "pack" / "需求覆盖.tsv").read_text(encoding="utf-8")
+    assert "部分提取" in (tmp_path / "pack" / "需求覆盖.tsv").read_text(
+        encoding="utf-8"
+    )
 ```
 
 - [ ] **Step 2: Update documentation to exact capability boundaries**

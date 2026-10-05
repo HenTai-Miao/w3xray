@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterable, Mapping, Sequence
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import replace
 from typing import Final
 
@@ -111,6 +113,12 @@ def merge_object_candidates(
         grouped,
         key=lambda item: (item[0].casefold(), item[1].encode("latin-1", "replace")),
     )
+    # 多核物化：_materialize 是纯函数，进程池结果与串行一致；失败回退串行。
+    workers = _configured_workers()
+    if workers > 1 and len(keys) >= 64:
+        parallel = _merge_parallel(keys, grouped, base_objects, workers)
+        if parallel is not None:
+            return parallel
     table_id = id(base_objects)
     table_cache = None
     if _table_is_cached(base_objects):
@@ -129,6 +137,54 @@ def merge_object_candidates(
                 table_cache[cache_key] = cached
         results.append(replace(cached))
     return tuple(results)
+
+
+# 工作进程初始化时注入的基础表（仅并行路径使用；小写以免被当作常量）。
+_worker_base_table: BaseObjectTable | None = None
+
+
+def _configured_workers() -> int:
+    """W3XRAY_MATERIALIZE_WORKERS 控制并行度（默认 1=串行，上限 32）。"""
+    try:
+        requested = int(os.environ.get("W3XRAY_MATERIALIZE_WORKERS", "1"))
+    except ValueError:
+        return 1
+    return max(1, min(requested, 32))
+
+
+def _init_worker(base_objects: BaseObjectTable) -> None:
+    """每个工作进程只接收一次基础表，避免逐任务重复序列化。"""
+    global _worker_base_table
+    _worker_base_table = base_objects
+
+
+def _materialize_job(
+    identity: tuple[str, str],
+    candidates: tuple[ObjectCandidate, ...],
+) -> GameObject:
+    base = _worker_base_table
+    if base is None:
+        raise RuntimeError("worker base table not initialized")
+    return _materialize(identity, candidates, base)
+
+
+def _merge_parallel(
+    keys: list[tuple[str, str]],
+    grouped: dict[tuple[str, str], list[ObjectCandidate]],
+    base_objects: BaseObjectTable,
+    workers: int,
+) -> tuple[GameObject, ...] | None:
+    """进程池并行物化；任何异常返回 None 由调用方走串行。"""
+    jobs = [(key, tuple(grouped[key])) for key in keys]
+    chunksize = max(1, len(jobs) // (workers * 4))
+    try:
+        with ProcessPoolExecutor(
+            max_workers=workers, initializer=_init_worker, initargs=(base_objects,)
+        ) as pool:
+            merged = list(pool.map(_materialize_job, *zip(*jobs), chunksize=chunksize))
+    except Exception:  # noqa: BLE001 - 并行边界，失败回退串行。
+        return None
+    return tuple(replace(item) for item in merged)
 
 
 def named_base_candidates(base_objects: BaseObjectTable) -> tuple[ObjectCandidate, ...]:

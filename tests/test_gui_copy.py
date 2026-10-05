@@ -1,4 +1,5 @@
 """表格右键复制：隐藏指令/合成配方/对象列 选中行可复制到剪贴板。"""
+
 import unittest
 
 from tests.gui_base import GuiTestCase
@@ -6,7 +7,9 @@ from tests.gui_base import GuiTestCase
 
 class TestTreeCopy(GuiTestCase):
     def test_copy_command_row(self):
-        self.app.cmd_tree.insert("", "end", iid="0", values=("-kill", "精确", "杀死单位"))
+        self.app.cmd_tree.insert(
+            "", "end", iid="0", values=("-kill", "精确", "杀死单位")
+        )
         self.app.cmd_tree.selection_set("0")
         self.app._copy_tree_row(self.app.cmd_tree)
         clip = self.app.clipboard_get()

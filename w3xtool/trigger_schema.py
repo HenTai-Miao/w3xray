@@ -116,7 +116,11 @@ def _parse_signature(
                 raise csv.Error("invalid TriggerCalls signature")
             return_type = parts[2]
             parameter_types = parts[3:]
-        case TriggerFunctionKind.EVENT | TriggerFunctionKind.CONDITION | TriggerFunctionKind.ACTION:
+        case (
+            TriggerFunctionKind.EVENT
+            | TriggerFunctionKind.CONDITION
+            | TriggerFunctionKind.ACTION
+        ):
             if len(parts) < 2:
                 raise csv.Error(f"invalid {kind.value} signature")
             return_type = None

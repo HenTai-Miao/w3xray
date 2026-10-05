@@ -741,7 +741,9 @@ def test_text_strings_win_over_binary_and_slk_without_losing_originals() -> None
 
 def test_only_same_field_level_and_priority_can_conflict() -> None:
     rows = _index_with_two_binary_ubertips_and_one_slk_value().records
-    conflicts = tuple(row for row in rows if row.state is ObjectTextState.SOURCE_CONFLICT)
+    conflicts = tuple(
+        row for row in rows if row.state is ObjectTextState.SOURCE_CONFLICT
+    )
     assert {row.raw_value for row in conflicts} == {"二进制甲", "二进制乙"}
     assert {row.source_priority for row in conflicts} == {
         int(TextSourcePriority.MAP_BINARY)
@@ -1613,9 +1615,7 @@ def derive_batch_axes(
         relation_partial_count,
         unresolved_endpoint_count,
     )
-    knowledge = (
-        KnowledgeEvidence.PARTIAL if reasons else KnowledgeEvidence.COMPLETE
-    )
+    knowledge = KnowledgeEvidence.PARTIAL if reasons else KnowledgeEvidence.COMPLETE
     return BatchAxes(publication, archive, knowledge, reasons)
 ```
 
@@ -1828,9 +1828,7 @@ def test_global_gap_rows_reconcile_paths_references_and_axes(tmp_path: Path) -> 
     cache_text = format_description_cache_tsv(EMPTY_DESCRIPTION_CACHE)
     bundle = build_global_payloads(tmp_path, state, cache_text, "")
     gaps = parse_global_icon_gaps_tsv(bundle.payloads["图标缺口汇总.tsv"])
-    assert len(gaps) == sum(
-        result.unresolved_icon_count for result in state.results
-    )
+    assert len(gaps) == sum(result.unresolved_icon_count for result in state.results)
     assert sum(row.reference_count for row in gaps) == sum(
         result.unresolved_icon_reference_count for result in state.results
     )
@@ -1876,9 +1874,7 @@ def collect_global_evidence(
         directory = Path(destination)
         validation = verify_map_publication(directory, result)
         if not validation.valid:
-            raise GlobalEvidenceError(
-                f"invalid map publication: {validation.code}"
-            )
+            raise GlobalEvidenceError(f"invalid map publication: {validation.code}")
         gaps.extend(read_global_gap_rows(directory, result))
         named_rows, anonymous_rows = read_global_icon_rows(directory, result)
         resolved.extend(named_rows)
@@ -2593,25 +2589,17 @@ def test_retained_integrity_separates_valid_partial_and_transient_objects(
     active = published_cache(tmp_path / "active-source", raw="active")
     old = published_cache(tmp_path / "old-source", raw="previous")
     previous = active.parent / (
-        ".w3xray-description-cache-retained-"
-        f"{'1' * 32}-previous"
+        f".w3xray-description-cache-retained-{'1' * 32}-previous"
     )
     old.rename(previous)
     failed = active.parent / (
-        ".w3xray-description-cache-retained-"
-        f"{'2' * 32}-failed-stage"
+        f".w3xray-description-cache-retained-{'2' * 32}-failed-stage"
     )
     failed.mkdir()
     (failed / "partial.bin").write_bytes(b"partial")
-    transient = active.parent / (
-        ".w3xray-description-cache-stage-"
-        f"{'3' * 32}"
-    )
+    transient = active.parent / (f".w3xray-description-cache-stage-{'3' * 32}")
     transient.write_bytes(b"transient")
-    unsafe = active.parent / (
-        ".w3xray-description-cache-retained-"
-        f"{'4' * 32}-recovery"
-    )
+    unsafe = active.parent / (f".w3xray-description-cache-retained-{'4' * 32}-recovery")
     unsafe.symlink_to(tmp_path / "outside", target_is_directory=True)
 
     report = inspect_retained_description_caches(active)
@@ -2630,12 +2618,18 @@ def test_retained_integrity_separates_valid_partial_and_transient_objects(
     assert len(report.transient) == 1
     assert report.transient[0].path == transient
     assert report.transient[0].kind is CacheArtifactKind.REGULAR_FILE
-    assert load_trusted_description_cache(active).cache.lookup(
-        "物品", "ratf", "扩展提示", None
-    )[0].raw_value == "active"
-    assert parse_description_cache_retention_report(
-        format_description_cache_retention_report(report)
-    ) == report
+    assert (
+        load_trusted_description_cache(active)
+        .cache.lookup("物品", "ratf", "扩展提示", None)[0]
+        .raw_value
+        == "active"
+    )
+    assert (
+        parse_description_cache_retention_report(
+            format_description_cache_retention_report(report)
+        )
+        == report
+    )
 ```
 
 - [ ] **Step 4: Write failing CLI safety and exit-code tests**
@@ -2649,9 +2643,12 @@ def test_integrity_cli_snapshots_then_verifies_exact_roots(
     root.mkdir()
     (root / "a.w3x").write_bytes(b"map")
     snapshot = tmp_path / "before.json"
-    assert run_integrity_cli(
-        ("snapshot", "--root", f"maps={root}", "--output", str(snapshot))
-    ) == 0
+    assert (
+        run_integrity_cli(
+            ("snapshot", "--root", f"maps={root}", "--output", str(snapshot))
+        )
+        == 0
+    )
     assert run_integrity_cli(("verify", "--snapshot", str(snapshot))) == 0
     assert "完整性验证通过" in capsys.readouterr().out
 
@@ -2662,9 +2659,12 @@ def test_integrity_cli_returns_one_for_a_changed_input(tmp_path: Path) -> None:
     source = root / "state.json"
     source.write_text("first", encoding="utf-8")
     snapshot = tmp_path / "before.json"
-    assert run_integrity_cli(
-        ("snapshot", "--root", f"history={root}", "--output", str(snapshot))
-    ) == 0
+    assert (
+        run_integrity_cli(
+            ("snapshot", "--root", f"history={root}", "--output", str(snapshot))
+        )
+        == 0
+    )
     source.write_text("second", encoding="utf-8")
     assert run_integrity_cli(("verify", "--snapshot", str(snapshot))) == 1
 ```
@@ -2813,8 +2813,7 @@ def schema5_context() -> Schema5Context:
             (
                 path
                 for path in maps_root.rglob("*")
-                if path.is_file()
-                and path.suffix.casefold() in {".w3x", ".w3m", ".w3n"}
+                if path.is_file() and path.suffix.casefold() in {".w3x", ".w3m", ".w3n"}
             ),
             key=lambda path: str(path).casefold(),
         )
@@ -2824,17 +2823,13 @@ def schema5_context() -> Schema5Context:
     results = generation.state.results
     v4_summary = read_tsv(v4_root / "批量提取汇总.tsv")
     v4_by_digest = {
-        v4_summary.value(row, "SHA256"):
-        v4_root / v4_summary.value(row, "输出目录")
+        v4_summary.value(row, "SHA256"): v4_root / v4_summary.value(row, "输出目录")
         for row in v4_summary.rows
     }
     new_by_digest = {
-        result.source.sha256: directory
-        for result, directory in authority.publications
+        result.source.sha256: directory for result, directory in authority.publications
     }
-    cache = load_trusted_description_cache(
-        Path(os.environ["W3XRAY_DESCRIPTION_CACHE"])
-    )
+    cache = load_trusted_description_cache(Path(os.environ["W3XRAY_DESCRIPTION_CACHE"]))
     return Schema5Context(
         maps,
         authority,
@@ -2892,8 +2887,7 @@ def test_every_gap_has_a_reason_and_no_filtered_field_leaks_back_in(
         gap_count += len(table.rows)
     assert gap_count == len(schema5_context.authority.generation.evidence.gaps)
     assert reference_count == sum(
-        result.unresolved_icon_reference_count
-        for result in schema5_context.results
+        result.unresolved_icon_reference_count for result in schema5_context.results
     )
 
 
@@ -2910,8 +2904,7 @@ def test_old_false_conflicts_are_reclassified_without_losing_text(
             for row in old.rows
         )
         new_current_conflicts += sum(
-            new.value(row, "状态")
-            == ObjectTextState.SOURCE_CONFLICT.value
+            new.value(row, "状态") == ObjectTextState.SOURCE_CONFLICT.value
             and new.value(row, "是否当前值") == "是"
             for row in new.rows
         )
@@ -2934,8 +2927,7 @@ def missing_complete_text_rows(old: TsvTable, new: TsvTable) -> tuple[str, ...]:
     missing = []
     for row in old.rows:
         if (
-            old.value(row, "状态")
-            == ObjectTextState.SOURCE_UNAVAILABLE.value
+            old.value(row, "状态") == ObjectTextState.SOURCE_UNAVAILABLE.value
             and old.value(row, "原始全文") == ""
         ):
             continue

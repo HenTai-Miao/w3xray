@@ -46,7 +46,12 @@ def _format_w3i_info(info, md: MapData) -> list[str]:
     if info.recommended_players:
         lines.append(f"推荐人数：{info.recommended_players}")
     lines.append(f"尺寸　　：{info.width} × {info.height}")
-    version_names = {18: "RoC(1.07-)", 25: "TFT(1.13-)", 28: "重制 1.31", 31: "重制 1.32+"}
+    version_names = {
+        18: "RoC(1.07-)",
+        25: "TFT(1.13-)",
+        28: "重制 1.31",
+        31: "重制 1.32+",
+    }
     lines.append(f"格式版本：{info.version}  {version_names.get(info.version, '')}")
     if info.script_type:
         lines.append(f"脚本语言：{info.script_type}")
@@ -54,7 +59,11 @@ def _format_w3i_info(info, md: MapData) -> list[str]:
     if tags:
         lines.append("标志　　：" + "、".join(tags))
     if md.script_features:
-        lines.append("脚本特征：" + "、".join(md.script_features) + "  （脚本用到的暴雪内置机制）")
+        lines.append(
+            "脚本特征："
+            + "、".join(md.script_features)
+            + "  （脚本用到的暴雪内置机制）"
+        )
     if info.description:
         lines.append(f"\n描述：\n{info.description}")
     if info.players:
@@ -100,16 +109,24 @@ def _format_force(force) -> str:
 def _format_world_metadata(md: MapData) -> list[str]:
     lines = []
     if md.regions or md.cameras or md.sounds:
-        lines.append(f"\n世界编辑器数据：区域 {len(md.regions)} · 镜头 {len(md.cameras)} · 声音 {len(md.sounds)}")
+        lines.append(
+            f"\n世界编辑器数据：区域 {len(md.regions)} · 镜头 {len(md.cameras)} · 声音 {len(md.sounds)}"
+        )
     if md.regions:
-        lines.append(f"  区域：{_names([r.name or str(r.region_id) for r in md.regions])}")
+        lines.append(
+            f"  区域：{_names([r.name or str(r.region_id) for r in md.regions])}"
+        )
     if md.cameras:
-        lines.append(f"  镜头：{_names([c.name or '(未命名镜头)' for c in md.cameras])}")
+        lines.append(
+            f"  镜头：{_names([c.name or '(未命名镜头)' for c in md.cameras])}"
+        )
     if md.sounds:
         imported = sum(1 for sound in md.sounds if sound.is_imported)
         music = sum(1 for sound in md.sounds if sound.is_music)
-        lines.append(f"  声音：{_names([s.name or s.path for s in md.sounds])}"
-                     f"  （导入 {imported}，音乐 {music}）")
+        lines.append(
+            f"  声音：{_names([s.name or s.path for s in md.sounds])}"
+            f"  （导入 {imported}，音乐 {music}）"
+        )
     return lines
 
 
@@ -153,13 +170,21 @@ def _format_trigger_summary(md: MapData) -> list[str]:
         f"  · 分类 {summary.category_count}"
     ]
     if summary.comment_count or summary.script_count:
-        lines.append(f"  注释：{summary.comment_count}  自定义脚本块：{summary.script_count}")
+        lines.append(
+            f"  注释：{summary.comment_count}  自定义脚本块：{summary.script_count}"
+        )
     if summary.categories:
-        lines.append(f"  分类：{_names([cat.name for cat in summary.categories if cat.name])}")
+        lines.append(
+            f"  分类：{_names([cat.name for cat in summary.categories if cat.name])}"
+        )
     if summary.variables:
-        lines.append(f"  变量：{_names([var.name for var in summary.variables if var.name])}")
+        lines.append(
+            f"  变量：{_names([var.name for var in summary.variables if var.name])}"
+        )
     if summary.triggers:
-        lines.append(f"  触发器：{_names([trigger.name or '(未命名触发器)' for trigger in summary.triggers])}")
+        lines.append(
+            f"  触发器：{_names([trigger.name or '(未命名触发器)' for trigger in summary.triggers])}"
+        )
     for diagnostic in format_summary_diagnostics(summary):
         lines.append(f"  {diagnostic}")
     return lines
@@ -193,7 +218,9 @@ def _format_import_summary(md: MapData) -> list[str]:
     if summary.unknown_count:
         lines[0] += f"  · 未知标志 {summary.unknown_count}"
     if summary.extension_counts:
-        ext_text = "、".join(f"{ext}:{count}" for ext, count in summary.extension_counts[:6])
+        ext_text = "、".join(
+            f"{ext}:{count}" for ext, count in summary.extension_counts[:6]
+        )
         lines.append(f"  类型：{ext_text}")
     if summary.missing_paths:
         lines.append(f"  疑似缺失：{_names(list(summary.missing_paths), 6)}")

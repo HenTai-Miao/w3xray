@@ -153,7 +153,9 @@ Select the artifact path before the existing platform match:
 
 ```python
 if config.format is DistFormat.ONEFILE:
-    return config.dist_path / (f"{APP_NAME}.exe" if current_system == "Windows" else APP_NAME)
+    return config.dist_path / (
+        f"{APP_NAME}.exe" if current_system == "Windows" else APP_NAME
+    )
 ```
 
 Pass the format to the spec in `run_dist_build()`:
@@ -276,31 +278,31 @@ Import `os`, parse and validate the mode before `Analysis`:
 ```python
 import os
 
-build_mode = os.environ.get('W3XRAY_PYINSTALLER_MODE', 'onedir')
-if build_mode not in {'onedir', 'onefile'}:
-    raise ValueError(f'unsupported W3XRAY_PYINSTALLER_MODE: {build_mode}')
+build_mode = os.environ.get("W3XRAY_PYINSTALLER_MODE", "onedir")
+if build_mode not in {"onedir", "onefile"}:
+    raise ValueError(f"unsupported W3XRAY_PYINSTALLER_MODE: {build_mode}")
 ```
 
 Keep the existing `Analysis` and `PYZ` unchanged. Replace the existing EXE/COLLECT tail with:
 
 ```python
 common_exe_options = {
-    'name': '魔兽地图提取器',
-    'debug': False,
-    'bootloader_ignore_signals': False,
-    'strip': False,
-    'upx': False,
-    'upx_exclude': [],
-    'runtime_tmpdir': None,
-    'console': False,
-    'disable_windowed_traceback': False,
-    'argv_emulation': False,
-    'target_arch': None,
-    'codesign_identity': None,
-    'entitlements_file': None,
+    "name": "魔兽地图提取器",
+    "debug": False,
+    "bootloader_ignore_signals": False,
+    "strip": False,
+    "upx": False,
+    "upx_exclude": [],
+    "runtime_tmpdir": None,
+    "console": False,
+    "disable_windowed_traceback": False,
+    "argv_emulation": False,
+    "target_arch": None,
+    "codesign_identity": None,
+    "entitlements_file": None,
 }
 
-if build_mode == 'onefile':
+if build_mode == "onefile":
     exe = EXE(
         pyz,
         a.scripts,
@@ -325,7 +327,7 @@ else:
         strip=False,
         upx=False,
         upx_exclude=[],
-        name='魔兽地图提取器',
+        name="魔兽地图提取器",
     )
 ```
 
@@ -393,7 +395,9 @@ def test_windows_acceptance_loads_bundled_casclib(
     loaded: list[Path] = []
 
     monkeypatch.setattr(module, "default_dll_path", lambda: dll)
-    monkeypatch.setattr(module, "CtypesCascLibApi", lambda *, dll_path: loaded.append(dll_path))
+    monkeypatch.setattr(
+        module, "CtypesCascLibApi", lambda *, dll_path: loaded.append(dll_path)
+    )
 
     check = module._bundled_casclib_check(require_windows=True)
 
@@ -434,7 +438,9 @@ Add:
 ```python
 def _bundled_casclib_check(require_windows: bool) -> AcceptanceCheck:
     if not require_windows:
-        return AcceptanceCheck("bundled_casclib", AcceptanceStatus.SKIP, "未要求 Windows", 0)
+        return AcceptanceCheck(
+            "bundled_casclib", AcceptanceStatus.SKIP, "未要求 Windows", 0
+        )
     return _run_check("bundled_casclib", _check_bundled_casclib)
 
 

@@ -44,12 +44,19 @@ def _archive(raw: bytes, block: _Block, *, sector_size: int = 8) -> MPQArchive:
 
 
 @pytest.mark.parametrize("extra_flag", (0, FLAG_FIX_KEY))
-def test_final_key_decodes_single_unit_without_reapplying_fix_key(extra_flag: int) -> None:
+def test_final_key_decodes_single_unit_without_reapplying_fix_key(
+    extra_flag: int,
+) -> None:
     # Given: the supplied key is already the final FIX_KEY-adjusted value.
     key = 0x89AB_CDEF
     plaintext = b"single-unit-data"
     raw = _encrypt(plaintext, key)
-    block = _Block(0, len(raw), len(plaintext), FLAG_EXISTS | FLAG_ENCRYPTED | FLAG_SINGLE_UNIT | extra_flag)
+    block = _Block(
+        0,
+        len(raw),
+        len(plaintext),
+        FLAG_EXISTS | FLAG_ENCRYPTED | FLAG_SINGLE_UNIT | extra_flag,
+    )
 
     # When: the block is read by index with that final key.
     decoded = _archive(raw, block).read_block_with_key(0, key)

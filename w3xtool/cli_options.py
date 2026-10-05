@@ -75,7 +75,9 @@ def parse_cli_options(argv: Sequence[str]) -> CliOptions:
             case unreachable:
                 assert_never(unreachable)
         index += 2
-    return CliOptions(map_path, listfile_path, game_data_path, pack_dir, author_bundle_path)
+    return CliOptions(
+        map_path, listfile_path, game_data_path, pack_dir, author_bundle_path
+    )
 
 
 def run_cli(options: CliOptions) -> int:
@@ -110,21 +112,29 @@ def run_cli(options: CliOptions) -> int:
     except Exception as exc:  # noqa: BROAD_EXCEPT_OK - export boundary reports stable CLI failure.
         error = format_user_exception(
             exc,
-            paths=(options.map_path, options.pack_dir or "", options.game_data_path or ""),
+            paths=(
+                options.map_path,
+                options.pack_dir or "",
+                options.game_data_path or "",
+            ),
         )
         print(f"无法写入资料包：{error}", file=sys.stderr)
         return 2
     match report.status:
         case KnowledgeWriteStatus.COMPLETE:
-            print(single_line_text(
-                f"资料包: 完整，{report.written_count} 个文件 -> {options.pack_dir}",
-            ))
+            print(
+                single_line_text(
+                    f"资料包: 完整，{report.written_count} 个文件 -> {options.pack_dir}",
+                )
+            )
             return 0
         case KnowledgeWriteStatus.PARTIAL:
-            print(single_line_text(
-                f"资料包: 部分完成，成功 {report.written_count}，"
-                f"失败 {report.failed_count} -> {options.pack_dir}",
-            ))
+            print(
+                single_line_text(
+                    f"资料包: 部分完成，成功 {report.written_count}，"
+                    f"失败 {report.failed_count} -> {options.pack_dir}",
+                )
+            )
             _print_first_write_failure(report)
             return 0
         case KnowledgeWriteStatus.FAILED:
@@ -145,7 +155,9 @@ def _print_first_write_failure(report: KnowledgeWriteReport) -> None:
     failure = report.first_failure
     if failure is not None:
         print(
-            single_line_text(f"首个失败: {failure.path}: {failure.error or '未知错误'}"),
+            single_line_text(
+                f"首个失败: {failure.path}: {failure.error or '未知错误'}"
+            ),
             file=sys.stderr,
         )
 
@@ -175,7 +187,9 @@ def _write_cli_packs(
             game_data_path=options.game_data_path,
             publication_root=options.pack_dir,
         )
-        items.extend(replace(item, path=f"{prefix}/{item.path}") for item in child_report.items)
+        items.extend(
+            replace(item, path=f"{prefix}/{item.path}") for item in child_report.items
+        )
     return KnowledgeWriteReport(tuple(items))
 
 
@@ -183,7 +197,10 @@ def _run_game_config(path: str) -> int:
     try:
         config = read_game_configuration_file(path)
     except (OSError, ValueError) as exc:
-        print(f"无法解析游戏配置：{format_user_exception(exc, paths=(path,))}", file=sys.stderr)
+        print(
+            f"无法解析游戏配置：{format_user_exception(exc, paths=(path,))}",
+            file=sys.stderr,
+        )
         return 2
     for line in iter_game_config_summary_lines(path, config):
         print(single_line_text(line))

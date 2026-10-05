@@ -41,7 +41,9 @@ class ScriptTriggerRegistrationIndex:
     registrations: tuple[ScriptTriggerRegistration, ...]
 
 
-def build_script_trigger_registration_index(md: MapData) -> ScriptTriggerRegistrationIndex:
+def build_script_trigger_registration_index(
+    md: MapData,
+) -> ScriptTriggerRegistrationIndex:
     """Return trigger, action, condition and timer registrations from script code."""
     functions = build_function_lookup(build_script_function_index(md).functions)
     rows: list[ScriptTriggerRegistration] = []
@@ -56,17 +58,21 @@ def format_script_trigger_registration_index_tsv(
     """Format trigger registration rows as TSV."""
     rows = ["来源\t行号\t函数\t注册类型\t句柄\tAPI\t目标\t字符串参数\t摘要"]
     for item in index.registrations:
-        rows.append("\t".join((
-            _tsv(item.source),
-            str(item.line),
-            _tsv(item.function),
-            _tsv(item.registration_type),
-            _tsv(item.handle),
-            _tsv(item.api),
-            _tsv(item.target),
-            _tsv("; ".join(item.string_args)),
-            _tsv(item.summary),
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    _tsv(item.source),
+                    str(item.line),
+                    _tsv(item.function),
+                    _tsv(item.registration_type),
+                    _tsv(item.handle),
+                    _tsv(item.api),
+                    _tsv(item.target),
+                    _tsv("; ".join(item.string_args)),
+                    _tsv(item.summary),
+                )
+            )
+        )
     return "\n".join(rows) + "\n"
 
 
@@ -86,17 +92,19 @@ def _registrations_for_script(
             continue
         args = extract_call_args(text, match.end())
         line = bisect_right(line_starts, match.start())
-        rows.append(ScriptTriggerRegistration(
-            source=source,
-            line=line,
-            function=functions.name_for(source, line),
-            registration_type=registration_type,
-            handle=_handle(args),
-            api=api,
-            target=_target(api, registration_type, args),
-            string_args=_string_args(args),
-            summary=_summary(raw_lines, line),
-        ))
+        rows.append(
+            ScriptTriggerRegistration(
+                source=source,
+                line=line,
+                function=functions.name_for(source, line),
+                registration_type=registration_type,
+                handle=_handle(args),
+                api=api,
+                target=_target(api, registration_type, args),
+                string_args=_string_args(args),
+                summary=_summary(raw_lines, line),
+            )
+        )
     return rows
 
 
@@ -179,8 +187,6 @@ def _summary(lines: list[str], line_no: int) -> str:
     if line_no > len(lines):
         return ""
     return _strip_comment(lines[line_no - 1]).strip()[:160]
-
-
 
 
 def _line_starts(text: str) -> list[int]:

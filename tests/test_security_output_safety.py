@@ -58,7 +58,10 @@ def test_no_production_module_defines_a_private_tsv_copy() -> None:
     # When: every production module is inspected structurally.
     for path in source_root.glob("*.py"):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        if any(isinstance(node, ast.FunctionDef) and node.name == "_tsv" for node in ast.walk(tree)):
+        if any(
+            isinstance(node, ast.FunctionDef) and node.name == "_tsv"
+            for node in ast.walk(tree)
+        ):
             copies.append(path.name)
 
     # Then: no delimiter-only implementation can bypass the shared policy.
@@ -79,12 +82,16 @@ def test_long_exception_path_is_redacted_before_display_limit() -> None:
     assert len(text) <= 512
 
 
-def test_structured_write_error_redacts_foreign_paths_and_controls(tmp_path: Path) -> None:
+def test_structured_write_error_redacts_foreign_paths_and_controls(
+    tmp_path: Path,
+) -> None:
     # Given: a raw sink error includes a non-output path and terminal controls.
     root = tmp_path / "pack"
     secret = tmp_path / "private" / "source.w3x"
     raw_error = f"failed '{secret}'\x1b\u202e"
-    raw = SafeWriteResult(SafeWriteStatus.FAILED, str(root / "result.tsv"), 0, raw_error)
+    raw = SafeWriteResult(
+        SafeWriteStatus.FAILED, str(root / "result.tsv"), 0, raw_error
+    )
     recorder = KnowledgeWriteRecorder(str(root), str(root))
 
     # When: the error becomes a structured publication item.

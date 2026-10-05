@@ -1,4 +1,5 @@
 """Readable terrain tile metadata for W3E tile ids."""
+
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -109,7 +110,9 @@ TERRAIN_TILE_PATHS: Final[Mapping[str, str]] = MappingProxyType(
 def describe_terrain_tile(tile_id: str) -> TerrainTile:
     """Return localized editor label and texture path for a W3E tile id."""
     label = WESTRINGS.get(f"WESTRING_TERRAINTYPE_{tile_id}", tile_id)
-    return TerrainTile(tile_id=tile_id, label=label, path=TERRAIN_TILE_PATHS.get(tile_id, ""))
+    return TerrainTile(
+        tile_id=tile_id, label=label, path=TERRAIN_TILE_PATHS.get(tile_id, "")
+    )
 
 
 def format_terrain_tile(tile_id: str) -> str:
@@ -124,7 +127,9 @@ def format_terrain_tile(tile_id: str) -> str:
 
 def format_terrain_tile_list(tile_ids: tuple[str, ...]) -> str:
     """Format a bounded terrain tile list for CLI output."""
-    shown = "、".join(format_terrain_tile(tile_id) for tile_id in tile_ids[:_SUMMARY_TILE_LIMIT])
+    shown = "、".join(
+        format_terrain_tile(tile_id) for tile_id in tile_ids[:_SUMMARY_TILE_LIMIT]
+    )
     if len(tile_ids) <= _SUMMARY_TILE_LIMIT:
         return shown
     return f"{shown} …… 另有 {len(tile_ids) - _SUMMARY_TILE_LIMIT} 个"

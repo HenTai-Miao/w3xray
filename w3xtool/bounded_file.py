@@ -40,7 +40,9 @@ def read_bounded_regular_file(
     descriptor, identity = _open_regular_file(path, max_bytes, expected)
     payload = bytearray()
     try:
-        while chunk := os.read(descriptor, min(_READ_CHUNK_BYTES, max_bytes + 1 - len(payload))):
+        while chunk := os.read(
+            descriptor, min(_READ_CHUNK_BYTES, max_bytes + 1 - len(payload))
+        ):
             payload.extend(chunk)
             if len(payload) > max_bytes:
                 raise BoundedFileError(path, f"size exceeds limit {max_bytes}")
@@ -109,7 +111,7 @@ def _open_regular_file(
             raise BoundedFileError(path, "file identity changed after validation")
         if max_bytes is not None and identity.size > max_bytes:
             raise BoundedFileError(path, f"size exceeds limit {max_bytes}")
-    except (OSError, BoundedFileError):
+    except OSError, BoundedFileError:
         os.close(descriptor)
         raise
     return descriptor, identity

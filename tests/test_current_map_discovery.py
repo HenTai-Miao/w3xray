@@ -20,7 +20,13 @@ from w3xtool.current_map_discovery import (
     discover_default_map_roots,
     locate_current_map,
 )
-from w3xtool.current_map_models import CurrentMapResolution, EvidenceKind, GameProcess, MapEvidence, ResolutionStatus
+from w3xtool.current_map_models import (
+    CurrentMapResolution,
+    EvidenceKind,
+    GameProcess,
+    MapEvidence,
+    ResolutionStatus,
+)
 from w3xtool.current_map_process import OpenMapProbeReport, ProcessProbeReport
 
 _NOW_NS = 1_800_000_000_000_000_000
@@ -66,7 +72,12 @@ class _CountingScandir:
     def __enter__(self) -> _CountingScandir:
         return self
 
-    def __exit__(self, _error_type: type[BaseException] | None, _error: BaseException | None, _traceback: TracebackType | None) -> None:
+    def __exit__(
+        self,
+        _error_type: type[BaseException] | None,
+        _error: BaseException | None,
+        _traceback: TracebackType | None,
+    ) -> None:
         self._close()
 
 
@@ -99,10 +110,14 @@ def _write_at(path: Path, payload: bytes, mtime_ns: int) -> None:
 
 
 def _wgc(map_path: str) -> bytes:
-    return struct.pack("<iii", 1, 0, 1) + map_path.encode() + b"\0" + struct.pack("<i", 0)
+    return (
+        struct.pack("<iii", 1, 0, 1) + map_path.encode() + b"\0" + struct.pack("<i", 0)
+    )
 
 
-def test_default_roots_dedupe_existing_directories_before_eight_root_cap(tmp_path: Path) -> None:
+def test_default_roots_dedupe_existing_directories_before_eight_root_cap(
+    tmp_path: Path,
+) -> None:
     # Given: duplicates, a missing path, and ten existing user roots.
     roots = tuple(tmp_path / f"root-{index}" for index in range(10))
     for root in roots:
@@ -117,7 +132,9 @@ def test_default_roots_dedupe_existing_directories_before_eight_root_cap(tmp_pat
 
 
 @pytest.mark.skipif(os.name != "posix", reason="requires POSIX /Volumes semantics")
-def test_known_roots_include_fixed_user_volume_pattern_without_volume_scan(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_known_roots_include_fixed_user_volume_pattern_without_volume_scan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Given: a macOS home whose username also names the mounted game volume.
     home = Path("/Users/zhongerbing")
     volume_root = Path("/Volumes") / home.name / "Program Files (x86)" / "Warcraft III"
@@ -245,7 +262,9 @@ def test_open_probe_nonregular_map_evidence_is_rejected(tmp_path: Path) -> None:
     assert resolution.status is ResolutionStatus.NOT_FOUND
 
 
-def test_recent_hint_window_includes_boundary_but_rejects_stale_and_future(tmp_path: Path) -> None:
+def test_recent_hint_window_includes_boundary_but_rejects_stale_and_future(
+    tmp_path: Path,
+) -> None:
     # Given: maps exactly at, just before, and just after the allowed time window.
     root = tmp_path / "window"
     boundary = root / "boundary.w3m"
@@ -286,7 +305,9 @@ def test_unavailable_process_probe_returns_unavailable(tmp_path: Path) -> None:
     assert resolution == CurrentMapResolution(ResolutionStatus.UNAVAILABLE, ())
 
 
-def test_recent_wgc_resolves_windows_paths_from_config_root_and_warcraft_ancestor(tmp_path: Path) -> None:
+def test_recent_wgc_resolves_windows_paths_from_config_root_and_warcraft_ancestor(
+    tmp_path: Path,
+) -> None:
     # Given: three recent configs reference old maps through each allowed base.
     warcraft = tmp_path / "Warcraft III"
     root = warcraft / "Cache"
@@ -309,7 +330,10 @@ def test_recent_wgc_resolves_windows_paths_from_config_root_and_warcraft_ancesto
         root_map.resolve(),
         ancestor_map.resolve(),
     }
-    assert all(item.evidence[0].kind is EvidenceKind.WGC_REFERENCE for item in resolution.candidates)
+    assert all(
+        item.evidence[0].kind is EvidenceKind.WGC_REFERENCE
+        for item in resolution.candidates
+    )
 
 
 def test_wgc_ancestor_iteration_is_lazy_and_bounded() -> None:
@@ -334,7 +358,9 @@ def test_stale_wgc_reference_does_not_participate(tmp_path: Path) -> None:
     assert resolution.status is ResolutionStatus.NOT_FOUND
 
 
-def test_oversized_wgc_is_not_passed_to_the_parser(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_oversized_wgc_is_not_passed_to_the_parser(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # Given: a recent .wgc exceeds the bounded one-megabyte read limit.
     root = tmp_path / "oversized"
     _write_at(root / "large.wgc", b"x" * (1_048_576 + 1), _NOW_NS)
@@ -352,7 +378,9 @@ def test_oversized_wgc_is_not_passed_to_the_parser(tmp_path: Path, monkeypatch: 
 
 
 @pytest.mark.skipif(_NONBLOCK_FLAG == 0, reason="requires nonblocking POSIX file open")
-def test_wgc_open_is_nonblocking_against_fifo_replacement(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_wgc_open_is_nonblocking_against_fifo_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     # Given: a recent config whose open boundary could race with entry metadata.
     root = tmp_path / "fifo-race"
     target = root / "target.w3x"
@@ -524,7 +552,9 @@ def test_log_hint_reads_only_the_bounded_tail(tmp_path: Path) -> None:
     map_file = tmp_path / "tail.w3n"
     _write_at(map_file, b"map", _NOW_NS - _WINDOW_NS - 1)
     filler = "x" * 4096 + "\n"
-    payload = filler * 300 + "Opening map - " + os.fspath(map_file).replace("\\", "/") + "\n"
+    payload = (
+        filler * 300 + "Opening map - " + os.fspath(map_file).replace("\\", "/") + "\n"
+    )
     assert len(payload.encode()) > 1_048_576 // 2
     log = home.joinpath(*discovery._LOG_RELPATH)
     _write_at(log, payload.encode(), _NOW_NS)

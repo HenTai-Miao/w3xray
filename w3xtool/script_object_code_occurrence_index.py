@@ -57,7 +57,9 @@ class ScriptObjectCodeOccurrenceIndex:
     occurrences: tuple[ScriptObjectCodeOccurrence, ...]
 
 
-def build_script_object_code_occurrence_index(md: MapData) -> ScriptObjectCodeOccurrenceIndex:
+def build_script_object_code_occurrence_index(
+    md: MapData,
+) -> ScriptObjectCodeOccurrenceIndex:
     """Return executable script object-code occurrences with readable context."""
     functions = build_function_lookup(build_script_function_index(md).functions)
     calls = build_script_call_catalog(md).calls
@@ -72,24 +74,30 @@ def format_script_object_code_occurrence_index_tsv(
     index: ScriptObjectCodeOccurrenceIndex,
 ) -> str:
     """Format script object-code occurrences as TSV."""
-    rows = ["来源\t行号\t函数\t对象码\t10进制\t分类\t名称\t对象来源\t上下文\t机制\t摘要\t英文名\t细类"]
+    rows = [
+        "来源\t行号\t函数\t对象码\t10进制\t分类\t名称\t对象来源\t上下文\t机制\t摘要\t英文名\t细类"
+    ]
     for item in index.occurrences:
         fine = BASE_CATEGORIES.get(item.code)
-        rows.append("\t".join((
-            _tsv(item.source),
-            str(item.line),
-            _tsv(item.function),
-            _tsv(item.code),
-            str(item.decimal),
-            _tsv(item.category),
-            _tsv(item.name),
-            _tsv(item.object_source),
-            _tsv(item.context),
-            _tsv(item.mechanism),
-            _tsv(item.summary),
-            _tsv(BASE_NAMES_EN.get(item.code, "")),
-            _tsv("" if fine is None else fine[0]),
-        )))
+        rows.append(
+            "\t".join(
+                (
+                    _tsv(item.source),
+                    str(item.line),
+                    _tsv(item.function),
+                    _tsv(item.code),
+                    str(item.decimal),
+                    _tsv(item.category),
+                    _tsv(item.name),
+                    _tsv(item.object_source),
+                    _tsv(item.context),
+                    _tsv(item.mechanism),
+                    _tsv(item.summary),
+                    _tsv(BASE_NAMES_EN.get(item.code, "")),
+                    _tsv("" if fine is None else fine[0]),
+                )
+            )
+        )
     return "\n".join(rows) + "\n"
 
 
@@ -108,38 +116,46 @@ def _occurrences_for_script(
     rows: list[ScriptObjectCodeOccurrence] = []
     for line_no, code_line in enumerate(code_lines, start=1):
         for code in _codes_in(code_line):
-            context, mechanism = _context_for(code_line, code, is_lua, calls_by_line.get(line_no, ()))
+            context, mechanism = _context_for(
+                code_line, code, is_lua, calls_by_line.get(line_no, ())
+            )
             obj = objects.get(code)
-            rows.append(ScriptObjectCodeOccurrence(
-                source=source,
-                line=line_no,
-                function=functions.name_for(source, line_no),
-                code=code,
-                decimal=code_decimal(code),
-                category=_category(code, obj, mechanism, categories),
-                name=_name(code, obj),
-                object_source=_object_source(obj),
-                context=context,
-                mechanism=mechanism,
-                summary=_summary(raw_lines, line_no),
-            ))
+            rows.append(
+                ScriptObjectCodeOccurrence(
+                    source=source,
+                    line=line_no,
+                    function=functions.name_for(source, line_no),
+                    code=code,
+                    decimal=code_decimal(code),
+                    category=_category(code, obj, mechanism, categories),
+                    name=_name(code, obj),
+                    object_source=_object_source(obj),
+                    context=context,
+                    mechanism=mechanism,
+                    summary=_summary(raw_lines, line_no),
+                )
+            )
         # Blz 系技能字段常量（如 ABILITY_RLF_HOLY_BOLT_DAMAGE）也是对象码引用：
         # 按 common.j 常量反查字段码，作为"技能字段"出现行保留。
         for field_code, constant in _field_constants_in(code_line):
-            context, mechanism = _context_for(code_line, field_code, is_lua, calls_by_line.get(line_no, ()))
-            rows.append(ScriptObjectCodeOccurrence(
-                source=source,
-                line=line_no,
-                function=functions.name_for(source, line_no),
-                code=field_code,
-                decimal=code_decimal(field_code),
-                category="技能字段",
-                name=label_for(field_code),
-                object_source="common.j 常量",
-                context=constant,
-                mechanism=mechanism,
-                summary=_summary(raw_lines, line_no),
-            ))
+            context, mechanism = _context_for(
+                code_line, field_code, is_lua, calls_by_line.get(line_no, ())
+            )
+            rows.append(
+                ScriptObjectCodeOccurrence(
+                    source=source,
+                    line=line_no,
+                    function=functions.name_for(source, line_no),
+                    code=field_code,
+                    decimal=code_decimal(field_code),
+                    category="技能字段",
+                    name=label_for(field_code),
+                    object_source="common.j 常量",
+                    context=constant,
+                    mechanism=mechanism,
+                    summary=_summary(raw_lines, line_no),
+                )
+            )
     return rows
 
 
@@ -166,7 +182,9 @@ def _object_lookup(md: MapData) -> dict[str, GameObject]:
     return lookup
 
 
-def _calls_by_line(source: str, calls: tuple[ScriptCall, ...]) -> dict[int, tuple[ScriptCall, ...]]:
+def _calls_by_line(
+    source: str, calls: tuple[ScriptCall, ...]
+) -> dict[int, tuple[ScriptCall, ...]]:
     grouped: dict[int, list[ScriptCall]] = {}
     for call in calls:
         if call.source != source:
@@ -275,5 +293,3 @@ def _summary(lines: list[str], line_no: int) -> str:
     if line_no > len(lines):
         return ""
     return _strip_comment(lines[line_no - 1]).strip()[:160]
-
-

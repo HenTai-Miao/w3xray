@@ -47,7 +47,9 @@ class DropSet:
     entries: tuple[DropEntry, ...]
 
 
-def read_drop_sets(reader: DropReader, *, maximum_count: int = 256) -> tuple[DropSet, ...]:
+def read_drop_sets(
+    reader: DropReader, *, maximum_count: int = 256
+) -> tuple[DropSet, ...]:
     """Read all nested item groups while retaining indexes and byte offsets."""
     group_count = reader.i32()
     _require_count("掉落集合数", group_count, maximum_count)
@@ -74,9 +76,7 @@ def read_drop_sets(reader: DropReader, *, maximum_count: int = 256) -> tuple[Dro
 def flatten_drop_sets(drop_sets: tuple[DropSet, ...]) -> list[tuple[str, int]]:
     """Return the historical flat ``(item_id, chance)`` compatibility view."""
     return [
-        (entry.item_id, entry.chance)
-        for group in drop_sets
-        for entry in group.entries
+        (entry.item_id, entry.chance) for group in drop_sets for entry in group.entries
     ]
 
 

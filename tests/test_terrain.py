@@ -1,4 +1,5 @@
 """war3map.w3e 地形头解析。"""
+
 import struct
 import unittest
 

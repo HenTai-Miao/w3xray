@@ -27,8 +27,10 @@ _FILE_OPEN_FLAGS: Final = (
     | getattr(os, "O_NOINHERIT", 0)
     | getattr(os, "O_NOFOLLOW", 0)
 )
-_SOURCE_OPEN_FLAGS: Final = os.O_RDONLY | _FILE_OPEN_FLAGS | getattr(
-    os, "O_NONBLOCK", getattr(os, "O_NDELAY", 0)
+_SOURCE_OPEN_FLAGS: Final = (
+    os.O_RDONLY
+    | _FILE_OPEN_FLAGS
+    | getattr(os, "O_NONBLOCK", getattr(os, "O_NDELAY", 0))
 )
 _SNAPSHOT_OPEN_FLAGS: Final = os.O_CREAT | os.O_EXCL | os.O_WRONLY | _FILE_OPEN_FLAGS
 
@@ -77,7 +79,9 @@ def create_current_map_snapshot(path: str | Path) -> CurrentMapSnapshot:
     try:
         before_details = os.lstat(source_path)
     except OSError as exc:
-        raise CurrentMapSnapshotError(source_path, f"could not inspect source: {exc}") from exc
+        raise CurrentMapSnapshotError(
+            source_path, f"could not inspect source: {exc}"
+        ) from exc
     if not stat.S_ISREG(before_details.st_mode):
         reason = "source is not a regular file or is a symlink"
         raise CurrentMapSnapshotError(source_path, reason)
@@ -85,14 +89,21 @@ def create_current_map_snapshot(path: str | Path) -> CurrentMapSnapshot:
     try:
         source_descriptor = os.open(source_path, _SOURCE_OPEN_FLAGS)
     except OSError as exc:
-        raise CurrentMapSnapshotError(source_path, f"could not open source: {exc}") from exc
+        raise CurrentMapSnapshotError(
+            source_path, f"could not open source: {exc}"
+        ) from exc
 
     directory: Path | None = None
     directory_identity: tuple[int, int] | None = None
     try:
         opened_details = os.fstat(source_descriptor)
-        if not stat.S_ISREG(opened_details.st_mode) or _identity(opened_details) != before:
-            raise CurrentMapSnapshotError(source_path, "source identity changed before open")
+        if (
+            not stat.S_ISREG(opened_details.st_mode)
+            or _identity(opened_details) != before
+        ):
+            raise CurrentMapSnapshotError(
+                source_path, "source identity changed before open"
+            )
 
         temp_root = Path(os.path.realpath(tempfile.gettempdir()))
         directory, directory_identity = create_snapshot_directory(temp_root)
@@ -103,7 +114,9 @@ def create_current_map_snapshot(path: str | Path) -> CurrentMapSnapshot:
         try:
             path_after_details = os.lstat(source_path)
         except OSError as exc:
-            raise CurrentMapSnapshotError(source_path, "source changed during copy") from exc
+            raise CurrentMapSnapshotError(
+                source_path, "source changed during copy"
+            ) from exc
         path_after = _identity(path_after_details)
         if (
             not stat.S_ISREG(path_after_details.st_mode)

@@ -122,12 +122,14 @@ def test_script_and_slk_read_failures_are_recorded() -> None:
 
 def test_map_component_helpers_record_present_read_failures() -> None:
     # Given: core map and campaign members exist but cannot be read.
-    archive = _FailingArchive({
-        "war3map.w3i",
-        "war3campaign.w3f",
-        "war3map.doo",
-        "war3mapUnits.doo",
-    })
+    archive = _FailingArchive(
+        {
+            "war3map.w3i",
+            "war3campaign.w3f",
+            "war3map.doo",
+            "war3mapUnits.doo",
+        }
+    )
     md = MapData(archive.path, "fixture")
 
     # When: core metadata and placement helpers run independently.
@@ -178,15 +180,17 @@ def test_readable_but_malformed_core_and_world_members_are_diagnosed() -> None:
 
 def test_optional_editor_helpers_record_only_present_failures() -> None:
     # Given: every supported optional editor member exists but is unreadable.
-    archive = _FailingArchive({
-        "war3map.w3r",
-        "war3map.w3c",
-        "war3map.w3s",
-        "war3map.wgc",
-        "war3map.wtg",
-        "war3map.mmp",
-        "war3map.imp",
-    })
+    archive = _FailingArchive(
+        {
+            "war3map.w3r",
+            "war3map.w3c",
+            "war3map.w3s",
+            "war3map.wgc",
+            "war3map.wtg",
+            "war3map.mmp",
+            "war3map.imp",
+        }
+    )
     md = MapData(archive.path, "fixture")
 
     # When: all optional metadata helpers run.
@@ -234,20 +238,25 @@ def test_component_diagnostics_are_exported_as_tsv() -> None:
 
     # Then: stable columns retain component, source, severity, and exception type.
     assert text.startswith("组件\t来源\t阶段\t级别\t异常类型\t可恢复\t消息\n")
-    assert "wts\twar3map.wts\tread/parse\twarning\tValueError\t是\tValueError: bad bytes" in text
+    assert (
+        "wts\twar3map.wts\tread/parse\twarning\tValueError\t是\tValueError: bad bytes"
+        in text
+    )
 
 
 def test_map_loader_routes_script_and_slk_failures_to_map_diagnostics() -> None:
     # Given: a map advertises unreadable primary scripts, WTS, WCT, and SLK data.
-    archive = _FailingArchive({
-        "war3map.j",
-        "war3map.lua",
-        "war3map.wts",
-        "war3map.wct",
-        "war3map.w3u",
-        "UnitData.slk",
-        "Units\\HumanUnitStrings.txt",
-    })
+    archive = _FailingArchive(
+        {
+            "war3map.j",
+            "war3map.lua",
+            "war3map.wts",
+            "war3map.wct",
+            "war3map.w3u",
+            "UnitData.slk",
+            "Units\\HumanUnitStrings.txt",
+        }
+    )
 
     # When: the high-level extraction orchestrator loads all independent sources.
     md = _load_map_impl(archive, archive.path, 0, None, MapLoadContext())
@@ -293,7 +302,9 @@ def test_reference_graph_failure_is_recorded_as_component_diagnostic(
     md = _load_map_impl(archive, archive.path, 0, None, MapLoadContext())
 
     # Then: extraction remains usable and the exact failed analysis is visible.
-    diagnostic = next(item for item in md.diagnostics if item.component == "reference-graph")
+    diagnostic = next(
+        item for item in md.diagnostics if item.component == "reference-graph"
+    )
     assert diagnostic.source == "objects/scripts/preplaced"
     assert diagnostic.stage == "analyze"
     assert diagnostic.exception_type == "RuntimeError"

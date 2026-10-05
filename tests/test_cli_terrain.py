@@ -44,11 +44,18 @@ def test_cli_summary_includes_terrain_point_statistics():
         lines = list(iter_cli_summary_lines(md))
 
     # Then: terrain point statistics are visible.
-    assert any("坐标范围" in line and "X -128~0" in line and "Y -128~0" in line for line in lines)
+    assert any(
+        "坐标范围" in line and "X -128~0" in line and "Y -128~0" in line
+        for line in lines
+    )
     assert any("高度: -1~2" in line and "水位: 0~2" in line for line in lines)
-    assert any("水域: 1" in line and "坡道: 1" in line and "边界: 1" in line for line in lines)
+    assert any(
+        "水域: 1" in line and "坡道: 1" in line and "边界: 1" in line for line in lines
+    )
     assert any("边缘: 1" in line for line in lines)
-    assert any("地表使用" in line and "Ldrt:3" in line and "#1:1" in line for line in lines)
+    assert any(
+        "地表使用" in line and "Ldrt:3" in line and "#1:1" in line for line in lines
+    )
     assert any("悬崖纹理" in line and "#1:2" in line for line in lines)
     assert any("悬崖层级" in line and "2:1" in line for line in lines)
     assert any("场景边界" in line and "越界单位 1/1" in line for line in lines)

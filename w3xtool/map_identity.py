@@ -35,7 +35,7 @@ def build_map_identity(source: str | MapData) -> MapIdentity:
     try:
         with open_map_source(source) as archive:
             return _build_buffer_identity(archive._data)
-    except (OSError, ValueError, struct.error):
+    except OSError, ValueError, struct.error:
         return MapIdentity(readable=False)
 
 
@@ -71,7 +71,7 @@ def _build_buffer_identity(data: bytes | mmap) -> MapIdentity:
     crc = 0
     size = 0
     for start in range(0, len(data), _CHUNK_SIZE):
-        chunk = data[start:start + _CHUNK_SIZE]
+        chunk = data[start : start + _CHUNK_SIZE]
         size += len(chunk)
         crc = zlib.crc32(chunk, crc)
         sha1.update(chunk)

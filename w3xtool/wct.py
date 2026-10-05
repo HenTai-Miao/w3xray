@@ -54,7 +54,7 @@ class _Reader:
         end = self.data.find(b"\x00", self.offset)
         if end < 0:
             raise _TruncatedWct
-        value = decode_warcraft_string(self.data[self.offset:end])
+        value = decode_warcraft_string(self.data[self.offset : end])
         self.offset = end + 1
         return value
 
@@ -62,7 +62,7 @@ class _Reader:
         end = self.offset + size
         if size < 0 or end > len(self.data):
             raise _TruncatedWct
-        value = self.data[self.offset:end]
+        value = self.data[self.offset : end]
         self.offset = end
         return value
 

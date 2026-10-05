@@ -65,7 +65,11 @@ def trusted_source_kind(name: str) -> TextObjectSourceKind | None:
     match = _TRUSTED_NAME.search(name)
     if match is None:
         return None
-    return TextObjectSourceKind.FUNC if match.group(1).casefold() == "func" else TextObjectSourceKind.STRINGS
+    return (
+        TextObjectSourceKind.FUNC
+        if match.group(1).casefold() == "func"
+        else TextObjectSourceKind.STRINGS
+    )
 
 
 def normalized_name(name: str) -> str:

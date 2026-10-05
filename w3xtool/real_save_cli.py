@@ -22,7 +22,9 @@ def run_real_save_cli(argv: tuple[str, ...]) -> int:
     parser.add_argument("--author-bundle", type=Path)
     args = parser.parse_args(argv)
     context = MapLoadContext(
-        author_bundle_path=str(args.author_bundle) if args.author_bundle is not None else None,
+        author_bundle_path=str(args.author_bundle)
+        if args.author_bundle is not None
+        else None,
     )
     try:
         md = load_map(str(args.map), load_context=context)
@@ -36,7 +38,10 @@ def run_real_save_cli(argv: tuple[str, ...]) -> int:
         print(f"真实存档分析失败：{type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
     if result.status is not SafeWriteStatus.WRITTEN:
-        print(f"真实存档报告写入失败：{result.error or result.status.value}", file=sys.stderr)
+        print(
+            f"真实存档报告写入失败：{result.error or result.status.value}",
+            file=sys.stderr,
+        )
         return 1
     print(f"真实存档只读分析：{len(report.files)} 个文件 -> {result.path}")
     for warning in report.warnings:

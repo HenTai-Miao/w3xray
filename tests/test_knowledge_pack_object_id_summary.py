@@ -15,7 +15,9 @@ class KnowledgePackObjectIdSummaryTest(unittest.TestCase):
         md.objects = {
             "单位": [GameObject("单位", "w3u", "H001", "Hpal", "圣骑士", True)],
         }
-        md.obj_index = {obj.obj_id: obj for objects in md.objects.values() for obj in objects}
+        md.obj_index = {
+            obj.obj_id: obj for objects in md.objects.values() for obj in objects
+        }
         md.scripts = {"war3map.j": "call CreateUnit(Player(0), 'H001', 0, 0, 0)"}
 
         # When: the user exports the knowledge pack.
@@ -25,7 +27,9 @@ class KnowledgePackObjectIdSummaryTest(unittest.TestCase):
             # Then: the pack contains a per-ID source-count summary.
             with open(os.path.join(out, "对象ID使用摘要.tsv"), encoding="utf-8") as f:
                 summary = f.read()
-            self.assertIn("ID\t10进制\t分类\t名称\t对象来源\t脚本引用\t存档/ID线索", summary)
+            self.assertIn(
+                "ID\t10进制\t分类\t名称\t对象来源\t脚本引用\t存档/ID线索", summary
+            )
             self.assertIn("H001\t1211117617\t单位\t圣骑士\tw3u\t1\t1", summary)
 
 

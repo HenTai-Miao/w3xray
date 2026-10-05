@@ -1,4 +1,5 @@
 """基础对象补全：无名的原版对象(系统内部、游戏没给显示名)不应塞进列表当噪声。"""
+
 import unittest
 
 from w3xtool.api import MapData, _add_base_objects

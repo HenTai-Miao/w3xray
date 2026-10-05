@@ -21,13 +21,15 @@ class ScriptVariableUsageIndexTest(unittest.TestCase):
         # Given: script code writes state and reads globals inside save/object logic.
         md = MapData(path="x.w3x", name="变量使用图")
         md.scripts = {
-            "war3map.j": "\n".join((
-                "function SaveHero takes nothing returns nothing",
-                "    set udg_HeroId = 'H001'",
-                "    call SaveInteger(udg_hash, StringHash(udg_SaveScope), StringHash(udg_SaveKey), udg_Level)",
-                "    call TriggerRegisterPlayerEvent(gg_trg_Save, Player(0), EVENT_PLAYER_LEAVE)",
-                "endfunction",
-            )),
+            "war3map.j": "\n".join(
+                (
+                    "function SaveHero takes nothing returns nothing",
+                    "    set udg_HeroId = 'H001'",
+                    "    call SaveInteger(udg_hash, StringHash(udg_SaveScope), StringHash(udg_SaveKey), udg_Level)",
+                    "    call TriggerRegisterPlayerEvent(gg_trg_Save, Player(0), EVENT_PLAYER_LEAVE)",
+                    "endfunction",
+                )
+            ),
         }
 
         # When: the variable usage index is built.
@@ -35,23 +37,34 @@ class ScriptVariableUsageIndexTest(unittest.TestCase):
 
         # Then: reads and writes are grouped with function context and variable category.
         self.assertIn("来源\t行号\t函数\t变量\t访问\t类别\t调用\t对象码\t摘要", text)
-        self.assertIn("war3map.j\t2\tSaveHero\tudg_HeroId\t写入\t用户全局\t\tH001", text)
-        self.assertIn("war3map.j\t3\tSaveHero\tudg_hash\t读取\t用户全局\tSaveInteger\t", text)
-        self.assertIn("war3map.j\t3\tSaveHero\tudg_SaveKey\t读取\t用户全局\tSaveInteger\t", text)
-        self.assertIn("war3map.j\t4\tSaveHero\tgg_trg_Save\t读取\t触发器变量\tTriggerRegisterPlayerEvent", text)
+        self.assertIn(
+            "war3map.j\t2\tSaveHero\tudg_HeroId\t写入\t用户全局\t\tH001", text
+        )
+        self.assertIn(
+            "war3map.j\t3\tSaveHero\tudg_hash\t读取\t用户全局\tSaveInteger\t", text
+        )
+        self.assertIn(
+            "war3map.j\t3\tSaveHero\tudg_SaveKey\t读取\t用户全局\tSaveInteger\t", text
+        )
+        self.assertIn(
+            "war3map.j\t4\tSaveHero\tgg_trg_Save\t读取\t触发器变量\tTriggerRegisterPlayerEvent",
+            text,
+        )
 
     def test_ignores_comments_strings_and_classifies_preplaced_globals(self):
         # Given: fake references appear in comments/strings while real preplaced globals are used.
         md = MapData(path="x.w3x", name="变量去噪图")
         md.scripts = {
-            "war3map.j": "\n".join((
-                "function Init takes nothing returns nothing",
-                '// set udg_Bad = "comment"',
-                '    call BJDebugMsg("udg_Fake")',
-                "    call SetUnitOwner(gg_unit_Hero_0001, Player(0), true)",
-                "    set bj_lastCreatedUnit = gg_unit_Hero_0001",
-                "endfunction",
-            )),
+            "war3map.j": "\n".join(
+                (
+                    "function Init takes nothing returns nothing",
+                    '// set udg_Bad = "comment"',
+                    '    call BJDebugMsg("udg_Fake")',
+                    "    call SetUnitOwner(gg_unit_Hero_0001, Player(0), true)",
+                    "    set bj_lastCreatedUnit = gg_unit_Hero_0001",
+                    "endfunction",
+                )
+            ),
         }
 
         # When: the variable usage index is built.

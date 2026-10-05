@@ -1,4 +1,5 @@
 """dist 打包入口的命令构建与 dry-run 测试。"""
+
 from __future__ import annotations
 
 import hashlib
@@ -128,12 +129,16 @@ def _write_pe(path: Path, *, machine: int = 0x8664) -> bytes:
 
 
 def _write_matching_hash(root: Path, payload: bytes) -> None:
-    hash_path = root / "third_party" / "CascLib" / "bin" / "win-x64" / "CascLib.dll.sha256"
+    hash_path = (
+        root / "third_party" / "CascLib" / "bin" / "win-x64" / "CascLib.dll.sha256"
+    )
     hash_path.write_text(hashlib.sha256(payload).hexdigest() + "\n", encoding="ascii")
 
 
 @pytest.mark.parametrize("missing_name", ["CascLib.dll", "CascLib.dll.sha256"])
-def test_windows_dist_rejects_missing_casclib_artifact(tmp_path: Path, missing_name: str) -> None:
+def test_windows_dist_rejects_missing_casclib_artifact(
+    tmp_path: Path, missing_name: str
+) -> None:
     # Given: only one of the required native build artifacts exists.
     dll = tmp_path / "third_party" / "CascLib" / "bin" / "win-x64" / "CascLib.dll"
     payload = _write_pe(dll)
@@ -253,7 +258,9 @@ def test_casclib_provenance_and_build_script_are_pinned() -> None:
     # Given: the committed provenance and Windows build recipe.
     root = Path(__file__).resolve().parents[1]
     provenance = json.loads(
-        (root / "third_party" / "CascLib" / "SOURCE_PROVENANCE.json").read_text(encoding="utf-8")
+        (root / "third_party" / "CascLib" / "SOURCE_PROVENANCE.json").read_text(
+            encoding="utf-8"
+        )
     )
     script = (root / "tools" / "build_casclib.ps1").read_text(encoding="utf-8")
 
@@ -283,7 +290,9 @@ def test_casclib_provenance_and_build_script_are_pinned() -> None:
 
 def test_spec_supports_onedir_and_onefile_from_one_analysis() -> None:
     # Given: the shared repository PyInstaller spec.
-    spec = (Path(__file__).resolve().parents[1] / f"{APP_NAME}.spec").read_text(encoding="utf-8")
+    spec = (Path(__file__).resolve().parents[1] / f"{APP_NAME}.spec").read_text(
+        encoding="utf-8"
+    )
 
     # When/Then: both output topologies share one dependency analysis.
     assert "W3XRAY_PYINSTALLER_MODE" in spec

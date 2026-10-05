@@ -2,11 +2,14 @@
 
 数据(jass_natives.py)由 build_jass_natives.py 从 common.j/blizzard.j 离线生成。
 """
+
 import unittest
 
 from w3xtool import script_scan
 from w3xtool.script_scan import (
-    scan_object_refs, scan_script_features, scan_all_referenced_codes,
+    scan_object_refs,
+    scan_script_features,
+    scan_all_referenced_codes,
 )
 
 
@@ -23,7 +26,9 @@ class BakedTableTest(unittest.TestCase):
     def test_bj_tables_nonempty(self):
         self.assertIn("MeleeStartingUnitsHuman", script_scan.BJ_FEATURES)
         self.assertTrue(script_scan.BJ_FUNC_CODES.get("MeleeStartingUnitsHuman"))
-        self.assertEqual(script_scan.BJ_CODE_CONSTANTS.get("bj_ELEVATOR_CODE01"), "DTrf")
+        self.assertEqual(
+            script_scan.BJ_CODE_CONSTANTS.get("bj_ELEVATOR_CODE01"), "DTrf"
+        )
 
 
 class ScanObjectRefsTest(unittest.TestCase):
@@ -34,23 +39,26 @@ class ScanObjectRefsTest(unittest.TestCase):
         self.assertIn("AHbz", refs["技能"])
 
     def test_unit_and_item(self):
-        script = ("set u = CreateUnit(p, 'hfoo', 0, 0, 0)\n"
-                  "call UnitAddItemById(u, 'Iitm')\n")
+        script = (
+            "set u = CreateUnit(p, 'hfoo', 0, 0, 0)\ncall UnitAddItemById(u, 'Iitm')\n"
+        )
         refs = scan_object_refs(script)
         self.assertIn("hfoo", refs["单位"])
         self.assertIn("Iitm", refs["物品"])
 
     def test_multiline_native_call_is_categorized(self):
         # Given: GUI-generated JASS may wrap native arguments across lines.
-        script = "\n".join((
-            "call CreateUnit(",
-            "    Player(0),",
-            "    'hfoo',",
-            "    0.,",
-            "    0.,",
-            "    270.",
-            ")",
-        ))
+        script = "\n".join(
+            (
+                "call CreateUnit(",
+                "    Player(0),",
+                "    'hfoo',",
+                "    0.,",
+                "    0.,",
+                "    270.",
+                ")",
+            )
+        )
 
         # When: object references are scanned.
         refs = scan_object_refs(script)
@@ -70,7 +78,7 @@ class ScanObjectRefsTest(unittest.TestCase):
 
     def test_non_object_line_ignored(self):
         # 不含对象码 native 的行不收码（避免误收伤害/金钱等整数）
-        refs = scan_object_refs("set damage = 1234\ncall BJDebugMsg(\"hi\")\n")
+        refs = scan_object_refs('set damage = 1234\ncall BJDebugMsg("hi")\n')
         self.assertEqual(sum(len(s) for s in refs.values()), 0)
 
     def test_multi_native_line_not_miscategorized(self):
@@ -81,7 +89,9 @@ class ScanObjectRefsTest(unittest.TestCase):
         self.assertIn("hfoo", refs["单位"])
         self.assertIn("Iitm", refs["物品"])
         # 同一行嵌套调用两类 native → 整行不归类(码不会错配到对方分类)
-        one = scan_object_refs("set it = UnitAddItemById(CreateUnit(p,'hfoo',0,0,0), 'Iitm')\n")
+        one = scan_object_refs(
+            "set it = UnitAddItemById(CreateUnit(p,'hfoo',0,0,0), 'Iitm')\n"
+        )
         self.assertNotIn("Iitm", one["单位"])
         self.assertNotIn("hfoo", one["物品"])
 
@@ -90,8 +100,10 @@ class ScanObjectRefsTest(unittest.TestCase):
         self.assertNotIn("GetObjectName", script_scan.NATIVE_OBJ_FUNCS)
 
     def test_bj_implicit_codes_are_categorized_as_object_refs(self):
-        script = ("call MeleeStartingUnitsHuman(p, loc, true, true, true)\n"
-                  "call MeleeGrantItemsToHero(hero)\n")
+        script = (
+            "call MeleeStartingUnitsHuman(p, loc, true, true, true)\n"
+            "call MeleeGrantItemsToHero(hero)\n"
+        )
         refs = scan_object_refs(script)
         self.assertIn("hpea", refs["单位"])
         self.assertIn("Amic", refs["技能"])
@@ -107,7 +119,7 @@ class ScriptFeaturesTest(unittest.TestCase):
         script = "call MeleeStartingUnitsHuman(p, loc, true, true, true)\n"
         feats, implicit = scan_script_features(script)
         self.assertIn("人族对战开局", feats)
-        self.assertIn("htow", implicit)        # 人族主基地是隐式引用
+        self.assertIn("htow", implicit)  # 人族主基地是隐式引用
 
     def test_no_feature(self):
         feats, implicit = scan_script_features("call DoNothing()\n")
@@ -121,10 +133,12 @@ class ScriptFeaturesTest(unittest.TestCase):
 
 class AllReferencedCodesTest(unittest.TestCase):
     def test_collects_literals_and_implicit(self):
-        script = ("call SomethingWith('Ax01')\n"
-                  "call MeleeStartingUnitsOrc(p, loc, true, true, true)\n")
+        script = (
+            "call SomethingWith('Ax01')\n"
+            "call MeleeStartingUnitsOrc(p, loc, true, true, true)\n"
+        )
         codes = scan_all_referenced_codes(script)
-        self.assertIn("Ax01", codes)           # 裸 'xxxx' 字面量也算根
+        self.assertIn("Ax01", codes)  # 裸 'xxxx' 字面量也算根
         self.assertTrue(any(c.islower() for c in codes))  # 兽族隐式基础单位码
 
     def test_collects_fourcc_double_quoted(self):
@@ -134,11 +148,13 @@ class AllReferencedCodesTest(unittest.TestCase):
 
     def test_ignores_comment_and_display_string_rawcodes(self):
         # Given: comments and user-facing strings mention text that looks like rawcodes.
-        script = "\n".join((
-            "// removed old unit 'hfoo'",
-            "call BJDebugMsg(\"debug marker 'A001'\")",
-            "call DoNothing()",
-        ))
+        script = "\n".join(
+            (
+                "// removed old unit 'hfoo'",
+                "call BJDebugMsg(\"debug marker 'A001'\")",
+                "call DoNothing()",
+            )
+        )
 
         # When: root object references are collected for orphan analysis.
         codes = scan_all_referenced_codes(script)

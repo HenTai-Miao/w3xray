@@ -82,7 +82,7 @@ def validate_external_names(
             continue
         try:
             exists = archive.has_file(name)
-        except (KeyError, OSError, ValueError):
+        except KeyError, OSError, ValueError:
             exists = False
         (confirmed if exists else missing).append(name)
     return ExternalListfileReport(
@@ -96,5 +96,7 @@ def validate_external_names(
 def _is_safe_archive_name(name: str) -> bool:
     if "\0" in name or name.startswith(("/", "\\")) or PureWindowsPath(name).drive:
         return False
-    parts = tuple(part for part in name.replace("\\", "/").split("/") if part not in ("", "."))
+    parts = tuple(
+        part for part in name.replace("\\", "/").split("/") if part not in ("", ".")
+    )
     return bool(parts) and ".." not in parts

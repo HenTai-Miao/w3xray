@@ -78,25 +78,51 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from w3xtool.object_text_models import ObjectTextIndex, ObjectTextRecord, ObjectTextState
+from w3xtool.object_text_models import (
+    ObjectTextIndex,
+    ObjectTextRecord,
+    ObjectTextState,
+)
 from w3xtool.object_text_roles import TextRoleMatch, classify_text_field
 
 
 def test_roles_cover_all_requested_tooltip_variants_and_levels() -> None:
-    assert classify_text_field("技能", "aret", "提示工具 - 学习") == TextRoleMatch("学习提示", None)
-    assert classify_text_field("技能", "arut:3", "提示工具 - 学习 - 扩展的 (等级3)") == TextRoleMatch("学习扩展提示", 3)
-    assert classify_text_field("技能", "aut1:2", "提示工具 - 关闭 (等级2)") == TextRoleMatch("关闭提示", 2)
-    assert classify_text_field("单位", "AwakenTip", "提示工具 - 唤醒") == TextRoleMatch("唤醒提示", None)
-    assert classify_text_field("物品", "ides", "描述") == TextRoleMatch("编辑器描述", None)
+    assert classify_text_field("技能", "aret", "提示工具 - 学习") == TextRoleMatch(
+        "学习提示", None
+    )
+    assert classify_text_field(
+        "技能", "arut:3", "提示工具 - 学习 - 扩展的 (等级3)"
+    ) == TextRoleMatch("学习扩展提示", 3)
+    assert classify_text_field(
+        "技能", "aut1:2", "提示工具 - 关闭 (等级2)"
+    ) == TextRoleMatch("关闭提示", 2)
+    assert classify_text_field("单位", "AwakenTip", "提示工具 - 唤醒") == TextRoleMatch(
+        "唤醒提示", None
+    )
+    assert classify_text_field("物品", "ides", "描述") == TextRoleMatch(
+        "编辑器描述", None
+    )
 
 
 def test_text_index_is_immutable_and_queries_by_category_and_id() -> None:
     row = ObjectTextRecord(
-        category="物品", object_id="I001", base_id="ratf", object_name="戒指",
-        is_custom=True, role="扩展提示", field_key="utub", field_label="提示文本",
-        level=None, raw_value="|cffffcc00全文|r|n第二行", readable_value="全文\n第二行",
-        source_kind="地图", source_path="war3map.w3t", state=ObjectTextState.MAP_VALUE,
-        placeholder=False, conflict_group="", evidence_ordinal=1,
+        category="物品",
+        object_id="I001",
+        base_id="ratf",
+        object_name="戒指",
+        is_custom=True,
+        role="扩展提示",
+        field_key="utub",
+        field_label="提示文本",
+        level=None,
+        raw_value="|cffffcc00全文|r|n第二行",
+        readable_value="全文\n第二行",
+        source_kind="地图",
+        source_path="war3map.w3t",
+        state=ObjectTextState.MAP_VALUE,
+        placeholder=False,
+        conflict_group="",
+        evidence_ordinal=1,
     )
     index = ObjectTextIndex.build((row,))
     assert index.for_object("物品", "I001") == (row,)
@@ -207,17 +233,48 @@ def test_cache_accepts_only_owned_unique_client_fill_rows(tmp_path: Path) -> Non
     (owned / ".w3xray-batch-owned").write_text("d" * 64, encoding="ascii")
     with (owned / "对象描述.tsv").open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
-        writer.writerow(("分类", "对象ID", "基础ID", "名称", "自定义", "等级",
-                         "原始提示", "可读提示", "提示来源", "原始说明", "可读说明",
-                         "说明来源", "完整性状态"))
-        writer.writerow(("物品", "I001", "ratf", "戒指", "是", "", "提示", "提示",
-                         "base:ratf", "完整说明", "完整说明", "base:ratf", "客户端补全"))
+        writer.writerow(
+            (
+                "分类",
+                "对象ID",
+                "基础ID",
+                "名称",
+                "自定义",
+                "等级",
+                "原始提示",
+                "可读提示",
+                "提示来源",
+                "原始说明",
+                "可读说明",
+                "说明来源",
+                "完整性状态",
+            )
+        )
+        writer.writerow(
+            (
+                "物品",
+                "I001",
+                "ratf",
+                "戒指",
+                "是",
+                "",
+                "提示",
+                "提示",
+                "base:ratf",
+                "完整说明",
+                "完整说明",
+                "base:ratf",
+                "客户端补全",
+            )
+        )
     cache = build_description_cache_from_batch(tmp_path)
     assert cache.lookup("物品", "ratf", "扩展提示", None)[0].raw_value == "完整说明"
     assert cache.conflict_count == 0
 
 
-def test_cache_rejects_conflicting_values_for_the_same_exact_key(tmp_path: Path) -> None:
+def test_cache_rejects_conflicting_values_for_the_same_exact_key(
+    tmp_path: Path,
+) -> None:
     # Create two independently owned result directories with different client-fill values.
     first = _write_owned_description(tmp_path, "001", "甲")
     second = _write_owned_description(tmp_path, "002", "乙")
@@ -308,80 +365,173 @@ from w3xtool.object_text_models import ObjectTextState
 
 
 def test_resolution_preserves_all_roles_levels_placeholders_and_conflicts() -> None:
-    long_raw = "|cffffcc00" + ("完整文本\t带引号\"\r\n" * 500) + "|r"
+    long_raw = "|cffffcc00" + ('完整文本\t带引号"\r\n' * 500) + "|r"
     candidates = (
-        _candidate("A001", "AHbz", (
-            _field("aret", "学习提示", "学习"),
-            _field("arut:2", "未学习提示 (等级2)", long_raw),
-            _field("aut1:2", "提示工具 - 关闭 (等级2)", "-"),
-        )),
+        _candidate(
+            "A001",
+            "AHbz",
+            (
+                _field("aret", "学习提示", "学习"),
+                _field("arut:2", "未学习提示 (等级2)", long_raw),
+                _field("aut1:2", "提示工具 - 关闭 (等级2)", "-"),
+            ),
+        ),
         _candidate("A001", "AHbz", (_field("arut:2", "未学习提示 (等级2)", "冲突值"),)),
     )
     index = build_object_text_index(
-        (_object("技能", "A001", "AHbz"),), candidates, (), _empty_cache(),
+        (_object("技能", "A001", "AHbz"),),
+        candidates,
+        (),
+        _empty_cache(),
         client_text_available=False,
     )
     rows = index.for_object("技能", "A001")
     assert {row.role for row in rows} >= {"学习提示", "学习扩展提示", "关闭提示"}
-    assert all(row.raw_value in {long_raw, "冲突值"} for row in rows if row.role == "学习扩展提示")
-    assert {row.state for row in rows if row.role == "学习扩展提示"} == {ObjectTextState.SOURCE_CONFLICT}
-    assert next(row for row in rows if row.role == "关闭提示").state is ObjectTextState.SOURCE_UNAVAILABLE
+    assert all(
+        row.raw_value in {long_raw, "冲突值"}
+        for row in rows
+        if row.role == "学习扩展提示"
+    )
+    assert {row.state for row in rows if row.role == "学习扩展提示"} == {
+        ObjectTextState.SOURCE_CONFLICT
+    }
+    assert (
+        next(row for row in rows if row.role == "关闭提示").state
+        is ObjectTextState.SOURCE_UNAVAILABLE
+    )
 
 
-def test_explicit_empty_blocks_fill_but_placeholder_allows_client_or_cache_fill() -> None:
+def test_explicit_empty_blocks_fill_but_placeholder_allows_client_or_cache_fill() -> (
+    None
+):
     # Map empty expansion stays cleared; map '-' normal tip is retained as placeholder and client text fills it.
     index = build_object_text_index(
         (_object("物品", "I001", "ratf"),),
-        (_candidate("I001", "ratf", (
-            _field("utip", "工具提示", "-"),
-            _field("utub", "提示文本", ""),
-        )),),
+        (
+            _candidate(
+                "I001",
+                "ratf",
+                (
+                    _field("utip", "工具提示", "-"),
+                    _field("utub", "提示文本", ""),
+                ),
+            ),
+        ),
         (_client("ratf", "物品", tip="客户端提示", description="客户端说明"),),
         _empty_cache(),
         client_text_available=True,
     )
     rows = index.for_object("物品", "I001")
-    assert any(row.role == "基础提示" and row.state is ObjectTextState.CLIENT_FILL for row in rows)
-    assert any(row.role == "扩展提示" and row.state is ObjectTextState.MAP_EXPLICIT_EMPTY for row in rows)
-    assert not any(row.role == "扩展提示" and row.state is ObjectTextState.CLIENT_FILL for row in rows)
+    assert any(
+        row.role == "基础提示" and row.state is ObjectTextState.CLIENT_FILL
+        for row in rows
+    )
+    assert any(
+        row.role == "扩展提示" and row.state is ObjectTextState.MAP_EXPLICIT_EMPTY
+        for row in rows
+    )
+    assert not any(
+        row.role == "扩展提示" and row.state is ObjectTextState.CLIENT_FILL
+        for row in rows
+    )
 
 
-def test_named_map_sources_precede_anonymous_client_and_cache_without_cross_map_custom_fill() -> None:
+def test_named_map_sources_precede_anonymous_client_and_cache_without_cross_map_custom_fill() -> (
+    None
+):
     named = ObjectCandidate(
-        "物品", "I001", "ratf", True, "w3t",
-        (ObjectFieldValue("utub", "提示文本", "具名地图全文", "war3map.w3t", ObjectSourceKind.BINARY),),
+        "物品",
+        "I001",
+        "ratf",
+        True,
+        "w3t",
+        (
+            ObjectFieldValue(
+                "utub",
+                "提示文本",
+                "具名地图全文",
+                "war3map.w3t",
+                ObjectSourceKind.BINARY,
+            ),
+        ),
         (),
     )
     anonymous = ObjectCandidate(
-        "物品", "I001", "I001", True, "txt",
-        (ObjectFieldValue("Ubertip", "提示文本", "匿名全文", "anonymous:block:000007", ObjectSourceKind.TEXT_ANONYMOUS),),
+        "物品",
+        "I001",
+        "I001",
+        True,
+        "txt",
+        (
+            ObjectFieldValue(
+                "Ubertip",
+                "提示文本",
+                "匿名全文",
+                "anonymous:block:000007",
+                ObjectSourceKind.TEXT_ANONYMOUS,
+            ),
+        ),
         (),
     )
     index = build_object_text_index(
         (GameObject("物品", "I001", "ratf", "戒指", True, "", "", (), (), (), ""),),
         (anonymous, named),
-        (ClientBaseObject("物品", "ratf", "戒指", evidence_fields=(
-            ObjectFieldValue("utub", "提示文本", "客户端全文", "Units/ItemStrings.txt", ObjectSourceKind.BASE),
-        )),),
-        DescriptionCache.build((DescriptionCacheEntry(
-            "物品", "ratf", "扩展提示", None, "缓存全文", "缓存全文", "a" * 64, "owned.tsv",
-        ),)),
+        (
+            ClientBaseObject(
+                "物品",
+                "ratf",
+                "戒指",
+                evidence_fields=(
+                    ObjectFieldValue(
+                        "utub",
+                        "提示文本",
+                        "客户端全文",
+                        "Units/ItemStrings.txt",
+                        ObjectSourceKind.BASE,
+                    ),
+                ),
+            ),
+        ),
+        DescriptionCache.build(
+            (
+                DescriptionCacheEntry(
+                    "物品",
+                    "ratf",
+                    "扩展提示",
+                    None,
+                    "缓存全文",
+                    "缓存全文",
+                    "a" * 64,
+                    "owned.tsv",
+                ),
+            )
+        ),
         client_text_available=True,
     )
-    row = next(record for record in index.for_object("物品", "I001") if record.role == "扩展提示")
+    row = next(
+        record
+        for record in index.for_object("物品", "I001")
+        if record.role == "扩展提示"
+    )
     assert (row.raw_value, row.state, row.source_path) == (
-        "具名地图全文", ObjectTextState.MAP_VALUE, "war3map.w3t",
+        "具名地图全文",
+        ObjectTextState.MAP_VALUE,
+        "war3map.w3t",
     )
 
 
-def test_text_rhs_and_wts_body_preserve_whitespace_line_endings_and_value_source() -> None:
+def test_text_rhs_and_wts_body_preserve_whitespace_line_endings_and_value_source() -> (
+    None
+):
     parsed = parse_text_objects("[I001]\r\nUbertip=  前导\t正文  \r\n")
     assert parsed[0][1]["Ubertip"] == "  前导\t正文  "
     wts = parse_wts(b"STRING 9\r\n{\r\n  first\r\nsecond\t  \r\n}\r\n")
     assert wts[9] == "  first\r\nsecond\t  "
-    archive = FakeArchive({
-        "war3map.w3t": _binary_object("ratf", "I001", (("utub", "TRIGSTR_9"),)),
-    })
+    archive = FakeArchive(
+        {
+            "war3map.w3t": _binary_object("ratf", "I001", (("utub", "TRIGSTR_9"),)),
+        }
+    )
     candidate = collect_binary_object_candidates(archive, wts, "w3t")[0]
     field = next(value for value in candidate.fields if value.key == "utub")
     assert field.value == "  first\r\nsecond\t  "
@@ -426,7 +576,11 @@ def _resolved_state(
     usable_cache = _usable_unique(cache_values)
     if usable_cache:
         return ObjectTextState.CACHE_FILL, usable_cache
-    state = ObjectTextState.AUTHOR_UNDEFINED if client_text_available else ObjectTextState.SOURCE_UNAVAILABLE
+    state = (
+        ObjectTextState.AUTHOR_UNDEFINED
+        if client_text_available
+        else ObjectTextState.SOURCE_UNAVAILABLE
+    )
     return state, ()
 ```
 
@@ -465,12 +619,23 @@ git commit -m "feat: retain complete object text evidence"
 - [ ] **Step 1: Extend fixtures and add failing nested-drop assertions**
 
 ```python
-def test_doodad_preserves_multiple_drop_sets_without_losing_flat_compatibility() -> None:
-    data = _build_doo([_doodad_with_sets(
-        "D001", [[("I001", 70), ("I002", 30)], [("I003", 100)]], serial=9,
-    )])
+def test_doodad_preserves_multiple_drop_sets_without_losing_flat_compatibility() -> (
+    None
+):
+    data = _build_doo(
+        [
+            _doodad_with_sets(
+                "D001",
+                [[("I001", 70), ("I002", 30)], [("I003", 100)]],
+                serial=9,
+            )
+        ]
+    )
     (doodad,) = parse_doodads(data)
-    assert [[(row.item_id, row.chance) for row in group.entries] for group in doodad.drop_sets] == [
+    assert [
+        [(row.item_id, row.chance) for row in group.entries]
+        for group in doodad.drop_sets
+    ] == [
         [("I001", 70), ("I002", 30)],
         [("I003", 100)],
     ]
@@ -478,13 +643,32 @@ def test_doodad_preserves_multiple_drop_sets_without_losing_flat_compatibility()
 
 
 def test_unit_retains_dropped_item_sets_that_were_previously_discarded() -> None:
-    unit = _unit("n001", 0, (1, 2, 0), 0, (1, 1, 1), 2, 12, -1, -1,
-                 0, -1, 1, [], [], 77,
-                 dropsets=[[("I001", 50)], [("I002", 25), ("I003", 75)]])
+    unit = _unit(
+        "n001",
+        0,
+        (1, 2, 0),
+        0,
+        (1, 1, 1),
+        2,
+        12,
+        -1,
+        -1,
+        0,
+        -1,
+        1,
+        [],
+        [],
+        77,
+        dropsets=[[("I001", 50)], [("I002", 25), ("I003", 75)]],
+    )
     (parsed,) = parse_units(_build_units([unit]))
     assert parsed.drops == [("I001", 50), ("I002", 25), ("I003", 75)]
     assert [group.group_index for group in parsed.drop_sets] == [0, 1]
-    assert all(entry.source_offset > parsed.source_offset for group in parsed.drop_sets for entry in group.entries)
+    assert all(
+        entry.source_offset > parsed.source_offset
+        for group in parsed.drop_sets
+        for entry in group.entries
+    )
 ```
 
 - [ ] **Step 2: Run DOO tests and verify missing attributes**
@@ -539,7 +723,9 @@ def test_relation_id_is_stable_but_distinct_per_instance_and_drop_group() -> Non
     assert index.for_item("I001") == (first, other_group)
 
 
-def test_structural_builder_emits_drop_shop_placement_inventory_and_skill_relations() -> None:
+def test_structural_builder_emits_drop_shop_placement_inventory_and_skill_relations() -> (
+    None
+):
     md = _map_with_items_units_shops_and_placements()
     records = build_structural_item_relations(md)
     assert {row.kind for row in records} >= {
@@ -589,8 +775,12 @@ class ItemRelationIndex:
         return cls(
             ordered,
             _frozen_group(ordered, lambda row: row.item.object_id),
-            _frozen_group(ordered, lambda row: row.source.object_id if row.source else ""),
-            _frozen_group(ordered, lambda row: row.skill.object_id if row.skill else ""),
+            _frozen_group(
+                ordered, lambda row: row.source.object_id if row.source else ""
+            ),
+            _frozen_group(
+                ordered, lambda row: row.skill.object_id if row.skill else ""
+            ),
         )
 ```
 
@@ -626,19 +816,26 @@ git commit -m "feat: index structural item acquisition relations"
 - [ ] **Step 1: Add failing source, function, line, quantity, and comment-noise tests**
 
 ```python
-def test_recipe_evidence_keeps_source_function_result_line_and_duplicate_material_counts() -> None:
-    script = "\n".join((
-        "function Forge takes nothing returns nothing",
-        "    call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I001'))",
-        "    call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I001'))",
-        "    call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I002'))",
-        "    call UnitAddItemById(u, 'I999')",
-        "endfunction",
-    ))
+def test_recipe_evidence_keeps_source_function_result_line_and_duplicate_material_counts() -> (
+    None
+):
+    script = "\n".join(
+        (
+            "function Forge takes nothing returns nothing",
+            "    call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I001'))",
+            "    call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I001'))",
+            "    call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I002'))",
+            "    call UnitAddItemById(u, 'I999')",
+            "endfunction",
+        )
+    )
     (recipe,) = scan_recipes(script, source="war3map.j")
     assert recipe.ingredients == ["I001", "I001", "I002"]
     assert (recipe.result, recipe.func, recipe.source, recipe.line) == (
-        "I999", "Forge", "war3map.j", 5,
+        "I999",
+        "Forge",
+        "war3map.j",
+        5,
     )
     assert "UnitAddItemById" in recipe.evidence
 
@@ -690,16 +887,24 @@ git commit -m "feat: retain recipe source evidence"
 
 ```python
 def test_fixed_item_reward_calls_keep_recipient_location_function_and_line() -> None:
-    md = MapData("x.w3x", "奖励图", scripts={
-        "war3map.j": "\n".join((
-            "function Reward takes nothing returns nothing",
-            "    call UnitAddItemById(GetTriggerUnit(), 'I001')",
-            "    call CreateItem('I002', 128.0, -64.0)",
-            "endfunction",
-        )),
-    })
+    md = MapData(
+        "x.w3x",
+        "奖励图",
+        scripts={
+            "war3map.j": "\n".join(
+                (
+                    "function Reward takes nothing returns nothing",
+                    "    call UnitAddItemById(GetTriggerUnit(), 'I001')",
+                    "    call CreateItem('I002', 128.0, -64.0)",
+                    "endfunction",
+                )
+            ),
+        },
+    )
     rows = build_script_item_relations(md)
-    assert {(row.item.object_id, row.evidence.source, row.evidence.line) for row in rows} == {
+    assert {
+        (row.item.object_id, row.evidence.source, row.evidence.line) for row in rows
+    } == {
         ("I001", "war3map.j", 2),
         ("I002", "war3map.j", 3),
     }
@@ -834,22 +1039,40 @@ import io
 
 
 def test_complete_text_tsv_round_trips_tabs_newlines_quotes_and_long_values() -> None:
-    raw = "\"开头\t字段\r\n" + ("长文本|n" * 2000)
+    raw = '"开头\t字段\r\n' + ("长文本|n" * 2000)
     index = _text_index_with_raw_value(raw)
     rendered = format_object_text_tsv(index)
     rows = list(csv.reader(io.StringIO(rendered), delimiter="\t"))
     assert rows[0] == [
-        "分类", "对象ID", "基础ID", "名称", "自定义", "文本角色", "字段键", "字段标签",
-        "等级/变体", "原始全文", "可读全文", "来源类型", "来源路径", "状态", "占位",
-        "冲突组", "证据序号",
+        "分类",
+        "对象ID",
+        "基础ID",
+        "名称",
+        "自定义",
+        "文本角色",
+        "字段键",
+        "字段标签",
+        "等级/变体",
+        "原始全文",
+        "可读全文",
+        "来源类型",
+        "来源路径",
+        "状态",
+        "占位",
+        "冲突组",
+        "证据序号",
     ]
     assert rows[1][9] == raw
 
 
 def test_relation_exports_split_acquisition_and_equipment_skill_rows() -> None:
     index = ItemRelationIndex.build((_drop_relation(), _item_ability_relation()))
-    acquisition = list(csv.reader(io.StringIO(format_item_acquisition_tsv(index)), delimiter="\t"))
-    skills = list(csv.reader(io.StringIO(format_equipment_skills_tsv(index)), delimiter="\t"))
+    acquisition = list(
+        csv.reader(io.StringIO(format_item_acquisition_tsv(index)), delimiter="\t")
+    )
+    skills = list(
+        csv.reader(io.StringIO(format_equipment_skills_tsv(index)), delimiter="\t")
+    )
     assert [row[2] for row in acquisition[1:]] == ["怪物直接掉落"]
     assert [row[3] for row in skills[1:]] == ["装备技能"]
     assert "证据行号/偏移" in acquisition[0]
@@ -971,21 +1194,26 @@ git commit -m "feat: publish item relations in knowledge packs"
 - [ ] **Step 1: Add failing schema/cache/report/resume tests**
 
 ```python
-def test_schema_one_result_is_not_reused_after_relation_reports_become_required(tmp_path: Path) -> None:
+def test_schema_one_result_is_not_reused_after_relation_reports_become_required(
+    tmp_path: Path,
+) -> None:
     old = _schema_one_state_json()
     (tmp_path / "批量提取状态.json").write_text(old, encoding="utf-8")
     assert batch_runner._read_previous_state(str(tmp_path)) is None
 
 
 def test_batch_builds_cache_before_processing_and_writes_all_new_reports(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     output = tmp_path / "output"
     _write_legacy_owned_client_fill(output)
     seen_cache_sizes: list[int] = []
+
     def process(index, fingerprint, options, context):
         seen_cache_sizes.append(len(context.description_cache.entries))
         return _publish_fake_v2_result(index, fingerprint, options)
+
     monkeypatch.setattr(batch_runner, "process_one_map", process)
     state = run_batch(BatchOptions(str(_map_source(tmp_path)), str(output)))
     assert state.schema_version == 2

@@ -49,7 +49,12 @@ def _function(
 
 
 def _trigger_fixture(name: str) -> str:
-    return Path(__file__).with_name("fixtures").joinpath("trigger", name).read_text(encoding="utf-8")
+    return (
+        Path(__file__)
+        .with_name("fixtures")
+        .joinpath("trigger", name)
+        .read_text(encoding="utf-8")
+    )
 
 
 def _duplicate_name_schema() -> TriggerSchema:
@@ -83,7 +88,10 @@ class TriggerDataSemanticTest(unittest.TestCase):
 
         # When: map-local display context is used by the semantic renderer.
         text = render_eca_semantic(
-            action, None, wts={1: "开始游戏"}, object_names={"H001": "圣骑士"},
+            action,
+            None,
+            wts={1: "开始游戏"},
+            object_names={"H001": "圣骑士"},
         )
 
         # Then: readable values remain traceable to their raw object ID.
@@ -93,10 +101,16 @@ class TriggerDataSemanticTest(unittest.TestCase):
         # Given: one array parameter whose index is another recursively indexed array.
         final_index = TriggerEcaParameter(0, "3")
         nested_index = TriggerEcaParameter(
-            1, "Indexes", have_array_indexer=1, array_indexer=final_index,
+            1,
+            "Indexes",
+            have_array_indexer=1,
+            array_indexer=final_index,
         )
         array = TriggerEcaParameter(
-            1, "Numbers", have_array_indexer=1, array_indexer=nested_index,
+            1,
+            "Numbers",
+            have_array_indexer=1,
+            array_indexer=nested_index,
         )
 
         # When: the schema-free semantic fallback renders the action.
@@ -105,7 +119,9 @@ class TriggerDataSemanticTest(unittest.TestCase):
         # Then: no recursive array-index value is dropped.
         self.assertEqual(text, "UseValue(Numbers[Indexes[3]])")
 
-    def test_render_eca_semantic_uses_real_trigger_strings_and_nested_calls(self) -> None:
+    def test_render_eca_semantic_uses_real_trigger_strings_and_nested_calls(
+        self,
+    ) -> None:
         # Given: complete real TriggerData/TriggerStrings fixtures and a WTG action
         # containing a nested condition call.
         trigger_data = parse_trigger_schema(
@@ -136,7 +152,9 @@ class TriggerDataSemanticTest(unittest.TestCase):
         text = render_eca_semantic(action, trigger_data)
 
         # Then: the output is an editor-style sentence instead of the raw signature.
-        self.assertEqual(text, "Create 1 hfoo for Player 1 at 1 == 2 facing 270.00 degrees")
+        self.assertEqual(
+            text, "Create 1 hfoo for Player 1 at 1 == 2 facing 270.00 degrees"
+        )
 
     def test_schema_lookup_prefers_an_exact_kind_match(self) -> None:
         # Given: two real-format schema entries with one shared function name.
@@ -221,8 +239,13 @@ class TriggerDataSemanticTest(unittest.TestCase):
         text = format_trigger_eca_tsv(summary, trigger_data=trigger_data)
 
         # Then: raw rows remain, with a semantic sentence attached to the function row.
-        self.assertIn("触发器\t深度\t行类型\t函数类型\t函数名\t启用\t参数序号\t参数类型\t参数值\t语义文本", text)
-        self.assertIn("DisplayTextToForce\t是\t\t\t\tDisplay to 欢迎 the text: 所有玩家", text)
+        self.assertIn(
+            "触发器\t深度\t行类型\t函数类型\t函数名\t启用\t参数序号\t参数类型\t参数值\t语义文本",
+            text,
+        )
+        self.assertIn(
+            "DisplayTextToForce\t是\t\t\t\tDisplay to 欢迎 the text: 所有玩家", text
+        )
 
     def test_real_schema_keeps_function_names_that_end_with_name(self) -> None:
         # Given: a real-format action whose function key itself ends with "Name".
@@ -265,16 +288,23 @@ class TriggerDataSemanticTest(unittest.TestCase):
                 ),
             )
         )
-        with tempfile.TemporaryDirectory() as game_data, tempfile.TemporaryDirectory() as out:
+        with (
+            tempfile.TemporaryDirectory() as game_data,
+            tempfile.TemporaryDirectory() as out,
+        ):
             ui_dir = os.path.join(game_data, "war3.w3mod", "UI")
             os.makedirs(ui_dir)
-            with open(os.path.join(ui_dir, "TriggerData.txt"), "w", encoding="utf-8") as handle:
+            with open(
+                os.path.join(ui_dir, "TriggerData.txt"), "w", encoding="utf-8"
+            ) as handle:
                 handle.write(
                     "[TriggerActions]\n"
                     "DisplayTextToForce=0,force,StringExt\n"
                     "_DisplayTextToForce_Category=TC_GAME\n"
                 )
-            with open(os.path.join(ui_dir, "TriggerStrings.txt"), "w", encoding="utf-8") as handle:
+            with open(
+                os.path.join(ui_dir, "TriggerStrings.txt"), "w", encoding="utf-8"
+            ) as handle:
                 handle.write(
                     "[TriggerActionStrings]\n"
                     'DisplayTextToForce="Text Message (Auto-Timed)"\n'
@@ -296,10 +326,15 @@ class TriggerDataSemanticTest(unittest.TestCase):
         md.trigger_summary = _Summary(
             (_function("DisplayTextToForce", (TriggerEcaParameter(0, "所有玩家"),)),)
         )
-        with tempfile.TemporaryDirectory() as game_data, tempfile.TemporaryDirectory() as out:
+        with (
+            tempfile.TemporaryDirectory() as game_data,
+            tempfile.TemporaryDirectory() as out,
+        ):
             ui_dir = os.path.join(game_data, "war3.w3mod", "UI")
             os.makedirs(ui_dir)
-            with open(os.path.join(ui_dir, "TriggerData.txt"), "w", encoding="utf-8") as handle:
+            with open(
+                os.path.join(ui_dir, "TriggerData.txt"), "w", encoding="utf-8"
+            ) as handle:
                 handle.write("[TriggerActions]\nDisplayTextToForce=\n")
 
             # When: the knowledge pack is written with malformed optional metadata.

@@ -188,7 +188,8 @@ def test_item_skill_relations_keep_unknown_skill_as_unresolved_evidence() -> Non
     skill_rows = [
         row
         for row in records
-        if row.kind in {ItemRelationKind.ITEM_ABILITY, ItemRelationKind.COOLDOWN_ABILITY}
+        if row.kind
+        in {ItemRelationKind.ITEM_ABILITY, ItemRelationKind.COOLDOWN_ABILITY}
     ]
     assert {row.skill.object_id for row in skill_rows if row.skill is not None} == {
         "A001",
@@ -196,7 +197,9 @@ def test_item_skill_relations_keep_unknown_skill_as_unresolved_evidence() -> Non
         "A404",
     }
     unresolved = next(
-        row for row in skill_rows if row.skill is not None and row.skill.object_id == "A404"
+        row
+        for row in skill_rows
+        if row.skill is not None and row.skill.object_id == "A404"
     )
     assert unresolved.skill is not None
     assert unresolved.skill.name == "未解析"
@@ -225,7 +228,9 @@ def test_shop_without_placement_remains_as_partial_type_level_evidence() -> None
     # Given: a defined shop has no preplaced instance.
     shop = _object("单位", "nshp", "动态商店", fields={"Sellitems": "I001"})
     item = _object("物品", "I001", "目标装备")
-    md = MapData(path="x.w3x", name="动态商店图", objects={"单位": [shop], "物品": [item]})
+    md = MapData(
+        path="x.w3x", name="动态商店图", objects={"单位": [shop], "物品": [item]}
+    )
     md.obj_index = {shop.obj_id: shop, item.obj_id: item}
 
     # When: structural relations are built.
@@ -245,14 +250,16 @@ def test_combined_index_counts_recipe_materials_and_preserves_source_evidence() 
         _object("物品", "I002", "材料乙"),
         _object("物品", "I999", "成品"),
     )
-    script = "\n".join((
-        "function Forge takes nothing returns nothing",
-        "call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I001'))",
-        "call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I001'))",
-        "call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I002'))",
-        "call UnitAddItemById(u, 'I999')",
-        "endfunction",
-    ))
+    script = "\n".join(
+        (
+            "function Forge takes nothing returns nothing",
+            "call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I001'))",
+            "call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I001'))",
+            "call RemoveItem(GetItemOfTypeFromUnitBJ(u, 'I002'))",
+            "call UnitAddItemById(u, 'I999')",
+            "endfunction",
+        )
+    )
     md = MapData(path="x.w3x", name="配方图", scripts={"war3map.j": script})
     md.objects = {"物品": list(objects)}
     md.obj_index = {item.obj_id: item for item in objects}

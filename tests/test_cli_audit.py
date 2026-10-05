@@ -1,11 +1,16 @@
 """CLI 摘要输出包含地图智能审计结果。"""
+
 import unittest
 from unittest.mock import patch
 from types import SimpleNamespace
 
 from main import iter_cli_summary_lines, iter_game_config_summary_lines
 from w3xtool.api import GameObject, MapData
-from w3xtool.gameconfig import GameConfiguration, GameConfigPlayer, NamedGameConfiguration
+from w3xtool.gameconfig import (
+    GameConfiguration,
+    GameConfigPlayer,
+    NamedGameConfiguration,
+)
 from w3xtool.gameplay import GameplayConstant
 from w3xtool.imp import ImportEntry, ImportSummary
 from w3xtool.mapmeta import MapStructureReport, PathingSummary
@@ -59,7 +64,9 @@ class CliAuditTest(unittest.TestCase):
             height=64,
         )
         md.objects = {"技能": [_obj("技能", "A001")]}
-        md.scripts = {"war3map.j": "function main takes nothing returns nothing\nendfunction"}
+        md.scripts = {
+            "war3map.j": "function main takes nothing returns nothing\nendfunction"
+        }
 
         # When: CLI summary lines are rendered.
         lines = list(iter_cli_summary_lines(md))
@@ -149,7 +156,9 @@ class CliAuditTest(unittest.TestCase):
 
         # Then: the decoded command name is visible.
         self.assertIn("  命令:", lines)
-        self.assertTrue(any("channel" in line and "war3map.j" in line for line in lines))
+        self.assertTrue(
+            any("channel" in line and "war3map.j" in line for line in lines)
+        )
 
     def test_cli_summary_includes_script_diagnostics(self):
         # Given: a script with local-player risk.
@@ -202,7 +211,9 @@ class CliAuditTest(unittest.TestCase):
 
         # Then: the script crash risk is visible.
         self.assertIn("  崩溃风险:", lines)
-        self.assertTrue(any("游戏缓存" in line and "war3map.j" in line for line in lines))
+        self.assertTrue(
+            any("游戏缓存" in line and "war3map.j" in line for line in lines)
+        )
 
     def test_cli_summary_includes_cheat_residue(self):
         # Given: a map contains an official cheat phrase in a chat trigger.
@@ -218,7 +229,9 @@ class CliAuditTest(unittest.TestCase):
 
         # Then: suspicious cheat/debug residue is visible.
         self.assertIn("  秘籍/调试口令:", lines)
-        self.assertTrue(any("whosyourdaddy" in line and "聊天指令" in line for line in lines))
+        self.assertTrue(
+            any("whosyourdaddy" in line and "聊天指令" in line for line in lines)
+        )
 
     def test_cli_summary_includes_terrain_block(self):
         # Given: a map whose terrain header can be read from the archive.
@@ -240,8 +253,12 @@ class CliAuditTest(unittest.TestCase):
         # Then: terrain texture and grid metadata is visible.
         self.assertIn("  地形:", lines)
         self.assertTrue(any("65×33" in line and "L" in line for line in lines))
-        self.assertTrue(any("Ldrt" in line and "洛丹伦(夏) - 泥地" in line for line in lines))
-        self.assertTrue(any("TerrainArt\\LordaeronSummer\\Lords_Dirt.blp" in line for line in lines))
+        self.assertTrue(
+            any("Ldrt" in line and "洛丹伦(夏) - 泥地" in line for line in lines)
+        )
+        self.assertTrue(
+            any("TerrainArt\\LordaeronSummer\\Lords_Dirt.blp" in line for line in lines)
+        )
 
     def test_cli_summary_includes_return_bug_compat_warning(self):
         # Given: a map script using old 1.20E return-bug handle casting.
@@ -295,14 +312,18 @@ class CliAuditTest(unittest.TestCase):
         )
 
         # When: CLI summary lines are rendered.
-        with patch("w3xtool.mapmeta.map_structure_report_from_map_path", return_value=report):
+        with patch(
+            "w3xtool.mapmeta.map_structure_report_from_map_path", return_value=report
+        ):
             lines = list(iter_cli_summary_lines(md))
 
         # Then: the structure block is visible.
         self.assertIn("  地图结构:", lines)
         self.assertTrue(any("区域: 2" in line and "镜头: 3" in line for line in lines))
         self.assertTrue(any("路径图: 8×9" in line for line in lines))
-        self.assertTrue(any("禁止行走: 10" in line and "禁止建造: 5" in line for line in lines))
+        self.assertTrue(
+            any("禁止行走: 10" in line and "禁止建造: 5" in line for line in lines)
+        )
         self.assertTrue(any("BossRoom" in line for line in lines))
         self.assertTrue(any("IntroCam" in line for line in lines))
         self.assertTrue(any("boss.mp3" in line for line in lines))
@@ -310,10 +331,12 @@ class CliAuditTest(unittest.TestCase):
     def test_cli_summary_includes_slk_inventory_block(self):
         # Given: parsed embedded SLK inventory from the map archive.
         md = MapData(path="x.w3x", name="测试图")
-        report = SlkInventoryReport((
-            SlkFileSummary(path="Units\\UnitData.slk", rows=12, columns=8),
-            SlkFileSummary(path="AbilityData.slk", rows=4, columns=6),
-        ))
+        report = SlkInventoryReport(
+            (
+                SlkFileSummary(path="Units\\UnitData.slk", rows=12, columns=8),
+                SlkFileSummary(path="AbilityData.slk", rows=4, columns=6),
+            )
+        )
 
         # When: CLI summary lines are rendered.
         with patch("w3xtool.slkmeta.slk_inventory_from_map_path", return_value=report):
@@ -321,8 +344,12 @@ class CliAuditTest(unittest.TestCase):
 
         # Then: the SLK table inventory is visible.
         self.assertIn("  SLK:", lines)
-        self.assertTrue(any("Units\\UnitData.slk" in line and "12 行" in line for line in lines))
-        self.assertTrue(any("AbilityData.slk" in line and "4 行" in line for line in lines))
+        self.assertTrue(
+            any("Units\\UnitData.slk" in line and "12 行" in line for line in lines)
+        )
+        self.assertTrue(
+            any("AbilityData.slk" in line and "4 行" in line for line in lines)
+        )
 
     def test_cli_summary_includes_gameplay_constants_block(self):
         # Given: parsed gameplay constants from war3mapMisc.txt.
@@ -333,7 +360,9 @@ class CliAuditTest(unittest.TestCase):
         )
 
         # When: CLI summary lines are rendered.
-        with patch("w3xtool.gameplay.gameplay_constants_from_map_path", return_value=constants):
+        with patch(
+            "w3xtool.gameplay.gameplay_constants_from_map_path", return_value=constants
+        ):
             lines = list(iter_cli_summary_lines(md))
 
         # Then: detailed constants are visible.
@@ -353,7 +382,9 @@ class CliAuditTest(unittest.TestCase):
                     map_path="Maps\\Anime\\Test.w3x",
                     players=(
                         GameConfigPlayer(0, 0, 0x01, 0, 100, 0x01, 1, ""),
-                        GameConfigPlayer(1, 0, 0x02, 1, 90, 0x04, 2, "AI Scripts\\rush.ai"),
+                        GameConfigPlayer(
+                            1, 0, 0x02, 1, 90, 0x04, 2, "AI Scripts\\rush.ai"
+                        ),
                     ),
                 ),
             )
@@ -365,8 +396,12 @@ class CliAuditTest(unittest.TestCase):
         # Then: game config details are visible in the map summary.
         self.assertIn("  游戏配置: 1", lines)
         self.assertIn("  游戏配置:", lines)
-        self.assertTrue(any("testconfig.wgc" in line and "400%" in line for line in lines))
-        self.assertTrue(any("禁用战争迷雾" in line and "禁用胜负条件" in line for line in lines))
+        self.assertTrue(
+            any("testconfig.wgc" in line and "400%" in line for line in lines)
+        )
+        self.assertTrue(
+            any("禁用战争迷雾" in line and "禁用胜负条件" in line for line in lines)
+        )
         self.assertTrue(any("AI Scripts\\rush.ai" in line for line in lines))
 
     def test_standalone_game_config_summary_lists_players(self):
@@ -408,8 +443,14 @@ class CliAuditTest(unittest.TestCase):
                 TriggerHeader("脚本块", "", False, False, True, True, False, 42, 1),
             ),
             has_unexpanded_functions=True,
-            missing_schema_functions=(UnknownTriggerFunction("初始化", "MissingAction", 2, 0x40),),
-            parse_failures=(TriggerParseFailure("脚本块", "BadAction", 0x80, "invalid parameter type 999"),),
+            missing_schema_functions=(
+                UnknownTriggerFunction("初始化", "MissingAction", 2, 0x40),
+            ),
+            parse_failures=(
+                TriggerParseFailure(
+                    "脚本块", "BadAction", 0x80, "invalid parameter type 999"
+                ),
+            ),
         )
 
         # When: CLI summary lines are rendered.
@@ -420,8 +461,15 @@ class CliAuditTest(unittest.TestCase):
         self.assertIn("  触发器树:", lines)
         self.assertTrue(any("初始化" in line and "开局运行" in line for line in lines))
         self.assertTrue(any("脚本块" in line and "禁用" in line for line in lines))
-        self.assertTrue(any("缺少 TriggerData/TriggerStrings" in line and "MissingAction" in line for line in lines))
-        self.assertTrue(any("WTG 解析失败" in line and "BadAction @ 0x80" in line for line in lines))
+        self.assertTrue(
+            any(
+                "缺少 TriggerData/TriggerStrings" in line and "MissingAction" in line
+                for line in lines
+            )
+        )
+        self.assertTrue(
+            any("WTG 解析失败" in line and "BadAction @ 0x80" in line for line in lines)
+        )
 
     def test_cli_summary_includes_preview_icons(self):
         # Given: a map with parsed minimap preview icons.
@@ -440,7 +488,9 @@ class CliAuditTest(unittest.TestCase):
         # Then: minimap marker counts and sample coordinates are visible.
         self.assertIn("  小地图标记: 2", lines)
         self.assertIn("  小地图标记:", lines)
-        self.assertTrue(any("玩家出生点" in line and "(12, 34)" in line for line in lines))
+        self.assertTrue(
+            any("玩家出生点" in line and "(12, 34)" in line for line in lines)
+        )
         self.assertTrue(any("金矿" in line and "1" in line for line in lines))
 
     def test_cli_summary_includes_import_summary(self):
@@ -462,8 +512,12 @@ class CliAuditTest(unittest.TestCase):
         # Then: import counts, type split and missing resources are visible.
         self.assertIn("  导入资源: 2", lines)
         self.assertIn("  导入资源:", lines)
-        self.assertTrue(any("标准路径: 1" in line and "自定义路径: 1" in line for line in lines))
-        self.assertTrue(any("ReplaceableTextures\\custom.blp" in line for line in lines))
+        self.assertTrue(
+            any("标准路径: 1" in line and "自定义路径: 1" in line for line in lines)
+        )
+        self.assertTrue(
+            any("ReplaceableTextures\\custom.blp" in line for line in lines)
+        )
 
 
 if __name__ == "__main__":

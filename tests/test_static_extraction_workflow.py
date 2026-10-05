@@ -28,7 +28,9 @@ def test_real_format_trigger_listfile_pack_workflow(tmp_path: Path) -> None:
 
     # When: the complete knowledge pack is written from that immutable map model.
     pack = tmp_path / "pack"
-    report = write_knowledge_pack_report(md, str(pack), game_data_path=str(TRIGGER_FIXTURE_DIR))
+    report = write_knowledge_pack_report(
+        md, str(pack), game_data_path=str(TRIGGER_FIXTURE_DIR)
+    )
 
     # Then: ECA localization, listfile diagnostics, identity, resources, and boundaries coexist.
     assert report.status is KnowledgeWriteStatus.COMPLETE

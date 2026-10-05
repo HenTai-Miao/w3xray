@@ -13,51 +13,88 @@
 - extract_refs_by_column(fields, category) → [(column, [code…])]  给文本对象用
 - build_reference_graph(md)    填 md.references / md.referenced_by / md.orphans
 """
+
 from __future__ import annotations
 
 import re
 
 from .script_sources import analysis_script_texts
 
-_LEVEL_LABEL_RE = re.compile(r" \(等级\d+\)$")   # 反向去重时剥掉标签里的"(等级N)"
+_LEVEL_LABEL_RE = re.compile(r" \(等级\d+\)$")  # 反向去重时剥掉标签里的"(等级N)"
 
 # 引用类型(FIELD_TYPES 的值) → 目标分类。仅列"值是对象 4cc 码/码列表"的类型；
 # intList/unrealList/stringList/modelList/targetList/unitClass 等是数值/字符串/枚举，非引用。
 # 注意：value(目标分类)仅作**说明性**——代码只用 `in REF_TYPES`(成员判定)，实际归类靠
 # 引用码在 obj_index 里查到的真实对象，故个别 value 不精确(如 effectList)不影响正确性。
 REF_TYPES = {
-    "abilCode": "技能", "abilityList": "技能", "heroAbilityList": "技能",
-    "unitCode": "单位", "unitList": "单位",
+    "abilCode": "技能",
+    "abilityList": "技能",
+    "heroAbilityList": "技能",
+    "unitCode": "单位",
+    "unitList": "单位",
     "itemList": "物品",
-    "upgradeCode": "科技", "upgradeList": "科技", "techList": "科技",
-    "buffList": "增益", "effectList": "增益",
+    "upgradeCode": "科技",
+    "upgradeList": "科技",
+    "techList": "科技",
+    "buffList": "增益",
+    "effectList": "增益",
 }
 
 # 文本格式对象档(SLK 列名)引用列 → 目标分类。取自优化器 [SearchObjectData]。
 # 键是中文分类(与 EXT_CATEGORY 对齐)，值是 {列名: 目标分类}。
 REF_COLUMNS = {
     "单位": {
-        "abilList": "技能", "heroAbilList": "技能",
-        "Makeitems": "物品", "Sellitems": "物品",
-        "Builds": "单位", "Sellunits": "单位", "Trains": "单位", "Reviveat": "单位",
-        "Upgrade": "单位", "DependencyOr": "单位",
-        "Researches": "科技", "upgrades": "科技", "Requires": "科技",
-        "Requires1": "科技", "Requires2": "科技", "Requires3": "科技", "Requires4": "科技",
-        "Requires5": "科技", "Requires6": "科技", "Requires7": "科技", "Requires8": "科技",
+        "abilList": "技能",
+        "heroAbilList": "技能",
+        "Makeitems": "物品",
+        "Sellitems": "物品",
+        "Builds": "单位",
+        "Sellunits": "单位",
+        "Trains": "单位",
+        "Reviveat": "单位",
+        "Upgrade": "单位",
+        "DependencyOr": "单位",
+        "Researches": "科技",
+        "upgrades": "科技",
+        "Requires": "科技",
+        "Requires1": "科技",
+        "Requires2": "科技",
+        "Requires3": "科技",
+        "Requires4": "科技",
+        "Requires5": "科技",
+        "Requires6": "科技",
+        "Requires7": "科技",
+        "Requires8": "科技",
     },
     "物品": {
-        "abilList": "技能", "cooldownID": "技能", "Requires": "科技",
+        "abilList": "技能",
+        "cooldownID": "技能",
+        "Requires": "科技",
     },
     "技能": {
-        "BuffID": "增益", "EfctID": "增益", "Requires": "科技",
+        "BuffID": "增益",
+        "EfctID": "增益",
+        "Requires": "科技",
         # SLK 技能数据按等级后缀分列：BuffID1..4(buff)、EfctID1..4(效果)、UnitID1..4(召唤/创建单位)
-        "BuffID1": "增益", "BuffID2": "增益", "BuffID3": "增益", "BuffID4": "增益",
-        "EfctID1": "增益", "EfctID2": "增益", "EfctID3": "增益", "EfctID4": "增益",
-        "UnitID1": "单位", "UnitID2": "单位", "UnitID3": "单位", "UnitID4": "单位",
+        "BuffID1": "增益",
+        "BuffID2": "增益",
+        "BuffID3": "增益",
+        "BuffID4": "增益",
+        "EfctID1": "增益",
+        "EfctID2": "增益",
+        "EfctID3": "增益",
+        "EfctID4": "增益",
+        "UnitID1": "单位",
+        "UnitID2": "单位",
+        "UnitID3": "单位",
+        "UnitID4": "单位",
     },
     "科技": {
         "Requires": "科技",
-        "code1": "科技", "code2": "科技", "code3": "科技", "code4": "科技",
+        "code1": "科技",
+        "code2": "科技",
+        "code3": "科技",
+        "code4": "科技",
     },
 }
 
@@ -132,8 +169,11 @@ def build_reference_graph(md) -> None:
     """
     from .fields import label_for
     from .slk_objects import slk_col_label
+
     try:
-        from .base_names import BASE_NAMES      # 引用到的原版对象(如标准 buff)未作为对象加载时，回退取原版名
+        from .base_names import (
+            BASE_NAMES,
+        )  # 引用到的原版对象(如标准 buff)未作为对象加载时，回退取原版名
     except ImportError:
         BASE_NAMES = {}
 
@@ -145,7 +185,7 @@ def build_reference_graph(md) -> None:
 
     references: dict = {}
     referenced_by: dict = {}
-    seen_edges: set = set()                     # (被引码, 引用者id, 标签) 去重，防重复边
+    seen_edges: set = set()  # (被引码, 引用者id, 标签) 去重，防重复边
     obj_index = md.obj_index
 
     all_objects = [o for objs in md.objects.values() for o in objs]
@@ -166,7 +206,7 @@ def build_reference_graph(md) -> None:
                 # 名字：已加载对象优先；否则回退原版名(标准 buff/单位等未当对象加载时也有名)
                 name = target.name if target is not None else BASE_NAMES.get(code)
                 resolved.append((code, name))
-                if code == o.obj_id:            # 跳过自引用：否则对象会被自己挡在"孤立"之外
+                if code == o.obj_id:  # 跳过自引用：否则对象会被自己挡在"孤立"之外
                     continue
                 # 反向"被谁引用"按去等级的基础标签去重：SLK 的 BuffID1..4 等逐级列
                 # 否则会让同一引用者重复 4 条；正向 references 仍保留逐级明细。
@@ -174,7 +214,9 @@ def build_reference_graph(md) -> None:
                 key = (code, o.obj_id, base_label)
                 if key not in seen_edges:
                     seen_edges.add(key)
-                    referenced_by.setdefault(code, []).append((o.obj_id, o.name, base_label))
+                    referenced_by.setdefault(code, []).append(
+                        (o.obj_id, o.name, base_label)
+                    )
             if resolved:
                 entries.append((label, resolved))
         if entries:
@@ -183,6 +225,7 @@ def build_reference_graph(md) -> None:
     # 根集合：被脚本引用 / 预放置在地图上的类型 —— 这些即便没被别的对象引用也不算"孤立"。
     roots = set(referenced_by.keys())
     from .script_scan import scan_all_referenced_codes
+
     for _source, script_text in analysis_script_texts(md):
         # 全类 native 提码 + 所有 'xxxx' 字面量 + BJ 隐式码，孤立判定宁滥勿缺
         roots.update(scan_all_referenced_codes(script_text))
@@ -192,8 +235,7 @@ def build_reference_graph(md) -> None:
         roots.add(getattr(d, "type_id", ""))
 
     # 孤立：自定义、且其 ID 不在根集合里（没被任何对象/脚本/预放置引用）。
-    orphans = [o for o in all_objects
-               if o.is_custom and o.obj_id not in roots]
+    orphans = [o for o in all_objects if o.is_custom and o.obj_id not in roots]
 
     # 引用覆盖度自检：SLK 优化图(如 U9)把单位→技能这类**入边**放进未解析/缺失的 .slk，
     # 导致整类对象"看起来"无人引用。两条判据任一成立即判低覆盖（孤立不可全信）：
@@ -205,6 +247,7 @@ def build_reference_graph(md) -> None:
     low = len(custom) >= 50 and with_refs < 0.15 * len(custom)
     if not low and custom:
         from collections import Counter
+
         cust_by_cat = Counter(o.category for o in custom)
         orph_by_cat = Counter(o.category for o in orphans)
         for cat, ncust in cust_by_cat.items():

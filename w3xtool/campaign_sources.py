@@ -13,7 +13,9 @@ if TYPE_CHECKING:
     from .w3f import W3fInfo
 
 
-def campaign_inner_maps(w3f: W3fInfo | None, archive_names: Iterable[str]) -> tuple[str, ...]:
+def campaign_inner_maps(
+    w3f: W3fInfo | None, archive_names: Iterable[str]
+) -> tuple[str, ...]:
     """Return archive map names in declared W3F order, then remaining members."""
     archive_maps: dict[str, str] = {}
     for name in archive_names:

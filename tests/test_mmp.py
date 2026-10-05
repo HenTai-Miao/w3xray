@@ -17,7 +17,8 @@ def _icon(icon_type, x, y, red, green, blue, alpha=255):
 
 def _mmp():
     return (
-        _i(0) + _i(3)
+        _i(0)
+        + _i(3)
         + _icon(2, 12, 34, 255, 0, 0)
         + _icon(0, 80, 90, 255, 215, 0)
         + _icon(1, 120, 150, 80, 160, 255, 200)

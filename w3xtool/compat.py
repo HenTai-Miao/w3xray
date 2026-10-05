@@ -1,4 +1,5 @@
 """版本兼容报告：面向经典版本的只读风险提示。"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -17,50 +18,54 @@ _JASS_FUNCTION_RE = re.compile(
     r"(?P<body>.*?)\bendfunction\b",
     re.IGNORECASE | re.DOTALL,
 )
-_RETURN_RE = re.compile(r"^\s*return\s+([A-Za-z_][A-Za-z0-9_]*)\b", re.IGNORECASE | re.MULTILINE)
-_HANDLE_TYPES = frozenset((
-    "handle",
-    "agent",
-    "event",
-    "player",
-    "widget",
-    "unit",
-    "destructable",
-    "item",
-    "ability",
-    "buff",
-    "force",
-    "group",
-    "trigger",
-    "triggercondition",
-    "triggeraction",
-    "timer",
-    "location",
-    "region",
-    "rect",
-    "boolexpr",
-    "sound",
-    "effect",
-    "unitpool",
-    "itempool",
-    "quest",
-    "questitem",
-    "defeatcondition",
-    "timerdialog",
-    "leaderboard",
-    "multiboard",
-    "multiboarditem",
-    "trackable",
-    "dialog",
-    "button",
-    "texttag",
-    "lightning",
-    "image",
-    "ubersplat",
-    "fogstate",
-    "fogmodifier",
-    "hashtable",
-))
+_RETURN_RE = re.compile(
+    r"^\s*return\s+([A-Za-z_][A-Za-z0-9_]*)\b", re.IGNORECASE | re.MULTILINE
+)
+_HANDLE_TYPES = frozenset(
+    (
+        "handle",
+        "agent",
+        "event",
+        "player",
+        "widget",
+        "unit",
+        "destructable",
+        "item",
+        "ability",
+        "buff",
+        "force",
+        "group",
+        "trigger",
+        "triggercondition",
+        "triggeraction",
+        "timer",
+        "location",
+        "region",
+        "rect",
+        "boolexpr",
+        "sound",
+        "effect",
+        "unitpool",
+        "itempool",
+        "quest",
+        "questitem",
+        "defeatcondition",
+        "timerdialog",
+        "leaderboard",
+        "multiboard",
+        "multiboarditem",
+        "trackable",
+        "dialog",
+        "button",
+        "texttag",
+        "lightning",
+        "image",
+        "ubersplat",
+        "fogstate",
+        "fogmodifier",
+        "hashtable",
+    )
+)
 
 
 class CompatSeverity(StrEnum):
@@ -87,7 +92,9 @@ class CompatReport:
 
     @property
     def warnings(self) -> tuple[CompatItem, ...]:
-        return tuple(item for item in self.items if item.severity == CompatSeverity.WARNING)
+        return tuple(
+            item for item in self.items if item.severity == CompatSeverity.WARNING
+        )
 
 
 def build_compat_report(md: MapData, target_patch: str = "1.24E") -> CompatReport:
@@ -102,21 +109,25 @@ def build_compat_report(md: MapData, target_patch: str = "1.24E") -> CompatRepor
     ]
     w3i = getattr(md, "w3i", None)
     if w3i is None:
-        items.append(CompatItem(
-            CompatSeverity.WARNING,
-            "w3i.missing",
-            "缺少地图信息",
-            "无法确认 w3i 格式版本、脚本语言和大地图标志。",
-        ))
+        items.append(
+            CompatItem(
+                CompatSeverity.WARNING,
+                "w3i.missing",
+                "缺少地图信息",
+                "无法确认 w3i 格式版本、脚本语言和大地图标志。",
+            )
+        )
     else:
         items.extend(_w3i_items(w3i, target_patch))
     if _uses_lua(md, w3i):
-        items.append(CompatItem(
-            CompatSeverity.WARNING,
-            "script.lua",
-            "Lua 脚本不兼容",
-            f"{target_patch} 不支持 war3map.lua，需要 JASS 脚本才能在该目标版本运行。",
-        ))
+        items.append(
+            CompatItem(
+                CompatSeverity.WARNING,
+                "script.lua",
+                "Lua 脚本不兼容",
+                f"{target_patch} 不支持 war3map.lua，需要 JASS 脚本才能在该目标版本运行。",
+            )
+        )
     items.extend(_return_bug_items(md, target_patch))
     items.extend(_asset_items(md, target_patch))
     return CompatReport(target_patch, tuple(items))
@@ -126,47 +137,56 @@ def _w3i_items(w3i, target_patch: str) -> tuple[CompatItem, ...]:
     items: list[CompatItem] = []
     version = getattr(w3i, "version", 0)
     if version >= 28:
-        items.append(CompatItem(
-            CompatSeverity.WARNING,
-            "w3i.newer_format",
-            "地图信息格式偏新",
-            f"w3i 版本 {version} 属于 1.31+ 格式，{target_patch} 可能无法直接读取。",
-        ))
+        items.append(
+            CompatItem(
+                CompatSeverity.WARNING,
+                "w3i.newer_format",
+                "地图信息格式偏新",
+                f"w3i 版本 {version} 属于 1.31+ 格式，{target_patch} 可能无法直接读取。",
+            )
+        )
     if getattr(w3i, "large_map", False):
-        items.append(CompatItem(
-            CompatSeverity.WARNING,
-            "map.large",
-            "大地图标志",
-            f"地图启用了大地图标志，{target_patch} 环境可能存在尺寸或编辑器兼容风险。",
-        ))
+        items.append(
+            CompatItem(
+                CompatSeverity.WARNING,
+                "map.large",
+                "大地图标志",
+                f"地图启用了大地图标志，{target_patch} 环境可能存在尺寸或编辑器兼容风险。",
+            )
+        )
     return tuple(items)
 
 
 def _uses_lua(md: MapData, w3i) -> bool:
     script_type = str(getattr(w3i, "script_type", "") if w3i is not None else "")
     return script_type.lower() == "lua" or any(
-        name.casefold() == "war3map.lua"
-        for name, _text in analysis_script_texts(md)
+        name.casefold() == "war3map.lua" for name, _text in analysis_script_texts(md)
     )
 
 
 def _return_bug_items(md: MapData, target_patch: str) -> tuple[CompatItem, ...]:
-    names = tuple(sorted({
-        name
-        for _name, script in analysis_script_texts(md)
-        for name in _return_bug_functions(script)
-    }))
+    names = tuple(
+        sorted(
+            {
+                name
+                for _name, script in analysis_script_texts(md)
+                for name in _return_bug_functions(script)
+            }
+        )
+    )
     if not names:
         return ()
     shown = "、".join(names[:8])
     suffix = "" if len(names) <= 8 else f" 等 {len(names)} 个"
-    return (CompatItem(
-        CompatSeverity.WARNING,
-        "script.return_bug",
-        "疑似 1.20E return bug",
-        f"发现 {shown}{suffix} 使用句柄/整数 return bug 类型转换；"
-        f"{target_patch} 已修复该漏洞，通常需要改为 hashtable 或安全索引方案。",
-    ),)
+    return (
+        CompatItem(
+            CompatSeverity.WARNING,
+            "script.return_bug",
+            "疑似 1.20E return bug",
+            f"发现 {shown}{suffix} 使用句柄/整数 return bug 类型转换；"
+            f"{target_patch} 已修复该漏洞，通常需要改为 hashtable 或安全索引方案。",
+        ),
+    )
 
 
 def _return_bug_functions(script: str) -> tuple[str, ...]:
@@ -202,22 +222,28 @@ def _is_return_bug_cast(param_type: str, returns_type: str) -> bool:
     if param_type == returns_type:
         return False
     return (
-        param_type == "integer" and returns_type in _HANDLE_TYPES
-        or returns_type == "integer" and param_type in _HANDLE_TYPES
-        or param_type in _HANDLE_TYPES and returns_type in _HANDLE_TYPES
+        param_type == "integer"
+        and returns_type in _HANDLE_TYPES
+        or returns_type == "integer"
+        and param_type in _HANDLE_TYPES
+        or param_type in _HANDLE_TYPES
+        and returns_type in _HANDLE_TYPES
     )
 
 
 def _asset_items(md: MapData, target_patch: str) -> tuple[CompatItem, ...]:
     dds_files = sorted(
-        name for name in (getattr(md, "all_files", []) or [])
+        name
+        for name in (getattr(md, "all_files", []) or [])
         if str(name).lower().endswith(".dds")
     )
     if not dds_files:
         return ()
-    return (CompatItem(
-        CompatSeverity.WARNING,
-        "asset.dds",
-        "DDS 贴图资源",
-        f"发现 {len(dds_files)} 个 DDS 资源；{target_patch} 经典环境通常应优先使用 BLP/TGA。",
-    ),)
+    return (
+        CompatItem(
+            CompatSeverity.WARNING,
+            "asset.dds",
+            "DDS 贴图资源",
+            f"发现 {len(dds_files)} 个 DDS 资源；{target_patch} 经典环境通常应优先使用 BLP/TGA。",
+        ),
+    )

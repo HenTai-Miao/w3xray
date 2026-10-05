@@ -10,7 +10,18 @@ import customtkinter as ctk
 
 from .deferred_paned import add_deferred_pane, build_deferred_horizontal_paned
 from .search import compile_query
-from .theme import BG, BORDER, CARD, FONT, MONO_FONT, PANEL, SUBTLE, TEXT, card_style, entry_style
+from .theme import (
+    BG,
+    BORDER,
+    CARD,
+    FONT,
+    MONO_FONT,
+    PANEL,
+    SUBTLE,
+    TEXT,
+    card_style,
+    entry_style,
+)
 from .wtg_eca import function_type_label, parameter_type_label
 from .wtg_models import TriggerEcaFunction, TriggerEcaParameter
 
@@ -37,16 +48,25 @@ class TriggerEcaViewMixin:
         top.pack(fill="x", padx=2, pady=(8, 6))
         self.trigger_eca_search = tk.StringVar()
         entry = ctk.CTkEntry(
-            top, textvariable=self.trigger_eca_search, height=38, font=(FONT, 13),
-            justify="center", placeholder_text="回车搜索：触发器 / 函数 / 参数",
+            top,
+            textvariable=self.trigger_eca_search,
+            height=38,
+            font=(FONT, 13),
+            justify="center",
+            placeholder_text="回车搜索：触发器 / 函数 / 参数",
             **entry_style(),
         )
         entry.pack(fill="x")
         entry.bind("<Return>", lambda *_: self._search_trigger_eca())
         self._attach_ctx_menu(entry, paste=True)
         self.trigger_eca_status = ctk.CTkLabel(
-            parent, text="没有可显示的 GUI 触发器", font=(FONT, 12),
-            text_color=SUBTLE, anchor="w", justify="left", wraplength=1100,
+            parent,
+            text="没有可显示的 GUI 触发器",
+            font=(FONT, 12),
+            text_color=SUBTLE,
+            anchor="w",
+            justify="left",
+            wraplength=1100,
         )
         self.trigger_eca_status.pack(fill="x", padx=6, pady=(0, 6))
 
@@ -55,11 +75,21 @@ class TriggerEcaViewMixin:
         left = ctk.CTkFrame(paned, **card_style())
         left_inner = tk.Frame(left, bg=CARD)
         left_inner.pack(fill="both", expand=True, padx=8, pady=8)
-        self.trigger_eca_tree = ttk.Treeview(left_inner, show="tree", selectmode="browse")
-        self.trigger_eca_tree.column("#0", width=430, minwidth=240, stretch=True, anchor="w")
-        tree_vsb = ttk.Scrollbar(left_inner, orient="vertical", command=self.trigger_eca_tree.yview)
-        tree_hsb = ttk.Scrollbar(left_inner, orient="horizontal", command=self.trigger_eca_tree.xview)
-        self.trigger_eca_tree.configure(yscrollcommand=tree_vsb.set, xscrollcommand=tree_hsb.set)
+        self.trigger_eca_tree = ttk.Treeview(
+            left_inner, show="tree", selectmode="browse"
+        )
+        self.trigger_eca_tree.column(
+            "#0", width=430, minwidth=240, stretch=True, anchor="w"
+        )
+        tree_vsb = ttk.Scrollbar(
+            left_inner, orient="vertical", command=self.trigger_eca_tree.yview
+        )
+        tree_hsb = ttk.Scrollbar(
+            left_inner, orient="horizontal", command=self.trigger_eca_tree.xview
+        )
+        self.trigger_eca_tree.configure(
+            yscrollcommand=tree_vsb.set, xscrollcommand=tree_hsb.set
+        )
         tree_vsb.pack(side="right", fill="y")
         tree_hsb.pack(side="bottom", fill="x")
         self.trigger_eca_tree.pack(side="left", fill="both", expand=True)
@@ -70,8 +100,13 @@ class TriggerEcaViewMixin:
 
         right = ctk.CTkFrame(paned, **card_style())
         self.trigger_eca_detail = ctk.CTkTextbox(
-            right, font=(MONO_FONT, 12), fg_color=PANEL, text_color=TEXT,
-            border_width=1, border_color=BORDER, wrap="word",
+            right,
+            font=(MONO_FONT, 12),
+            fg_color=PANEL,
+            text_color=TEXT,
+            border_width=1,
+            border_color=BORDER,
+            wrap="word",
         )
         self.trigger_eca_detail.pack(fill="both", expand=True, padx=8, pady=8)
         self.trigger_eca_detail.configure(state="disabled")
@@ -82,7 +117,9 @@ class TriggerEcaViewMixin:
         self._trigger_eca_map = None
 
     def _refresh_trigger_eca(self) -> None:
-        summary = getattr(self.map_data, "trigger_summary", None) if self.map_data else None
+        summary = (
+            getattr(self.map_data, "trigger_summary", None) if self.map_data else None
+        )
         functions = tuple(getattr(summary, "eca_functions", ()) or ())
         same_map = self.map_data is self._trigger_eca_map
         selected = self.trigger_eca_tree.selection()
@@ -97,7 +134,9 @@ class TriggerEcaViewMixin:
     def _search_trigger_eca(self) -> None:
         selected = self.trigger_eca_tree.selection()
         selected_iid = selected[0] if selected else ""
-        self._rebuild_trigger_eca_tree(self.trigger_eca_search.get().strip(), selected_iid)
+        self._rebuild_trigger_eca_tree(
+            self.trigger_eca_search.get().strip(), selected_iid
+        )
 
     def _rebuild_trigger_eca_tree(self, query: str, selected_iid: str) -> None:
         tree = self.trigger_eca_tree
@@ -106,7 +145,11 @@ class TriggerEcaViewMixin:
         compiled = compile_query(query)
         for group in self._trigger_eca_groups:
             group_match = not query or compiled.score(group.name) is not None
-            visible = tuple(node for node in group.children if group_match or _node_matches(node, compiled))
+            visible = tuple(
+                node
+                for node in group.children
+                if group_match or _node_matches(node, compiled)
+            )
             if not visible:
                 continue
             tree.insert("", "end", iid=group.iid, text=group.name, open=True)
@@ -115,7 +158,10 @@ class TriggerEcaViewMixin:
                     self._insert_filtered_node(group.iid, node, compiled)
                 else:
                     self._insert_trigger_node(
-                        group.iid, node, eager_children=True, reveal_iid=selected_iid,
+                        group.iid,
+                        node,
+                        eager_children=True,
+                        reveal_iid=selected_iid,
                     )
         if selected_iid and tree.exists(selected_iid):
             tree.selection_set(selected_iid)
@@ -134,20 +180,30 @@ class TriggerEcaViewMixin:
     ) -> None:
         reveal_children = bool(reveal_iid) and reveal_iid.startswith(f"{node.iid}:")
         self.trigger_eca_tree.insert(
-            parent, "end", iid=node.iid, text=node.function.name,
+            parent,
+            "end",
+            iid=node.iid,
+            text=node.function.name,
             open=eager_children or reveal_children,
         )
         self._trigger_eca_nodes[node.iid] = node
         if eager_children or reveal_children:
             for child in node.children:
                 self._insert_trigger_node(
-                    node.iid, child, eager_children=False, reveal_iid=reveal_iid,
+                    node.iid,
+                    child,
+                    eager_children=False,
+                    reveal_iid=reveal_iid,
                 )
         elif node.children:
-            self.trigger_eca_tree.insert(node.iid, "end", iid=f"{node.iid}:lazy", text="")
+            self.trigger_eca_tree.insert(
+                node.iid, "end", iid=f"{node.iid}:lazy", text=""
+            )
 
     def _insert_filtered_node(self, parent: str, node: _EcaNode, compiled) -> None:
-        self.trigger_eca_tree.insert(parent, "end", iid=node.iid, text=node.function.name, open=True)
+        self.trigger_eca_tree.insert(
+            parent, "end", iid=node.iid, text=node.function.name, open=True
+        )
         self._trigger_eca_nodes[node.iid] = node
         for child in node.children:
             if _node_matches(child, compiled):
@@ -179,16 +235,28 @@ class TriggerEcaViewMixin:
     def _clear_trigger_eca_detail(self) -> None:
         self._set_trigger_eca_detail("")
 
-    def _set_trigger_eca_status(self, summary, functions: tuple[TriggerEcaFunction, ...]) -> None:
-        parts = [f"已展开 {_count_functions(functions)} 个函数"] if functions else ["没有可显示的 GUI 触发器"]
+    def _set_trigger_eca_status(
+        self, summary, functions: tuple[TriggerEcaFunction, ...]
+    ) -> None:
+        parts = (
+            [f"已展开 {_count_functions(functions)} 个函数"]
+            if functions
+            else ["没有可显示的 GUI 触发器"]
+        )
         for item in tuple(getattr(summary, "missing_schema_functions", ()) or ()):
-            parts.append(f"缺 TriggerData：{item.trigger_name}/{item.function_name} @ 0x{item.offset:x}")
+            parts.append(
+                f"缺 TriggerData：{item.trigger_name}/{item.function_name} @ 0x{item.offset:x}"
+            )
         for failure in tuple(getattr(summary, "parse_failures", ()) or ()):
-            parts.append(f"解析失败：{failure.trigger_name}/{failure.function_name} @ 0x{failure.offset:x}：{failure.reason}")
+            parts.append(
+                f"解析失败：{failure.trigger_name}/{failure.function_name} @ 0x{failure.offset:x}：{failure.reason}"
+            )
         self.trigger_eca_status.configure(text="  |  ".join(parts))
 
 
-def _group_functions(functions: tuple[TriggerEcaFunction, ...]) -> tuple[_TriggerGroup, ...]:
+def _group_functions(
+    functions: tuple[TriggerEcaFunction, ...],
+) -> tuple[_TriggerGroup, ...]:
     order: list[str] = []
     grouped: dict[str, list[_EcaNode]] = {}
     for index, function in enumerate(functions):
@@ -197,7 +265,10 @@ def _group_functions(functions: tuple[TriggerEcaFunction, ...]) -> tuple[_Trigge
             order.append(name)
             grouped[name] = []
         grouped[name].append(_build_node(function, f"eca:{index}"))
-    return tuple(_TriggerGroup(f"trigger:{index}", name, tuple(grouped[name])) for index, name in enumerate(order))
+    return tuple(
+        _TriggerGroup(f"trigger:{index}", name, tuple(grouped[name]))
+        for index, name in enumerate(order)
+    )
 
 
 def _build_node(function: TriggerEcaFunction, iid: str) -> _EcaNode:
@@ -206,26 +277,36 @@ def _build_node(function: TriggerEcaFunction, iid: str) -> _EcaNode:
         for index, parameter in enumerate(function.parameters)
         for node in _build_parameter_nodes(parameter, f"{iid}:p{index}")
     )
-    children = tuple(_build_node(child, f"{iid}:c{index}") for index, child in enumerate(function.children))
+    children = tuple(
+        _build_node(child, f"{iid}:c{index}")
+        for index, child in enumerate(function.children)
+    )
     return _EcaNode(iid, function, nested + children)
 
 
-def _build_parameter_nodes(parameter: TriggerEcaParameter, iid: str) -> tuple[_EcaNode, ...]:
-    nodes = () if parameter.nested_function is None else (_build_node(parameter.nested_function, f"{iid}:f"),)
+def _build_parameter_nodes(
+    parameter: TriggerEcaParameter, iid: str
+) -> tuple[_EcaNode, ...]:
+    nodes = (
+        ()
+        if parameter.nested_function is None
+        else (_build_node(parameter.nested_function, f"{iid}:f"),)
+    )
     if parameter.array_indexer is None:
         return nodes
     return nodes + _build_parameter_nodes(parameter.array_indexer, f"{iid}:a")
 
 
 def _node_matches(node: _EcaNode, compiled) -> bool:
-    return (
-        compiled.score(_function_search_text(node.function)) is not None
-        or any(_node_matches(child, compiled) for child in node.children)
+    return compiled.score(_function_search_text(node.function)) is not None or any(
+        _node_matches(child, compiled) for child in node.children
     )
 
 
 def _function_search_text(function: TriggerEcaFunction) -> str:
-    parameters = " ".join(_parameter_search_text(parameter) for parameter in function.parameters)
+    parameters = " ".join(
+        _parameter_search_text(parameter) for parameter in function.parameters
+    )
     return f"{function.trigger_name} {function.name} {function_type_label(function.function_type)} {parameters}"
 
 
@@ -238,9 +319,15 @@ def _parameter_search_text(parameter: TriggerEcaParameter) -> str:
 
 def _format_function_detail(function: TriggerEcaFunction) -> str:
     lines = [
-        f"函数：{function.name}", f"触发器：{function.trigger_name}",
-        f"类型：{function_type_label(function.function_type)}", f"启用：{'是' if function.is_enabled else '否'}",
-        f"层级：{function.depth}", f"分支：{function.branch}", f"源偏移：0x{function.source_offset:x}", "", "参数：",
+        f"函数：{function.name}",
+        f"触发器：{function.trigger_name}",
+        f"类型：{function_type_label(function.function_type)}",
+        f"启用：{'是' if function.is_enabled else '否'}",
+        f"层级：{function.depth}",
+        f"分支：{function.branch}",
+        f"源偏移：0x{function.source_offset:x}",
+        "",
+        "参数：",
     ]
     if not function.parameters:
         lines.append("(无)")
@@ -249,7 +336,9 @@ def _format_function_detail(function: TriggerEcaFunction) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _append_parameter_detail(lines: list[str], label: str, parameter: TriggerEcaParameter) -> None:
+def _append_parameter_detail(
+    lines: list[str], label: str, parameter: TriggerEcaParameter
+) -> None:
     expected = f" / {parameter.expected_type}" if parameter.expected_type else ""
     lines.append(
         f"{label}. {parameter_type_label(parameter.parameter_type)}{expected}: "
@@ -268,12 +357,20 @@ def _count_function(function: TriggerEcaFunction) -> int:
 
 
 def _function_children(function: TriggerEcaFunction) -> tuple[TriggerEcaFunction, ...]:
-    nested = tuple(child for parameter in function.parameters for child in _parameter_functions(parameter))
+    nested = tuple(
+        child
+        for parameter in function.parameters
+        for child in _parameter_functions(parameter)
+    )
     return nested + function.children
 
 
-def _parameter_functions(parameter: TriggerEcaParameter) -> tuple[TriggerEcaFunction, ...]:
-    functions = () if parameter.nested_function is None else (parameter.nested_function,)
+def _parameter_functions(
+    parameter: TriggerEcaParameter,
+) -> tuple[TriggerEcaFunction, ...]:
+    functions = (
+        () if parameter.nested_function is None else (parameter.nested_function,)
+    )
     if parameter.array_indexer is None:
         return functions
     return functions + _parameter_functions(parameter.array_indexer)

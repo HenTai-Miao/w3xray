@@ -13,10 +13,18 @@ _ICON = "ReplaceableTextures\\CommandButtons\\BTNClient.blp"
 _CUSTOM_ICON = "UI\\CustomIcon.blp"
 
 
-def test_referenced_client_icon_is_exported_with_explicit_source(tmp_path: Path) -> None:
+def test_referenced_client_icon_is_exported_with_explicit_source(
+    tmp_path: Path,
+) -> None:
     # Given: an object references an icon absent from the map but present in client data.
     client_root = tmp_path / "client"
-    client_icon = client_root / "war3.w3mod" / "ReplaceableTextures" / "CommandButtons" / "BTNClient.blp"
+    client_icon = (
+        client_root
+        / "war3.w3mod"
+        / "ReplaceableTextures"
+        / "CommandButtons"
+        / "BTNClient.blp"
+    )
     client_icon.parent.mkdir(parents=True)
     client_icon.write_bytes(b"BLP1client")
     md = _map_with_icon(tmp_path / "missing.w3x")
@@ -26,7 +34,14 @@ def test_referenced_client_icon_is_exported_with_explicit_source(tmp_path: Path)
     write_knowledge_pack(md, str(output), game_data_path=str(client_root))
 
     # Then: the body and manifest identify the external source honestly.
-    body = output / "资源" / "素材文件" / "replaceabletextures" / "commandbuttons" / "btnclient.blp"
+    body = (
+        output
+        / "资源"
+        / "素材文件"
+        / "replaceabletextures"
+        / "commandbuttons"
+        / "btnclient.blp"
+    )
     assert body.read_bytes() == b"BLP1client"
     manifest = (output / "资源" / "素材文件_manifest.tsv").read_text(encoding="utf-8")
     assert "已导出\t客户端数据" in manifest
@@ -39,7 +54,9 @@ def test_map_body_wins_over_same_named_client_icon(tmp_path: Path) -> None:
     map_icon.parent.mkdir(parents=True)
     map_icon.write_bytes(b"BLP1map")
     client_root = tmp_path / "client"
-    client_icon = client_root / "ReplaceableTextures" / "CommandButtons" / "BTNClient.blp"
+    client_icon = (
+        client_root / "ReplaceableTextures" / "CommandButtons" / "BTNClient.blp"
+    )
     client_icon.parent.mkdir(parents=True)
     client_icon.write_bytes(b"BLP1client")
     md = _map_with_icon(map_root)
@@ -56,10 +73,14 @@ def test_map_body_wins_over_same_named_client_icon(tmp_path: Path) -> None:
     exported = report.items[0]
     assert exported.status == "已导出"
     assert exported.source == "地图数据"
-    assert Path(tmp_path / "resources" / exported.exported_path).read_bytes() == b"BLP1map"
+    assert (
+        Path(tmp_path / "resources" / exported.exported_path).read_bytes() == b"BLP1map"
+    )
 
 
-def test_nonstandard_object_icon_path_can_fall_back_to_client_data(tmp_path: Path) -> None:
+def test_nonstandard_object_icon_path_can_fall_back_to_client_data(
+    tmp_path: Path,
+) -> None:
     # Given: the object icon is authoritative even without a BTN filename convention.
     client_root = tmp_path / "client"
     client_icon = client_root / "UI" / "CustomIcon.blp"
@@ -79,7 +100,10 @@ def test_nonstandard_object_icon_path_can_fall_back_to_client_data(tmp_path: Pat
     exported = report.items[0]
     assert exported.status == "已导出"
     assert exported.source == "客户端数据"
-    assert Path(tmp_path / "resources" / exported.exported_path).read_bytes() == b"BLP1custom"
+    assert (
+        Path(tmp_path / "resources" / exported.exported_path).read_bytes()
+        == b"BLP1custom"
+    )
 
 
 def _map_with_icon(path: Path, *, icon: str = _ICON) -> MapData:
