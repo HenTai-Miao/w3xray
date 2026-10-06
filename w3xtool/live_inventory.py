@@ -631,6 +631,7 @@ class _LiveReport(TypedDict):
     unit_matches: list[Any]
     owner_counts: "dict[int, int] | None"
     owned_units: "list[dict[str, object]] | None"
+    resources: "list[dict[str, object]] | None"
 
 
 def read_live(
@@ -641,6 +642,7 @@ def read_live(
     verbose=True,
     unit_query=None,
     players=False,
+    resources=None,
 ):
     report: _LiveReport = {
         "strategy_used": None,
@@ -652,6 +654,7 @@ def read_live(
         "unit_matches": [],
         "owner_counts": None,
         "owned_units": None,
+        "resources": None,
     }
     ver: dict[str, object] | None = None
     if load_snapshot_dir:
@@ -750,6 +753,17 @@ def read_live(
                         "y": round(u.y, 1),
                     }
                     for u in listed
+                ]
+            if resources is not None:
+                found = hc.find_resource_layout(reader, resources[0], resources[1])
+                report["resources"] = [
+                    {
+                        "addr": hex(r.addr),
+                        "gold": round(r.gold),
+                        "lumber": round(r.lumber),
+                        "food": r.food,
+                    }
+                    for r in found
                 ]
             if unit_query:
                 pool = list(report["units"])
@@ -858,6 +872,12 @@ def main(argv=None):
         action="store_true",
         help="列出每个真人玩家号下的单位 (所有者+坐标, 地图物件自动归并)",
     )
+    ap.add_argument(
+        "--resources",
+        nargs=2,
+        metavar=("金币", "木材"),
+        help="校准并读取全部玩家资源: 传入你当前 HUD 显示的金币/木材数值",
+    )
     args = ap.parse_args(argv)
     if args.test_image:
         templates, names = build_templates(args.pack, verbose=True)
@@ -877,12 +897,23 @@ def main(argv=None):
         args.save_snapshot,
         args.load_snapshot,
         unit_query=args.unit,
-        players=args.players,
+        players=args.players or bool(args.resources),
+        resources=(float(args.resources[0]), float(args.resources[1]))
+        if args.resources
+        else None,
     )
     counts = rep.get("owner_counts") or {}
     if counts:
         print("== 所有者分布 ==")
         print("  " + "  ".join(f"P{o}:{n}" for o, n in sorted(counts.items())))
+    res = rep.get("resources")
+    if res is not None:
+        print(f"== 玩家资源 (同布局结构 {len(res)} 个: 你+队友+缓存副本) ==")
+        for r2 in res:
+            food = f" 人口~{r2['food']}" if r2.get("food") is not None else ""
+            print(f"  {r2['addr']}: 金{r2['gold']} 木{r2['lumber']}{food}")
+        if not res:
+            print("  未定位到资源结构; 确认金币/木材数值没变后重试")
         listed = rep.get("owned_units") or []
         print(f"== 玩家单位 (数量少的玩家号, 共{len(listed)}个) ==")
         for u in listed:
@@ -909,6 +940,8 @@ def main(argv=None):
     if rep["slots"]:
         return 0
     if args.players and rep.get("owner_counts") is not None:
+        return 0
+    if args.resources and rep.get("resources") is not None:
         return 0
     return 2
 

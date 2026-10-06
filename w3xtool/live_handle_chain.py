@@ -23,6 +23,7 @@ HANDLE_CHAIN_OFFSETS 即可; 结构布局在经典引擎内高度稳定。
 from __future__ import annotations
 
 import bisect
+import math
 import re
 import struct
 from dataclasses import dataclass, field, replace
@@ -33,6 +34,7 @@ __all__ = (
     "MemoryReader",
     "HandleSystem",
     "OwnedUnit",
+    "PlayerResources",
     "UNIT_OWNER_OFF",
     "UNIT_POS_X_OFF",
     "UNIT_POS_Y_OFF",
@@ -44,6 +46,7 @@ __all__ = (
     "read_unit_pos",
     "walk_owned_units",
     "summarize_owners",
+    "find_resource_layout",
     "selected_unit",
     "match_unit_entries",
     "classic_template",
@@ -405,6 +408,76 @@ def summarize_owners(
     listed = [u for u in units if u.owner in small]
     listed.sort(key=lambda u: (u.owner, u.code, round(u.x), round(u.y)))
     return counts, listed
+
+
+@dataclass(frozen=True, slots=True)
+class PlayerResources:
+    """一个玩家资源结构: 结构地址 + 金币/木材 (+人口尽力识别)。"""
+
+    addr: int
+    gold: float
+    lumber: float
+    food: int | None = None
+
+
+def _plausible_resource(f: float) -> bool:
+    """资源值特征: 有限、非负、近整数的常规数量级。"""
+    return math.isfinite(f) and 0 <= f < 10_000_000 and abs(f - round(f)) < 0.001
+
+
+def _iter_float_slots(reader: "MemoryReader"):
+    """遍历全部区域的 (地址, float 值); 只产出资源量级的候选。"""
+    for base_a, data in reader._data.items():
+        if len(data) < 0x100:
+            continue
+        for off in range(0, len(data) - 4, 4):
+            f = struct.unpack_from("<f", data, off)[0]
+            if _plausible_resource(f):
+                yield base_a + off, f
+
+
+def find_resource_layout(
+    reader: "MemoryReader", gold: float, lumber: float, window: int = 0x100
+) -> list[PlayerResources]:
+    """以当前已知的一组 金币/木材 数值为锚, 定位同布局的玩家资源结构列表。
+
+    原理: 精确匹配金币 float; 在 +/- window 内找木材 float; 同一
+    (金币->木材) 相对偏移的其余结构即为其他玩家/缓存副本。引擎为每个
+    玩家维护同构资源结构, 布局一致而地址不同。
+    """
+    gold_addr = []
+    lumber_addr = []
+    for addr, f in _iter_float_slots(reader):
+        if f == gold:
+            gold_addr.append(addr)
+        elif f == lumber:
+            lumber_addr.append(addr)
+    pairs: list[tuple[int, int]] = []
+    for g in gold_addr:
+        for lum in lumber_addr:
+            delta = lum - g
+            if 0 < abs(delta) <= window and delta % 4 == 0:
+                pairs.append((g, delta))
+    if not pairs:
+        return []
+    delta_counts: dict[int, int] = {}
+    for _, d in pairs:
+        delta_counts[d] = delta_counts.get(d, 0) + 1
+    best_delta = max(delta_counts, key=lambda d: delta_counts[d])
+    anchors = sorted(g for g, d in pairs if d == best_delta)
+    out: list[PlayerResources] = []
+    for g in anchors:
+        food = None
+        for fo in (best_delta + 4, best_delta + 8, best_delta - 4, 4, 8):
+            raw = reader.read(g + fo, 4)
+            if not raw:
+                continue
+            fv = struct.unpack("<f", raw)[0]
+            if _plausible_resource(fv) and round(fv) <= 1000:
+                food = round(fv)
+                break
+        out.append(PlayerResources(g, gold, lumber, food))
+    return out
 
 
 def match_unit_entries(units, query):

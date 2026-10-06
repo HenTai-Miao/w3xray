@@ -16,6 +16,9 @@ uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --u
 
 # 列出每个真人玩家号下的单位 (所有者 + 坐标)
 uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --players
+
+# 校准并读取全部玩家资源 (金币/木材/人口): 传当前 HUD 显示的自己的金木值
+uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --resources 169 808
 ```
 
 - 不带 `--unit`: 自动识别**当前选中单位**并读其 6 格背包, 同时列出全图带物品单位
@@ -27,6 +30,9 @@ uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --p
   地图生成物件集中在少数玩家号且数量巨大 (如中立 8/地形 0/装饰 15),
   数量少的玩家号即真人单位, 逐个列出四码/名字/坐标 (X 东正, Y 北正;
   坐标偏移 +0x284/+0x288)。躲猫猫类地图可直接定位所有躲藏玩家的形态与位置。
+- `--resources 金币 木材`: 以你当前 HUD 金/木值为锚, 在全内存中定位同布局的玩家资源结构
+  (引擎为每个玩家/缓存维护同构 float 结构); 一次校准当场列出所有玩家的金/木/人口。
+  传值后立刻执行, 避免资源变动导致定位失败; 人口为邻近偏移的尽力识别 (可能为空)。
 - 需要管理员权限 (SeDebugPrivilege + OpenProcess); 游戏没开则报告"war3 未运行"。
 
 ## 输出含义
