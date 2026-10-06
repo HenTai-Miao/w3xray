@@ -89,24 +89,26 @@ def load_item_gold_overrides(pack_dir: Path) -> dict[str, str]:
 
 
 def load_shop_stocks(pack_dir: Path) -> list[tuple[str, str, list[str]]]:
-    """商店出售清单：[(商店四码, 商店名, [物品四码])]，来自 usei 字段。
+    """商店出售清单：[(商店四码, 商店名, [物品四码])]，来自出售物品字段。
 
-    usei 值形如 "I002, I001" 或 "敏捷之书+2(tst2), 银锭(I008)"——
+    字段名兼容 usei 与 Sellitems（不同地图导出对同一"售出的物品"字段的
+    原始码写法不同）。值形如 "I002, I001" 或 "敏捷之书+2(tst2), 银锭(I008)"——
     括号里才是物品四码，裸 token 视为四码本身。
     """
     out: list[tuple[str, str, list[str]]] = []
     for r in _read_rows(pack_dir, "对象字段.tsv"):
-        if len(r) > 5 and r[3] == "usei":
-            codes = []
-            for token in r[5].split(","):
-                token = token.strip()
-                m = re.search(r"\(([A-Za-z0-9]{4})\)", token)
-                if m:
-                    codes.append(m.group(1))
-                elif len(token) == 4:
-                    codes.append(token)
-            if codes:
-                out.append((r[1], _clean(r[2]), codes))
+        if len(r) > 5 and r[3] not in ("usei", "Sellitems"):
+            continue
+        codes = []
+        for token in r[5].split(","):
+            token = token.strip()
+            m = re.search(r"\(([A-Za-z0-9]{4})\)", token)
+            if m:
+                codes.append(m.group(1))
+            elif len(token) == 4:
+                codes.append(token)
+        if codes:
+            out.append((r[1], _clean(r[2]), codes))
     return out
 
 
@@ -181,8 +183,8 @@ def load_placements(pack_dir: Path) -> list[tuple[str, float, float, str]]:
     if not path.exists():
         return out
     for line in path.open(encoding="utf-8"):
-        if "set u=CreateUnit(p, '" in line:
-            tail = line.split("set u=CreateUnit(p, '", 1)[1]
+        if "=CreateUnit(p, '" in line:
+            tail = line.split("=CreateUnit(p, '", 1)[1]
             parts = tail.rstrip().rstrip(")").split(", ")
             if len(parts) < 3:
                 continue
