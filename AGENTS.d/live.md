@@ -19,6 +19,9 @@ uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --p
 
 # 校准并读取全部玩家资源 (金币/木材/人口): 传当前 HUD 显示的自己的金木值
 uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --resources 169 808
+
+# 自动差分 (免报数, 连拍3快照找上涨金币列; 打钱时效果最好)
+uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --resources auto
 ```
 
 - 不带 `--unit`: 自动识别**当前选中单位**并读其 6 格背包, 同时列出全图带物品单位

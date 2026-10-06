@@ -8,6 +8,7 @@ import struct
 from w3xtool.live_handle_chain import (
     MemoryReader,
     PlayerResources,
+    find_auto_resource_rows,
     find_resource_layout,
 )
 
@@ -81,3 +82,37 @@ def test_find_resource_layout_picks_most_common_delta():
     reader = MemoryReader([(0x20000000, bytes(blob))])
     found = find_resource_layout(reader, 169.0, 808.0)
     assert [f.addr for f in found] == [0x20000000 + 0x40, 0x20000000 + 0x140]
+
+
+def test_find_auto_resource_rows_rising_gold():
+    # 两个快照间单调上涨的 float 即金币锚; +0x4 木, +0x8 人口。
+    def region(gold1, gold2):
+        blob = bytearray(0x200)
+        struct.pack_into("<f", blob, 0x40, gold1)
+        struct.pack_into("<f", blob, 0x44, 113.5)
+        struct.pack_into("<f", blob, 0x48, 5.0)
+        return bytes(blob)
+
+    r1 = MemoryReader([(0x20000000, region(7774.0, 0))])
+    # 第二个 reader: 金币上涨, 其余不变。
+    blob2 = bytearray(0x200)
+    struct.pack_into("<f", blob2, 0x40, 7801.4)
+    struct.pack_into("<f", blob2, 0x44, 113.5)
+    struct.pack_into("<f", blob2, 0x48, 5.0)
+    r2 = MemoryReader([(0x20000000, bytes(blob2))])
+    rows = find_auto_resource_rows([r1, r2])
+    assert len(rows) == 1
+    row = rows[0]
+    assert abs(row.gold - 7801.4) < 0.01
+    assert abs(row.lumber - 113.5) < 0.01
+    assert row.food == 5
+
+
+def test_find_auto_resource_rows_ignores_falling():
+    blob1 = bytearray(0x200)
+    struct.pack_into("<f", blob1, 0x40, 900.0)
+    blob2 = bytearray(0x200)
+    struct.pack_into("<f", blob2, 0x40, 800.0)
+    r1 = MemoryReader([(0x20000000, bytes(blob1))])
+    r2 = MemoryReader([(0x20000000, bytes(blob2))])
+    assert find_auto_resource_rows([r1, r2]) == []

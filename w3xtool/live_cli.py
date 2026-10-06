@@ -98,13 +98,20 @@ def parse_live_cli_options(argv: Sequence[str]) -> LiveCliOptions:
         if option == "--resources":
             if resources is not None:
                 raise LiveCliOptionError("参数不能重复：--resources")
+            nxt = index + 1
+            if nxt < len(argv) and argv[nxt] == "auto":
+                resources = ("auto", "")
+                index += 2
+                continue
             v1_i, v2_i = index + 1, index + 2
             if (
                 v2_i >= len(argv)
                 or argv[v1_i].startswith("--")
                 or argv[v2_i].startswith("--")
             ):
-                raise LiveCliOptionError("参数需要两个数值：--resources 金币 木材")
+                raise LiveCliOptionError(
+                    "参数需要两个数值：--resources 金币 木材 (或 --resources auto)"
+                )
             for v in (argv[v1_i], argv[v2_i]):
                 try:
                     float(v)

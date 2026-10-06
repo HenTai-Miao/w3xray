@@ -47,6 +47,7 @@ __all__ = (
     "walk_owned_units",
     "summarize_owners",
     "find_resource_layout",
+    "find_auto_resource_rows",
     "selected_unit",
     "match_unit_entries",
     "classic_template",
@@ -492,6 +493,64 @@ def find_resource_layout(
                 break
         out.append(PlayerResources(g, gold_val, lumber_val, food))
     return out
+
+
+def find_auto_resource_rows(
+    readers: "list[MemoryReader]",
+    min_gold: float = 100.0,
+) -> list[PlayerResources]:
+    """自动差分定位: 多个快照中"单调上涨"的 float 即为打钱玩家的金币。
+
+    免报数校准: 打怪/经营时金币只涨不跌且带小数 (坐标/血量会回落或整跳),
+    连拍 3 个快照取一路上涨者为金币锚; 木头取 +0x4、人口取 +0x8/+0xC 的
+    尽力识别 (结构为引擎 UI 缓存, 会被堆搬移, 必须同进程内完成发现+读取)。
+    """
+    if len(readers) < 2:
+        return []
+
+    def collect(reader: "MemoryReader") -> dict[int, float]:
+        out: dict[int, float] = {}
+        for base_a, data in reader._data.items():
+            if len(data) < 0x100:
+                continue
+            for off in range(0, len(data) - 4, 4):
+                f = struct.unpack_from("<f", data, off)[0]
+                if math.isfinite(f) and min_gold <= f <= 100000:
+                    out[base_a + off] = f
+        return out
+
+    series = [collect(r) for r in readers]
+    last = series[-1]
+    rows: list[PlayerResources] = []
+    for addr, v_final in last.items():
+        values: list[float] = []
+        for s in series:
+            v = s.get(addr)
+            if v is None:
+                values = []
+                break
+            values.append(v)
+        if len(values) != len(series):
+            continue
+        if not all(values[i] < values[i + 1] for i in range(len(values) - 1)):
+            continue
+        if not 0.3 < v_final - values[0] < 2000:
+            continue
+        blk = readers[-1].read(addr, 0x10)
+        if not blk:
+            continue
+        lumber_f = struct.unpack_from("<f", blk, 4)[0]
+        food = None
+        for fo in (8, 12):
+            fv = struct.unpack_from("<f", blk, fo)[0]
+            if _plausible_resource(fv) and round(fv) <= 100:
+                food = round(fv)
+                break
+        if not _plausible_resource(lumber_f) or lumber_f > 100000:
+            continue
+        rows.append(PlayerResources(addr, v_final, lumber_f, food))
+    rows.sort(key=lambda r: r.addr)
+    return rows
 
 
 def match_unit_entries(units, query):

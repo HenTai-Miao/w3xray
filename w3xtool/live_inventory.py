@@ -634,6 +634,20 @@ class _LiveReport(TypedDict):
     resources: "list[dict[str, object]] | None"
 
 
+def _parse_resources_arg(parts):
+    """--resources auto 或 --resources 金币 木材 -> ("auto") / (金, 木) / None。"""
+    if not parts:
+        return None
+    if parts == ["auto"]:
+        return "auto"
+    if len(parts) != 2:
+        return None
+    try:
+        return (float(parts[0]), float(parts[1]))
+    except ValueError:
+        return None
+
+
 def read_live(
     pack_dir,
     strategy="auto",
@@ -644,6 +658,7 @@ def read_live(
     players=False,
     resources=None,
 ):
+    """resources: (金币, 木材) 元组为报数校准; "auto" 为自动差分 (免报数)。"""
     report: _LiveReport = {
         "strategy_used": None,
         "version": None,
@@ -657,6 +672,8 @@ def read_live(
         "resources": None,
     }
     ver: dict[str, object] | None = None
+    h = 0
+    max_addr = 0x7FFF0000
     if load_snapshot_dir:
         regions, total = load_snapshot(load_snapshot_dir), 0
         total = sum(len(d) for _, d in regions)
@@ -755,7 +772,16 @@ def read_live(
                     for u in listed
                 ]
             if resources is not None:
-                found = hc.find_resource_layout(reader, resources[0], resources[1])
+                if resources == "auto":
+                    import time as _time
+
+                    readers = [reader]
+                    for _ in range(2):
+                        _time.sleep(3)
+                        readers.append(hc.MemoryReader(snapshot(h, max_addr)))
+                    found = hc.find_auto_resource_rows(readers)
+                else:
+                    found = hc.find_resource_layout(reader, resources[0], resources[1])
                 report["resources"] = [
                     {
                         "addr": hex(r.addr),
@@ -874,9 +900,9 @@ def main(argv=None):
     )
     ap.add_argument(
         "--resources",
-        nargs=2,
-        metavar=("金币", "木材"),
-        help="校准并读取全部玩家资源: 传入你当前 HUD 显示的金币/木材数值",
+        nargs="+",
+        metavar=("金币|auto", "木材"),
+        help="读取全部玩家资源: 报数校准 (--resources 169 808) 或自动差分 (--resources auto)",
     )
     args = ap.parse_args(argv)
     if args.test_image:
@@ -898,9 +924,7 @@ def main(argv=None):
         args.load_snapshot,
         unit_query=args.unit,
         players=args.players or bool(args.resources),
-        resources=(float(args.resources[0]), float(args.resources[1]))
-        if args.resources
-        else None,
+        resources=_parse_resources_arg(args.resources),
     )
     counts = rep.get("owner_counts") or {}
     if counts:
