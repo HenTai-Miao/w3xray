@@ -100,6 +100,19 @@ def main() -> None:
             print(f"实时读取参数错误：{exc}", file=sys.stderr)
             raise SystemExit(2) from None
         raise SystemExit(run_live_cli(options))
+    if len(sys.argv) >= 2 and sys.argv[1] == "pack-query":
+        from w3xtool.pack_query_cli import (
+            PackQueryCliOptionError,
+            parse_pack_query_cli_options,
+            run_pack_query_cli,
+        )
+
+        try:
+            options = parse_pack_query_cli_options(tuple(sys.argv[2:]))
+        except PackQueryCliOptionError as exc:
+            print(f"资料包查询参数错误：{exc}", file=sys.stderr)
+            raise SystemExit(2) from None
+        raise SystemExit(run_pack_query_cli(options))
     if len(sys.argv) >= 2 and sys.argv[1] == "cli":
         try:
             options = parse_cli_options(tuple(sys.argv[2:]))
