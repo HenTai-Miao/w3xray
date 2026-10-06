@@ -201,7 +201,10 @@ def run_live_cli(options: LiveCliOptions) -> int:
     if options.players:
         args += ["--players"]
     if options.resources is not None:
-        args += ["--resources", options.resources[0], options.resources[1]]
+        if options.resources == ("auto", ""):
+            args += ["--resources", "auto"]
+        else:
+            args += ["--resources", options.resources[0], options.resources[1]]
     if options.test_image is not None:
         args += ["--test-image", options.test_image]
     if options.save_snapshot is not None:
