@@ -79,6 +79,15 @@ def load_item_bases(pack_dir: Path) -> dict[str, str]:
     return out
 
 
+def load_item_gold_overrides(pack_dir: Path) -> dict[str, str]:
+    """地图内逐物品金币覆写：对象字段.tsv 中字段列为 igol 的行。"""
+    out: dict[str, str] = {}
+    for r in _read_rows(pack_dir, "对象字段.tsv"):
+        if len(r) > 5 and r[0] == "物品" and len(r[1]) == 4 and r[3] == "igol":
+            out[r[1]] = r[5].strip()
+    return out
+
+
 _base_price_cache: dict[str, str] | None = None
 
 
@@ -100,8 +109,12 @@ def _base_prices() -> dict[str, str]:
     return _base_price_cache
 
 
-def _item_price(bases: dict[str, str], code: str) -> str:
-    """物品商店价：优先按基础ID继承，其次物品本身即基础物品。"""
+def _item_price(
+    bases: dict[str, str], code: str, overrides: dict[str, str] | None = None
+) -> str:
+    """物品商店价：地图 igol 覆写优先，其次按基础ID继承，再次物品本身即基础物品。"""
+    if overrides and code in overrides:
+        return overrides[code]
     prices = _base_prices()
     base = bases.get(code, "")
     if base and base in prices:
@@ -230,16 +243,20 @@ def _match(query: str, code: str, name: str) -> bool:
 def _query_item(pack: Path, query: str, limit: int) -> list[str]:
     items = load_items(pack)
     bases = load_item_bases(pack)
+    overrides = load_item_gold_overrides(pack)
     lines = []
     for code, (name, desc) in items.items():
         if _match(query, code, name):
             lines.append("[" + code + "] " + name)
-            price = _item_price(bases, code)
+            price = _item_price(bases, code, overrides)
             base = bases.get(code, "")
             if price:
-                lines.append(
-                    "  金币: " + price + (" (继承基础 " + base + ")" if base else "")
+                src = (
+                    "地图价"
+                    if code in overrides
+                    else ("继承基础 " + base if base else "")
                 )
+                lines.append("  金币: " + price + (" (" + src + ")" if src else ""))
             lines.append("  " + desc[:240])
             if len(lines) >= limit * 3:
                 break
@@ -249,13 +266,15 @@ def _query_item(pack: Path, query: str, limit: int) -> list[str]:
 def _query_price(pack: Path, query: str, limit: int) -> list[str]:
     items = load_items(pack)
     bases = load_item_bases(pack)
+    overrides = load_item_gold_overrides(pack)
     lines = []
     for code, (name, _desc) in items.items():
         if _match(query, code, name):
-            price = _item_price(bases, code)
+            price = _item_price(bases, code, overrides)
             base = bases.get(
                 code, code.lower() if code.lower() in _base_prices() else "-"
             )
+            src = "地图价" if code in overrides else "继承"
             lines.append(
                 "["
                 + code
@@ -263,7 +282,9 @@ def _query_price(pack: Path, query: str, limit: int) -> list[str]:
                 + name
                 + "  金币: "
                 + (price or "-")
-                + "  (基础: "
+                + "  ("
+                + src
+                + ", 基础: "
                 + base
                 + ")"
             )

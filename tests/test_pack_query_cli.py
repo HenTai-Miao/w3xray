@@ -10,6 +10,7 @@ from w3xtool.pack_query_cli import (
     _base_prices,
     load_formulas,
     load_item_bases,
+    load_item_gold_overrides,
     load_items,
     load_placements,
     parse_pack_query_cli_options,
@@ -25,7 +26,8 @@ def pack(tmp_path):
         "物品\t四码\t数值\t四码2\t名称\t英雄\t描述\n"
         "物品\tI0AA\t1\tI0AA\t|cffff0000冰晶|r\t是\t'+10攻|n【冰】：减速\n"
         "物品\tI0BB\t2\tI0BB\t雪白的熊掌\t是\t材料\n"
-        "物品\tI0CC\t3\tratf\t攻击之爪+15样\t否\t继承基础价\n",
+        "物品\tI0CC\t3\tratf\t攻击之爪+15样\t否\t继承基础价\n"
+        "物品\tI0DD\t4\tratc\t攻击之爪+12样\t否\t无覆写走基础价\n",
         encoding="utf-8",
     )
     (obj / "单位.tsv").write_text(
@@ -45,6 +47,11 @@ def pack(tmp_path):
     (tmp_path / "掉落与获取关系.tsv").write_text(
         "hash\t地图\t类型\t四码\t名称\t来源类\t来源\n"
         "h1\t测试图\t脚本/触发奖励\tI0AA\t冰晶\t单位\tu0AA\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "对象字段.tsv").write_text(
+        "物品\tI0CC\t攻击之爪+15样\tigol\t黄金\t123\twar3map.w3t\n"
+        "物品\tI0AA\t冰晶\tbase:金币\t金币\t999\tbase:I0AA\n",
         encoding="utf-8",
     )
     (tmp_path / "脚本字符串索引.tsv").write_text(
@@ -122,7 +129,19 @@ def test_run_cli_price_query(pack, capsys):
     rc = run_pack_query_cli(parse_pack_query_cli_options([str(pack), "price", "I0CC"]))
     out = capsys.readouterr().out
     assert rc == 0
-    assert "金币: 800" in out and "ratf" in out
+    assert "金币: 123" in out and "地图价" in out and "ratf" in out
+
+
+def test_load_item_gold_overrides(pack):
+    ov = load_item_gold_overrides(pack)
+    assert ov == {"I0CC": "123"}
+
+
+def test_price_falls_back_to_base_without_override(pack, capsys):
+    rc = run_pack_query_cli(parse_pack_query_cli_options([str(pack), "price", "I0DD"]))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "金币: 500" in out and "继承" in out
 
 
 def test_run_cli_item_includes_price(pack, capsys):
@@ -131,7 +150,7 @@ def test_run_cli_item_includes_price(pack, capsys):
     )
     out = capsys.readouterr().out
     assert rc == 0
-    assert "金币: 800" in out
+    assert "金币: 123 (地图价)" in out and "金币: 500" in out
 
 
 def test_run_cli_price_base_code_direct(pack, capsys):
