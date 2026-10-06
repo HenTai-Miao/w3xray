@@ -5,12 +5,13 @@
     uv run main.py pack-query <资料包目录> <子命令> <查询词> [--limit N]
 
 子命令：
-    item   <名字|四码>   物品属性
-    recipe <名字|四码>   相关合成配方（作为产物或材料）
+    item   <名字|四码>   物品属性（含商店金币价，若可查到）
+    recipe <名字|四码>   相关合成配方（作为产物或材料，自动去重）
     where  <名字|四码>   单位/地面物品的放置坐标
     drop   <名字|四码>   获取途径（掉落/商店/触发奖励）
     quest  <关键词>     任务注册文本与剧情对话
     text   <关键词>     全包 TSV 有界搜索
+    price  <名字|四码>   商店金币价（自定义物品按基础ID继承基础价目表）
 
 设计动机：避免为每次查询写一次性脚本/起多个进程（文件变更通知会拖垮资源
 管理器外壳）；全部查询在单次进程内完成，输出有界。
@@ -35,7 +36,7 @@ __all__ = (
     "run_pack_query_cli",
 )
 
-_COMMANDS = ("item", "recipe", "where", "drop", "quest", "text")
+_COMMANDS = ("item", "recipe", "where", "drop", "quest", "text", "price")
 _COLOR_RE = re.compile(r"\|c[0-9A-Fa-f]{8}|\|r")
 
 
@@ -67,6 +68,45 @@ def load_units(pack_dir: Path) -> dict[str, str]:
         if len(r) > 4 and len(r[1]) == 4:
             out[r[1]] = _clean(r[4])
     return out
+
+
+def load_item_bases(pack_dir: Path) -> dict[str, str]:
+    """物品四码 -> 基础对象四码（对象ID/物品.tsv 第4列）。"""
+    out: dict[str, str] = {}
+    for r in _read_rows(pack_dir, "对象ID/物品.tsv"):
+        if len(r) > 4 and len(r[1]) == 4 and len(r[3]) == 4:
+            out[r[1]] = r[3].lower()
+    return out
+
+
+_base_price_cache: dict[str, str] | None = None
+
+
+def _base_prices() -> dict[str, str]:
+    """基础物品四码(小写) -> 金币价（生成表 base_objects.BASE_OBJECTS）。"""
+    global _base_price_cache
+    if _base_price_cache is None:
+        from .base_objects import BASE_OBJECTS
+
+        prices: dict[str, str] = {}
+        for code, entry in BASE_OBJECTS.items():
+            if entry[0] != "物品":
+                continue
+            for key, val in entry[1]:
+                if key == "金币":
+                    prices[code.lower()] = val
+                    break
+        _base_price_cache = prices
+    return _base_price_cache
+
+
+def _item_price(bases: dict[str, str], code: str) -> str:
+    """物品商店价：优先按基础ID继承，其次物品本身即基础物品。"""
+    prices = _base_prices()
+    base = bases.get(code, "")
+    if base and base in prices:
+        return prices[base]
+    return prices.get(code.lower(), "")
 
 
 def load_formulas(pack_dir: Path) -> list[tuple[str, list[tuple[str, int]]]]:
@@ -168,7 +208,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         rest = rest[:i] + rest[i + 2 :]
     if len(rest) != 3:
         raise PackQueryCliOptionError(
-            "用法: pack-query <资料包目录> <item|recipe|where|drop|quest|text> <查询词>"
+            "用法: pack-query <资料包目录> <item|recipe|where|drop|quest|text|price> <查询词>"
         )
     pack_dir, command, query = rest
     if command not in _COMMANDS:
@@ -189,20 +229,62 @@ def _match(query: str, code: str, name: str) -> bool:
 
 def _query_item(pack: Path, query: str, limit: int) -> list[str]:
     items = load_items(pack)
+    bases = load_item_bases(pack)
     lines = []
     for code, (name, desc) in items.items():
         if _match(query, code, name):
             lines.append("[" + code + "] " + name)
+            price = _item_price(bases, code)
+            base = bases.get(code, "")
+            if price:
+                lines.append(
+                    "  金币: " + price + (" (继承基础 " + base + ")" if base else "")
+                )
             lines.append("  " + desc[:240])
-            if len(lines) >= limit * 2:
+            if len(lines) >= limit * 3:
                 break
     return lines or ["未找到物品: " + query]
 
 
+def _query_price(pack: Path, query: str, limit: int) -> list[str]:
+    items = load_items(pack)
+    bases = load_item_bases(pack)
+    lines = []
+    for code, (name, _desc) in items.items():
+        if _match(query, code, name):
+            price = _item_price(bases, code)
+            base = bases.get(
+                code, code.lower() if code.lower() in _base_prices() else "-"
+            )
+            lines.append(
+                "["
+                + code
+                + "] "
+                + name
+                + "  金币: "
+                + (price or "-")
+                + "  (基础: "
+                + base
+                + ")"
+            )
+            if len(lines) >= limit:
+                break
+    if not lines:
+        price = _base_prices().get(query.lower())
+        if price:
+            lines.append("基础物品 [" + query.lower() + "]  金币: " + price)
+    return lines or ["未找到物品价格: " + query]
+
+
 def _query_recipe(pack: Path, query: str, limit: int) -> list[str]:
     items = load_items(pack)
-    hits = []
+    hits: list[str] = []
+    seen: set[tuple[str, tuple[tuple[str, int], ...]]] = set()
     for prod, pairs in load_formulas(pack):
+        key = (prod, tuple(pairs))
+        if key in seen:
+            continue
+        seen.add(key)
         prod_name = items.get(prod, (prod, ""))[0]
         mat_names = [items.get(c, (c, ""))[0] for c, _k in pairs]
         if _match(query, prod, prod_name) or any(
@@ -299,6 +381,7 @@ _QUERIES = {
     "drop": _query_drop,
     "quest": _query_quest,
     "text": _query_text,
+    "price": _query_price,
 }
 
 

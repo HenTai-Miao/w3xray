@@ -7,7 +7,9 @@ import pytest
 
 from w3xtool.pack_query_cli import (
     PackQueryCliOptionError,
+    _base_prices,
     load_formulas,
+    load_item_bases,
     load_items,
     load_placements,
     parse_pack_query_cli_options,
@@ -22,7 +24,8 @@ def pack(tmp_path):
     (obj / "物品.tsv").write_text(
         "物品\t四码\t数值\t四码2\t名称\t英雄\t描述\n"
         "物品\tI0AA\t1\tI0AA\t|cffff0000冰晶|r\t是\t'+10攻|n【冰】：减速\n"
-        "物品\tI0BB\t2\tI0BB\t雪白的熊掌\t是\t材料\n",
+        "物品\tI0BB\t2\tI0BB\t雪白的熊掌\t是\t材料\n"
+        "物品\tI0CC\t3\tratf\t攻击之爪+15样\t否\t继承基础价\n",
         encoding="utf-8",
     )
     (obj / "单位.tsv").write_text(
@@ -33,6 +36,7 @@ def pack(tmp_path):
     )
     (tmp_path / "脚本调用参数索引.tsv").write_text(
         "war3map.j\t1\tF\tcall\t1\t'x'\t\t\t\tcall YDWENewItemsFormula('I0BB', 4, 'ches', 0, 'I0AA')\n"
+        "war3map.j\t5\tF\tcall\t1\t'x'\t\t\t\tcall YDWENewItemsFormula('I0BB', 4, 'ches', 0, 'I0AA')\n"
         "war3map.j\t2\tF\tCreateUnit\t1\tp\t\t\t普通参数\tset u=CreateUnit(p, 'u0AA', - 6144.0, 24320.0, 270.000)\n"
         "war3map.j\t3\tF\tCreateItem\t1\t'I0AA'\t\t\t对象码\tcall CreateItem('I0AA', - 7082.0, 25177.5)\n"
         "war3map.j\t4\tF\tCreateItemLoc\t1\t'I0BB'\t\t\t对象码\tcall CreateItemLoc('I0BB', GetRectCenter(gg_rct_x))\n",
@@ -79,7 +83,7 @@ def test_load_items_strips_colors(pack):
 
 def test_load_formulas_filters_fillers(pack):
     f = load_formulas(pack)
-    assert f == [("I0AA", [("I0BB", 4)])]
+    assert f == [("I0AA", [("I0BB", 4)]), ("I0AA", [("I0BB", 4)])]
 
 
 def test_load_placements_unit_and_ground_item(pack):
@@ -112,6 +116,48 @@ def test_run_cli_where_and_drop_and_quest(pack, capsys):
         parse_pack_query_cli_options([str(pack), "quest", "玻璃球"])
     )
     assert rc == 0 and "老爷爷" in capsys.readouterr().out
+
+
+def test_run_cli_price_query(pack, capsys):
+    rc = run_pack_query_cli(parse_pack_query_cli_options([str(pack), "price", "I0CC"]))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "金币: 800" in out and "ratf" in out
+
+
+def test_run_cli_item_includes_price(pack, capsys):
+    rc = run_pack_query_cli(
+        parse_pack_query_cli_options([str(pack), "item", "攻击之爪"])
+    )
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "金币: 800" in out
+
+
+def test_run_cli_price_base_code_direct(pack, capsys):
+    rc = run_pack_query_cli(parse_pack_query_cli_options([str(pack), "price", "RATF"]))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "金币: 800" in out
+
+
+def test_load_item_bases(pack):
+    bases = load_item_bases(pack)
+    assert bases["I0CC"] == "ratf"
+    assert bases.get("I0AA", "") in ("", "i0aa")
+
+
+def test_base_prices_has_known_entries():
+    prices = _base_prices()
+    assert prices.get("ratf") == "800"
+    assert prices.get("ckng") is not None
+
+
+def test_run_cli_recipe_dedupes(pack, capsys):
+    rc = run_pack_query_cli(parse_pack_query_cli_options([str(pack), "recipe", "冰晶"]))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert out.count("<-") == 1
 
 
 def test_run_cli_miss_returns_two(pack, capsys):

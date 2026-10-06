@@ -11,7 +11,7 @@
 - `w3xtool/cli_options.py`, `api.py`, `archive_source.py`: existing map CLI, load/export API, and archive boundary.
 - `w3xtool/guide_report.py`, `guide_cli.py`: one-shot player-facing guide report (basic info, chat commands, quest texts, hero lineup, recipes, shops, drops, wave clues) behind the `guide` subcommand.
 - `w3xtool/live_inventory.py`, `live_handle_chain.py`, `live_cli.py`: read-only live game memory reader behind the `live` subcommand — currently selected unit's inventory plus every item-bearing unit on the map (handle-system chain, version offsets in `HANDLE_CHAIN_OFFSETS`); see `AGENTS.d/live.md`.
-- `w3xtool/pack_query_cli.py`: one-process knowledge-pack query behind the `pack-query` subcommand (item/recipe/where/drop/quest/text) — use it instead of writing throwaway analysis scripts into temp folders (shell change notifications from churn freeze Explorer).
+- `w3xtool/pack_query_cli.py`: one-process knowledge-pack query behind the `pack-query` subcommand (item/recipe/where/drop/quest/text/price) — use it instead of writing throwaway analysis scripts into temp folders (shell change notifications from churn freeze Explorer).
 - `w3xtool/cache_root.py`, `guide_cache.py`, snapshot cache in `client_object_data.py`: fail-open disk caches outside the repo (content-addressed client snapshots, per-map guide reports). Env: `W3XRAY_CACHE_DIR`, `W3XRAY_SNAPSHOT_CACHE=0`, `W3XRAY_GUIDE_CACHE=0`.
 - `w3xtool/object_materialization.py`: pure per-object materialization; `W3XRAY_MATERIALIZE_WORKERS>1` enables process-pool parallel merge (serial fallback on any failure); the `guide` CLI auto-sets it to min(8, cores).
 - `w3xtool/save_container.py`: bounded read-only `.w3z`/`.w3v` recorded-save container decoding (checksums verified, no repacking).
@@ -38,7 +38,7 @@
 - Run GUI: `uv run main.py`.
 - Run map CLI: `uv run main.py cli <map-path>`.
 - One-shot map guide: `uv run main.py guide <map-path> [--section basic|commands|quests|heroes|recipes|shops|drops|clues] [--refresh]`; repeat queries hit the per-map cache (~0.5s), map edits invalidate it.
-- Query an exported knowledge pack: `uv run python -X utf8 main.py pack-query <pack-dir> <item|recipe|where|drop|quest|text> <查询词> [--limit N]` (single process, bounded output).
+- Query an exported knowledge pack: `uv run python -X utf8 main.py pack-query <pack-dir> <item|recipe|where|drop|quest|text|price> <查询词> [--limit N]` (single process, bounded output; `item` shows inherited shop gold prices, `price` looks prices up directly via `base_objects` catalogs, `recipe` output is deduplicated).
 - Locate current map: `uv run main.py current [--root PATH] [--accept-suggestion]`.
 - Migrate trusted descriptions: `uv run main.py description-cache migrate --legacy-output <schema-1-root> --legacy-cache <schema-2-cache.tsv> --output <owned-cache-root>`.
 - Batch schema 6: `uv run main.py batch <maps-root> --output <v6-root> --game-data <client-or-trusted-icon-root> --description-cache <owned-cache-root>`.
