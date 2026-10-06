@@ -421,8 +421,13 @@ class PlayerResources:
 
 
 def _plausible_resource(f: float) -> bool:
-    """资源值特征: 有限、非负、近整数的常规数量级。"""
-    return math.isfinite(f) and 0 <= f < 10_000_000 and abs(f - round(f)) < 0.001
+    """资源值特征: 有限、非负、常规数量级 (允许小数, 收入按秒累加)。"""
+    return math.isfinite(f) and 0 <= f < 10_000_000
+
+
+def _matches_reported(f: float, reported: float) -> bool:
+    """HUD 显示的是取整值; 内部 float 带小数, 用 +/-1 容差匹配。"""
+    return abs(f - reported) <= 1.0
 
 
 def _iter_float_slots(reader: "MemoryReader"):
@@ -441,16 +446,18 @@ def find_resource_layout(
 ) -> list[PlayerResources]:
     """以当前已知的一组 金币/木材 数值为锚, 定位同布局的玩家资源结构列表。
 
-    原理: 精确匹配金币 float; 在 +/- window 内找木材 float; 同一
-    (金币->木材) 相对偏移的其余结构即为其他玩家/缓存副本。引擎为每个
-    玩家维护同构资源结构, 布局一致而地址不同。
+    原理: HUD 显示值为取整, 内部为带小数的 float (收入按秒累加), 因此用
+    +/-1 容差匹配; 在 +/- window 内找木材 float; 同一 (金币->木材) 相对
+    偏移的其余结构即为其他玩家/缓存副本。引擎为每个玩家维护同构资源结构,
+    布局一致而地址不同。注意: 小型资源结构可能被引擎堆管理器搬移, 校准
+    应在报数后数秒内执行。
     """
     gold_addr = []
     lumber_addr = []
     for addr, f in _iter_float_slots(reader):
-        if f == gold:
+        if _matches_reported(f, gold):
             gold_addr.append(addr)
-        elif f == lumber:
+        elif _matches_reported(f, lumber):
             lumber_addr.append(addr)
     pairs: list[tuple[int, int]] = []
     for g in gold_addr:
@@ -467,6 +474,13 @@ def find_resource_layout(
     anchors = sorted(g for g, d in pairs if d == best_delta)
     out: list[PlayerResources] = []
     for g in anchors:
+        lum_addr = g + best_delta
+        gold_raw = reader.read(g, 4)
+        lumber_raw = reader.read(lum_addr, 4)
+        if not gold_raw or not lumber_raw:
+            continue
+        gold_val = struct.unpack("<f", gold_raw)[0]
+        lumber_val = struct.unpack("<f", lumber_raw)[0]
         food = None
         for fo in (best_delta + 4, best_delta + 8, best_delta - 4, 4, 8):
             raw = reader.read(g + fo, 4)
@@ -476,7 +490,7 @@ def find_resource_layout(
             if _plausible_resource(fv) and round(fv) <= 1000:
                 food = round(fv)
                 break
-        out.append(PlayerResources(g, gold, lumber, food))
+        out.append(PlayerResources(g, gold_val, lumber_val, food))
     return out
 
 

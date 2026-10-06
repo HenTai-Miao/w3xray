@@ -48,6 +48,20 @@ def test_find_resource_layout_requires_co_located_pair():
     assert find_resource_layout(reader, 169.0, 808.0) == []
 
 
+def test_find_resource_layout_matches_fractional_internal():
+    # HUD 显示取整值, 内部 float 带小数 (收入累加): +/-1 容差匹配。
+    blob = bytearray(0x300)
+    struct.pack_into("<f", blob, 0x40, 7774.63)
+    struct.pack_into("<f", blob, 0x58, 113.28)
+    struct.pack_into("<f", blob, 0x5C, 3.0)
+    reader = MemoryReader([(0x20000000, bytes(blob))])
+    found = find_resource_layout(reader, 7775, 113)
+    assert len(found) == 1
+    assert abs(found[0].gold - 7774.63) < 0.01
+    assert abs(found[0].lumber - 113.28) < 0.01
+    assert found[0].food == 3
+
+
 def test_find_resource_layout_no_match_returns_empty():
     blob = bytearray(0x100)
     struct.pack_into("<f", blob, 0x10, 42.0)
