@@ -687,10 +687,6 @@ def read_live(
         if load_snapshot_dir or not ver:
             report["notes"].append("handle 策略需要运行中的游戏 (版本探测)")
             return None
-        offsets = HANDLE_CHAIN_OFFSETS.get(str(ver.get("version") or ""))
-        if offsets is None:
-            report["notes"].append(f"版本 {ver.get('version')} 暂无句柄链偏移")
-            return None
         try:
             import importlib
 
@@ -701,6 +697,16 @@ def read_live(
                 report["notes"].append("未取到 Game.dll 基址")
                 return None
             reader = hc.MemoryReader(regions)
+            offsets = HANDLE_CHAIN_OFFSETS.get(str(ver.get("version") or ""))
+            if offsets is None:
+                offsets = hc.derive_offsets(reader, dll_base, dll_base + 0x2000000)
+                if offsets is not None:
+                    report["notes"].append(
+                        f"版本 {ver.get('version')} 未收录, 偏移按结构特征自动推导"
+                    )
+            if offsets is None:
+                report["notes"].append(f"版本 {ver.get('version')} 暂无句柄链偏移")
+                return None
             system = hc.HandleSystem(reader, dll_base, offsets)
             if not system.valid:
                 report["notes"].append("句柄管理器不可读")

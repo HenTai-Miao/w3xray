@@ -25,7 +25,7 @@ from __future__ import annotations
 import bisect
 import re
 import struct
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 __all__ = (
     "LiveHandleOffsets",
@@ -38,6 +38,8 @@ __all__ = (
     "walk_item_units",
     "selected_unit",
     "match_unit_entries",
+    "classic_template",
+    "derive_offsets",
 )
 
 _FOURCC_RE = re.compile(r"[A-Za-z][0-9A-Za-z]{3}")
@@ -99,6 +101,41 @@ HANDLE_CHAIN_OFFSETS: dict[str, LiveHandleOffsets] = {
 }
 
 
+def classic_template() -> LiveHandleOffsets:
+    """经典引擎 (1.24~1.27 家族) 的结构字段偏移模板。
+
+    同族版本的结构字段布局稳定, 版本差异集中在两个全局变量的 RVA;
+    RVA 由 derive_offsets() 在运行内存中按结构特征自动识别。
+    """
+    known = HANDLE_CHAIN_OFFSETS.get("1.27.0.52240")
+    if known is not None:
+        return replace(
+            known, vmctx_global_rva=0, handle_mgr_global_rva=0, source="classic 模板"
+        )
+    return LiveHandleOffsets(
+        vmctx_global_rva=0,
+        handle_mgr_global_rva=0,
+        player_idx_off=0x28,
+        pctx_array_off=0x58,
+        selmgr_off=0x34,
+        sel_entry_off=0x1E0,
+        entry_pair_off=0xC,
+        hm_tableA_base_off=0xC,
+        hm_tableA_bound_off=0x1C,
+        hm_tableB_base_off=0x2C,
+        hm_tableB_bound_off=0x3C,
+        wrapper_gen_off=0x18,
+        wrapper_alive_off=0x20,
+        wrapper_obj_off=0x54,
+        unit_type_off=0x30,
+        unit_inv_off=0x1F8,
+        inv_slots_off=0x70,
+        inv_slot_stride=12,
+        item_type_off=0x30,
+        source="classic 模板",
+    )
+
+
 def fourcc(dword: int) -> str:
     """把内存中的四码 dword (大端序) 转成字符串。"""
     return struct.pack(">I", dword & 0xFFFFFFFF).decode("latin-1")
@@ -135,6 +172,11 @@ class MemoryReader:
     def u16(self, addr: int) -> int:
         raw = self.read(addr, 2)
         return struct.unpack("<H", raw)[0] if raw else 0
+
+    def iter_regions(self):
+        """按基址升序产出 (基址, 字节块)。"""
+        for base in self._bases:
+            yield base, self._data[base]
 
 
 @dataclass(frozen=True, slots=True)
@@ -299,6 +341,139 @@ def match_unit_entries(units, query):
         for u in units
         if q in str(u.get("unit", "")).lower() or str(u.get("unit", "")).lower() in q
     ]
+
+
+def _looks_like_handle_manager(
+    reader: MemoryReader, hm: int, o: LiveHandleOffsets
+) -> bool:
+    """结构校验: 双表指针入堆、bound 合理、且能找到存活的包装条目。"""
+    hits = 0
+    for base_off, bound_off in (
+        (o.hm_tableA_base_off, o.hm_tableA_bound_off),
+        (o.hm_tableB_base_off, o.hm_tableB_bound_off),
+    ):
+        base = reader.u32(hm + base_off)
+        bound = reader.u32(hm + bound_off)
+        if not (_HEAP_LO <= base < _HEAP_HI) or not (0 < bound < 0x200000):
+            return False
+        for index in range(min(bound, 128)):
+            if reader.u32(base + index * 8) != 0xFFFFFFFE:
+                continue
+            wrapper = reader.u32(base + index * 8 + 4)
+            if not (_HEAP_LO <= wrapper < _HEAP_HI):
+                continue
+            if reader.u32(wrapper + o.wrapper_alive_off) != 0:
+                continue
+            obj = reader.u32(wrapper + o.wrapper_obj_off)
+            if _HEAP_LO <= obj < _HEAP_HI:
+                hits += 1
+                if hits >= 2:
+                    return True
+    return False
+
+
+def _selection_chain_valid(
+    reader: MemoryReader,
+    system: HandleSystem,
+    o: LiveHandleOffsets,
+    vmctx: int,
+    require_inventory: bool = True,
+) -> bool:
+    """端到端校验: 从候选 vmctx 走选中链, 解析出一个带合法四码的单位。
+
+    严格模式 (require_inventory) 额外要求该单位带背包对象, 并要求
+    vmctx+0x28 的本地玩家号落在 0..15 —— 用于排除结构巧合的假阳性。
+    """
+    if reader.u16(vmctx + o.player_idx_off) >= 16:
+        return False
+    for player in range(16):
+        pctx = reader.u32(vmctx + o.pctx_array_off + player * 4)
+        if not (_HEAP_LO <= pctx < _HEAP_HI):
+            continue
+        selmgr = reader.u32(pctx + o.selmgr_off)
+        if not (_HEAP_LO <= selmgr < _HEAP_HI):
+            continue
+        entry = reader.u32(selmgr + o.sel_entry_off)
+        for _ in range(12):
+            if not (_HEAP_LO <= entry < _HEAP_HI):
+                break
+            lo = reader.u32(entry + o.entry_pair_off)
+            hi = reader.u32(entry + o.entry_pair_off + 4)
+            unit = system.resolve(lo, hi)
+            if unit is not None and is_fourcc(
+                fourcc(reader.u32(unit + o.unit_type_off))
+            ):
+                if require_inventory:
+                    inv = reader.u32(unit + o.unit_inv_off)
+                    if not (_HEAP_LO <= inv < _HEAP_HI):
+                        continue
+                return True
+            entry = reader.u32(entry)
+    return False
+
+
+def _iter_dwords(reader: MemoryReader, lo: int, hi: int):
+    """产出 [lo, hi) 内可读的 (地址, dword 值), 按区域分块。"""
+    for base, blob in reader.iter_regions():
+        if base + len(blob) <= lo or base >= hi:
+            continue
+        start = max(lo, base) - base
+        end = min(hi, base + len(blob)) - base
+        for off in range(start & ~3, end - 3, 4):
+            yield base + off, struct.unpack_from("<I", blob, off)[0]
+
+
+def derive_offsets(
+    reader: MemoryReader,
+    dll_base: int,
+    dll_end: int,
+    scan_limit: int = 0x4000000,
+    max_hm_candidates: int = 8,
+) -> LiveHandleOffsets | None:
+    """在 Game.dll 内存中按结构特征自动识别两个全局槽, 生成偏移表。
+
+    不依赖版本号或硬编码 RVA: 先收集"长得像句柄管理器"的候选,
+    逐个构建句柄系统并用选中链端到端验证, 全部通过才算成功
+    (避免先遇到的假阳性候选导致整体失败)。
+    适用于经典引擎家族; 失败返回 None (调用方回退其它策略)。
+    """
+    hi = min(dll_end, dll_base + scan_limit)
+    if hi <= dll_base:
+        return None
+    tpl = classic_template()
+    hm_candidates: list[tuple[int, int]] = []
+    seen_managers: set[int] = set()
+    for addr, value in _iter_dwords(reader, dll_base, hi):
+        if (
+            _HEAP_LO <= value < _HEAP_HI
+            and value not in seen_managers
+            and _looks_like_handle_manager(reader, value, tpl)
+        ):
+            seen_managers.add(value)
+            hm_candidates.append((addr, value))
+            if len(hm_candidates) >= max_hm_candidates:
+                break
+    systems: list[tuple[LiveHandleOffsets, HandleSystem]] = []
+    for hm_slot, _hm in hm_candidates:
+        stage = replace(tpl, handle_mgr_global_rva=hm_slot - dll_base)
+        system = HandleSystem(reader, dll_base, stage)
+        if system.valid:
+            systems.append((stage, system))
+    # 先全员严格校验 (要求玩家号合法 + 选中单位带背包), 再放宽到四码即可。
+    for require_inventory in (True, False):
+        for stage, system in systems:
+            for addr, value in _iter_dwords(reader, dll_base, hi):
+                if not (_HEAP_LO <= value < _HEAP_HI):
+                    continue
+                if _selection_chain_valid(
+                    reader, system, tpl, value, require_inventory
+                ):
+                    return replace(
+                        stage,
+                        vmctx_global_rva=addr - dll_base,
+                        source="结构特征自动推导 (classic 模板)",
+                    )
+    return None
 
 
 def selected_unit(

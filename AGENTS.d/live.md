@@ -39,8 +39,22 @@ uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --u
 
 策略顺序: auto → handle (本链, 版本已知时) → chain (启发式) → icons (截图匹配)。
 
-## 版本适配 (换 1.24 / 1.3x 时)
-`HANDLE_CHAIN_OFFSETS` 目前收录 1.27.0.52240 (KK 平台)。换版本:
+## 版本适配 (换 1.24 / 1.26 / 其他平台时)
+
+**首选: 自动推导 (无版本依赖)**。版本号不在 `HANDLE_CHAIN_OFFSETS` 里时,
+`derive_offsets()` 会在 Game.dll 内存里按**结构特征**自动识别:
+1. 扫 dll 数据区的堆指针, 找"长得像句柄管理器"的结构 (双表 + 0xFFFFFFFE
+   条目标记 + 存活包装对象), 支持多候选去重, 防假阳性。
+2. 对每个候选构建句柄系统, 再扫 vmctx 候选: 要求玩家号 0..15、选中链
+   端到端解析出带四码 (严格时还要求带背包) 的单位。
+3. 全部通过才生成偏移 (classic 模板结构字段 + 推导出的两个 RVA);
+   失败自动回退 chain/icons 策略。
+
+已在 1.27.0.52240 真实内存快照上验证: 推导出的 vmctx RVA 精确命中, HM 槽
+功能等价 (同一管理器), 选中链读出英雄+6 件物品。经典引擎家族 (1.24~1.27)
+结构字段一致, 理论上开箱即用; Reforged (x64) 布局不同, 仍会回退。
+
+**兜底: 手工反汇编** (自动推导失败时):
 1. 内存快照里找 native 名字**堆副本** (`SelectUnit\0` 等), numpy searchsorted
    找指向它的 dword = 原生表条目, 邻近 Game.dll .text 指针 = 实现地址。
 2. capstone 反汇编 SelectUnit/ClearSelection/UnitItemInSlot 实现, 提取全局 RVA

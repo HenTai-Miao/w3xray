@@ -13,6 +13,8 @@ from w3xtool.live_handle_chain import (
     HANDLE_CHAIN_OFFSETS,
     HandleSystem,
     MemoryReader,
+    classic_template,
+    derive_offsets,
     fourcc,
     is_fourcc,
     read_inventory,
@@ -206,3 +208,31 @@ def test_walk_item_units_orders_by_count():
     assert codes[0] == "N02A"  # 3 件排最前
     assert "H004" in codes
     assert all(u.items for u in units)  # 空背包单位被过滤
+
+
+def test_classic_template_zero_rvas():
+    t = classic_template()
+    assert t.vmctx_global_rva == 0
+    assert t.handle_mgr_global_rva == 0
+    known = HANDLE_CHAIN_OFFSETS["1.27.0.52240"]
+    assert t.player_idx_off == known.player_idx_off
+    assert t.unit_inv_off == known.unit_inv_off
+
+
+def test_derive_offsets_rediscovers_globals():
+    """不喂版本表: 纯结构特征应重新找到两个全局槽并走通选中链。"""
+    regions, _hero, _other, o = _build_memory()
+    reader = MemoryReader(regions)
+    derived = derive_offsets(reader, DLL_BASE, DLL_BASE + 0x2000000)
+    assert derived is not None
+    assert derived.handle_mgr_global_rva == o.handle_mgr_global_rva
+    assert derived.vmctx_global_rva == o.vmctx_global_rva
+    system = HandleSystem(reader, DLL_BASE, derived)
+    assert system.valid
+    sel = selected_unit(reader, system, derived, DLL_BASE)
+    assert sel is not None and sel.code == "H004"
+
+
+def test_derive_offsets_returns_none_without_structures():
+    reader = MemoryReader([(0x50000000, b"\x00" * 0x1000)])
+    assert derive_offsets(reader, 0x50000000, 0x50001000) is None
