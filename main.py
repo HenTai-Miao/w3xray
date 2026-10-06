@@ -87,6 +87,19 @@ def main() -> None:
             print(f"攻略参数错误：{exc}", file=sys.stderr)
             raise SystemExit(2) from None
         raise SystemExit(run_guide_cli(options))
+    if len(sys.argv) >= 2 and sys.argv[1] == "live":
+        from w3xtool.live_cli import (
+            LiveCliOptionError,
+            parse_live_cli_options,
+            run_live_cli,
+        )
+
+        try:
+            options = parse_live_cli_options(tuple(sys.argv[2:]))
+        except LiveCliOptionError as exc:
+            print(f"实时读取参数错误：{exc}", file=sys.stderr)
+            raise SystemExit(2) from None
+        raise SystemExit(run_live_cli(options))
     if len(sys.argv) >= 2 and sys.argv[1] == "cli":
         try:
             options = parse_cli_options(tuple(sys.argv[2:]))

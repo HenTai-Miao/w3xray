@@ -10,6 +10,7 @@
 - `w3xtool/gui.py`, `gui_topbar.py`, `gui_lifecycle.py`: GUI composition, top-level actions, and shutdown.
 - `w3xtool/cli_options.py`, `api.py`, `archive_source.py`: existing map CLI, load/export API, and archive boundary.
 - `w3xtool/guide_report.py`, `guide_cli.py`: one-shot player-facing guide report (basic info, chat commands, quest texts, hero lineup, recipes, shops, drops, wave clues) behind the `guide` subcommand.
+- `w3xtool/live_inventory.py`, `live_handle_chain.py`, `live_cli.py`: read-only live game memory reader behind the `live` subcommand — currently selected unit's inventory plus every item-bearing unit on the map (handle-system chain, version offsets in `HANDLE_CHAIN_OFFSETS`); see `AGENTS.d/live.md`.
 - `w3xtool/cache_root.py`, `guide_cache.py`, snapshot cache in `client_object_data.py`: fail-open disk caches outside the repo (content-addressed client snapshots, per-map guide reports). Env: `W3XRAY_CACHE_DIR`, `W3XRAY_SNAPSHOT_CACHE=0`, `W3XRAY_GUIDE_CACHE=0`.
 - `w3xtool/object_materialization.py`: pure per-object materialization; `W3XRAY_MATERIALIZE_WORKERS>1` enables process-pool parallel merge (serial fallback on any failure); the `guide` CLI auto-sets it to min(8, cores).
 - `w3xtool/save_container.py`: bounded read-only `.w3z`/`.w3v` recorded-save container decoding (checksums verified, no repacking).
@@ -56,6 +57,7 @@
 - Do not hand-edit packaging output: `build/`, `dist/`, `wheels/`, `*.egg-info/`.
 - Treat `third_party/` as vendored; CascLib DLL/hash under `third_party/CascLib/bin/win-x64/` are generated local artifacts.
 - Generated tables: `w3xtool/base_names.py`, `base_objects.py`, `westrings.py`, `jass_natives.py`, `field_meta.py`; update through their `build_*.py` generators. `base_names.py` additionally carries `BASE_NAMES_EN`/`BASE_CATEGORIES` (bilingual names and fine categories from the pinned war3-objectdata enUS snapshot), merged by `build_base_catalog.py --objectdata-dir`; rerun that merge after regenerating `BASE_NAMES`. `field_meta.py` additionally carries `GENERATED_FIELD_APPLICABILITY`/`GENERATED_FIELD_BOUNDS`/`GENERATED_FIELD_CONSTANTS` (ability-field useSpecific, min/max, common.j constant names); regenerate with `build_field_labels.py --meta-dir <metadata-slk dir> [--common-j <Reforged common.j>]` — labels/types are preserve-and-fill, the extra tables rebuild fully.
-- Keep current-map discovery bounded and evidence-based; never add memory reads, `Game.dll` loading, injection, elevation, or runtime decryption.
+- Keep current-map discovery bounded and evidence-based.
+- Live game inspection (`main.py live`) is read-only: `ReadProcessMemory`/`PrintWindow` snapshots only; never inject, never write game memory, never execute extracted binaries or map payloads. See `AGENTS.d/live.md`.
 - Keep `/Users/zhongerbing/Desktop/Maps`, `map-extract-output`, `map-extract-output-v2`, `map-extract-output-v4`, and `trusted-icon-cache-classic` read-only; never use a historical root as a new-run destination.
 - Generated caches, schema-6 batch outputs, logs, integrity snapshots, and acceptance reports belong outside the repository.
