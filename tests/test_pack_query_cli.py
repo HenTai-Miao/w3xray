@@ -12,6 +12,7 @@ from w3xtool.pack_query_cli import (
     load_item_bases,
     load_item_gold_overrides,
     load_items,
+    load_shop_stocks,
     load_placements,
     parse_pack_query_cli_options,
     run_pack_query_cli,
@@ -51,7 +52,8 @@ def pack(tmp_path):
     )
     (tmp_path / "对象字段.tsv").write_text(
         "物品\tI0CC\t攻击之爪+15样\tigol\t黄金\t123\twar3map.w3t\n"
-        "物品\tI0AA\t冰晶\tbase:金币\t金币\t999\tbase:I0AA\n",
+        "物品\tI0AA\t冰晶\tbase:金币\t金币\t999\tbase:I0AA\n"
+        "单位\th0BB\t铁匠铺\tusei\t售出的物品\t冰晶(I0AA), I0CC\twar3map.w3u\n",
         encoding="utf-8",
     )
     (tmp_path / "脚本字符串索引.tsv").write_text(
@@ -177,6 +179,19 @@ def test_run_cli_recipe_dedupes(pack, capsys):
     out = capsys.readouterr().out
     assert rc == 0
     assert out.count("<-") == 1
+
+
+def test_load_shop_stocks_parses_paren_codes(pack):
+    stocks = load_shop_stocks(pack)
+    assert stocks == [("h0BB", "铁匠铺", ["I0AA", "I0CC"])]
+
+
+def test_run_cli_shop_query(pack, capsys):
+    rc = run_pack_query_cli(parse_pack_query_cli_options([str(pack), "shop", "铁匠铺"]))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "冰晶" in out and "攻击之爪+15样" in out
+    assert "123金" in out and "地图价" in out and "继承" in out
 
 
 def test_run_cli_miss_returns_two(pack, capsys):

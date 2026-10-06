@@ -36,7 +36,7 @@ __all__ = (
     "run_pack_query_cli",
 )
 
-_COMMANDS = ("item", "recipe", "where", "drop", "quest", "text", "price")
+_COMMANDS = ("item", "recipe", "where", "drop", "quest", "text", "price", "shop")
 _COLOR_RE = re.compile(r"\|c[0-9A-Fa-f]{8}|\|r")
 
 
@@ -85,6 +85,28 @@ def load_item_gold_overrides(pack_dir: Path) -> dict[str, str]:
     for r in _read_rows(pack_dir, "对象字段.tsv"):
         if len(r) > 5 and r[0] == "物品" and len(r[1]) == 4 and r[3] == "igol":
             out[r[1]] = r[5].strip()
+    return out
+
+
+def load_shop_stocks(pack_dir: Path) -> list[tuple[str, str, list[str]]]:
+    """商店出售清单：[(商店四码, 商店名, [物品四码])]，来自 usei 字段。
+
+    usei 值形如 "I002, I001" 或 "敏捷之书+2(tst2), 银锭(I008)"——
+    括号里才是物品四码，裸 token 视为四码本身。
+    """
+    out: list[tuple[str, str, list[str]]] = []
+    for r in _read_rows(pack_dir, "对象字段.tsv"):
+        if len(r) > 5 and r[3] == "usei":
+            codes = []
+            for token in r[5].split(","):
+                token = token.strip()
+                m = re.search(r"\(([A-Za-z0-9]{4})\)", token)
+                if m:
+                    codes.append(m.group(1))
+                elif len(token) == 4:
+                    codes.append(token)
+            if codes:
+                out.append((r[1], _clean(r[2]), codes))
     return out
 
 
@@ -297,6 +319,29 @@ def _query_price(pack: Path, query: str, limit: int) -> list[str]:
     return lines or ["未找到物品价格: " + query]
 
 
+def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
+    """按商店列出售清单与逐件真实价格（igol 地图价优先，回落基础继承价）。"""
+    items = load_items(pack)
+    bases = load_item_bases(pack)
+    overrides = load_item_gold_overrides(pack)
+    lines: list[str] = []
+    for shop_code, shop_name, codes in load_shop_stocks(pack):
+        if not _match(query, shop_code, shop_name):
+            continue
+        lines.append("== " + shop_name + " [" + shop_code + "]")
+        for c in codes:
+            name = items.get(c, (c, ""))[0]
+            price = _item_price(bases, c, overrides)
+            tag = "地图价" if c in overrides else "继承"
+            lines.append(
+                "  " + name + "  " + (price or "?") + "金  (" + tag + " " + c + ")"
+            )
+        lines.append("")
+        if len(lines) >= limit * 12:
+            break
+    return lines or ["未找到商店: " + query]
+
+
 def _query_recipe(pack: Path, query: str, limit: int) -> list[str]:
     items = load_items(pack)
     hits: list[str] = []
@@ -403,6 +448,7 @@ _QUERIES = {
     "quest": _query_quest,
     "text": _query_text,
     "price": _query_price,
+    "shop": _query_shop,
 }
 
 

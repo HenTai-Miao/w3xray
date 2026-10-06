@@ -38,7 +38,7 @@
 - Run GUI: `uv run main.py`.
 - Run map CLI: `uv run main.py cli <map-path>`.
 - One-shot map guide: `uv run main.py guide <map-path> [--section basic|commands|quests|heroes|recipes|shops|drops|clues] [--refresh]`; repeat queries hit the per-map cache (~0.5s), map edits invalidate it.
-- Query an exported knowledge pack: `uv run python -X utf8 main.py pack-query <pack-dir> <item|recipe|where|drop|quest|text|price> <查询词> [--limit N]` (single process, bounded output; `item` shows inherited shop gold prices, `price` looks prices up directly via `base_objects` catalogs, `recipe` output is deduplicated).
+- Query an exported knowledge pack: `uv run python -X utf8 main.py pack-query <pack-dir> <item|recipe|where|drop|quest|text|price|shop> <查询词> [--limit N]` (single process, bounded output; `item` shows shop gold prices, `price` looks them up directly — per-item `igol` map overrides first, then `base_objects` inheritance; `shop` lists one shop's stock with per-item real prices; `recipe` output is deduplicated).
 - Locate current map: `uv run main.py current [--root PATH] [--accept-suggestion]`.
 - Migrate trusted descriptions: `uv run main.py description-cache migrate --legacy-output <schema-1-root> --legacy-cache <schema-2-cache.tsv> --output <owned-cache-root>`.
 - Batch schema 6: `uv run main.py batch <maps-root> --output <v6-root> --game-data <client-or-trusted-icon-root> --description-cache <owned-cache-root>`.
