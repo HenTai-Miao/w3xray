@@ -32,15 +32,31 @@ __all__ = (
     "HANDLE_CHAIN_OFFSETS",
     "MemoryReader",
     "HandleSystem",
+    "OwnedUnit",
+    "UNIT_OWNER_OFF",
+    "UNIT_POS_X_OFF",
+    "UNIT_POS_Y_OFF",
     "fourcc",
     "is_fourcc",
     "read_inventory",
     "walk_item_units",
+    "read_unit_owner",
+    "read_unit_pos",
+    "walk_owned_units",
+    "summarize_owners",
     "selected_unit",
     "match_unit_entries",
     "classic_template",
     "derive_offsets",
 )
+
+# 单位结构内的所属玩家与坐标字段偏移 (1.27.0.52240/KK 实测验证):
+# 所有者为单字节玩家号 0..15; 坐标为两个相邻 float (X 东正, Y 北正)。
+UNIT_OWNER_OFF = 0x58
+UNIT_POS_X_OFF = 0x284
+UNIT_POS_Y_OFF = 0x288
+# 坐标合理上限 (超出视为解析失败而不是游戏坐标)。
+_POS_SPAN_LIMIT = 200000.0
 
 _FOURCC_RE = re.compile(r"[A-Za-z][0-9A-Za-z]{3}")
 
@@ -322,6 +338,73 @@ def walk_item_units(
             break
     units.sort(key=lambda u: -len(u.items))
     return units[:max_units]
+
+
+@dataclass(frozen=True, slots=True)
+class OwnedUnit:
+    """一个存活单位: 地址、四码、所属玩家号与坐标。"""
+
+    addr: int
+    code: str
+    owner: int
+    x: float
+    y: float
+
+
+def read_unit_owner(reader: MemoryReader, addr: int) -> int:
+    """单位所属玩家号 (0..15); 读不到返回 -1。"""
+    raw = reader.read(addr + UNIT_OWNER_OFF, 1)
+    return raw[0] if raw else -1
+
+
+def read_unit_pos(reader: MemoryReader, addr: int) -> tuple[float, float]:
+    """单位坐标 (X 东正, Y 北正); 不合理或读不到返回 (0.0, 0.0)。"""
+    raw = reader.read(addr + UNIT_POS_X_OFF, 8)
+    if not raw:
+        return (0.0, 0.0)
+    x, y = struct.unpack("<ff", raw)
+    if abs(x) > _POS_SPAN_LIMIT or abs(y) > _POS_SPAN_LIMIT:
+        return (0.0, 0.0)
+    return (x, y)
+
+
+def walk_owned_units(
+    reader: MemoryReader,
+    system: HandleSystem,
+    o: LiveHandleOffsets,
+    max_units: int = 8000,
+) -> list[OwnedUnit]:
+    """全对象扫描, 返回所有带合法四码且所有者可读的单位 (含地图物件)。"""
+    units: list[OwnedUnit] = []
+    for obj in system.live_objects():
+        code = fourcc(reader.u32(obj + o.unit_type_off))
+        if not is_fourcc(code):
+            continue
+        owner = read_unit_owner(reader, obj)
+        if not 0 <= owner <= 15:
+            continue
+        x, y = read_unit_pos(reader, obj)
+        units.append(OwnedUnit(obj, code, owner, x, y))
+        if len(units) >= max_units:
+            break
+    return units
+
+
+def summarize_owners(
+    units: list[OwnedUnit], list_cap: int = 8
+) -> tuple[dict[int, int], list[OwnedUnit]]:
+    """按所有者汇总: (每个玩家号的数量, 数量<=list_cap 的玩家号下全部单位)。
+
+    地图生成的物件通常集中在少数玩家号 (如中立 8/地形 0) 且数量巨大;
+    真人玩家的单位挂在各自玩家号下数量很少, 低于 list_cap 即逐个列出。
+    """
+    counts: dict[int, int] = {}
+    for u in units:
+        counts[u.owner] = counts.get(u.owner, 0) + 1
+    small = {owner for owner, n in counts.items() if n <= list_cap}
+    listed = [u for u in units if u.owner in small]
+    listed.sort(key=lambda u: (u.owner, u.code, round(u.x), round(u.y)))
+    return counts, listed
 
 
 def match_unit_entries(units, query):

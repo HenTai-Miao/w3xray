@@ -13,6 +13,9 @@ uv run --with numpy --with pillow python -X utf8 main.py live <地图路径>
 # 按单位名 (子串) 或四码过滤
 uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --unit 寒冰游侠
 uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --unit H004
+
+# 列出每个真人玩家号下的单位 (所有者 + 坐标)
+uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --players
 ```
 
 - 不带 `--unit`: 自动识别**当前选中单位**并读其 6 格背包, 同时列出全图带物品单位
@@ -20,6 +23,10 @@ uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --u
 - `--unit`: 名字子串或四码匹配 (寒冰 → 寒冰游侠; h00X → 所有宝宝)。
   玩家自己起的角色昵称 (如「艾希」) 不在地图单位表里, 匹配不到时先不带
   `--unit` 看全列表, 再按类型名/四码取。
+- `--players`: 全部单位按所属玩家号 (单位结构 +0x58 字节) 归并;
+  地图生成物件集中在少数玩家号且数量巨大 (如中立 8/地形 0/装饰 15),
+  数量少的玩家号即真人单位, 逐个列出四码/名字/坐标 (X 东正, Y 北正;
+  坐标偏移 +0x284/+0x288)。躲猫猫类地图可直接定位所有躲藏玩家的形态与位置。
 - 需要管理员权限 (SeDebugPrivilege + OpenProcess); 游戏没开则报告"war3 未运行"。
 
 ## 输出含义

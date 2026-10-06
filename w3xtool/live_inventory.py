@@ -629,6 +629,8 @@ class _LiveReport(TypedDict):
     selected_unit: Any
     units: list[Any]
     unit_matches: list[Any]
+    owner_counts: "dict[int, int] | None"
+    owned_units: "list[dict[str, object]] | None"
 
 
 def read_live(
@@ -638,6 +640,7 @@ def read_live(
     load_snapshot_dir=None,
     verbose=True,
     unit_query=None,
+    players=False,
 ):
     report: _LiveReport = {
         "strategy_used": None,
@@ -647,6 +650,8 @@ def read_live(
         "selected_unit": None,
         "units": [],
         "unit_matches": [],
+        "owner_counts": None,
+        "owned_units": None,
     }
     ver: dict[str, object] | None = None
     if load_snapshot_dir:
@@ -732,6 +737,20 @@ def read_live(
 
             units = hc.walk_item_units(reader, system, offsets)
             report["units"] = [describe(u) for u in units]
+            if players:
+                owned = hc.walk_owned_units(reader, system, offsets)
+                counts, listed = hc.summarize_owners(owned)
+                report["owner_counts"] = counts
+                report["owned_units"] = [
+                    {
+                        "owner": u.owner,
+                        "unit": unit_names.get(u.code.encode("latin-1"), "?"),
+                        "code": u.code,
+                        "x": round(u.x, 1),
+                        "y": round(u.y, 1),
+                    }
+                    for u in listed
+                ]
             if unit_query:
                 pool = list(report["units"])
                 sel = hc.selected_unit(reader, system, offsets, dll_base)
@@ -834,6 +853,11 @@ def main(argv=None):
     ap.add_argument("--save-snapshot", help="保存内存快照目录 (离线分析用)")
     ap.add_argument("--load-snapshot", help="载入快照目录代替实时读取")
     ap.add_argument("--unit", help="按单位名或四码过滤输出 (如 寒冰游侠 / H004 / 宝宝)")
+    ap.add_argument(
+        "--players",
+        action="store_true",
+        help="列出每个真人玩家号下的单位 (所有者+坐标, 地图物件自动归并)",
+    )
     args = ap.parse_args(argv)
     if args.test_image:
         templates, names = build_templates(args.pack, verbose=True)
@@ -853,7 +877,18 @@ def main(argv=None):
         args.save_snapshot,
         args.load_snapshot,
         unit_query=args.unit,
+        players=args.players,
     )
+    counts = rep.get("owner_counts") or {}
+    if counts:
+        print("== 所有者分布 ==")
+        print("  " + "  ".join(f"P{o}:{n}" for o, n in sorted(counts.items())))
+        listed = rep.get("owned_units") or []
+        print(f"== 玩家单位 (数量少的玩家号, 共{len(listed)}个) ==")
+        for u in listed:
+            print(
+                f"  P{u['owner']} {u['unit']} [{u['code']}] @ ({u['x']:.0f}, {u['y']:.0f})"
+            )
     if rep.get("unit_matches"):
         for u in rep["unit_matches"]:
             print(f"匹配单位: {u['unit']} [{u['code']}]")
@@ -871,7 +906,11 @@ def main(argv=None):
                 names_txt = "、".join(f"{i['name']}" for i in u["items"])
                 print(f"  {u['unit']} [{u['code']}]: {names_txt}")
     print(json.dumps(rep, ensure_ascii=False, indent=1, default=str))
-    return 0 if rep["slots"] else 2
+    if rep["slots"]:
+        return 0
+    if args.players and rep.get("owner_counts") is not None:
+        return 0
+    return 2
 
 
 if __name__ == "__main__":

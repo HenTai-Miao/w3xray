@@ -4,7 +4,7 @@
 用法：
     uv run main.py live <地图路径> [--strategy auto|handle|chain|icons] [--test-image <截图>]
                         [--pack <资料包目录>] [--save-snapshot <目录>] [--load-snapshot <目录>]
-                        [--unit <单位名|四码>]
+                        [--unit <单位名|四码>] [--players]
 
 策略 handle = 句柄系统直读: 自动识别当前选中单位并读其背包 6 槽 + 全图带物品单位
 (需 Game.dll 版本偏移已知, 目前 1.27.0.52240 已验证)。auto 时优先尝试 handle。
@@ -43,6 +43,7 @@ _VALUE_OPTIONS = (
     "--load-snapshot",
     "--unit",
 )
+_FLAG_OPTIONS = ("--players",)
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +57,7 @@ class LiveCliOptions:
     save_snapshot: str | None = None
     load_snapshot: str | None = None
     unit_query: str | None = None
+    players: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +76,7 @@ def parse_live_cli_options(argv: Sequence[str]) -> LiveCliOptions:
     if argv and not argv[0].startswith("--"):
         map_path = argv[0]
     values: dict[str, str] = {}
+    flags: set[str] = set()
     strategy = "auto"
     index = 0 if map_path is None else 1
     while index < len(argv):
@@ -88,6 +91,12 @@ def parse_live_cli_options(argv: Sequence[str]) -> LiveCliOptions:
                 raise LiveCliOptionError(f"未知策略：{value}（可选：{valid}）")
             strategy = value
             index += 2
+            continue
+        if option in _FLAG_OPTIONS:
+            if option in flags:
+                raise LiveCliOptionError(f"参数不能重复：{option}")
+            flags.add(option)
+            index += 1
             continue
         if option not in _VALUE_OPTIONS:
             raise LiveCliOptionError(f"不支持的参数：{option}")
@@ -108,6 +117,7 @@ def parse_live_cli_options(argv: Sequence[str]) -> LiveCliOptions:
         save_snapshot=values.get("--save-snapshot"),
         load_snapshot=values.get("--load-snapshot"),
         unit_query=values.get("--unit"),
+        players="--players" in flags,
     )
 
 
@@ -157,6 +167,8 @@ def run_live_cli(options: LiveCliOptions) -> int:
         print(f"无法准备资料包：{type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
     args = ["--pack", pack_dir, "--strategy", options.strategy]
+    if options.players:
+        args += ["--players"]
     if options.test_image is not None:
         args += ["--test-image", options.test_image]
     if options.save_snapshot is not None:
