@@ -417,7 +417,7 @@ class PlayerResources:
 
     addr: int
     gold: float
-    lumber: float
+    lumber: float | None = None
     food: int | None = None
 
 
@@ -539,16 +539,17 @@ def find_auto_resource_rows(
         blk = readers[-1].read(addr, 0x10)
         if not blk:
             continue
+        lumber = None
         lumber_f = struct.unpack_from("<f", blk, 4)[0]
+        if _plausible_resource(lumber_f) and lumber_f <= 100000:
+            lumber = lumber_f
         food = None
         for fo in (8, 12):
             fv = struct.unpack_from("<f", blk, fo)[0]
             if _plausible_resource(fv) and round(fv) <= 100:
                 food = round(fv)
                 break
-        if not _plausible_resource(lumber_f) or lumber_f > 100000:
-            continue
-        rows.append(PlayerResources(addr, v_final, lumber_f, food))
+        rows.append(PlayerResources(addr, v_final, lumber, food))
     rows.sort(key=lambda r: r.addr)
     return rows
 
