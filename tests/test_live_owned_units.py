@@ -16,6 +16,52 @@ from w3xtool.live_handle_chain import (
     salvage_big_owner_units,
     summarize_owners,
 )
+from w3xtool.live_handle_chain import (
+    PlayerResources,
+    format_player_rows,
+    owner_slot_codes,
+    parse_nick_overrides,
+)
+
+
+def test_parse_nick_overrides_maps_and_ignores_garbage():
+    assert parse_nick_overrides("1=飞信对信,2=大白海岸,3=萌新") == {
+        0: "飞信对信",
+        1: "大白海岸",
+        2: "萌新",
+    }
+    assert parse_nick_overrides("x, 0=坏 , 13=超界,=空") == {}
+    assert parse_nick_overrides(None) == {}
+    assert parse_nick_overrides("") == {}
+
+
+def test_format_player_rows_nick_first_and_multi_hero():
+    rows = [
+        PlayerResources(0x1, 100.0, 5.0, 5, 5),
+        PlayerResources(0x2, 200.0, None, 5, 5),
+        PlayerResources(0x3, 300.0, 1.0, 5, 5),
+        PlayerResources(0x4, None, None, 0, 0),  # 空槽
+    ]
+    slot_codes = {
+        1: {"O001": 7, "n000": 40},  # 多英雄/召唤: 英雄型优先
+        2: {"O002": 1, "H01L": 1},  # 双英雄用 · 连接
+    }
+    unit_names = {b"O001": "云玎", b"O002": "牛母", b"H01L": "凛冬"}
+    lines = format_player_rows(rows, slot_codes, unit_names, 2, {2: "萌新"})
+    assert lines == [
+        "玩家1(无英雄): 金100 木5 人口5",
+        "玩家2(云玎): 金200 木- 人口5",
+        "玩家3(萌新): 金300 木1 人口5  <-- 你",
+    ]
+
+
+def test_owner_slot_codes_counts_by_slot():
+    units = [
+        OwnedUnit(0x10, "O001", 1, 1.0, 2.0),
+        OwnedUnit(0x14, "O001", 1, 3.0, 4.0),
+        OwnedUnit(0x18, "n000", 5, 0.0, 0.0),
+    ]
+    assert owner_slot_codes(units) == {1: {"O001": 2}, 5: {"n000": 1}}
 
 
 def _reader_with_unit(owner: int, x: float, y: float) -> MemoryReader:

@@ -632,6 +632,8 @@ class _LiveReport(TypedDict):
     owner_counts: "dict[int, int] | None"
     owned_units: "list[dict[str, object]] | None"
     resources: "list[dict[str, object]] | None"
+    player_rows: "list[str] | None"
+    nick_raw: "str | None"
 
 
 def _parse_resources_arg(parts):
@@ -657,6 +659,7 @@ def read_live(
     unit_query=None,
     players=False,
     resources=None,
+    nick=None,
 ):
     """resources: (金币, 木材) 元组为报数校准; "auto" 为自动差分 (免报数)。"""
     report: _LiveReport = {
@@ -670,6 +673,8 @@ def read_live(
         "owner_counts": None,
         "owned_units": None,
         "resources": None,
+        "player_rows": None,
+        "nick_raw": nick,
     }
     ver: dict[str, object] | None = None
     h = 0
@@ -789,6 +794,7 @@ def read_live(
 
             units = hc.walk_item_units(reader, system, offsets)
             report["units"] = [describe(u) for u in units]
+            owned: list[Any] | None = None
             if players:
                 owned = hc.walk_owned_units(reader, system, offsets)
                 counts, listed = hc.summarize_owners(owned)
@@ -842,6 +848,31 @@ def read_live(
                     }
                     for r in found
                 ]
+                # 按玩家号的权威链直读 + 槽位英雄/昵称标注 (每次运行现取,
+                # 换局自动跟随新结构)。昵称来自 --nick 大厅号=名字。
+                try:
+                    chain_rows = hc.read_player_resources_chain(
+                        reader.u32, dll_base, str(ver.get("version"))
+                    )
+                    if chain_rows:
+                        me_idx = hc.read_local_player_index(reader, dll_base, offsets)
+                        pool = (
+                            owned
+                            if owned is not None
+                            else hc.walk_owned_units(reader, system, offsets)
+                        )
+                        nicks = hc.parse_nick_overrides(report.get("nick_raw"))
+                        lines = hc.format_player_rows(
+                            chain_rows,
+                            hc.owner_slot_codes(pool),
+                            unit_names,
+                            me_idx,
+                            nicks,
+                        )
+                        if lines:
+                            report["player_rows"] = lines
+                except Exception as ex:  # noqa: BLE001 - 标注失败不影响资源主体
+                    report["notes"].append(f"按玩家号标注失败: {ex}")
             if unit_query:
                 pool = list(report["units"])
                 sel = hc.selected_unit(reader, system, offsets, dll_base)
@@ -955,6 +986,11 @@ def main(argv=None):
         metavar=("金币|auto", "木材"),
         help="读取全部玩家资源: 报数校准 (--resources 169 808) 或自动差分 (--resources auto)",
     )
+    ap.add_argument(
+        "--nick",
+        metavar="大厅号=名字",
+        help="按玩家号标注时的真实玩家名覆盖, 如 --nick 「1=飞信对信,2=大白海岸,3=萌新」",
+    )
     args = ap.parse_args(argv)
     if args.test_image:
         templates, names = build_templates(args.pack, verbose=True)
@@ -976,6 +1012,7 @@ def main(argv=None):
         unit_query=args.unit,
         players=args.players or bool(args.resources),
         resources=_parse_resources_arg(args.resources),
+        nick=args.nick,
     )
     counts = rep.get("owner_counts") or {}
     if counts:
@@ -989,6 +1026,11 @@ def main(argv=None):
             gold = r2["gold"] if r2.get("gold") is not None else "?"
             lumber = r2["lumber"] if r2.get("lumber") is not None else "?"
             print(f"  {r2['addr']}: 金{gold} 木{lumber}{food}")
+    prows = rep.get("player_rows")
+    if prows:
+        print("== 按玩家号 (权威链直读, 玩家号=大厅号) ==")
+        for line in prows:
+            print("  " + line)
         if not res:
             print("  未定位到资源结构; 确认金币/木材数值没变后重试")
         listed = rep.get("owned_units") or []

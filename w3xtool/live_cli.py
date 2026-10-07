@@ -42,6 +42,7 @@ _VALUE_OPTIONS = (
     "--save-snapshot",
     "--load-snapshot",
     "--unit",
+    "--nick",
 )
 _FLAG_OPTIONS = ("--players",)
 _TWO_VALUE_OPTIONS = ("--resources",)
@@ -60,6 +61,7 @@ class LiveCliOptions:
     unit_query: str | None = None
     players: bool = False
     resources: tuple[str, str] | None = None
+    nick: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,6 +151,7 @@ def parse_live_cli_options(argv: Sequence[str]) -> LiveCliOptions:
         unit_query=values.get("--unit"),
         players="--players" in flags,
         resources=resources,
+        nick=values.get("--nick"),
     )
 
 
@@ -213,6 +216,8 @@ def run_live_cli(options: LiveCliOptions) -> int:
         args += ["--load-snapshot", options.load_snapshot]
     if options.unit_query is not None:
         args += ["--unit", options.unit_query]
+    if options.nick is not None:
+        args += ["--nick", options.nick]
     try:
         return live_main(args)
     except Exception as exc:  # noqa: BLE001 - 读取失败不抛堆栈给玩家。

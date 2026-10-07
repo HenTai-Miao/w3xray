@@ -22,6 +22,9 @@ uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --r
 
 # 自动差分 (免报数, 连拍3快照找上涨金币列; 打钱时效果最好)
 uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --resources auto
+
+# 按玩家号标注真实玩家名 (大厅号=名字, 逗号分隔; 不传则用该玩家号主英雄名)
+uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --resources auto --nick "1=大白海岸,2=飞信对信,3=萌新"
 ```
 
 - 不带 `--unit`: 自动识别**当前选中单位**并读其 6 格背包, 同时列出全图带物品单位
@@ -41,6 +44,13 @@ uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --r
   (引擎为每个玩家/缓存维护同构 float 结构); 一次校准当场列出所有玩家的金/木/人口。
   传值后立刻执行, 避免资源变动导致定位失败 (内部 float 带小数, 匹配用 +/-1 容差;
   小型资源结构可能被引擎堆搬移, 隔局地址会变); 人口为邻近偏移的尽力识别 (可能为空)。
+- `--resources` 同时输出「按玩家号」权威链直读段: `玩家N(名字): 金X 木Y 人口Z  <-- 你`。
+  权威链 (`read_player_resources_chain`) 按槽位给出 P1..P12, 本地玩家号来自
+  vmctx (0 起始内存槽, 大厅显示号=槽位+1, 每次运行现取, 换局自动跟随新结构)。
+  名字优先取 `--nick 大厅号=名字` (引擎侧不保存平台玩家名——KK 只在聊天/事件
+  缓冲留 Unicode 副本且不绑定槽位, 真名需人工指定一次); 未指定时取该槽位
+  英雄型四码 (O/E/H/U+数字) 数量最多的前两个用 · 连接 (多英雄可辨);
+  金/木为 None 的空槽跳过。
 - 需要管理员权限 (SeDebugPrivilege + OpenProcess); 游戏没开则报告"war3 未运行"。
 
 ## 输出含义

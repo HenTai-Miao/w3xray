@@ -678,6 +678,86 @@ def rank_auto_rows(
     return ranked[:cap], total
 
 
+def read_local_player_index(
+    reader: MemoryReader, dll_base: int, o: LiveHandleOffsets
+) -> int | None:
+    """本地玩家槽位号 (0 起始内存槽; 大厅显示 = 槽位+1)。读不到返回 None。"""
+    vmctx = reader.u32(dll_base + o.vmctx_global_rva)
+    if not vmctx:
+        return None
+    raw = reader.read(vmctx + o.player_idx_off, 2)
+    if not raw:
+        return None
+    return struct.unpack("<H", raw)[0]
+
+
+def owner_slot_codes(units: list[OwnedUnit]) -> dict[int, dict[str, int]]:
+    """按玩家槽位汇总单位四码计数: {槽位: {四码: 数量}}。
+
+    输入用 walk_owned_units 的全量结果, 不做二次扫描。
+    """
+    out: dict[int, dict[str, int]] = {}
+    for u in units:
+        codes = out.setdefault(u.owner, {})
+        codes[u.code] = codes.get(u.code, 0) + 1
+    return out
+
+
+def parse_nick_overrides(raw):
+    """--nick "1=名字A,2=名字B" (大厅玩家号) -> {0起始槽位: 名字}。
+
+    引擎侧不保存平台玩家名 (KK 只在聊天/事件缓冲留 Unicode 副本, 不绑定
+    槽位), 真名由调用者按大厅号指定一次; 解析容错: 逗号分隔, 忽略坏段。
+    """
+    if not raw:
+        return {}
+    out: dict[int, str] = {}
+    for part in str(raw).split(","):
+        part = part.strip()
+        if not part or "=" not in part:
+            continue
+        num, _, name = part.partition("=")
+        num, name = num.strip(), name.strip()
+        if num.isdigit() and 1 <= int(num) <= 12 and name:
+            out[int(num) - 1] = name
+    return out
+
+
+def format_player_rows(
+    rows: list[PlayerResources],
+    slot_codes: dict[int, dict[str, int]],
+    unit_names: dict[bytes, str],
+    local_index: int | None,
+    nicks: dict[int, str] | None = None,
+) -> list[str]:
+    """把权威链的按槽资源行格式化为 '玩家N(名字): 金X 木Y 人口Z  <-- 你'。
+
+    槽位为 0 起始内存槽, 显示号 = 槽位+1 (大厅玩家号);
+    名字优先取 nicks (--nick 指定的真实玩家名, 大厅号-1 为键),
+    否则取该槽位英雄型四码 (O/E/H/U + 数字) 中数量最多的前两个用 · 连接,
+    金币为空且无英雄的空槽位跳过。名字查不到时回退四码。
+    """
+    lines: list[str] = []
+    for i, r in enumerate(rows[:12]):
+        codes = slot_codes.get(i) or {}
+        heroes = [
+            c for c in codes if len(c) == 4 and c[0] in "OEHU" and c[1:].isdigit()
+        ]
+        heroes.sort(key=lambda c: -codes[c])
+        hero_names = [unit_names.get(c.encode("latin-1"), c) for c in heroes[:2]]
+        label = (nicks or {}).get(i) or (
+            "·".join(hero_names) if hero_names else "无英雄"
+        )
+        gold = f"{r.gold:.0f}" if r.gold is not None else "-"
+        lumber = f"{r.lumber:.0f}" if r.lumber is not None else "-"
+        food = f"{r.food}" if r.food is not None else "-"
+        if r.gold is None and not heroes:
+            continue  # 空槽位
+        mark = "  <-- 你" if local_index == i else ""
+        lines.append(f"玩家{i + 1}({label}): 金{gold} 木{lumber} 人口{food}{mark}")
+    return lines
+
+
 def match_unit_entries(units, query):
     """按单位名子串或四码 (大小写不敏感) 过滤 handle 策略产出的单位条目。
 
