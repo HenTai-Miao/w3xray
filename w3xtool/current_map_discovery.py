@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from itertools import chain, islice
 import os
 from pathlib import Path, PureWindowsPath
@@ -14,7 +15,7 @@ from typing import Final
 
 from . import current_map_models as models
 from . import current_map_process
-from .current_map_inuse_probe import probe_in_use_files
+from .current_map_inuse_probe import MAX_PROBED_PATHS, probe_in_use_files
 from .current_map_process import OpenMapProbeReport, ProcessProbeReport
 from .gameconfig import parse_game_configuration
 
@@ -31,7 +32,7 @@ _LOG_RELPATH: Final = ("Documents", "Warcraft III", "Logs", "War3Log.txt")
 _MAX_LOG_BYTES: Final = 1_048_576
 _OPENING_MAP_MARKER: Final = re.compile(r"opening map - ", re.IGNORECASE)
 _MAP_SUFFIXES: Final = frozenset({".w3x", ".w3m", ".w3n"})
-_MAX_PROBED_HINTS: Final = 16
+_MAX_PROBED_ROOT_MAPS: Final = 512
 _HINT_EVIDENCE_KINDS: Final = frozenset(
     {
         models.EvidenceKind.RECENT_CACHE,
@@ -44,6 +45,20 @@ _HINT_EVIDENCE_KINDS: Final = frozenset(
 type _ProcessProvider = Callable[[], ProcessProbeReport]
 type _OpenFileProvider = Callable[[Iterable[models.GameProcess]], OpenMapProbeReport]
 type _InUseProvider = Callable[[Iterable[Path]], tuple[Path, ...]]
+
+
+@dataclass(frozen=True, slots=True)
+class _RootScan:
+    """Bounded outcome of one map-root directory sweep.
+
+    ``evidence`` keeps only recency-windowed hints; ``map_files`` records
+    every regular map file seen during the same bounded walk so in-use
+    probing can also cover long-lived local maps whose modification time
+    predates the hint window.
+    """
+
+    evidence: tuple[models.MapEvidence, ...]
+    map_files: tuple[tuple[Path, int], ...]
 
 
 def discover_default_map_roots(extra_roots: Iterable[Path] = ()) -> tuple[Path, ...]:
@@ -90,10 +105,13 @@ def locate_current_map(
             item for item in direct_evidence if _is_regular_map_file(item.path)
         )
         clock_ns = time.time_ns() if now_ns is None else now_ns
-        evidence.extend(_scan_hint_evidence(roots, clock_ns))
+        scan = _scan_hint_evidence(roots, clock_ns)
+        evidence.extend(scan.evidence)
         evidence.extend(_log_hint_evidence(Path.home(), roots, clock_ns))
         evidence.extend(
-            _in_use_evidence(evidence, in_use_provider or probe_in_use_files)
+            _in_use_evidence(
+                evidence, scan.map_files, in_use_provider or probe_in_use_files
+            )
         )
         direct_probe_available = open_report.available
     else:
@@ -106,14 +124,44 @@ def locate_current_map(
 
 def _in_use_evidence(
     evidence: list[models.MapEvidence],
+    root_map_files: tuple[tuple[Path, int], ...],
     provider: _InUseProvider,
 ) -> tuple[models.MapEvidence, ...]:
-    """Probe bounded hint candidates newest-first for live file handles."""
-    hints = [item for item in evidence if item.kind in _HINT_EVIDENCE_KINDS]
-    hints.sort(key=lambda item: item.mtime_ns or 0, reverse=True)
-    hits = provider([item.path for item in hints[:_MAX_PROBED_HINTS]])
+    """Probe bounded map candidates newest-first for live file handles.
+
+    Recency hints keep their head start, but every map file discovered
+    during the bounded root walk joins the queue: a long-lived local map
+    that was simply re-hosted carries an old modification time and would
+    otherwise never be probed. Candidates are probed in provider-sized
+    batches and never exceed ``_MAX_PROBED_ROOT_MAPS`` paths.
+    """
+    candidates: dict[str, tuple[Path, int]] = {}
+    for item in evidence:
+        if item.kind not in _HINT_EVIDENCE_KINDS:
+            continue
+        candidates.setdefault(
+            os.path.normcase(os.fspath(item.path)), (item.path, item.mtime_ns or 0)
+        )
+    for path, mtime_ns in root_map_files:
+        candidates.setdefault(os.path.normcase(os.fspath(path)), (path, mtime_ns))
+    ordered = sorted(candidates.values(), key=lambda item: (-item[1], str(item[0])))
+    paths = [item[0] for item in ordered[:_MAX_PROBED_ROOT_MAPS]]
+    hits: list[Path] = []
+    for start in range(0, len(paths), MAX_PROBED_PATHS):
+        hits.extend(provider(paths[start : start + MAX_PROBED_PATHS]))
     return tuple(
         models.MapEvidence(path, models.EvidenceKind.LIVE_FILE) for path in hits
+    )
+
+
+def _windows_classic_map_roots() -> tuple[Path, ...]:
+    """Fixed classic-install map roots on the Windows system drive."""
+    system_root = os.environ.get("SystemRoot", r"C:\Windows")
+    drive = PureWindowsPath(system_root).drive or "C:"
+    base = PureWindowsPath(f"{drive}\\") / "Program Files (x86)" / "Warcraft III"
+    return (
+        Path(base / "Maps"),
+        Path(base / "Warcraft III Frozen Throne" / "Maps"),
     )
 
 
@@ -121,6 +169,7 @@ def _known_map_roots(home: Path) -> tuple[Path, ...]:
     user = home.name
     return (
         home / "Documents" / "Warcraft III" / "Maps",
+        *_windows_classic_map_roots(),
         home / "Library/Application Support/Blizzard/Warcraft III/Maps",
         home
         / "Library/Application Support/CrossOver/Bottles/Battle.net/drive_c"
@@ -134,11 +183,10 @@ def _known_map_roots(home: Path) -> tuple[Path, ...]:
     )
 
 
-def _scan_hint_evidence(
-    roots: tuple[Path, ...], now_ns: int
-) -> tuple[models.MapEvidence, ...]:
+def _scan_hint_evidence(roots: tuple[Path, ...], now_ns: int) -> _RootScan:
     pending = deque((root, 0) for root in roots)
     evidence: set[models.MapEvidence] = set()
+    map_files: list[tuple[Path, int]] = []
     seen_entries = 0
     parsed_configs = 0
     while pending and seen_entries < _MAX_DIRECTORY_ENTRIES:
@@ -160,24 +208,24 @@ def _scan_hint_evidence(
                     if depth < _MAX_DEPTH:
                         pending.append((Path(entry.path), depth + 1))
                     continue
-                if not stat.S_ISREG(mode) or not _is_recent(
-                    metadata.st_mtime_ns, now_ns
-                ):
+                if not stat.S_ISREG(mode):
                     continue
                 path = Path(entry.path)
                 suffix = path.suffix.casefold()
                 if suffix in _MAP_SUFFIXES:
-                    evidence.add(
-                        models.MapEvidence(
-                            path,
-                            models.EvidenceKind.RECENT_CACHE,
-                            mtime_ns=metadata.st_mtime_ns,
+                    map_files.append((path, metadata.st_mtime_ns))
+                    if _is_recent(metadata.st_mtime_ns, now_ns):
+                        evidence.add(
+                            models.MapEvidence(
+                                path,
+                                models.EvidenceKind.RECENT_CACHE,
+                                mtime_ns=metadata.st_mtime_ns,
+                            )
                         )
-                    )
                 elif suffix == ".wgc" and parsed_configs < _MAX_WGC_FILES:
                     parsed_configs += 1
                     evidence.update(_wgc_reference_evidence(path, roots, now_ns))
-    return tuple(evidence)
+    return _RootScan(tuple(evidence), tuple(map_files))
 
 
 def _log_hint_evidence(

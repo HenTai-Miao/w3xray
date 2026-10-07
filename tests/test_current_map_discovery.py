@@ -94,6 +94,9 @@ def _locate(
     isolated_home = root / ".isolated-home" if log_home is None else log_home
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(Path, "home", staticmethod(lambda: isolated_home))
+        # Keep orchestration tests hermetic: the host machine's real classic
+        # install directories must not leak map files into isolated roots.
+        patch.setattr(discovery, "_windows_classic_map_roots", lambda: ())
         return locate_current_map(
             (root,),
             now_ns,
@@ -160,6 +163,37 @@ def test_known_roots_include_fixed_user_volume_pattern_without_volume_scan(
 
     # Then: the user's legacy Warcraft Maps location is an exact candidate.
     assert roots == (volume_root,)
+
+
+def test_known_roots_include_windows_classic_install_directories(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: a home without Warcraft directories and a Windows system drive
+    # carrying the classic install layout.
+    home = Path("/Users/demo")
+    classic = Path("C:\\Program Files (x86)\\Warcraft III\\Maps")
+    classic_tft = Path(
+        "C:\\Program Files (x86)\\Warcraft III\\Warcraft III Frozen Throne\\Maps"
+    )
+
+    def fake_home() -> Path:
+        return home
+
+    def fake_lstat(path: Path) -> os.stat_result:
+        if path in (classic, classic_tft):
+            return os.stat_result((stat.S_IFDIR, 0, 0, 0, 0, 0, 0, 0, 0, 0))
+        raise FileNotFoundError(path)
+
+    monkeypatch.setenv("SystemRoot", "C:\\Windows")
+    monkeypatch.setattr(Path, "home", staticmethod(fake_home))
+    monkeypatch.setattr(Path, "lstat", fake_lstat)
+
+    # When: public root discovery checks its fixed candidates.
+    roots = discover_default_map_roots()
+
+    # Then: both classic-install map directories are discovered roots.
+    expected = {Path(os.path.abspath(item)) for item in (classic, classic_tft)}
+    assert expected.issubset(roots)
 
 
 def test_hint_scan_stops_after_five_nested_directories(tmp_path: Path) -> None:
@@ -443,6 +477,81 @@ def test_in_use_hint_promotes_to_the_found_map(tmp_path: Path) -> None:
         Path(os.path.normcase(newer.resolve())),
     )
     assert received and received[0][:2] == [newer, older]
+
+
+def test_stale_root_map_in_use_is_found_without_recent_hints(
+    tmp_path: Path,
+) -> None:
+    # Given: one long-lived local map whose modification time predates the
+    # recency window and whose file handle is currently held open.
+    root = tmp_path / "stale"
+    stale = root / "legacy.w3x"
+    _write_at(stale, b"m", _NOW_NS - 90 * 24 * 60 * 60 * 1_000_000_000)
+
+    def provider(paths: list[Path]) -> list[Path]:
+        return [path for path in paths if path == stale]
+
+    # When: full discovery runs with the in-use probe wired in.
+    resolution = _locate(root, in_use_provider=provider)
+
+    # Then: the stale but live map is the automatically selected current map.
+    assert resolution.status is ResolutionStatus.FOUND
+    assert tuple(item.path for item in resolution.candidates) == (
+        Path(os.path.normcase(stale.resolve())),
+    )
+
+
+def test_in_use_probe_batches_root_candidates_within_provider_cap(
+    tmp_path: Path,
+) -> None:
+    # Given: more stale root maps than a single provider call may accept.
+    root = tmp_path / "batched"
+    root.mkdir()
+    for index in range(70):
+        _write_at(
+            root / f"map-{index:04}.w3x",
+            b"m",
+            _NOW_NS - 90 * 24 * 60 * 60 * 1_000_000_000 - index,
+        )
+    sizes: list[int] = []
+
+    def provider(paths: list[Path]) -> list[Path]:
+        sizes.append(len(paths))
+        return []
+
+    # When: discovery probes every discovered root map for live handles.
+    resolution = _locate(root, in_use_provider=provider)
+
+    # Then: each provider call stays within the probe's per-call cap and
+    # together the calls cover every discovered map file.
+    assert resolution.status is ResolutionStatus.NOT_FOUND
+    assert sizes and all(size <= discovery.MAX_PROBED_PATHS for size in sizes)
+    assert sum(sizes) == 70
+
+
+def test_in_use_probe_covers_at_most_512_root_map_candidates(
+    tmp_path: Path,
+) -> None:
+    # Given: 600 stale root maps, more than the root-map probe budget.
+    root = tmp_path / "capped"
+    root.mkdir()
+    for index in range(600):
+        _write_at(
+            root / f"map-{index:04}.w3x",
+            b"m",
+            _NOW_NS - 90 * 24 * 60 * 60 * 1_000_000_000 - index,
+        )
+    probed: list[Path] = []
+
+    def provider(paths: list[Path]) -> list[Path]:
+        probed.extend(paths)
+        return []
+
+    # When: discovery probes discovered root maps for live handles.
+    _locate(root, in_use_provider=provider)
+
+    # Then: probing never exceeds the documented root-map budget.
+    assert len(probed) == 512
 
 
 def test_log_hint_supplies_last_opening_map_as_suggestion(tmp_path: Path) -> None:
