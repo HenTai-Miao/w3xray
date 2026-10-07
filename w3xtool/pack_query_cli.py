@@ -80,10 +80,19 @@ def load_item_bases(pack_dir: Path) -> dict[str, str]:
 
 
 def load_item_gold_overrides(pack_dir: Path) -> dict[str, str]:
-    """地图内逐物品金币覆写：对象字段.tsv 中字段列为 igol 的行。"""
+    """地图内逐物品金币覆写：对象字段.tsv 中的金币字段行。
+
+    字段键兼容 igol（w3u 对象导出）与 goldcost（SLK 数据导出，
+    如《西方世界的劫难》系列地图），两者同为物品金币成本字段。
+    """
     out: dict[str, str] = {}
     for r in _read_rows(pack_dir, "对象字段.tsv"):
-        if len(r) > 5 and r[0] == "物品" and len(r[1]) == 4 and r[3] == "igol":
+        if (
+            len(r) > 5
+            and r[0] == "物品"
+            and len(r[1]) == 4
+            and r[3].lower() in ("igol", "goldcost")
+        ):
             out[r[1]] = r[5].strip()
     return out
 

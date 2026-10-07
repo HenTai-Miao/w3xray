@@ -53,6 +53,7 @@ def pack(tmp_path):
     (tmp_path / "对象字段.tsv").write_text(
         "物品\tI0CC\t攻击之爪+15样\tigol\t黄金\t123\twar3map.w3t\n"
         "物品\tI0AA\t冰晶\tbase:金币\t金币\t999\tbase:I0AA\n"
+        + "物品\tI0BB\t雪白的熊掌\tgoldcost\t金币\t4500\twar3map *Data.slk\n"
         "单位\th0BB\t铁匠铺\tusei\t售出的物品\t冰晶(I0AA), I0CC\twar3map.w3u\n",
         encoding="utf-8",
     )
@@ -136,7 +137,7 @@ def test_run_cli_price_query(pack, capsys):
 
 def test_load_item_gold_overrides(pack):
     ov = load_item_gold_overrides(pack)
-    assert ov == {"I0CC": "123"}
+    assert ov == {"I0CC": "123", "I0BB": "4500"}
 
 
 def test_price_falls_back_to_base_without_override(pack, capsys):
@@ -205,3 +206,10 @@ def test_run_cli_missing_pack(tmp_path, capsys):
         parse_pack_query_cli_options([str(tmp_path / "x"), "item", "a"])
     )
     assert rc == 2
+
+
+def test_load_item_gold_overrides_accepts_goldcost(pack):
+    """SLK 系地图的金币字段键是 goldcost，必须与 igol 一样被识别为地图价。"""
+    o = load_item_gold_overrides(pack)
+    assert o.get("I0CC") == "123"  # igol 路径保持不变
+    assert o.get("I0BB") == "4500"  # goldcost 路径（西方世界的劫难系）
