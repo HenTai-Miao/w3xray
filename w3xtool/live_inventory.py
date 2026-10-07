@@ -769,10 +769,13 @@ def read_live(
             unit_names = load_names(pack_dir, "单位")
 
             def describe(inv):
+                px, py = hc.read_unit_pos(reader, inv.unit_addr)
                 return {
                     "unit": unit_names.get(inv.code.encode("latin-1"), "?"),
                     "code": inv.code,
                     "addr": inv.unit_addr,
+                    "x": round(px, 1),
+                    "y": round(py, 1),
                     "items": [
                         {
                             "slot": i.slot,
@@ -789,6 +792,15 @@ def read_live(
             if players:
                 owned = hc.walk_owned_units(reader, system, offsets)
                 counts, listed = hc.summarize_owners(owned)
+                item_entries = []
+                for u in units:
+                    owner = hc.read_unit_owner(reader, u.unit_addr)
+                    if 0 <= owner <= 15:
+                        ux, uy = hc.read_unit_pos(reader, u.unit_addr)
+                        item_entries.append(
+                            hc.OwnedUnit(u.unit_addr, u.code, owner, ux, uy)
+                        )
+                rescued = hc.salvage_big_owner_units(counts, listed, item_entries)
                 report["owner_counts"] = counts
                 report["owned_units"] = [
                     {
@@ -798,8 +810,12 @@ def read_live(
                         "x": round(u.x, 1),
                         "y": round(u.y, 1),
                     }
-                    for u in listed
+                    for u in listed + rescued
                 ]
+                if rescued:
+                    report["notes"].append(
+                        f"大玩家号槽位过滤后, 从带物品单位打捞 {len(rescued)} 个条目"
+                    )
             if resources is not None:
                 if resources == "auto":
                     import time as _time
@@ -975,12 +991,14 @@ def main(argv=None):
             )
     if rep.get("unit_matches"):
         for u in rep["unit_matches"]:
-            print(f"匹配单位: {u['unit']} [{u['code']}]")
+            pos = f" @ ({u['x']:.0f}, {u['y']:.0f})" if u.get("x") is not None else ""
+            print(f"匹配单位: {u['unit']} [{u['code']}]{pos}")
             for it in u["items"]:
                 print(f"  槽{it['slot']}: {it['name']} [{it['code']}]")
     elif rep.get("strategy_used") == "handle" and rep.get("selected_unit"):
         sel = rep["selected_unit"]
-        print(f"当前选中: {sel['unit']} [{sel['code']}]")
+        pos = f" @ ({sel['x']:.0f}, {sel['y']:.0f})" if sel.get("x") is not None else ""
+        print(f"当前选中: {sel['unit']} [{sel['code']}]{pos}")
         for it in sel["items"]:
             print(f"  槽{it['slot']}: {it['name']} [{it['code']}]")
         others = [u for u in rep.get("units", []) if u != sel]
@@ -988,7 +1006,10 @@ def main(argv=None):
             print("其余带物品单位:")
             for u in others:
                 names_txt = "、".join(f"{i['name']}" for i in u["items"])
-                print(f"  {u['unit']} [{u['code']}]: {names_txt}")
+                upos = (
+                    f" @ ({u['x']:.0f}, {u['y']:.0f})" if u.get("x") is not None else ""
+                )
+                print(f"  {u['unit']} [{u['code']}]{upos}: {names_txt}")
     print(json.dumps(rep, ensure_ascii=False, indent=1, default=str))
     if rep["slots"]:
         return 0

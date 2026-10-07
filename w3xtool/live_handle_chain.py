@@ -422,6 +422,29 @@ def summarize_owners(
     return counts, listed
 
 
+def salvage_big_owner_units(
+    counts: dict[int, int],
+    listed: list[OwnedUnit],
+    item_entries: list[OwnedUnit],
+    list_cap: int = 8,
+) -> list[OwnedUnit]:
+    """从带物品单位中打捞被 list_cap 过滤掉的大玩家号条目。
+
+    单一玩家号挂上千生成物件的地图会让 summarize_owners 把该槽位清空,
+    但槽位里的真人英雄/坐骑/商店恰恰是关注对象; 带物品单位数量少且
+    几乎都是有效交互对象, 用它们补录大槽位, 按地址去重后排序返回。
+    """
+    small = {owner for owner, n in counts.items() if n <= list_cap}
+    listed_addrs = {u.addr for u in listed}
+    rescued: list[OwnedUnit] = []
+    for u in item_entries:
+        if u.owner in small or u.addr in listed_addrs:
+            continue
+        rescued.append(u)
+    rescued.sort(key=lambda u: (u.owner, u.code, round(u.x), round(u.y)))
+    return rescued
+
+
 @dataclass(frozen=True, slots=True)
 class PlayerResources:
     """一个玩家资源结构: 结构地址 + 金币/木材 (+人口尽力识别)。"""
