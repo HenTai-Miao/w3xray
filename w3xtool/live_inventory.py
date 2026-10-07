@@ -699,6 +699,35 @@ def read_live(
                 + (" [已知偏移表]" if ver.get("known_offsets") else "")
             )
         max_addr = 0x7FFFFFFEFFFF if ver["arch"] == "x64" else 0x7FFF0000
+        if resources is not None and not players and not unit_query:
+            import ctypes as _ct
+            import struct as _st
+
+            k = k32
+
+            def _ru32(a):
+                buf = _ct.create_string_buffer(4)
+                got = _ct.c_size_t()
+                if (
+                    k.ReadProcessMemory(h, _ct.c_void_p(a), buf, 4, _ct.byref(got))
+                    and got.value == 4
+                ):
+                    return _st.unpack("<I", buf.raw)[0]
+                return None
+
+            import importlib as _il
+
+            _hc0 = _il.import_module("w3xtool.live_handle_chain")
+            gd0 = ver.get("game_dll")
+            dll0 = gd0.get("base", 0) if isinstance(gd0, dict) else 0
+            chain_rows = _hc0.read_player_resources_chain(
+                _ru32, dll0, str(ver.get("version") or "")
+            )
+            if chain_rows:
+                report["resources"] = chain_rows
+                if verbose:
+                    print("权威链直读全队资源完成 (免扫描免报数)")
+                return report
         regions, total = snapshot(h, max_addr)
         if verbose:
             print(f"快照 {len(regions)} 区 {total // 1048576}MB")

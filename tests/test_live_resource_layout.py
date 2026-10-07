@@ -10,6 +10,7 @@ from w3xtool.live_handle_chain import (
     PlayerResources,
     find_auto_resource_rows,
     find_resource_layout,
+    read_player_resources_chain,
 )
 
 
@@ -58,6 +59,8 @@ def test_find_resource_layout_matches_fractional_internal():
     reader = MemoryReader([(0x20000000, bytes(blob))])
     found = find_resource_layout(reader, 7775, 113)
     assert len(found) == 1
+    assert found[0].gold is not None
+    assert found[0].lumber is not None
     assert abs(found[0].gold - 7774.63) < 0.01
     assert abs(found[0].lumber - 113.28) < 0.01
     assert found[0].food == 3
@@ -103,6 +106,8 @@ def test_find_auto_resource_rows_rising_gold():
     rows = find_auto_resource_rows([r1, r2])
     assert len(rows) == 1
     row = rows[0]
+    assert row.gold is not None
+    assert row.lumber is not None
     assert abs(row.gold - 7801.4) < 0.01
     assert abs(row.lumber - 113.5) < 0.01
     assert row.food == 5
@@ -116,3 +121,39 @@ def test_find_auto_resource_rows_ignores_falling():
     r1 = MemoryReader([(0x20000000, bytes(blob1))])
     r2 = MemoryReader([(0x20000000, bytes(blob2))])
     assert find_auto_resource_rows([r1, r2]) == []
+
+
+def test_read_player_resources_chain_synthetic():
+    # 合成链: dll -> thisgame -> gmem -> raw -> 12 玩家块 (金 x10 / 木 x10 / 人口)。
+    mem = {}
+
+    def poke(addr, value):
+        mem[addr] = value & 0xFFFFFFFF
+
+    dll = 0x787B0000
+    this_game, gmem, raw = 0x205800D0, 0x264690D8, 0x274C0098
+    poke(dll + 0xBE40A8, this_game)
+    poke(this_game + 0xC, gmem)
+    poke(gmem + 0xC, raw)
+    upper = raw & 0xFFFF0000
+    poke(upper + 0x190, 9000)  # P1 金 900.0
+    poke(upper + 0x190 + 0x80, 200)  # P1 木 20.0
+    poke(upper + 0x190 + 0x200, 1)  # P1 人口 1
+    poke(upper + 0x190 + 0x180, 10)  # P1 人口上限 10
+    poke(upper + 0x1410, 8005)  # P2 金 800.5 (小数!)
+
+    def read_u32(addr):
+        return mem.get(addr)
+
+    rows = read_player_resources_chain(read_u32, dll, "1.27.0.52240")
+    assert rows is not None and len(rows) == 12
+    assert rows[0].gold == 900.0
+    assert rows[0].lumber == 20.0
+    assert rows[0].food == 1
+    assert rows[0].food_cap == 10
+    assert rows[1].gold == 800.5
+    assert rows[2].gold is None
+
+
+def test_read_player_resources_chain_unknown_version():
+    assert read_player_resources_chain(lambda a: 0, 0x1000, "9.9.9") is None

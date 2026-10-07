@@ -48,6 +48,7 @@ __all__ = (
     "summarize_owners",
     "find_resource_layout",
     "find_auto_resource_rows",
+    "read_player_resources_chain",
     "selected_unit",
     "match_unit_entries",
     "classic_template",
@@ -416,9 +417,85 @@ class PlayerResources:
     """一个玩家资源结构: 结构地址 + 金币/木材 (+人口尽力识别)。"""
 
     addr: int
-    gold: float
+    gold: float | None
     lumber: float | None = None
     food: int | None = None
+    food_cap: int | None = None
+
+
+# 权威资源链 (来源: Still4/War3Trainer GameContext/GameTrainer, 1.20~1.28 全版本表;
+# 1.27.0.52240 在 KK 经典平台实测验证)。金/木内部为 x10 整数 (9639 = 963.9 金)。
+GAME_STRUCT_RVAS: dict[str, int] = {
+    "1.20.4.6074": 0x87C744,
+    "1.21.0.6263": 0x87D7BC,
+    "1.21.1.6300": 0x87D7BC,
+    "1.22.0.6328": 0xAA4178,
+    "1.23.0.6352": 0xABCFC8,
+    "1.24.0.6372": 0xACE5E0,
+    "1.24.1.6374": 0xACE5E0,
+    "1.24.2.6378": 0xACE5E0,
+    "1.24.3.6384": 0xACE5E0,
+    "1.24.4.6387": 0xACE5E0,
+    "1.25.1.6397": 0xAB7788,
+    "1.26.0.6401": 0xAB7788,
+    "1.27.0.52240": 0xBE40A8,
+    "1.28.0.7205": 0xD72F58,
+    "1.28.5.7680": 0xD30448,
+}
+
+# 12 个玩家资源块相对 (游戏内存基址 & 0xFFFF0000) 的偏移。
+PLAYER_RESOURCE_BASES = (
+    0x190,
+    0x1410,
+    0x26A0,
+    0x3920,
+    0x4BB0,
+    0x5E30,
+    0x70C0,
+    0x8350,
+    0x95D0,
+    0xA860,
+    0xBAE0,
+    0xCD70,
+)
+
+
+def _to_signed(x):
+    if x is None:
+        return None
+    return x - 0x100000000 if x >= 0x80000000 else x
+
+
+def read_player_resources_chain(read_u32, dll_base: int, version: str):
+    """权威指针链直读全队资源 (免扫描免报数)。
+
+    read_u32: 回调 (地址)->int|None (ReadProcessMemory 或快照读取)。
+    返回 PlayerResources 列表 (P1..P12, 金/木为内部值/10, 人口尽力)。
+    """
+    rva = GAME_STRUCT_RVAS.get(str(version or ""))
+    if not rva or not dll_base:
+        return None
+    this_game = read_u32(dll_base + rva)
+    if not this_game:
+        return None
+    game_mem = read_u32(this_game + 0xC)
+    if not game_mem or game_mem == 0xFFFFFFFF:
+        return None
+    raw = read_u32(game_mem + 0xC)
+    if not raw:
+        return None
+    upper = raw & 0xFFFF0000
+    rows: list[PlayerResources] = []
+    for base in PLAYER_RESOURCE_BASES:
+        gold_i = _to_signed(read_u32(upper + base))
+        lumber_i = _to_signed(read_u32(upper + base + 0x80))
+        food_i = _to_signed(read_u32(upper + base + 0x200))
+        cap_i = _to_signed(read_u32(upper + base + 0x180))
+        gold = gold_i / 10 if gold_i and 0 < gold_i < 40_000_000 else None
+        lumber = lumber_i / 10 if lumber_i and 0 < lumber_i < 40_000_000 else None
+        food = food_i if food_i is not None and 0 <= food_i < 300 else None
+        rows.append(PlayerResources(upper + base, gold, lumber, food, cap_i))
+    return rows
 
 
 def _plausible_resource(f: float) -> bool:
