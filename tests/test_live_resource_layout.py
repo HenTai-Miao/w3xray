@@ -10,6 +10,7 @@ from w3xtool.live_handle_chain import (
     PlayerResources,
     find_auto_resource_rows,
     find_resource_layout,
+    rank_auto_rows,
     read_player_resources_chain,
 )
 
@@ -121,6 +122,39 @@ def test_find_auto_resource_rows_ignores_falling():
     r1 = MemoryReader([(0x20000000, bytes(blob1))])
     r2 = MemoryReader([(0x20000000, bytes(blob2))])
     assert find_auto_resource_rows([r1, r2]) == []
+
+
+def test_find_auto_resource_rows_lumber_may_be_none():
+    # 金币锚有效但 +0x4 不是合理木料 float 时, lumber 合法为 None;
+    # 报告层必须容忍 None 而不是 round(None) 崩溃 (真机 auto 复现)。
+    blob1 = bytearray(0x200)
+    struct.pack_into("<f", blob1, 0x40, 7774.0)
+    struct.pack_into("<f", blob1, 0x44, 9e30)  # 非合理值 -> 木料不可识别
+    blob2 = bytearray(0x200)
+    struct.pack_into("<f", blob2, 0x40, 7801.4)
+    struct.pack_into("<f", blob2, 0x44, 9e30)
+    r1 = MemoryReader([(0x20000000, bytes(blob1))])
+    r2 = MemoryReader([(0x20000000, bytes(blob2))])
+    rows = find_auto_resource_rows([r1, r2])
+    assert len(rows) == 1
+    assert rows[0].gold is not None
+    assert rows[0].lumber is None
+    # 报告组装等价逻辑: None 不参与 round。
+    assert round(rows[0].gold) == 7801
+    assert rows[0].lumber is None  # noqa: PT018 (显式断言 None 语义)
+
+
+def test_rank_auto_rows_orders_and_caps():
+    # 真机复现: 动态图 auto 能抓到数千锚点; 木/人口齐全的玩家行排前, 输出封顶。
+    rows = [
+        PlayerResources(0x300, 100.0, None, None),
+        PlayerResources(0x100, 100.0, 50.0, 5),
+        PlayerResources(0x200, 100.0, None, 5),
+        PlayerResources(0x110, 100.0, 60.0, None),
+    ] + [PlayerResources(0x1000 + i * 4, 100.0, None, None) for i in range(40)]
+    ranked, total = rank_auto_rows(rows, cap=3)
+    assert total == 44
+    assert [hex(r.addr) for r in ranked] == [hex(0x100), hex(0x110), hex(0x200)]
 
 
 def test_read_player_resources_chain_synthetic():

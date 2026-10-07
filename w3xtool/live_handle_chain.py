@@ -664,6 +664,20 @@ def find_auto_resource_rows(
     return rows
 
 
+def rank_auto_rows(
+    rows: list[PlayerResources], cap: int = 24
+) -> tuple[list[PlayerResources], int]:
+    """auto 锚点可信度排序并封顶。
+
+    差分定位会把所有一路上涨的 float 都当金币锚 (成长计数器/波次计时等),
+    动态图一局能到数千个; 真正的玩家行木/人口同时可读, 排前面,
+    其余按地址稳定排序, 输出封顶避免万行刷屏。返回 (前 cap 个, 总数)。
+    """
+    total = len(rows)
+    ranked = sorted(rows, key=lambda r: (r.lumber is None, r.food is None, r.addr))
+    return ranked[:cap], total
+
+
 def match_unit_entries(units, query):
     """按单位名子串或四码 (大小写不敏感) 过滤 handle 策略产出的单位条目。
 

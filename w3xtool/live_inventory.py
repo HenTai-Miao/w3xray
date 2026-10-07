@@ -824,14 +824,20 @@ def read_live(
                     for _ in range(2):
                         _time.sleep(3)
                         readers.append(hc.reader_from_snapshot(snapshot(h, max_addr)))
-                    found = hc.find_auto_resource_rows(readers)
+                    found, total_anchors = hc.rank_auto_rows(
+                        hc.find_auto_resource_rows(readers)
+                    )
+                    if total_anchors > len(found):
+                        report["notes"].append(
+                            f"auto 锚点 {total_anchors} 个, 按木/人口可信度取前 {len(found)}"
+                        )
                 else:
                     found = hc.find_resource_layout(reader, resources[0], resources[1])
                 report["resources"] = [
                     {
                         "addr": hex(r.addr),
-                        "gold": round(r.gold),
-                        "lumber": round(r.lumber),
+                        "gold": round(r.gold) if r.gold is not None else None,
+                        "lumber": round(r.lumber) if r.lumber is not None else None,
                         "food": r.food,
                     }
                     for r in found
@@ -980,7 +986,9 @@ def main(argv=None):
         print(f"== 玩家资源 (同布局结构 {len(res)} 个: 你+队友+缓存副本) ==")
         for r2 in res:
             food = f" 人口~{r2['food']}" if r2.get("food") is not None else ""
-            print(f"  {r2['addr']}: 金{r2['gold']} 木{r2['lumber']}{food}")
+            gold = r2["gold"] if r2.get("gold") is not None else "?"
+            lumber = r2["lumber"] if r2.get("lumber") is not None else "?"
+            print(f"  {r2['addr']}: 金{gold} 木{lumber}{food}")
         if not res:
             print("  未定位到资源结构; 确认金币/木材数值没变后重试")
         listed = rep.get("owned_units") or []
