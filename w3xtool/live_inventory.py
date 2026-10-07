@@ -807,7 +807,7 @@ def read_live(
                     readers = [reader]
                     for _ in range(2):
                         _time.sleep(3)
-                        readers.append(hc.MemoryReader(snapshot(h, max_addr)))
+                        readers.append(hc.reader_from_snapshot(snapshot(h, max_addr)))
                     found = hc.find_auto_resource_rows(readers)
                 else:
                     found = hc.find_resource_layout(reader, resources[0], resources[1])

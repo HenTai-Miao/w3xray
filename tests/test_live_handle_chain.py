@@ -18,6 +18,7 @@ from w3xtool.live_handle_chain import (
     fourcc,
     is_fourcc,
     read_inventory,
+    reader_from_snapshot,
     selected_unit,
     walk_item_units,
 )
@@ -236,3 +237,16 @@ def test_derive_offsets_rediscovers_globals():
 def test_derive_offsets_returns_none_without_structures():
     reader = MemoryReader([(0x50000000, b"\x00" * 0x1000)])
     assert derive_offsets(reader, 0x50000000, 0x50001000) is None
+
+
+def test_reader_from_snapshot_unpacks_regions_tuple():
+    """回归: snapshot() 返回 (regions, total) 二元组。
+
+    直接把该元组传给 MemoryReader 会把区域列表当二元组迭代, 真实进程中以
+    "too many values to unpack" 崩溃 (差分快照路径)。
+    """
+    regions = [(0x20000000, b"\x00" * 0x100), (0x20010000, b"\xff" * 0x100)]
+    reader = reader_from_snapshot((regions, 0x200))
+    assert reader.read(0x20000000, 4) == b"\x00\x00\x00\x00"
+    assert reader.read(0x20010000, 2) == b"\xff\xff"
+    assert reader.read(0x90000000, 4) is None

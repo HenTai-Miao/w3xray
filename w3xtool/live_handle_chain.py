@@ -200,6 +200,16 @@ class MemoryReader:
             yield base, self._data[base]
 
 
+def reader_from_snapshot(result) -> "MemoryReader":
+    """把 live_inventory.snapshot() 的 (regions, total) 返回值安全转成 MemoryReader。
+
+    直接把该二元组传给 MemoryReader 会把 (区域列表, 总字节) 当作两个区域迭代,
+    真实进程中以 "too many values to unpack" 崩溃; 这里显式解包固定形态。
+    """
+    regions, _total = result
+    return MemoryReader(regions)
+
+
 @dataclass(frozen=True, slots=True)
 class _Table:
     base: int
