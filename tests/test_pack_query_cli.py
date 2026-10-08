@@ -8,6 +8,7 @@ import pytest
 from w3xtool.pack_query_cli import (
     PackQueryCliOptionError,
     _base_prices,
+    load_acquisition_index,
     load_formulas,
     load_item_bases,
     load_item_gold_overrides,
@@ -54,7 +55,7 @@ def pack(tmp_path):
     )
     (tmp_path / "对象字段.tsv").write_text(
         "物品\tI0CC\t攻击之爪+15样\tigol\t黄金\t123\twar3map.w3t\n"
-        "物品\tI0AA\t冰晶\tbase:金币\t金币\t999\tbase:I0AA\n"
+        "物品\tI0AA\t冰晶\tigol\t黄金\t999\twar3map.w3t\n"
         + "物品\tI0BB\t雪白的熊掌\tgoldcost\t金币\t4500\twar3map *Data.slk\n"
         "单位\th0BB\t铁匠铺\tusei\t售出的物品\t冰晶(I0AA), I0CC\twar3map.w3u\n",
         encoding="utf-8",
@@ -139,7 +140,7 @@ def test_run_cli_price_query(pack, capsys):
 
 def test_load_item_gold_overrides(pack):
     ov = load_item_gold_overrides(pack)
-    assert ov == {"I0CC": "123", "I0BB": "4500"}
+    assert ov == {"I0AA": "999", "I0CC": "123", "I0BB": "4500"}
 
 
 def test_price_falls_back_to_base_without_override(pack, capsys):
@@ -157,7 +158,7 @@ def test_run_cli_item_includes_price(pack, capsys):
     assert rc == 0
     # I0CC 在铁匠铺货架上：标注商店在售；I0DD 不在任何货架：标注无商店在售。
     assert "金币: 123 (地图价; 商店在售: 铁匠铺)" in out
-    assert "金币: 500 (继承基础 ratc; 无商店在售, 仅为物品估值)" in out
+    assert "金币: 500 (继承基础 ratc; 无商店在售; 未见获取途径)" in out
 
 
 def test_run_cli_price_annotates_availability(pack, capsys):
@@ -169,7 +170,28 @@ def test_run_cli_price_annotates_availability(pack, capsys):
     rc = run_pack_query_cli(parse_pack_query_cli_options([str(pack), "price", "I0DD"]))
     out = capsys.readouterr().out
     assert rc == 0
-    assert "无商店在售, 仅为物品估值" in out
+    assert "无商店在售; 未见获取途径" in out
+
+
+def test_run_cli_item_merges_drop_acquisition(pack, capsys):
+    """掉落/触发获取与商店货架同为真实来源，一并标注。"""
+    rc = run_pack_query_cli(parse_pack_query_cli_options([str(pack), "item", "I0AA"]))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "商店在售: 铁匠铺; 获取: 脚本/触发奖励<-u0AA" in out
+
+
+def test_acquisition_shown_even_without_shop_data(pack, capsys):
+    """货架数据缺失不做在售断言，但掉落/触发来源照常展示。"""
+    (pack / "对象字段.tsv").write_text(
+        "物品\tI0AA\t冰晶\tigol\t黄金\t999\twar3map.w3t\n",
+        encoding="utf-8",
+    )
+    rc = run_pack_query_cli(parse_pack_query_cli_options([str(pack), "item", "I0AA"]))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "获取: 脚本/触发奖励<-u0AA" in out
+    assert "商店在售" not in out and "无商店在售" not in out
 
 
 def test_load_shop_stock_index_dedupes(pack):
@@ -228,7 +250,7 @@ def test_run_cli_shop_query(pack, capsys):
     out = capsys.readouterr().out
     assert rc == 0
     assert "冰晶" in out and "攻击之爪+15样" in out
-    assert "123金" in out and "地图价" in out and "继承" in out
+    assert "999金" in out and "123金" in out and "地图价" in out
 
 
 def test_run_cli_miss_returns_two(pack, capsys):
@@ -242,6 +264,11 @@ def test_run_cli_missing_pack(tmp_path, capsys):
         parse_pack_query_cli_options([str(tmp_path / "x"), "item", "a"])
     )
     assert rc == 2
+
+
+def test_load_acquisition_index_dedupes(pack):
+    idx = load_acquisition_index(pack)
+    assert idx["i0aa"] == ["脚本/触发奖励<-u0AA"]
 
 
 def test_load_item_tooltips_prefers_ides(pack):

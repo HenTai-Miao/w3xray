@@ -5,7 +5,7 @@
     uv run main.py pack-query <资料包目录> <子命令> <查询词> [--limit N]
 
 子命令：
-    item   <名字|四码>   物品属性（金币价+在售标注; 真实提示文本优先于继承模板描述）
+    item   <名字|四码>   物品属性（金币价+在售/获取标注; 真实提示文本优先于继承模板描述）
     recipe <名字|四码>   相关合成配方（作为产物或材料，自动去重）
     where  <名字|四码>   单位/地面物品的放置坐标
     drop   <名字|四码>   获取途径（掉落/商店/触发奖励）
@@ -136,17 +136,53 @@ def load_shop_stock_index(pack_dir: Path) -> dict[str, list[str]]:
     return index
 
 
+def load_acquisition_index(pack_dir: Path) -> dict[str, list[str]]:
+    """物品四码(小写) -> 获取途径摘要（掉落与获取关系.tsv，去重保序）。
+
+    真实获取途径不只有商店货架：怪物/boss 掉落、脚本触发奖励同样
+    是地图里真实存在的来源（列布局: [2]=类型 [3]=四码 [5]=来源类
+    [6]=来源）。摘要形如 "怪物掉落<-u0AA"，最多保留前 4 条防刷屏。
+    """
+    index: dict[str, list[str]] = {}
+    for r in _read_rows(pack_dir, "掉落与获取关系.tsv"):
+        if len(r) < 7 or len(r[3]) != 4:
+            continue
+        entry = (r[2].strip() or "获取") + "<-" + r[6].strip()
+        entries = index.setdefault(r[3].lower(), [])
+        if entry not in entries and len(entries) < 4:
+            entries.append(entry)
+    return index
+
+
 def _availability_note(
-    stock_index: dict[str, list[str]], stock_known: bool, code: str
+    stock_index: dict[str, list[str]],
+    stock_known: bool,
+    code: str,
+    acquisitions: dict[str, list[str]] | None = None,
 ) -> str:
-    """在售标注：有货架数据时区分“商店在售/无商店在售”，数据缺失则不标注。"""
-    if not stock_known:
-        return ""
+    """在售/获取标注：货架与掉落/触发获取都算真实来源。
+
+    商店在售与获取途径并列展示；无商店在售时补掉落/触发来源；
+    两者皆无才写“未见获取途径”。货架数据缺失时不做在售断言，
+    但掉落/触发来源仍照常展示（有据即可说）。
+    """
+    acquisitions = acquisitions or {}
     shops = stock_index.get(code.lower())
+    acqs = acquisitions.get(code.lower(), [])
+    parts: list[str] = []
     if shops:
         shown = "/".join(shops[:2])
-        return "商店在售: " + shown + ("等" if len(shops) > 2 else "")
-    return "无商店在售, 仅为物品估值"
+        parts.append("商店在售: " + shown + ("等" if len(shops) > 2 else ""))
+    elif stock_known:
+        parts.append("无商店在售")
+    if acqs:
+        shown = "; ".join(acqs[:2])
+        parts.append(
+            "获取: " + shown + ("等" + str(len(acqs)) + "条" if len(acqs) > 2 else "")
+        )
+    elif stock_known and not shops:
+        parts.append("未见获取途径")
+    return "; ".join(parts)
 
 
 def load_item_tooltips(pack_dir: Path) -> dict[str, str]:
@@ -333,6 +369,7 @@ def _query_item(pack: Path, query: str, limit: int) -> list[str]:
     overrides = load_item_gold_overrides(pack)
     stock_index = load_shop_stock_index(pack)
     stock_known = bool(stock_index)
+    acquisitions = load_acquisition_index(pack)
     tooltips = load_item_tooltips(pack)
     lines = []
     for code, (name, desc) in items.items():
@@ -346,7 +383,7 @@ def _query_item(pack: Path, query: str, limit: int) -> list[str]:
                     if code in overrides
                     else ("继承基础 " + base if base else "")
                 )
-                note = _availability_note(stock_index, stock_known, code)
+                note = _availability_note(stock_index, stock_known, code, acquisitions)
                 detail = "; ".join(p for p in (src, note) if p)
                 lines.append(
                     "  金币: " + price + (" (" + detail + ")" if detail else "")
@@ -364,6 +401,7 @@ def _query_price(pack: Path, query: str, limit: int) -> list[str]:
     overrides = load_item_gold_overrides(pack)
     stock_index = load_shop_stock_index(pack)
     stock_known = bool(stock_index)
+    acquisitions = load_acquisition_index(pack)
     lines = []
     for code, (name, _desc) in items.items():
         if _match(query, code, name):
@@ -373,7 +411,7 @@ def _query_price(pack: Path, query: str, limit: int) -> list[str]:
             )
             src = "地图价" if code in overrides else "继承"
             head = src + ", 基础: " + base
-            note = _availability_note(stock_index, stock_known, code)
+            note = _availability_note(stock_index, stock_known, code, acquisitions)
             lines.append(
                 "["
                 + code
