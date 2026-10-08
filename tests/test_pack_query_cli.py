@@ -12,6 +12,7 @@ from w3xtool.pack_query_cli import (
     load_item_bases,
     load_item_gold_overrides,
     load_items,
+    load_item_tooltips,
     load_shop_stock_index,
     load_shop_stocks,
     load_placements,
@@ -241,6 +242,30 @@ def test_run_cli_missing_pack(tmp_path, capsys):
         parse_pack_query_cli_options([str(tmp_path / "x"), "item", "a"])
     )
     assert rc == 2
+
+
+def test_load_item_tooltips_prefers_ides(pack):
+    """地图自定义 ides(描述) 优先于 utub(提示文本)，并剥离转义前缀单引号。"""
+    (pack / "对象字段.tsv").write_text(
+        "物品\tI0AA\t冰晶\tutub\t提示文本\t'utub兜底文本\twar3map.w3t\n"
+        "物品\tI0AA\t冰晶\tides\t描述\t'ides真实提示\twar3map.w3t\n",
+        encoding="utf-8",
+    )
+    tips = load_item_tooltips(pack)
+    assert tips["I0AA"] == "ides真实提示"
+
+
+def test_run_cli_item_prefers_real_tooltip(pack, capsys):
+    """item 输出用地图真实提示文本；继承模板描述不再冒充真实效果。"""
+    with (pack / "对象字段.tsv").open("a", encoding="utf-8") as f:
+        f.write(
+            "物品\tI0AA\t冰晶\tides\t描述\t'+5攻|n【冰·真】真实冻伤提示\twar3map.w3t\n"
+        )
+    rc = run_pack_query_cli(parse_pack_query_cli_options([str(pack), "item", "I0AA"]))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "真实冻伤提示" in out
+    assert "减速" not in out  # 模板描述被真实提示取代
 
 
 def test_load_item_gold_overrides_accepts_goldcost(pack):

@@ -5,7 +5,7 @@
     uv run main.py pack-query <资料包目录> <子命令> <查询词> [--limit N]
 
 子命令：
-    item   <名字|四码>   物品属性（金币价 + 商店在售/无商店在售标注）
+    item   <名字|四码>   物品属性（金币价+在售标注; 真实提示文本优先于继承模板描述）
     recipe <名字|四码>   相关合成配方（作为产物或材料，自动去重）
     where  <名字|四码>   单位/地面物品的放置坐标
     drop   <名字|四码>   获取途径（掉落/商店/触发奖励）
@@ -147,6 +147,32 @@ def _availability_note(
         shown = "/".join(shops[:2])
         return "商店在售: " + shown + ("等" if len(shops) > 2 else "")
     return "无商店在售, 仅为物品估值"
+
+
+def load_item_tooltips(pack_dir: Path) -> dict[str, str]:
+    """物品四码 -> 地图内真实提示文本（自定义 ides/utub 字段，ides 优先）。
+
+    对象ID/物品.tsv 的描述列多为按基础ID继承的模板文本（如
+    “装备时英雄的法力恢复速度提高<AIrm,DataA1,%>%”），同名自定义物品
+    共用时会互相误导；只有地图自己在 w3t 里写的 ides(描述)/
+    utub(提示文本) 才是该物品在地图上的真实效果说明。值可能带
+    电子表格转义前缀单引号，展示前剥离。
+    """
+    best: dict[str, tuple[int, str]] = {}
+    for r in _read_rows(pack_dir, "对象字段.tsv"):
+        if (
+            len(r) > 5
+            and r[0] == "物品"
+            and len(r[1]) == 4
+            and r[3] in ("ides", "utub")
+        ):
+            prio = 0 if r[3] == "ides" else 1
+            cur = best.get(r[1])
+            if cur is None or prio < cur[0]:
+                text = _clean(r[5].lstrip("'"))
+                if text:
+                    best[r[1]] = (prio, text)
+    return {code: text for code, (_prio, text) in best.items()}
 
 
 _base_price_cache: dict[str, str] | None = None
@@ -307,6 +333,7 @@ def _query_item(pack: Path, query: str, limit: int) -> list[str]:
     overrides = load_item_gold_overrides(pack)
     stock_index = load_shop_stock_index(pack)
     stock_known = bool(stock_index)
+    tooltips = load_item_tooltips(pack)
     lines = []
     for code, (name, desc) in items.items():
         if _match(query, code, name):
@@ -324,7 +351,8 @@ def _query_item(pack: Path, query: str, limit: int) -> list[str]:
                 lines.append(
                     "  金币: " + price + (" (" + detail + ")" if detail else "")
                 )
-            lines.append("  " + desc[:240])
+            # 真实提示文本（地图自定义 ides/utub）优先；继承模板描述仅作兜底。
+            lines.append("  " + (tooltips.get(code, "") or desc)[:240])
             if len(lines) >= limit * 3:
                 break
     return lines or ["未找到物品: " + query]

@@ -38,7 +38,7 @@
 - Run GUI: `uv run main.py`.
 - Run map CLI: `uv run main.py cli <map-path>`.
 - One-shot map guide: `uv run main.py guide <map-path> [--section basic|commands|quests|heroes|recipes|shops|drops|clues] [--refresh]`; repeat queries hit the per-map cache (~0.5s), map edits invalidate it.
-- Query an exported knowledge pack: `uv run python -X utf8 main.py pack-query <pack-dir> <item|recipe|where|drop|quest|text|price|shop> <查询词> [--limit N]` (single process, bounded output; `item` shows gold prices and `price` looks them up directly — per-item `igol` map overrides first, then `base_objects` inheritance; both cross-check the `usei`/`Sellitems` shop-stock fields and annotate `商店在售: <shop>` or `无商店在售, 仅为物品估值` (igol is an internal valuation, not a sale price; no annotation when the pack has no stock rows); `shop` lists one shop's stock with per-item real prices; `recipe` output is deduplicated).
+- Query an exported knowledge pack: `uv run python -X utf8 main.py pack-query <pack-dir> <item|recipe|where|drop|quest|text|price|shop> <查询词> [--limit N]` (single process, bounded output; `item` shows gold prices and `price` looks them up directly — per-item `igol` map overrides first, then `base_objects` inheritance; both cross-check the `usei`/`Sellitems` shop-stock fields and annotate `商店在售: <shop>` or `无商店在售, 仅为物品估值` (igol is an internal valuation, not a sale price; no annotation when the pack has no stock rows); `item` also prefers the map's own `ides`/`utub` tooltip text over inherited base-template descriptions; `shop` lists one shop's stock with per-item real prices; `recipe` output is deduplicated).
 - Locate current map: `uv run main.py current [--root PATH] [--accept-suggestion]`.
 - Migrate trusted descriptions: `uv run main.py description-cache migrate --legacy-output <schema-1-root> --legacy-cache <schema-2-cache.tsv> --output <owned-cache-root>`.
 - Batch schema 6: `uv run main.py batch <maps-root> --output <v6-root> --game-data <client-or-trusted-icon-root> --description-cache <owned-cache-root>`.
@@ -51,6 +51,7 @@
 - Type-check changed Python: `uv run --with basedpyright basedpyright --level error <paths>`; no checked-in basedpyright config.
 
 ## Knowledge
+- 地图证据原则（不要猜）：只有地图里真实存在的数据才算事实。售价以 `usei`/`Sellitems` 货架为准——`igol` 只是内部估值，商店没卖就是没卖；物品效果以地图自定义 `ides`/`utub` 提示文本为准——按基础ID继承的模板描述（含 `<字段占位符>`，同名自定义物品共用）不可当作真实效果；获取途径只认真实货架、掉落表、脚本放置/奖励。回答地图问题必须引用上述真实来源，禁止用继承值或推测补全。
 - `AGENTS.d/runtime.md`: schema-6 commands, protected roots, output semantics, required reports, and resume rules.
 - `AGENTS.d/testing.md`: focused/full/static gates and schema-6 acceptance invariants.
 
