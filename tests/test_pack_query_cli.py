@@ -30,7 +30,8 @@ def pack(tmp_path):
         "物品\tI0AA\t1\tI0AA\t|cffff0000冰晶|r\t是\t'+10攻|n【冰】：减速\n"
         "物品\tI0BB\t2\tI0BB\t雪白的熊掌\t是\t材料\n"
         "物品\tI0CC\t3\tratf\t攻击之爪+15样\t否\t继承基础价\n"
-        "物品\tI0DD\t4\tratc\t攻击之爪+12样\t否\t无覆写走基础价\n",
+        "物品\tI0DD\t4\tratc\t攻击之爪+12样\t否\t无覆写走基础价\n"
+        "物品\tI0EE\t5\tI0EE\t力量戒指SLK\t是\t材料\n",
         encoding="utf-8",
     )
     (obj / "单位.tsv").write_text(
@@ -59,7 +60,11 @@ def pack(tmp_path):
         "物品\tI0AA\t冰晶\tiabi\t携带技能\tA0AA\twar3map.w3t\n"
         "技能\tA0AA\t力量\tIstr:1\t力量奖励 (等级1)\t11\twar3map.w3a\n"
         "技能\tA0AA\t力量\tbase:Istr:1\t力量奖励 (等级1)\t1\tbase:AIs1\n"
-        "单位\th0BB\t铁匠铺\tusei\t售出的物品\t冰晶(I0AA), I0CC\twar3map.w3u\n",
+        "物品\tI0EE\t力量戒指SLK\tiabi\t携带技能\tA0AB\twar3map.w3t\n"
+        "技能\tA0AB\t力量\tIstr1\t力量奖励 (等级1)\t7\twar3map *UnitData.slk\n"
+        "单位\th0BB\t铁匠铺\tusei\t售出的物品\t冰晶(I0AA), I0CC\twar3map.w3u\n"
+        "单位\th0BB\t铁匠铺\tbase:Sellitems\tSellitems\told1\tbase:nshe\n"
+        "单位\tngme\t地精商店\tbase:Sellitems\tSellitems\tstwp, bspd\tbase:ngme\n",
         encoding="utf-8",
     )
     (tmp_path / "脚本字符串索引.tsv").write_text(
@@ -190,7 +195,11 @@ def test_run_cli_recipe_dedupes(pack, capsys):
 
 def test_load_shop_stocks_parses_paren_codes(pack):
     stocks = load_shop_stocks(pack)
-    assert stocks == [("h0BB", "铁匠铺", ["I0AA", "I0CC"])]
+    # 自定义货架优先；仅有继承货架的原版商店也列出；同单位继承行被压制。
+    assert stocks == [
+        ("h0BB", "铁匠铺", ["I0AA", "I0CC"]),
+        ("ngme", "地精商店", ["stwp", "bspd"]),
+    ]
 
 
 def test_run_cli_shop_query(pack, capsys):
@@ -218,6 +227,12 @@ def test_load_item_equipped_effects_custom_over_base(pack):
     """装备效果取 iabi 技能的属性字段，自定义行(11)压过继承行(1)。"""
     effects = load_item_equipped_effects(pack)
     assert effects["I0AA"] == ["+11 力量"]
+
+
+def test_load_item_equipped_effects_accepts_slk_level_suffix(pack):
+    """SLK 导出的等级字段无冒号（Istr1），同样要解析出装备效果。"""
+    effects = load_item_equipped_effects(pack)
+    assert effects["I0EE"] == ["+7 力量"]
 
 
 def test_run_cli_item_shows_equipped_effects(pack, capsys):

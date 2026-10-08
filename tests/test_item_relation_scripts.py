@@ -27,6 +27,29 @@ def _map_with_items(
     return md
 
 
+def test_same_line_duplicate_calls_each_produce_relations() -> None:
+    # 压缩/单行脚本：同一物理行出现两个同名调用时，各自的奖励都要保留
+    # （此前按 (来源,行,函数,调用,摘要) 分组后位置重叠会整组静默丢弃）。
+    script = "\n".join(
+        (
+            "function Reward takes nothing returns nothing",
+            "    call UnitAddItemById(GetTriggerUnit(), 'I001') call UnitAddItemById(GetTriggerUnit(), 'I002')",
+            "endfunction",
+        )
+    )
+    md = _map_with_items(
+        _item("I001", "同行奖励甲"),
+        _item("I002", "同行奖励乙"),
+        scripts={"war3map.j": script},
+    )
+
+    rows = build_script_item_relations(md)
+    rewarded = {
+        row.item.object_id for row in rows if row.kind is ItemRelationKind.SCRIPT_REWARD
+    }
+    assert {"I001", "I002"} <= rewarded
+
+
 def test_fixed_reward_calls_keep_item_source_function_line_recipient_and_location() -> (
     None
 ):

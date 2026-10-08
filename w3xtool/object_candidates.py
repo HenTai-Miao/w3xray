@@ -98,6 +98,11 @@ def collect_binary_object_candidates(
             value = _resolved_value(mod.value, wts)
             if is_concat_type(mod.field_id):
                 value = _expand_codes(value)
+            if not value:
+                # 空字符串 mod 无信息量，却会以自定义身份驱逐同名继承值
+                # （如 uhpm="" 清掉基础生命上限），与文本/SLK 路径的
+                # retain_field 过滤口径对齐。
+                continue
             values.append(
                 ObjectFieldValue(
                     key,

@@ -103,10 +103,16 @@ def load_shop_stocks(pack_dir: Path) -> list[tuple[str, str, list[str]]]:
     字段名兼容 usei 与 Sellitems（不同地图导出对同一"售出的物品"字段的
     原始码写法不同）。值形如 "I002, I001" 或 "敏捷之书+2(tst2), 银锭(I008)"——
     括号里才是物品四码，裸 token 视为四码本身。
+
+    地图未改过货架的原版商店（如直接摆放的 ngme 地精商店）只有
+    base:Sellitems 继承行——继承货架在该单位身上真实生效，同样列出；
+    同一单位自定义行优先，有自定义货架时忽略其继承行。
     """
-    out: list[tuple[str, str, list[str]]] = []
+    custom: list[tuple[str, str, list[str]]] = []
+    inherited: list[tuple[str, str, list[str]]] = []
+    custom_units: set[str] = set()
     for r in _read_rows(pack_dir, "对象字段.tsv"):
-        if len(r) > 5 and r[3] not in ("usei", "Sellitems"):
+        if len(r) > 5 and r[3].removeprefix("base:") not in ("usei", "Sellitems"):
             continue
         codes = []
         for token in r[5].split(","):
@@ -116,9 +122,14 @@ def load_shop_stocks(pack_dir: Path) -> list[tuple[str, str, list[str]]]:
                 codes.append(m.group(1))
             elif len(token) == 4:
                 codes.append(token)
-        if codes:
-            out.append((r[1], _clean(r[2]), codes))
-    return out
+        if not codes:
+            continue
+        if r[3].startswith("base:"):
+            inherited.append((r[1], _clean(r[2]), codes))
+        else:
+            custom_units.add(r[1])
+            custom.append((r[1], _clean(r[2]), codes))
+    return custom + [row for row in inherited if row[0] not in custom_units]
 
 
 def load_item_tooltips(pack_dir: Path) -> dict[str, str]:
@@ -152,16 +163,20 @@ _ITEM_STAT_FIELDS = {
     "Iagi": "敏捷",
     "Iint": "智力",
 }
+# 二进制导出的等级字段带冒号（Istr:1），SLK 导出直接拼数字（Istr1）。
+_ITEM_STAT_FIELD_RE = re.compile(r"(Istr|Iagi|Iint)(?::\d+|\d+)?\Z")
 
 
 def load_item_equipped_effects(pack_dir: Path) -> dict[str, list[str]]:
     """物品四码 -> 装备真实效果摘要（如 ["+11 力量"]）。
 
     物品的实际加成由 iabi(携带技能) 指向的技能决定；提示文本可能是
-    按基础ID继承的模板（占位符未填、与真实效果完全不符）。技能的
-    属性奖励字段（Istr/Iagi/Iint，中文标签“力量/敏捷/智力奖励”）
-    以地图自定义行（war3map.* 来源）优先，其次 base: 继承行——
-    继承值与自定义值可能差一个数量级，漏看自定义行会得出错误结论。
+    按基础ID继承的模板（占位符未填、与真实效果完全不符）。只解读
+    地图自定义行的属性奖励字段（Istr/Iagi/Iint，中文标签
+    “力量/敏捷/智力奖励”，来源 war3map.*），等级后缀兼容二进制
+    （Istr:1）与 SLK（Istr1）两种导出形式；继承行的字段码是英文
+    原始码（base:DataC1 等），其数值列在不同技能家族指向不同属性，
+    不做解读——宁缺毋滥，漏报优于按错列猜数。
     """
     equipped: dict[str, list[str]] = {}
     stat_rows: dict[str, dict[str, str]] = {}
@@ -173,12 +188,9 @@ def load_item_equipped_effects(pack_dir: Path) -> dict[str, list[str]]:
             if codes:
                 equipped.setdefault(r[1], []).extend(codes)
         elif r[0] == "技能":
-            field = r[3].split(":")[0]
-            if field in _ITEM_STAT_FIELDS:
-                custom = not r[6].startswith("base:")
-                cur = stat_rows.setdefault(r[1], {})
-                if custom or field not in cur:
-                    cur[field] = r[5]
+            stat = _ITEM_STAT_FIELD_RE.fullmatch(r[3])
+            if stat:
+                stat_rows.setdefault(r[1], {}).setdefault(stat.group(1), r[5])
     effects: dict[str, list[str]] = {}
     for item, abilities in equipped.items():
         parts: list[str] = []

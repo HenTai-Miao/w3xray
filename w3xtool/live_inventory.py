@@ -311,6 +311,11 @@ def _icon_paths_from_pack(pack_dir):
             and c[5].lower().endswith(".blp")
             and "commandbuttons" in c[5].lower()
         ):
+            # 同一物品 base: 继承图标行与自定义图标行并存时，自定义行
+            # 优先：来源列以 base: 开头的行不得覆盖已 collected 的非继承值
+            # （此前靠 TSV 排序碰巧正确，排序翻转就会拿继承图标当模板）。
+            if c[1] in paths and len(c) >= 7 and c[6].startswith("base:"):
+                continue
             paths[c[1]] = c[5].replace("\\", "/")
     return paths
 

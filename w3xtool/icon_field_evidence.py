@@ -105,7 +105,13 @@ def icon_display_priority(
     key: str,
     source_kind: ObjectSourceKind,
 ) -> int:
-    """Rank ordinary object icons above auxiliary metadata-confirmed icons."""
+    """Rank ordinary object icons above auxiliary metadata-confirmed icons.
+
+    辅助图标键（如施放者升级技巧 ucua）语义上是升级界面槽而非主头像：
+    主槽图标（含 base:图标 继承的普通图标）恒高于辅助槽，即便来源
+    优先级更低——被清空的辅助图标不得抹掉继承主图标（锁定测试
+    test_auxiliary_metadata_icon_does_not_evict_an_inherited_primary_icon）。
+    """
     canonical_key = _canonical_key(key)
     if source_kind is ObjectSourceKind.BASE and canonical_key == "base:图标":
         return 2

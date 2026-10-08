@@ -52,6 +52,8 @@
 
 ## Knowledge
 - 地图证据原则（不要猜）：只有地图里真实存在的数据才算事实。售价以 `usei`/`Sellitems` 货架为准——`igol` 只是内部估值，商店没卖就是没卖；物品效果以地图自定义 `ides`/`utub` 提示文本为准——按基础ID继承的模板描述（含 `<字段占位符>`，同名自定义物品共用）不可当作真实效果；装备加成以 `iabi` 携带技能的属性字段为准（`Istr`/`Iagi`/`Iint`），地图自定义行优先于 `base:` 继承行，两者可能差一个数量级，漏看自定义行会得出错误结论；分析导出数据必须覆盖全部自定义行，不得因输出截断而拿继承值下结论；获取途径只认真实货架、掉落表、脚本放置/奖励。回答地图问题必须引用上述真实来源，禁止用继承值或推测补全。
+- 继承行语义（双行是有意设计）：`对象字段.tsv` 同时保留 `base:` 继承行与自定义行作为无损证据，读取方必须自行裁决优先级——自定义行优先、继承行兜底（如 `load_shop_stocks` 对未改货架原版商店的处理）。关系表（掉落与获取/装备技能）有意只认地图自定义 `usei`/`iabi` 行（作者证据），生效继承货架的展示走 pack-query 的兜底路径。静态检查注意：本仓库使用 Python 3.14 的 PEP 758 无括号多异常 `except A, B:` 写法，旧版解析器会误报 SyntaxError。
+- 已知提取边界（记录备查，勿盲目改格式）：脚本调用参数索引的"摘要"列只取首行且截断 160 字符，多行/超长调用的参数重建依赖"参数"列而非摘要；关系构建的 legacy 回退路径（无 field_evidence 时）不解析 `名称(四码)` 括号形式。
 - `AGENTS.d/runtime.md`: schema-6 commands, protected roots, output semantics, required reports, and resume rules.
 - `AGENTS.d/testing.md`: focused/full/static gates and schema-6 acceptance invariants.
 

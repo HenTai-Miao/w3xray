@@ -79,6 +79,21 @@ def _binary_object(
     return struct.pack("<ii", 2, 0) + struct.pack("<i", 1) + obj
 
 
+def test_empty_binary_mod_does_not_evict_base_inherited_value() -> None:
+    # 空字符串 mod 无信息量，却会以自定义身份驱逐同名继承值
+    # （uhpm="" 清掉基础生命上限）；应与文本/SLK 的空值过滤口径一致。
+    archive = FakeArchive(
+        {"war3map.w3u": _binary_object("hfoo", "H001", (("uhpm", ""),))}
+    )
+    md = MapData(path="fixture.w3x", name="fixture")
+
+    load_object_pipeline(
+        md, archive, {}, base_objects={"hfoo": ("单位", (("生命上限", "420"),))}
+    )
+
+    assert dict(md.obj_index["H001"].fields)["生命上限"] == "420"
+
+
 def test_text_and_slk_values_resolve_wts_and_westring_before_storage() -> None:
     # Given: text and SLK display fields contain WTS and editor-string references.
     archive = FakeArchive(

@@ -135,12 +135,21 @@ def _call_groups(arguments: tuple[ScriptCallArgument, ...]) -> tuple[_CallGroup,
         grouped.setdefault(key, []).append(row)
     result: list[_CallGroup] = []
     for key, rows in grouped.items():
-        positions = [row.position for row in rows]
-        if len(set(positions)) != len(positions):
-            continue
-        result.append(
-            _CallGroup(*key, tuple(sorted(rows, key=lambda row: row.position)))
-        )
+        rows = sorted(rows, key=lambda row: row.position)
+        # 同一物理行可能出现多个同名调用（压缩/单行脚本）：position 是
+        # 调用内参数序号、每个调用都从 1 严格递增，position 回落（<= 前值）
+        # 即新调用边界。此前遇到重叠位置会整组静默丢弃，压缩脚图的
+        # SCRIPT_REWARD 关系会整体消失。
+        batch: list[ScriptCallArgument] = []
+        prev = 0
+        for row in rows:
+            if batch and row.position <= prev:
+                result.append(_CallGroup(*key, tuple(batch)))
+                batch = []
+            batch.append(row)
+            prev = row.position
+        if batch:
+            result.append(_CallGroup(*key, tuple(batch)))
     return tuple(result)
 
 

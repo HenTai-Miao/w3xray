@@ -308,7 +308,8 @@ def _materialize(
             en_name,
             *(fine or ()),
         )
-        if value
+        # 过滤 base 占位值（'-'）：它们不是可检索的真实信息。
+        if value and value.strip() != "-"
     )
     return GameObject(
         category=category,
