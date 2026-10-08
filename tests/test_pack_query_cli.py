@@ -10,6 +10,7 @@ from w3xtool.pack_query_cli import (
     _base_prices,
     load_formulas,
     load_item_bases,
+    load_item_equipped_effects,
     load_item_gold_overrides,
     load_items,
     load_item_tooltips,
@@ -55,6 +56,9 @@ def pack(tmp_path):
         "物品\tI0CC\t攻击之爪+15样\tigol\t黄金\t123\twar3map.w3t\n"
         "物品\tI0AA\t冰晶\tigol\t黄金\t999\twar3map.w3t\n"
         + "物品\tI0BB\t雪白的熊掌\tgoldcost\t金币\t4500\twar3map *Data.slk\n"
+        "物品\tI0AA\t冰晶\tiabi\t携带技能\tA0AA\twar3map.w3t\n"
+        "技能\tA0AA\t力量\tIstr:1\t力量奖励 (等级1)\t11\twar3map.w3a\n"
+        "技能\tA0AA\t力量\tbase:Istr:1\t力量奖励 (等级1)\t1\tbase:AIs1\n"
         "单位\th0BB\t铁匠铺\tusei\t售出的物品\t冰晶(I0AA), I0CC\twar3map.w3u\n",
         encoding="utf-8",
     )
@@ -208,6 +212,19 @@ def test_run_cli_missing_pack(tmp_path, capsys):
         parse_pack_query_cli_options([str(tmp_path / "x"), "item", "a"])
     )
     assert rc == 2
+
+
+def test_load_item_equipped_effects_custom_over_base(pack):
+    """装备效果取 iabi 技能的属性字段，自定义行(11)压过继承行(1)。"""
+    effects = load_item_equipped_effects(pack)
+    assert effects["I0AA"] == ["+11 力量"]
+
+
+def test_run_cli_item_shows_equipped_effects(pack, capsys):
+    rc = run_pack_query_cli(parse_pack_query_cli_options([str(pack), "item", "I0AA"]))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "装备效果: +11 力量" in out
 
 
 def test_load_item_tooltips_prefers_ides(pack):

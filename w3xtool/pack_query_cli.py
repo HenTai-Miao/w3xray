@@ -5,7 +5,7 @@
     uv run main.py pack-query <资料包目录> <子命令> <查询词> [--limit N]
 
 子命令：
-    item   <名字|四码>   物品属性（金币价; 真实提示文本优先于继承模板描述）
+    item   <名字|四码>   物品属性（金币价; 装备效果取自携带技能属性字段; 真实提示文本优先于继承模板描述）
     recipe <名字|四码>   相关合成配方（作为产物或材料，自动去重）
     where  <名字|四码>   单位/地面物品的放置坐标
     drop   <名字|四码>   获取途径（掉落/商店/触发奖励）
@@ -145,6 +145,51 @@ def load_item_tooltips(pack_dir: Path) -> dict[str, str]:
                 if text:
                     best[r[1]] = (prio, text)
     return {code: text for code, (_prio, text) in best.items()}
+
+
+_ITEM_STAT_FIELDS = {
+    "Istr": "力量",
+    "Iagi": "敏捷",
+    "Iint": "智力",
+}
+
+
+def load_item_equipped_effects(pack_dir: Path) -> dict[str, list[str]]:
+    """物品四码 -> 装备真实效果摘要（如 ["+11 力量"]）。
+
+    物品的实际加成由 iabi(携带技能) 指向的技能决定；提示文本可能是
+    按基础ID继承的模板（占位符未填、与真实效果完全不符）。技能的
+    属性奖励字段（Istr/Iagi/Iint，中文标签“力量/敏捷/智力奖励”）
+    以地图自定义行（war3map.* 来源）优先，其次 base: 继承行——
+    继承值与自定义值可能差一个数量级，漏看自定义行会得出错误结论。
+    """
+    equipped: dict[str, list[str]] = {}
+    stat_rows: dict[str, dict[str, str]] = {}
+    for r in _read_rows(pack_dir, "对象字段.tsv"):
+        if len(r) < 7 or len(r[1]) != 4:
+            continue
+        if r[0] == "物品" and r[3] == "iabi":
+            codes = [c.strip() for c in r[5].split(",") if len(c.strip()) == 4]
+            if codes:
+                equipped.setdefault(r[1], []).extend(codes)
+        elif r[0] == "技能":
+            field = r[3].split(":")[0]
+            if field in _ITEM_STAT_FIELDS:
+                custom = not r[6].startswith("base:")
+                cur = stat_rows.setdefault(r[1], {})
+                if custom or field not in cur:
+                    cur[field] = r[5]
+    effects: dict[str, list[str]] = {}
+    for item, abilities in equipped.items():
+        parts: list[str] = []
+        for ab in abilities:
+            for field, label in _ITEM_STAT_FIELDS.items():
+                val = stat_rows.get(ab, {}).get(field)
+                if val and val not in ("-", "'"):
+                    parts.append("+" + val + " " + label)
+        if parts:
+            effects[item] = parts
+    return effects
 
 
 _base_price_cache: dict[str, str] | None = None
@@ -304,6 +349,7 @@ def _query_item(pack: Path, query: str, limit: int) -> list[str]:
     bases = load_item_bases(pack)
     overrides = load_item_gold_overrides(pack)
     tooltips = load_item_tooltips(pack)
+    equipped_effects = load_item_equipped_effects(pack)
     lines = []
     for code, (name, desc) in items.items():
         if _match(query, code, name):
@@ -317,6 +363,9 @@ def _query_item(pack: Path, query: str, limit: int) -> list[str]:
                     else ("继承基础 " + base if base else "")
                 )
                 lines.append("  金币: " + price + (" (" + src + ")" if src else ""))
+            # 装备真实效果（iabi 携带技能的属性字段，自定义行优先）。
+            if code in equipped_effects:
+                lines.append("  装备效果: " + ", ".join(equipped_effects[code]))
             # 真实提示文本（地图自定义 ides/utub）优先；继承模板描述仅作兜底。
             lines.append("  " + (tooltips.get(code, "") or desc)[:240])
             if len(lines) >= limit * 3:
