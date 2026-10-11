@@ -12,6 +12,11 @@ from .knowledge_io import record_safe_write, write_bytes, write_text
 from .mpq import guess_extension
 from .safe_output import SafeWriteStatus
 from .safe_output_models import SafeWriteResult
+from .script_protection import (
+    EncryptedScriptDetection,
+    detect_encrypted_script_label,
+    format_encrypted_script_report,
+)
 
 if TYPE_CHECKING:
     from .api import MapData
@@ -77,6 +82,7 @@ def write_unknown_files_from_archive(
     rows = [
         "block_index\tkind\trelative_path\tbytes\tflags\tfile_size\tcomp_size\tstatus",
     ]
+    detections: list[EncryptedScriptDetection] = []
     count = 0
     consumed_bytes = 0
     for index, block in archive.iter_blocks():
@@ -96,6 +102,7 @@ def write_unknown_files_from_archive(
         data = archive.read_block_anon(block)
         if data is None:
             raw = _block_raw_payload(archive, block)
+            _record_encrypted_script(detections, index, "UnknownRaw", raw)
             consumed_bytes += max(declared_size, len(raw))
             if len(raw) > remaining_bytes:
                 rows.append(
@@ -108,6 +115,7 @@ def write_unknown_files_from_archive(
             kind = "UnknownRaw"
             status = "原始负载兜底" if written else "写入被拒绝"
         else:
+            _record_encrypted_script(detections, index, "Unknown", data)
             consumed_bytes += max(declared_size, len(data))
             if len(data) > remaining_bytes:
                 rows.append(
@@ -121,7 +129,21 @@ def write_unknown_files_from_archive(
             status = "已解包" if written else "写入被拒绝"
         rows.append(_manifest_row(index, kind, relative_path, size, block, status))
         count += int(written)
+    if detections:
+        count += write_text(
+            out_dir, "加密脚本检测.txt", format_encrypted_script_report(detections)
+        )
     return count + write_text(out_dir, "Unknown_manifest.tsv", "\n".join(rows) + "\n")
+
+
+def _record_encrypted_script(
+    detections: list[EncryptedScriptDetection], index: int, kind: str, payload: bytes
+) -> None:
+    label = detect_encrypted_script_label(payload)
+    if label is not None:
+        detections.append(
+            EncryptedScriptDetection(index, kind, label, len(payload))
+        )
 
 
 def _named_block_indexes(

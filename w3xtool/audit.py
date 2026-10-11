@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass
 from enum import StrEnum
@@ -14,6 +15,11 @@ if TYPE_CHECKING:
 
 MIN_CATEGORY_CUSTOM: Final = 10
 HIGH_ORPHAN_RATIO: Final = 0.50
+_PRIMARY_SCRIPTS: Final = {"war3map.j", "war3map.lua"}
+_SCRIPT_PLACEHOLDER_CHARS: Final = "\x00\r\n\t "
+_STUB_STATEMENT_PATTERN: Final = re.compile(
+    r"(?mi)^[ \t]*(call|set|local|loop|exitwhen|if|elseif|return|executefunc|debug)\b"
+)
 
 
 class AuditSeverity(StrEnum):
@@ -53,6 +59,9 @@ def build_audit_report(md: MapData) -> AuditReport:
     script_item = _script_item(md)
     if script_item is not None:
         items.append(script_item)
+        stub_item = _script_stub_item(md)
+        if stub_item is not None:
+            items.append(stub_item)
     else:
         items.append(
             AuditItem(
@@ -117,13 +126,36 @@ def _inventory_item(objects: list[GameObject]) -> AuditItem:
 
 def _script_item(md: MapData) -> AuditItem | None:
     for name, text in analysis_script_texts(md):
-        if name in {"war3map.j", "war3map.lua"} and text.strip("\x00\r\n\t "):
+        if name in _PRIMARY_SCRIPTS and text.strip(_SCRIPT_PLACEHOLDER_CHARS):
             return AuditItem(
                 AuditSeverity.INFO,
                 "script.primary",
                 "主脚本",
                 f"已解析 {name}，可用于隐藏指令、合成和脚本引用分析。",
             )
+    return None
+
+
+def _script_stub_item(md: MapData) -> AuditItem | None:
+    """主脚本只剩函数壳时的存根告警（常见于平台插件加密图）。"""
+    for name, text in analysis_script_texts(md):
+        if name not in _PRIMARY_SCRIPTS:
+            continue
+        if not text.strip(_SCRIPT_PLACEHOLDER_CHARS):
+            continue
+        if _STUB_STATEMENT_PATTERN.search(text):
+            return None
+        return AuditItem(
+            AuditSeverity.WARNING,
+            "script.stub",
+            "主脚本疑似存根",
+            (
+                f"{name} 已解析但未见任何可执行语句（call/set/local/loop/if）；"
+                "若地图确有玩法，真实脚本可能被平台插件加密存放在无名块"
+                "（如 KKWE 加密 JASS 签名），隐藏指令、合成、掉落触发等"
+                "脚本类分析将不可用，请结合知识包 未知文件/加密脚本检测.txt 确认。"
+            ),
+        )
     return None
 
 

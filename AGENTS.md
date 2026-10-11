@@ -29,6 +29,7 @@
 - `w3xtool/description_cache_retained_*.py`: descriptor-relative, no-follow, two-round retained-cache evidence scanning and canonical reports.
 - `w3xtool/object_text_models.py`, `object_text_index.py`, `description_cache.py`: lossless object-text evidence, seven states, and trusted base-object fills.
 - `w3xtool/item_relation_models.py`, `item_relation_builder.py`, `item_relation_exports.py`: immutable drop/acquisition/equipment-skill relations and TSV reports.
+- `w3xtool/script_protection.py`: 平台加密脚本签名检测（KKWE 加密 JASS 等真图签名）；无名块导出循环内零成本嗅探并写 `未知文件/加密脚本检测.txt`，审计对无可执行语句的存根主脚本发 `script.stub` 警告——脚本被加密时脚本类分析（隐藏指令/合成/掉落触发）不可用，不得用猜测补全。
 - `w3xtool/gui_item_relations.py`, `gui_item_relation_layout.py`: searchable relation workspace and evidence navigation.
 - `w3xtool/gui_worker_registry.py`, `gui_worker_host.py`: bounded GUI workers and Tk-main-thread callback delivery.
 - `tests/`: pytest suite; current-map coverage is in `test_current_map_*.py` and `test_gui_current_map*.py`.
