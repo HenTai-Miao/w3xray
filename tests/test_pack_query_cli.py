@@ -64,7 +64,20 @@ def pack(tmp_path):
         "技能\tA0AB\t力量\tIstr1\t力量奖励 (等级1)\t7\twar3map *UnitData.slk\n"
         "单位\th0BB\t铁匠铺\tusei\t售出的物品\t冰晶(I0AA), I0CC\twar3map.w3u\n"
         "单位\th0BB\t铁匠铺\tbase:Sellitems\tSellitems\told1\tbase:nshe\n"
-        "单位\tngme\t地精商店\tbase:Sellitems\tSellitems\tstwp, bspd\tbase:ngme\n",
+        "单位\tngme\t地精商店\tbase:Sellitems\tSellitems\tstwp, bspd\tbase:ngme\n"
+        "科技\tR0AA\t改良伐木测试\tglvl\t等级数\t10\twar3map.w3q\n"
+        "科技\tR0AA\t改良伐木测试\tglmb\t基础木材\t100\twar3map.w3q\n"
+        "科技\tR0AA\t改良伐木测试\tglmm\t木材增量\t20\twar3map.w3q\n"
+        "科技\tR0AA\t改良伐木测试\tgglm\t金币增量\t20\twar3map.w3q\n"
+        "科技\tR0AA\t改良伐木测试\tgub1:1\t扩展提示 (等级1)\t每级+1木\twar3map.w3q\n"
+        "科技\tR0AA\t改良伐木测试\tgub1:10\t扩展提示 (等级10)\t高级+2木\twar3map.w3q\n"
+        "科技\tR0AA\t改良伐木测试\tgreq:1\t依赖科技 (等级1)\tR0A9\twar3map.w3q\n"
+        "科技\tR0AA\t改良伐木测试\tbase:gglb\t基础金\t555\tbase:rhlh\n",
+        encoding="utf-8",
+    )
+    (obj / "科技.tsv").write_text(
+        "科技	四码	数值	四码2	名称	自定义	说明\n"
+        "科技	R0AA	1	rhlh	改良伐木测试	是	说明\n",
         encoding="utf-8",
     )
     (tmp_path / "脚本字符串索引.tsv").write_text(
@@ -72,6 +85,30 @@ def pack(tmp_path):
         encoding="utf-8",
     )
     return tmp_path
+
+
+def test_parse_tech_command():
+    o = parse_pack_query_cli_options(["pack", "tech", "R0AA"])
+    assert (o.command, o.query) == ("tech", "R0AA")
+
+
+def test_query_tech_sheet_custom_overrides_and_base_inherit(pack):
+    from w3xtool.pack_query_cli import _query_tech, load_tech_fields, load_techs
+
+    assert load_techs(pack)["R0AA"][0] == "改良伐木测试"
+    assert load_tech_fields(pack)["R0AA"]["glvl"] == "10"
+    assert "base:gglb" not in load_tech_fields(pack)["R0AA"]
+    lines = _query_tech(pack, "R0AA", 20)
+    text = "\n".join(lines)
+    assert lines[0] == "[R0AA] 改良伐木测试  (基础: rhlh)"
+    assert "最大等级: 10" in text
+    # 金基数走 base_objects 继承(rhlh=100), 不吃 base: 行的 555
+    assert "每级费用: 金 100+20/级, 木 100+20/级" in text
+    assert "满级累计: 金1900 木1900" in text
+    assert "效果(1级): 每级+1木" in text
+    assert "效果(10级): 高级+2木" in text
+    assert "前置: 1级←R0A9" in text
+    assert _query_tech(pack, "zz不存在", 20) == ["未找到科技: zz不存在"]
 
 
 def test_parse_ok():

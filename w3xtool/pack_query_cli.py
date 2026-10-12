@@ -12,6 +12,7 @@
     quest  <关键词>     任务注册文本与剧情对话
     text   <关键词>     全包 TSV 有界搜索
     price  <名字|四码>   金币价（igol 地图价优先, 基础ID继承）
+    tech   <名字|四码>   科技卡（最大等级/每级金木费用/效果/前置, 自定义字段优先基础继承）
 
 设计动机：避免为每次查询写一次性脚本/起多个进程（文件变更通知会拖垮资源
 管理器外壳）；全部查询在单次进程内完成，输出有界。
@@ -36,7 +37,7 @@ __all__ = (
     "run_pack_query_cli",
 )
 
-_COMMANDS = ("item", "recipe", "where", "drop", "quest", "text", "price", "shop")
+_COMMANDS = ("item", "recipe", "where", "drop", "quest", "text", "price", "shop", "tech")
 _COLOR_RE = re.compile(r"\|c[0-9A-Fa-f]{8}|\|r")
 
 
@@ -225,6 +226,129 @@ def _base_prices() -> dict[str, str]:
     return _base_price_cache
 
 
+_tech_base_fields_cache: dict[str, dict[str, str]] | None = None
+
+
+def _tech_base_fields() -> dict[str, dict[str, str]]:
+    """基础科技四码(小写) -> {字段名: 值}（生成表 base_objects.BASE_OBJECTS）。"""
+    global _tech_base_fields_cache
+    if _tech_base_fields_cache is None:
+        from .base_objects import BASE_OBJECTS
+
+        out: dict[str, dict[str, str]] = {}
+        for code, entry in BASE_OBJECTS.items():
+            if entry[0] != "科技":
+                continue
+            out[code.lower()] = {k: v for k, v in entry[1]}
+        _tech_base_fields_cache = out
+    return _tech_base_fields_cache
+
+
+def load_techs(pack_dir: Path) -> dict[str, tuple[str, str]]:
+    """科技四码 -> (去色名称, 基础ID小写)。基础ID非四码时为空串。"""
+    out: dict[str, tuple[str, str]] = {}
+    for r in _read_rows(pack_dir, "对象ID/科技.tsv"):
+        if len(r) > 4 and len(r[1]) == 4:
+            base = r[3].lower() if len(r[3]) == 4 else ""
+            out[r[1]] = (_clean(r[4]), base)
+    return out
+
+
+def load_tech_fields(pack_dir: Path) -> dict[str, dict[str, str]]:
+    """科技四码 -> {自定义字段键: 值}（不含 base: 继承行；gub1:N/greq:N 原样保留）。"""
+    out: dict[str, dict[str, str]] = {}
+    for r in _read_rows(pack_dir, "对象字段.tsv"):
+        if (
+            len(r) > 5
+            and r[0] == "科技"
+            and len(r[1]) == 4
+            and not r[3].startswith("base:")
+        ):
+            out.setdefault(r[1], {})[r[3]] = _clean(r[5].lstrip("'"))
+    return out
+
+
+def _query_tech(pack: Path, query: str, limit: int) -> list[str]:
+    techs = load_techs(pack)
+    fields = load_tech_fields(pack)
+    bases = _tech_base_fields()
+    lines: list[str] = []
+    for code, (name, base_id) in techs.items():
+        if not _match(query, code, name):
+            continue
+        f = fields.get(code, {})
+        base_f = bases.get(base_id, {})
+
+        def _num(custom_key: str, base_label: str) -> int | None:
+            for v in (f.get(custom_key), base_f.get(base_label)):
+                if v and v.lstrip("'") not in ("-", "_", "'"):
+                    try:
+                        return int(float(v))
+                    except ValueError:
+                        pass
+            return None
+
+        levels = _num("glvl", "最大等级")
+        gold_b = _num("gglb", "基础金")
+        gold_i = _num("gglm", "金增量")
+        lum_b = _num("glmb", "基础木")
+        lum_i = _num("glmm", "木增量")
+
+        lines.append(
+            "[" + code + "] " + name + (("  (基础: " + base_id + ")") if base_id else "")
+        )
+        if levels:
+            lines.append("  最大等级: " + str(levels))
+        cost_bits = []
+        if gold_b is not None:
+            cost_bits.append("金 " + str(gold_b) + (("+" + str(gold_i) + "/级") if gold_i else ""))
+        if lum_b is not None:
+            cost_bits.append("木 " + str(lum_b) + (("+" + str(lum_i) + "/级") if lum_i else ""))
+        if cost_bits:
+            lines.append("  每级费用: " + ", ".join(cost_bits))
+        if levels and levels > 1:
+
+            def _cost(n: int) -> str:
+                g = str(gold_b + gold_i * (n - 1)) if gold_b is not None else "-"
+                w = str(lum_b + lum_i * (n - 1)) if lum_b is not None else "-"
+                return "金" + g + " 木" + w
+
+            marks = sorted({1, min(5, levels), levels})
+            lines.append(
+                "  级费用: " + " | ".join(str(n) + "级 " + _cost(n) for n in marks)
+            )
+            gsum = (
+                sum(gold_b + gold_i * (n - 1) for n in range(1, levels + 1))
+                if gold_b is not None
+                else None
+            )
+            wsum = (
+                sum(lum_b + lum_i * (n - 1) for n in range(1, levels + 1))
+                if lum_b is not None
+                else None
+            )
+            if gsum is not None or wsum is not None:
+                lines.append(
+                    "  满级累计: "
+                    + (("金" + str(gsum) + " ") if gsum is not None else "")
+                    + (("木" + str(wsum)) if wsum is not None else "")
+                )
+        if levels:
+            for lv in (1, levels):
+                t = f.get("gub1:" + str(lv))
+                if t:
+                    lines.append("  效果(" + str(lv) + "级): " + t[:120])
+        reqs = sorted((k, v) for k, v in f.items() if k.startswith("greq:"))
+        if reqs:
+            lines.append(
+                "  前置: " + ", ".join(k.split(":", 1)[1] + "级←" + v for k, v in reqs)
+            )
+        lines.append("")
+        if len(lines) >= limit * 8:
+            break
+    return lines or ["未找到科技: " + query]
+
+
 def _item_price(
     bases: dict[str, str], code: str, overrides: dict[str, str] | None = None
 ) -> str:
@@ -337,7 +461,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         rest = rest[:i] + rest[i + 2 :]
     if len(rest) != 3:
         raise PackQueryCliOptionError(
-            "用法: pack-query <资料包目录> <item|recipe|where|drop|quest|text|price> <查询词>"
+            "用法: pack-query <资料包目录> <item|recipe|where|drop|quest|text|price|tech> <查询词>"
         )
     pack_dir, command, query = rest
     if command not in _COMMANDS:
@@ -559,6 +683,7 @@ _QUERIES = {
     "text": _query_text,
     "price": _query_price,
     "shop": _query_shop,
+    "tech": _query_tech,
 }
 
 
