@@ -495,16 +495,26 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
 def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
     q = query.lower()
     lines = []
+    kinds = set()
     for r in _read_rows(pack, "掉落与获取关系.tsv"):
         if len(r) < 7:
             continue
         code, name = r[3], _clean(r[4])
         if not (q == code.lower() or q in name.lower() or name.lower() in q):
             continue
+        kinds.add(r[2])
         lines.append(name + " [" + code + "]  " + r[2] + " <- " + r[5] + " " + r[6])
         if len(lines) >= limit:
             break
-    return lines or ["未找到获取途径: " + query]
+    if not lines:
+        return ["未找到获取途径: " + query]
+    if not any("掉落" in k for k in kinds):
+        lines.append(
+            "⚠ 防呆: 该物品无 Boss/单位死亡掉落记录(仅 "
+            + "/".join(sorted(kinds))
+            + ")——不得断言打怪掉落; NPC 随身携带不构成掉落证据"
+        )
+    return lines
 
 
 def _query_quest(pack: Path, query: str, limit: int) -> list[str]:
