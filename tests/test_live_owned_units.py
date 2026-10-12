@@ -6,6 +6,7 @@ from __future__ import annotations
 import struct
 
 from w3xtool import live_cli
+from w3xtool.live_handle_chain import OWNED_UNITS_PARTIAL_VIEW_NOTE
 from w3xtool.live_handle_chain import (
     UNIT_OWNER_OFF,
     UNIT_POS_X_OFF,
@@ -22,6 +23,12 @@ from w3xtool.live_handle_chain import (
     owner_slot_codes,
     parse_nick_overrides,
 )
+
+
+def test_owned_units_partial_view_note_required_phrases():
+    # 闸门5护栏: owned_units 输出必须永久携带部分视图警告 (防止误当全量清单下否定结论)
+    for phrase in ("部分视图", "否定结论", "owner_counts"):
+        assert phrase in OWNED_UNITS_PARTIAL_VIEW_NOTE
 
 
 def test_parse_nick_overrides_maps_and_ignores_garbage():

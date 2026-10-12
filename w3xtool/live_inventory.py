@@ -823,10 +823,7 @@ def read_live(
                     }
                     for u in listed + rescued
                 ]
-                report["notes"].append(
-                    "owned_units 为部分视图: 仅含带物品/打捞单位, 不含无物品单位 — "
-                    "禁止据此下『玩家没有某单位/某建筑』类否定结论, 全量计数见 owner_counts"
-                )
+                report["notes"].append(hc.OWNED_UNITS_PARTIAL_VIEW_NOTE)
                 if rescued:
                     report["notes"].append(
                         f"大玩家号槽位过滤后, 从带物品单位打捞 {len(rescued)} 个条目"

@@ -60,6 +60,13 @@ __all__ = (
 UNIT_OWNER_OFF = 0x58
 UNIT_POS_X_OFF = 0x284
 UNIT_POS_Y_OFF = 0x288
+
+# 闸门5护栏: owned_units 输出必须永久携带的部分视图警告文本
+# (live_inventory 组装报告时无条件追加; 防止误当全量清单下"玩家没有X"类否定结论)
+OWNED_UNITS_PARTIAL_VIEW_NOTE = (
+    "owned_units 为部分视图: 仅含带物品/打捞单位, 不含无物品单位 — "
+    "禁止据此下『玩家没有某单位/某建筑』类否定结论, 全量计数见 owner_counts"
+)
 # 坐标合理上限 (超出视为解析失败而不是游戏坐标)。
 _POS_SPAN_LIMIT = 200000.0
 
