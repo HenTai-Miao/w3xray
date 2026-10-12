@@ -59,7 +59,7 @@
 - 断言防呆三闸（回答玩家"怎么获得/打谁掉什么/一共有几个"类问题前必须全过；机制通用，不绑定具体地图名词，历史实例见 AGENTS.d/map-evidence.md 附录）：①**掉落断言前置**——"打 X 掉 Y/通关奖励 Y"必须先跑 `pack-query where <id>` 与 `pack-query drop <id>` 并引用其输出；单位身上带某物品（脚本塞给剧情 NPC 的展示道具）不构成掉落证据；掉落与获取关系.tsv 无该物品的单位死亡掉落行时必须明说"无掉落记录，仅合成/脚本奖励"。②**计数满量**——用 grep/脚本索引统计数量（Boss 个数、配方数、掉落点数）必须消费全部匹配行；grep 超出单次 250 上限时改用更窄 pattern 或按文件分片重查，禁止 `slice(0,N)` 后下结论；触发器行号顺序≠触发顺序，尾部行同样可能是关键实体。③**同名不同码**——单位同名不等于同一实体：先拿 fourcc 对当前图单位表的阵营/类型裁决身份（中立被动=剧情 NPC 站桩，不掉落；敌对槽位=战斗实体；连续 Boss 战常以另一 ID 重生同名 Boss）；随机奖池（脚本 itempool 数组）是"打怪抽奖"渠道，描述来源时写"池子 N 选 1、抽取点 M 处"而非固定掉落。
 - `AGENTS.d/runtime.md`: schema-6 commands, protected roots, output semantics, required reports, and resume rules.
 - `AGENTS.d/testing.md`: focused/full/static gates and schema-6 acceptance invariants.
-- `AGENTS.d/map-evidence.md`: 玩家提问的证据闸门（闸门 0 玩家状态先行 / 掉落断言前置 / 计数满量 / 同名不同码 / 内存边界），含事故存档。
+- `AGENTS.d/map-evidence.md`: 玩家提问的证据闸门（闸门 0 玩家状态先行 / 掉落断言前置 / 计数满量 / 同名不同码 / 内存边界 / 否定断言与测量前提），含事故存档。
 - `AGENTS.d/chat-style.md`: 对玩家的聊天风格与口语解析（对当前图词表做宽松匹配解析口语输入、字面未命中先扩展再否定、回答形态按问题分级、用户质疑=重查信号、局内节奏）。
 
 ## Boundaries
