@@ -59,6 +59,8 @@
 - 断言防呆三闸（灰色意志会话教训；回答玩家"怎么获得/打谁掉什么/一共有几个"类问题前必须全过）：①**掉落断言前置**——"打 X 掉 Y/通关奖励 Y"必须先跑 `pack-query where <id>` 与 `pack-query drop <id>` 并引用其输出；单位身上带某物品（脚本 `UnitAddItemToSlotById` 的剧情道具，常见于剧情 NPC）不构成掉落证据；掉落与获取关系.tsv 无该物品的 Boss 掉落行时必须明说"无掉落记录，仅合成/脚本奖励"（实例：星之守护 I03D 只能合成，剧情永琳 H017 随身带它但不掉）。②**计数满量**——用 grep/脚本索引统计数量（Boss 个数、配方数、掉落点数）必须消费全部匹配行；grep 超出单次 250 上限时改用更窄 pattern 或分片重查，禁止 `slice(0,N)` 后下结论（实例：61 条 Boss Rush 播报只看前 30 条，把 9 个 Boss 数成 8 个、漏了八意永琳）。③**同名不同码**——单位同名不等于同一实体：先拿 fourcc 对 `单位.tsv` 的阵营/类型裁决身份（中立被动=剧情 NPC 站桩；敌对槽位=Boss 实体；Boss Rush 常以另一 ID 重生 Boss，实例：剧情永琳 H017 vs Rush Boss H010）；随机奖池（itempool，如 `udg_SAO[]` 数组）是"打怪抽奖"渠道，描述来源时写"池子 N 选 1、抽取点 M 处"而非固定掉落（实例：SAO[5] 含涡流/嗜血等 13 种符文，Boss Rush 与巢穴共 20 个抽取点）。
 - `AGENTS.d/runtime.md`: schema-6 commands, protected roots, output semantics, required reports, and resume rules.
 - `AGENTS.d/testing.md`: focused/full/static gates and schema-6 acceptance invariants.
+- `AGENTS.d/map-evidence.md`: 玩家提问的证据闸门（闸门 0 玩家状态先行 / 掉落断言前置 / 计数满量 / 同名不同码 / 内存边界），含事故存档。
+- `AGENTS.d/chat-style.md`: 对玩家的聊天风格与口语解析（错别字映射、字面未命中先扩同义词、回答形态按问题分级、用户质疑=重查信号、局内节奏）。
 
 ## Boundaries
 - Do not hand-edit caches/environments: `.venv/`, `__pycache__/`, `.pytest_cache/`, `.ruff_cache/`.
