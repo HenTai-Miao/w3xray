@@ -80,6 +80,32 @@ def pack(tmp_path):
         "科技	R0AA	1	rhlh	改良伐木测试	是	说明\n",
         encoding="utf-8",
     )
+    script_dir = tmp_path / "脚本可读文本"
+    script_dir.mkdir()
+    (script_dir / "war3map.j").write_text(
+        "function Trig_ABCActions takes nothing returns nothing\r"
+        "call KillUnit(GetTriggerUnit())\r"
+        "endfunction\r"
+        "function Trig_hgtConditions takes nothing returns boolean\r"
+        "return true\r"
+        "endfunction\r"
+        "function Trig_hgtActions takes nothing returns nothing\r"
+        "call PanCameraToTimedLocForPlayer(GetTriggerPlayer(), udg_fhd, 0.10)\r"
+        "endfunction\r"
+        "function InitTrig_ABC takes nothing returns nothing\r"
+        "set gg_trg_ABC=CreateTrigger()\r"
+        'call TriggerRegisterPlayerChatEvent(gg_trg_ABC, Player(1), "自杀", true)\r'
+        'call TriggerRegisterPlayerChatEvent(gg_trg_ABC, Player(2), "自杀", true)\r'
+        "call TriggerAddAction(gg_trg_ABC, function Trig_ABCActions)\r"
+        "endfunction\r"
+        "function InitTrig_hgt takes nothing returns nothing\r"
+        "set gg_trg_hgt=CreateTrigger()\r"
+        'call TriggerRegisterPlayerChatEvent(gg_trg_hgt, Player(1), "hg", false)\r'
+        "call TriggerAddCondition(gg_trg_hgt, Condition(function Trig_hgtConditions))\r"
+        "call TriggerAddAction(gg_trg_hgt, function Trig_hgtActions)\r"
+        "endfunction\r",
+        encoding="utf-8",
+    )
     (tmp_path / "脚本字符串索引.tsv").write_text(
         'war3map.j\t99\tTrig_xActions\tCreateQuestBJ\t字符串\t消失的玻璃球\t\tset udg=CreateQuestBJ(1, "消失的玻璃球", "找到老爷爷丢失的玻璃球")\n',
         encoding="utf-8",
@@ -109,6 +135,27 @@ def test_query_tech_sheet_custom_overrides_and_base_inherit(pack):
     assert "效果(10级): 高级+2木" in text
     assert "前置: 1级←R0A9" in text
     assert _query_tech(pack, "zz不存在", 20) == ["未找到科技: zz不存在"]
+
+
+def test_query_cmd_effect_chain(pack):
+    from w3xtool.pack_query_cli import _query_cmd, load_script
+
+    script = load_script(pack)
+    assert script is not None and "\r" not in script
+    lines = _query_cmd(pack, "自杀", 10)
+    text = "\n".join(lines)
+    assert '指令 "自杀" (精确, 注册2个玩家位) -> gg_trg_ABC' in text
+    assert "KillUnit" in text
+    hg = "\n".join(_query_cmd(pack, "hg", 10))
+    assert '指令 "hg" (前缀' in hg
+    assert "条件: function Trig_hgtConditions" in hg
+    assert "PanCameraToTimedLocForPlayer" in hg
+    assert _query_cmd(pack, "不存在zz", 10) == ["未找到聊天指令: 不存在zz"]
+
+
+def test_parse_cmd_command():
+    o = parse_pack_query_cli_options(["pack", "cmd", "自杀"])
+    assert (o.command, o.query) == ("cmd", "自杀")
 
 
 def test_parse_ok():

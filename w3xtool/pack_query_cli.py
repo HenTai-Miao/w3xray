@@ -13,6 +13,7 @@
     text   <关键词>     全包 TSV 有界搜索
     price  <名字|四码>   金币价（igol 地图价优先, 基础ID继承）
     tech   <名字|四码>   科技卡（最大等级/每级金木费用/效果/前置, 自定义字段优先基础继承）
+    cmd    <指令文字>    聊天指令效果链（注册->触发器->条件+动作函数体节选, 免手搓脚本）
 
 设计动机：避免为每次查询写一次性脚本/起多个进程（文件变更通知会拖垮资源
 管理器外壳）；全部查询在单次进程内完成，输出有界。
@@ -37,7 +38,18 @@ __all__ = (
     "run_pack_query_cli",
 )
 
-_COMMANDS = ("item", "recipe", "where", "drop", "quest", "text", "price", "shop", "tech")
+_COMMANDS = (
+    "item",
+    "recipe",
+    "where",
+    "drop",
+    "quest",
+    "text",
+    "price",
+    "shop",
+    "tech",
+    "cmd",
+)
 _COLOR_RE = re.compile(r"\|c[0-9A-Fa-f]{8}|\|r")
 
 
@@ -295,15 +307,23 @@ def _query_tech(pack: Path, query: str, limit: int) -> list[str]:
         lum_i = _num("glmm", "木增量")
 
         lines.append(
-            "[" + code + "] " + name + (("  (基础: " + base_id + ")") if base_id else "")
+            "["
+            + code
+            + "] "
+            + name
+            + (("  (基础: " + base_id + ")") if base_id else "")
         )
         if levels:
             lines.append("  最大等级: " + str(levels))
         cost_bits = []
         if gold_b is not None:
-            cost_bits.append("金 " + str(gold_b) + (("+" + str(gold_i) + "/级") if gold_i else ""))
+            cost_bits.append(
+                "金 " + str(gold_b) + (("+" + str(gold_i) + "/级") if gold_i else "")
+            )
         if lum_b is not None:
-            cost_bits.append("木 " + str(lum_b) + (("+" + str(lum_i) + "/级") if lum_i else ""))
+            cost_bits.append(
+                "木 " + str(lum_b) + (("+" + str(lum_i) + "/级") if lum_i else "")
+            )
         if cost_bits:
             lines.append("  每级费用: " + ", ".join(cost_bits))
         if levels and levels > 1:
@@ -461,7 +481,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         rest = rest[:i] + rest[i + 2 :]
     if len(rest) != 3:
         raise PackQueryCliOptionError(
-            "用法: pack-query <资料包目录> <item|recipe|where|drop|quest|text|price|tech> <查询词>"
+            "用法: pack-query <资料包目录> <item|recipe|where|drop|quest|text|price|shop|tech|cmd> <查询词>"
         )
     pack_dir, command, query = rest
     if command not in _COMMANDS:
@@ -674,6 +694,72 @@ def _query_text(pack: Path, query: str, limit: int) -> list[str]:
     return lines or ["未找到文本: " + query]
 
 
+_CHAT_REG_RE = re.compile(
+    r"TriggerRegisterPlayerChatEvent\(\s*(gg_trg_\w+)\s*,\s*Player\(\d+\)\s*,\s*"
+    r'"([^"]*)"\s*,\s*(true|false)\s*\)'
+)
+_ADD_ACTION_RE = re.compile(r"TriggerAddAction\(\s*(gg_trg_\w+)\s*,\s*function\s+(\w+)")
+_ADD_COND_RE = re.compile(
+    r"TriggerAddCondition\(\s*(gg_trg_\w+)\s*,\s*Condition\(function\s+(\w+)\)"
+)
+
+
+def load_script(pack_dir: Path) -> str | None:
+    """脚本可读文本/*.j 全文（\r 归一为 \n），无则 None。"""
+    d = pack_dir / "脚本可读文本"
+    if not d.is_dir():
+        return None
+    for p in sorted(d.glob("*.j")):
+        try:
+            return p.read_text(encoding="utf-8", errors="replace").replace("\r", "\n")
+        except OSError:
+            continue
+    return None
+
+
+def _fn_body(script: str, fn: str, cap: int = 900) -> str:
+    i = script.find("function " + fn + " takes")
+    if i < 0:
+        return "(未找到函数体)"
+    j = script.find("endfunction", i)
+    body = script[i : (j + len("endfunction")) if j >= 0 else i + cap]
+    return " ".join(body.split())[:cap]
+
+
+def _query_cmd(pack: Path, query: str, limit: int) -> list[str]:
+    script = load_script(pack)
+    if script is None:
+        return ["未找到脚本 (脚本可读文本/*.j)——该包可能未导出可读脚本"]
+    regs: dict[str, tuple[str, str, int]] = {}
+    for m in _CHAT_REG_RE.finditer(script):
+        var, cmd, exact = m.group(1), m.group(2), m.group(3)
+        if query in cmd or cmd in query:
+            v = regs.setdefault(var, (cmd, exact, 0))
+            regs[var] = (v[0], v[1], v[2] + 1)
+    if not regs:
+        return ["未找到聊天指令: " + query]
+    actions = dict(_ADD_ACTION_RE.findall(script))
+    conds = dict(_ADD_COND_RE.findall(script))
+    lines: list[str] = []
+    for var, (cmd, exact, count) in sorted(regs.items(), key=lambda kv: -kv[1][2]):
+        if len(lines) >= limit * 6:
+            break
+        lines.append(
+            f'指令 "{cmd}" ({"精确" if exact == "true" else "前缀"}, 注册{count}个玩家位) -> {var}'
+        )
+        cond = conds.get(var)
+        if cond:
+            lines.append("  条件: " + _fn_body(script, cond, 320))
+        act = actions.get(var)
+        lines.append(
+            "  动作: " + _fn_body(script, act)
+            if act
+            else "  动作: (未找到 TriggerAddAction)"
+        )
+        lines.append("")
+    return lines
+
+
 _QUERIES = {
     "item": _query_item,
     "recipe": _query_recipe,
@@ -684,6 +770,7 @@ _QUERIES = {
     "price": _query_price,
     "shop": _query_shop,
     "tech": _query_tech,
+    "cmd": _query_cmd,
 }
 
 
