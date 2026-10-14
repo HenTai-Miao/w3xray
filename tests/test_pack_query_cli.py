@@ -106,6 +106,18 @@ def pack(tmp_path):
         "endfunction\r",
         encoding="utf-8",
     )
+    ref_rows = [
+        "来源\t行号\t函数\t对象码\t10进制\t分类\t名称\t对象来源\t上下文\t机制\t摘要\t英文名\t细类",
+        "war3map.j\t10\tTrig_A\tIZYY\t1\t物品\t断链弓\ttxt\tObjectCode\tObjectCode\tcall UnitAddItemByIdSwapped('IZYY',GetTriggerUnit())\t\t",
+        "war3map.j\t11\tTrig_A\tIZYY\t1\t物品\t断链弓\ttxt\tObjectCode\tObjectCode\tcall UnitAddItemToSlotById(gg_unit_X,'IZYY',1)\t\t",
+        "war3map.j\t20\tTrig_B\tIZZZ\t1\t物品\t链上弓\ttxt\tObjectCode\tObjectCode\tcall UnitAddItemByIdSwapped('IZZZ',GetTriggerUnit())\t\t",
+        "war3map.j\t21\tTrig_B\tIZZZ\t1\t物品\t链上弓\ttxt\tObjectCode\tObjectCode\tif((YDWEUnitHasItemOfTypeBJNull(GetTriggerUnit(),'IZZZ')==true))then\t\t",
+        "war3map.j\t30\tCreateNeutralHostile\tu0ZZ\t1\t单位\t假英雄\ttxt\t赋值\t赋值\tset u=CreateUnit(p,'u0ZZ',1.0,2.0,0)\t\t",
+        "war3map.j\t40\tYDWETimer\tEMPT\t1\t技能\t\ttxt\tObjectCode\tObjectCode\tset i=LoadInteger(YDHT,id,'EMPT')\t\t",
+    ]
+    (tmp_path / "脚本对象码出现索引.tsv").write_text(
+        "\n".join(ref_rows) + "\n", encoding="utf-8"
+    )
     (tmp_path / "脚本字符串索引.tsv").write_text(
         'war3map.j\t99\tTrig_xActions\tCreateQuestBJ\t字符串\t消失的玻璃球\t\tset udg=CreateQuestBJ(1, "消失的玻璃球", "找到老爷爷丢失的玻璃球")\n',
         encoding="utf-8",
@@ -156,6 +168,26 @@ def test_query_cmd_effect_chain(pack):
 def test_parse_cmd_command():
     o = parse_pack_query_cli_options(["pack", "cmd", "自杀"])
     assert (o.command, o.query) == ("cmd", "自杀")
+
+
+def test_query_refs_chain_termination_and_classification(pack):
+    from w3xtool.pack_query_cli import _query_refs
+
+    dead = "\n".join(_query_refs(pack, "IZYY", 10))
+    assert "[IZYY] 断链弓  (物品)  共2处引用" in dead
+    assert "给予/创建: 2 处" in dead
+    assert "零消耗引用" in dead
+    live = "\n".join(_query_refs(pack, "IZZZ", 10))
+    assert "作为材料/触发媒介(被检测或移除): 1 处" in live
+    assert "零消耗引用" not in live
+    unit = "\n".join(_query_refs(pack, "假英雄", 10))
+    assert "[u0ZZ] 假英雄  (单位)" in unit and "给予/创建: 1 处" in unit
+    assert _query_refs(pack, "不存在zz", 10) == ["未找到引用: 不存在zz"]
+
+
+def test_parse_refs_command():
+    o = parse_pack_query_cli_options(["pack", "refs", "IZYY"])
+    assert (o.command, o.query) == ("refs", "IZYY")
 
 
 def test_parse_ok():

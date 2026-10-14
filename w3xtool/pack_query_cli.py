@@ -14,6 +14,7 @@
     price  <名字|四码>   金币价（igol 地图价优先, 基础ID继承）
     tech   <名字|四码>   科技卡（最大等级/每级金木费用/效果/前置, 自定义字段优先基础继承）
     cmd    <指令文字>    聊天指令效果链（注册->触发器->条件+动作函数体节选, 免手搓脚本）
+    refs   <四码|名>     对象码脚本引用分类（给予/作为材料/生成），物品零消耗引用=升级链终止
 
 设计动机：避免为每次查询写一次性脚本/起多个进程（文件变更通知会拖垮资源
 管理器外壳）；全部查询在单次进程内完成，输出有界。
@@ -49,6 +50,7 @@ _COMMANDS = (
     "shop",
     "tech",
     "cmd",
+    "refs",
 )
 _COLOR_RE = re.compile(r"\|c[0-9A-Fa-f]{8}|\|r")
 
@@ -481,7 +483,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         rest = rest[:i] + rest[i + 2 :]
     if len(rest) != 3:
         raise PackQueryCliOptionError(
-            "用法: pack-query <资料包目录> <item|recipe|where|drop|quest|text|price|shop|tech|cmd> <查询词>"
+            "用法: pack-query <资料包目录> <item|recipe|where|drop|quest|text|price|shop|tech|cmd|refs> <查询词>"
         )
     pack_dir, command, query = rest
     if command not in _COMMANDS:
@@ -760,6 +762,77 @@ def _query_cmd(pack: Path, query: str, limit: int) -> list[str]:
     return lines
 
 
+_GIVE_MECHS = ("UnitAddItem", "CreateItem")
+_GIVE_DIGEST_MARKS = (
+    "call UnitAddItem",
+    "call CreateItem",
+    "=CreateUnit",
+    "call CreateNUnitsAtLoc",
+)
+_CONSUME_MARKS = ("GetItemTypeId", "UnitHasItemOfType", "GetItemOfType", "RemoveItem")
+
+
+def _ref_kind(mech: str, digest: str) -> str:
+    """单条对象码引用的形态: give=给予/创建, consume=作为材料或触发媒介, other。
+
+    机制列常为笼统的 ObjectCode，native 名在摘要里，两处都嗅。"""
+    if (
+        mech.startswith(_GIVE_MECHS)
+        or "CreateItem" in mech
+        or any(m in digest for m in _GIVE_DIGEST_MARKS)
+    ):
+        return "give"
+    if any(m in digest for m in _CONSUME_MARKS):
+        return "consume"
+    return "other"
+
+
+def _query_refs(pack: Path, query: str, limit: int) -> list[str]:
+    rows = _read_rows(pack, "脚本对象码出现索引.tsv")
+    if not rows:
+        return ["未找到 脚本对象码出现索引.tsv（资料包未导出脚本索引）"]
+    q = query.lower()
+    give: list[tuple[str, str, str]] = []
+    consume: list[tuple[str, str, str]] = []
+    other: list[tuple[str, str, str]] = []
+    label = query
+    obj_kind = ""
+    for r in rows:
+        if len(r) < 11:
+            continue
+        code, kind, name, fn, mech, digest = r[3], r[5], _clean(r[6]), r[2], r[9], r[10]
+        if len(code) != 4 or not (
+            q == code.lower() or (name and (q in name.lower() or name.lower() in q))
+        ):
+            continue
+        if not (give or consume or other):
+            label = f"[{code}] {name}"
+            obj_kind = kind
+        entry = (r[1], fn, mech + " " + digest[:70])
+        bucket = _ref_kind(mech, digest)
+        (
+            give if bucket == "give" else consume if bucket == "consume" else other
+        ).append(entry)
+    if not (give or consume or other):
+        return ["未找到引用: " + query]
+    lines = [f"{label}  ({obj_kind})  共{len(give) + len(consume) + len(other)}处引用"]
+    lines.append(f"  给予/创建: {len(give)} 处")
+    lines.extend(f"    行{e[0]} {e[1]}  {e[2]}" for e in give[:limit])
+    lines.append(f"  作为材料/触发媒介(被检测或移除): {len(consume)} 处")
+    lines.extend(f"    行{e[0]} {e[1]}  {e[2]}" for e in consume[:limit])
+    if other:
+        lines.append(f"  其他引用: {len(other)} 处")
+        lines.extend(f"    行{e[0]} {e[1]}  {e[2]}" for e in other[: min(limit, 5)])
+    if obj_kind == "物品" and give and not consume:
+        lines.append(
+            "  ⚠ 零消耗引用: 该物品没有任何'作为材料被检测/移除'的记录 -> 升级链在此终止"
+        )
+        lines.append(
+            "    (名字带[N/M]不证明存在下一级; 报'可升级'前必须有消耗它的配方证据)"
+        )
+    return lines
+
+
 _QUERIES = {
     "item": _query_item,
     "recipe": _query_recipe,
@@ -771,6 +844,7 @@ _QUERIES = {
     "shop": _query_shop,
     "tech": _query_tech,
     "cmd": _query_cmd,
+    "refs": _query_refs,
 }
 
 
