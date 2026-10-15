@@ -1033,6 +1033,14 @@ def main(argv=None):
             lumber = r2["lumber"] if r2.get("lumber") is not None else "?"
             print(f"  {r2['addr']}: 金{gold} 木{lumber}{food}")
     prows = rep.get("player_rows")
+    if (args.players or args.resources) and not prows:
+        garbage = counts and len(counts) == 1 and next(iter(counts.values()), 0) > 1000
+        print("== 归属不可读 ==")
+        print("  ⚠ 玩家号->单位归属链未产出 (本图布局差异):")
+        print("    禁止把场上单位/背包断言为某玩家的; 操作者只能以'当前选中'+复探位移")
+        print("    推断, 且必须向玩家明示不确定。")
+        if garbage:
+            print(f"    (owner_counts 疑似垃圾读数: {counts})")
     if prows:
         print("== 按玩家号 (权威链直读, 玩家号=大厅号) ==")
         for line in prows:
@@ -1054,7 +1062,8 @@ def main(argv=None):
     elif rep.get("strategy_used") == "handle" and rep.get("selected_unit"):
         sel = rep["selected_unit"]
         pos = f" @ ({sel['x']:.0f}, {sel['y']:.0f})" if sel.get("x") is not None else ""
-        print(f"当前选中: {sel['unit']} [{sel['code']}]{pos}")
+        label = "当前选中" if prows else "当前选中(归属未知)"
+        print(f"{label}: {sel['unit']} [{sel['code']}]{pos}")
         for it in sel["items"]:
             print(f"  槽{it['slot']}: {it['name']} [{it['code']}]")
         others = [u for u in rep.get("units", []) if u != sel]

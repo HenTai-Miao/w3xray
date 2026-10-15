@@ -103,6 +103,16 @@ def pack(tmp_path):
         'call TriggerRegisterPlayerChatEvent(gg_trg_hgt, Player(1), "hg", false)\r'
         "call TriggerAddCondition(gg_trg_hgt, Condition(function Trig_hgtConditions))\r"
         "call TriggerAddAction(gg_trg_hgt, function Trig_hgtActions)\r"
+        "endfunction\r"
+        "function InitTrig_zst takes nothing returns nothing\r"
+        "set gg_trg_zst=CreateTrigger()\r"
+        'call TriggerRegisterPlayerChatEvent(gg_trg_zst, ConvertedPlayer(GetForLoopIndexA()), "-zs", true)\r'
+        "call TriggerAddAction(gg_trg_zst, function Trig_ABCActions)\r"
+        "endfunction\r"
+        "function InitTrig_zoom takes nothing returns nothing\r"
+        "set gg_trg_zoom=CreateTrigger()\r"
+        'call TriggerRegisterPlayerChatEvent(gg_trg_zoom, Player(0), "-", true)\r'
+        "call TriggerAddAction(gg_trg_zoom, function Trig_ABCActions)\r"
         "endfunction\r",
         encoding="utf-8",
     )
@@ -188,6 +198,17 @@ def test_query_refs_chain_termination_and_classification(pack):
 def test_parse_refs_command():
     o = parse_pack_query_cli_options(["pack", "refs", "IZYY"])
     assert (o.command, o.query) == ("refs", "IZYY")
+
+
+def test_query_cmd_exact_precedence_and_loop_registration(pack):
+    from w3xtool.pack_query_cli import _query_cmd
+
+    zs = "\n".join(_query_cmd(pack, "-zs", 10))
+    assert '指令 "-zs" (精确' in zs
+    assert '指令 "-"' not in zs
+    dash = "\n".join(_query_cmd(pack, "-", 10))
+    assert '指令 "-" (精确' in dash
+    assert '指令 "-zs"' not in dash
 
 
 def test_parse_ok():

@@ -331,8 +331,8 @@ def _query_tech(pack: Path, query: str, limit: int) -> list[str]:
         if levels and levels > 1:
 
             def _cost(n: int) -> str:
-                g = str(gold_b + gold_i * (n - 1)) if gold_b is not None else "-"
-                w = str(lum_b + lum_i * (n - 1)) if lum_b is not None else "-"
+                g = str(gold_b + (gold_i or 0) * (n - 1)) if gold_b is not None else "-"
+                w = str(lum_b + (lum_i or 0) * (n - 1)) if lum_b is not None else "-"
                 return "金" + g + " 木" + w
 
             marks = sorted({1, min(5, levels), levels})
@@ -340,12 +340,12 @@ def _query_tech(pack: Path, query: str, limit: int) -> list[str]:
                 "  级费用: " + " | ".join(str(n) + "级 " + _cost(n) for n in marks)
             )
             gsum = (
-                sum(gold_b + gold_i * (n - 1) for n in range(1, levels + 1))
+                sum(gold_b + (gold_i or 0) * (n - 1) for n in range(1, levels + 1))
                 if gold_b is not None
                 else None
             )
             wsum = (
-                sum(lum_b + lum_i * (n - 1) for n in range(1, levels + 1))
+                sum(lum_b + (lum_i or 0) * (n - 1) for n in range(1, levels + 1))
                 if lum_b is not None
                 else None
             )
@@ -697,7 +697,8 @@ def _query_text(pack: Path, query: str, limit: int) -> list[str]:
 
 
 _CHAT_REG_RE = re.compile(
-    r"TriggerRegisterPlayerChatEvent\(\s*(gg_trg_\w+)\s*,\s*Player\(\d+\)\s*,\s*"
+    r"TriggerRegisterPlayerChatEvent\(\s*(gg_trg_\w+)\s*,\s*"
+    r"([A-Za-z_]\w*(?:\((?:[^()]|\([^()]*\))*\))?)\s*,\s*"
     r'"([^"]*)"\s*,\s*(true|false)\s*\)'
 )
 _ADD_ACTION_RE = re.compile(r"TriggerAddAction\(\s*(gg_trg_\w+)\s*,\s*function\s+(\w+)")
@@ -732,12 +733,19 @@ def _query_cmd(pack: Path, query: str, limit: int) -> list[str]:
     script = load_script(pack)
     if script is None:
         return ["未找到脚本 (脚本可读文本/*.j)——该包可能未导出可读脚本"]
-    regs: dict[str, tuple[str, str, int]] = {}
+    exact_hits: dict[str, tuple[str, str, int]] = {}
+    loose_hits: dict[str, tuple[str, str, int]] = {}
     for m in _CHAT_REG_RE.finditer(script):
-        var, cmd, exact = m.group(1), m.group(2), m.group(3)
-        if query in cmd or cmd in query:
-            v = regs.setdefault(var, (cmd, exact, 0))
-            regs[var] = (v[0], v[1], v[2] + 1)
+        var, cmd, exact = m.group(1), m.group(3), m.group(4)
+        if cmd == query:
+            bucket = exact_hits
+        elif query in cmd or (cmd in query and len(cmd) > 1):
+            bucket = loose_hits
+        else:
+            continue
+        v = bucket.setdefault(var, (cmd, exact, 0))
+        bucket[var] = (v[0], v[1], v[2] + 1)
+    regs = exact_hits or loose_hits
     if not regs:
         return ["未找到聊天指令: " + query]
     actions = dict(_ADD_ACTION_RE.findall(script))
