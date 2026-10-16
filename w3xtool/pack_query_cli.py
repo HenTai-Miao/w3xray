@@ -697,11 +697,40 @@ def _script_pool_drops(pack: Path, code: str) -> list[str]:
             out.append(
                 f"  死亡{chance}掉1件, 池 {pvar}[{pidx}] 共{len(entries)}件 (权重/总权重):"
             )
+            prices = load_item_gold_overrides(pack)
             for icode, w in entries[:12]:
-                iname = items.get(icode, (icode, ""))[0]
-                out.append(f"    - {iname} [{icode}]  {w:g}/{total:g}")
+                iname, idesc = items.get(icode, (icode, ""))
+                qm = re.search(r"品质[：:]\s*([\w\u4e00-\u9fff]+)", idesc)
+                tag = "·" + qm.group(1) if qm else ""
+                slot = _item_slot_by_name(iname)
+                if slot:
+                    tag += "·" + slot + "(名推断)"
+                p = prices.get(icode, "")
+                price_disp = (p + "金") if p and p != "0" else "非卖品"
+                out.append(
+                    f"    - {iname} [{icode}]  {w:g}/{total:g}  {price_disp}{tag}"
+                )
         out.append("")
     return out
+
+
+_SLOT_PATTERNS: tuple[tuple[str, str], ...] = (
+    ("手套|拳套|手甲|扳指", "手部"),
+    ("靴|鞋", "脚部"),
+    ("面具|头盔|头环|面纱|帽|冠", "头部"),
+    ("宝典|书|卷|册|礼盒", "书籍/杂物"),
+    ("链|项链|戒指|戒|坠|锁|长命", "饰品"),
+    ("爪|剑|刀|斧|锤|弓|杖|枪|弩|刃", "武器"),
+    ("甲|铠|衣|袍|斗篷|风衣|皮|鳞", "身体"),
+)
+
+
+def _item_slot_by_name(name: str) -> str:
+    """物品类型（部位）按名称形态推断——地图无槽位字段(icla)，输出带(名推断)标记。"""
+    for pat, slot in _SLOT_PATTERNS:
+        if re.search(pat, name):
+            return slot
+    return ""
 
 
 def _query_drop(pack: Path, query: str, limit: int) -> list[str]:

@@ -271,8 +271,17 @@ def test_query_drop_script_pool_fallback(pack):
     assert "奖池怪 [nbos]  ⚠ 脚本死亡奖池" in text
     assert "必掉" in text
     assert "池 udg_WPool[2] 共2件" in text
-    assert "奖池甲 [I0P1]  15/45" in text
-    assert "奖池乙 [I0P2]  30/45" in text
+    assert "奖池甲 [I0P1]  15/45  非卖品" in text
+    assert "奖池乙 [I0P2]  30/45  非卖品" in text
+    # 名称推断的部位标注 (月光银狼池样例形态)
+    from w3xtool.pack_query_cli import _item_slot_by_name
+
+    assert _item_slot_by_name("狼牙链") == "饰品"
+    assert _item_slot_by_name("月光手套") == "手部"
+    assert _item_slot_by_name("纱布轻靴") == "脚部"
+    assert _item_slot_by_name("白狼牙爪") == "武器"
+    assert _item_slot_by_name("葵花宝典") == "书籍/杂物"
+    assert _item_slot_by_name("无名物") == ""
     by_name = "\n".join(_query_drop(pack, "奖池怪", 10))
     assert "脚本死亡奖池" in by_name
     # 四字中文名不得被误当 fourcc (月光银狼事故)
