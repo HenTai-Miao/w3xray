@@ -721,7 +721,9 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
         if len(lines) >= limit:
             break
     if not lines:
-        cands = [query] if len(query) == 4 else []
+        cands = (
+            [query] if len(query) == 4 and query.isascii() and query.isalnum() else []
+        )
         if not cands:
             for ucode, uname in load_units(pack).items():
                 if q in uname.lower():

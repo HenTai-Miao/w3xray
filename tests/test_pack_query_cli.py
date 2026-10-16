@@ -275,6 +275,9 @@ def test_query_drop_script_pool_fallback(pack):
     assert "奖池乙 [I0P2]  30/45" in text
     by_name = "\n".join(_query_drop(pack, "奖池怪", 10))
     assert "脚本死亡奖池" in by_name
+    # 四字中文名不得被误当 fourcc (月光银狼事故)
+    four_char = "\n".join(_query_drop(pack, "四字怪名", 10))
+    assert "未找到获取途径: 四字怪名" in four_char
     assert _query_drop(pack, "zz不存在", 10) == ["未找到获取途径: zz不存在"]
 
 
