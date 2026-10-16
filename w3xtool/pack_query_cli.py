@@ -100,7 +100,7 @@ def load_item_gold_overrides(pack_dir: Path) -> dict[str, str]:
     """地图内逐物品金币覆写：对象字段.tsv 中的金币字段行。
 
     字段键兼容 igol（w3u 对象导出）与 goldcost（SLK 数据导出，
-    如《西方世界的劫难》系列地图），两者同为物品金币成本字段。
+    如按 SLK 导出物件的系列地图），两者同为物品金币成本字段。
     """
     out: dict[str, str] = {}
     for r in _read_rows(pack_dir, "对象字段.tsv"):
