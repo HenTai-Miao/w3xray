@@ -698,6 +698,13 @@ def _script_pool_drops(pack: Path, code: str) -> list[str]:
                 f"  死亡{chance}掉1件, 池 {pvar}[{pidx}] 共{len(entries)}件 (权重/总权重):"
             )
             prices = load_item_gold_overrides(pack)
+            shelves_by_item: dict[str, list[str]] = {}
+            for _sc, sname, stocks in load_shop_stocks(pack):
+                for c in stocks:
+                    shelves_by_item.setdefault(c, []).append(sname)
+            name_counts: dict[str, int] = {}
+            for _uc, (un, _ud) in items.items():
+                name_counts[un] = name_counts.get(un, 0) + 1
             for icode, w in entries[:12]:
                 iname, idesc = items.get(icode, (icode, ""))
                 qm = re.search(r"品质[：:]\s*([\w\u4e00-\u9fff]+)", idesc)
@@ -706,15 +713,20 @@ def _script_pool_drops(pack: Path, code: str) -> list[str]:
                 if slot:
                     tag += "·" + slot + "(名推断)"
                 p = prices.get(icode, "")
+                shelves = shelves_by_item.get(icode, [])
                 if p and p != "0":
-                    sold = any(
-                        icode in stocks for _, _, stocks in load_shop_stocks(pack)
-                    )
-                    price_disp = ("在售" if sold else "估值") + p + "金"
-                    if not sold:
-                        price_disp += "(无货架)"
+                    if not shelves:
+                        price_disp = "估值" + p + "金(无货架)"
+                    elif len(shelves) == 1:
+                        price_disp = "在售" + p + "金@" + shelves[0]
+                    else:
+                        shown = "/".join(shelves[:3])
+                        extra = f"等{len(shelves)}家" if len(shelves) > 3 else ""
+                        price_disp = p + "金@" + shown + extra
                 else:
                     price_disp = "非卖品"
+                if name_counts.get(iname, 1) > 1:
+                    price_disp += "·同名异码价随码"
                 out.append(
                     f"    - {iname} [{icode}]  {w:g}/{total:g}  {price_disp}{tag}"
                 )
