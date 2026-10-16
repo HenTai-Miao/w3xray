@@ -273,6 +273,15 @@ def test_query_drop_script_pool_fallback(pack):
     assert "池 udg_WPool[2] 共2件" in text
     assert "奖池甲 [I0P1]  15/45  非卖品" in text
     assert "奖池乙 [I0P2]  30/45  非卖品" in text
+    # 估值 vs 在售: goldcost 存在但无货架 → 估值+无货架 (连弩事故)
+    (pack / "对象字段.tsv").write_text(
+        (pack / "对象字段.tsv").read_text(encoding="utf-8")
+        + "物品\tI0P1\t1\tgoldcost\tgoldcost\t450\tslk\n",
+        encoding="utf-8",
+    )
+    re_run = "\n".join(_query_drop(pack, "奖池怪", 10))
+    assert "奖池甲 [I0P1]  15/45  估值450金(无货架)" in re_run
+    assert "奖池乙 [I0P2]  30/45  非卖品" in re_run
     # 名称推断的部位标注 (月光银狼池样例形态)
     from w3xtool.pack_query_cli import _item_slot_by_name
 

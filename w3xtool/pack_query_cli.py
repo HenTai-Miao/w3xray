@@ -706,7 +706,15 @@ def _script_pool_drops(pack: Path, code: str) -> list[str]:
                 if slot:
                     tag += "·" + slot + "(名推断)"
                 p = prices.get(icode, "")
-                price_disp = (p + "金") if p and p != "0" else "非卖品"
+                if p and p != "0":
+                    sold = any(
+                        icode in stocks for _, _, stocks in load_shop_stocks(pack)
+                    )
+                    price_disp = ("在售" if sold else "估值") + p + "金"
+                    if not sold:
+                        price_disp += "(无货架)"
+                else:
+                    price_disp = "非卖品"
                 out.append(
                     f"    - {iname} [{icode}]  {w:g}/{total:g}  {price_disp}{tag}"
                 )
