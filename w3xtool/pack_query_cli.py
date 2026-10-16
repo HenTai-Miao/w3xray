@@ -705,6 +705,33 @@ def _script_pool_drops(pack: Path, code: str) -> list[str]:
             name_counts: dict[str, int] = {}
             for _uc, (un, _ud) in items.items():
                 name_counts[un] = name_counts.get(un, 0) + 1
+            acq_by_item: dict[str, list[str]] = {}
+            rel_rows = _read_rows(pack, "掉落与获取关系.tsv")
+            if rel_rows:
+                hdr = rel_rows[0]
+                try:
+                    ci = hdr.index("装备ID")
+                    ck = hdr.index("关系类型")
+                    cn = hdr.index("来源名称")
+                except ValueError:
+                    ci = ck = cn = -1
+                if ci >= 0:
+                    for r in rel_rows[1:]:
+                        if len(r) <= max(ci, ck, cn):
+                            continue
+                        kind = r[ck]
+                        src = r[cn].strip()
+                        tag = ""
+                        if kind == "合成":
+                            tag = "可合成"
+                        elif kind == "商店制造":
+                            tag = "商店制造" + (("@" + src) if src else "")
+                        elif kind == "脚本/触发奖励" and src:
+                            tag = "脚本获取@" + src
+                        if tag:
+                            lst = acq_by_item.setdefault(r[ci], [])
+                            if tag not in lst:
+                                lst.append(tag)
             for icode, w in entries[:12]:
                 iname, idesc = items.get(icode, (icode, ""))
                 qm = re.search(r"品质[：:]\s*([\w\u4e00-\u9fff]+)", idesc)
@@ -716,7 +743,7 @@ def _script_pool_drops(pack: Path, code: str) -> list[str]:
                 shelves = shelves_by_item.get(icode, [])
                 if p and p != "0":
                     if not shelves:
-                        price_disp = "估值" + p + "金(无货架)"
+                        price_disp = "估值" + p + "金(无货架记录)"
                     elif len(shelves) == 1:
                         price_disp = "在售" + p + "金@" + shelves[0]
                     else:
@@ -725,6 +752,9 @@ def _script_pool_drops(pack: Path, code: str) -> list[str]:
                         price_disp = p + "金@" + shown + extra
                 else:
                     price_disp = "非卖品"
+                acq = acq_by_item.get(icode, [])
+                if acq:
+                    price_disp += "·" + "/".join(acq[:2])
                 if name_counts.get(iname, 1) > 1:
                     price_disp += "·同名异码价随码"
                 out.append(

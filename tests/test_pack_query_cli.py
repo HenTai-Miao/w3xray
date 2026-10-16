@@ -66,8 +66,10 @@ def pack(tmp_path):
         encoding="utf-8",
     )
     (tmp_path / "掉落与获取关系.tsv").write_text(
-        "hash\t地图\t类型\t四码\t名称\t来源类\t来源\n"
-        "h1\t测试图\t脚本/触发奖励\tI0AA\t冰晶\t单位\tu0AA\n",
+        "关系ID\t地图子图\t关系类型\t装备ID\t装备名称\t来源分类\t来源ID\t来源名称\t实例序号\t玩家\tX\tY\tZ\t掉落组\t组内序号\t概率\t槽位\t合成材料ID\t合成材料名称与数量\t证据文件\n"
+        "h1\t测试图\t脚本/触发奖励\tI0AA\t冰晶\t单位\tu0AA\t雪妖\t\t\t\t\t\t\t\t\t\t\t\t\tw3x\n"
+        "h2\t测试图\t合成\tI0P2\t奖池乙\t配方\t\t配方桌\t\t\t\t\t\t\t\t\tI0P1\tx2\t\tw3x\n"
+        "h3\t测试图\t商店制造\tI0P1\t奖池甲\t单位\th0ZZ\t铁匠铺\t\t\t\t\t\t\t\t\t\t\t\tw3x\n",
         encoding="utf-8",
     )
     (tmp_path / "对象字段.tsv").write_text(
@@ -291,9 +293,10 @@ def test_query_drop_script_pool_fallback(pack):
     )
     re_run = "\n".join(_query_drop(pack, "奖池怪", 10))
     assert (
-        "奖池甲 [I0P1]  15/45  在售450金@杂货铺·同名异码价随码·身体(名推断)" in re_run
+        "奖池甲 [I0P1]  15/45  在售450金@杂货铺·商店制造@铁匠铺·同名异码价随码·身体(名推断)"
+        in re_run
     )
-    assert "奖池乙 [I0P2]  30/45  600金@杂货铺/黑店" in re_run
+    assert "奖池乙 [I0P2]  30/45  600金@杂货铺/黑店·可合成" in re_run
     # 名称推断的部位标注 (月光银狼池样例形态)
     from w3xtool.pack_query_cli import _item_slot_by_name
 
