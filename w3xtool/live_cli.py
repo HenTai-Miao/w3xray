@@ -79,6 +79,12 @@ def parse_live_cli_options(argv: Sequence[str]) -> LiveCliOptions:
     map_path: str | None = None
     if argv and not argv[0].startswith("--"):
         map_path = argv[0]
+        if os.path.isdir(map_path):
+            raise LiveCliOptionError(
+                "live 的位置参数应是地图 .w3x 文件，收到目录: "
+                + map_path
+                + "；已导出的知识包请用 --pack <目录>"
+            )
     values: dict[str, str] = {}
     flags: set[str] = set()
     strategy = "auto"

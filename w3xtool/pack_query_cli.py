@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import csv
+import math
 import re
 import sys
 from collections.abc import Sequence
@@ -49,6 +50,7 @@ _COMMANDS = (
     "price",
     "shop",
     "tech",
+    "near",
     "cmd",
     "refs",
 )
@@ -481,11 +483,15 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         if limit < 1:
             raise PackQueryCliOptionError("--limit 必须为正整数")
         rest = rest[:i] + rest[i + 2 :]
+    command = rest[1] if len(rest) > 1 else ""
+    if command == "near" and len(rest) in (4, 5):
+        rest = rest[:2] + [" ".join(rest[2:])]
     if len(rest) != 3:
         raise PackQueryCliOptionError(
-            "用法: pack-query <资料包目录> <item|recipe|where|drop|quest|text|price|shop|tech|cmd|refs> <查询词>"
+            "用法: pack-query <资料包目录> <item|recipe|where|drop|quest|text|price|shop|tech|cmd|refs|near> <查询词>"
+            + ("  (near 用法: near <x> <y> [radius])" if command == "near" else "")
         )
-    pack_dir, command, query = rest
+    pack_dir, query = rest[0], rest[2]
     if command not in _COMMANDS:
         raise PackQueryCliOptionError(
             "未知子命令: " + command + " (可选: " + ",".join(_COMMANDS) + ")"
@@ -802,6 +808,125 @@ def _fn_body(script: str, fn: str, cap: int = 900) -> str:
     return " ".join(body.split())[:cap]
 
 
+_RECT_DEF_RE = re.compile(
+    r"set\s+(gg_rct_\w+)\s*=\s*Rect\(\s*(-?\s?[\d.]+)\s*,\s*(-?\s?[\d.]+)\s*,"
+    r"\s*(-?\s?[\d.]+)\s*,\s*(-?\s?[\d.]+)\s*\)"
+)
+_CREATE_UNIT_RE = re.compile(
+    r"CreateUnit\s*\(\s*\w+\s*,\s*'(\w{4})'\s*,\s*(-?\s?[\d.]+)\s*,\s*(-?\s?[\d.]+)"
+)
+
+
+def _coord_columns(header: list[str]) -> tuple[int, int]:
+    """按表头名取 X/Y 列（防列位漂移）；无表头时退回 3/4。"""
+    try:
+        return header.index("X"), header.index("Y")
+    except ValueError:
+        return 3, 4
+
+
+def _num(s: str) -> float:
+    return float(s.replace(" ", ""))
+
+
+def _query_near(pack: Path, query: str, limit: int) -> list[str]:
+    """坐标反查: near <x> <y> [radius=3000] —— 脚底/附近内容物。
+
+    表头驱动解析预放置表列位；Rect 负号带空格(- 5184.0)统一归一；装饰物聚类报告。"""
+    parts = query.split()
+    if len(parts) not in (2, 3):
+        return ["用法: near <x> <y> [radius=3000]"]
+    try:
+        px, py = float(parts[0]), float(parts[1])
+        radius = float(parts[2]) if len(parts) == 3 else 3000.0
+    except ValueError:
+        return ["坐标与半径必须是数字: near <x> <y> [radius]"]
+    radius = max(50.0, min(radius, 20000.0))
+    lines = [f"== 坐标 ({px:g}, {py:g}) 半径 {radius:g} =="]
+
+    def dist(x: float, y: float) -> float:
+        return math.hypot(x - px, y - py)
+
+    for rel, kind in (("预放置单位.tsv", "单位"), ("预放置装饰物.tsv", "装饰")):
+        rows = _read_rows(pack, rel)
+        if not rows:
+            continue
+        cx_i, cy_i = _coord_columns(rows[0])
+        entries: dict[tuple[str, str], list[tuple[float, float]]] = {}
+        nearest: list[tuple[float, str]] = []
+        for r in rows[1:]:
+            if len(r) <= max(cx_i, cy_i):
+                continue
+            try:
+                x, y = float(r[cx_i]), float(r[cy_i])
+            except ValueError:
+                continue
+            d = dist(x, y)
+            nearest.append((d, f"{r[2] if len(r) > 2 else r[1]} [{r[1]}]"))
+            if d <= radius:
+                key = (r[1], r[2] if len(r) > 2 else r[1])
+                entries.setdefault(key, []).append((x, y))
+        if kind == "单位":
+            hits = sorted(
+                ((k[0], k[1], xs) for k, xs in entries.items()),
+                key=lambda t: dist(
+                    sum(p[0] for p in t[2]) / len(t[2]),
+                    sum(p[1] for p in t[2]) / len(t[2]),
+                ),
+            )
+            for code, name, xs in hits[: max(4, limit)]:
+                cx = sum(p[0] for p in xs) / len(xs)
+                cy = sum(p[1] for p in xs) / len(xs)
+                lines.append(
+                    f"  {kind}: {name} [{code}] ×{len(xs)} @({cx:g},{cy:g}) 距{dist(cx, cy):.0f}"
+                )
+        else:
+            clusters: list[tuple[float, str, int, float, float]] = []
+            for (code, name), pts in entries.items():
+                remaining = list(pts)
+                while remaining:
+                    seed = remaining[0]
+                    group = [
+                        p
+                        for p in remaining
+                        if math.hypot(p[0] - seed[0], p[1] - seed[1]) < 1200
+                    ]
+                    remaining = [p for p in remaining if p not in group]
+                    gcx = sum(p[0] for p in group) / len(group)
+                    gcy = sum(p[1] for p in group) / len(group)
+                    clusters.append(
+                        (dist(gcx, gcy), f"{name} [{code}]", len(group), gcx, gcy)
+                    )
+            clusters.sort()
+            for d, label, n, gcx, gcy in clusters[: max(4, limit)]:
+                lines.append(f"  {kind}群: {label} ×{n} @({gcx:g},{gcy:g}) 距{d:.0f}")
+        if not entries and nearest:
+            nearest.sort()
+            for d, label in nearest[:3]:
+                lines.append(f"  (半径外最近{kind}: {label} 距{d:.0f})")
+
+    script = load_script(pack)
+    if script:
+        in_rect: list[str] = []
+        for m in _RECT_DEF_RE.finditer(script):
+            x1, y1, x2, y2 = (_num(m.group(i)) for i in range(2, 6))
+            if min(x1, x2) <= px <= max(x1, x2) and min(y1, y2) <= py <= max(y1, y2):
+                in_rect.append(m.group(1))
+        if in_rect:
+            lines.append("  所在矩形: " + ", ".join(in_rect[:6]))
+        spawned = []
+        for m in _CREATE_UNIT_RE.finditer(script):
+            x, y = _num(m.group(2)), _num(m.group(3))
+            d = dist(x, y)
+            if d <= radius:
+                spawned.append((d, m.group(1), x, y))
+        spawned.sort()
+        for d, code, x, y in spawned[: max(4, limit)]:
+            name = load_units(pack).get(code, code)
+            lines.append(f"  脚本单位: {name} [{code}] @({x:g},{y:g}) 距{d:.0f}")
+    return lines
+
+
 def _query_cmd(pack: Path, query: str, limit: int) -> list[str]:
     script = load_script(pack)
     if script is None:
@@ -926,6 +1051,7 @@ _QUERIES = {
     "tech": _query_tech,
     "cmd": _query_cmd,
     "refs": _query_refs,
+    "near": _query_near,
 }
 
 

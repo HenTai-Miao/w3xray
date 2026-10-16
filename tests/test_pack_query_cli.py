@@ -51,6 +51,20 @@ def pack(tmp_path):
         "war3map.j\t4\tF\tCreateItemLoc\t1\t'I0BB'\t\t\t对象码\tcall CreateItemLoc('I0BB', GetRectCenter(gg_rct_x))\n",
         encoding="utf-8",
     )
+    (tmp_path / "预放置单位.tsv").write_text(
+        "序号\t类型ID\t名称\t玩家\tX\tY\tZ\n"
+        "1\tu0AA\t雪妖\t敌对\t10.0\t20.0\t0\n"
+        "2\th0AA\t老伯基蓝\t中立\t9000.0\t9000.0\t0\n",
+        encoding="utf-8",
+    )
+    # 列位故意多一列(名称后带备注)，验证表头驱动而非固定列位
+    (tmp_path / "预放置装饰物.tsv").write_text(
+        "序号\t类型ID\t名称\t备注\tX\tY\tZ\n"
+        "1\tD0ZZ\t测试阵\t圈\t12.0\t18.0\t0\n"
+        "2\tD0ZZ\t测试阵\t圈\t14.0\t22.0\t0\n"
+        "3\tD0ZZ\t测试阵\t圈\t8000.0\t8000.0\t0\n",
+        encoding="utf-8",
+    )
     (tmp_path / "掉落与获取关系.tsv").write_text(
         "hash\t地图\t类型\t四码\t名称\t来源类\t来源\n"
         "h1\t测试图\t脚本/触发奖励\tI0AA\t冰晶\t单位\tu0AA\n",
@@ -132,6 +146,7 @@ def pack(tmp_path):
         "call TriggerAddCondition(gg_trg_pool, Condition(function Trig_poolConditions))\r"
         "call TriggerAddAction(gg_trg_pool, function Trig_poolActions)\r"
         "endfunction\r"
+        "set gg_rct_testrect=Rect(- 5184.0, - 64.0, 4512.0, 64.0)\r"
         "set udg_WPool[2]=CreateItemPool()\r"
         "call ItemPoolAddItemType(udg_WPool[2], 'I0P1', 15.00)\r"
         "call ItemPoolAddItemType(udg_WPool[2], 'I0P2', 30.00)\r",
@@ -230,6 +245,22 @@ def test_query_cmd_exact_precedence_and_loop_registration(pack):
     dash = "\n".join(_query_cmd(pack, "-", 10))
     assert '指令 "-" (精确' in dash
     assert '指令 "-zs"' not in dash
+
+
+def test_query_near_header_driven_and_rect_normalize(pack):
+    from w3xtool.pack_query_cli import _query_near
+
+    lines = _query_near(pack, "15 20 200", 10)
+    text = "\n".join(lines)
+    assert "== 坐标 (15, 20) 半径 200 ==" in text
+    assert "单位: 雪妖 [u0AA] ×1 @(10,20) 距5" in text
+    assert "装饰群: 测试阵 [D0ZZ] ×2 @(13,20)" in text
+    assert "×3" not in text  # 8000,8000 那座不在半径内
+    assert "所在矩形: gg_rct_testrect" in text  # 负号带空格归一后才含 (15,20)
+    usage = _query_near(pack, "1", 10)
+    assert usage[0].startswith("用法: near")
+    bad = _query_near(pack, "a b", 10)
+    assert bad[0].startswith("坐标与半径")
 
 
 def test_query_drop_script_pool_fallback(pack):
