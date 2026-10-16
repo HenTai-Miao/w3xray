@@ -31,13 +31,16 @@ def pack(tmp_path):
         "物品\tI0BB\t2\tI0BB\t雪白的熊掌\t是\t材料\n"
         "物品\tI0CC\t3\tratf\t攻击之爪+15样\t否\t继承基础价\n"
         "物品\tI0DD\t4\tratc\t攻击之爪+12样\t否\t无覆写走基础价\n"
-        "物品\tI0EE\t5\tI0EE\t力量戒指SLK\t是\t材料\n",
+        "物品\tI0EE\t5\tI0EE\t力量戒指SLK\t是\t材料\n"
+        "物品\tI0P1\t6\tI0P1\t奖池甲\t是\t测试奖池物1\n"
+        "物品\tI0P2\t7\tI0P2\t奖池乙\t是\t测试奖池物2\n",
         encoding="utf-8",
     )
     (obj / "单位.tsv").write_text(
         "单位\t四码\t数值\t四码2\t名称\n"
         "单位\tu0AA\t1\tu0AA\t雪妖\n"
-        "单位\th0AA\t2\th0AA\t老伯基蓝\n",
+        "单位\th0AA\t2\th0AA\t老伯基蓝\n"
+        "单位\tnbos\t3\tnbos\t奖池怪\n",
         encoding="utf-8",
     )
     (tmp_path / "脚本调用参数索引.tsv").write_text(
@@ -113,7 +116,25 @@ def pack(tmp_path):
         "set gg_trg_zoom=CreateTrigger()\r"
         'call TriggerRegisterPlayerChatEvent(gg_trg_zoom, Player(0), "-", true)\r'
         "call TriggerAddAction(gg_trg_zoom, function Trig_ABCActions)\r"
-        "endfunction\r",
+        "endfunction\r"
+        "function Trig_poolConditions takes nothing returns boolean\r"
+        "return ( ( GetUnitTypeId(GetDyingUnit()) == 'nbos' ) )\r"
+        "endfunction\r"
+        "function Trig_poolActions takes nothing returns nothing\r"
+        "call SaveInteger(YDLOC, GetHandleId(GetTriggeringTrigger()), 0x34CF9D83, 100)\r"
+        "if ( ( GetRandomInt(1, 100) <= LoadInteger(YDLOC, GetHandleId(GetTriggeringTrigger()), 0x34CF9D83) ) ) then\r"
+        "set bj_lastPoolAbstractedItem=PlaceRandomItem((udg_WPool[2]), 0.0, 0.0)\r"
+        "endif\r"
+        "endfunction\r"
+        "function InitTrig_pool takes nothing returns nothing\r"
+        "set gg_trg_pool=CreateTrigger()\r"
+        "call TriggerRegisterAnyUnitEventBJ(gg_trg_pool, EVENT_PLAYER_UNIT_DEATH)\r"
+        "call TriggerAddCondition(gg_trg_pool, Condition(function Trig_poolConditions))\r"
+        "call TriggerAddAction(gg_trg_pool, function Trig_poolActions)\r"
+        "endfunction\r"
+        "set udg_WPool[2]=CreateItemPool()\r"
+        "call ItemPoolAddItemType(udg_WPool[2], 'I0P1', 15.00)\r"
+        "call ItemPoolAddItemType(udg_WPool[2], 'I0P2', 30.00)\r",
         encoding="utf-8",
     )
     ref_rows = [
@@ -209,6 +230,21 @@ def test_query_cmd_exact_precedence_and_loop_registration(pack):
     dash = "\n".join(_query_cmd(pack, "-", 10))
     assert '指令 "-" (精确' in dash
     assert '指令 "-zs"' not in dash
+
+
+def test_query_drop_script_pool_fallback(pack):
+    from w3xtool.pack_query_cli import _query_drop
+
+    lines = _query_drop(pack, "nbos", 10)
+    text = "\n".join(lines)
+    assert "奖池怪 [nbos]  ⚠ 脚本死亡奖池" in text
+    assert "必掉" in text
+    assert "池 udg_WPool[2] 共2件" in text
+    assert "奖池甲 [I0P1]  15/45" in text
+    assert "奖池乙 [I0P2]  30/45" in text
+    by_name = "\n".join(_query_drop(pack, "奖池怪", 10))
+    assert "脚本死亡奖池" in by_name
+    assert _query_drop(pack, "zz不存在", 10) == ["未找到获取途径: zz不存在"]
 
 
 def test_parse_ok():

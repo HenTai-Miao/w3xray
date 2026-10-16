@@ -638,6 +638,66 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
     return lines or ["未找到放置记录: " + query]
 
 
+_DEATH_COND_BLOCK_RE = re.compile(
+    r"function\s+(Trig_\w+?)Conditions\s+takes nothing returns boolean(.*?)endfunction",
+    re.S,
+)
+_POOL_ITEM_RE = re.compile(
+    r"ItemPoolAddItemType\(\s*(udg_\w+)\[(\d+)\]\s*,\s*'(\w{4})'\s*,\s*([\d.]+)"
+)
+_PLACE_POOL_RE = re.compile(r"PlaceRandomItem\(\s*\(?\s*(udg_\w+)\[(\d+)\]")
+_ROLL_RE = re.compile(r"GetRandomInt\(\s*1\s*,\s*(\d+)\s*\)")
+
+
+def _script_pool_drops(pack: Path, code: str) -> list[str]:
+    """死亡触发奖池兜底: 关系表无该单位掉落行时, 扫脚本 GetDyingUnit 条件 -> PlaceRandomItem 池。
+
+    输出仍是"池子 N 选 1"形态, 不写成固定掉落。"""
+    script = load_script(pack)
+    if script is None or len(code) != 4:
+        return []
+    want = "'" + code.lower() + "'"
+    var_by_cond = {fn: var for var, fn in _ADD_COND_RE.findall(script)}
+    act_by_var = dict(_ADD_ACTION_RE.findall(script))
+    pools: dict[tuple[str, str], list[tuple[str, float]]] = {}
+    for pm in _POOL_ITEM_RE.finditer(script):
+        pools.setdefault((pm.group(1), pm.group(2)), []).append(
+            (pm.group(3), float(pm.group(4)))
+        )
+    items = load_items(pack)
+    units = load_units(pack)
+    out: list[str] = []
+    for m in _DEATH_COND_BLOCK_RE.finditer(script):
+        body = m.group(2)
+        if want not in body.lower() or "GetDyingUnit" not in body:
+            continue
+        var = var_by_cond.get(m.group(1) + "Conditions")
+        act = act_by_var.get(var or "")
+        if not act:
+            continue
+        action_body = _fn_body(script, act, 4000)
+        placed = _PLACE_POOL_RE.findall(action_body)
+        if not placed:
+            continue
+        denom = _ROLL_RE.findall(action_body)
+        chance = f"1~{denom[0]} 掷骰" if denom else "掷骰"
+        if denom and re.search(rf"SaveInteger.*?,\s*{denom[0]}\s*\)", action_body):
+            chance = f"{denom[0]}/{denom[0]}=必掉"
+        label = units.get(code, units.get(code.upper(), code))
+        out.append(f"{label} [{code}]  ⚠ 脚本死亡奖池 (关系表无此掉落记录):")
+        for pvar, pidx in placed[:2]:
+            entries = pools.get((pvar, pidx), [])
+            total = sum(w for _, w in entries) or 1.0
+            out.append(
+                f"  死亡{chance}掉1件, 池 {pvar}[{pidx}] 共{len(entries)}件 (权重/总权重):"
+            )
+            for icode, w in entries[:12]:
+                iname = items.get(icode, (icode, ""))[0]
+                out.append(f"    - {iname} [{icode}]  {w:g}/{total:g}")
+        out.append("")
+    return out
+
+
 def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
     q = query.lower()
     lines = []
@@ -646,13 +706,26 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
         if len(r) < 7:
             continue
         code, name = r[3], _clean(r[4])
-        if not (q == code.lower() or q in name.lower() or name.lower() in q):
+        if not (
+            q == code.lower() or (name and (q in name.lower() or name.lower() in q))
+        ):
             continue
         kinds.add(r[2])
         lines.append(name + " [" + code + "]  " + r[2] + " <- " + r[5] + " " + r[6])
         if len(lines) >= limit:
             break
     if not lines:
+        cands = [query] if len(query) == 4 else []
+        if not cands:
+            for ucode, uname in load_units(pack).items():
+                if q in uname.lower():
+                    cands.append(ucode)
+                if len(cands) >= 3:
+                    break
+        for cand in cands:
+            got = _script_pool_drops(pack, cand)
+            if got:
+                return got
         return ["未找到获取途径: " + query]
     if not any("掉落" in k for k in kinds):
         lines.append(
