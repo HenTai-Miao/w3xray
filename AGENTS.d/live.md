@@ -1,5 +1,17 @@
 # live: 运行中游戏的只读物品读取
 
+## 待真机: 共享映像观察 (学 trainer discovery_image, 边界内合法只读)
+trainer 对受保护页的只读路径: DuplicateHandle 复制游戏 section 句柄 →
+NtQuerySection/NtQueryObject 验证 → MapViewOfFile 映射到自己进程读
+(「never injects or changes protection」— 不注入不改页保护, 纯读)。
+我们的快照模型遇 PAGE_NOACCESS 只记 partial (299 计数); 若重制版
+真机上出现读不到的关键页, 按此法补 capture_image 等价物。配套纪律:
+capture 优先匹配的可读共享映像否则退回普通可读页; RTTI 名字从匹配
+版本 PE 文件读 (RVA 对齐, 与游戏文件版本映射一致, 不用文件偏移)。
+另: trainer discovery_dependencies 有操作依赖审计 (50+ 发现域清单,
+missing_dependencies 拒绝未证实依赖的操作, audit_inventory 点名未
+登记操作) — 我们 4 个读策略规模不需要, 架构规模差异记录备查。
+
 ## 诊断日志与失败可见化 (学 trainer error_messages)
 用户解释与完整技术日志分离: notes 只放人话 (原因+恢复建议), 兜底
 异常的完整栈落盘 `cache/live/errors-v1.log` (fail-open, 带 stage 与
