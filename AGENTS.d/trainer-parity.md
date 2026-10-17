@@ -87,4 +87,6 @@ batch_edit (纯写路径数据模型)。≥19KB 内容级至此零遗留。第 3
 缓存块而非任意字符串匹配」— 我们 notes 有原因+建议但没有系统性
 写「拒绝了什么猜测」, 解析类错误文案可参考此句式。hero_skill_
 catalog/casc_catalog 为 SHA-256 内容寻址数据件, 归类正确。下一步在
-真机: live --players --resources auto --export-profile。
+真机: live --players --resources auto --export-profile。第 31 轮以
+PYZ 压缩尺度反向重扫 8-19KB 段 21 模块, 全部与已消费清单重合 —
+覆盖闭环在压缩/解压双尺度交叉验证下成立, 静态空间关闭为终局。
