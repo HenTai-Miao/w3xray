@@ -291,6 +291,23 @@ class TestProfileVerification:
         names = [s.name for s in stages]
         assert names[0] == "candidates" and names[-1] == "complete"
 
+    def test_load_profile_override_branches(self, tmp_path):
+        """显式档案接缝: 好档案带 tier 注, 坏文件降级注不抛出。"""
+        import json as _json
+
+        good = tmp_path / "good.json"
+        p = lh.resolve_profile("1.27.0.52240")
+        good.write_text(_json.dumps(lh.profile_to_dict(p)), encoding="utf-8")
+        loaded, note = li.load_profile_override(str(good))
+        assert loaded is not None and "tier=" in note and "已加载" in note
+        bad = tmp_path / "bad.json"
+        bad.write_text("{不是 JSON", encoding="utf-8")
+        none_p, bad_note = li.load_profile_override(str(bad))
+        assert none_p is None
+        assert "回退内置" in bad_note and "JSONDecodeError" in bad_note
+        missing, miss_note = li.load_profile_override(str(tmp_path / "缺.json"))
+        assert missing is None and "FileNotFoundError" in miss_note
+
     def test_profile_from_dict_shape_validation(self):
         """形状校验 (学 trainer game_profile): 浮点/坏版本/未知键导入时拒。"""
         import pytest

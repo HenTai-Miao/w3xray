@@ -355,6 +355,23 @@ def read_file_version(path):
 _snapshot_partial = {"count": 0}
 
 
+def load_profile_override(profile_json):
+    """显式档案加载 (与 --export-profile 闭环); 返回 (档案或 None, 注文案)。
+
+    坏档案不阻断探测: 失败返回降级注, 调用方回退内置矩阵 (学 trainer
+    game_profile 的失败可见化——档案问题必须出现在 notes, 不静默吞)。
+    """
+    from .live_handle_chain import profile_from_dict
+
+    try:
+        p = profile_from_dict(
+            json.loads(Path(profile_json).read_text(encoding="utf-8"))
+        )
+        return p, f"已加载显式档案: {profile_json} (tier={p.tier})"
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        return None, f"显式档案不可用 ({type(exc).__name__}: {exc}), 回退内置"
+
+
 def read_pe_fingerprint(path):
     """PE 头三要素 (machine, timestamp, image_size) -> ProfileFingerprint。
 
@@ -1001,21 +1018,10 @@ def read_live(
             profile = hc.resolve_profile(v_str, v_engine, v_arch)
             if profile_json:
                 # 显式档案优先 (与 --export-profile 闭环); 失败降级内置并明示。
-                try:
-                    profile = hc.profile_from_dict(
-                        json.loads(Path(profile_json).read_text(encoding="utf-8"))
-                    )
-                    report["notes"].append(
-                        "已加载显式档案: "
-                        + profile_json
-                        + " (tier="
-                        + profile.tier
-                        + ")"
-                    )
-                except (OSError, ValueError, KeyError, TypeError) as exc:
-                    report["notes"].append(
-                        f"显式档案不可用 ({type(exc).__name__}: {exc}), 回退内置"
-                    )
+                loaded, note = load_profile_override(profile_json)
+                report["notes"].append(note)
+                if loaded is not None:
+                    profile = loaded
             # 档案诊断面: exact/rva-table/template/reforged-pending 四档, notes 永远携带。
             report["notes"].append(hc.describe_live_profile(v_str, v_engine, v_arch))
             offsets = profile.handle_chain
