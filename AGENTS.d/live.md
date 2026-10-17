@@ -1,5 +1,17 @@
 # live: 运行中游戏的只读物品读取
 
+## 待真机: v2 schema 字段参考 (trainer 档案 schema v5 字段全貌)
+trainer 单档案 (3.0.0.24268.json, 9.9KB) 字段全集: status=validated
+(验证状态独立于精确度档位, 候选/借用/已验证三态) / fingerprint 三要
+素 (与我们 ProfileFingerprint 完全一致) / addresses+module_addresses
+分域地址 / checks 三域 (resolver/game_state/context — 我们 domain 字
+段源型) / **modules.*.implementation 版本化实现标签** (如
+legacy_layout_24268_v1 + enabled 开关 + 独立指纹 — 每模块可独立启停
+与验证, v2 schema 可参考) / bridge_layout RVA 与布局字段分离 /
+native_abi 机器 ABI 描述。decoder 族 (ror/rol/xor 解码参数) 为写路
+径, 不学。档案数据本身是 trainer 实测偏移 — 只参考结构, 不抄数据
+(我们的档案必须自测建立)。
+
 ## 待真机: 重制版装备目录数据源 (学 trainer new_equipment_catalog)
 trainer 内嵌完整官方 3.0 装备目录 (495 条: 名称/描述/类别/内部代码,
 含 UndeadRE03a/b 同名不同码对; 3 个 SHA-256 目录数据完整性哈希),
