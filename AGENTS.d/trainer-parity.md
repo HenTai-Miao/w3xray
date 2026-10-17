@@ -77,5 +77,8 @@ savecodes 全面同构 (同正则/同载体/同「map-unverified candidates」
 gui_worker_host 同构, ability_fields 生成目录+重复键防呆,
 operations 的 is_read_query「读写分类只认固定操作目录, 绝不信任调
 用者标签」— 我们只读边界靠代码结构不靠运行时标签, 同构)。至此
-≥19KB 内容清零核对完成, 静态矿脉最终穷尽。下一步在真机:
-live --players --resources auto --export-profile。
+≥19KB 内容清零核对完成, 静态矿脉最终穷尽。第 29 轮抓获 ≥19KB 最后两个漏网并清零:
+speed_clock_backend (故障隔离「已知损坏路径退出时无关写入保持可用」
+— 与策略链回退同构; 驻留映像只读验证「no new code ran」) 与
+batch_edit (纯写路径数据模型)。≥19KB 内容级至此零遗留, 下一步在
+真机: live --players --resources auto --export-profile。
