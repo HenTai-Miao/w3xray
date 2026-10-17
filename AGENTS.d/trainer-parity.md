@@ -64,5 +64,12 @@ fields/stats/unit_bindings_protocol) — 「矿脉穷尽」的依据从抽样扫
 再收两条架构级验证纪律: 「父组既有证明不得掩盖新出现的子冲突」
 (证据层级失效传播) 与「重复消费者身份拒绝叠加为更确信 + 看不懂的
 函数体保持未解析」(见证去重与不猜的字段层具体化)。至此 ≥19KB 模
-块内容全看, 静态矿脉按自定标准穷尽。下一步在真机:
+块内容全看, 静态矿脉按自定标准穷尽。第 27 轮对 ≥19KB 声明做最终清零核对
+(facade_native/selection 纯门面, engine_transport 桥接传输含写链与
+「排队消息≠回调, 要真实排空证明」纪律, equipment_effects 写事务,
+三个 UI 模块纯 Tk 线程纪律 — save_extraction_ui 轮询队列与我们
+gui_worker_host 同构, ability_fields 生成目录+重复键防呆,
+operations 的 is_read_query「读写分类只认固定操作目录, 绝不信任调
+用者标签」— 我们只读边界靠代码结构不靠运行时标签, 同构)。至此
+≥19KB 内容清零核对完成, 静态矿脉最终穷尽。下一步在真机:
 live --players --resources auto --export-profile。
