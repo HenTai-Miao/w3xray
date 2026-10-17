@@ -9,6 +9,7 @@ import struct
 import pytest
 
 from w3xtool import live_handle_chain as lh
+from w3xtool import live_inventory as li
 from w3xtool.live_inventory import append_live_journal
 
 BASE = 0x10000000
@@ -176,6 +177,50 @@ class TestProfileVerification:
             lh.profile_from_dict(
                 {"schema_version": 2, "game_version": "9.9", "id": "x"}
             )
+
+    def test_scan_budget_phases(self):
+        """ScanBudget 三相位: 不限时放行 / 超时置位 / 取消不置超时。"""
+        import time as _time
+
+        b0 = lh.ScanBudget(deadline_s=0.0)
+        assert b0.check() is True and b0.timed_out is False
+        b1 = lh.ScanBudget(deadline_s=0.01)
+        _time.sleep(0.03)
+        assert b1.check() is False and b1.timed_out is True
+        b2 = lh.ScanBudget(deadline_s=0.0, cancelled=True)
+        assert b2.check() is False and b2.timed_out is False
+
+    def test_log_live_exception_lands_traceback(self, tmp_path, monkeypatch):
+        """诊断日志三件套: 栈+阶段+pid 落盘, notes 拿到路径, fail-open。"""
+        monkeypatch.setenv("W3XRAY_CACHE_DIR", str(tmp_path))
+        li._active_pid["pid"] = 4242
+        try:
+            try:
+                raise RuntimeError("表面症状")
+            except RuntimeError as ex:
+                suffix = li.log_live_exception("test_stage", ex)
+        finally:
+            li._active_pid["pid"] = None
+        log = tmp_path / "live" / "errors-v1.log"
+        assert log.exists()
+        text = log.read_text(encoding="utf-8")
+        assert "stage=test_stage" in text
+        assert "pid=4242" in text
+        assert "Traceback" in text and "表面症状" in text
+        assert "诊断日志" in suffix and "errors-v1.log" in suffix
+
+    def test_log_live_exception_fail_open(self, tmp_path, monkeypatch):
+        """日志写失败不抛出, 返回空后缀 (fail-open 不影响探测)。"""
+        import w3xtool.cache_root as cr
+
+        def boom():
+            raise OSError("cache root unavailable")
+
+        monkeypatch.setattr(cr, "w3xray_cache_root", boom)
+        try:
+            raise ValueError("x")
+        except ValueError as ex:
+            assert li.log_live_exception("s", ex) == ""
 
     def test_profile_from_dict_shape_validation(self):
         """形状校验 (学 trainer game_profile): 浮点/坏版本/未知键导入时拒。"""
