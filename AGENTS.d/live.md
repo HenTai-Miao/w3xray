@@ -147,9 +147,20 @@ strict-verify → [loose-verify] → complete); 推导失败/超时的 notes 携
 证据参考库属过度工程 (1 个 exact 档案的 checks 已内含证据), 重制版
 多 build 并行时按此骨架扩展。
 
-**事实修正** (CArchive 资产清点): trainer 包内唯一的非标准二进制是
-capstone.dll (7.5MB 反汇编引擎) —— **桥接 DLL 不随包分发**, per-build
-桥接是运行时现场生成/部署; 「引擎桥接」是能力描述而非随包文件。
+**事实修正×2** (CArchive 资产清点): ① 包内非标准二进制除 capstone.dll
+外还有 **`architecture-runtime/war3_bridge_24268.dll`** —— 第六轮「桥接
+DLL 不随包分发」是资产清单输出截断导致的误判, 实际是**随包自带 +
+PyInstaller 运行时解包** (engine_24268 的 `_default_bridge_image` 从
+`_MEIPASS/architecture-runtime/` 取, 缺失时报「validated bridge is
+missing from the executable bundle」明确诊断而非静默); ② 包内还有
+pefile (第三方 PE 解析, 我们手搓 4096 字节等价) 与自有的
+diagnostics.war3_native_profile 诊断模块。engine 层的其余可记录面:
+EngineExecutionError 携带 30+ 结构化诊断字段 (回调全生命周期:
+dispatch/after_send/after_cleanup/route_attempt/callback_lifecycle/
+expected_callback_tid…), war3_engine_continuation 的安全续行判定
+(「只有观察或确认实例清理才允许继续; 效果上下文变了就拒绝」) —
+均为写路径协议, 记录不学; Win10ProcessMemory 的 exact/tolerant 双读
+模式对我们快照模型已等价 (快照只含可读区域, 遍历不碰不可读段)。
 
 **档案 JSON 固化** (学自 trainer profiles/*.json): `live --export-profile
 <json>` 把本进程实际工作的档案写成 trainer 风格 JSON
