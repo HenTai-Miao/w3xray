@@ -1,7 +1,26 @@
 # trainer-parity: War3ReforgedTrainer 读路径设计对照矩阵
 
-二十一轮换层下钻 (只读静态分析: marshal 结构化元数据 + CArchive 资产,
+四十一轮换层下钻 (只读静态分析: marshal 结构化元数据 + CArchive 资产,
 不做 co_code 字节码层) 的全景收口。每行: trainer 设计 → 我们对应物 → 状态。
+
+## 挖掘方法论 (换学习对象时复用)
+
+1. PyInstaller 解包探针: CArchive 尾标 `MEI\x0c\x0b\x0a\x0b\x0e`
+   + pkglen/tocoff/toclen (偏移基 i+88-pkglen) → zlib 解 PYZ →
+   marshal.loads TOC → 按模块名解 marshal, 只取 co_consts/co_names
+   (结构化元数据), co_code 字节码层不做。
+2. 清单先行: 全模块声明行 (首条长字符串常量) 审计后才能谈「穷尽」
+   —— 抽样扫尾必漏 (id_catalog 45KB/discovery_fields 58KB 两次教训)。
+3. ≥19KB 模块必须内容级 (不只声明行); 8-19KB 段用压缩长度反向
+   重扫交叉验证覆盖闭环。
+4. 正交维度: 按模块正向看 co_consts 之外, 按 API 反查 co_names
+   调用者 (静态绑定 vs GetProcAddress 动态解析的分布本身就是架构
+   事实)。
+5. 「归类条目」必须附出处 (声明行/依赖引用/内容级), 大模块归类后
+   仍需内容级复核——声明行会撒谎。
+6. 挖完后向内审计三面: 落地机制的测试盲区 / 文档-代码一致性逐条
+   实证 / 嵌入式逻辑提取为可测纯函数。探针脚本在 %TEMP%\w3x_deep*,
+   方法论在此节, 脚本本身不入库。
 
 ## 已落地 (代码化, 提交在 20261005 分支)
 
