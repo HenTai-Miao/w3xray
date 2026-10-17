@@ -162,12 +162,40 @@ _UNIT_LIST_RVAS: dict[str, int] = {
 
 
 @dataclass(frozen=True, slots=True)
+class ProfileFingerprint:
+    """Game.dll PE 头三要素指纹 (学自 trainer GameProfile.fingerprint)。
+
+    machine = PE Machine (0x14C x86 / 0x8664 x64), timestamp =
+    TimeDateStamp, image_size = SizeOfImage。把档案锚定到具体二进制,
+    防「版本号相同但 DLL 不同」的错配。
+    """
+
+    machine: int
+    timestamp: int
+    image_size: int
+
+
+@dataclass(frozen=True, slots=True)
+class ProfileCheck:
+    """档案自校验项: Game.dll 的 rva 处期望内存字节 (学自 trainer _checks)。
+
+    采样窗口已避开 .reloc 全部 HIGHLOW 目标, ASLR 下文件字节=内存字节。
+    """
+
+    rva: int
+    expect: bytes
+    label: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class LiveBuildProfile:
     """一个游戏 build 的只读读取档案 (纯数据; 载入档案不载入可执行代码)。
 
     tier 档位: exact = 句柄链已真机验证; rva-table = 资源/单位链有公开表
     来源且句柄链可运行时推导; template = 未收录 classic 版本, 全部靠引擎
     家族结构推导; reforged-pending = 重制版 x64 档案待建立, 明确回退。
+    fingerprint/checks = 运行时自验证 (可选): 指纹不符或校验字节不匹配
+    时档案整体作废, 偏移不沿用。
     """
 
     version: str
@@ -178,7 +206,39 @@ class LiveBuildProfile:
     handle_chain: "LiveHandleOffsets | None"
     tier: str
     source: str
+    fingerprint: "ProfileFingerprint | None" = None
+    checks: "tuple[ProfileCheck, ...]" = ()
 
+
+# 1.27.0.52240 (KK) 的 PE 三要素与 .text 自校验样本 —— 从本机 Game.dll
+# (13,187,048B, TimeDateStamp 0x56BD0E1C) 提取; 采样窗口解析并避开了
+# .reloc 的 43.4 万个 HIGHLOW 目标, ASLR 下内存字节与文件字节一致。
+# 换平台/换语言版 Game.dll 时这些校验会失败 -> 档案作废并回退推导,
+# 这正是「不做静默错配」的设计意图。
+_PROFILE_FINGERPRINTS: "dict[str, ProfileFingerprint]" = {
+    "1.27.0.52240": ProfileFingerprint(
+        machine=0x14C, timestamp=0x56BD0E1C, image_size=0xCD8000
+    ),
+}
+_PROFILE_CHECKS: "dict[str, tuple[ProfileCheck, ...]]" = {
+    "1.27.0.52240": (
+        ProfileCheck(
+            rva=0x2543A8,
+            expect=b"\x6f\x8b\xc6\x5e\x5d\xc2\x04\x00\x55\x8b\xec\x56\xff\x75\x08\x8b",
+            label="text-q1",
+        ),
+        ProfileCheck(
+            rva=0x4A7740,
+            expect=b"\x8b\x70\x54\x85\xf6\x74\x18\x8b\x06\x8b\xce\xff\x50\x1c\x8b\xd7",
+            label="text-mid",
+        ),
+        ProfileCheck(
+            rva=0x6FC1EC,
+            expect=b"\xd4\xbe\x6f\x01\x00\x00\x00\xc3\xcc\xcc\xcc\xcc\xcc\xcc\xcc\xcc",
+            label="text-q3",
+        ),
+    )
+}
 
 _build_profiles_cache: "dict[str, LiveBuildProfile] | None" = None
 
@@ -203,12 +263,60 @@ def build_profiles() -> "dict[str, LiveBuildProfile]":
                     if chain is not None
                     else "Still4/War3Trainer 公开表 (GameContext.cs); 句柄链待真机验证"
                 ),
+                fingerprint=_PROFILE_FINGERPRINTS.get(ver),
+                checks=_PROFILE_CHECKS.get(ver, ()),
             )
         _build_profiles_cache = table
     return _build_profiles_cache
 
 
 BUILD_PROFILES = build_profiles
+
+
+def verify_profile(
+    reader: "MemoryReader",
+    dll_base: int,
+    profile: LiveBuildProfile,
+    dll_fingerprint: "ProfileFingerprint | None" = None,
+) -> "tuple[bool, list[str]]":
+    """档案运行时自验证 (学自 trainer: 加载即核对, 不做静默错配)。
+
+    checks: 逐条在内存 Game.dll 的 RVA 读期望字节比对; 无 checks 的
+    档案视为「无校验可做, 不拦截」。dll_fingerprint (来自磁盘 PE 头)
+    提供时先比指纹三要素。返回 (是否通过, 失败描述列表)。
+    """
+    fails: list[str] = []
+    if dll_fingerprint is not None and profile.fingerprint is not None:
+        a, b = dll_fingerprint, profile.fingerprint
+        if (
+            a.machine != b.machine
+            or a.timestamp != b.timestamp
+            or a.image_size != b.image_size
+        ):
+            fails.append(
+                "PE 指纹不符 (档案 %s/0x%X/0x%X vs 本机 %s/0x%X/0x%X)"
+                % (
+                    hex(b.machine),
+                    b.timestamp,
+                    b.image_size,
+                    hex(a.machine),
+                    a.timestamp,
+                    a.image_size,
+                )
+            )
+    for c in profile.checks:
+        got = reader.read(dll_base + c.rva, len(c.expect))
+        if got != c.expect:
+            fails.append(
+                "%s@0x%X: 期望 %s, 实得 %s"
+                % (
+                    c.label or "check",
+                    c.rva,
+                    c.expect.hex(),
+                    got.hex() if got else "不可读",
+                )
+            )
+    return (not fails), fails
 
 
 def resolve_profile(

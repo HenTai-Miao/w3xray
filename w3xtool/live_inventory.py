@@ -34,7 +34,7 @@ from .live_handle_chain import match_unit_entries
 
 u32 = ctypes.windll.user32
 g32 = ctypes.windll.gdi32
-k32 = ctypes.windll.kernel32
+k32 = ctypes.WinDLL("kernel32", use_last_error=True)
 adv = ctypes.WinDLL("advapi32", use_last_error=True)
 
 # ---------------------------------------------------------------------------
@@ -207,6 +207,10 @@ def snapshot(h, max_addr=0x7FFF0000):
             ):
                 regions.append(((mbi.Base or 0), buf.raw[: got.value]))
                 total += got.value
+            else:
+                err = ctypes.get_last_error()
+                if err in (299, 5):  # ERROR_PARTIAL_COPY / ERROR_ACCESS_DENIED
+                    _snapshot_partial["count"] += 1
         addr = (mbi.Base or 0) + rs
     return regions, total
 
@@ -275,6 +279,34 @@ def read_file_version(path):
         return v & 0xFFFF
 
     return f"{hi(ms)}.{lo(ms)}.{hi(ls)}.{lo(ls)}"
+
+
+# 最近一次 snapshot 里失败区域计数 (299=ERROR_PARTIAL_COPY 部分拷贝)。
+# 学自 trainer adapter 的不可读精确判定: 进程退出/权限不足/跨页边界时
+# ReadProcessMemory 返回部分数据或失败, 光看空列表分不出原因。
+_snapshot_partial = {"count": 0}
+
+
+def read_pe_fingerprint(path):
+    """PE 头三要素 (machine, timestamp, image_size) -> ProfileFingerprint。
+
+    档案指纹比对用: 读磁盘 Game.dll 的 COFF/Optional 头, 失败返回 None。
+    """
+    from w3xtool.live_handle_chain import ProfileFingerprint
+
+    try:
+        with open(path, "rb") as f:
+            d = f.read(4096)
+        e = struct.unpack_from("<I", d, 0x3C)[0]
+        if d[e : e + 4] != b"PE\0\0" or e + 24 + 64 > len(d):
+            return None
+        machine, _numsec, timestamp = struct.unpack_from("<HHI", d, e + 4)
+        image_size = struct.unpack_from("<I", d, e + 24 + 56)[0]
+        return ProfileFingerprint(
+            machine=machine, timestamp=timestamp, image_size=image_size
+        )
+    except Exception, struct.error:  # noqa: BLE001 - 指纹拿不到就不比
+        return None
 
 
 def pe_machine(path):
@@ -829,6 +861,11 @@ def read_live(
         regions, total = snapshot(h, max_addr)
         if verbose:
             print(f"快照 {len(regions)} 区 {total // 1048576}MB")
+        if not regions and _snapshot_partial["count"]:
+            report["notes"].append(
+                f"快照 0 区域可读 ({_snapshot_partial['count']} 个区域部分拷贝/拒绝访问) — "
+                "进程可能已退出, 或权限/完整性级别不足"
+            )
         if save_snapshot_dir:
             p = save_snapshot(regions, save_snapshot_dir)
             if verbose:
@@ -856,6 +893,19 @@ def read_live(
             # 档案诊断面: exact/rva-table/template/reforged-pending 四档, notes 永远携带。
             report["notes"].append(hc.describe_live_profile(v_str, v_engine, v_arch))
             offsets = profile.handle_chain
+            if offsets is not None and profile.checks:
+                disk_fp = None
+                _gd = ver.get("game_dll")
+                if isinstance(_gd, dict) and _gd.get("path"):
+                    disk_fp = read_pe_fingerprint(str(_gd["path"]))
+                ok, fails = hc.verify_profile(reader, dll_base, profile, disk_fp)
+                if not ok:
+                    report["notes"].append(
+                        "档案自校验失败 ("
+                        + "; ".join(fails[:3])
+                        + ") — 偏移档案与本进程 Game.dll 不符, 不沿用, 改走结构推导"
+                    )
+                    offsets = None
             if offsets is None and profile.tier != "reforged-pending":
                 offsets = hc.derive_offsets(reader, dll_base, dll_base + 0x2000000)
             if offsets is None:

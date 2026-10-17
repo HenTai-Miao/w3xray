@@ -84,6 +84,93 @@ class TestResolveProfile:
             assert p.tier in ("exact", "rva-table"), ver
 
 
+class TestProfileVerification:
+    def _reader_at(self, blob, base=BASE):
+        return lh.MemoryReader([(base, blob)])
+
+    def test_checks_pass_on_exact_bytes(self):
+        import hashlib
+
+        blob = hashlib.sha256(b"seed").digest()
+        reader = self._reader_at(blob)
+        p = lh.LiveBuildProfile(
+            version="t",
+            engine="classic",
+            arch="x86",
+            game_struct_rva=None,
+            unit_list_rva=None,
+            handle_chain=None,
+            tier="rva-table",
+            source="t",
+            checks=(lh.ProfileCheck(rva=4, expect=blob[4:12], label="w"),),
+        )
+        ok, fails = lh.verify_profile(reader, BASE, p)
+        assert ok and not fails
+
+    def test_checks_fail_reports_diff(self):
+        reader = self._reader_at(b"\x90" * 64)
+        p = lh.LiveBuildProfile(
+            version="t",
+            engine="classic",
+            arch="x86",
+            game_struct_rva=None,
+            unit_list_rva=None,
+            handle_chain=None,
+            tier="rva-table",
+            source="t",
+            checks=(lh.ProfileCheck(rva=8, expect=b"\x01\x02", label="w"),),
+        )
+        ok, fails = lh.verify_profile(reader, BASE, p)
+        assert not ok and "w@0x8" in fails[0]
+
+    def test_fingerprint_mismatch_fails(self):
+        reader = self._reader_at(b"\x00" * 64)
+        p = lh.LiveBuildProfile(
+            version="t",
+            engine="classic",
+            arch="x86",
+            game_struct_rva=None,
+            unit_list_rva=None,
+            handle_chain=None,
+            tier="exact",
+            source="t",
+            fingerprint=lh.ProfileFingerprint(machine=0x14C, timestamp=1, image_size=2),
+            checks=(lh.ProfileCheck(rva=0, expect=b"\x00" * 4),),
+        )
+        fp = lh.ProfileFingerprint(machine=0x14C, timestamp=9, image_size=2)
+        ok, fails = lh.verify_profile(reader, BASE, p, fp)
+        assert not ok and any("PE 指纹不符" in f for f in fails)
+
+    def test_127_profile_carries_real_samples(self):
+        p = lh.resolve_profile("1.27.0.52240")
+        assert p.fingerprint is not None
+        assert p.fingerprint.machine == 0x14C
+        assert p.fingerprint.timestamp == 0x56BD0E1C
+        assert p.fingerprint.image_size == 0xCD8000
+        assert len(p.checks) == 3
+        assert all(len(c.expect) == 16 for c in p.checks)
+
+    def test_read_pe_fingerprint_on_real_pe(self):
+        import sys
+
+        from w3xtool.live_inventory import read_pe_fingerprint
+
+        fp = read_pe_fingerprint(sys.executable)
+        assert fp is not None
+        assert fp.machine in (0x14C, 0x8664)
+        assert fp.image_size > 0
+
+    def test_read_pe_fingerprint_garbage(self):
+        import tempfile
+
+        from w3xtool.live_inventory import read_pe_fingerprint
+
+        with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as f:
+            f.write(b"not a pe" * 32)
+            path = f.name
+        assert read_pe_fingerprint(path) is None
+
+
 class TestTokenIntegrity:
     def test_bad_handle_returns_none(self):
         from w3xtool.live_inventory import _token_integrity_level

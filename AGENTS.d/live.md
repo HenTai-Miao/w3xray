@@ -124,9 +124,19 @@ uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --e
 的 resources 无玩家归属、无权威链 player_rows, notes 明示「版本无关扫描」;
 对玩家报数时禁止归属到具体玩家 (「谁多少金」= 乱编), 只能报全体结构值。
 
-**权限一致性预检** (学自 trainer): 每次 live 探测对比游戏与工具进程的
-TokenIntegrityLevel (中/中高/高), 不一致时 notes 明示「请以与游戏相同的
-权限重新启动工具」——把「为什么要管理员」从猜测变成明确提示。
+**权限一致性预检** (学自 trainer, 方向性语义): 对比游戏与工具进程的
+TokenIntegrityLevel, **只在工具级别低于游戏时**报警 (写上提会被系统拒;
+管理员工具读普通游戏完全正常, 不报)。RID 表按 trainer 实测:
+低=0x1000 中=0x2000 中高=0x2100 高=0x3000 系统=0x4000。
+
+**档案自校验** (`verify_profile`, 学自 trainer 的 fingerprint+checks):
+exact/rva-table 档案可携带 ① PE 三要素指纹 (machine/timestamp/
+image_size, 比对磁盘 Game.dll) 与 ② checks 校验点 (RVA→期望 16 字节,
+比对内存)。任一不符 → notes 明示「档案与本进程 Game.dll 不符, 不沿用」
+并作废档案句柄链, 改走结构推导——**版本号相同但 DLL 不同**的错配从此
+不可能静默通过。1.27.0.52240 档案已带真实样本 (本机 KK Game.dll 提取,
+采样窗口避开 .reloc 全部 43.4 万 HIGHLOW 目标, ASLR 下文件=内存字节);
+rva-table 档 (1.24 家族等) 无样本, checks 为空 = 不拦截, 待真机补。
 
 **真机验证流程** (把档位升到 exact): 切到目标版本开一局 → 跑 live
 `--players --resources auto` → 把 notes 里的「偏移档案」行与输出贴回,
