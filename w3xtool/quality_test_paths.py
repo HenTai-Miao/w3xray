@@ -96,6 +96,14 @@ tests/test_icon_path_evidence.py
 tests/test_item_relation_models.py
 tests/test_item_relation_resilience.py
 tests/test_map_relation_loading.py
+tests/test_live_cli.py
+tests/test_live_handle_chain.py
+tests/test_live_icon_paths.py
+tests/test_live_inventory_chain.py
+tests/test_live_owned_units.py
+tests/test_live_profile.py
+tests/test_live_resource_layout.py
+tests/test_live_unit_query.py
 tests/test_mpq_names_locale.py
 tests/test_object_candidate_collection.py
 tests/test_object_candidate_merge.py

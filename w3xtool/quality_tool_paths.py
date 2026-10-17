@@ -129,6 +129,7 @@ w3xtool/icon_field_evidence.py
 w3xtool/icon_gap_diagnostics.py
 w3xtool/icon_path_evidence.py
 w3xtool/icon_reference_resolution.py
+w3xtool/hero_chain.py
 w3xtool/icons.py
 w3xtool/item_relation_builder.py
 w3xtool/item_relation_endpoints.py
@@ -138,6 +139,9 @@ w3xtool/item_relation_fields.py
 w3xtool/item_relation_models.py
 w3xtool/item_relation_presentation.py
 w3xtool/item_relation_scripts.py
+w3xtool/live_cli.py
+w3xtool/live_handle_chain.py
+w3xtool/live_inventory.py
 w3xtool/load_context.py
 w3xtool/map_components.py
 w3xtool/map_data.py

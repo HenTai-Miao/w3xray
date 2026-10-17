@@ -356,9 +356,7 @@ def main():
             chosen = args.pid
         elif len(pids) > 1:
             print(
-                "检测到多个 war3 进程 "
-                + str(pids)
-                + " — 不猜, 用 --pid <PID> 显式选择"
+                "检测到多个 war3 进程 " + str(pids) + " — 不猜, 用 --pid <PID> 显式选择"
             )
             return 1
         else:

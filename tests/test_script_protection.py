@@ -28,9 +28,7 @@ class ScriptProtectionTest(unittest.TestCase):
         payload = b"KKWE PLUG-IN ENCRYPT JASS!" + b"\x1a\x00" + b"rest" * 8
 
         # Then: only the encrypted marker yields a label.
-        self.assertEqual(
-            detect_encrypted_script_label(payload), "KKWE 加密 JASS"
-        )
+        self.assertEqual(detect_encrypted_script_label(payload), "KKWE 加密 JASS")
         self.assertIsNone(
             detect_encrypted_script_label(b"function main takes nothing returns")
         )
@@ -96,9 +94,7 @@ class ScriptProtectionTest(unittest.TestCase):
         # Then: no encrypted-script report is written.
         with tempfile.TemporaryDirectory() as out:
             write_unknown_files_from_archive(Archive(), out)
-            self.assertFalse(
-                os.path.exists(os.path.join(out, "加密脚本检测.txt"))
-            )
+            self.assertFalse(os.path.exists(os.path.join(out, "加密脚本检测.txt")))
 
     def test_audit_warns_on_stub_primary_script(self) -> None:
         # Given: a stub war3map.j with function shells only (KKWE-protected maps).

@@ -461,6 +461,7 @@ def _icon_paths_from_pack(pack_dir):
         if (
             len(c) >= 6
             and c[0] == "物品"
+            and c[3].startswith(("display:icon", "base:art"))
             and c[5].lower().endswith(".blp")
             and "commandbuttons" in c[5].lower()
         ):
