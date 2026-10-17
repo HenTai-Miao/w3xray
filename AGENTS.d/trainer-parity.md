@@ -50,7 +50,14 @@
 - 按命名归类的教训: id_catalog 曾被误归写路径 (36.5KB 未看内容) —
   归类条目至少看过声明行, 大模块必须看内容
 
-## 剩余未看 (<8KB 桥接门面/写路径 UI 小件)
+## 剩余未看 (第 25 轮全清单审计后修正)
 
-按依赖关系与命名归类为写路径/门面件; 边际收益低于换层成本。
-静态矿脉已穷尽, 下一步在真机: live --players --resources auto --export-profile。
+第 37 层对全部 134 个 war3 系模块做了声明行级覆盖审计, 抓出 5 个
+曾被抽样扫尾漏掉的只读模块并补挖 (discovery_selection/properties/
+fields/stats/unit_bindings_protocol) — 「矿脉穷尽」的依据从抽样扫
+尾升级为全清单逐项声明行审计。补挖收获三条同构纪律: 原生调用行为
+独立指认管理器 (IsUnitSelected, 我们无指令层不适用)、代码推导的槽
+位布局不暗示其它模式 (我们 oversized-slot 修复教训的形式化)、布局
+字节窗口逐成员证明后才推导 (我们 UNIT_FIELD_LAYOUT provenance 同
+构)。全部 134 模块声明行已消费, 无剩余读路径空白。下一步在真机:
+live --players --resources auto --export-profile。
