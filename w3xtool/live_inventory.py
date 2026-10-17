@@ -1249,6 +1249,9 @@ def read_live(
             return None
 
     def try_chain():
+        if pack_dir is None:
+            report["notes"].append("结构链跳过 (离线快照无知识包, 物品名单不可用)")
+            return []
         try:
             import importlib
 
@@ -1264,6 +1267,9 @@ def read_live(
             return []
 
     def try_icons():
+        if pack_dir is None:
+            report["notes"].append("图标匹配跳过 (离线快照无图标模板目录)")
+            return []
         try:
             templates, names = build_templates(pack_dir, verbose=verbose)
             if not templates:

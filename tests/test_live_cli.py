@@ -136,5 +136,6 @@ def test_read_live_offline_snapshot_fail_open(tmp_path):
     assert rep["strategy_used"] is None
     assert rep["pid"] is None  # 离线快照无进程归属
     assert any("需要运行中的游戏" in n for n in rep["notes"])
-    assert any("异常" in n for n in rep["notes"])  # 兜底链可见不静默
+    assert any("跳过" in n for n in rep["notes"])  # 用户语言, 非程序员异常
+    assert not any("TypeError" in n for n in rep["notes"])
     assert rep["resources"] is None and rep["player_rows"] is None
