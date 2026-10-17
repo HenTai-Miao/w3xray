@@ -31,7 +31,7 @@ class CampaignMapEntry:
     initially_visible: bool
 
 
-@dataclass  # noqa: MUTABLE_OK  # noqa: SLOTS_OK - mutable map-list compatibility model.
+@dataclass  # MUTABLE_OK, SLOTS_OK: mutable map-list compatibility model.
 class W3fInfo:
     """Campaign metadata with a mutable compatibility list of map entries."""
 
@@ -63,7 +63,7 @@ class _TruncatedRead(Exception):
     """Raised when a bounded W3F reader cannot confirm the next field."""
 
 
-@dataclass(slots=True)  # noqa: MUTABLE_OK - mutable bounded-reader cursor.
+@dataclass(slots=True)  # MUTABLE_OK: mutable bounded-reader cursor.
 class _Reader:
     data: bytes
     position: int = 0
@@ -73,7 +73,7 @@ class _Reader:
         return len(self.data) - self.position
 
     def i32(self) -> int:
-        return self._unpack("<i")
+        return int(self._unpack("<i"))
 
     def f32(self) -> float:
         return self._unpack("<f")

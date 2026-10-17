@@ -77,6 +77,7 @@ class TestTerminateImageGuard(unittest.TestCase):
     def test_terminate_kills_matching_image(self):
         p = self._spawn()
         try:
+            img = None
             for _ in range(50):  # 等子进程映像可查询
                 img = _image_path(p.pid)
                 if img:

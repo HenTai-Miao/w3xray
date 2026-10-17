@@ -235,7 +235,7 @@ def _fallback(function_name: str, values: tuple[str, ...]) -> str:
 
 
 def _kind_from_function_type(value: int) -> TriggerFunctionKind:
-    match value:  # noqa: MATCH_OK - unknown legacy values retain the call fallback.
+    match value:  # MATCH_OK: unknown legacy values retain the call fallback.
         case 0:
             return TriggerFunctionKind.EVENT
         case 1:

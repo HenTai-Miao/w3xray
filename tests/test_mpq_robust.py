@@ -124,6 +124,7 @@ class TestAnonymousKeyRecovery(unittest.TestCase):
 
         key = a.recover_block_key(blk)
 
+        assert isinstance(key, int)
         self.assertEqual(key, 0x0F8EE069)
         off_raw = _decrypt(a._data[:8], (key - 1) & 0xFFFFFFFF)
         self.assertEqual(struct.unpack("<2I", off_raw), (8, 4897))

@@ -19,7 +19,7 @@ class WctDiagnostic(StrEnum):
     UNSUPPORTED_VERSION = "unsupported_version"
 
 
-@dataclass  # noqa: MUTABLE_OK  # noqa: SLOTS_OK - preserve the legacy mutable result contract.
+@dataclass  # MUTABLE_OK, SLOTS_OK: preserve the legacy mutable result contract.
 class WctScript:
     """Mutable legacy WCT result with an optional partial-parse diagnostic."""
 
@@ -33,7 +33,7 @@ class _TruncatedWct(Exception):
     """Internal control flow for a read beyond confirmed WCT bytes."""
 
 
-@dataclass(slots=True)  # noqa: MUTABLE_OK - this object is an explicit byte cursor.
+@dataclass(slots=True)  # MUTABLE_OK: this object is an explicit byte cursor.
 class _Reader:
     """Mutable cursor that rejects unterminated and out-of-bounds fields."""
 

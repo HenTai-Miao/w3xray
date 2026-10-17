@@ -1,5 +1,26 @@
 # live: 运行中游戏的只读物品读取
 
+## 真机实测 (2026-10-17, 1.27.0.52240 / KK 官方对战平台)
+
+首次真机全链验证 (PID 29532, war3.exe Frozen Throne, 提权后):
+
+- **KK 的 Game.dll 是 gpatch 按局动态生成**, 布局有补丁级抖动:
+  内置 exact 档案 (hm_rva=0xbe40a8) 与真机推导 (0xbe40a4) 差 4 字
+  节, 两处 text checks 字节不同 (q1 6f→62, q3 rip 位移 be6f01→
+  7e6201)。静态 exact 档案在 KK 环境天然不可靠。
+- **fallback 链真实走通**: verify_profile 拒绝 (checks 失败可见,
+  字节级 diff 出现在注里) → derive_offsets 推导 (多解歧义 3 候选
+  标注, 取地址序首个) → HandleSystem valid → 选中链真实读出英雄
+  U001 六格背包 (每格带物品对象地址) → 资源 auto 差分 8910 锚点。
+- 完整性预检双向 None (KK 环境 token 不可读, fail-open 正常)。
+- **待真机清单第一项完成**: 首个用户侧档案导出 (真机推导固化,
+  %TEMP%\w3x_kk_1.27_profile.json; 生成物不入库, 正式归档待用户
+  定路径)。
+- **KK 流式供图不落盘**: 当前图为哈希名 F0ED3C1154A37D5E3F015D79CF
+  B9AAFB.w3x (内存文件名级扫描 x9 命中), 磁盘全搜无此文件 — 四码
+  →名字解读暂无知识包来源, 待用户报图名或图被平台落盘。
+- OpenProcess 需要管理员 (工具进程须提权; UAC 弹窗由用户确认)。
+
 ## 待真机: v2 schema 字段参考 (trainer 档案 schema v5 字段全貌)
 trainer 单档案 (3.0.0.24268.json, 9.9KB) 字段全集: status=validated
 (验证状态独立于精确度档位, 候选/借用/已验证三态) / fingerprint 三要
