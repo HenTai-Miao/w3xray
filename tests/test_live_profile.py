@@ -329,6 +329,7 @@ class TestAppendLiveJournal:
         rep = {
             "version": {"version": "1.27.0.52240", "engine": "classic"},
             "strategy_used": "handle",
+            "pid": 12345,
             "units": [{"addr": 1}],
             "owned_units": None,
             "resources": None,
@@ -342,6 +343,7 @@ class TestAppendLiveJournal:
         entry = json.loads(f.read_text(encoding="utf-8").splitlines()[-1])
         assert entry["version"] == "1.27.0.52240"
         assert entry["strategy"] == "handle"
+        assert entry["pid"] == 12345
         assert entry["units"] == 1
         assert entry["profile_note"] and "已验证" in entry["profile_note"]
 

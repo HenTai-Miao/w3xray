@@ -710,6 +710,7 @@ def match_inventory(img, templates, names, max_slots=6, min_score=0.5):
 
 class _LiveReport(TypedDict):
     strategy_used: "str | None"
+    pid: "int | None"
     version: "dict[str, object] | None"
     slots: list[Any]
     notes: list[str]
@@ -737,6 +738,7 @@ def append_live_journal(rep):
         ver = rep.get("version") or {}
         entry = {
             "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "pid": rep.get("pid"),
             "version": ver.get("version"),
             "engine": ver.get("engine"),
             "strategy": rep.get("strategy_used"),
@@ -787,6 +789,7 @@ def read_live(
     """resources: (金币, 木材) 元组为报数校准; "auto" 为自动差分 (免报数)。"""
     report: _LiveReport = {
         "strategy_used": None,
+        "pid": None,
         "version": None,
         "slots": [],
         "notes": [],
@@ -827,6 +830,7 @@ def read_live(
             return report
         else:
             chosen = pids[0]
+        report["pid"] = chosen  # 追溯: 本次读的是哪个游戏进程 (多实例排查)
         h = open_process(chosen)
         if not h:
             report["notes"].append("OpenProcess 失败 (需管理员)")
