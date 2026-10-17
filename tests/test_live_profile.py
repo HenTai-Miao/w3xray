@@ -149,6 +149,25 @@ class TestProfileVerification:
         assert p.fingerprint.image_size == 0xCD8000
         assert len(p.checks) == 3
         assert all(len(c.expect) == 16 for c in p.checks)
+        assert all(c.domain == "text" for c in p.checks)
+        assert p.schema_version == 1
+
+    def test_check_failure_message_carries_domain(self):
+        reader = self._reader_at(b"\x90" * 64)
+        p = lh.LiveBuildProfile(
+            version="t",
+            engine="classic",
+            arch="x86",
+            game_struct_rva=None,
+            unit_list_rva=None,
+            handle_chain=None,
+            tier="exact",
+            source="t",
+            checks=(lh.ProfileCheck(rva=8, expect=b"\x01\x02", label="w"),),
+        )
+        ok, fails = lh.verify_profile(reader, BASE, p)
+        assert not ok
+        assert fails[0].startswith("[text] w@0x8")
 
     def test_read_pe_fingerprint_on_real_pe(self):
         import sys

@@ -198,11 +198,14 @@ class ProfileCheck:
     """档案自校验项: Game.dll 的 rva 处期望内存字节 (学自 trainer _checks)。
 
     采样窗口已避开 .reloc 全部 HIGHLOW 目标, ASLR 下文件字节=内存字节。
+    domain = 验证对象域 (schema 分域学自 trainer profiles JSON: resolver/
+    game_state/context 各自一组); 经典档案全部在 text 域。
     """
 
     rva: int
     expect: bytes
     label: str = ""
+    domain: str = "text"
 
 
 @dataclass(frozen=True, slots=True)
@@ -226,6 +229,10 @@ class LiveBuildProfile:
     source: str
     fingerprint: "ProfileFingerprint | None" = None
     checks: "tuple[ProfileCheck, ...]" = ()
+    # 档案格式版本 (学自 trainer schema_version; v1 = 经典链结构,
+    # trainer 验证过的 v2 骨架 — 分域 checks/modules 开关/证据参考库
+    # 分离 — 见 AGENTS.d/live.md, 重制版多 build 时启用)。
+    schema_version: int = 1
 
 
 # 1.27.0.52240 (KK) 的 PE 三要素与 .text 自校验样本 —— 从本机 Game.dll
@@ -326,8 +333,9 @@ def verify_profile(
         got = reader.read(dll_base + c.rva, len(c.expect))
         if got != c.expect:
             fails.append(
-                "%s@0x%X: 期望 %s, 实得 %s"
+                "[%s] %s@0x%X: 期望 %s, 实得 %s"
                 % (
+                    c.domain,
                     c.label or "check",
                     c.rva,
                     c.expect.hex(),
