@@ -134,6 +134,23 @@ TokenIntegrityLevel, **只在工具级别低于游戏时**报警 (写上提会�
 strict-verify → [loose-verify] → complete); 推导失败/超时的 notes 携带
 「最后阶段: <name>」, 诊断粒度从「推导失败」细化到「死在哪一步」。
 
+**档案格式参考** (学自 trainer profiles JSON 的经过 5 个真机 build
+验证的 schema 骨架, 重制版档案落地时照此设计): ① 三层分离——**档案=
+结论** (偏移+checks+指纹), **参考库=证据** (每个偏移的调用点机器码,
+按 build 分组), **语义表=消费关系** (哪个功能消费哪些字段, 每条带
+`build/0xaddr` 出处); ② 版本化四重——schema_version / 配方修订号 /
+桥协议版本 / 适配器版本各自独立演进; ③ checks 按验证对象**分域**
+(resolver/game_state/context 各一组) 而非扁平列表; ④ **能力模块粒度
+开关**: modules.{名}.implementation + enabled + per-module fingerprint,
+功能失效只禁该模块不废整档; ⑤ 原生调用 ABI 字符串化描述
+(real_argument='float_pointer' 等)。当前功能规模下 per-module 开关与
+证据参考库属过度工程 (1 个 exact 档案的 checks 已内含证据), 重制版
+多 build 并行时按此骨架扩展。
+
+**事实修正** (CArchive 资产清点): trainer 包内唯一的非标准二进制是
+capstone.dll (7.5MB 反汇编引擎) —— **桥接 DLL 不随包分发**, per-build
+桥接是运行时现场生成/部署; 「引擎桥接」是能力描述而非随包文件。
+
 **重制版发现流水线规格** (学自 trainer 新版本自动定位的 16 阶段进度
 文案, 待 Game.dll x64 真机样本后照此实现 reforged-pending 档案):
 识别游戏文件 → 读共享映像 → 读原生类型信息 → 等待可读的游戏线程数据
