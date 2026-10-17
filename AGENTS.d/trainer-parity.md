@@ -80,5 +80,11 @@ operations 的 is_read_query「读写分类只认固定操作目录, 绝不信�
 ≥19KB 内容清零核对完成, 静态矿脉最终穷尽。第 29 轮抓获 ≥19KB 最后两个漏网并清零:
 speed_clock_backend (故障隔离「已知损坏路径退出时无关写入保持可用」
 — 与策略链回退同构; 驻留映像只读验证「no new code ran」) 与
-batch_edit (纯写路径数据模型)。≥19KB 内容级至此零遗留, 下一步在
+batch_edit (纯写路径数据模型)。≥19KB 内容级至此零遗留。第 30 轮补
+看 gamecache_fields (20KB) — 「不猜」纪律在文件解析层的最完整文案
+集: 每条错误消息都带「未做什么」句式 (未套用错误布局/未显示猜测
+数值/未把候选当已识别/未把部分记录当全部结果), 且「读框架化嵌入
+缓存块而非任意字符串匹配」— 我们 notes 有原因+建议但没有系统性
+写「拒绝了什么猜测」, 解析类错误文案可参考此句式。hero_skill_
+catalog/casc_catalog 为 SHA-256 内容寻址数据件, 归类正确。下一步在
 真机: live --players --resources auto --export-profile。
