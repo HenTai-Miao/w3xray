@@ -87,6 +87,9 @@ uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --e
 - 物品归属必须按单位条目边界解析: 「其余带物品单位」列表含剧情 NPC/敌方实体
   (如剧情 NPC 手上的展示武器), 禁止按输出出现顺序/邻近性把物品配到玩家单位——
   在乱码 JSON 上做跨条目正则配对正是这类归属事故的放大器。
+- 探测 journal: 每次 live CLI 探测追加一行到 `<缓存根>/live/journal-v1.jsonl`
+  (时间/游戏版本/策略/规模/档案诊断行; fail-open)。玩家问「刚才那次读的什么
+  版本/为什么坏读数」时用它追溯——但现状永远必须现取, journal 不是现状。
 
 ## 原理 (`w3xtool/live_handle_chain.py`)
 全部偏移经 Game.dll 静态反汇编 (capstone) 验证, 纯 ReadProcessMemory 只读:
@@ -115,6 +118,16 @@ uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --e
 已在 1.27.0.52240 真实内存快照上验证: 推导出的 vmctx RVA 精确命中, HM 槽
 功能等价 (同一管理器), 选中链读出英雄+6 件物品。经典引擎家族 (1.24~1.27)
 结构字段一致, 理论上开箱即用; Reforged (x64) 布局不同, 仍会回退。
+
+**档案诊断面**: 每次 live 探测的 notes 都携带 `describe_live_profile()` 一行,
+三档 = 已验证句柄链 / 资源链 RVA 已收录 (句柄链走模板推导) / 完全未收录,
+档案标识 `LIVE_PROFILE_ID` 随升级递增可追溯。在非「已验证」档位上做归属或
+资源断言前必须先看这行降级——推导档是尽力而为, 回答要向玩家标注不确定。
+
+**资源锚缓存**: 报数校准 (`--resources 金 木`) 找到的 (金币地址, 木偏移)
+组会缓存; 复探先按缓存地址做 ±1 值复验, 全过才免全扫 (notes 打「命中上次
+锚缓存」), 任一失效自动回全扫。缓存只做加速不做事实——值校验不过就以
+全扫为准, 换局/堆搬移天然失效, 禁止把缓存地址当跨局事实引用。
 
 **兜底: 手工反汇编** (自动推导失败时):
 1. 内存快照里找 native 名字**堆副本** (`SelectUnit\0` 等), numpy searchsorted

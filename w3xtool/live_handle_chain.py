@@ -31,6 +31,9 @@ from dataclasses import dataclass, field, replace
 __all__ = (
     "LiveHandleOffsets",
     "HANDLE_CHAIN_OFFSETS",
+    "LIVE_PROFILE_ID",
+    "describe_live_profile",
+    "cached_resource_hit",
     "MemoryReader",
     "HandleSystem",
     "OwnedUnit",
@@ -127,6 +130,31 @@ HANDLE_CHAIN_OFFSETS: dict[str, LiveHandleOffsets] = {
         source="Game.dll 1.27.0.52240 (KK) 反汇编验证",
     ),
 }
+
+# 偏移档案标识 (学自 trainer 的 PROFILE_ID 思路): 版本表/模板/诊断逻辑整体
+# 升级时递增, journal 与 live notes 引用它, 坏读数可追溯到具体档案版。
+LIVE_PROFILE_ID = "classic-chain-r1-1.27.0.52240"
+
+
+def describe_live_profile(version: str | None) -> str:
+    """一行诊断: 当前游戏版本命中的偏移档案档位。
+
+    三档: 已验证句柄链 / 仅资源链 RVA 收录 (句柄链走模板推导) / 完全未收录。
+    live 报告 notes 必须携带本行, 未收录版本上的归属断言据此降级。
+    """
+    v = str(version or "")
+    known = HANDLE_CHAIN_OFFSETS.get(v)
+    if known is not None:
+        return f"偏移档案: {v} 已验证 ({known.source}; {LIVE_PROFILE_ID})"
+    if v in GAME_STRUCT_RVAS:
+        return (
+            f"偏移档案: {v} 资源链 RVA 已收录, 句柄链按 classic 模板推导"
+            f" ({LIVE_PROFILE_ID})"
+        )
+    return (
+        f"偏移档案: {v} 未收录, 结构推导尽力而为;"
+        f" 已验证仅 1.27.0.52240 ({LIVE_PROFILE_ID})"
+    )
 
 
 def classic_template() -> LiveHandleOffsets:
@@ -548,6 +576,31 @@ def _matches_reported(f: float, reported: float) -> bool:
     return abs(f - reported) <= 1.0
 
 
+# 资源锚缓存 (学自 trainer ResourceCacher 的"地址缓存+签名复验"思路):
+# 报数校准找到的 (金币地址, 木地址相对偏移) 组。复探先按缓存地址读值,
+# 全部通过 ±1 容差校验才免全扫; 任一失效自动回全扫。引擎堆会搬移小型
+# 结构, 因此缓存只做加速永远不做事实——值校验不过就以全扫为准。
+_resource_anchors: "list[tuple[int, int]] | None" = None
+_resource_cache_hit = False
+
+
+def cached_resource_hit() -> bool:
+    """上次 find_resource_layout 是否命中了锚缓存 (供报告 notes 引用)。"""
+    return _resource_cache_hit
+
+
+def _probe_food(reader: "MemoryReader", gold_addr: int, delta: int) -> "int | None":
+    """尽力识别人口: 常见相对偏移处第一个数量级合理的 float。"""
+    for fo in (delta + 4, delta + 8, delta - 4, 4, 8):
+        raw = reader.read(gold_addr + fo, 4)
+        if not raw:
+            continue
+        fv = struct.unpack("<f", raw)[0]
+        if _plausible_resource(fv) and round(fv) <= 1000:
+            return round(fv)
+    return None
+
+
 def _iter_float_slots(reader: "MemoryReader"):
     """遍历全部区域的 (地址, float 值); 只产出资源量级的候选。"""
     for base_a, data in reader._data.items():
@@ -560,7 +613,11 @@ def _iter_float_slots(reader: "MemoryReader"):
 
 
 def find_resource_layout(
-    reader: "MemoryReader", gold: float, lumber: float, window: int = 0x100
+    reader: "MemoryReader",
+    gold: float,
+    lumber: float,
+    window: int = 0x100,
+    use_cache: bool = True,
 ) -> list[PlayerResources]:
     """以当前已知的一组 金币/木材 数值为锚, 定位同布局的玩家资源结构列表。
 
@@ -569,7 +626,38 @@ def find_resource_layout(
     偏移的其余结构即为其他玩家/缓存副本。引擎为每个玩家维护同构资源结构,
     布局一致而地址不同。注意: 小型资源结构可能被引擎堆管理器搬移, 校准
     应在报数后数秒内执行。
+
+    锚缓存: 上次校准的 (金币地址, 木偏移) 组先按本次报数做 ±1 值复验,
+    全部通过才免全扫 (cached_resource_hit() 返回 True); 任一失效自动回
+    全扫并重填缓存。换局/搬移天然失效, 不会返回过期地址。
     """
+    global _resource_anchors, _resource_cache_hit
+    if use_cache and _resource_anchors:
+        replay: list[PlayerResources] = []
+        ok = True
+        for g_addr, delta in _resource_anchors:
+            gr = reader.read(g_addr, 4)
+            lr = reader.read(g_addr + delta, 4)
+            if not gr or not lr:
+                ok = False
+                break
+            gv = struct.unpack("<f", gr)[0]
+            lv = struct.unpack("<f", lr)[0]
+            if not (
+                _plausible_resource(gv)
+                and _plausible_resource(lv)
+                and _matches_reported(gv, gold)
+                and _matches_reported(lv, lumber)
+            ):
+                ok = False
+                break
+            replay.append(
+                PlayerResources(g_addr, gv, lv, _probe_food(reader, g_addr, delta))
+            )
+        if ok:
+            _resource_cache_hit = True
+            return replay
+    _resource_cache_hit = False
     gold_addr = []
     lumber_addr = []
     for addr, f in _iter_float_slots(reader):
@@ -599,16 +687,10 @@ def find_resource_layout(
             continue
         gold_val = struct.unpack("<f", gold_raw)[0]
         lumber_val = struct.unpack("<f", lumber_raw)[0]
-        food = None
-        for fo in (best_delta + 4, best_delta + 8, best_delta - 4, 4, 8):
-            raw = reader.read(g + fo, 4)
-            if not raw:
-                continue
-            fv = struct.unpack("<f", raw)[0]
-            if _plausible_resource(fv) and round(fv) <= 1000:
-                food = round(fv)
-                break
-        out.append(PlayerResources(g, gold_val, lumber_val, food))
+        out.append(
+            PlayerResources(g, gold_val, lumber_val, _probe_food(reader, g, best_delta))
+        )
+    _resource_anchors = [(g, best_delta) for g in anchors] if out else None
     return out
 
 

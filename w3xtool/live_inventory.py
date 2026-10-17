@@ -24,6 +24,7 @@ import os
 import re
 import struct
 import sys
+import time
 from typing import Any, TypedDict
 
 import numpy as np
@@ -641,6 +642,39 @@ class _LiveReport(TypedDict):
     nick_raw: "str | None"
 
 
+def append_live_journal(rep):
+    """把本次探测追加到 journal (cache/live/journal-v1.jsonl)。
+
+    学自 trainer 的 journal-v4 思路: 版本/档案/模式/规模逐次落盘, 坏读数
+    可追溯。fail-open: 任何异常静默跳过, 绝不影响探测结果。
+    """
+    try:
+        from .cache_root import w3xray_cache_root
+
+        root = w3xray_cache_root() / "live"
+        root.mkdir(parents=True, exist_ok=True)
+        ver = rep.get("version") or {}
+        entry = {
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "version": ver.get("version"),
+            "engine": ver.get("engine"),
+            "strategy": rep.get("strategy_used"),
+            "units": len(rep.get("units") or []),
+            "owned": len(rep.get("owned_units") or [])
+            if rep.get("owned_units")
+            else None,
+            "resources": len(rep.get("resources") or []) if rep.get("resources") else 0,
+            "profile_note": next(
+                (n for n in rep.get("notes") or [] if str(n).startswith("偏移档案")),
+                None,
+            ),
+        }
+        with (root / "journal-v1.jsonl").open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:  # noqa: BLE001 - journal 属派生数据, 失败不影响探测。
+        pass
+
+
 def _parse_resources_arg(parts):
     """--resources auto 或 --resources 金币 木材 -> ("auto") / (金, 木) / None。"""
     if not parts:
@@ -762,14 +796,14 @@ def read_live(
                 return None
             reader = hc.MemoryReader(regions)
             offsets = HANDLE_CHAIN_OFFSETS.get(str(ver.get("version") or ""))
+            # 档案诊断面: 已验证/半收录/未收录三档, notes 永远携带。
+            report["notes"].append(
+                hc.describe_live_profile(str(ver.get("version") or ""))
+            )
             if offsets is None:
                 offsets = hc.derive_offsets(reader, dll_base, dll_base + 0x2000000)
-                if offsets is not None:
-                    report["notes"].append(
-                        f"版本 {ver.get('version')} 未收录, 偏移按结构特征自动推导"
-                    )
             if offsets is None:
-                report["notes"].append(f"版本 {ver.get('version')} 暂无句柄链偏移")
+                report["notes"].append("结构推导失败, 句柄链不可用")
                 return None
             system = hc.HandleSystem(reader, dll_base, offsets)
             if not system.valid:
@@ -845,6 +879,11 @@ def read_live(
                         )
                 else:
                     found = hc.find_resource_layout(reader, resources[0], resources[1])
+                    if hc.cached_resource_hit():
+                        report["notes"].append(
+                            "资源布局命中上次锚缓存 (±1 值校验通过, 免全扫;"
+                            " 换局/搬移会自动失效重扫)"
+                        )
                 report["resources"] = [
                     {
                         "addr": hex(r.addr),
@@ -1020,6 +1059,7 @@ def main(argv=None):
         resources=_parse_resources_arg(args.resources),
         nick=args.nick,
     )
+    append_live_journal(rep)
     counts = rep.get("owner_counts") or {}
     if counts:
         print("== 所有者分布 ==")
