@@ -960,6 +960,7 @@ def read_live(
                             "slot": i.slot,
                             "name": item_names.get(i.code.encode("latin-1"), "?"),
                             "code": i.code,
+                            "addr": i.item_addr,
                         }
                         for i in inv.items
                         if hc.is_fourcc(i.code)
@@ -987,6 +988,7 @@ def read_live(
                         "owner": u.owner,
                         "unit": unit_names.get(u.code.encode("latin-1"), "?"),
                         "code": u.code,
+                        "addr": u.unit_addr,
                         "x": round(u.x, 1),
                         "y": round(u.y, 1),
                     }
