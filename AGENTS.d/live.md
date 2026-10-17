@@ -1,5 +1,14 @@
 # live: 运行中游戏的只读物品读取
 
+## 诊断日志与失败可见化 (学 trainer error_messages)
+用户解释与完整技术日志分离: notes 只放人话 (原因+恢复建议), 兜底
+异常的完整栈落盘 `cache/live/errors-v1.log` (fail-open, 带 stage 与
+目标 pid), notes 追加「诊断日志: <path>」指路 —— str(ex) 常常只是表
+象, 栈与阶段名才是排查证据 (「Use recorded evidence, never treat a
+generic WinError as a root cause」)。Game.dll 按文件名未命中时,
+notes 列出进程内实际枚举到的模块名 (trainer GameModuleNotFoundError
+的状态精确区分: 进程活着 ≠ 映像可见, 排查要有清单不猜)。
+
 ## 证据晋升与歧义可见 (学 trainer discovery_validation)
 推导结果分严格/宽松两轮, source 如实标注: 严格轮通过为默认;
 多解同时通过严格校验时 source 带「[多解歧义: N 个候选…取地址序

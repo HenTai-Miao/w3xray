@@ -150,6 +150,44 @@ _INTEGRITY_NAMES = {
 }
 
 
+def log_live_exception(stage, ex):
+    """兜底异常带栈落盘 (fail-open) 并返回提示后缀。
+
+    学自 trainer format_error 三件套 (reason/recovery/diagnostic_log
+    _path) 与 describe_error 纪律「绝不把通用 WinError 当根因」——
+    str(ex) 常常只是表象, 栈与阶段名才是排查证据。写失败不抛出。
+    """
+    import traceback
+
+    try:
+        from .cache_root import w3xray_cache_root
+
+        root = w3xray_cache_root() / "live"
+        root.mkdir(parents=True, exist_ok=True)
+        p = root / "errors-v1.log"
+        with p.open("a", encoding="utf-8") as fh:
+            fh.write(
+                "[%s] stage=%s pid=%s\n%s\n"
+                % (
+                    time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    stage,
+                    report_pid() or "?",
+                    traceback.format_exc(),
+                )
+            )
+        return f" (诊断日志: {p})"
+    except Exception:  # noqa: BLE001 - 日志属派生数据, 失败不影响探测。
+        return ""
+
+
+def report_pid():
+    """当前探测目标 PID (异常日志用; 无活跃探测返回 None)。"""
+    return _active_pid.get("pid")
+
+
+_active_pid: dict[str, "int | None"] = {"pid": None}
+
+
 def _process_identity(handle):
     """进程 exe 绝对路径 (身份); 拿不到返回 None (fail-open)。"""
     try:
@@ -355,7 +393,8 @@ def detect_version(h):
         "arch": "x86",
         "game_dll": None,
     }
-    for path, base in enum_modules(h):
+    mods = enum_modules(h)
+    for path, base in mods:
         name = os.path.basename(path).lower()
         if name == "game.dll":
             ver = read_file_version(path)
@@ -364,6 +403,11 @@ def detect_version(h):
             info["engine"] = "reforged" if info["arch"] == "x64" else "classic"
             info["game_dll"] = {"base": base, "path": path}
             break
+    if info["game_dll"] is None:
+        # 失败可见化 (学 trainer GameModuleNotFoundError 的状态精确区分
+        # 「进程活着但已验证映像不可见」+ game_module_base 的模块枚举
+        # 交叉验证): 给出实际枚举到的模块名, 排查不再两眼一抹黑。
+        info["modules_seen"] = [os.path.basename(p) for p, _b in mods][:24]
     if isinstance(info["version"], str) and info["version"] in OFFSET_REFERENCE:
         info["known_offsets"] = OFFSET_REFERENCE[info["version"]]
     return info
@@ -859,6 +903,7 @@ def read_live(
         else:
             chosen = pids[0]
         report["pid"] = chosen  # 追溯: 本次读的是哪个游戏进程 (多实例排查)
+        _active_pid["pid"] = chosen  # 异常日志关联目标进程
         h = open_process(chosen)
         if not h:
             report["notes"].append("OpenProcess 失败 (需管理员)")
@@ -938,7 +983,15 @@ def read_live(
             gd = ver.get("game_dll")
             dll_base = gd.get("base", 0) if isinstance(gd, dict) else 0
             if not dll_base:
-                report["notes"].append("未取到 Game.dll 基址")
+                seen = ver.get("modules_seen")
+                hint = (
+                    "; 进程内枚举到的模块: " + ", ".join(seen)
+                    if isinstance(seen, list) and seen
+                    else ""
+                )
+                report["notes"].append(
+                    "未取到 Game.dll 基址 (进程存活但按文件名未命中)" + hint
+                )
                 return None
             reader = hc.MemoryReader(regions)
             v_str = str(ver.get("version") or "")
@@ -1282,7 +1335,9 @@ def read_live(
             report["notes"].append("资源扫描无结果 (报数与内存值不匹配或已变动)")
             return None
         except Exception as ex:  # noqa: BLE001 - 兜底失败回退原策略链
-            report["notes"].append(f"资源兜底扫描异常: {ex}")
+            report["notes"].append(
+                f"资源兜底扫描异常: {ex}" + log_live_exception("try_resources_scan", ex)
+            )
             return None
 
     if strategy in ("auto", "handle"):
