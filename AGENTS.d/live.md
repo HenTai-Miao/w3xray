@@ -106,7 +106,25 @@ uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --e
 
 ## 版本适配 (换 1.24 / 1.26 / 其他平台时)
 
-**首选: 自动推导 (无版本依赖)**。版本号不在 `HANDLE_CHAIN_OFFSETS` 里时,
+**版本矩阵** (`resolve_profile(version, engine, arch)` 四档):
+
+| 版本 | 档位 | 资源链 | 句柄链 |
+|---|---|---|---|
+| 1.27.0.52240 | exact | 公开表 RVA | 已真机验证 (KK) |
+| 1.20.4~1.28.5 (15 build, 含 1.24 全家族) | rva-table | 公开表 (Still4/War3Trainer) | 运行时 `derive_offsets` 模板推导 |
+| 1.29+/其他未收录 classic | template | 无表, 资源差分定位 | 结构推导 (尽力而为) |
+| 重制版 (Reforged, Game.dll x64) | reforged-pending | 待建档 | 待建档, 直接回退 chain/icons |
+
+非 exact 档位的偏移**没有真机验证过**: rva-table 档的资源链数值来自公开表
+(来源 Still4/War3Trainer, 与本地 1.27 实测同源互证), 推导档完全现场计算。
+纪律同 trainer 的「未沿用旧地址执行」——版本不在档案里就绝不引用旧地址。
+
+**真机验证流程** (把档位升到 exact): 切到目标版本开一局 → 跑 live
+`--players --resources auto` → 把 notes 里的「偏移档案」行与输出贴回,
+选中链/背包/资源逐项核对后才能把档案升 exact; 未核对前禁止对该版本
+的输出做归属断言。
+
+**首选: 自动推导 (无版本依赖)**。档案表无精确命中 (tier=template) 时,
 `derive_offsets()` 会在 Game.dll 内存里按**结构特征**自动识别:
 1. 扫 dll 数据区的堆指针, 找"长得像句柄管理器"的结构 (双表 + 0xFFFFFFFE
    条目标记 + 存活包装对象), 支持多候选去重, 防假阳性。
@@ -120,9 +138,10 @@ uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --e
 结构字段一致, 理论上开箱即用; Reforged (x64) 布局不同, 仍会回退。
 
 **档案诊断面**: 每次 live 探测的 notes 都携带 `describe_live_profile()` 一行,
-三档 = 已验证句柄链 / 资源链 RVA 已收录 (句柄链走模板推导) / 完全未收录,
-档案标识 `LIVE_PROFILE_ID` 随升级递增可追溯。在非「已验证」档位上做归属或
-资源断言前必须先看这行降级——推导档是尽力而为, 回答要向玩家标注不确定。
+四档 = 已验证句柄链 (exact) / 公开表收录 (rva-table) / 未收录模板 (template)
+/ 重制版待建 (reforged-pending), 档案标识 `LIVE_PROFILE_ID` 随升级递增可追溯
+(当前 r2-multibuild)。在非「已验证」档位上做归属或资源断言前必须先看这行
+降级——推导档与公开表档都是尽力而为, 回答要向玩家标注不确定。
 
 **资源锚缓存**: 报数校准 (`--resources 金 木`) 找到的 (金币地址, 木偏移)
 组会缓存; 复探先按缓存地址做 ±1 值复验, 全过才免全扫 (notes 打「命中上次

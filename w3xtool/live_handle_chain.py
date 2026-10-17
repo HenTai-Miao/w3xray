@@ -34,6 +34,9 @@ __all__ = (
     "LIVE_PROFILE_ID",
     "describe_live_profile",
     "cached_resource_hit",
+    "LiveBuildProfile",
+    "BUILD_PROFILES",
+    "resolve_profile",
     "MemoryReader",
     "HandleSystem",
     "OwnedUnit",
@@ -133,27 +136,141 @@ HANDLE_CHAIN_OFFSETS: dict[str, LiveHandleOffsets] = {
 
 # 偏移档案标识 (学自 trainer 的 PROFILE_ID 思路): 版本表/模板/诊断逻辑整体
 # 升级时递增, journal 与 live notes 引用它, 坏读数可追溯到具体档案版。
-LIVE_PROFILE_ID = "classic-chain-r1-1.27.0.52240"
+# r2: 引入 per-build 档案层 (LiveBuildProfile/BUILD_PROFILES/resolve_profile),
+# 覆盖 1.20~1.28 公开表 + 未收录 classic 模板档 + 重制版待建档。
+LIVE_PROFILE_ID = "classic-chain-r2-multibuild"
+
+# 单位链表 RVA (Still4/War3Trainer GameContext.cs 公开表, 1.20~1.28):
+# 与资源链同源的第二锚, 供后续 UnitList 遍历类读取复用。
+_UNIT_LIST_RVAS: dict[str, int] = {
+    "1.20.4.6074": 0x8722BC,
+    "1.21.0.6263": 0x873334,
+    "1.21.1.6300": 0x873334,
+    "1.22.0.6328": 0xAA2FFC,
+    "1.23.0.6352": 0xABBE4C,
+    "1.24.0.6372": 0xACD44C,
+    "1.24.1.6374": 0xACD44C,
+    "1.24.2.6378": 0xACD44C,
+    "1.24.3.6384": 0xACD44C,
+    "1.24.4.6387": 0xACD44C,
+    "1.25.1.6397": 0xAB65F4,
+    "1.26.0.6401": 0xAB65F4,
+    "1.27.0.52240": 0xBE4238,
+    "1.28.0.7205": 0xD730F0,
+    "1.28.5.7680": 0xD305E0,
+}
 
 
-def describe_live_profile(version: str | None) -> str:
-    """一行诊断: 当前游戏版本命中的偏移档案档位。
+@dataclass(frozen=True, slots=True)
+class LiveBuildProfile:
+    """一个游戏 build 的只读读取档案 (纯数据; 载入档案不载入可执行代码)。
 
-    三档: 已验证句柄链 / 仅资源链 RVA 收录 (句柄链走模板推导) / 完全未收录。
-    live 报告 notes 必须携带本行, 未收录版本上的归属断言据此降级。
+    tier 档位: exact = 句柄链已真机验证; rva-table = 资源/单位链有公开表
+    来源且句柄链可运行时推导; template = 未收录 classic 版本, 全部靠引擎
+    家族结构推导; reforged-pending = 重制版 x64 档案待建立, 明确回退。
+    """
+
+    version: str
+    engine: str
+    arch: str
+    game_struct_rva: "int | None"
+    unit_list_rva: "int | None"
+    handle_chain: "LiveHandleOffsets | None"
+    tier: str
+    source: str
+
+
+_build_profiles_cache: "dict[str, LiveBuildProfile] | None" = None
+
+
+def build_profiles() -> "dict[str, LiveBuildProfile]":
+    """惰性构建 per-build 档案表 (引用 HANDLE_CHAIN_OFFSETS/GAME_STRUCT_RVAS)。"""
+    global _build_profiles_cache
+    if _build_profiles_cache is None:
+        table: dict[str, LiveBuildProfile] = {}
+        for ver, rva in GAME_STRUCT_RVAS.items():
+            chain = HANDLE_CHAIN_OFFSETS.get(ver)
+            table[ver] = LiveBuildProfile(
+                version=ver,
+                engine="classic",
+                arch="x86",
+                game_struct_rva=rva,
+                unit_list_rva=_UNIT_LIST_RVAS.get(ver),
+                handle_chain=chain,
+                tier="exact" if chain is not None else "rva-table",
+                source=(
+                    chain.source
+                    if chain is not None
+                    else "Still4/War3Trainer 公开表 (GameContext.cs); 句柄链待真机验证"
+                ),
+            )
+        _build_profiles_cache = table
+    return _build_profiles_cache
+
+
+BUILD_PROFILES = build_profiles
+
+
+def resolve_profile(
+    version: str | None, engine: str = "classic", arch: str = "x86"
+) -> LiveBuildProfile:
+    """档案解析三档: 精确命中 → 公开表 → 引擎家族模板 / 重制版待建。
+
+    精确命中零额外开销直接返回; 未收录版本不沿用任何旧地址, 由
+    derive_offsets (classic) 或调用方回退策略 (reforged) 现场解决。
     """
     v = str(version or "")
-    known = HANDLE_CHAIN_OFFSETS.get(v)
-    if known is not None:
-        return f"偏移档案: {v} 已验证 ({known.source}; {LIVE_PROFILE_ID})"
-    if v in GAME_STRUCT_RVAS:
+    hit = build_profiles().get(v)
+    if hit is not None:
+        return hit
+    if engine == "reforged" or arch == "x64":
+        return LiveBuildProfile(
+            version=v,
+            engine="reforged",
+            arch="x64",
+            game_struct_rva=None,
+            unit_list_rva=None,
+            handle_chain=None,
+            tier="reforged-pending",
+            source="重制版 x64 档案待建立 (需真机采集验证)",
+        )
+    return LiveBuildProfile(
+        version=v,
+        engine="classic",
+        arch="x86",
+        game_struct_rva=None,
+        unit_list_rva=None,
+        handle_chain=None,
+        tier="template",
+        source="未收录版本: classic 引擎家族结构推导 + 资源差分定位",
+    )
+
+
+def describe_live_profile(
+    version: str | None, engine: str = "classic", arch: str = "x86"
+) -> str:
+    """一行诊断: 当前游戏版本命中的档案档位。
+
+    四档: 已验证句柄链 (exact) / 公开表收录 (rva-table) / 未收录 classic
+    模板 (template) / 重制版待建 (reforged-pending)。live 报告 notes 必须
+    携带本行, 非精确档位上的归属断言据此降级。
+    """
+    p = resolve_profile(version, engine, arch)
+    if p.tier == "exact":
+        return f"偏移档案: {p.version} 已验证 ({p.source}; {LIVE_PROFILE_ID})"
+    if p.tier == "rva-table":
         return (
-            f"偏移档案: {v} 资源链 RVA 已收录, 句柄链按 classic 模板推导"
-            f" ({LIVE_PROFILE_ID})"
+            f"偏移档案: {p.version} 资源链/单位链已收录 (公开表),"
+            f" 句柄链运行时按 classic 模板推导 ({LIVE_PROFILE_ID})"
+        )
+    if p.tier == "reforged-pending":
+        return (
+            f"偏移档案: {p.version} 重制版 x64: 句柄链/资源链档案待建立,"
+            f" 回退 chain/icons 策略 ({LIVE_PROFILE_ID})"
         )
     return (
-        f"偏移档案: {v} 未收录, 结构推导尽力而为;"
-        f" 已验证仅 1.27.0.52240 ({LIVE_PROFILE_ID})"
+        f"偏移档案: {p.version} 未收录 (classic 家族), 结构推导与资源差分"
+        f" 尽力而为; 已验证仅 1.27.0.52240 ({LIVE_PROFILE_ID})"
     )
 
 

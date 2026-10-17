@@ -37,13 +37,51 @@ class TestDescribeLiveProfile:
         assert lh.LIVE_PROFILE_ID in s
 
     def test_rva_only(self):
-        assert "资源链 RVA 已收录" in lh.describe_live_profile("1.24.4.6387")
+        s = lh.describe_live_profile("1.24.4.6387")
+        assert "已收录" in s and "公开表" in s
 
     def test_unknown(self):
         assert "未收录" in lh.describe_live_profile("9.9.9.99999")
 
     def test_none(self):
         assert "未收录" in lh.describe_live_profile(None)
+
+    def test_reforged_pending(self):
+        s = lh.describe_live_profile("2.0.4.24687", "reforged", "x64")
+        assert "重制版" in s and "回退" in s
+
+
+class TestResolveProfile:
+    def test_exact_hit(self):
+        p = lh.resolve_profile("1.27.0.52240")
+        assert p.tier == "exact"
+        assert p.handle_chain is not None
+        assert p.game_struct_rva == 0xBE40A8
+        assert p.unit_list_rva == 0xBE4238
+
+    def test_rva_table_hit(self):
+        p = lh.resolve_profile("1.24.4.6387")
+        assert p.tier == "rva-table"
+        assert p.engine == "classic" and p.arch == "x86"
+        assert p.game_struct_rva == 0xACE5E0
+        assert p.unit_list_rva == 0xACD44C
+        assert p.handle_chain is None
+
+    def test_unknown_classic_falls_to_template(self):
+        p = lh.resolve_profile("1.29.0.5971", "classic", "x86")
+        assert p.tier == "template"
+        assert p.game_struct_rva is None and p.handle_chain is None
+
+    def test_reforged_falls_to_pending(self):
+        p = lh.resolve_profile("2.0.4.24687", "reforged", "x64")
+        assert p.tier == "reforged-pending"
+        assert p.arch == "x64" and p.handle_chain is None
+
+    def test_table_covers_all_rva_versions(self):
+        for ver, rva in lh.GAME_STRUCT_RVAS.items():
+            p = lh.resolve_profile(ver)
+            assert p.game_struct_rva == rva, ver
+            assert p.tier in ("exact", "rva-table"), ver
 
 
 class TestResourceAnchorCache:

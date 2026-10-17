@@ -30,7 +30,7 @@ from typing import Any, TypedDict
 import numpy as np
 from PIL import Image
 
-from .live_handle_chain import HANDLE_CHAIN_OFFSETS, match_unit_entries
+from .live_handle_chain import match_unit_entries
 
 u32 = ctypes.windll.user32
 g32 = ctypes.windll.gdi32
@@ -795,15 +795,25 @@ def read_live(
                 report["notes"].append("未取到 Game.dll 基址")
                 return None
             reader = hc.MemoryReader(regions)
-            offsets = HANDLE_CHAIN_OFFSETS.get(str(ver.get("version") or ""))
-            # 档案诊断面: 已验证/半收录/未收录三档, notes 永远携带。
-            report["notes"].append(
-                hc.describe_live_profile(str(ver.get("version") or ""))
-            )
-            if offsets is None:
+            v_str = str(ver.get("version") or "")
+            v_engine = str(ver.get("engine") or "classic")
+            v_arch = str(ver.get("arch") or "x86")
+            profile = hc.resolve_profile(v_str, v_engine, v_arch)
+            # 档案诊断面: exact/rva-table/template/reforged-pending 四档, notes 永远携带。
+            report["notes"].append(hc.describe_live_profile(v_str, v_engine, v_arch))
+            offsets = profile.handle_chain
+            if offsets is None and profile.tier != "reforged-pending":
                 offsets = hc.derive_offsets(reader, dll_base, dll_base + 0x2000000)
             if offsets is None:
-                report["notes"].append("结构推导失败, 句柄链不可用")
+                report["notes"].append(
+                    "句柄链不可用 ("
+                    + (
+                        "重制版 x64 档案待建立"
+                        if profile.tier == "reforged-pending"
+                        else "结构推导失败"
+                    )
+                    + "), 回退 chain/icons 策略"
+                )
                 return None
             system = hc.HandleSystem(reader, dll_base, offsets)
             if not system.valid:
