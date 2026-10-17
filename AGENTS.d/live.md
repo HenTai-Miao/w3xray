@@ -1,5 +1,14 @@
 # live: 运行中游戏的只读物品读取
 
+## 证据晋升与歧义可见 (学 trainer discovery_validation)
+推导结果分严格/宽松两轮, source 如实标注: 严格轮通过为默认;
+多解同时通过严格校验时 source 带「[多解歧义: N 个候选…取地址序
+首个]」(三态 confirmed/ambiguous/unresolved 里的可见歧义 — 不静默
+选择); 宽松轮兜底通过时 source 带「宽松校验」后缀。黄金规则同源:
+「Never promote an inherited offset by numerical plausibility」—
+绝不因数值看似合理而采信偏移, 采信只来自端到端结构验证; 世代操作
+数只是提示, 完整回链一致才算数。
+
 ## 进程身份防护 (防 PID 复用错读)
 open_process 成功后立即用 `K32GetModuleFileNameExW` 记录该句柄的 exe 路径
 作为身份基线; 每条策略产出结果返回前用 `verify_opened_process` 复核

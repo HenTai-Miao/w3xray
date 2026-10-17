@@ -1379,9 +1379,39 @@ def derive_offsets(
     # 顺序语义: 以地址序返回首个通过端到端验证的 (system, vmctx) 组合;
     # 多解同时通过时任意一组都是功能正确的读取配置。
     _enter("strict-verify")
-    for require_inventory in (True, False):
-        if require_inventory is False:
-            _enter("loose-verify")
+    # 严格轮不提前返回: 收集全部通过候选后取地址序首个, 多解时把歧义
+    # 标注进 source (学 trainer discovery_validation 三态 confirmed/
+    # ambiguous/unresolved — 歧义可见而非静默选择; 推导是一次性成本,
+    # 固化后走档案不再推导)。
+    strict_hits: list[tuple[int, "LiveHandleOffsets"]] = []
+    _tick = 0
+    for addr, value in _iter_dwords(reader, dll_base, hi):
+        _tick += 1
+        if not _tick & 0xFFFF and budget is not None and not budget.check():
+            return None
+        if not (_HEAP_LO <= value < _HEAP_HI):
+            continue
+        for stage, system in systems:
+            if _selection_chain_valid(reader, system, tpl, value, True):
+                strict_hits.append((addr, stage))
+    if strict_hits:
+        addr, stage = strict_hits[0]
+        result = replace(
+            stage,
+            vmctx_global_rva=addr - dll_base,
+            source=(
+                "结构特征自动推导 (classic 模板)"
+                + (
+                    f" [多解歧义: {len(strict_hits)} 个候选通过严格校验, 取地址序首个]"
+                    if len(strict_hits) > 1
+                    else ""
+                )
+            ),
+        )
+        _enter("complete")
+        return result
+    for require_inventory in (False,):
+        _enter("loose-verify")
         _tick = 0
         for addr, value in _iter_dwords(reader, dll_base, hi):
             _tick += 1
@@ -1396,7 +1426,7 @@ def derive_offsets(
                     result = replace(
                         stage,
                         vmctx_global_rva=addr - dll_base,
-                        source="结构特征自动推导 (classic 模板)",
+                        source="结构特征自动推导 (classic 模板, 宽松校验)",
                     )
                     _enter("complete")
                     return result
