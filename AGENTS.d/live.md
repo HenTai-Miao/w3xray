@@ -1,5 +1,14 @@
 # live: 运行中游戏的只读物品读取
 
+## 进程身份防护 (防 PID 复用错读)
+open_process 成功后立即用 `K32GetModuleFileNameExW` 记录该句柄的 exe 路径
+作为身份基线; 每条策略产出结果返回前用 `verify_opened_process` 复核
+(学自 trainer GameSession: "Process identity changed; no access to
+replacement process")。游戏退出后系统把同 PID 发给新进程而工具仍持旧
+句柄时, 复核不通过会在 notes 明示「进程身份已变…读数可能来自已被替
+换的进程」—— 归因污染必须可见, 不能静默把无关进程的内存当游戏读数。
+路径拿不到 (fail-open) 视为「无法判定 ≠ 已变化」, 不虚报。
+
 ## 强制: 每问必现取 (禁止复用旧结果)
 用户每次提问 (查资源 / 查单位 / 查背包 / 谁是谁 / 查地图指令) 都必须**当场重新
 探测与读取**: 重新找 war3 进程、重新拍快照、重新跑 live / current 命令。

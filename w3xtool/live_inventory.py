@@ -150,6 +150,33 @@ _INTEGRITY_NAMES = {
 }
 
 
+def _process_identity(handle):
+    """进程 exe 绝对路径 (身份); 拿不到返回 None (fail-open)。"""
+    try:
+        buf = ctypes.create_unicode_buffer(0x400)
+        if k32.K32GetModuleFileNameExW(handle, None, buf, 0x400):
+            return buf.value
+    except Exception:  # noqa: BLE001 - 身份读取失败不阻断探测。
+        pass
+    return None
+
+
+def verify_opened_process(handle, opened_path):
+    """开启句柄与访问时刻的进程身份比对 (学自 trainer GameSession
+    verify_opened_process: process changed between verification and
+    access — 拒绝访问替换进程)。返回警示文本或 None。
+
+    PID 复用窗口 (游戏退出后系统把同 PID 发给新进程, 而工具仍持有
+    旧句柄指向新进程) 下读数会来自完全无关的进程 — 归因污染。
+    """
+    now = _process_identity(handle)
+    if now is None or opened_path is None:
+        return None  # 无法判定 ≠ 已变化, 不虚报
+    if now.lower() != opened_path.lower():
+        return f"进程身份已变 (开启时 {opened_path} → 访问时 {now}) — 本次读数可能来自已被替换的进程"
+    return None
+
+
 def _integrity_rid(process_handle):
     """读取进程 token 完整性 RID; 无法判定返回 None (fail-open)。"""
     try:
@@ -804,6 +831,7 @@ def read_live(
     }
     ver: dict[str, object] | None = None
     h = 0
+    opened_path: str | None = None  # 进程身份基线 (离线快照无此概念)
     max_addr = 0x7FFF0000
     if load_snapshot_dir:
         regions, total = load_snapshot(load_snapshot_dir), 0
@@ -835,6 +863,9 @@ def read_live(
         if not h:
             report["notes"].append("OpenProcess 失败 (需管理员)")
             return report
+        opened_path = _process_identity(
+            h
+        )  # 身份基线 (防 PID 复用, 学 trainer GameSession)
         game_rid, self_rid = _integrity_rid(h), _integrity_rid(None)
         if game_rid and self_rid and self_rid < game_rid:
             report["notes"].append(
@@ -1257,6 +1288,9 @@ def read_live(
     if strategy in ("auto", "handle"):
         slots = try_handle()
         if slots:
+            warn = verify_opened_process(h, opened_path)
+            if warn:
+                report["notes"].append(warn)
             report["strategy_used"] = "handle"
             return report
     # 资源兜底: 句柄链不可用 (reforged-pending/template) 时资源读取不该陪葬。
@@ -1265,15 +1299,24 @@ def read_live(
     if strategy in ("auto", "chain"):
         slots = try_chain()
         if slots:
+            warn = verify_opened_process(h, opened_path)
+            if warn:
+                report["notes"].append(warn)
             report["strategy_used"] = "chain"
             report["slots"] = slots
             return report
     if strategy in ("auto", "icons"):
         slots = try_icons()
         if slots:
+            warn = verify_opened_process(h, opened_path)
+            if warn:
+                report["notes"].append(warn)
             report["strategy_used"] = "icons"
             report["slots"] = slots
             return report
+    warn = verify_opened_process(h, opened_path)
+    if warn:
+        report["notes"].append(warn)
     report["notes"].append("所有策略均未产出 (背包可能为空/结构未识别/UI 不可见)")
     return report
 
