@@ -1,5 +1,14 @@
 # live: 运行中游戏的只读物品读取
 
+## 待真机: 重制版装备目录数据源 (学 trainer new_equipment_catalog)
+trainer 内嵌完整官方 3.0 装备目录 (495 条: 名称/描述/类别/内部代码,
+含 UndeadRE03a/b 同名不同码对; 3 个 SHA-256 目录数据完整性哈希),
+声明「map availability may differ」—— 官方目录 ≠ 当前图可用, 与地图
+证据原则同源。我们建立重制版档案时的展示层数据源参考: 装备目录以
+数据文件内嵌 (content-hash 校验), 不查网。资产面全量核对结论:
+trainer 包内业务数据资产仅 profiles(7)/tools(3 DLL: 桥接+
+speed_clock+talent_icon_display, 后两者写路径与时钟/UI)/assets(1)。
+
 ## 待真机: 共享映像观察 (学 trainer discovery_image, 边界内合法只读)
 trainer 对受保护页的只读路径: DuplicateHandle 复制游戏 section 句柄 →
 NtQuerySection/NtQueryObject 验证 → MapViewOfFile 映射到自己进程读
