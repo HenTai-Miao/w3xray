@@ -45,6 +45,20 @@ class TestParse:
         assert opts.save_snapshot == "snapdir"
         assert opts.load_snapshot == "snapdir"
 
+    def test_profile_export_and_load_options(self):
+        opts = parse_live_cli_options(
+            (
+                "--pack",
+                "pk",
+                "--export-profile",
+                "out.json",
+                "--profile-json",
+                "in.json",
+            )
+        )
+        assert opts.export_profile == "out.json"
+        assert opts.profile_json == "in.json"
+
     def test_missing_everything(self):
         with pytest.raises(LiveCliOptionError, match="缺少地图路径"):
             parse_live_cli_options(())

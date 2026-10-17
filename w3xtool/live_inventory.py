@@ -21,6 +21,7 @@ import ctypes
 import ctypes.wintypes as wt
 import json
 import os
+from pathlib import Path
 import re
 import struct
 import sys
@@ -778,6 +779,7 @@ def read_live(
     resources=None,
     nick=None,
     export_profile=None,
+    profile_json=None,
 ):
     """resources: (金币, 木材) 元组为报数校准; "auto" 为自动差分 (免报数)。"""
     report: _LiveReport = {
@@ -891,11 +893,28 @@ def read_live(
             v_engine = str(ver.get("engine") or "classic")
             v_arch = str(ver.get("arch") or "x86")
             profile = hc.resolve_profile(v_str, v_engine, v_arch)
+            if profile_json:
+                # 显式档案优先 (与 --export-profile 闭环); 失败降级内置并明示。
+                try:
+                    profile = hc.profile_from_dict(
+                        json.loads(Path(profile_json).read_text(encoding="utf-8"))
+                    )
+                    report["notes"].append(
+                        "已加载显式档案: "
+                        + profile_json
+                        + " (tier="
+                        + profile.tier
+                        + ")"
+                    )
+                except (OSError, ValueError, KeyError, TypeError) as exc:
+                    report["notes"].append(
+                        f"显式档案不可用 ({type(exc).__name__}: {exc}), 回退内置"
+                    )
             # 档案诊断面: exact/rva-table/template/reforged-pending 四档, notes 永远携带。
             report["notes"].append(hc.describe_live_profile(v_str, v_engine, v_arch))
             offsets = profile.handle_chain
             last_stage: list[str] = []  # 推导阶段追踪 (诊断带最后阶段)
-            if offsets is not None and profile.checks:
+            if offsets is not None and (profile.checks or profile.fingerprint):
                 disk_fp = None
                 _gd = ver.get("game_dll")
                 if isinstance(_gd, dict) and _gd.get("path"):
@@ -1269,6 +1288,11 @@ def main(argv=None):
         metavar="JSON路径",
         help="句柄链可用时把本进程实际工作的档案固化为 JSON (升 exact 复用)",
     )
+    ap.add_argument(
+        "--profile-json",
+        metavar="JSON路径",
+        help="显式档案文件优先于内置 (--export-profile 固化结果的复用端)",
+    )
     args = ap.parse_args(argv)
     if args.test_image:
         templates, names = build_templates(args.pack, verbose=True)
@@ -1292,6 +1316,7 @@ def main(argv=None):
         resources=_parse_resources_arg(args.resources),
         nick=args.nick,
         export_profile=args.export_profile,
+        profile_json=args.profile_json,
     )
     append_live_journal(rep)
     counts = rep.get("owner_counts") or {}
