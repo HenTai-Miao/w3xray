@@ -326,7 +326,7 @@ def main():
     import argparse
     import json
     from .live_inventory import (
-        find_war3_pid,
+        find_war3_pids,
         load_names,
         load_snapshot,
         mem_setup,
@@ -338,17 +338,32 @@ def main():
     ap.add_argument("--pack", required=True)
     ap.add_argument("--load-snapshot", help="离线快照目录")
     ap.add_argument("--save-snapshot", help="保存快照目录")
+    ap.add_argument("--pid", type=int, help="多实例时显式指定游戏进程 PID")
     args = ap.parse_args()
     if args.load_snapshot:
         regions = load_snapshot(args.load_snapshot)
         print("离线快照", sum(len(d) for _, d in regions) // 1048576, "MB")
     else:
         mem_setup()
-        pids = find_war3_pid()
+        pids = find_war3_pids()
         if not pids:
             print("war3 未运行")
             return 1
-        h = open_process(pids[0])
+        if args.pid is not None:
+            if args.pid not in pids:
+                print(f"--pid {args.pid} 不在运行中的 war3 进程列表 {pids}")
+                return 1
+            chosen = args.pid
+        elif len(pids) > 1:
+            print(
+                "检测到多个 war3 进程 "
+                + str(pids)
+                + " — 不猜, 用 --pid <PID> 显式选择"
+            )
+            return 1
+        else:
+            chosen = pids[0]
+        h = open_process(chosen)
         regions, total = snapshot(h)
         print(f"pid {pids[0]} 快照 {total // 1048576}MB")
         if args.save_snapshot:

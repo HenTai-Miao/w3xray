@@ -45,6 +45,7 @@ _VALUE_OPTIONS = (
     "--nick",
     "--export-profile",
     "--profile-json",
+    "--pid",
 )
 _FLAG_OPTIONS = ("--players", "--elevated-hint")
 _TWO_VALUE_OPTIONS = ("--resources",)
@@ -66,6 +67,7 @@ class LiveCliOptions:
     nick: str | None = None
     export_profile: str | None = None
     profile_json: str | None = None
+    pid: str | None = None
     elevated_hint: bool = False
 
 
@@ -165,6 +167,7 @@ def parse_live_cli_options(argv: Sequence[str]) -> LiveCliOptions:
         nick=values.get("--nick"),
         export_profile=values.get("--export-profile"),
         profile_json=values.get("--profile-json"),
+        pid=values.get("--pid"),
         elevated_hint="--elevated-hint" in flags,
     )
 
@@ -247,6 +250,8 @@ def run_live_cli(options: LiveCliOptions) -> int:
         args += ["--export-profile", options.export_profile]
     if options.profile_json is not None:
         args += ["--profile-json", options.profile_json]
+    if options.pid is not None:
+        args += ["--pid", options.pid]
     try:
         return live_main(args)
     except Exception as exc:  # noqa: BLE001 - 读取失败不抛堆栈给玩家。

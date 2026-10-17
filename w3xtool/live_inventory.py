@@ -107,7 +107,9 @@ def mem_setup():
     ]
 
 
-def find_war3_pid():
+def find_war3_pids():
+    """全部 war3 进程 PID (多实例不猜 — 学自 trainer find_war3:
+    Multiple clients -> select an explicit PID)。"""
     import subprocess
 
     try:
@@ -116,11 +118,11 @@ def find_war3_pid():
                 "powershell",
                 "-NoProfile",
                 "-Command",
-                "(Get-Process -Name war3,warcraft* -ErrorAction SilentlyContinue | Select-Object -First 1).Id",
+                "(Get-Process -Name war3,warcraft* -ErrorAction SilentlyContinue).Id",
             ],
             text=True,
         ).strip()
-        return [int(out)] if out else []
+        return sorted({int(x) for x in out.split() if x.strip().isdigit()})
     except Exception:
         return []
 
@@ -780,6 +782,7 @@ def read_live(
     nick=None,
     export_profile=None,
     profile_json=None,
+    pid=None,
 ):
     """resources: (金币, 木材) 元组为报数校准; "auto" 为自动差分 (免报数)。"""
     report: _LiveReport = {
@@ -806,11 +809,25 @@ def read_live(
             print(f"离线快照 {len(regions)} 区 {total // 1048576}MB")
     else:
         mem_setup()
-        pids = find_war3_pid()
+        pids = find_war3_pids()
         if not pids:
             report["notes"].append("war3 未运行")
             return report
-        h = open_process(pids[0])
+        if pid is not None:
+            if pid not in pids:
+                report["notes"].append(f"--pid {pid} 不在运行中的 war3 进程列表 {pids}")
+                return report
+            chosen = pid
+        elif len(pids) > 1:
+            # 多实例不猜 (学自 trainer find_war3: Multiple clients ->
+            # select an explicit PID) — 自动选第一个可能读错人。
+            report["notes"].append(
+                "检测到多个 war3 进程 " + str(pids) + " — 不猜, 用 --pid <PID> 显式选择"
+            )
+            return report
+        else:
+            chosen = pids[0]
+        h = open_process(chosen)
         if not h:
             report["notes"].append("OpenProcess 失败 (需管理员)")
             return report
@@ -1293,6 +1310,11 @@ def main(argv=None):
         metavar="JSON路径",
         help="显式档案文件优先于内置 (--export-profile 固化结果的复用端)",
     )
+    ap.add_argument(
+        "--pid",
+        type=int,
+        help="多实例时显式指定游戏进程 PID (多实例不给则不猜报错)",
+    )
     args = ap.parse_args(argv)
     if args.test_image:
         templates, names = build_templates(args.pack, verbose=True)
@@ -1317,6 +1339,7 @@ def main(argv=None):
         nick=args.nick,
         export_profile=args.export_profile,
         profile_json=args.profile_json,
+        pid=args.pid,
     )
     append_live_journal(rep)
     counts = rep.get("owner_counts") or {}

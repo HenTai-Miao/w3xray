@@ -54,10 +54,13 @@ class TestParse:
                 "out.json",
                 "--profile-json",
                 "in.json",
+                "--pid",
+                "12345",
             )
         )
         assert opts.export_profile == "out.json"
         assert opts.profile_json == "in.json"
+        assert opts.pid == "12345"
 
     def test_missing_everything(self):
         with pytest.raises(LiveCliOptionError, match="缺少地图路径"):
