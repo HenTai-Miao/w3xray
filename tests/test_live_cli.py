@@ -116,3 +116,25 @@ class TestRunCli:
         monkeypatch.setattr(builtins, "__import__", fake_import)
         code = live_cli.run_live_cli(live_cli.LiveCliOptions(pack_dir=str(tmp_path)))
         assert code == 2
+
+
+def test_read_live_offline_snapshot_fail_open(tmp_path):
+    """合成快照全流程: 无进程不炸, 异常逐层兜进 notes (fail-open 端到端)。"""
+    import json
+
+    pytest.importorskip("numpy")
+    from w3xtool.live_inventory import read_live
+
+    d = tmp_path / "snap"
+    d.mkdir()
+    (d / "index.json").write_text(
+        json.dumps([{"base": 0x60000000, "off": 0, "len": 0x20000}]),
+        encoding="utf-8",
+    )
+    (d / "snap.bin").write_bytes(bytes(0x20000))
+    rep = read_live(None, load_snapshot_dir=str(d), verbose=False)
+    assert rep["strategy_used"] is None
+    assert rep["pid"] is None  # 离线快照无进程归属
+    assert any("需要运行中的游戏" in n for n in rep["notes"])
+    assert any("异常" in n for n in rep["notes"])  # 兜底链可见不静默
+    assert rep["resources"] is None and rep["player_rows"] is None
