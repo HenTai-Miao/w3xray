@@ -100,7 +100,25 @@ class TestTokenIntegrity:
         from w3xtool.live_inventory import _INTEGRITY_NAMES
 
         assert _INTEGRITY_NAMES[0x2000] == "中"
-        assert _INTEGRITY_NAMES[0x4000] == "高"
+        assert _INTEGRITY_NAMES[0x2100] == "中高"
+        assert _INTEGRITY_NAMES[0x3000] == "高"
+        assert _INTEGRITY_NAMES[0x4000] == "系统"
+
+    def test_bad_handle_rid_none(self):
+        from w3xtool.live_inventory import _integrity_rid
+
+        assert _integrity_rid(0) is None
+
+    def test_directional_preflight_semantics(self):
+        from w3xtool.live_inventory import _INTEGRITY_NAMES
+
+        def flag(game, self_):
+            return bool(game and self_ and self_ < game)
+
+        assert flag(0x2000, 0x1000)
+        assert not flag(0x1000, 0x3000)
+        assert not flag(0x2000, 0x2000)
+        assert _INTEGRITY_NAMES.get(0x2100) is not None
 
 
 class TestResourceAnchorCache:

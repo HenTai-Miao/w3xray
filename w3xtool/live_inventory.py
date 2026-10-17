@@ -135,20 +135,20 @@ def open_process(pid):
     return k32.OpenProcess(0x1FFFFF, False, pid)
 
 
-# TokenIntegrityLevel RID → 人话 (学自 trainer 的权限一致性预检):
-# 游戏与工具的管理员级别不一致时 OpenProcess/读写会失败或读不全,
-# 提前比对给出明确原因, 而不是让玩家猜「为什么要管理员」。
+# TokenIntegrityLevel RID → 人话 (学自 trainer 的方向性权限预检):
+# 只有「工具级别低于游戏」才是真问题 (写上提会被拒); 管理员工具读
+# 普通游戏完全正常, 不报。RID 表按 trainer 实测: medium_plus=0x2100。
 _INTEGRITY_NAMES = {
     0x1000: "低",
     0x2000: "中",
-    0x3000: "中高",
-    0x4000: "高",
-    0x5000: "系统",
+    0x2100: "中高",
+    0x3000: "高",
+    0x4000: "系统",
 }
 
 
-def _token_integrity_level(process_handle):
-    """读取进程 token 完整性级别名; 无法判定返回 None (fail-open)。"""
+def _integrity_rid(process_handle):
+    """读取进程 token 完整性 RID; 无法判定返回 None (fail-open)。"""
     try:
         adv32 = ctypes.WinDLL("advapi32", use_last_error=True)
         tok = wt.HANDLE()
@@ -170,10 +170,15 @@ def _token_integrity_level(process_handle):
         adv32.GetSidSubAuthorityCount.restype = ctypes.POINTER(ctypes.c_ubyte)
         cnt = adv32.GetSidSubAuthorityCount(ctypes.c_void_p(sid)).contents.value
         adv32.GetSidSubAuthority.restype = ctypes.POINTER(ctypes.c_ulong)
-        rid = adv32.GetSidSubAuthority(ctypes.c_void_p(sid), cnt - 1).contents.value
-        return _INTEGRITY_NAMES.get(rid, hex(rid))
+        return adv32.GetSidSubAuthority(ctypes.c_void_p(sid), cnt - 1).contents.value
     except Exception:  # noqa: BLE001 - 预检失败不影响主流程
         return None
+
+
+def _token_integrity_level(process_handle):
+    """读取进程 token 完整性级别名; 无法判定返回 None (fail-open)。"""
+    rid = _integrity_rid(process_handle)
+    return None if rid is None else _INTEGRITY_NAMES.get(rid, hex(rid))
 
 
 def snapshot(h, max_addr=0x7FFF0000):
@@ -774,11 +779,13 @@ def read_live(
         if not h:
             report["notes"].append("OpenProcess 失败 (需管理员)")
             return report
-        game_lvl, self_lvl = _token_integrity_level(h), _token_integrity_level(None)
-        if game_lvl and self_lvl and game_lvl != self_lvl:
+        game_rid, self_rid = _integrity_rid(h), _integrity_rid(None)
+        if game_rid and self_rid and self_rid < game_rid:
             report["notes"].append(
-                f"完整性级别不一致: 游戏 {game_lvl} / 工具 {self_lvl} — "
-                "请以与游戏相同的权限重新启动工具, 否则读写可能失败或读不全"
+                f"权限不足 (写上提会被系统拒绝): 游戏 "
+                f"{_INTEGRITY_NAMES.get(game_rid, hex(game_rid))} / 工具 "
+                f"{_INTEGRITY_NAMES.get(self_rid, hex(self_rid))} — "
+                "请以与游戏相同的权限重新启动工具"
             )
         ver = detect_version(h)
         report["version"] = ver
