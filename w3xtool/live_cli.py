@@ -44,7 +44,7 @@ _VALUE_OPTIONS = (
     "--unit",
     "--nick",
 )
-_FLAG_OPTIONS = ("--players",)
+_FLAG_OPTIONS = ("--players", "--elevated-hint")
 _TWO_VALUE_OPTIONS = ("--resources",)
 
 
@@ -62,6 +62,7 @@ class LiveCliOptions:
     players: bool = False
     resources: tuple[str, str] | None = None
     nick: str | None = None
+    elevated_hint: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -158,6 +159,7 @@ def parse_live_cli_options(argv: Sequence[str]) -> LiveCliOptions:
         players="--players" in flags,
         resources=resources,
         nick=values.get("--nick"),
+        elevated_hint="--elevated-hint" in flags,
     )
 
 
@@ -192,6 +194,17 @@ def _ensure_pack_dir(options: LiveCliOptions) -> str:
 def run_live_cli(options: LiveCliOptions) -> int:
     """准备资料包并运行多策略背包读取；失败返回 2。"""
     configure_cli_output()
+    if options.elevated_hint:
+        target = options.map_path or options.pack_dir or "<地图路径>"
+        print("--elevated-hint 提权运行参考（UAC 弹窗选“是”）：")
+        print("  Start-Process pwsh -Verb RunAs -ArgumentList '-NoProfile','-Command',")
+        print(
+            '    \'$env:PYTHONIOENCODING="utf-8"; uv run python -X utf8 main.py live "'
+            + target
+            + "\"'"
+        )
+        print("注意: 重定向到文件时同样保持 PYTHONIOENCODING=utf-8，避免 GBK 乱码。")
+        return 0
     try:
         from .live_inventory import main as live_main
     except Exception:  # noqa: BLE001 - 依赖缺失给出可执行提示而不是堆栈。

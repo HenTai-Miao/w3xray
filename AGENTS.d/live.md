@@ -33,6 +33,9 @@ uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --r
 
 # 按玩家号标注真实玩家名 (大厅号=名字, 逗号分隔; 不传则用该玩家号主英雄名)
 uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --resources auto --nick "1=大白海岸,2=飞信对信,3=萌新"
+
+# 打印提权运行参考命令 (UAC 弹窗 + PYTHONIOENCODING=utf-8, 防 GBK 乱码)
+uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --elevated-hint
 ```
 
 - 不带 `--unit`: 自动识别**当前选中单位**并读其 6 格背包, 同时列出全图带物品单位
@@ -78,6 +81,12 @@ uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --r
   **禁止把场上任何单位/背包/物品断言为某玩家的** (「你身上有X」= 乱编); 操作者推断只能
   用「当前选中」+ 复探位移 (两次探针间在动的单位=玩家控制), 且必须向玩家明示不确定。
   实例: 某图把队友英雄身上的关键物品说成玩家的, 玩家原话「我是蓝色啊 你不能乱说啊」。
+- 输出编码: 提权重定向运行 (`Start-Process -Verb RunAs` + `> 文件`) 时, 重定向落盘用
+  控制台编码 (中文 Windows = GBK), UTF-8 输出会变乱码; 提权脚本必须设
+  `PYTHONIOENCODING=utf-8` (或用 `--elevated-hint` 打印现成命令)。
+- 物品归属必须按单位条目边界解析: 「其余带物品单位」列表含剧情 NPC/敌方实体
+  (如剧情 NPC 手上的展示武器), 禁止按输出出现顺序/邻近性把物品配到玩家单位——
+  在乱码 JSON 上做跨条目正则配对正是这类归属事故的放大器。
 
 ## 原理 (`w3xtool/live_handle_chain.py`)
 全部偏移经 Game.dll 静态反汇编 (capstone) 验证, 纯 ReadProcessMemory 只读:

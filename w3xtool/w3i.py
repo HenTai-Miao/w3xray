@@ -75,6 +75,10 @@ class W3iInfo:
     players: list = field(default_factory=list)
     forces: list = field(default_factory=list)
     parse_issue: str = ""
+    camera_bounds: tuple[
+        float, ...
+    ] = ()  # 镜头边界 8f: left,bottom,right,top + 4 补充浮点
+    camera_margins: tuple[int, ...] = ()  # 镜头补足 4i (可玩区 = 边界 ± 补足)
 
 
 class _Reader:
@@ -139,8 +143,10 @@ def parse_w3i(data: bytes, wts: dict | None = None) -> "W3iInfo | None":
         info.author = rs()
         info.description = rs()
         info.recommended_players = rs()
-        r.skip(8 * 4)  # 镜头边界 8f
-        r.skip(4 * 4)  # 镜头补足 4i
+        info.camera_bounds = struct.unpack_from("<8f", r.d, r.p)
+        r.p += 8 * 4  # 镜头边界 8f
+        info.camera_margins = struct.unpack_from("<4i", r.d, r.p)
+        r.p += 4 * 4  # 镜头补足 4i
         info.width = r.i32()
         info.height = r.i32()
         flag = r.u32()

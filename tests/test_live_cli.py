@@ -65,6 +65,11 @@ class TestParse:
         with pytest.raises(LiveCliOptionError, match="缺少路径值"):
             parse_live_cli_options(("m.w3x", "--test-image"))
 
+    def test_elevated_hint(self):
+        opts = parse_live_cli_options(("m.w3x", "--elevated-hint"))
+        assert opts.elevated_hint is True
+        assert parse_live_cli_options(("m.w3x",)).elevated_hint is False
+
 
 class TestPackCacheDir:
     def test_key_changes_with_mtime(self, tmp_path, monkeypatch):

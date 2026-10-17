@@ -2,6 +2,7 @@
 
 用法：
     uv run main.py guide <地图路径> [--section basic|commands|quests|heroes|recipes|shops|drops|clues] [--refresh]
+        [--minimap-marks [输出.png | 点位.json]]
 
 对源地图只读；同一地图版本的重复查询走磁盘缓存（地图改动自动失效），
 --refresh 强制重算。W3XRAY_GUIDE_CACHE=0 可整体关闭。
@@ -37,6 +38,7 @@ class GuideCliOptions:
     map_path: str
     section: str | None = None
     refresh: bool = False
+    minimap_marks: str | None = None  # 请求小地图标注图; "" = 自动命名
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +58,7 @@ def parse_guide_cli_options(argv: Sequence[str]) -> GuideCliOptions:
     map_path = argv[0]
     section: str | None = None
     refresh = False
+    minimap_marks: str | None = None
     index = 1
     while index < len(argv):
         option = argv[index]
@@ -64,6 +67,17 @@ def parse_guide_cli_options(argv: Sequence[str]) -> GuideCliOptions:
                 raise GuideCliOptionError("参数不能重复：--refresh")
             refresh = True
             index += 1
+            continue
+        if option == "--minimap-marks":
+            if minimap_marks is not None:
+                raise GuideCliOptionError("参数不能重复：--minimap-marks")
+            value_index = index + 1
+            if value_index < len(argv) and not argv[value_index].startswith("--"):
+                minimap_marks = argv[value_index]
+                index += 2
+            else:
+                minimap_marks = ""  # 请求了但未给路径 → 运行时自动命名
+                index += 1
             continue
         if option != "--section":
             raise GuideCliOptionError(f"不支持的参数：{option}")
@@ -78,7 +92,7 @@ def parse_guide_cli_options(argv: Sequence[str]) -> GuideCliOptions:
             raise GuideCliOptionError(f"未知段落：{value}（可选：{valid}）")
         section = value
         index += 2
-    return GuideCliOptions(map_path, section, refresh)
+    return GuideCliOptions(map_path, section, refresh, minimap_marks)
 
 
 def run_guide_cli(options: GuideCliOptions) -> int:
@@ -89,7 +103,8 @@ def run_guide_cli(options: GuideCliOptions) -> int:
         "W3XRAY_MATERIALIZE_WORKERS", str(min(8, os.cpu_count() or 1))
     )
     cache_path = report_cache_path(options.map_path)
-    if not options.refresh:
+    # --minimap-marks 需要完整 MapData (底图/对象表/w3i), 有它就不走缓存早退。
+    if not options.refresh and options.minimap_marks is None:
         cached = load_cached_report(cache_path)
         if cached is not None:
             print("（命中攻略缓存；--refresh 强制重算）", file=sys.stderr)
@@ -108,6 +123,25 @@ def run_guide_cli(options: GuideCliOptions) -> int:
     store_cached_report(cache_path, full_report)
     for line in _display_lines(full_report, options.section):
         print(single_line_text(line))
+    if options.minimap_marks is not None:
+        requested = options.minimap_marks
+        stem = os.path.splitext(os.path.basename(options.map_path))[0]
+        extra_json: str | None = None
+        if requested.lower().endswith(".json"):
+            extra_json = requested
+            out_path = stem + "-minimap.png"
+        elif requested:
+            out_path = requested
+        else:
+            out_path = stem + "-minimap.png"
+        try:
+            from .guide_minimap import write_guide_minimap
+
+            for line in write_guide_minimap(map_data, out_path, extra_json):
+                print(single_line_text(line))
+        except Exception as exc:  # noqa: BLE001 - CLI 边界统一转成稳定错误码。
+            print(f"小地图标注图生成失败：{exc}", file=sys.stderr)
+            return 2
     return 0
 
 

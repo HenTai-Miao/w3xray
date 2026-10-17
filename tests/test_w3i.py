@@ -22,6 +22,8 @@ def _build_v25(
     players=None,
     forces=None,
     flags=0,
+    bounds=(0.0,) * 8,
+    margins=(0,) * 4,
     script_after=b"",
 ):
     players = players if players is not None else []
@@ -29,8 +31,8 @@ def _build_v25(
     b = struct.pack("<i", 25)
     b += struct.pack("<ii", 1, 6060)  # map_version, we_version
     b += _z(map_name) + _z(author) + _z("描述") + _z("推荐:2")
-    b += struct.pack("<8f", *([0.0] * 8))  # 镜头边界
-    b += struct.pack("<4i", *([0] * 4))  # 镜头补足
+    b += struct.pack("<8f", *bounds)  # 镜头边界
+    b += struct.pack("<4i", *margins)  # 镜头补足
     b += struct.pack("<ii", 64, 64)  # 宽, 高
     b += struct.pack("<I", flags)  # flags
     b += b"L"  # c1 主地表
@@ -68,6 +70,17 @@ class TestParseW3i(unittest.TestCase):
         self.assertEqual(info.author, "张三")
         self.assertEqual(info.width, 64)
         self.assertTrue(info.melee)  # flag bit2 = 对战图
+
+    def test_camera_bounds_and_margins_retained(self):
+        info = parse_w3i(
+            _build_v25(
+                bounds=(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0),
+                margins=(9, 10, 11, 12),
+            )
+        )
+        assert info is not None
+        self.assertEqual(info.camera_bounds, (1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0))
+        self.assertEqual(info.camera_margins, (9, 10, 11, 12))
 
     def test_players_and_forces(self):
         info = parse_w3i(
