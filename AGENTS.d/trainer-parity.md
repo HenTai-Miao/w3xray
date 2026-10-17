@@ -64,7 +64,13 @@ fields/stats/unit_bindings_protocol) — 「矿脉穷尽」的依据从抽样扫
 再收两条架构级验证纪律: 「父组既有证明不得掩盖新出现的子冲突」
 (证据层级失效传播) 与「重复消费者身份拒绝叠加为更确信 + 看不懂的
 函数体保持未解析」(见证去重与不猜的字段层具体化)。至此 ≥19KB 模
-块内容全看, 静态矿脉按自定标准穷尽。第 27 轮对 ≥19KB 声明做最终清零核对
+块内容全看, 静态矿脉按自定标准穷尽。第 28 轮尾巴清零: CArchive m/s/o 全为
+PyInstaller 运行时组件; archive_fields 的 .w3v/.w3z 存档读英雄物
+品栏 (64MB 上限) 与 save_container 同构; war3_save_codes 与我们
+savecodes 全面同构 (同正则/同载体/同「map-unverified candidates」
+状态标注), 其 scan_memory_codes 揭示待需求项 — 加密图静态读不到
+存码时, 运行时内存私有堆可扫 -load 明文候选 (保留边界暴露扫描间
+隙), 对应我们提取阶梯第③层, 真有人问存码再建。第 27 轮对 ≥19KB 声明做最终清零核对
 (facade_native/selection 纯门面, engine_transport 桥接传输含写链与
 「排队消息≠回调, 要真实排空证明」纪律, equipment_effects 写事务,
 三个 UI 模块纯 Tk 线程纪律 — save_extraction_ui 轮询队列与我们
