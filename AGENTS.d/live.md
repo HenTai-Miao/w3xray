@@ -151,6 +151,18 @@ strict-verify → [loose-verify] → complete); 推导失败/超时的 notes 携
 capstone.dll (7.5MB 反汇编引擎) —— **桥接 DLL 不随包分发**, per-build
 桥接是运行时现场生成/部署; 「引擎桥接」是能力描述而非随包文件。
 
+**build 间漂移实证** (trainer 5 个重制版档案的字段级 diff, 重制版档案
+维护的纪律依据): **版本号接近 ≠ 布局接近** —— 3.0.1.24360 的布局与
+3.0.0.24268 **完全一致** (含解码五常量), 而中间的 24323/24332/24342
+各不相同; 编译布局无单调性, 每 build 独立指纹校验是唯一正确姿势。
+漂移分层规律: 补丁版只挪代码地址 (addresses/checks 全漂), 第三段版本
+变化才动数据结构 (context.native_slot 56→72, players.count 9880→
+9928, decoder 五常量整组更换, bridge_layout.unit_attack 1888→1928)。
+档案允许「字段未发现」: layouts.unit.position_x 在 24268-24332 为 0
+占位, 24342 才发现 2276 —— 发现后补录, 不猜。per-module enabled 的
+真实用途实证: talent_icons 在 24323 起被禁 (功能坏未修)。同 build 档案
+多次修订以 id 的 r 后缀计 (war3-3.0.0.24268-r5)。
+
 **重制版发现流水线规格** (学自 trainer 新版本自动定位的 16 阶段进度
 文案, 待 Game.dll x64 真机样本后照此实现 reforged-pending 档案):
 识别游戏文件 → 读共享映像 → 读原生类型信息 → 等待可读的游戏线程数据
