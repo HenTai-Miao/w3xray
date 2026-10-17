@@ -28,7 +28,8 @@ import re
 import struct
 import time
 from collections.abc import Callable
-from dataclasses import dataclass, field, replace
+from dataclasses import asdict, dataclass, field, replace
+from typing import Any
 
 __all__ = (
     "LiveHandleOffsets",
@@ -43,6 +44,8 @@ __all__ = (
     "UNIT_FIELD_LAYOUT",
     "DiscoveryStage",
     "DERIVE_STAGES",
+    "profile_to_dict",
+    "profile_from_dict",
     "MemoryReader",
     "HandleSystem",
     "OwnedUnit",
@@ -377,6 +380,80 @@ def resolve_profile(
         handle_chain=None,
         tier="template",
         source="未收录版本: classic 引擎家族结构推导 + 资源差分定位",
+    )
+
+
+def profile_to_dict(profile: LiveBuildProfile) -> dict[str, Any]:
+    """档案 → JSON 兼容 dict (schema v1; 学自 trainer profiles/*.json)。
+
+    bytes 以 hex 存; handle_chain 用 dataclasses.asdict 展开为纯标量。
+    """
+    d: dict[str, Any] = {
+        "schema_version": profile.schema_version,
+        "id": f"war3-classic-{profile.version}",
+        "game_version": profile.version,
+        "engine": profile.engine,
+        "arch": profile.arch,
+        "tier": profile.tier,
+        "status": "validated" if profile.tier == "exact" else "unverified",
+        "source": profile.source,
+    }
+    if profile.fingerprint is not None:
+        fp = profile.fingerprint
+        d["fingerprint"] = {
+            "machine": fp.machine,
+            "timestamp": fp.timestamp,
+            "image_size": fp.image_size,
+        }
+    if profile.checks:
+        d["checks"] = [
+            {
+                "rva": c.rva,
+                "bytes": c.expect.hex(),
+                "label": c.label,
+                "domain": c.domain,
+            }
+            for c in profile.checks
+        ]
+    for name in ("game_struct_rva", "unit_list_rva"):
+        v = getattr(profile, name)
+        if v is not None:
+            d[name] = v
+    if profile.handle_chain is not None:
+        d["handle_chain"] = asdict(profile.handle_chain)
+    return d
+
+
+def profile_from_dict(d: dict[str, Any]) -> LiveBuildProfile:
+    """JSON dict → 档案; schema 版本不符时明确拒绝 (不静默容错)。"""
+    v = int(d.get("schema_version", 1))
+    if v != 1:
+        raise ValueError(
+            f"档案 schema v{v} 需要新版工具 (本工具支持 v1): {d.get('id', '?')}"
+        )
+    checks = tuple(
+        ProfileCheck(
+            rva=int(c["rva"]),
+            expect=bytes.fromhex(c["bytes"]),
+            label=str(c.get("label", "")),
+            domain=str(c.get("domain", "text")),
+        )
+        for c in d.get("checks", ())
+    )
+    fp = d.get("fingerprint")
+    hc_d = d.get("handle_chain")
+    return LiveBuildProfile(
+        version=str(d["game_version"]),
+        engine=str(d.get("engine", "classic")),
+        arch=str(d.get("arch", "x86")),
+        game_struct_rva=d.get("game_struct_rva"),
+        unit_list_rva=d.get("unit_list_rva"),
+        handle_chain=LiveHandleOffsets(**hc_d) if hc_d else None,
+        tier=str(d.get("tier", "exact")),
+        source=str(d.get("source", "JSON 导入")),
+        fingerprint=ProfileFingerprint(**fp) if fp else None,
+        checks=checks,
+        schema_version=v,
     )
 
 

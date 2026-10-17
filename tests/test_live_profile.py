@@ -152,6 +152,39 @@ class TestProfileVerification:
         assert all(c.domain == "text" for c in p.checks)
         assert p.schema_version == 1
 
+    def test_profile_json_roundtrip(self):
+        import json
+
+        p = lh.resolve_profile("1.27.0.52240")
+        d = json.loads(json.dumps(lh.profile_to_dict(p)))
+        assert d["schema_version"] == 1
+        assert d["status"] == "validated"
+        assert d["fingerprint"]["machine"] == 0x14C
+        assert len(d["checks"]) == 3
+        assert d["checks"][0]["domain"] == "text"
+        q = lh.profile_from_dict(d)
+        assert q.version == p.version
+        assert q.fingerprint == p.fingerprint
+        assert q.checks == p.checks
+        assert q.handle_chain == p.handle_chain
+        assert q.schema_version == 1
+
+    def test_profile_from_dict_rejects_unknown_schema(self):
+        import pytest
+
+        with pytest.raises(ValueError, match="v2"):
+            lh.profile_from_dict(
+                {"schema_version": 2, "game_version": "9.9", "id": "x"}
+            )
+
+    def test_profile_to_dict_without_chain(self):
+        import json
+
+        p = lh.resolve_profile("1.24.4.7138")
+        d = json.loads(json.dumps(lh.profile_to_dict(p)))
+        assert "handle_chain" not in d
+        assert lh.profile_from_dict(d).handle_chain is None
+
     def test_check_failure_message_carries_domain(self):
         reader = self._reader_at(b"\x90" * 64)
         p = lh.LiveBuildProfile(

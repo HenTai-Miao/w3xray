@@ -777,6 +777,7 @@ def read_live(
     players=False,
     resources=None,
     nick=None,
+    export_profile=None,
 ):
     """resources: (金币, 木材) 元组为报数校准; "auto" 为自动差分 (免报数)。"""
     report: _LiveReport = {
@@ -944,6 +945,37 @@ def read_live(
             if not system.valid:
                 report["notes"].append("句柄管理器不可读")
                 return None
+            if export_profile:
+                # 档案固化 (学自 trainer profiles/*.json): 本进程实际工作
+                # 着的完整档案写 JSON — 档案命中时原样导出, 结构推导时把
+                # 推导出的 handle_chain 填入模板档案, 供升 exact 复用。
+                try:
+                    from dataclasses import replace as _dc_replace
+                    from pathlib import Path as _Path
+
+                    if offsets is profile.handle_chain:
+                        eff = profile
+                    else:
+                        eff = _dc_replace(
+                            profile,
+                            handle_chain=offsets,
+                            source="真机推导固化 (live --export-profile)",
+                        )
+                    out_p = _Path(export_profile)
+                    out_p.parent.mkdir(parents=True, exist_ok=True)
+                    out_p.write_text(
+                        json.dumps(
+                            hc.profile_to_dict(eff),
+                            ensure_ascii=False,
+                            indent=1,
+                        ),
+                        encoding="utf-8",
+                    )
+                    report["notes"].append("档案已固化 -> " + export_profile)
+                except OSError as exc:
+                    report["notes"].append(
+                        f"档案固化失败 ({type(exc).__name__}: {exc})"
+                    )
             item_names = load_names(pack_dir)
             unit_names = load_names(pack_dir, "单位")
 
@@ -1232,6 +1264,11 @@ def main(argv=None):
         metavar="大厅号=名字",
         help="按玩家号标注时的真实玩家名覆盖, 如 --nick 「1=飞信对信,2=大白海岸,3=萌新」",
     )
+    ap.add_argument(
+        "--export-profile",
+        metavar="JSON路径",
+        help="句柄链可用时把本进程实际工作的档案固化为 JSON (升 exact 复用)",
+    )
     args = ap.parse_args(argv)
     if args.test_image:
         templates, names = build_templates(args.pack, verbose=True)
@@ -1254,6 +1291,7 @@ def main(argv=None):
         players=args.players or bool(args.resources),
         resources=_parse_resources_arg(args.resources),
         nick=args.nick,
+        export_profile=args.export_profile,
     )
     append_live_journal(rep)
     counts = rep.get("owner_counts") or {}

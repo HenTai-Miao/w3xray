@@ -151,6 +151,14 @@ strict-verify → [loose-verify] → complete); 推导失败/超时的 notes 携
 capstone.dll (7.5MB 反汇编引擎) —— **桥接 DLL 不随包分发**, per-build
 桥接是运行时现场生成/部署; 「引擎桥接」是能力描述而非随包文件。
 
+**档案 JSON 固化** (学自 trainer profiles/*.json): `live --export-profile
+<json>` 把本进程实际工作的档案写成 trainer 风格 JSON
+(`profile_to_dict`/`profile_from_dict` 往返, schema v1, bytes 走 hex,
+版本不符明确拒绝)。档案命中时原样导出; 结构推导时把推导出的
+handle_chain 填入模板档案 (source 标「真机推导固化」) —— 真机跑一次
+即完成「模板→可复用档案」的固化, 升 exact 从改代码发版降为放文件
+(0 占位补录哲学的落地: 允许字段未发现, 发现后补录, 不猜)。
+
 **build 间漂移实证** (trainer 5 个重制版档案的字段级 diff, 重制版档案
 维护的纪律依据): **版本号接近 ≠ 布局接近** —— 3.0.1.24360 的布局与
 3.0.0.24268 **完全一致** (含解码五常量), 而中间的 24323/24332/24342
