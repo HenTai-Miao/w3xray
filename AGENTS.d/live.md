@@ -162,6 +162,22 @@ expected_callback_tid…), war3_engine_continuation 的安全续行判定
 均为写路径协议, 记录不学; Win10ProcessMemory 的 exact/tolerant 双读
 模式对我们快照模型已等价 (快照只含可读区域, 遍历不碰不可读段)。
 
+**定位器纪律与 RTTI 设计** (学自 trainer war3_discovery_locators,
+重制版指令级定位落地时的参考): ① 声明「instruction-aware, no
+first-match or address-delta fallback」—— 拒绝首匹配和地址增量回退,
+命中必须经指令语义确认; ② **签名掩码策略**: 掩码重定位操作数 (每次
+进程不同), 不掩码寄存器/操作码/控制流指令类型 —— 哪些字节通配哪些
+严格有明确规则; ③ **RTTI 表定位器**有完整实现 (MSVC x64
+complete-object locator: self RVA + 主子对象/方法指针), 且 witness 只
+存相对身份数据、绝对方法指针丢弃 —— ASLR 安全的 RTTI 指纹; ④ 解码器
+识别「认两个捆绑算法并恢复常量, 拒绝其他顺序」(decoder 五常量的发现
+端, legacy/modern_tail 两套指令签名字节); ⑤ 被调方被保护时「关联两
+个独立已知调用方」交叉定位; ⑥ 选中管理器用 IsUnitSelected 原生函数
+独立验证 (双通道互证的 discovery 层对应物)。经典选中链另有双读一致
+性校验 (「Selection changed while reading」+ 重复单位/头尾一致/上限
+24) —— **快照模型天然免疫撕裂读数** (同一快照内链表不变), 该校验
+仅直读模型需要, 我们的架构对照结论: 不补 (补了是死代码)。
+
 **档案 JSON 固化** (学自 trainer profiles/*.json): `live --export-profile
 <json>` 把本进程实际工作的档案写成 trainer 风格 JSON
 (`profile_to_dict`/`profile_from_dict` 往返, schema v1, bytes 走 hex,
