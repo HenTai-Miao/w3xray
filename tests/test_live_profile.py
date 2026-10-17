@@ -222,6 +222,75 @@ class TestProfileVerification:
         except ValueError as ex:
             assert li.log_live_exception("s", ex) == ""
 
+    def test_verify_opened_process_branches(self, monkeypatch):
+        """身份复核四分支: 相同(大小写不敏感)/已变/无法判定不虚报。"""
+        import w3xtool.live_inventory as inv
+
+        h = object()
+        monkeypatch.setattr(inv, "_process_identity", lambda handle: None)
+        assert li.verify_opened_process(h, "C:/game/war3.exe") is None
+        monkeypatch.setattr(inv, "_process_identity", lambda handle: "C:/GAME/War3.EXE")
+        assert li.verify_opened_process(h, "C:/game/war3.exe") is None
+        monkeypatch.setattr(
+            inv, "_process_identity", lambda handle: "C:/other/notepad.exe"
+        )
+        warn = li.verify_opened_process(h, "C:/game/war3.exe")
+        assert warn is not None and "war3.exe" in warn and "notepad.exe" in warn
+
+    def test_detect_version_modules_seen_on_miss(self, monkeypatch, tmp_path):
+        """Game.dll 未命中时 modules_seen 列出实际模块; 命中时不出现。"""
+        import w3xtool.live_inventory as inv
+
+        monkeypatch.setattr(
+            inv, "enum_modules", lambda h: [("C:/x/notepad.exe", 0x400000)]
+        )
+        info = inv.detect_version(object())
+        assert info["game_dll"] is None
+        assert info["modules_seen"] == ["notepad.exe"]
+        dll = tmp_path / "Game.dll"
+        dll.write_bytes(b"MZ" + bytes(64))
+        monkeypatch.setattr(
+            inv,
+            "enum_modules",
+            lambda h: [("C:/x/notepad.exe", 0x400000), (str(dll), 0x600000)],
+        )
+        monkeypatch.setattr(inv, "read_file_version", lambda p: "1.27.0.52240")
+        monkeypatch.setattr(inv, "pe_machine", lambda p: 0x014C)
+        info2 = inv.detect_version(object())
+        assert info2["game_dll"] is not None
+        assert "modules_seen" not in info2
+        assert info2["version"] == "1.27.0.52240"
+
+    def test_derive_offsets_ambiguity_tagged(self, monkeypatch):
+        """derive 多解: 多个候选过严格校验 → source 带歧义标注 + 地址序首个。"""
+        import struct as _struct
+
+        import w3xtool.live_handle_chain as hc
+
+        base = 0x20000000
+        buf = bytearray(0x1000)
+        _struct.pack_into("<I", buf, 0x100, 0x10000000)  # vmctx 候选 1 (低地址)
+        _struct.pack_into("<I", buf, 0x200, 0x10000000)  # 候选 2
+        _struct.pack_into("<I", buf, 0x300, 0x10000000)  # 候选 3
+        reader = hc.MemoryReader([(base, bytes(buf))])
+        monkeypatch.setattr(hc, "_looks_like_handle_manager", lambda *a, **k: True)
+        monkeypatch.setattr(hc, "_selection_chain_valid", lambda *a, **k: True)
+
+        class FakeSystem:
+            valid = True
+
+            def __init__(self, *a, **k):
+                pass
+
+        monkeypatch.setattr(hc, "HandleSystem", FakeSystem)
+        stages = []
+        result = hc.derive_offsets(reader, base, base + 0x1000, on_stage=stages.append)
+        assert result is not None
+        assert "多解歧义: 3" in result.source
+        assert result.vmctx_global_rva == 0x100  # 地址序首个, 非静默任选
+        names = [s.name for s in stages]
+        assert names[0] == "candidates" and names[-1] == "complete"
+
     def test_profile_from_dict_shape_validation(self):
         """形状校验 (学 trainer game_profile): 浮点/坏版本/未知键导入时拒。"""
         import pytest
