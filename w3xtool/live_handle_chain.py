@@ -1297,18 +1297,22 @@ def derive_offsets(
         if system.valid:
             systems.append((stage, system))
     # 先全员严格校验 (要求玩家号合法 + 选中单位带背包), 再放宽到四码即可。
+    # 同一轮校验的多个候选 system 共享一次全量遍历 (学自 trainer
+    # scan_bytes_many 多模式单轮思想): N 个候选从 2N 次遍历降到 2 次。
+    # 顺序语义: 以地址序返回首个通过端到端验证的 (system, vmctx) 组合;
+    # 多解同时通过时任意一组都是功能正确的读取配置。
     _enter("strict-verify")
     for require_inventory in (True, False):
         if require_inventory is False:
             _enter("loose-verify")
-        for stage, system in systems:
-            _tick = 0
-            for addr, value in _iter_dwords(reader, dll_base, hi):
-                _tick += 1
-                if not _tick & 0xFFFF and budget is not None and not budget.check():
-                    return None
-                if not (_HEAP_LO <= value < _HEAP_HI):
-                    continue
+        _tick = 0
+        for addr, value in _iter_dwords(reader, dll_base, hi):
+            _tick += 1
+            if not _tick & 0xFFFF and budget is not None and not budget.check():
+                return None
+            if not (_HEAP_LO <= value < _HEAP_HI):
+                continue
+            for stage, system in systems:
                 if _selection_chain_valid(
                     reader, system, tpl, value, require_inventory
                 ):
