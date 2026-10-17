@@ -8,13 +8,13 @@
     item   <名字|四码>   物品属性（金币价; 装备效果取自携带技能属性字段; 真实提示文本优先于继承模板描述）
     recipe <名字|四码>   相关合成配方（作为产物或材料，自动去重）
     where  <名字|四码>   单位/地面物品的放置坐标
-    drop   <名字|四码>   获取途径（掉落/商店/触发奖励）
+    drop   <名字|四码>   获取途径（掉落/商店/触发奖励; 无记录时回落文案级配方/来源线索）
     quest  <关键词>     任务注册文本与剧情对话
     text   <关键词>     全包 TSV 有界搜索
     price  <名字|四码>   金币价（igol 地图价优先, 基础ID继承）
     tech   <名字|四码>   科技卡（最大等级/每级金木费用/效果/前置, 自定义字段优先基础继承）
     cmd    <指令文字>    聊天指令效果链（注册->触发器->条件+动作函数体节选, 免手搓脚本）
-    refs   <四码|名>     对象码脚本引用分类（给予/作为材料/生成），物品零消耗引用=升级链终止
+    refs   <四码|名>     对象码脚本引用分类（给予/作为材料/生成），零消耗引用=升级链终止（脚本加密图不下终止结论）
 
 设计动机：避免为每次查询写一次性脚本/起多个进程（文件变更通知会拖垮资源
 管理器外壳）；全部查询在单次进程内完成，输出有界。
@@ -641,6 +641,15 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
             )
             if len(lines) >= limit:
                 break
+    if not lines:
+        hints = _tooltip_source_hints(pack, _hint_targets(pack, query), limit)
+        if hints:
+            head = (
+                "⚠ 文案级来源线索 (无预放置/关系表记录"
+                + ("; 脚本加密" if _script_encrypted(pack) else "")
+                + "; 未脚本验证):"
+            )
+            return [head] + ["  " + h for h in hints[:limit]]
     return lines or ["未找到放置记录: " + query]
 
 
@@ -813,6 +822,14 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
             got = _script_pool_drops(pack, cand)
             if got:
                 return got
+        hints = _tooltip_source_hints(pack, _hint_targets(pack, query), limit)
+        if hints:
+            head = (
+                "⚠ 文案级配方/来源线索 (关系表与脚本奖池无记录"
+                + ("; 脚本加密" if _script_encrypted(pack) else "")
+                + "; 未脚本验证——合成/掉落触发以实际游戏为准):"
+            )
+            return [head] + ["  " + h for h in hints[:limit]]
         return ["未找到获取途径: " + query]
     if not any("掉落" in k for k in kinds):
         lines.append(
@@ -878,6 +895,43 @@ def load_script(pack_dir: Path) -> str | None:
         except OSError:
             continue
     return None
+
+
+def _script_encrypted(pack_dir: Path) -> bool:
+    """平台加密脚本块存在（未知文件/加密脚本检测.txt）：脚本类触发分析不可用。"""
+    return (pack_dir / "未知文件" / "加密脚本检测.txt").is_file()
+
+
+def _hint_targets(pack_dir: Path, query: str) -> set[str]:
+    """查询词 -> 文案层提示的目标名集合（四码先解名, 与原词并入）。"""
+    targets = {query}
+    if len(query) == 4:
+        name = load_items(pack_dir).get(query, ("", ""))[0]
+        if name:
+            targets.add(name)
+        uname = load_units(pack_dir).get(query, "")
+        if uname:
+            targets.add(uname)
+    return {t for t in targets if t}
+
+
+def _tooltip_source_hints(pack_dir: Path, targets: set[str], limit: int) -> list[str]:
+    """文案层获取线索兜底：其他对象说明文本提到目标物品名（配方/掉落来源）。
+
+    关系表与脚本奖池都无记录时使用——输出必须带"文案级"标注（未脚本验证）。"""
+    if not targets:
+        return []
+    out: list[str] = []
+    for code, (name, desc) in load_items(pack_dir).items():
+        if not desc or name in targets:
+            continue
+        if next((t for t in sorted(targets) if t in desc), None) is None:
+            continue
+        excerpt = desc if len(desc) <= 150 else desc[:147] + "..."
+        out.append(f"{name} [{code}] 说明: {excerpt}")
+        if len(out) >= limit:
+            break
+    return out
 
 
 def _fn_body(script: str, fn: str, cap: int = 900) -> str:
@@ -1111,12 +1165,18 @@ def _query_refs(pack: Path, query: str, limit: int) -> list[str]:
         lines.append(f"  其他引用: {len(other)} 处")
         lines.extend(f"    行{e[0]} {e[1]}  {e[2]}" for e in other[: min(limit, 5)])
     if obj_kind == "物品" and give and not consume:
-        lines.append(
-            "  ⚠ 零消耗引用: 该物品没有任何'作为材料被检测/移除'的记录 -> 升级链在此终止"
-        )
-        lines.append(
-            "    (名字带[N/M]不证明存在下一级; 报'可升级'前必须有消耗它的配方证据)"
-        )
+        if _script_encrypted(pack):
+            lines.append(
+                "  ⚠ 脚本加密: 消耗引用不可读, '终止'结论不成立——"
+                "先用 pack-query drop <物品名> 查文案级配方线索"
+            )
+        else:
+            lines.append(
+                "  ⚠ 零消耗引用: 该物品没有任何'作为材料被检测/移除'的记录 -> 升级链在此终止"
+            )
+            lines.append(
+                "    (名字带[N/M]不证明存在下一级; 报'可升级'前必须有消耗它的配方证据)"
+            )
     return lines
 
 
