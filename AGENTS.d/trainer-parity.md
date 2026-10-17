@@ -90,3 +90,10 @@ catalog/casc_catalog 为 SHA-256 内容寻址数据件, 归类正确。下一步
 真机: live --players --resources auto --export-profile。第 31 轮以
 PYZ 压缩尺度反向重扫 8-19KB 段 21 模块, 全部与已消费清单重合 —
 覆盖闭环在压缩/解压双尺度交叉验证下成立, 静态空间关闭为终局。
+第 32 轮以 co_names 反查 API 调用者 (正交维度, 首次): 读写分离延
+伸到 API 获取方式 — ReadProcessMemory 仅主模块静态绑定 (读统一入
+口, 简单透明), WriteProcessMemory/MapViewOfFile/CreateRemoteThread/
+NtQuerySection/VirtualAllocEx 静态引用为零 (写链+NT API 全经
+transport 动态 GetProcAddress, 其名只现于 co_consts 字符串) — 读
+透明写隐匿是架构性分离; facade_selection 静态写、integrity 开进程
+实证了读写归类。
