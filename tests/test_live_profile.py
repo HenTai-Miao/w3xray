@@ -171,6 +171,43 @@ class TestProfileVerification:
         assert read_pe_fingerprint(path) is None
 
 
+class TestDeriveStages:
+    def test_stage_table_shape(self):
+        from w3xtool.live_handle_chain import DERIVE_STAGES
+
+        order = [
+            "candidates",
+            "build-systems",
+            "strict-verify",
+            "loose-verify",
+            "complete",
+        ]
+        assert list(DERIVE_STAGES) == order
+        assert all(s.message for s in DERIVE_STAGES.values())
+
+    def test_success_reaches_complete_without_loose(self):
+        from w3xtool.live_handle_chain import derive_offsets
+
+        blob = bytearray(0x40000)
+        struct.pack_into("<I", blob, 0x100, 0xFFFFFFFE)
+        struct.pack_into("<I", blob, 0x108, BASE + 0x400)
+        reader = lh.MemoryReader([(BASE, bytes(blob))])
+        stages = []
+        result = derive_offsets(reader, BASE, BASE + 0x40000, on_stage=stages.append)
+        names = [s.name for s in stages]
+        if result is not None:
+            assert names[-1] == "complete"
+            assert "loose-verify" not in names
+        assert names[0] == "candidates"
+
+    def test_stage_messages_are_progress_worthy(self):
+        from w3xtool.live_handle_chain import DERIVE_STAGES
+
+        for s in DERIVE_STAGES.values():
+            assert s.name and s.message
+            assert s.message != s.name
+
+
 class TestTokenIntegrity:
     def test_bad_handle_returns_none(self):
         from w3xtool.live_inventory import _token_integrity_level

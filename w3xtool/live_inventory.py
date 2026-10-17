@@ -893,6 +893,7 @@ def read_live(
             # 档案诊断面: exact/rva-table/template/reforged-pending 四档, notes 永远携带。
             report["notes"].append(hc.describe_live_profile(v_str, v_engine, v_arch))
             offsets = profile.handle_chain
+            last_stage: list[str] = []  # 推导阶段追踪 (诊断带最后阶段)
             if offsets is not None and profile.checks:
                 disk_fp = None
                 _gd = ver.get("game_dll")
@@ -908,24 +909,35 @@ def read_live(
                     offsets = None
             if offsets is None and profile.tier != "reforged-pending":
                 budget = hc.ScanBudget(deadline_s=12.0)
+
+                def _track(stage) -> None:  # hc.DiscoveryStage (运行时导入)
+                    last_stage.append(stage.name)
+
                 offsets = hc.derive_offsets(
-                    reader, dll_base, dll_base + 0x2000000, budget=budget
+                    reader,
+                    dll_base,
+                    dll_base + 0x2000000,
+                    budget=budget,
+                    on_stage=_track,
                 )
                 if offsets is None and budget.timed_out:
+                    where = f", 最后阶段: {last_stage[-1]}" if last_stage else ""
                     report["notes"].append(
-                        "结构推导达到时间预算 (12s), 未完成 — "
-                        "全程只读可稍后重试, 回退 chain/icons 策略"
+                        "结构推导达到时间预算 (12s), 未完成"
+                        + where
+                        + " — 全程只读可稍后重试, 回退 chain/icons 策略"
                     )
                     return None
             if offsets is None:
+                reason = (
+                    "重制版 x64 档案待建立"
+                    if profile.tier == "reforged-pending"
+                    else "结构推导失败"
+                )
+                if last_stage:
+                    reason += f", 最后阶段: {last_stage[-1]}"
                 report["notes"].append(
-                    "句柄链不可用 ("
-                    + (
-                        "重制版 x64 档案待建立"
-                        if profile.tier == "reforged-pending"
-                        else "结构推导失败"
-                    )
-                    + "), 回退 chain/icons 策略"
+                    f"句柄链不可用 ({reason}), 回退 chain/icons 策略"
                 )
                 return None
             system = hc.HandleSystem(reader, dll_base, offsets)

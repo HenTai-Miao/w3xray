@@ -129,6 +129,23 @@ TokenIntegrityLevel, **只在工具级别低于游戏时**报警 (写上提会�
 管理员工具读普通游戏完全正常, 不报)。RID 表按 trainer 实测:
 低=0x1000 中=0x2000 中高=0x2100 高=0x3000 系统=0x4000。
 
+**发现阶段化** (学自 trainer 每阶段一条进度文案): `derive_offsets` 按
+`DERIVE_STAGES` 顺序回调 `on_stage` (candidates → build-systems →
+strict-verify → [loose-verify] → complete); 推导失败/超时的 notes 携带
+「最后阶段: <name>」, 诊断粒度从「推导失败」细化到「死在哪一步」。
+
+**重制版发现流水线规格** (学自 trainer 新版本自动定位的 16 阶段进度
+文案, 待 Game.dll x64 真机样本后照此实现 reforged-pending 档案):
+识别游戏文件 → 读共享映像 → 读原生类型信息 → 等待可读的游戏线程数据
+→ 匹配函数与结构签名 → 定位原生接口注册表 → 定位原生接口名称
+→ 核对注册表 → 核对当前线程的原生接口 → 核对原生调用约定
+→ 定位选中单位列表 → 核对本地玩家身份 → 核对原生接口调用关系
+→ 核对共享对象结构 → 核对只读数据布局 → (命中缓存)使用本版本定位缓存。
+要点: **「核对」类阶段占一半** — 定位到≠可信, 每个定位都要独立核对
+(调用约定/调用关系/共享结构/只读布局各一道); 每阶段产出一条
+进度文案与 DiscoveryEvidence 证据 (见下), 全部通过才宣告
+「自动定位完毕, 功能按已确认数据范围运行」。
+
 **档案自校验** (`verify_profile`, 学自 trainer 的 fingerprint+checks):
 exact/rva-table 档案可携带 ① PE 三要素指纹 (machine/timestamp/
 image_size, 比对磁盘 Game.dll) 与 ② checks 校验点 (RVA→期望 16 字节,

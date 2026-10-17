@@ -27,6 +27,7 @@ import math
 import re
 import struct
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
 __all__ = (
@@ -40,6 +41,8 @@ __all__ = (
     "resolve_profile",
     "ScanBudget",
     "UNIT_FIELD_LAYOUT",
+    "DiscoveryStage",
+    "DERIVE_STAGES",
     "MemoryReader",
     "HandleSystem",
     "OwnedUnit",
@@ -1209,6 +1212,30 @@ class ScanBudget:
         return True
 
 
+@dataclass(frozen=True, slots=True)
+class DiscoveryStage:
+    """发现流水线的阶段 (学自 trainer: 每阶段一条进度文案)。
+
+    name 是机器名 (日志/诊断字段), message 是中文进度文案
+    (报告 notes/UI 用)。失败时报告「最后到达阶段」, 诊断粒度
+    从「推导失败」细化到「死在哪一步」。
+    """
+
+    name: str
+    message: str
+
+
+DERIVE_STAGES: "dict[str, DiscoveryStage]" = {
+    "candidates": DiscoveryStage("candidates", "正在收集句柄管理器候选"),
+    "build-systems": DiscoveryStage("build-systems", "正在构建句柄系统并做结构校验"),
+    "strict-verify": DiscoveryStage(
+        "strict-verify", "正在严格校验选中链 (要求玩家号合法+选中带背包)"
+    ),
+    "loose-verify": DiscoveryStage("loose-verify", "正在放宽校验选中链 (类型四码即可)"),
+    "complete": DiscoveryStage("complete", "自动定位完毕, 偏移按已确认数据使用"),
+}
+
+
 def derive_offsets(
     reader: MemoryReader,
     dll_base: int,
@@ -1216,6 +1243,7 @@ def derive_offsets(
     scan_limit: int = 0x4000000,
     max_hm_candidates: int = 8,
     budget: "ScanBudget | None" = None,
+    on_stage: "Callable[[DiscoveryStage], None] | None" = None,
 ) -> LiveHandleOffsets | None:
     """在 Game.dll 内存中按结构特征自动识别两个全局槽, 生成偏移表。
 
@@ -1224,11 +1252,19 @@ def derive_offsets(
     (避免先遇到的假阳性候选导致整体失败)。
     适用于经典引擎家族; 失败/预算耗尽返回 None (调用方用
     budget.timed_out 区分「推导失败」与「可稍后重试」)。
+    on_stage: 每进入一个阶段回调一次 (顺序见 DERIVE_STAGES;
+    loose-verify 仅在严格校验全军覆没后出现)。
     """
+
+    def _enter(name: str) -> None:
+        if on_stage is not None:
+            on_stage(DERIVE_STAGES[name])
+
     hi = min(dll_end, dll_base + scan_limit)
     if hi <= dll_base:
         return None
     tpl = classic_template()
+    _enter("candidates")
     hm_candidates: list[tuple[int, int]] = []
     seen_managers: set[int] = set()
     _tick = 0
@@ -1245,6 +1281,7 @@ def derive_offsets(
             hm_candidates.append((addr, value))
             if len(hm_candidates) >= max_hm_candidates:
                 break
+    _enter("build-systems")
     systems: list[tuple[LiveHandleOffsets, HandleSystem]] = []
     for hm_slot, _hm in hm_candidates:
         stage = replace(tpl, handle_mgr_global_rva=hm_slot - dll_base)
@@ -1252,7 +1289,10 @@ def derive_offsets(
         if system.valid:
             systems.append((stage, system))
     # 先全员严格校验 (要求玩家号合法 + 选中单位带背包), 再放宽到四码即可。
+    _enter("strict-verify")
     for require_inventory in (True, False):
+        if require_inventory is False:
+            _enter("loose-verify")
         for stage, system in systems:
             _tick = 0
             for addr, value in _iter_dwords(reader, dll_base, hi):
@@ -1264,11 +1304,13 @@ def derive_offsets(
                 if _selection_chain_valid(
                     reader, system, tpl, value, require_inventory
                 ):
-                    return replace(
+                    result = replace(
                         stage,
                         vmctx_global_rva=addr - dll_base,
                         source="结构特征自动推导 (classic 模板)",
                     )
+                    _enter("complete")
+                    return result
     return None
 
 
