@@ -59,5 +59,10 @@ fields/stats/unit_bindings_protocol) — 「矿脉穷尽」的依据从抽样扫
 独立指认管理器 (IsUnitSelected, 我们无指令层不适用)、代码推导的槽
 位布局不暗示其它模式 (我们 oversized-slot 修复教训的形式化)、布局
 字节窗口逐成员证明后才推导 (我们 UNIT_FIELD_LAYOUT provenance 同
-构)。全部 134 模块声明行已消费, 无剩余读路径空白。下一步在真机:
+构)。全部 134 模块声明行已消费, 无剩余读路径空白。第 26 轮按「大模块必
+须看内容」标准补看 ≥19KB 残留 (discovery_fields 58.7KB/stats 19KB),
+再收两条架构级验证纪律: 「父组既有证明不得掩盖新出现的子冲突」
+(证据层级失效传播) 与「重复消费者身份拒绝叠加为更确信 + 看不懂的
+函数体保持未解析」(见证去重与不猜的字段层具体化)。至此 ≥19KB 模
+块内容全看, 静态矿脉按自定标准穷尽。下一步在真机:
 live --players --resources auto --export-profile。
