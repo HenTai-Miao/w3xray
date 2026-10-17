@@ -208,7 +208,9 @@ first-match or address-delta fallback」—— 拒绝首匹配和地址增量回
 进程不同), 不掩码寄存器/操作码/控制流指令类型 —— 哪些字节通配哪些
 严格有明确规则; ③ **RTTI 表定位器**有完整实现 (MSVC x64
 complete-object locator: self RVA + 主子对象/方法指针), 且 witness 只
-存相对身份数据、绝对方法指针丢弃 —— ASLR 安全的 RTTI 指纹; ④ 解码器
+存相对身份数据、绝对方法指针丢弃 —— ASLR 安全的 RTTI 指纹; 读的是
+**固定的 MSVC x64 RTTI ABI 而非游戏版本对象布局** (ABI 稳定, 游戏布
+局会漂 — 读取器因此版本无关); ④ 解码器
 识别「认两个捆绑算法并恢复常量, 拒绝其他顺序」(decoder 五常量的发现
 端, legacy/modern_tail 两套指令签名字节); ⑤ 被调方被保护时「关联两
 个独立已知调用方」交叉定位; ⑥ 选中管理器用 IsUnitSelected 原生函数
