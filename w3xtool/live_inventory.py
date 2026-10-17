@@ -135,6 +135,47 @@ def open_process(pid):
     return k32.OpenProcess(0x1FFFFF, False, pid)
 
 
+# TokenIntegrityLevel RID → 人话 (学自 trainer 的权限一致性预检):
+# 游戏与工具的管理员级别不一致时 OpenProcess/读写会失败或读不全,
+# 提前比对给出明确原因, 而不是让玩家猜「为什么要管理员」。
+_INTEGRITY_NAMES = {
+    0x1000: "低",
+    0x2000: "中",
+    0x3000: "中高",
+    0x4000: "高",
+    0x5000: "系统",
+}
+
+
+def _token_integrity_level(process_handle):
+    """读取进程 token 完整性级别名; 无法判定返回 None (fail-open)。"""
+    try:
+        adv32 = ctypes.WinDLL("advapi32", use_last_error=True)
+        tok = wt.HANDLE()
+        proc = process_handle if process_handle else k32.GetCurrentProcess()
+        if not adv32.OpenProcessToken(proc, 0x0008, ctypes.byref(tok)):  # TOKEN_QUERY
+            return None
+        ret_len = wt.DWORD()
+        # TokenIntegrityLevel = 25 (winnt.h)
+        if not adv32.GetTokenInformation(tok, 25, None, 0, ctypes.byref(ret_len)):
+            return None
+        buf = ctypes.create_string_buffer(ret_len.value)
+        if not adv32.GetTokenInformation(
+            tok, 25, buf, ret_len.value, ctypes.byref(ret_len)
+        ):
+            return None
+        sid = ctypes.cast(buf, ctypes.POINTER(ctypes.c_void_p)).contents.value
+        if not sid:
+            return None
+        adv32.GetSidSubAuthorityCount.restype = ctypes.POINTER(ctypes.c_ubyte)
+        cnt = adv32.GetSidSubAuthorityCount(ctypes.c_void_p(sid)).contents.value
+        adv32.GetSidSubAuthority.restype = ctypes.POINTER(ctypes.c_ulong)
+        rid = adv32.GetSidSubAuthority(ctypes.c_void_p(sid), cnt - 1).contents.value
+        return _INTEGRITY_NAMES.get(rid, hex(rid))
+    except Exception:  # noqa: BLE001 - 预检失败不影响主流程
+        return None
+
+
 def snapshot(h, max_addr=0x7FFF0000):
     regions = []
     addr = 0x10000
@@ -733,6 +774,12 @@ def read_live(
         if not h:
             report["notes"].append("OpenProcess 失败 (需管理员)")
             return report
+        game_lvl, self_lvl = _token_integrity_level(h), _token_integrity_level(None)
+        if game_lvl and self_lvl and game_lvl != self_lvl:
+            report["notes"].append(
+                f"完整性级别不一致: 游戏 {game_lvl} / 工具 {self_lvl} — "
+                "请以与游戏相同的权限重新启动工具, 否则读写可能失败或读不全"
+            )
         ver = detect_version(h)
         report["version"] = ver
         if verbose:
@@ -999,11 +1046,70 @@ def read_live(
             report["notes"].append(f"图标匹配异常: {ex}")
             return []
 
+    def try_resources_scan():
+        """版本无关的资源读取兜底 (template/reforged 档)。
+
+        报数校准与 auto 差分是纯内存值扫描, 不需要句柄链偏移——
+        引擎为每个玩家维护同构 float 结构这一事实跨版本成立。重制版
+        等无档案版本借此仍可读全队资源近似值; 归属与权威链标注
+        (player_rows) 不可用, notes 必须明示。
+        """
+        if resources is None:
+            return None
+        try:
+            import importlib
+            import time as _time
+
+            hc1 = importlib.import_module("w3xtool.live_handle_chain")
+            total_b = sum(len(d) for _, d in regions)
+            reader = hc1.reader_from_snapshot((regions, total_b))
+            if resources == "auto":
+                readers = [reader]
+                for _ in range(2):
+                    _time.sleep(3)
+                    readers.append(hc1.reader_from_snapshot(snapshot(h, max_addr)))
+                found, total_anchors = hc1.rank_auto_rows(
+                    hc1.find_auto_resource_rows(readers)
+                )
+                if total_anchors > len(found):
+                    report["notes"].append(
+                        f"auto 锚点 {total_anchors} 个, 按木/人口可信度取前 {len(found)}"
+                    )
+            else:
+                found = hc1.find_resource_layout(reader, resources[0], resources[1])
+                if hc1.cached_resource_hit():
+                    report["notes"].append(
+                        "资源布局命中上次锚缓存 (±1 值校验通过, 免全扫)"
+                    )
+            if found:
+                report["resources"] = [
+                    {
+                        "addr": hex(r.addr),
+                        "gold": round(r.gold) if r.gold is not None else None,
+                        "lumber": round(r.lumber) if r.lumber is not None else None,
+                        "food": r.food,
+                    }
+                    for r in found
+                ]
+                report["notes"].append(
+                    "资源读取走版本无关扫描 (当前版本无句柄链档案: 数值来自"
+                    "同布局结构, 玩家归属与权威链标注不可用)"
+                )
+                return report["resources"]
+            report["notes"].append("资源扫描无结果 (报数与内存值不匹配或已变动)")
+            return None
+        except Exception as ex:  # noqa: BLE001 - 兜底失败回退原策略链
+            report["notes"].append(f"资源兜底扫描异常: {ex}")
+            return None
+
     if strategy in ("auto", "handle"):
         slots = try_handle()
         if slots:
             report["strategy_used"] = "handle"
             return report
+    # 资源兜底: 句柄链不可用 (reforged-pending/template) 时资源读取不该陪葬。
+    if resources is not None and report.get("resources") is None:
+        try_resources_scan()
     if strategy in ("auto", "chain"):
         slots = try_chain()
         if slots:

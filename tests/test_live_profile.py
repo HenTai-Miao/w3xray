@@ -84,6 +84,25 @@ class TestResolveProfile:
             assert p.tier in ("exact", "rva-table"), ver
 
 
+class TestTokenIntegrity:
+    def test_bad_handle_returns_none(self):
+        from w3xtool.live_inventory import _token_integrity_level
+
+        assert _token_integrity_level(0) is None
+
+    def test_self_process_returns_name_or_none(self):
+        from w3xtool.live_inventory import _token_integrity_level
+
+        lvl = _token_integrity_level(None)
+        assert lvl is None or isinstance(lvl, str)
+
+    def test_level_names_complete(self):
+        from w3xtool.live_inventory import _INTEGRITY_NAMES
+
+        assert _INTEGRITY_NAMES[0x2000] == "中"
+        assert _INTEGRITY_NAMES[0x4000] == "高"
+
+
 class TestResourceAnchorCache:
     def test_first_scan_then_cache_hit(self):
         r1 = _reader_at({0x200: 1234.5, 0x240: 567.8})

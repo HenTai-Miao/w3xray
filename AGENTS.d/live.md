@@ -113,11 +113,20 @@ uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --e
 | 1.27.0.52240 | exact | 公开表 RVA | 已真机验证 (KK) |
 | 1.20.4~1.28.5 (15 build, 含 1.24 全家族) | rva-table | 公开表 (Still4/War3Trainer) | 运行时 `derive_offsets` 模板推导 |
 | 1.29+/其他未收录 classic | template | 无表, 资源差分定位 | 结构推导 (尽力而为) |
-| 重制版 (Reforged, Game.dll x64) | reforged-pending | 待建档 | 待建档, 直接回退 chain/icons |
+| 重制版 (Reforged, Game.dll x64) | reforged-pending | **版本无关扫描** (报数校准/auto 差分) | 待建档, 单位/背包回退 icons |
 
 非 exact 档位的偏移**没有真机验证过**: rva-table 档的资源链数值来自公开表
 (来源 Still4/War3Trainer, 与本地 1.27 实测同源互证), 推导档完全现场计算。
 纪律同 trainer 的「未沿用旧地址执行」——版本不在档案里就绝不引用旧地址。
+
+**资源兜底扫描** (reforged-pending/template 档): 句柄链不可用时资源读取
+不陪葬——报数校准与 auto 差分是纯内存值扫描, 不需要版本偏移。此时输出
+的 resources 无玩家归属、无权威链 player_rows, notes 明示「版本无关扫描」;
+对玩家报数时禁止归属到具体玩家 (「谁多少金」= 乱编), 只能报全体结构值。
+
+**权限一致性预检** (学自 trainer): 每次 live 探测对比游戏与工具进程的
+TokenIntegrityLevel (中/中高/高), 不一致时 notes 明示「请以与游戏相同的
+权限重新启动工具」——把「为什么要管理员」从猜测变成明确提示。
 
 **真机验证流程** (把档位升到 exact): 切到目标版本开一局 → 跑 live
 `--players --resources auto` → 把 notes 里的「偏移档案」行与输出贴回,
