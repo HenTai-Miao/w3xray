@@ -424,34 +424,75 @@ def profile_to_dict(profile: LiveBuildProfile) -> dict[str, Any]:
     return d
 
 
+def _strict_int(v: Any, label: str) -> int:
+    """偏移类字段的严格 int: 拒绝浮点 (静默截断=静默错值) 与数字字符串。
+
+    学自 trainer game_profile 形状校验 (Adapter value type differs):
+    导入时拒绝, 不拖到使用时半路炸。
+    """
+    if isinstance(v, bool) or not isinstance(v, int):
+        raise ValueError(f"档案字段 {label} 需要整数, 实得 {type(v).__name__}: {v!r}")
+    return v
+
+
 def profile_from_dict(d: dict[str, Any]) -> LiveBuildProfile:
-    """JSON dict → 档案; schema 版本不符时明确拒绝 (不静默容错)。"""
+    """JSON dict → 档案; schema 版本不符时明确拒绝 (不静默容错)。
+
+    形状校验学自 trainer game_profile: 尺寸上限 / 逐字段类型严格化 /
+    版本四段格式 — 导入时全部校验完, 坏档案在使用前被拒。
+    """
+    import json as _json
+    import re as _re
+
+    if len(_json.dumps(d, default=str)) > 2 * 1024 * 1024:
+        raise ValueError("档案超出 2MiB 尺寸上限 (疑似损坏或非档案文件)")
     v = int(d.get("schema_version", 1))
     if v != 1:
         raise ValueError(
             f"档案 schema v{v} 需要新版工具 (本工具支持 v1): {d.get('id', '?')}"
         )
+    gv = str(d["game_version"])
+    if not _re.fullmatch(r"\d+\.\d+\.\d+\.\d+", gv):
+        raise ValueError(
+            f"档案 game_version 需要四段数字版本号 (a.b.c.d), 实得: {gv!r}"
+        )
     checks = tuple(
         ProfileCheck(
-            rva=int(c["rva"]),
-            expect=bytes.fromhex(c["bytes"]),
+            rva=_strict_int(c["rva"], f"checks[{i}].rva"),
+            expect=bytes.fromhex(str(c["bytes"])),
             label=str(c.get("label", "")),
             domain=str(c.get("domain", "text")),
         )
-        for c in d.get("checks", ())
+        for i, c in enumerate(d.get("checks", ()))
     )
     fp = d.get("fingerprint")
     hc_d = d.get("handle_chain")
+    if hc_d:
+        try:
+            chain = LiveHandleOffsets(**hc_d)
+        except TypeError as ex:
+            raise ValueError(f"档案 handle_chain 字段与 schema 不符: {ex}") from ex
+    else:
+        chain = None
+    if fp:
+        try:
+            fingerprint = ProfileFingerprint(**fp)
+        except TypeError as ex:
+            raise ValueError(f"档案 fingerprint 字段与 schema 不符: {ex}") from ex
+        for k in ("machine", "timestamp", "image_size"):
+            _strict_int(getattr(fingerprint, k), f"fingerprint.{k}")
+    else:
+        fingerprint = None
     return LiveBuildProfile(
-        version=str(d["game_version"]),
+        version=gv,
         engine=str(d.get("engine", "classic")),
         arch=str(d.get("arch", "x86")),
         game_struct_rva=d.get("game_struct_rva"),
         unit_list_rva=d.get("unit_list_rva"),
-        handle_chain=LiveHandleOffsets(**hc_d) if hc_d else None,
+        handle_chain=chain,
         tier=str(d.get("tier", "exact")),
         source=str(d.get("source", "JSON 导入")),
-        fingerprint=ProfileFingerprint(**fp) if fp else None,
+        fingerprint=fingerprint,
         checks=checks,
         schema_version=v,
     )

@@ -177,6 +177,30 @@ class TestProfileVerification:
                 {"schema_version": 2, "game_version": "9.9", "id": "x"}
             )
 
+    def test_profile_from_dict_shape_validation(self):
+        """形状校验 (学 trainer game_profile): 浮点/坏版本/未知键导入时拒。"""
+        import pytest
+
+        # 浮点 rva 静默截断 = 静默错值, 必须导入时拒绝
+        with pytest.raises(ValueError, match=r"checks\[0\]\.rva"):
+            lh.profile_from_dict(
+                {
+                    "game_version": "1.27.0.52240",
+                    "checks": [{"rva": 12.5, "bytes": "90"}],
+                }
+            )
+        # 版本号必须四段数字
+        with pytest.raises(ValueError, match="四段"):
+            lh.profile_from_dict({"game_version": "1.27"})
+        # handle_chain 未知键给友好错误而非裸 TypeError
+        with pytest.raises(ValueError, match="handle_chain"):
+            lh.profile_from_dict(
+                {
+                    "game_version": "1.27.0.52240",
+                    "handle_chain": {"no_such_field": 1},
+                }
+            )
+
     def test_profile_to_dict_without_chain(self):
         import json
 
