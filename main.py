@@ -50,6 +50,10 @@ def main() -> None:
         from w3xtool.real_save_cli import run_real_save_cli
 
         raise SystemExit(run_real_save_cli(tuple(sys.argv[2:])))
+    if len(sys.argv) >= 2 and sys.argv[1] == "savecodes":
+        from w3xtool.save_code_cli import run_save_code_cli
+
+        raise SystemExit(run_save_code_cli(tuple(sys.argv[2:])))
     if len(sys.argv) >= 2 and sys.argv[1] == "current":
         from w3xtool.current_map_cli import (
             CurrentMapCliOptionError,

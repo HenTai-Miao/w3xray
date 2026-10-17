@@ -26,6 +26,7 @@ import bisect
 import math
 import re
 import struct
+import time
 from dataclasses import dataclass, field, replace
 
 __all__ = (
@@ -37,6 +38,8 @@ __all__ = (
     "LiveBuildProfile",
     "BUILD_PROFILES",
     "resolve_profile",
+    "ScanBudget",
+    "UNIT_FIELD_LAYOUT",
     "MemoryReader",
     "HandleSystem",
     "OwnedUnit",
@@ -66,6 +69,18 @@ __all__ = (
 UNIT_OWNER_OFF = 0x58
 UNIT_POS_X_OFF = 0x284
 UNIT_POS_Y_OFF = 0x288
+
+# 单位结构字段语义目录 (学自 trainer discovery_fields 的字段目标清单):
+# 名字 -> (偏移, 说明)。经典引擎家族结构字段稳定 (1.24~1.28.5 同组,
+# Still4 表 ItemsListOffset=0x1F8 与本地 1.27 实测互证); 属主/坐标
+# 三字段在 1.27.0.52240 (KK) 真机验证。诊断失败时引用字段名而非整链。
+UNIT_FIELD_LAYOUT: "dict[str, tuple[int, str]]" = {
+    "owner_slot": (UNIT_OWNER_OFF, "属主玩家槽号/对象指针"),
+    "pos_x": (UNIT_POS_X_OFF, "X 坐标 (float)"),
+    "pos_y": (UNIT_POS_Y_OFF, "Y 坐标 (float)"),
+    "type_code": (0x30, "类型四码 (fourcc, 大端)"),
+    "inventory": (0x1F8, "背包列表指针 (Still4 表 ItemsListOffset 同值)"),
+}
 
 # 闸门5护栏: owned_units 输出必须永久携带的部分视图警告文本
 # (live_inventory 组装报告时无条件追加; 防止误当全量清单下"玩家没有X"类否定结论)
@@ -1171,19 +1186,44 @@ def _iter_dwords(reader: MemoryReader, lo: int, hi: int):
             yield base + off, struct.unpack_from("<I", blob, off)[0]
 
 
+class ScanBudget:
+    """发现过程的有界预算 (学自 trainer ScanBudget): 时间截止 + 取消。
+
+    超限不是失败而是「未完成」——推导全程只读不写游戏, 重试安全。
+    调用方据此把「结构推导失败」和「预算耗尽可稍后重试」分开报告。
+    """
+
+    def __init__(self, deadline_s: float = 0.0, cancelled: bool = False):
+        self._start = time.monotonic()
+        self.deadline_s = float(deadline_s)
+        self.cancelled = bool(cancelled)
+        self.timed_out = False
+
+    def check(self) -> bool:
+        """是否允许继续; 超限时置位 timed_out 并返回 False。"""
+        if self.cancelled:
+            return False
+        if self.deadline_s > 0 and time.monotonic() - self._start > self.deadline_s:
+            self.timed_out = True
+            return False
+        return True
+
+
 def derive_offsets(
     reader: MemoryReader,
     dll_base: int,
     dll_end: int,
     scan_limit: int = 0x4000000,
     max_hm_candidates: int = 8,
+    budget: "ScanBudget | None" = None,
 ) -> LiveHandleOffsets | None:
     """在 Game.dll 内存中按结构特征自动识别两个全局槽, 生成偏移表。
 
     不依赖版本号或硬编码 RVA: 先收集"长得像句柄管理器"的候选,
     逐个构建句柄系统并用选中链端到端验证, 全部通过才算成功
     (避免先遇到的假阳性候选导致整体失败)。
-    适用于经典引擎家族; 失败返回 None (调用方回退其它策略)。
+    适用于经典引擎家族; 失败/预算耗尽返回 None (调用方用
+    budget.timed_out 区分「推导失败」与「可稍后重试」)。
     """
     hi = min(dll_end, dll_base + scan_limit)
     if hi <= dll_base:
@@ -1191,7 +1231,11 @@ def derive_offsets(
     tpl = classic_template()
     hm_candidates: list[tuple[int, int]] = []
     seen_managers: set[int] = set()
+    _tick = 0
     for addr, value in _iter_dwords(reader, dll_base, hi):
+        _tick += 1
+        if not _tick & 0xFFFF and budget is not None and not budget.check():
+            return None
         if (
             _HEAP_LO <= value < _HEAP_HI
             and value not in seen_managers
@@ -1210,7 +1254,11 @@ def derive_offsets(
     # 先全员严格校验 (要求玩家号合法 + 选中单位带背包), 再放宽到四码即可。
     for require_inventory in (True, False):
         for stage, system in systems:
+            _tick = 0
             for addr, value in _iter_dwords(reader, dll_base, hi):
+                _tick += 1
+                if not _tick & 0xFFFF and budget is not None and not budget.check():
+                    return None
                 if not (_HEAP_LO <= value < _HEAP_HI):
                     continue
                 if _selection_chain_valid(

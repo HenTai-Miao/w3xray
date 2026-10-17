@@ -907,7 +907,16 @@ def read_live(
                     )
                     offsets = None
             if offsets is None and profile.tier != "reforged-pending":
-                offsets = hc.derive_offsets(reader, dll_base, dll_base + 0x2000000)
+                budget = hc.ScanBudget(deadline_s=12.0)
+                offsets = hc.derive_offsets(
+                    reader, dll_base, dll_base + 0x2000000, budget=budget
+                )
+                if offsets is None and budget.timed_out:
+                    report["notes"].append(
+                        "结构推导达到时间预算 (12s), 未完成 — "
+                        "全程只读可稍后重试, 回退 chain/icons 策略"
+                    )
+                    return None
             if offsets is None:
                 report["notes"].append(
                     "句柄链不可用 ("
