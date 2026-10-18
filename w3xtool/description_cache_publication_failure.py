@@ -62,7 +62,7 @@ def _raise_after_private_finalization(
             known_records,
             publication_error.transient,
         )
-    except Exception as finalization_cause:  # noqa: BROAD_EXCEPT_OK - finalizer evidence
+    except Exception as finalization_cause:  # BROAD_EXCEPT_OK - finalizer evidence
         match finalization_cause:
             case DescriptionCachePublicationError() as typed_error:
                 finalization_error = typed_error

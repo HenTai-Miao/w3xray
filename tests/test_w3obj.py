@@ -119,11 +119,24 @@ class TestParseObjectData(unittest.TestCase):
         self.assertEqual(objs[0].mods[0].value, "Footman")
 
     def test_absurd_count_does_not_hang(self):
-        # 注水的超大 count(远超剩余字节)应立即判损坏，而非进入数十亿次循环
+        # 注水的超大 count(远超剩余字节)不再放弃整表：按剩余字节量出上界后
+        # 解析到字节耗尽——此处 count 后面没有真对象字节，结果仍为空
         data = struct.pack(
             "<iii", 2, 0x7FFFFFFF, 0
         )  # version, 原始表 count=21亿, 自定义表空
         self.assertEqual(parse_object_data(data, "w3u"), [])
+
+    def test_absurd_count_still_parses_real_objects_following(self):
+        # count 被写坏(注水)但后面跟着真对象：必须全部解析，不许弃表
+        good = _obj("hpea", "x001", [_mod("unam", 3, "A")])
+        good2 = _obj("hfoo", "x002", [_mod("unam", 3, "B")])
+        data = (
+            struct.pack("<ii", 2, 0x7FFFFFFF) + good + good2
+        )  # 原始表 count=21亿 + 2 个真对象
+        data += struct.pack("<i", 0)  # 自定义表空
+        objs = parse_object_data(data, "w3u")
+        self.assertEqual(len(objs), 2)
+        self.assertEqual([o.new_id for o in objs], ["x001", "x002"])
 
     def test_gbk_string_value_decoded(self):
         # 老地图(1.20~1.27)的字符串可能是 GBK 编码；UTF-8 解会乱码 → 应回退 GBK

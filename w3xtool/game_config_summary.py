@@ -25,7 +25,7 @@ def iter_game_config_summary_lines(
         f"  用户: {config.human_count}  电脑: {config.computer_count}"
         f"  观察者: {config.observer_count}"
     )
-    for player in config.players[:12]:
+    for player in config.players:
         yield "    - " + _format_game_config_player(player)
     if len(config.players) > 12:
         yield f"    …… 另有 {len(config.players) - 12} 个玩家槽"
@@ -37,7 +37,7 @@ def iter_embedded_game_config_summary_lines(md: MapData) -> Iterator[str]:
     if not configs:
         return
     yield "  游戏配置:"
-    for entry in configs[:4]:
+    for entry in configs:
         config = entry.config
         yield (
             f"    - {entry.source}: {config.map_path or '(未指定地图)'}"
@@ -51,7 +51,7 @@ def iter_embedded_game_config_summary_lines(md: MapData) -> Iterator[str]:
             for player in config.players
             if player.load_custom_ai and player.custom_ai_path
         ]
-        for player in ai_players[:3]:
+        for player in ai_players:
             yield f"      自定义AI: P{player.slot_id + 1} {player.custom_ai_path}"
         if len(ai_players) > 3:
             yield f"      …… 另有 {len(ai_players) - 3} 个自定义AI"

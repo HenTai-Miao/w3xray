@@ -180,6 +180,8 @@ def parse_object_data(data: bytes, ext: str) -> list[W3Object]:
 
     单个对象解析失败(截断/字节错位/未知字段类型/注水 count)不再拖垮整个文件：
     保留出错之前已成功解析的对象，并尽量重同步到后续完整对象。
+    注水 count 不再放弃整张表——以剩余字节量出对象数上界，解析到字节耗尽，
+    一个不多一个不少。
     """
     return list(parse_object_data_report(data, ext).objects)
 
@@ -203,13 +205,16 @@ def parse_object_data_report(data: bytes, ext: str) -> ObjectParseReport:
         except struct.error, IndexError:
             issues.append(f"truncated object table {table_idx}")
             break
-        # 每个对象至少有对象头：count 远超剩余字节即为损坏/注水，立即停止（防超大循环）。
+        # 每个对象至少有对象头：count 远超剩余字节即为损坏/注水。防超大循环的
+        # 手段是量出上界而非放弃——以剩余字节算出可达对象数，解析到字节耗尽。
         min_object_size = _min_object_size(version)
         if count < 0 or count * min_object_size > len(r.d) - r.p:
+            reachable = max(0, (len(r.d) - r.p) // min_object_size)
             issues.append(
-                f"invalid {ext} object count {count} with {len(r.d) - r.p} bytes remaining",
+                f"invalid {ext} object count {count} with {len(r.d) - r.p} bytes "
+                f"remaining; parsing table {table_idx} to end-of-data (≤{reachable} objects)",
             )
-            break
+            count = reachable
         parsed_in_table = 0
         while parsed_in_table < count:
             start_p = r.p

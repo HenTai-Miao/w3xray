@@ -13,7 +13,7 @@ def iter_component_diagnostic_lines(md: MapData) -> Iterator[str]:
     if not md.diagnostics:
         return
     yield f"  组件诊断: {len(md.diagnostics)}"
-    for item in md.diagnostics[:8]:
+    for item in md.diagnostics:
         yield f"    - {format_component_diagnostic(item)}"
     if len(md.diagnostics) > 8:
         yield f"    …… 另有 {len(md.diagnostics) - 8} 条，导出资料包查看 TSV。"

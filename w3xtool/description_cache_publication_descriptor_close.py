@@ -52,7 +52,7 @@ def close_publication_descriptors(
         label, descriptor = descriptors[index]
         try:
             close_descriptor(descriptor)
-        except Exception as exc:  # noqa: BROAD_EXCEPT_OK - descriptor close evidence
+        except Exception as exc:  # BROAD_EXCEPT_OK - descriptor close evidence
             failures.append((label, exc))
         finally:
             attempt(index + 1)

@@ -16,7 +16,6 @@ STRUCTURE_FILES: Final = (
     "war3map.shd",
 )
 _MAX_COUNT: Final = 1_000_000
-_MAX_STRINGS: Final = 50
 _MIN_STRING_LEN: Final = 2
 
 
@@ -93,8 +92,6 @@ def parse_structure_strings(data: bytes, magic: bytes) -> tuple[str, ...]:
             continue
         seen.add(text)
         out.append(text)
-        if len(out) >= _MAX_STRINGS:
-            break
     return tuple(out)
 
 

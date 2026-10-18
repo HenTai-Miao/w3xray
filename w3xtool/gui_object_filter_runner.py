@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 import traceback
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final, Protocol, assert_never
+from typing import TYPE_CHECKING, Protocol, assert_never
 
 from .api import GameObject, MapData
 from .gui_worker_registry import GuiWorkerTicket
@@ -16,8 +16,6 @@ from .object_filter import (
     object_fine_category,
 )
 from .theme import CARD, PARALLEL_CATS, ROW_ALT
-
-OBJECT_TREE_LIMIT: Final = 32
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,7 +165,7 @@ class ObjectFilterRunnerMixin(_ObjectFilterHost):
             payload: ObjectFilterPayload = filter_objects_by_query(
                 md, query, fine_filter
             )
-        except Exception as exc:  # noqa: BROAD_EXCEPT_OK
+        except Exception as exc:  # BROAD_EXCEPT_OK - GUI 对象筛选边界失败必须回传错误负载而非炸掉 worker
             traceback.print_exc()
             payload = ObjectFilterError(f"对象筛选失败：{exc}")
         _ = self._post_gui_worker(
@@ -196,7 +194,7 @@ class ObjectFilterRunnerMixin(_ObjectFilterHost):
     def _refresh_object_tree(self, category: str, objects: list[GameObject]) -> None:
         tree = self.col_trees[category]
         tree.delete(*tree.get_children())
-        for index, obj in enumerate(objects[:OBJECT_TREE_LIMIT]):
+        for index, obj in enumerate(objects):  # 满量: 对象树全量渲染
             ext = getattr(obj, "ext", "")
             mark = (
                 " 〔脚本〕"

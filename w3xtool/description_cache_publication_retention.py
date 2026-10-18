@@ -77,7 +77,7 @@ def retain_object(
     move_error: Exception | None = None
     try:
         rename_noreplace(parent_descriptor, source.name, target.name)
-    except Exception as exc:  # noqa: BROAD_EXCEPT_OK - atomic move reproof
+    except Exception as exc:  # BROAD_EXCEPT_OK - atomic move reproof
         move_error = exc
 
     source_after = read_named_leaf(parent_descriptor, source.name)

@@ -234,7 +234,7 @@ def test_save_file_swap_after_metadata_check_does_not_read_symlink_target(
     assert "outside-secret" not in report.files[0].printable_strings
 
 
-def test_mpq_member_declared_oversize_is_rejected_before_decompression(
+def test_mpq_member_is_read_whatever_its_declared_size(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -275,12 +275,12 @@ def test_mpq_member_declared_oversize_is_rejected_before_decompression(
     # When: the save analyzer inspects named MPQ text.
     report = save_module.analyze_real_save_path(save, _map_with_save_contract())
 
-    # Then: declared expansion is checked before read_file can allocate it.
-    assert read_calls == 0
+    # Then: 满量纪律——不再有声明尺寸预检, 成员照读 (内存由 MPQ 解压层炸弹护栏兜底)。
+    assert read_calls == 1
     assert report.files[0].kind.value == "mpq"
 
 
-def test_mpq_named_text_respects_one_aggregate_decoded_budget(
+def test_mpq_named_text_reads_every_member(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -322,11 +322,11 @@ def test_mpq_named_text_respects_one_aggregate_decoded_budget(
     # When: named text is collected for evidence.
     _ = save_module.analyze_real_save_path(save, _map_with_save_contract())
 
-    # Then: only members fitting the shared 8 MiB budget are decompressed.
-    assert read_calls == 2
+    # Then: 满量纪律——没有共享预算, 五个成员全部解压读取。
+    assert read_calls == 5
 
 
-def test_mpq_binary_members_consume_the_aggregate_decompression_budget(
+def test_mpq_binary_members_are_still_read_and_classified(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -368,5 +368,5 @@ def test_mpq_binary_members_consume_the_aggregate_decompression_budget(
     # When: the analyzer rejects each member as binary after decompression.
     _ = save_module.analyze_real_save_path(save, _map_with_save_contract())
 
-    # Then: binary payloads still consume the same aggregate allocation budget.
-    assert read_calls == 2
+    # Then: 二进制成员也全部读取并如实归类, 不占任何预算。
+    assert read_calls == 5

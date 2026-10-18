@@ -117,7 +117,7 @@ class BackgroundLoaderMixin(BackgroundLoaderHost):
     ) -> None:
         try:
             payload = build_payload()
-        except Exception as exc:  # noqa: BLE001  # noqa: BROAD_EXCEPT_OK - worker boundary returns typed GUI payloads.
+        except Exception as exc:  # noqa: BLE001  # BROAD_EXCEPT_OK - worker boundary returns typed GUI payloads.
             traceback.print_exc()
             message = (
                 diagnose_archive_open(source_path, exc).message
@@ -190,7 +190,7 @@ def _discard_loader_payload(payload: LoaderPayload) -> None:
             if resolver is not None:
                 try:
                     resolver.close()
-                except Exception:  # noqa: BLE001  # noqa: BROAD_EXCEPT_OK - third-party resolver close is best effort.
+                except Exception:  # noqa: BLE001  # BROAD_EXCEPT_OK - third-party resolver close is best effort.
                     return
         case LoadedCampaign() | LoaderError():
             return

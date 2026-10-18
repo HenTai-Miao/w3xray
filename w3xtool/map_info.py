@@ -135,7 +135,7 @@ def _format_game_configs(md: MapData) -> list[str]:
     if not configs:
         return []
     lines = [f"\n游戏配置：{len(configs)} 个"]
-    for entry in configs[:4]:
+    for entry in configs:
         cfg = entry.config
         lines.append(
             f"  {entry.source}：{cfg.map_path or '(未指定地图)'}"
@@ -152,7 +152,7 @@ def _format_game_configs(md: MapData) -> list[str]:
         custom_ai = [p for p in cfg.players if p.load_custom_ai and p.custom_ai_path]
         if custom_ai:
             names = [f"P{p.slot_id + 1}:{p.custom_ai_path}" for p in custom_ai]
-            lines.append(f"    自定义AI：{_names(names, 4)}")
+            lines.append(f"    自定义AI：{_names(names)}")
     if len(configs) > 4:
         lines.append(f"  ……另 {len(configs) - 4} 个配置")
     return lines
@@ -219,17 +219,15 @@ def _format_import_summary(md: MapData) -> list[str]:
         lines[0] += f"  · 未知标志 {summary.unknown_count}"
     if summary.extension_counts:
         ext_text = "、".join(
-            f"{ext}:{count}" for ext, count in summary.extension_counts[:6]
+            f"{ext}:{count}" for ext, count in summary.extension_counts
         )
         lines.append(f"  类型：{ext_text}")
     if summary.missing_paths:
-        lines.append(f"  疑似缺失：{_names(list(summary.missing_paths), 6)}")
+        lines.append(f"  疑似缺失：{_names(list(summary.missing_paths))}")
     else:
         lines.append(f"  已匹配文件：{len(summary.resolved_paths)}")
     return lines
 
 
-def _names(names: list[str], limit: int = 8) -> str:
-    shown = names[:limit]
-    suffix = f" ……另 {len(names) - limit} 个" if len(names) > limit else ""
-    return "、".join(shown) + suffix
+def _names(names: list[str]) -> str:
+    return "、".join(names)  # 满量: 全部列出, 不设条数上限

@@ -26,11 +26,41 @@ from .theme import (
 )
 
 if TYPE_CHECKING:
+    from typing import Any
+
+    from .api import MapData
     from .gui_reports import GuiReportBlock
 
+    class _ReportTabsHost:
+        """宿主 App (gui.py) 提供的状态、部件与 Tk 剪贴板方法 (仅类型检查用)。"""
 
-class ReportTabsMixin:
-    """为主窗口提供总览与分析报告两个只读面板。"""
+        map_data: MapData | None = None
+        commands: list[Any] = []
+        recipes: list[Any] = []
+        overview_box: ctk.CTkTextbox | None = None
+        overview_cards: list[ctk.CTkFrame] = []
+        overview_surface: Any = None
+        analysis_box: ctk.CTkTextbox | None = None
+        analysis_cards: list[ctk.CTkFrame] = []
+        analysis_surface: Any = None
+
+        def clipboard_clear(self) -> None:
+            raise NotImplementedError
+
+        def clipboard_append(self, text: str) -> None:
+            raise NotImplementedError
+
+    _HostBase = _ReportTabsHost
+else:
+    _HostBase = object
+
+
+class ReportTabsMixin(_HostBase):
+    """为主窗口提供总览与分析报告两个只读面板。
+
+    宿主契约见 _ReportTabsHost (仅类型检查存在, 运行时基类是 object,
+    一切属性仍由 gui.App 按原流程赋值)。
+    """
 
     def _build_overview_tab(self, parent) -> None:
         self.overview_box = self._build_hidden_report_cache(parent)
@@ -249,18 +279,9 @@ class ReportTabsMixin:
         body = ctk.CTkFrame(card, fg_color="transparent")
         body.pack(fill="both", expand=True, padx=14, pady=(0, 12))
         shown_lines = lines if lines else ("暂无条目",)
-        limit = 5 if compact else 12
-        for line in shown_lines[:limit]:
+        for line in shown_lines:  # 全部条目照印, 不设显示上限
             self._add_report_line(
                 body, line, warning=_is_warning_line(line), compact=compact
-            )
-        if len(shown_lines) > limit:
-            self._add_report_line(
-                body,
-                f"另有 {len(shown_lines) - limit} 条，复制全文查看。",
-                warning=False,
-                compact=compact,
-                muted=True,
             )
         return card
 

@@ -101,7 +101,7 @@ def _iter_references(md: MapData, table: dict[int, str]):
                     line=line_no,
                     trigstr=trigstr,
                     text=table.get(int(match.group(1)), ""),
-                    context=line.strip()[:160],
+                    context=line.strip(),  # 整行上下文
                 )
 
 

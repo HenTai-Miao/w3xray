@@ -282,7 +282,7 @@ def _materialize(
         name = (
             BASE_NAMES.get(representative.base_id) or BASE_NAMES.get(obj_id) or obj_id
         )
-    name = name.split("\n", 1)[0][:60]
+    name = name.split("\n", 1)[0]  # 整行名称, 不截断
     selected_icon = selected.get("display:icon")
     icon = "" if selected_icon is None else selected_icon.value.split(",", 1)[0].strip()
     icon_evidence = (

@@ -121,7 +121,7 @@ def publish_description_cache(
             )
             bound.close_ledger.remember(result.retained, ())
             return result
-        except Exception as exc:  # noqa: BROAD_EXCEPT_OK - transaction evidence boundary
+        except Exception as exc:  # BROAD_EXCEPT_OK - transaction evidence boundary
             _raise_after_private_finalization(
                 bound,
                 backup,

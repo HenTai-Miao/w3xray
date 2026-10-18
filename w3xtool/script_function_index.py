@@ -163,7 +163,7 @@ def _function_ranges(source: str, text: str) -> Iterable[_FunctionRange]:
                 source=source,
                 start_line=index + 1,
                 end_line=end_index + 1,
-                summary=lines[index].strip()[:160],
+                summary=lines[index].strip(),
             )
             index = end_index + 1
             continue
@@ -175,7 +175,7 @@ def _function_ranges(source: str, text: str) -> Iterable[_FunctionRange]:
                 source=source,
                 start_line=index + 1,
                 end_line=end_index + 1,
-                summary=lines[index].strip()[:160],
+                summary=lines[index].strip(),
             )
             index = end_index + 1
             continue

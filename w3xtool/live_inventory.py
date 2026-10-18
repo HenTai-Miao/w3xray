@@ -305,10 +305,27 @@ def load_snapshot(snap_dir):
 # 版本探测: 枚举进程模块 -> Game.dll 路径/基址 -> 磁盘文件 VS_FIXEDFILEINFO
 
 
+class _MODULEINFO(ctypes.Structure):
+    _fields_ = [
+        ("lpBaseOfDll", ctypes.c_void_p),
+        ("SizeOfImage", wt.DWORD),
+        ("EntryPoint", ctypes.c_void_p),
+    ]
+
+
 def enum_modules(h):
+    """枚举进程模块 -> [(路径, 基址, 镜像字节数)]。镜像大小用于量出扫描窗口。
+
+    先量后分: 第一趟拿 needed 字节数, 按量得大小精确分配再枚举, 不设
+    1024 之类的数量上限 (模块再多也全量); 列表增长时按新尺寸重试一趟。
+    """
     psapi = ctypes.WinDLL("psapi")
-    arr = (ctypes.c_void_p * 1024)()
     needed = wt.DWORD()
+    if not psapi.EnumProcessModulesEx(h, None, 0, ctypes.byref(needed), 0x03):
+        if not psapi.EnumProcessModules(h, None, 0, ctypes.byref(needed)):
+            return []
+    arr_t = ctypes.c_void_p * (needed.value // ctypes.sizeof(ctypes.c_void_p) or 1)
+    arr = arr_t()
     ok = psapi.EnumProcessModulesEx(
         h, arr, ctypes.sizeof(arr), ctypes.byref(needed), 0x03
     )
@@ -319,12 +336,18 @@ def enum_modules(h):
     count = needed.value // ctypes.sizeof(ctypes.c_void_p)
     mods = []
     buf = ctypes.create_unicode_buffer(2048)
-    for i in range(min(count, 1024)):
+    mi = _MODULEINFO()
+    for i in range(count):
         base = arr[i]
         if not base:
             continue
         if psapi.GetModuleFileNameExW(h, ctypes.c_void_p(base), buf, 2048):
-            mods.append((buf.value, base))
+            size = 0
+            if psapi.GetModuleInformation(
+                h, ctypes.c_void_p(base), ctypes.byref(mi), ctypes.sizeof(mi)
+            ):
+                size = int(mi.SizeOfImage)
+            mods.append((buf.value, base, size))
     return mods
 
 
@@ -396,7 +419,7 @@ def read_pe_fingerprint(path):
 
 def pe_machine(path):
     try:
-        d = open(path, "rb").read(4096)
+        d = open(path, "rb").read(65536)  # PE 头可达 64KB (证书表前移时)
         e = struct.unpack_from("<I", d, 0x3C)[0]
         return struct.unpack_from("<H", d, e + 4)[0]
     except OSError, struct.error:
@@ -411,20 +434,20 @@ def detect_version(h):
         "game_dll": None,
     }
     mods = enum_modules(h)
-    for path, base in mods:
+    for path, base, size in mods:
         name = os.path.basename(path).lower()
         if name == "game.dll":
             ver = read_file_version(path)
             info["version"] = ver
             info["arch"] = "x64" if pe_machine(path) == 0x8664 else "x86"
             info["engine"] = "reforged" if info["arch"] == "x64" else "classic"
-            info["game_dll"] = {"base": base, "path": path}
+            info["game_dll"] = {"base": base, "path": path, "size": size}
             break
     if info["game_dll"] is None:
         # 失败可见化 (学 trainer GameModuleNotFoundError 的状态精确区分
         # 「进程活着但已验证映像不可见」+ game_module_base 的模块枚举
         # 交叉验证): 给出实际枚举到的模块名, 排查不再两眼一抹黑。
-        info["modules_seen"] = [os.path.basename(p) for p, _b in mods][:24]
+        info["modules_seen"] = [os.path.basename(p) for p, _b, _s in mods]  # 全量列出
     if isinstance(info["version"], str) and info["version"] in OFFSET_REFERENCE:
         info["known_offsets"] = OFFSET_REFERENCE[info["version"]]
     return info
@@ -808,6 +831,7 @@ class _LiveReport(TypedDict):
     unit_matches: list[Any]
     owner_counts: "dict[int, int] | None"
     owned_units: "list[dict[str, object]] | None"
+    all_units: "list[dict[str, object]] | None"
     resources: "list[dict[str, object]] | None"
     player_rows: "list[str] | None"
     nick_raw: "str | None"
@@ -869,6 +893,7 @@ def read_live(
     verbose=True,
     unit_query=None,
     players=False,
+    all_units=False,
     resources=None,
     nick=None,
     export_profile=None,
@@ -887,6 +912,7 @@ def read_live(
         "unit_matches": [],
         "owner_counts": None,
         "owned_units": None,
+        "all_units": None,
         "resources": None,
         "player_rows": None,
         "nick_raw": nick,
@@ -1031,16 +1057,33 @@ def read_live(
                 _gd = ver.get("game_dll")
                 if isinstance(_gd, dict) and _gd.get("path"):
                     disk_fp = read_pe_fingerprint(str(_gd["path"]))
-                ok, fails = hc.verify_profile(reader, dll_base, profile, disk_fp)
+                ok, fails, patches = hc.verify_profile(
+                    reader, dll_base, profile, disk_fp
+                )
+                if patches:
+                    report["notes"].append(
+                        f"运行时补丁差异 {len(patches)} 处 — 磁盘 PE 指纹匹配证实同版本,"
+                        f" 差异为平台加载后所打 (放行; 明细: {'; '.join(patches)})"
+                    )
                 if not ok:
                     report["notes"].append(
                         "档案自校验失败 ("
-                        + "; ".join(fails[:3])
+                        + "; ".join(fails)
                         + ") — 偏移档案与本进程 Game.dll 不符, 不沿用, 改走结构推导"
                     )
                     offsets = None
             if offsets is None and profile.tier != "reforged-pending":
-                budget = hc.ScanBudget(deadline_s=12.0)
+                # 扫描窗口量出来, 不拍数字: 进程内镜像大小 (GetModuleInformation)
+                # -> 磁盘 PE size-of-image -> 兜底扫满用户态。
+                gd_raw = ver.get("game_dll")
+                gd = gd_raw if isinstance(gd_raw, dict) else {}
+                span_end = dll_base + int(gd.get("size") or 0)
+                if span_end <= dll_base and gd.get("path"):
+                    fp0 = read_pe_fingerprint(str(gd["path"]))
+                    if fp0 is not None and fp0.image_size:
+                        span_end = dll_base + fp0.image_size
+                if span_end <= dll_base:
+                    span_end = 0x7FFE0000
 
                 def _track(stage) -> None:  # hc.DiscoveryStage (运行时导入)
                     last_stage.append(stage.name)
@@ -1048,18 +1091,10 @@ def read_live(
                 offsets = hc.derive_offsets(
                     reader,
                     dll_base,
-                    dll_base + 0x2000000,
-                    budget=budget,
+                    span_end,
+                    budget=None,
                     on_stage=_track,
                 )
-                if offsets is None and budget.timed_out:
-                    where = f", 最后阶段: {last_stage[-1]}" if last_stage else ""
-                    report["notes"].append(
-                        "结构推导达到时间预算 (12s), 未完成"
-                        + where
-                        + " — 全程只读可稍后重试, 回退 chain/icons 策略"
-                    )
-                    return None
             if offsets is None:
                 reason = (
                     "重制版 x64 档案待建立"
@@ -1136,47 +1171,45 @@ def read_live(
             if players:
                 owned = hc.walk_owned_units(reader, system, offsets)
                 counts, listed = hc.summarize_owners(owned)
-                item_entries = []
-                for u in units:
-                    owner = hc.read_unit_owner(reader, u.unit_addr)
-                    if 0 <= owner <= 15:
-                        ux, uy = hc.read_unit_pos(reader, u.unit_addr)
-                        item_entries.append(
-                            hc.OwnedUnit(u.unit_addr, u.code, owner, ux, uy)
-                        )
-                rescued = hc.salvage_big_owner_units(counts, listed, item_entries)
                 report["owner_counts"] = counts
                 report["owned_units"] = [
                     {
                         "owner": u.owner,
                         "unit": unit_names.get(u.code.encode("latin-1"), "?"),
                         "code": u.code,
-                        "addr": u.unit_addr,
+                        "addr": u.addr,
                         "x": round(u.x, 1),
                         "y": round(u.y, 1),
                     }
-                    for u in listed + rescued
+                    for u in listed
                 ]
-                report["notes"].append(hc.OWNED_UNITS_PARTIAL_VIEW_NOTE)
-                if rescued:
-                    report["notes"].append(
-                        f"大玩家号槽位过滤后, 从带物品单位打捞 {len(rescued)} 个条目"
-                    )
+            if all_units:
+                all_rows = hc.walk_owned_units(reader, system, offsets)
+                report["all_units"] = [
+                    {
+                        "owner": u.owner,
+                        "unit": unit_names.get(u.code.encode("latin-1"), "?"),
+                        "code": u.code,
+                        "addr": u.addr,
+                        "x": round(u.x, 1),
+                        "y": round(u.y, 1),
+                    }
+                    for u in all_rows
+                ]
             if resources is not None:
                 if resources == "auto":
                     import time as _time
 
                     readers = [reader]
-                    for _ in range(2):
+                    for _ in range(2):  # 差分采样节奏 (非数据上限; 样本越多排名越稳)
                         _time.sleep(3)
                         readers.append(hc.reader_from_snapshot(snapshot(h, max_addr)))
                     found, total_anchors = hc.rank_auto_rows(
                         hc.find_auto_resource_rows(readers)
                     )
-                    if total_anchors > len(found):
-                        report["notes"].append(
-                            f"auto 锚点 {total_anchors} 个, 按木/人口可信度取前 {len(found)}"
-                        )
+                    report["notes"].append(
+                        f"auto 锚点共 {total_anchors} 个, 按木/人口可信度排序全量输出"
+                    )
                 else:
                     found = hc.find_resource_layout(reader, resources[0], resources[1])
                     if hc.cached_resource_hit():
@@ -1314,16 +1347,15 @@ def read_live(
             reader = hc1.reader_from_snapshot((regions, total_b))
             if resources == "auto":
                 readers = [reader]
-                for _ in range(2):
+                for _ in range(2):  # 差分采样节奏 (非数据上限; 样本越多排名越稳)
                     _time.sleep(3)
                     readers.append(hc1.reader_from_snapshot(snapshot(h, max_addr)))
                 found, total_anchors = hc1.rank_auto_rows(
                     hc1.find_auto_resource_rows(readers)
                 )
-                if total_anchors > len(found):
-                    report["notes"].append(
-                        f"auto 锚点 {total_anchors} 个, 按木/人口可信度取前 {len(found)}"
-                    )
+                report["notes"].append(
+                    f"auto 锚点共 {total_anchors} 个, 按木/人口可信度排序全量输出"
+                )
             else:
                 found = hc1.find_resource_layout(reader, resources[0], resources[1])
                 if hc1.cached_resource_hit():
@@ -1405,6 +1437,11 @@ def main(argv=None):
         help="列出每个真人玩家号下的单位 (所有者+坐标, 地图物件自动归并)",
     )
     ap.add_argument(
+        "--all-units",
+        action="store_true",
+        help="全对象扫描: 场上全部单位 (所有者+四码+坐标), 不按物品/玩家号过滤",
+    )
+    ap.add_argument(
         "--resources",
         nargs="+",
         metavar=("金币|auto", "木材"),
@@ -1450,6 +1487,7 @@ def main(argv=None):
         args.load_snapshot,
         unit_query=args.unit,
         players=args.players or bool(args.resources),
+        all_units=args.all_units,
         resources=_parse_resources_arg(args.resources),
         nick=args.nick,
         export_profile=args.export_profile,
@@ -1512,10 +1550,23 @@ def main(argv=None):
                     f" @ ({u['x']:.0f}, {u['y']:.0f})" if u.get("x") is not None else ""
                 )
                 print(f"  {u['unit']} [{u['code']}]{upos}: {names_txt}")
+    all_rows = rep.get("all_units")
+    if all_rows:
+        combo: dict[tuple[int, str], int] = {}
+        names: dict[tuple[int, str], str] = {}
+        for u in all_rows:
+            key = (u["owner"], u["code"])
+            combo[key] = combo.get(key, 0) + 1
+            names[key] = u["unit"]
+        print(f"== 全部单位 ({len(all_rows)}个, 按 所有者+四码 聚合) ==")
+        for (o2, c2), n2 in sorted(combo.items()):
+            print(f"  P{o2} {names[(o2, c2)]} [{c2}] ×{n2}")
     print(json.dumps(rep, ensure_ascii=False, indent=1, default=str))
     if rep["slots"]:
         return 0
     if args.players and rep.get("owner_counts") is not None:
+        return 0
+    if args.all_units and rep.get("all_units") is not None:
         return 0
     if args.resources and rep.get("resources") is not None:
         return 0

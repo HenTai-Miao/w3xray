@@ -118,7 +118,9 @@ class ExportActionsMixin:
                     ticket,
                     lambda: self._open_dir(out, n, "文件"),
                 )
-            except Exception as exc:  # noqa: BROAD_EXCEPT_OK - GUI worker boundary reports export failures.
+            except (
+                Exception
+            ) as exc:  # BROAD_EXCEPT_OK - GUI worker boundary reports export failures.
                 error_text = format_user_exception(exc, paths=(path, md.path))
                 _ = self._post_gui_worker(
                     ticket,
@@ -144,7 +146,9 @@ class ExportActionsMixin:
                     ticket,
                     lambda: self._open_dir(out, n, "脚本"),
                 )
-            except Exception as exc:  # noqa: BROAD_EXCEPT_OK - GUI worker boundary reports export failures.
+            except (
+                Exception
+            ) as exc:  # BROAD_EXCEPT_OK - GUI worker boundary reports export failures.
                 error_text = format_user_exception(exc, paths=(out, md.path))
                 _ = self._post_gui_worker(
                     ticket,
@@ -175,7 +179,9 @@ class ExportActionsMixin:
                     ticket,
                     lambda: self._open_dir(out, n, "分类的ID列表"),
                 )
-            except Exception as exc:  # noqa: BROAD_EXCEPT_OK - GUI worker boundary reports export failures.
+            except (
+                Exception
+            ) as exc:  # BROAD_EXCEPT_OK - GUI worker boundary reports export failures.
                 error_text = format_user_exception(exc, paths=(out, md.path))
                 _ = self._post_gui_worker(
                     ticket,
@@ -204,7 +210,9 @@ class ExportActionsMixin:
                     ticket,
                     lambda: self._show_pack_result(out, report),
                 )
-            except Exception as exc:  # noqa: BROAD_EXCEPT_OK - GUI worker boundary reports export failures.
+            except (
+                Exception
+            ) as exc:  # BROAD_EXCEPT_OK - GUI worker boundary reports export failures.
                 error_text = format_user_exception(exc, paths=(out, md.path))
                 _ = self._post_gui_worker(
                     ticket,

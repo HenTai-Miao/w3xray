@@ -47,7 +47,7 @@ _VALUE_OPTIONS = (
     "--profile-json",
     "--pid",
 )
-_FLAG_OPTIONS = ("--players", "--elevated-hint")
+_FLAG_OPTIONS = ("--all-units", "--players", "--elevated-hint")
 _TWO_VALUE_OPTIONS = ("--resources",)
 
 
@@ -63,6 +63,7 @@ class LiveCliOptions:
     load_snapshot: str | None = None
     unit_query: str | None = None
     players: bool = False
+    all_units: bool = False
     resources: tuple[str, str] | None = None
     nick: str | None = None
     export_profile: str | None = None
@@ -163,6 +164,7 @@ def parse_live_cli_options(argv: Sequence[str]) -> LiveCliOptions:
         load_snapshot=values.get("--load-snapshot"),
         unit_query=values.get("--unit"),
         players="--players" in flags,
+        all_units="--all-units" in flags,
         resources=resources,
         nick=values.get("--nick"),
         export_profile=values.get("--export-profile"),
@@ -172,10 +174,15 @@ def parse_live_cli_options(argv: Sequence[str]) -> LiveCliOptions:
     )
 
 
+LIVE_PACK_CACHE_VERSION = "live-pack-v2"
+
+
 def live_pack_cache_dir(map_path: str) -> Path:
-    """按地图绝对路径+大小+mtime 推导缓存包目录（改动自动失效）。"""
+    """按版本+地图绝对路径+大小+mtime 推导缓存包目录。"""
     stat = os.stat(map_path)
-    key_material = f"{os.path.abspath(map_path)}|{stat.st_size}|{int(stat.st_mtime)}"
+    # v2: 满量纪律后的导出语义 (无摘要截断/全文索引)。代码修复救不了旧缓存,
+    # 版本入键让旧包立刻退役, 下次 live 运行自动用新代码重导。
+    key_material = f"{LIVE_PACK_CACHE_VERSION}|{os.path.abspath(map_path)}|{stat.st_size}|{int(stat.st_mtime)}"
     key = hashlib.sha1(key_material.encode("utf-8")).hexdigest()[:16]
     return w3xray_cache_root() / "live-pack" / key
 
@@ -231,6 +238,8 @@ def run_live_cli(options: LiveCliOptions) -> int:
     args = ["--pack", pack_dir, "--strategy", options.strategy]
     if options.players:
         args += ["--players"]
+    if options.all_units:
+        args += ["--all-units"]
     if options.resources is not None:
         if options.resources == ("auto", ""):
             args += ["--resources", "auto"]

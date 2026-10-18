@@ -105,8 +105,8 @@ class TestProfileVerification:
             source="t",
             checks=(lh.ProfileCheck(rva=4, expect=blob[4:12], label="w"),),
         )
-        ok, fails = lh.verify_profile(reader, BASE, p)
-        assert ok and not fails
+        ok, fails, patches = lh.verify_profile(reader, BASE, p)
+        assert ok and not fails and not patches
 
     def test_checks_fail_reports_diff(self):
         reader = self._reader_at(b"\x90" * 64)
@@ -121,8 +121,8 @@ class TestProfileVerification:
             source="t",
             checks=(lh.ProfileCheck(rva=8, expect=b"\x01\x02", label="w"),),
         )
-        ok, fails = lh.verify_profile(reader, BASE, p)
-        assert not ok and "w@0x8" in fails[0]
+        ok, fails, patches = lh.verify_profile(reader, BASE, p)
+        assert not ok and not patches and "w@0x8" in fails[0]
 
     def test_fingerprint_mismatch_fails(self):
         reader = self._reader_at(b"\x00" * 64)
@@ -139,8 +139,28 @@ class TestProfileVerification:
             checks=(lh.ProfileCheck(rva=0, expect=b"\x00" * 4),),
         )
         fp = lh.ProfileFingerprint(machine=0x14C, timestamp=9, image_size=2)
-        ok, fails = lh.verify_profile(reader, BASE, p, fp)
+        ok, fails, patches = lh.verify_profile(reader, BASE, p, fp)
         assert not ok and any("PE 指纹不符" in f for f in fails)
+
+    def test_fingerprint_match_runtime_patch_passes_with_evidence(self):
+        # KK 实证: 磁盘 PE 与档案一致但内存 text 被平台运行时补丁改写,
+        # 差异是证据不是版本不符 — 放行并返回差异明细, 不再拒绝。
+        reader = self._reader_at(b"\x11" * 64)
+        p = lh.LiveBuildProfile(
+            version="t",
+            engine="classic",
+            arch="x86",
+            game_struct_rva=None,
+            unit_list_rva=None,
+            handle_chain=None,
+            tier="exact",
+            source="t",
+            fingerprint=lh.ProfileFingerprint(machine=0x14C, timestamp=7, image_size=2),
+            checks=(lh.ProfileCheck(rva=16, expect=b"\x00" * 4, domain="text"),),
+        )
+        fp = lh.ProfileFingerprint(machine=0x14C, timestamp=7, image_size=2)
+        ok, fails, patches = lh.verify_profile(reader, BASE, p, fp)
+        assert ok and not fails and len(patches) == 1 and "text" in patches[0]
 
     def test_127_profile_carries_real_samples(self):
         p = lh.resolve_profile("1.27.0.52240")
@@ -242,7 +262,7 @@ class TestProfileVerification:
         import w3xtool.live_inventory as inv
 
         monkeypatch.setattr(
-            inv, "enum_modules", lambda h: [("C:/x/notepad.exe", 0x400000)]
+            inv, "enum_modules", lambda h: [("C:/x/notepad.exe", 0x400000, 0x10000)]
         )
         info = inv.detect_version(object())
         assert info["game_dll"] is None
@@ -252,7 +272,10 @@ class TestProfileVerification:
         monkeypatch.setattr(
             inv,
             "enum_modules",
-            lambda h: [("C:/x/notepad.exe", 0x400000), (str(dll), 0x600000)],
+            lambda h: [
+                ("C:/x/notepad.exe", 0x400000, 0x10000),
+                (str(dll), 0x600000, 0x20000),
+            ],
         )
         monkeypatch.setattr(inv, "read_file_version", lambda p: "1.27.0.52240")
         monkeypatch.setattr(inv, "pe_machine", lambda p: 0x014C)
@@ -353,7 +376,7 @@ class TestProfileVerification:
             source="t",
             checks=(lh.ProfileCheck(rva=8, expect=b"\x01\x02", label="w"),),
         )
-        ok, fails = lh.verify_profile(reader, BASE, p)
+        ok, fails, _patches = lh.verify_profile(reader, BASE, p)
         assert not ok
         assert fails[0].startswith("[text] w@0x8")
 

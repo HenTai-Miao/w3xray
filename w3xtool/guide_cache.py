@@ -20,7 +20,9 @@ __all__ = (
 )
 
 # 报告段落逻辑变化时同步 bump，使旧缓存整体失效。
-GUIDE_CACHE_VERSION = "guide-v1"
+# v2: 满量纪律后的报告语义 (配方证据标注/全文 tooltip/无条数上限)——
+# 代码修复救不了旧缓存, 版本换代让旧报告立刻退役。
+GUIDE_CACHE_VERSION = "guide-v2"
 
 
 def report_cache_path(map_path: str) -> Path | None:

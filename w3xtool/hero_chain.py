@@ -35,14 +35,14 @@ def clean(s):
     return "".join(o)
 
 
-def _sample(names, want, min_len=3):
+def _sample(names, min_len=3):
     cands = [
         (code, n)
         for code, n in names.items()
         if len(n) >= min_len and re.fullmatch(r"[\u4e00-\u9fffA-Za-z0-9·+-]+", n)
     ]
     cands.sort(key=lambda kv: -len(kv[1]))
-    return cands[:want]
+    return cands  # 满量: 全部名字候选参与扫描, 不设采样上限
 
 
 def _find_instances(regions, pats):
@@ -116,7 +116,7 @@ def _learn_def_layout(
     regions, names, verbose=False, min_anchors=5, min_votes=3, fc_codes=None
 ):
     """返回 (d, off_nameptr) 或 None; fc_codes 指定时按其收集四码位置(单位表用)。"""
-    anchors = _find_instances(regions, _sample(names, 80))
+    anchors = _find_instances(regions, _sample(names))
     if len(anchors) < min_anchors:
         if verbose:
             print(f"锚点串不足 ({len(anchors)})")
@@ -144,7 +144,7 @@ def _learn_def_layout(
         code = anchor_addr2code.get(v)
         if not code:
             continue
-        for pos in fc_pos.get(code, ())[:8]:
+        for pos in fc_pos.get(code, ()):  # 全量参与投票, 不设采样窗口
             d = pos - s
             if -0x200 <= d <= 0x200 and d % 4 == 0:
                 dist[d] += 1
@@ -309,7 +309,7 @@ def read_inventory(regions, names, unit_names=None, verbose=False):
                         off = data.find(code, off + 1)
             udefs = []
             for code, poss in unit_fc.items():
-                for p in poss[:4]:
+                for p in poss:  # 全量候选参与投票
                     udefs.append(p - d_unit - u_np)
             if udefs:
                 ut = np.array(sorted(set(udefs)), dtype=np.uint64)

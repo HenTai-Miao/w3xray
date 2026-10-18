@@ -173,8 +173,8 @@ def _call_detail(text: str, start: int, args: tuple[str, ...]) -> str:
     arg_text = ", ".join(args)
     strings = [unescape_arg(match.group(1)) for match in _STRING_RE.finditer(arg_text)]
     if strings:
-        return " / ".join(strings[:4])
-    return _line_fragment(text, start)[:120]
+        return " / ".join(strings)  # 全部字符串
+    return _line_fragment(text, start)  # 整行
 
 
 def _line_fragment(text: str, start: int) -> str:

@@ -245,8 +245,9 @@ def test_anonymous_blocks_at_threshold_are_collected() -> None:
     }
 
 
-def test_malformed_or_oversized_trusted_sources_are_ignored() -> None:
-    # Given: trusted files with no section syntax and content above the bounded parse limit.
+def test_malformed_trusted_sources_are_ignored_and_oversized_still_parse() -> None:
+    # Given: 一个没有节语法的坏文件, 和一个超过旧 4MB 限的超大真文本表
+    # (体积跳过闸已删除——满量纪律: 超大真表是合法证据, 必须解析)。
     archive = FakeArchive(
         {
             "Units\\HumanUnitFunc.txt": b"not an object table",
@@ -258,8 +259,8 @@ def test_malformed_or_oversized_trusted_sources_are_ignored() -> None:
     # When: the sources are collected.
     records = collect_text_object_records(archive)
 
-    # Then: malformed and oversized content does not become a record.
-    assert records == ()
+    # Then: 坏文件不产记录; 超大真文本表照常满量解析。
+    assert {(row.obj_id, row.category) for row in records} == {("O001", "单位")}
 
 
 def test_mixed_ability_strings_classifies_buff_section_separately() -> None:

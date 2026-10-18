@@ -96,7 +96,7 @@ def _reference_summary_lines(md: MapData) -> Iterator[str]:
     else:
         suffix = "（无人引用，可能是废弃对象）" if orphans else ""
         yield f"  孤立自定义对象: {len(orphans)}{suffix}"
-    for orphan in orphans[:10]:
+    for orphan in orphans:
         yield f"    - [{orphan.category}] {orphan.name}({orphan.obj_id})"
     if len(orphans) > 10:
         yield f"    …… 另有 {len(orphans) - 10} 个"
@@ -115,10 +115,10 @@ def _import_summary_lines(md: MapData) -> Iterator[str]:
         yield f"    未知标志: {summary.unknown_count}"
     if summary.extension_counts:
         extension_text = "、".join(
-            f"{extension}:{count}" for extension, count in summary.extension_counts[:6]
+            f"{extension}:{count}" for extension, count in summary.extension_counts
         )
         yield f"    类型: {extension_text}"
-    for path in summary.missing_paths[:5]:
+    for path in summary.missing_paths:
         yield f"    - 疑似缺失: {path}"
     if len(summary.missing_paths) > 5:
         yield f"    …… 另有 {len(summary.missing_paths) - 5} 个疑似缺失资源"
@@ -142,7 +142,7 @@ def _trigger_tree_summary_lines(md: MapData) -> Iterator[str]:
     if summary.variables:
         names = tuple(variable.name for variable in summary.variables if variable.name)
         yield f"    变量: {_format_summary_list(names)}"
-    for trigger in summary.triggers[:6]:
+    for trigger in summary.triggers:
         tags = _trigger_tags(trigger)
         suffix = f"  ·  {'/'.join(tags)}" if tags else ""
         yield f"    - {trigger.name or '(未命名触发器)'}{suffix}"
@@ -161,7 +161,7 @@ def _preview_icon_summary_lines(md: MapData) -> Iterator[str]:
         f"    总数: {summary.icon_count}  玩家出生点: {summary.player_start_count}"
         f"  金矿: {summary.gold_mine_count}  中立建筑: {summary.neutral_building_count}"
     )
-    for icon in summary.icons[:8]:
+    for icon in summary.icons:
         yield f"    - {icon.type_label} ({icon.x}, {icon.y})  RGB{icon.color_rgb}"
     if len(summary.icons) > 8:
         yield f"    …… 另有 {len(summary.icons) - 8} 个标记"
@@ -183,7 +183,7 @@ def _trigger_tags(trigger: TriggerHeader) -> list[str]:
 
 
 def _format_summary_list(items: tuple[str, ...]) -> str:
-    shown = "、".join(items[:5])
+    shown = "、".join(items)
     if len(items) <= 5:
         return shown
     return f"{shown} …… 另有 {len(items) - 5} 个"

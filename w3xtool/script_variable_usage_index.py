@@ -97,7 +97,7 @@ def _usages_for_script(
         write_target = _write_target(code_line, is_lua)
         object_codes = tuple(sorted(set(_codes_in(code_line))))
         call = _line_call(code_line)
-        summary = _strip_comment(raw_lines[line_no - 1]).strip()[:160]
+        summary = _strip_comment(raw_lines[line_no - 1]).strip()
         for variable in variables:
             rows.append(
                 ScriptVariableUsage(

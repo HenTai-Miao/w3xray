@@ -36,7 +36,7 @@ def attempt_private(
     """Capture one failure so the other private name is still attempted."""
     try:
         return PrivateAttempt(record=operation())
-    except Exception as cause:  # noqa: BROAD_EXCEPT_OK - independent private attempt
+    except Exception as cause:  # BROAD_EXCEPT_OK - independent private attempt
         match cause:
             case DescriptionCachePublicationError() as publication_error:
                 return PrivateAttempt(error=publication_error)

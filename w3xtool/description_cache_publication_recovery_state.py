@@ -143,7 +143,7 @@ def normalize_recovery_failure(
         transient = tuple(dict.fromkeys((*transient, *retained_proof.transient)))
     try:
         sync_parent(parent_descriptor)
-    except Exception as sync_error:  # noqa: BROAD_EXCEPT_OK - rollback durability
+    except Exception as sync_error:  # BROAD_EXCEPT_OK - rollback durability
         sync_proof = reprove_retained(
             parent_descriptor,
             parent,

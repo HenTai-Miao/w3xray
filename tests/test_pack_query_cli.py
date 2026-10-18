@@ -316,9 +316,11 @@ def test_query_drop_script_pool_fallback(pack):
 
 def test_parse_ok():
     o = parse_pack_query_cli_options(["pack", "item", "冰晶"])
-    assert (o.command, o.query, o.limit) == ("item", "冰晶", 20)
+    assert (o.command, o.query, o.limit) == ("item", "冰晶", 0)  # 默认全量
     o = parse_pack_query_cli_options(["pack", "text", "x", "--limit", "3"])
     assert o.limit == 3
+    o = parse_pack_query_cli_options(["pack", "text", "x", "--limit", "0"])
+    assert o.limit == 0  # 显式 0 = 不限量
 
 
 def test_parse_errors():
@@ -331,7 +333,9 @@ def test_parse_errors():
     with pytest.raises(PackQueryCliOptionError):
         parse_pack_query_cli_options(["pack", "item", "x", "--limit"])
     with pytest.raises(PackQueryCliOptionError):
-        parse_pack_query_cli_options(["pack", "item", "x", "--limit", "0"])
+        parse_pack_query_cli_options(
+            ["pack", "item", "x", "--limit", "-1"]
+        )  # 负数仍拒绝
 
 
 def test_load_items_strips_colors(pack):

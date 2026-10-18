@@ -141,9 +141,7 @@ def _record_encrypted_script(
 ) -> None:
     label = detect_encrypted_script_label(payload)
     if label is not None:
-        detections.append(
-            EncryptedScriptDetection(index, kind, label, len(payload))
-        )
+        detections.append(EncryptedScriptDetection(index, kind, label, len(payload)))
 
 
 def _named_block_indexes(

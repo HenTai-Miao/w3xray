@@ -49,7 +49,7 @@ def publish_absent(
     post_install_error: DescriptionCachePublicationError | None = None
     try:
         rename_noreplace(parent_descriptor, stage.name, output.name)
-    except Exception as rename_cause:  # noqa: BROAD_EXCEPT_OK - install reproof
+    except Exception as rename_cause:  # BROAD_EXCEPT_OK - install reproof
         installed, rename_error = _reprove_absent_install(
             parent_descriptor,
             parent_identity,
@@ -73,7 +73,7 @@ def publish_absent(
             raise DescriptionCachePublicationError(
                 "published output differs from the descriptor-verified stage"
             )
-    except Exception as cause:  # noqa: BROAD_EXCEPT_OK - post-install retention
+    except Exception as cause:  # BROAD_EXCEPT_OK - post-install retention
         match cause:
             case DescriptionCachePublicationError() as typed_error:
                 publication_error = typed_error
@@ -90,7 +90,7 @@ def publish_absent(
                 stage_identity,
                 RetainedCacheRole.FAILED_OUTPUT,
             )
-        except Exception as retention_cause:  # noqa: BROAD_EXCEPT_OK - retain boundary
+        except Exception as retention_cause:  # BROAD_EXCEPT_OK - retain boundary
             match retention_cause:
                 case DescriptionCachePublicationError() as typed_error:
                     retention_error = typed_error

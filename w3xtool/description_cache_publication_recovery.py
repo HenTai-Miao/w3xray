@@ -146,7 +146,7 @@ def restore_previous_generation(
         return retain(private, staged_identity, RetainedCacheRole.FAILED_STAGE)
     except DescriptionCachePublicationError as caught:
         _raise_normalized_recovery_error(caught)
-    except Exception as caught:  # noqa: BROAD_EXCEPT_OK - recovery evidence boundary
+    except Exception as caught:  # BROAD_EXCEPT_OK - recovery evidence boundary
         wrapped = DescriptionCachePublicationError(
             str(caught),
             failures=(caught,),

@@ -110,7 +110,7 @@ def _entries_for_script(
                 purpose=_purpose(call, token.value),
                 value=token.value,
                 resolved=_resolve_string(token.value, trigstr_table),
-                summary=token.summary[:160],
+                summary=token.summary,
             )
         )
     return rows

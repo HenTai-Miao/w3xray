@@ -76,8 +76,13 @@ class TestEditorStyleLayout(GuiTestCase):
         self.app._render_map(md, [], [], None)
 
         # Then: the new editor dashboard and analysis report are populated.
-        overview = self.app.overview_box.get("1.0", "end")
-        analysis = self.app.analysis_box.get("1.0", "end")
+        overview_box = self.app.overview_box
+        analysis_box = self.app.analysis_box
+        self.assertIsNotNone(overview_box)
+        self.assertIsNotNone(analysis_box)
+        assert overview_box is not None and analysis_box is not None
+        overview = overview_box.get("1.0", "end")
+        analysis = analysis_box.get("1.0", "end")
         self.assertIn("布局测试图", overview)
         self.assertIn("技能 1", overview)
         self.assertIn("崩溃风险", analysis)
@@ -106,8 +111,13 @@ class TestEditorStyleLayout(GuiTestCase):
         # Then: visible card widgets replace the unreadable raw textbox surface.
         self.assertGreaterEqual(len(self.app.overview_cards), 3)
         self.assertGreaterEqual(len(self.app.analysis_cards), 1)
-        self.assertEqual(self.app.overview_box.winfo_ismapped(), 0)
-        self.assertEqual(self.app.analysis_box.winfo_ismapped(), 0)
+        overview_box = self.app.overview_box
+        analysis_box = self.app.analysis_box
+        self.assertIsNotNone(overview_box)
+        self.assertIsNotNone(analysis_box)
+        assert overview_box is not None and analysis_box is not None
+        self.assertEqual(overview_box.winfo_ismapped(), 0)
+        self.assertEqual(analysis_box.winfo_ismapped(), 0)
 
     def test_object_gallery_shows_icon_and_name_in_one_fast_list(self):
         # Given: enough items to fill more than one dense list row.
@@ -174,7 +184,7 @@ class TestEditorStyleLayout(GuiTestCase):
         # Then: every object row in the active category is available without loading more.
         self.assertEqual(len(rows), 100)
         self.assertEqual(self.app.object_cards.item(rows[99], "text"), "物品99")
-        self.assertLessEqual(len(self.app.col_trees["物品"].get_children()), 32)
+        self.assertEqual(len(self.app.col_trees["物品"].get_children()), 100)
 
     def test_object_gallery_exposes_all_object_editor_categories(self):
         # Given: a map has every object-editor category the parser supports.

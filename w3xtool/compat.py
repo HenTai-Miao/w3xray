@@ -176,7 +176,7 @@ def _return_bug_items(md: MapData, target_patch: str) -> tuple[CompatItem, ...]:
     )
     if not names:
         return ()
-    shown = "、".join(names[:8])
+    shown = "、".join(names)
     suffix = "" if len(names) <= 8 else f" 等 {len(names)} 个"
     return (
         CompatItem(

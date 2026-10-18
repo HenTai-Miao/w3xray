@@ -89,7 +89,7 @@ def require_live_result_evidence(
                 output,
             ),
         )
-    except Exception as exc:  # noqa: BROAD_EXCEPT_OK - result evidence boundary
+    except Exception as exc:  # BROAD_EXCEPT_OK - result evidence boundary
         context_error = PublicationCommitContextError(
             "publication result revalidation raised an ordinary exception; "
             "NEEDS_CONTEXT",

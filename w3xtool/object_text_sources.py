@@ -29,7 +29,6 @@ if TYPE_CHECKING:
     from .map_data import MapData
 
 
-_MAX_TEXT_OBJECT_BYTES: Final = 4 * 1024 * 1024
 _ANONYMOUS_HEAD_BYTES: Final = 8 * 1024
 
 
@@ -99,8 +98,6 @@ def _anonymous_records(
 ) -> tuple[TextObjectRecord, ...]:
     records: list[TextObjectRecord] = []
     for index, block in archive.iter_blocks():
-        if block.file_size > _MAX_TEXT_OBJECT_BYTES:
-            continue
         source_name = f"anonymous:block:{index:06d}"
         if md is not None:
             head_result = read_component(
@@ -188,8 +185,6 @@ def _records_from_payload(
     *,
     minimum_objects: int,
 ) -> tuple[TextObjectRecord, ...]:
-    if len(payload) > _MAX_TEXT_OBJECT_BYTES:
-        return ()
     objects = tuple(
         (obj_id, fields)
         for obj_id, fields in parse_text_objects(decode_warcraft_string(payload))

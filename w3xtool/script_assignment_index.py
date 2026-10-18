@@ -131,7 +131,7 @@ def _assignment_row(
         string_value=string_value,
         object_codes=object_codes,
         purpose=_purpose(variable, index, value, string_value, object_codes),
-        summary=_strip_comment(match.string).strip()[:160],
+        summary=_strip_comment(match.string).strip(),
     )
 
 

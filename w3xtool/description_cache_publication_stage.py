@@ -156,7 +156,7 @@ def create_stage_and_capture(
         )
         transferred = True
         return bound
-    except Exception as exc:  # noqa: BROAD_EXCEPT_OK - created-stage normalization
+    except Exception as exc:  # BROAD_EXCEPT_OK - created-stage normalization
         if collision_handled:
             match exc:
                 case DescriptionCachePublicationError():

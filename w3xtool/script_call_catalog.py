@@ -112,7 +112,7 @@ def _scan_script_calls(source: str, text: str) -> list[ScriptCall]:
                 mechanism=_mechanism(name, object_codes),
                 object_codes=object_codes,
                 string_args=string_args,
-                example=_line_fragment(text, match.start())[:160],
+                example=_line_fragment(text, match.start()),  # 全文
             )
         )
     return rows
@@ -140,7 +140,7 @@ def _group_calls(calls: Iterable[ScriptCall]) -> tuple[ScriptCallRow, ...]:
                 ),
                 examples=_unique_ordered(
                     item.example for item in items if item.example
-                )[:3],
+                ),  # 全部示例
             )
         )
     return tuple(rows)

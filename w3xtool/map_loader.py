@@ -173,7 +173,9 @@ def _load_map_impl(
 
     try:
         build_reference_graph(md)
-    except Exception as exc:  # noqa: BROAD_EXCEPT_OK - optional reference analysis cannot abort extraction.
+    except (
+        Exception
+    ) as exc:  # BROAD_EXCEPT_OK - optional reference analysis cannot abort extraction.
         md.ref_low_coverage = True
         record_component_failure(
             md,

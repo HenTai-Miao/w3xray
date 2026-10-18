@@ -118,7 +118,7 @@ def _parse_global(source: str, line_no: int, line: str) -> ScriptGlobal | None:
         string_value=string_value,
         object_codes=object_codes,
         purpose=_purpose(name, value_type, is_array, string_value, object_codes),
-        summary=line[:160],
+        summary=line,
     )
 
 

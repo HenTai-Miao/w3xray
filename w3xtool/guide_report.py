@@ -47,10 +47,6 @@ _WHITESPACE = re.compile(r"\s+")
 # 播报线索只保留与流程推进相关的关键词
 _CLUE_KEYWORDS = re.compile(r"波|boss|BOSS|Boss|胜利|失败|隐藏|进攻|防守|通关")
 
-_MAX_CLUES = 30
-_MAX_SHOP_ITEMS = 12
-_MAX_DROP_ENTRIES = 8
-
 
 @dataclass(frozen=True, slots=True)
 class GuideSection:
@@ -196,13 +192,11 @@ def _recipe_lines(md: MapData) -> tuple[str, ...]:
 
 
 def _shop_lines(md: MapData) -> tuple[str, ...]:
-    return _grouped_source_lines(md, ItemRelationKind.SHOP_SELL, _MAX_SHOP_ITEMS, "、")
+    return _grouped_source_lines(md, ItemRelationKind.SHOP_SELL, "、")
 
 
 def _drop_lines(md: MapData) -> tuple[str, ...]:
-    return _grouped_source_lines(
-        md, ItemRelationKind.UNIT_DROP, _MAX_DROP_ENTRIES, "；"
-    )
+    return _grouped_source_lines(md, ItemRelationKind.UNIT_DROP, "；")
 
 
 def _clue_lines(md: MapData) -> tuple[str, ...]:
@@ -223,15 +217,12 @@ def _clue_lines(md: MapData) -> tuple[str, ...]:
             continue
         seen.add(clue)
         rows.append(f"- 播报：{clue}")
-        if len(rows) >= _MAX_CLUES:
-            break
-    return tuple(rows)
+    return tuple(rows)  # 线索全量: 匹配多少收多少, 不设条数上限
 
 
 def _grouped_source_lines(
     md: MapData,
     kind: ItemRelationKind,
-    limit: int,
     separator: str,
 ) -> tuple[str, ...]:
     grouped: dict[str, list[str]] = {}
@@ -250,10 +241,7 @@ def _grouped_source_lines(
         grouped.setdefault(key, []).append(entry)
     rows: list[str] = []
     for source, items in grouped.items():
-        head = items[:limit]
-        extra = len(items) - len(head)
-        suffix = f" ……另 {extra} 项" if extra > 0 else ""
-        rows.append(f"- {source}：{separator.join(head)}{suffix}")
+        rows.append(f"- {source}：{separator.join(items)}")  # 全量, 无截断
     return tuple(rows)
 
 

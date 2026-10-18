@@ -195,7 +195,7 @@ def _extend_relation_channel(
 ) -> None:
     try:
         rows.extend(builder(md))
-    except Exception as exc:  # noqa: BLE001  # noqa: BROAD_EXCEPT_OK - independent analysis boundary.
+    except Exception as exc:  # noqa: BLE001  # BROAD_EXCEPT_OK - independent analysis boundary.
         record_component_failure(
             md,
             "item-relations",

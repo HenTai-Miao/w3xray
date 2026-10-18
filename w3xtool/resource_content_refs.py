@@ -29,7 +29,6 @@ _TEXT_BODY_EXTS: Final = {
     "ai",
     "mdl",
 }
-_MAX_SCAN_BYTES: Final = 2 * 1024 * 1024
 
 
 class _ReadableSource(Protocol):
@@ -109,7 +108,7 @@ def _scan_one_body(
     seen: set[tuple[str, str]],
 ) -> None:
     try:
-        raw = source.read_file(path)[:_MAX_SCAN_BYTES]
+        raw = source.read_file(path)  # 全文扫描; 大文件由 MPQ 解压层护栏兜底
     except KeyError, OSError, ValueError, struct.error:
         return
     text = decode_warcraft_string(raw, allow_latin1=True)

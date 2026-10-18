@@ -82,7 +82,7 @@ def _find_hint(script: str, trigger: str) -> str:
     d = _DISPLAY.search(body)
     if d:
         txt = d.group(1).strip()
-        return txt[:60]
+        return txt  # 全文
     return ""
 
 

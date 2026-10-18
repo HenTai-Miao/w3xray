@@ -16,8 +16,6 @@ from w3xtool.save_codes import extract_save_codes, extract_script_save_codes
 
 __all__ = ("run_save_code_cli",)
 
-_TEXT_LIMIT = 8 * 1024 * 1024
-
 
 def _iter_text_files(pack_dir: str) -> list[tuple[str, str]]:
     """(相对路径, 绝对路径) 列表: 脚本可读文本/*.j + Preload 相关 *.txt。"""
@@ -50,7 +48,9 @@ def run_save_code_cli(argv: tuple[str, ...]) -> int:
         prog="savecodes", description="从知识包文本载体提取存/读码模板"
     )
     parser.add_argument("pack", help="导出知识包目录 (含 脚本可读文本/)")
-    parser.add_argument("--limit", type=int, default=40, help="最多输出条数")
+    parser.add_argument(
+        "--limit", type=int, default=0, help="最多输出条数 (默认 0=全部输出)"
+    )
     args = parser.parse_args(argv)
     pack = args.pack
     if not os.path.isdir(pack):
@@ -60,8 +60,6 @@ def run_save_code_cli(argv: tuple[str, ...]) -> int:
     scanned = 0
     for rel, full in _iter_text_files(pack):
         try:
-            if os.path.getsize(full) > _TEXT_LIMIT:
-                continue
             with open(full, encoding="utf-8", errors="replace") as f:
                 text = f.read()
         except OSError:
@@ -80,8 +78,9 @@ def run_save_code_cli(argv: tuple[str, ...]) -> int:
             " (提取阶梯静态层结论)"
         )
         return 0
-    for rel, sc in found[: args.limit]:
+    shown = found[: args.limit] if args.limit else found  # 默认全量
+    for rel, sc in shown:
         print(f"{rel}:{sc.line} [{sc.source}] {sc.command} {sc.code}")
-    if len(found) > args.limit:
+    if args.limit and len(found) > args.limit:
         print(f"... 其余 {len(found) - args.limit} 条省略 (--limit 提高上限)")
     return 0

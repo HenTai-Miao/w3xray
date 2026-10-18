@@ -62,7 +62,7 @@ def retain_durably(
             installed_error,
             sync_parent,
         )
-    except Exception as retention_cause:  # noqa: BROAD_EXCEPT_OK - durable retention
+    except Exception as retention_cause:  # BROAD_EXCEPT_OK - durable retention
         match retention_cause:
             case DescriptionCachePublicationError() as publication_error:
                 retention_error = publication_error
@@ -76,7 +76,7 @@ def retain_durably(
                 assert_never(unreachable)
         try:
             sync_parent(parent_descriptor)
-        except Exception as sync_error:  # noqa: BROAD_EXCEPT_OK - durability sync
+        except Exception as sync_error:  # BROAD_EXCEPT_OK - durability sync
             source_evidence = capture_named_transient(
                 parent_descriptor,
                 parent,
@@ -116,7 +116,7 @@ def retain_durably(
         )
     try:
         sync_parent(parent_descriptor)
-    except Exception as sync_error:  # noqa: BROAD_EXCEPT_OK - durability sync
+    except Exception as sync_error:  # BROAD_EXCEPT_OK - durability sync
         source_evidence = capture_named_transient(
             parent_descriptor,
             parent,
@@ -164,7 +164,7 @@ def retain_durably(
             parent_identity,
             (retained,),
         )
-    except Exception as evidence_cause:  # noqa: BROAD_EXCEPT_OK - evidence boundary
+    except Exception as evidence_cause:  # BROAD_EXCEPT_OK - evidence boundary
         match evidence_cause:
             case DescriptionCachePublicationError() as publication_error:
                 evidence_error = publication_error
@@ -196,7 +196,7 @@ def _synchronize_installed_error(
 ) -> Never:
     try:
         sync_parent(parent_descriptor)
-    except Exception as sync_error:  # noqa: BROAD_EXCEPT_OK - installed sync
+    except Exception as sync_error:  # BROAD_EXCEPT_OK - installed sync
         context_error = PublicationCommitContextError(
             "installed retained target could not be durably synchronized; "
             "NEEDS_CONTEXT",

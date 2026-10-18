@@ -159,17 +159,18 @@ def test_find_auto_resource_rows_lumber_may_be_none():
     assert rows[0].lumber is None  # noqa: PT018 (显式断言 None 语义)
 
 
-def test_rank_auto_rows_orders_and_caps():
-    # 真机复现: 动态图 auto 能抓到数千锚点; 木/人口齐全的玩家行排前, 输出封顶。
+def test_rank_auto_rows_orders_and_returns_all():
+    # 真机复现: 动态图 auto 能抓到数千锚点; 木/人口齐全的玩家行排前, 全量输出。
     rows = [
         PlayerResources(0x300, 100.0, None, None),
         PlayerResources(0x100, 100.0, 50.0, 5),
         PlayerResources(0x200, 100.0, None, 5),
         PlayerResources(0x110, 100.0, 60.0, None),
     ] + [PlayerResources(0x1000 + i * 4, 100.0, None, None) for i in range(40)]
-    ranked, total = rank_auto_rows(rows, cap=3)
+    ranked, total = rank_auto_rows(rows)
     assert total == 44
-    assert [hex(r.addr) for r in ranked] == [hex(0x100), hex(0x110), hex(0x200)]
+    assert len(ranked) == 44
+    assert [hex(r.addr) for r in ranked[:3]] == [hex(0x100), hex(0x110), hex(0x200)]
 
 
 def test_read_player_resources_chain_synthetic():

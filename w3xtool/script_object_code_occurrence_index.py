@@ -292,4 +292,4 @@ def _object_source(obj: GameObject | None) -> str:
 def _summary(lines: list[str], line_no: int) -> str:
     if line_no > len(lines):
         return ""
-    return _strip_comment(lines[line_no - 1]).strip()[:160]
+    return _strip_comment(lines[line_no - 1]).strip()

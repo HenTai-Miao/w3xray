@@ -6,7 +6,6 @@ from __future__ import annotations
 import struct
 
 from w3xtool import live_cli
-from w3xtool.live_handle_chain import OWNED_UNITS_PARTIAL_VIEW_NOTE
 from w3xtool.live_handle_chain import (
     UNIT_OWNER_OFF,
     UNIT_POS_X_OFF,
@@ -14,7 +13,6 @@ from w3xtool.live_handle_chain import (
     OwnedUnit,
     read_unit_owner,
     read_unit_pos,
-    salvage_big_owner_units,
     summarize_owners,
 )
 from w3xtool.live_handle_chain import (
@@ -23,12 +21,6 @@ from w3xtool.live_handle_chain import (
     owner_slot_codes,
     parse_nick_overrides,
 )
-
-
-def test_owned_units_partial_view_note_required_phrases():
-    # 闸门5护栏: owned_units 输出必须永久携带部分视图警告 (防止误当全量清单下否定结论)
-    for phrase in ("部分视图", "否定结论", "owner_counts"):
-        assert phrase in OWNED_UNITS_PARTIAL_VIEW_NOTE
 
 
 def test_parse_nick_overrides_maps_and_ignores_garbage():
@@ -96,53 +88,18 @@ def test_read_unit_owner_missing_region():
     assert read_unit_owner(reader, 0x10000000) == -1
 
 
-def test_summarize_owners_lists_small_owners_only():
-    units = []
-    for _ in range(20):
-        units.append(OwnedUnit(1, "YTlb", 8, 1.0, 2.0))
-    units.append(OwnedUnit(2, "h00D", 3, 100.0, 200.0))
-    units.append(OwnedUnit(3, "h01W", 5, -50.0, 700.0))
-    counts, listed = summarize_owners(units)
-    assert counts == {8: 20, 3: 1, 5: 1}
-    assert [(u.owner, u.code) for u in listed] == [(3, "h00D"), (5, "h01W")]
-
-
-def test_summarize_owners_respects_cap():
-    units = [OwnedUnit(i, "h01U", 2, float(i), 0.0) for i in range(9)]
-    counts, listed = summarize_owners(units, list_cap=8)
-    assert counts == {2: 9}
-    assert listed == []
-
-
-def test_salvage_big_owner_units_rescues_heroes_from_huge_slots():
-    # 大槽位 (生成物件挂玩家号 0) -> summarize_owners 清空;
-    # 该槽位里的带物品英雄应被打捞, 小槽位条目不重复补录。
+def test_summarize_owners_lists_every_unit_sorted_by_slot():
+    # 满量纪律: 大槽位 (生成物件挂玩家号 0) 不再被上限过滤整槽隐掉,
+    # 全部单位按 (槽位, 四码, 坐标) 排序逐个列出。
     units = [OwnedUnit(i, "YTlb", 0, 1.0, 2.0) for i in range(20)]
     hero = OwnedUnit(0x77, "H00O", 0, -16404.0, -4152.0)
     units.append(hero)
-    mate = OwnedUnit(0x98, "h00E", 3, 8.0, 9.0)  # 小槽位 (玩家号3) 本来就在 listed
-    units.append(mate)
+    units.append(OwnedUnit(0x98, "h00E", 3, 8.0, 9.0))
     counts, listed = summarize_owners(units)
-    assert [(u.owner, u.code) for u in listed] == [(3, "h00E")]
-    item_entries = [
-        hero,
-        OwnedUnit(0x99, "H01L", 3, 10.0, 20.0),  # 小槽位 (玩家号3) 不打捞
-    ]
-    rescued = salvage_big_owner_units(counts, listed, item_entries)
-    assert [(u.addr, u.code, u.owner) for u in rescued] == [(0x77, "H00O", 0)]
-
-
-def test_salvage_big_owner_units_dedups_by_addr():
-    units = [OwnedUnit(0x77, "H00O", 0, -16404.0, -4152.0)]
-    units += [OwnedUnit(i, "YTlb", 0, 1.0, 2.0) for i in range(1, 21)]
-    counts, listed = summarize_owners(units)
-    assert listed == []  # 玩家号 0 是大槽位, 唯一英雄也被过滤
-    rescued = salvage_big_owner_units(counts, listed, [units[0]])
-    assert [u.addr for u in rescued] == [0x77]
-    # 同一单位出现在 listed 里 (小槽位场景) 时不重复
-    small_units = [OwnedUnit(0x77, "H00O", 3, 5.0, 6.0)]
-    counts2, listed2 = summarize_owners(small_units)
-    assert salvage_big_owner_units(counts2, listed2, small_units) == []
+    assert counts == {0: 21, 3: 1}
+    assert len(listed) == len(units)
+    assert all(listed[i].owner <= listed[i + 1].owner for i in range(len(listed) - 1))
+    assert (0x77, "H00O", 0) in [(u.addr, u.code, u.owner) for u in listed]
 
 
 def test_live_cli_parses_players_flag():

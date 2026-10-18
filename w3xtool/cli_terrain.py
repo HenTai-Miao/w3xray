@@ -58,7 +58,7 @@ def iter_terrain_summary_lines(md: "MapData") -> Iterator[str]:
             f"    场景边界: 越界单位 {report.unit_issue_count}/{report.unit_count}"
             f"  越界装饰物 {report.doodad_issue_count}/{report.doodad_count}"
         )
-        for issue in report.issues[:5]:
+        for issue in report.issues:
             yield f"    - 越界{issue.kind}: {issue.type_id} ({_fmt(issue.x)}, {_fmt(issue.y)})"
         if len(report.issues) > 5:
             yield f"    …… 另有 {len(report.issues) - 5} 个越界放置物"
@@ -89,12 +89,12 @@ def _format_index_counts(
     counts: tuple[tuple[int, int], ...], labels: tuple[str, ...]
 ) -> str:
     return "、".join(
-        f"{_label_for_index(index, labels)}:{count}" for index, count in counts[:8]
+        f"{_label_for_index(index, labels)}:{count}" for index, count in counts
     )
 
 
 def _format_plain_counts(counts: tuple[tuple[int, int], ...]) -> str:
-    return "、".join(f"{index}:{count}" for index, count in counts[:8])
+    return "、".join(f"{index}:{count}" for index, count in counts)
 
 
 def _label_for_index(index: int, labels: tuple[str, ...]) -> str:

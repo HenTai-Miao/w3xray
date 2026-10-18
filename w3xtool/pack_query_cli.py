@@ -2,7 +2,7 @@
 """pack-query 子命令：一次进程内查询地图知识包（物品/配方/坐标/掉落/任务/全文）。
 
 用法：
-    uv run main.py pack-query <资料包目录> <子命令> <查询词> [--limit N]
+    uv run main.py pack-query <资料包目录> <子命令> <查询词> [--limit N] (默认全量输出; --limit N 为显式缩减)
 
 子命令：
     item   <名字|四码>   物品属性（金币价; 装备效果取自携带技能属性字段; 真实提示文本优先于继承模板描述）
@@ -284,6 +284,11 @@ def load_tech_fields(pack_dir: Path) -> dict[str, dict[str, str]]:
     return out
 
 
+def _bounded(seq, limit: int):
+    """limit=0(默认)不限量; --limit N 为显式缩减。"""
+    return seq[:limit] if limit else seq
+
+
 def _query_tech(pack: Path, query: str, limit: int) -> list[str]:
     techs = load_techs(pack)
     fields = load_tech_fields(pack)
@@ -361,14 +366,14 @@ def _query_tech(pack: Path, query: str, limit: int) -> list[str]:
             for lv in (1, levels):
                 t = f.get("gub1:" + str(lv))
                 if t:
-                    lines.append("  效果(" + str(lv) + "级): " + t[:120])
+                    lines.append("  效果(" + str(lv) + "级): " + t)  # 全文, 不截断
         reqs = sorted((k, v) for k, v in f.items() if k.startswith("greq:"))
         if reqs:
             lines.append(
                 "  前置: " + ", ".join(k.split(":", 1)[1] + "级←" + v for k, v in reqs)
             )
         lines.append("")
-        if len(lines) >= limit * 8:
+        if limit and len(lines) >= limit * 8:
             break
     return lines or ["未找到科技: " + query]
 
@@ -455,7 +460,7 @@ class PackQueryCliOptions:
     pack_dir: str
     command: str
     query: str
-    limit: int = 20
+    limit: int = 0  # 0 = 不限量 (满量输出); --limit N 显式缩减
 
 
 @dataclass(frozen=True, slots=True)
@@ -469,9 +474,11 @@ class PackQueryCliOptionError(ValueError):
 
 
 def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
-    """解析 pack-query 后的参数：<资料包目录> <子命令> <查询词> [--limit N]。"""
+    """解析 pack-query 后的参数：<资料包目录> <子命令> <查询词> [--limit N]。
+
+    默认 limit=0 全量输出——不敲 --limit 就拿到全部匹配; --limit N 是显式缩减。"""
     rest = list(argv)
-    limit = 20
+    limit = 0
     if "--limit" in rest:
         i = rest.index("--limit")
         if i + 1 >= len(rest):
@@ -480,8 +487,8 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
             limit = int(rest[i + 1])
         except ValueError as exc:
             raise PackQueryCliOptionError("--limit 需要一个数字参数") from exc
-        if limit < 1:
-            raise PackQueryCliOptionError("--limit 必须为正整数")
+        if limit < 0:
+            raise PackQueryCliOptionError("--limit 必须为非负整数 (0=不限量)")
         rest = rest[:i] + rest[i + 2 :]
     command = rest[1] if len(rest) > 1 else ""
     if command == "near" and len(rest) in (4, 5):
@@ -531,8 +538,8 @@ def _query_item(pack: Path, query: str, limit: int) -> list[str]:
             if code in equipped_effects:
                 lines.append("  装备效果: " + ", ".join(equipped_effects[code]))
             # 真实提示文本（地图自定义 ides/utub）优先；继承模板描述仅作兜底。
-            lines.append("  " + (tooltips.get(code, "") or desc)[:240])
-            if len(lines) >= limit * 3:
+            lines.append("  " + (tooltips.get(code, "") or desc))  # ides/utub 全文
+            if limit and len(lines) >= limit * 3:
                 break
     return lines or ["未找到物品: " + query]
 
@@ -562,7 +569,7 @@ def _query_price(pack: Path, query: str, limit: int) -> list[str]:
                 + base
                 + ")"
             )
-            if len(lines) >= limit:
+            if limit and len(lines) >= limit:
                 break
     if not lines:
         price = _base_prices().get(query.lower())
@@ -589,7 +596,7 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
                 "  " + name + "  " + (price or "?") + "金  (" + tag + " " + c + ")"
             )
         lines.append("")
-        if len(lines) >= limit * 12:
+        if limit and len(lines) >= limit * 12:
             break
     return lines or ["未找到商店: " + query]
 
@@ -612,7 +619,7 @@ def _query_recipe(pack: Path, query: str, limit: int) -> list[str]:
                 n + "x" + str(k) for (_c, k), n in zip(pairs, mat_names, strict=False)
             )
             hits.append("[" + prod + "] " + prod_name + "  <-  " + need)
-            if len(hits) >= limit:
+            if limit and len(hits) >= limit:
                 break
     return hits or ["未找到相关配方: " + query]
 
@@ -639,7 +646,7 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
                 + f"{y:.0f}"
                 + ")"
             )
-            if len(lines) >= limit:
+            if limit and len(lines) >= limit:
                 break
     if not lines:
         hints = _tooltip_source_hints(pack, _hint_targets(pack, query), limit)
@@ -649,7 +656,7 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
                 + ("; 脚本加密" if _script_encrypted(pack) else "")
                 + "; 未脚本验证):"
             )
-            return [head] + ["  " + h for h in hints[:limit]]
+            return [head] + ["  " + h for h in _bounded(hints, limit)]
     return lines or ["未找到放置记录: " + query]
 
 
@@ -690,7 +697,7 @@ def _script_pool_drops(pack: Path, code: str) -> list[str]:
         act = act_by_var.get(var or "")
         if not act:
             continue
-        action_body = _fn_body(script, act, 4000)
+        action_body = _fn_body(script, act)
         placed = _PLACE_POOL_RE.findall(action_body)
         if not placed:
             continue
@@ -700,7 +707,7 @@ def _script_pool_drops(pack: Path, code: str) -> list[str]:
             chance = f"{denom[0]}/{denom[0]}=必掉"
         label = units.get(code, units.get(code.upper(), code))
         out.append(f"{label} [{code}]  ⚠ 脚本死亡奖池 (关系表无此掉落记录):")
-        for pvar, pidx in placed[:2]:
+        for pvar, pidx in placed:  # 全部奖池
             entries = pools.get((pvar, pidx), [])
             total = sum(w for _, w in entries) or 1.0
             out.append(
@@ -741,7 +748,7 @@ def _script_pool_drops(pack: Path, code: str) -> list[str]:
                             lst = acq_by_item.setdefault(r[ci], [])
                             if tag not in lst:
                                 lst.append(tag)
-            for icode, w in entries[:12]:
+            for icode, w in entries:
                 iname, idesc = items.get(icode, (icode, ""))
                 qm = re.search(r"品质[：:]\s*([\w\u4e00-\u9fff]+)", idesc)
                 tag = "·" + qm.group(1) if qm else ""
@@ -756,14 +763,12 @@ def _script_pool_drops(pack: Path, code: str) -> list[str]:
                     elif len(shelves) == 1:
                         price_disp = "在售" + p + "金@" + shelves[0]
                     else:
-                        shown = "/".join(shelves[:3])
-                        extra = f"等{len(shelves)}家" if len(shelves) > 3 else ""
-                        price_disp = p + "金@" + shown + extra
+                        price_disp = p + "金@" + "/".join(shelves)  # 全部货架
                 else:
                     price_disp = "非卖品"
                 acq = acq_by_item.get(icode, [])
                 if acq:
-                    price_disp += "·" + "/".join(acq[:2])
+                    price_disp += "·" + "/".join(acq)  # 全部获取途径
                 if name_counts.get(iname, 1) > 1:
                     price_disp += "·同名异码价随码"
                 out.append(
@@ -806,7 +811,7 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
             continue
         kinds.add(r[2])
         lines.append(name + " [" + code + "]  " + r[2] + " <- " + r[5] + " " + r[6])
-        if len(lines) >= limit:
+        if limit and len(lines) >= limit:
             break
     if not lines:
         cands = (
@@ -829,7 +834,7 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
                 + ("; 脚本加密" if _script_encrypted(pack) else "")
                 + "; 未脚本验证——合成/掉落触发以实际游戏为准):"
             )
-            return [head] + ["  " + h for h in hints[:limit]]
+            return [head] + ["  " + h for h in _bounded(hints, limit)]
         return ["未找到获取途径: " + query]
     if not any("掉落" in k for k in kinds):
         lines.append(
@@ -848,12 +853,8 @@ def _query_quest(pack: Path, query: str, limit: int) -> list[str]:
             if query in line and (
                 "CreateQuestBJ" in line or "DisplayTimedTextToForce" in line
             ):
-                tail = line.rstrip("\n")
-                s = tail.find("\t", tail.find(query))
-                lines.append(
-                    _clean(tail[s + 1 : s + 260]) if s > 0 else _clean(tail[:260])
-                )
-                if len(lines) >= limit:
+                lines.append(_clean(line.rstrip("\n")))  # 整行, 不开窗
+                if limit and len(lines) >= limit:
                     break
     return lines or ["未找到任务文本: " + query]
 
@@ -864,11 +865,11 @@ def _query_text(pack: Path, query: str, limit: int) -> list[str]:
         try:
             for line in path.open(encoding="utf-8"):
                 if query in line:
-                    lines.append(path.name + ": " + _clean(line.rstrip("\n"))[:220])
+                    lines.append(path.name + ": " + _clean(line.rstrip("\n")))  # 整行
                     break
         except OSError:
             continue
-        if len(lines) >= limit:
+        if limit and len(lines) >= limit:
             break
     return lines or ["未找到文本: " + query]
 
@@ -927,20 +928,20 @@ def _tooltip_source_hints(pack_dir: Path, targets: set[str], limit: int) -> list
             continue
         if next((t for t in sorted(targets) if t in desc), None) is None:
             continue
-        excerpt = desc if len(desc) <= 150 else desc[:147] + "..."
+        excerpt = desc  # 说明全文
         out.append(f"{name} [{code}] 说明: {excerpt}")
-        if len(out) >= limit:
+        if limit and len(out) >= limit:
             break
     return out
 
 
-def _fn_body(script: str, fn: str, cap: int = 900) -> str:
+def _fn_body(script: str, fn: str) -> str:
     i = script.find("function " + fn + " takes")
     if i < 0:
         return "(未找到函数体)"
     j = script.find("endfunction", i)
-    body = script[i : (j + len("endfunction")) if j >= 0 else i + cap]
-    return " ".join(body.split())[:cap]
+    body = script[i : (j + len("endfunction")) if j >= 0 else len(script)]
+    return " ".join(body.split())  # 满量: 函数体全文, 不设字符上限
 
 
 _RECT_DEF_RE = re.compile(
@@ -1009,7 +1010,7 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
                     sum(p[1] for p in t[2]) / len(t[2]),
                 ),
             )
-            for code, name, xs in hits[: max(4, limit)]:
+            for code, name, xs in _bounded(hits, limit):
                 cx = sum(p[0] for p in xs) / len(xs)
                 cy = sum(p[1] for p in xs) / len(xs)
                 lines.append(
@@ -1033,11 +1034,11 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
                         (dist(gcx, gcy), f"{name} [{code}]", len(group), gcx, gcy)
                     )
             clusters.sort()
-            for d, label, n, gcx, gcy in clusters[: max(4, limit)]:
+            for d, label, n, gcx, gcy in _bounded(clusters, limit):
                 lines.append(f"  {kind}群: {label} ×{n} @({gcx:g},{gcy:g}) 距{d:.0f}")
         if not entries and nearest:
             nearest.sort()
-            for d, label in nearest[:3]:
+            for d, label in nearest:  # 半径外最近全部列出
                 lines.append(f"  (半径外最近{kind}: {label} 距{d:.0f})")
 
     script = load_script(pack)
@@ -1048,7 +1049,7 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
             if min(x1, x2) <= px <= max(x1, x2) and min(y1, y2) <= py <= max(y1, y2):
                 in_rect.append(m.group(1))
         if in_rect:
-            lines.append("  所在矩形: " + ", ".join(in_rect[:6]))
+            lines.append("  所在矩形: " + ", ".join(in_rect))  # 全部
         spawned = []
         for m in _CREATE_UNIT_RE.finditer(script):
             x, y = _num(m.group(2)), _num(m.group(3))
@@ -1056,7 +1057,7 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
             if d <= radius:
                 spawned.append((d, m.group(1), x, y))
         spawned.sort()
-        for d, code, x, y in spawned[: max(4, limit)]:
+        for d, code, x, y in _bounded(spawned, limit):
             name = load_units(pack).get(code, code)
             lines.append(f"  脚本单位: {name} [{code}] @({x:g},{y:g}) 距{d:.0f}")
     return lines
@@ -1085,14 +1086,14 @@ def _query_cmd(pack: Path, query: str, limit: int) -> list[str]:
     conds = dict(_ADD_COND_RE.findall(script))
     lines: list[str] = []
     for var, (cmd, exact, count) in sorted(regs.items(), key=lambda kv: -kv[1][2]):
-        if len(lines) >= limit * 6:
+        if limit and len(lines) >= limit * 6:
             break
         lines.append(
             f'指令 "{cmd}" ({"精确" if exact == "true" else "前缀"}, 注册{count}个玩家位) -> {var}'
         )
         cond = conds.get(var)
         if cond:
-            lines.append("  条件: " + _fn_body(script, cond, 320))
+            lines.append("  条件: " + _fn_body(script, cond))
         act = actions.get(var)
         lines.append(
             "  动作: " + _fn_body(script, act)
@@ -1149,7 +1150,7 @@ def _query_refs(pack: Path, query: str, limit: int) -> list[str]:
         if not (give or consume or other):
             label = f"[{code}] {name}"
             obj_kind = kind
-        entry = (r[1], fn, mech + " " + digest[:70])
+        entry = (r[1], fn, mech + " " + digest)  # 引用摘录全文
         bucket = _ref_kind(mech, digest)
         (
             give if bucket == "give" else consume if bucket == "consume" else other
@@ -1158,12 +1159,12 @@ def _query_refs(pack: Path, query: str, limit: int) -> list[str]:
         return ["未找到引用: " + query]
     lines = [f"{label}  ({obj_kind})  共{len(give) + len(consume) + len(other)}处引用"]
     lines.append(f"  给予/创建: {len(give)} 处")
-    lines.extend(f"    行{e[0]} {e[1]}  {e[2]}" for e in give[:limit])
+    lines.extend(f"    行{e[0]} {e[1]}  {e[2]}" for e in _bounded(give, limit))
     lines.append(f"  作为材料/触发媒介(被检测或移除): {len(consume)} 处")
-    lines.extend(f"    行{e[0]} {e[1]}  {e[2]}" for e in consume[:limit])
+    lines.extend(f"    行{e[0]} {e[1]}  {e[2]}" for e in _bounded(consume, limit))
     if other:
         lines.append(f"  其他引用: {len(other)} 处")
-        lines.extend(f"    行{e[0]} {e[1]}  {e[2]}" for e in other[: min(limit, 5)])
+        lines.extend(f"    行{e[0]} {e[1]}  {e[2]}" for e in _bounded(other, limit))
     if obj_kind == "物品" and give and not consume:
         if _script_encrypted(pack):
             lines.append(

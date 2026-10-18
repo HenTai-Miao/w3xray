@@ -105,7 +105,7 @@ def _arguments_for_script(
                 mechanism,
                 raw_args,
                 code_args,
-                _line_fragment(text, match.start())[:160],
+                _line_fragment(text, match.start()),
             )
         )
     return rows

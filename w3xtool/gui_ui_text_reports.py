@@ -6,8 +6,6 @@ from .api import MapData
 from .gui_reports import GuiReportBlock
 from .ui_texts import build_ui_text_report
 
-_MAX_SITES_SHOWN = 8
-
 
 def build_ui_text_block(md: MapData) -> GuiReportBlock:
     """Build the UI text card for the analysis report."""
@@ -41,8 +39,5 @@ def _grouped_reference_lines(report) -> tuple[str, ...]:
             lines.append(f"{trigstr} -> {text or '(未解析)'}")
             continue
         lines.append(f"{trigstr} -> {text or '(未解析)'}（×{len(sites)}）")
-        shown = "、".join(sites[:_MAX_SITES_SHOWN])
-        if len(sites) > _MAX_SITES_SHOWN:
-            shown += f" 等{len(sites)}处"
-        lines.append(f"  引用位置：{shown}")
+        lines.append(f"  引用位置：{'、'.join(sites)}")  # 全部引用位置
     return tuple(lines)

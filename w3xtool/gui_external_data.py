@@ -136,7 +136,7 @@ class ExternalDataToolsMixin:
                     ticket,
                     lambda: self._open_dir(out, count, "存档分析文件"),
                 )
-            except Exception as exc:  # noqa: BLE001  # noqa: BROAD_EXCEPT_OK - GUI worker boundary reports failures.
+            except Exception as exc:  # noqa: BLE001  # BROAD_EXCEPT_OK - GUI worker boundary reports failures.
                 message = str(exc)
                 _ = self._post_gui_worker(
                     ticket,

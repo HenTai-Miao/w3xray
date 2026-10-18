@@ -88,20 +88,21 @@ UNIT_FIELD_LAYOUT: "dict[str, tuple[int, str]]" = {
     "inventory": (0x1F8, "背包列表指针 (Still4 表 ItemsListOffset 同值)"),
 }
 
-# 闸门5护栏: owned_units 输出必须永久携带的部分视图警告文本
-# (live_inventory 组装报告时无条件追加; 防止误当全量清单下"玩家没有X"类否定结论)
-OWNED_UNITS_PARTIAL_VIEW_NOTE = (
-    "owned_units 为部分视图: 仅含带物品/打捞单位, 不含无物品单位 — "
-    "禁止据此下『玩家没有某单位/某建筑』类否定结论, 全量计数见 owner_counts"
-)
-# 坐标合理上限 (超出视为解析失败而不是游戏坐标)。
-_POS_SPAN_LIMIT = 200000.0
+# owned_units 现为全量清单 (不再有部分视图告警的必要)。
+# 坐标合理上限由引擎几何量出, 不是拍脑袋数: 经典版引擎最大地图 480x480 格、
+# 每格 128 单位 -> 任何真实游戏坐标 |x|,|y| <= 61440; x2 覆盖出界停靠点与
+# 镜头边距余量。超限视为解析失败 (垃圾包装指针); inf 同样被此校验拦下。
+_ENGINE_MAX_TILES = 480
+_TILE_UNITS = 128
+_POS_SPAN_LIMIT = float(_ENGINE_MAX_TILES * _TILE_UNITS * 2)
+
 
 _FOURCC_RE = re.compile(r"[A-Za-z][0-9A-Za-z]{3}")
 
-# 可句柄化的游戏对象都落在引擎堆区间; 出界即视为解析失败。
-_HEAP_LO = 0x08000000
-_HEAP_HI = 0x60000000
+# 指针有效性: 整个用户态都是合法窗口, 拒绝的只有 NULL 和内核态。
+# (旧写法把上限拍在 0x60000000, LAA/超大地图的高址对象被当垃圾整批丢弃。)
+_HEAP_LO = 0x00010000
+_HEAP_HI = 0x7FFE0000
 
 
 @dataclass(frozen=True, slots=True)
@@ -306,14 +307,21 @@ def verify_profile(
     dll_base: int,
     profile: LiveBuildProfile,
     dll_fingerprint: "ProfileFingerprint | None" = None,
-) -> "tuple[bool, list[str]]":
+) -> "tuple[bool, list[str], list[str]]":
     """档案运行时自验证 (学自 trainer: 加载即核对, 不做静默错配)。
 
     checks: 逐条在内存 Game.dll 的 RVA 读期望字节比对; 无 checks 的
     档案视为「无校验可做, 不拦截」。dll_fingerprint (来自磁盘 PE 头)
-    提供时先比指纹三要素。返回 (是否通过, 失败描述列表)。
+    提供时先比指纹三要素。返回 (是否通过, 失败描述列表, 运行时补丁差异列表)。
+
+    归因规则: 磁盘 PE 三要素与档案一致 = 同一个文件, 内存字节不同只可能
+    是平台加载后打的运行时补丁 (KK 类平台实证, 每局补的字节还可能不同),
+    这种差异进 patches 交调用方写进 notes 作证据, 不拦截; 指纹不符 = 版本
+    不明, text 差异硬拦截。
     """
     fails: list[str] = []
+    patches: list[str] = []
+    fp_matched = False
     if dll_fingerprint is not None and profile.fingerprint is not None:
         a, b = dll_fingerprint, profile.fingerprint
         if (
@@ -332,20 +340,23 @@ def verify_profile(
                     a.image_size,
                 )
             )
+        else:
+            fp_matched = True
     for c in profile.checks:
         got = reader.read(dll_base + c.rva, len(c.expect))
         if got != c.expect:
-            fails.append(
-                "[%s] %s@0x%X: 期望 %s, 实得 %s"
-                % (
-                    c.domain,
-                    c.label or "check",
-                    c.rva,
-                    c.expect.hex(),
-                    got.hex() if got else "不可读",
-                )
+            entry = "[%s] %s@0x%X: 期望 %s, 实得 %s" % (
+                c.domain,
+                c.label or "check",
+                c.rva,
+                c.expect.hex(),
+                got.hex() if got else "不可读",
             )
-    return (not fails), fails
+            if fp_matched:
+                patches.append(entry)
+            else:
+                fails.append(entry)
+    return (not fails), fails, patches
 
 
 def resolve_profile(
@@ -668,8 +679,11 @@ class HandleSystem:
         obj = r.u32(wrapper + o.wrapper_obj_off)
         return obj if _HEAP_LO <= obj < _HEAP_HI else None
 
-    def live_objects(self, limit: int = 400_000):
-        """枚举句柄表中所有存活对象地址 (单位/物品/UI 混在一起)。"""
+    def live_objects(self):
+        """枚举句柄表中所有存活对象地址 (单位/物品/UI 混在一起)。
+
+        无上限: 句柄表自身的 bound 就是完备边界, 走满为止。
+        """
         o = self._o
         r = self._r
         found: list[int] = []
@@ -677,8 +691,6 @@ class HandleSystem:
             if not table.base:
                 continue
             for index in range(table.bound):
-                if len(found) >= limit:
-                    return found
                 wrapper = r.u32(table.base + index * 8 + 4)
                 if not (_HEAP_LO <= wrapper < _HEAP_HI):
                     continue
@@ -737,9 +749,8 @@ def walk_item_units(
     reader: MemoryReader,
     system: HandleSystem,
     o: LiveHandleOffsets,
-    max_units: int = 24,
 ) -> list[UnitInventory]:
-    """全对象扫描, 返回带有效物品四码的单位 (英雄/宝宝/商店怪)。"""
+    """全对象扫描, 返回带有效物品四码的单位 (英雄/宝宝/商店怪)。无上限。"""
     units: list[UnitInventory] = []
     for obj in system.live_objects():
         inv = UnitInventory(obj, "", ())
@@ -753,10 +764,8 @@ def walk_item_units(
         valid = [i for i in inv.items if is_fourcc(i.code)]
         if valid:
             units.append(UnitInventory(obj, code, tuple(valid)))
-        if len(units) >= max_units * 8:
-            break
     units.sort(key=lambda u: -len(u.items))
-    return units[:max_units]
+    return units
 
 
 @dataclass(frozen=True, slots=True)
@@ -782,6 +791,10 @@ def read_unit_pos(reader: MemoryReader, addr: int) -> tuple[float, float]:
     if not raw:
         return (0.0, 0.0)
     x, y = struct.unpack("<ff", raw)
+    # NaN 与任何比较都是 False, 会绕过跨度校验一路漏到排序的 round() 才炸
+    # (堆窗口开全后垃圾包装指针增多, 实证); inf 则被跨度校验正常拦下。
+    if math.isnan(x) or math.isnan(y):
+        return (0.0, 0.0)
     if abs(x) > _POS_SPAN_LIMIT or abs(y) > _POS_SPAN_LIMIT:
         return (0.0, 0.0)
     return (x, y)
@@ -791,9 +804,8 @@ def walk_owned_units(
     reader: MemoryReader,
     system: HandleSystem,
     o: LiveHandleOffsets,
-    max_units: int = 8000,
 ) -> list[OwnedUnit]:
-    """全对象扫描, 返回所有带合法四码且所有者可读的单位 (含地图物件)。"""
+    """全对象扫描, 返回所有带合法四码且所有者可读的单位 (含地图物件)。无上限。"""
     units: list[OwnedUnit] = []
     for obj in system.live_objects():
         code = fourcc(reader.u32(obj + o.unit_type_off))
@@ -804,49 +816,20 @@ def walk_owned_units(
             continue
         x, y = read_unit_pos(reader, obj)
         units.append(OwnedUnit(obj, code, owner, x, y))
-        if len(units) >= max_units:
-            break
     return units
 
 
-def summarize_owners(
-    units: list[OwnedUnit], list_cap: int = 8
-) -> tuple[dict[int, int], list[OwnedUnit]]:
-    """按所有者汇总: (每个玩家号的数量, 数量<=list_cap 的玩家号下全部单位)。
+def summarize_owners(units: list[OwnedUnit]) -> tuple[dict[int, int], list[OwnedUnit]]:
+    """按所有者汇总: (每个玩家号的数量, 全部单位按槽位排序)。
 
-    地图生成的物件通常集中在少数玩家号 (如中立 8/地形 0) 且数量巨大;
-    真人玩家的单位挂在各自玩家号下数量很少, 低于 list_cap 即逐个列出。
+    不做大小槽位分类: 旧 list_cap=8 会把挂了上千生成物件的真人槽位整槽
+    隐掉再靠打捞补录, 现在直接全量列出, 物件多就多打印几行。
     """
     counts: dict[int, int] = {}
     for u in units:
         counts[u.owner] = counts.get(u.owner, 0) + 1
-    small = {owner for owner, n in counts.items() if n <= list_cap}
-    listed = [u for u in units if u.owner in small]
-    listed.sort(key=lambda u: (u.owner, u.code, round(u.x), round(u.y)))
+    listed = sorted(units, key=lambda u: (u.owner, u.code, round(u.x), round(u.y)))
     return counts, listed
-
-
-def salvage_big_owner_units(
-    counts: dict[int, int],
-    listed: list[OwnedUnit],
-    item_entries: list[OwnedUnit],
-    list_cap: int = 8,
-) -> list[OwnedUnit]:
-    """从带物品单位中打捞被 list_cap 过滤掉的大玩家号条目。
-
-    单一玩家号挂上千生成物件的地图会让 summarize_owners 把该槽位清空,
-    但槽位里的真人英雄/坐骑/商店恰恰是关注对象; 带物品单位数量少且
-    几乎都是有效交互对象, 用它们补录大槽位, 按地址去重后排序返回。
-    """
-    small = {owner for owner, n in counts.items() if n <= list_cap}
-    listed_addrs = {u.addr for u in listed}
-    rescued: list[OwnedUnit] = []
-    for u in item_entries:
-        if u.owner in small or u.addr in listed_addrs:
-            continue
-        rescued.append(u)
-    rescued.sort(key=lambda u: (u.owner, u.code, round(u.x), round(u.y)))
-    return rescued
 
 
 @dataclass(frozen=True, slots=True)
@@ -1122,18 +1105,16 @@ def find_auto_resource_rows(
     return rows
 
 
-def rank_auto_rows(
-    rows: list[PlayerResources], cap: int = 24
-) -> tuple[list[PlayerResources], int]:
-    """auto 锚点可信度排序并封顶。
+def rank_auto_rows(rows: list[PlayerResources]) -> tuple[list[PlayerResources], int]:
+    """auto 锚点可信度排序, 全量输出 (满量纪律: 不设封顶)。
 
     差分定位会把所有一路上涨的 float 都当金币锚 (成长计数器/波次计时等),
     动态图一局能到数千个; 真正的玩家行木/人口同时可读, 排前面,
-    其余按地址稳定排序, 输出封顶避免万行刷屏。返回 (前 cap 个, 总数)。
+    其余按地址稳定排序。返回 (全部排序行, 总数)。
     """
     total = len(rows)
     ranked = sorted(rows, key=lambda r: (r.lumber is None, r.food is None, r.addr))
-    return ranked[:cap], total
+    return ranked, total
 
 
 def read_local_player_index(
@@ -1192,17 +1173,19 @@ def format_player_rows(
 
     槽位为 0 起始内存槽, 显示号 = 槽位+1 (大厅玩家号);
     名字优先取 nicks (--nick 指定的真实玩家名, 大厅号-1 为键),
-    否则取该槽位英雄型四码 (O/E/H/U + 数字) 中数量最多的前两个用 · 连接,
+    否则取该槽位英雄型四码 (O/E/H/U + 数字) 中英雄型四码按数量降序全部用 · 连接,
     金币为空且无英雄的空槽位跳过。名字查不到时回退四码。
     """
     lines: list[str] = []
-    for i, r in enumerate(rows[:12]):
+    for i, r in enumerate(rows):  # 全部非空槽位 (旧 [:12] 曾静默丢裁判槽)
         codes = slot_codes.get(i) or {}
         heroes = [
             c for c in codes if len(c) == 4 and c[0] in "OEHU" and c[1:].isdigit()
         ]
         heroes.sort(key=lambda c: -codes[c])
-        hero_names = [unit_names.get(c.encode("latin-1"), c) for c in heroes[:2]]
+        hero_names = [
+            unit_names.get(c.encode("latin-1"), c) for c in heroes
+        ]  # 全部英雄型四码
         label = (nicks or {}).get(i) or (
             "·".join(hero_names) if hero_names else "无英雄"
         )

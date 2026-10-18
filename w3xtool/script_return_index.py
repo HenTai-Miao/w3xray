@@ -116,7 +116,7 @@ def _returns_for_script(
                 strings=strings,
                 object_codes=object_codes,
                 purpose=_purpose(expression, calls, variables, strings, object_codes),
-                summary=raw_line.strip()[:160],
+                summary=raw_line.strip(),
             )
         )
     return rows

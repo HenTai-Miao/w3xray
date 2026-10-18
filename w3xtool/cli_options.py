@@ -93,13 +93,15 @@ def run_cli(options: CliOptions) -> int:
     )
     try:
         map_data = load_map(options.map_path, load_context=context)
-    except Exception as exc:  # noqa: BROAD_EXCEPT_OK - CLI boundary converts parser failures to code 2.
+    except (
+        Exception
+    ) as exc:  # BROAD_EXCEPT_OK - CLI boundary converts parser failures to code 2.
         diagnosis = diagnose_archive_open(options.map_path, exc)
         print(f"无法解析地图：{diagnosis.message}", file=sys.stderr)
         return 2
     try:
         summary_lines = tuple(iter_cli_summary_lines(map_data))
-    except Exception as exc:  # noqa: BROAD_EXCEPT_OK - summary boundary returns CLI code 2.
+    except Exception as exc:  # BROAD_EXCEPT_OK - summary boundary returns CLI code 2.
         error = format_user_exception(exc, paths=(options.map_path,))
         print(f"无法生成地图摘要：{error}", file=sys.stderr)
         return 2
@@ -109,7 +111,9 @@ def run_cli(options: CliOptions) -> int:
         return 0
     try:
         report = _write_cli_packs(map_data, options, external_names)
-    except Exception as exc:  # noqa: BROAD_EXCEPT_OK - export boundary reports stable CLI failure.
+    except (
+        Exception
+    ) as exc:  # BROAD_EXCEPT_OK - export boundary reports stable CLI failure.
         error = format_user_exception(
             exc,
             paths=(

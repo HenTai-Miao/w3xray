@@ -71,7 +71,7 @@ def move_object_to_recovery(
     move_error: Exception | None = None
     try:
         rename_noreplace(parent_descriptor, source.name, recovery.name)
-    except Exception as exc:  # noqa: BROAD_EXCEPT_OK - recovery move reproof
+    except Exception as exc:  # BROAD_EXCEPT_OK - recovery move reproof
         move_error = exc
     proof = _reprove_recovery_move(
         parent_descriptor,
