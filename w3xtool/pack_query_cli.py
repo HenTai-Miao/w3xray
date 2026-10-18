@@ -613,9 +613,11 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
     bases = load_item_bases(pack)
     overrides = load_item_gold_overrides(pack)
     lines: list[str] = []
+    stocked: set[str] = set()
     for shop_code, shop_name, codes in load_shop_stocks(pack):
         if not _match(query, shop_code, shop_name):
             continue
+        stocked.add(shop_code)
         lines.append("== " + shop_name + " [" + shop_code + "]")
         for c in codes:
             name = items.get(c, (c, ""))[0]
@@ -646,6 +648,26 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
         lines.append("== " + name + " [" + code + "]  (商店制造)")
         for icode, iname in entries:
             lines.append("  制造 " + iname + " [" + icode + "]")
+        lines.append("")
+    # 关系表「商店出售」行: 货架字段缺失时的另一证据源——战役容器商店
+    # (h704 银月配方商) 只有关系行, 对象字段无自定义 usei, 曾答未找到
+    sell: dict[str, tuple[str, list[str]]] = {}
+    for r in _read_rows(pack, "掉落与获取关系.tsv"):
+        if len(r) < 8 or r[2] != "商店出售":
+            continue
+        code = r[6]
+        if not code:
+            continue
+        entry = sell.setdefault(code, (_clean(r[7]) or code, []))
+        item = _clean(r[4]) + " [" + r[3] + "]"
+        if item not in entry[1]:
+            entry[1].append(item)
+    for code, (name, entries) in sell.items():
+        if code in stocked or not _match(query, code, name):
+            continue
+        lines.append("== " + name + " [" + code + "]  (关系表出售)")
+        for item in entries:
+            lines.append("  " + item)
         lines.append("")
     return lines or ["未找到商店: " + query]
 
@@ -2035,6 +2057,14 @@ def run_pack_query_cli(options: PackQueryCliOptions) -> int:
     subs = _campaign_subpacks(pack)
     if subs:
         printed = False
+        # 容器自身也有对象表 (商店/物品定义在容器级) —— 先跑容器再把逐关
+        # 结果附后; 只聚合子地图会把 shop 商人 这类容器级查询吞成「无结果」
+        base_lines = _QUERIES[options.command](pack, options.query, options.limit)
+        if base_lines and not base_lines[0].startswith("未找到"):
+            print("== 容器级 ==")
+            for line in base_lines:
+                print(line)
+            printed = True
         for sub in subs:
             lines = _QUERIES[options.command](sub, options.query, options.limit)
             if not lines or lines[0].startswith("未找到"):

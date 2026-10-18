@@ -90,7 +90,8 @@ def pack(tmp_path):
         "h2\t测试图\t合成\tI0P2\t奖池乙\t配方\t\t配方桌\t\t\t\t\t\t\t\t\tI0P1\tx2\t\tw3x\n"
         "h3\t测试图\t商店制造\tI0P1\t奖池甲\t单位\th0ZZ\t铁匠铺\t\t\t\t\t\t\t\t\t\t\t\tw3x\n"
         "h4\t测试图\t可破坏物掉落\tI0G1\t图腾石\t可破坏物\tB007\t路障\t\t\t\t\t\t\t\t\t\t\t\tw3x\n"
-        "h5\t测试图\t合成\tI0G1\t图腾石\t配方\t\t配方桌\t\t\t\t\t\t\t\t\t\tI0CK;I0A1\t凭证×1;宝物甲×2\tw3x\n",
+        "h5\t测试图\t合成\tI0G1\t图腾石\t配方\t\t配方桌\t\t\t\t\t\t\t\t\t\tI0CK;I0A1\t凭证×1;宝物甲×2\tw3x\n"
+        "h6\t测试图\t商店出售\tI0A1\t宝物甲\t单位\th0YM\t银月配方商\t\t\t\t\t\t\t\t\t\t\t\tw3x\n",
         encoding="utf-8",
     )
     (tmp_path / "对象字段.tsv").write_text(
@@ -695,6 +696,10 @@ def test_query_shop_includes_craft_shops(pack):
     text = "\n".join(_query_shop(pack, "铁匠铺", 20))
     assert "== 铁匠铺 [h0ZZ]  (商店制造)" in text
     assert "制造 奖池甲 [I0P1]" in text
+    # 关系表出售行 (货架字段缺失时的另一证据源: 容器商店只有关系行)
+    sell_text = "\n".join(_query_shop(pack, "银月配方商", 20))
+    assert "== 银月配方商 [h0YM]  (关系表出售)" in sell_text
+    assert "宝物甲 [I0A1]" in sell_text
 
 
 def test_query_recipe_from_relation_rows(pack):
