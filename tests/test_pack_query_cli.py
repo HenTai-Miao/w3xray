@@ -80,7 +80,8 @@ def pack(tmp_path):
         "序号\t类型ID\t名称\t备注\tX\tY\tZ\n"
         "1\tD0ZZ\t测试阵\t圈\t12.0\t18.0\t0\n"
         "2\tD0ZZ\t测试阵\t圈\t14.0\t22.0\t0\n"
-        "3\tD0ZZ\t测试阵\t圈\t8000.0\t8000.0\t0\n",
+        "3\tD0ZZ\t测试阵\t圈\t8000.0\t8000.0\t0\n"
+        "4\tB007\t路障\t圈\t12.0\t18.0\t0\n",
         encoding="utf-8",
     )
     (tmp_path / "掉落与获取关系.tsv").write_text(
@@ -674,6 +675,15 @@ def test_query_source_side_relation_rows(pack):
     assert "路障[B007] 可破坏物掉落 -> 图腾石 [I0G1]" in drop_text
     where_text = "\n".join(_query_where(pack, "路障", 20))
     assert "来源 路障[B007]: 可破坏物掉落 -> 图腾石 [I0G1]" in where_text
+
+
+def test_query_near_annotates_source_drops(pack):
+    # 脚底/附近的可破坏物带掉落清单 (来源侧关系行): 路障 B007 掉图腾石
+    from w3xtool.pack_query_cli import _query_near
+
+    text = "\n".join(_query_near(pack, "12 18 500", 10))
+    assert "装饰群: 路障 [B007]" in text
+    assert "掉: 图腾石[I0G1]" in text
 
 
 def test_parse_ok():

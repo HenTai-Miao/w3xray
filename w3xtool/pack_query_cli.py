@@ -1678,6 +1678,22 @@ def _num(s: str) -> float:
     return float(s.replace(" ", ""))
 
 
+def _source_drop_map(pack: Path) -> dict[str, str]:
+    """来源ID -> 掉落物品清单 (关系表 掉落 行, 供 near 就近注解)。"""
+    drops: dict[str, list[str]] = {}
+    for r in _read_rows(pack, "掉落与获取关系.tsv"):
+        if len(r) < 8 or "掉落" not in r[2]:
+            continue
+        src = r[6]
+        if not src:
+            continue
+        entry = _clean(r[4]) + "[" + r[3] + "]"
+        lst = drops.setdefault(src, [])
+        if entry not in lst:
+            lst.append(entry)
+    return {code: "、".join(items) for code, items in drops.items()}
+
+
 def _query_near(pack: Path, query: str, limit: int) -> list[str]:
     """坐标反查: near <x> <y> [radius=3000] —— 脚底/附近内容物。
 
@@ -1692,6 +1708,7 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
         return ["坐标与半径必须是数字: near <x> <y> [radius]"]
     radius = max(50.0, min(radius, 20000.0))
     lines = [f"== 坐标 ({px:g}, {py:g}) 半径 {radius:g} =="]
+    drop_map = _source_drop_map(pack)
 
     def dist(x: float, y: float) -> float:
         return math.hypot(x - px, y - py)
@@ -1726,8 +1743,9 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
             for code, name, xs in _bounded(hits, limit):
                 cx = sum(p[0] for p in xs) / len(xs)
                 cy = sum(p[1] for p in xs) / len(xs)
+                drop = f"  掉: {drop_map[code]}" if code in drop_map else ""
                 lines.append(
-                    f"  {kind}: {name} [{code}] ×{len(xs)} @({cx:g},{cy:g}) 距{dist(cx, cy):.0f}"
+                    f"  {kind}: {name} [{code}] ×{len(xs)} @({cx:g},{cy:g}) 距{dist(cx, cy):.0f}{drop}"
                 )
         else:
             clusters: list[tuple[float, str, int, float, float]] = []
@@ -1748,7 +1766,11 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
                     )
             clusters.sort()
             for d, label, n, gcx, gcy in _bounded(clusters, limit):
-                lines.append(f"  {kind}群: {label} ×{n} @({gcx:g},{gcy:g}) 距{d:.0f}")
+                code = label.rsplit("[", 1)[-1].rstrip("]") if "[" in label else ""
+                drop = f"  掉: {drop_map[code]}" if code in drop_map else ""
+                lines.append(
+                    f"  {kind}群: {label} ×{n} @({gcx:g},{gcy:g}) 距{d:.0f}{drop}"
+                )
         if not entries and nearest:
             nearest.sort()
             for d, label in nearest:  # 半径外最近全部列出
@@ -1772,7 +1794,10 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
         spawned.sort()
         for d, code, x, y in _bounded(spawned, limit):
             name = load_units(pack).get(code, code)
-            lines.append(f"  脚本单位: {name} [{code}] @({x:g},{y:g}) 距{d:.0f}")
+            drop = f"  掉: {drop_map[code]}" if code in drop_map else ""
+            lines.append(
+                f"  脚本单位: {name} [{code}] @({x:g},{y:g}) 距{d:.0f}{drop}"
+            )
     return lines
 
 
