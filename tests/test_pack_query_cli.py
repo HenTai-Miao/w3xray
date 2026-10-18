@@ -686,6 +686,16 @@ def test_query_near_annotates_source_drops(pack):
     assert "掉: 图腾石[I0G1]" in text
 
 
+def test_query_shop_includes_craft_shops(pack):
+    # 「商店制造」是独立通道: 制造商店没有 usei 货架, 只靠 stock 扫描
+    # 会答「未找到商店」(迷失国度 奇迹古树/神秘藏宝室 即此类)。
+    from w3xtool.pack_query_cli import _query_shop
+
+    text = "\n".join(_query_shop(pack, "铁匠铺", 20))
+    assert "== 铁匠铺 [h0ZZ]  (商店制造)" in text
+    assert "制造 奖池甲 [I0P1]" in text
+
+
 def test_parse_ok():
     o = parse_pack_query_cli_options(["pack", "item", "冰晶"])
     assert (o.command, o.query, o.limit) == ("item", "冰晶", 0)  # 默认全量

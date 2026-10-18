@@ -598,6 +598,26 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
         lines.append("")
         if limit and len(lines) >= limit * 12:
             break
+    # 商店制造 (关系表独立通道): 奇迹古树/神秘藏宝室这类制造商店没有
+    # usei 货架, 只靠 stock 扫描会答「未找到商店」
+    craft: dict[str, tuple[str, list[tuple[str, str]]]] = {}
+    for r in _read_rows(pack, "掉落与获取关系.tsv"):
+        if len(r) < 8 or r[2] != "商店制造":
+            continue
+        code = r[6]
+        if not code:
+            continue
+        entry = craft.setdefault(code, (_clean(r[7]) or code, []))
+        pair = (r[3], _clean(r[4]))
+        if pair not in entry[1]:
+            entry[1].append(pair)
+    for code, (name, entries) in craft.items():
+        if not _match(query, code, name):
+            continue
+        lines.append("== " + name + " [" + code + "]  (商店制造)")
+        for icode, iname in entries:
+            lines.append("  制造 " + iname + " [" + icode + "]")
+        lines.append("")
     return lines or ["未找到商店: " + query]
 
 
