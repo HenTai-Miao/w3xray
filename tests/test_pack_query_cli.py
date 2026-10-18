@@ -265,6 +265,25 @@ def pack(tmp_path):
         "call TriggerAddCondition(gg_trg_use, Condition(function Trig_useConditions))\r"
         "call TriggerAddAction(gg_trg_use, function Trig_useActions)\r"
         "endfunction\r"
+        "function Trig_useLocalConditions takes nothing returns boolean\r"
+        "return GetItemTypeId(GetManipulatedItem())=='I0LV'\r"
+        "endfunction\r"
+        "function Trig_useLocalActions takes nothing returns nothing\r"
+        "call CreateItem('I0LV',GetUnitX(GetTriggerUnit()),GetUnitY(GetTriggerUnit()))\r"
+        "endfunction\r"
+        "function InitTrig_useLocal takes nothing returns nothing\r"
+        "local trigger t = CreateTrigger()\r"
+        "call TriggerRegisterPlayerUnitEventSimple(t,Player(0),EVENT_PLAYER_UNIT_USE_ITEM)\r"
+        "call TriggerAddCondition(t, Condition(function Trig_useLocalConditions))\r"
+        "call TriggerAddAction(t, function Trig_useLocalActions)\r"
+        "endfunction\r"
+        "function InitTrig_decoy takes nothing returns nothing\r"
+        "local trigger t = CreateTrigger()\r"
+        "call TriggerAddAction(t, function Trig_decoyActions)\r"
+        "endfunction\r"
+        "function Trig_decoyActions takes nothing returns nothing\r"
+        "call DoNothing()\r"
+        "endfunction\r"
         "set udg_ZBS[1]='I0A1'\r"
         "set udg_ZBS[2]='I0A2'\r"
         "function Trig_pickConditions takes nothing returns boolean\r"
@@ -366,6 +385,19 @@ def test_query_refs_chain_termination_and_classification(pack):
 def test_parse_refs_command():
     o = parse_pack_query_cli_options(["pack", "refs", "IZYY"])
     assert (o.command, o.query) == ("refs", "IZYY")
+
+
+def test_item_trigger_blocks_scope_local_vars(pack):
+    # 局部 trigger t 跨函数重名: 条件/动作必须按注册所在函数配对,
+    # 否则 I0LV 的使用触发器会配到 decoy 的动作体 (假证据)
+    from w3xtool.pack_query_cli import _item_trigger_blocks, load_script
+
+    blocks = _item_trigger_blocks(load_script(pack))
+    hit = [b for b in blocks if "I0LV" in b[1]]
+    assert hit, "I0LV 使用触发器未进入块列表"
+    body = hit[0][2]
+    assert "CreateItem" in body and "I0LV" in body
+    assert "DoNothing" not in body
 
 
 def test_query_cmd_scopes_local_trigger_handlers(pack):

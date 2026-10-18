@@ -977,9 +977,8 @@ def _item_trigger_blocks(script: str) -> list[tuple[str, list[str], str, set[str
     双形态: ①Trig_*Conditions/Trig_*Actions 成对 (wbc 开箱);
     ②动作体自判 (hxsj TBX/JFDH/SJSRWPGM 兑换系统——条件函数不存在,
     物品判定与发放都在 action 里)。事件集区分拾取/使用维度。"""
-    var_by_cond = {fn: var for var, fn in _ADD_COND_RE.findall(script)}
-    act_by_var = dict(_ADD_ACTION_RE.findall(script))
-    var_by_action = {fn: var for var, fn in _ADD_ACTION_RE.findall(script)}
+    conds, acts = _scope_registrations(script)
+    act_by_var_scope = {(sc, v): fn for fn, (sc, v) in acts.items()}
     blocks: list[tuple[str, list[str], str, set[str]]] = []
     seen_bodies: set[str] = set()
     for m in _DEATH_COND_BLOCK_RE.finditer(script):
@@ -992,15 +991,17 @@ def _item_trigger_blocks(script: str) -> list[tuple[str, list[str], str, set[str
         if not codes:
             continue
         stem = m.group(1)
-        var = var_by_cond.get(stem + "Conditions")
-        act = act_by_var.get(var or "")
+        scope, var = conds.get(stem + "Conditions", ("", ""))
+        if not var:
+            continue
+        act = act_by_var_scope.get((scope, var), "")
         if not act:
             continue
         body = _fn_body(script, act)
         if body == "(未找到函数体)":
             continue
         seen_bodies.add(act)
-        events = _trigger_events(script, var) if var else set()
+        events = _trigger_events(_fn_body(script, scope), var) if scope else set()
         blocks.append((stem, codes, body, events))
     for m in _FN_ALL_RE.finditer(script):
         name = m.group(1)
@@ -1016,8 +1017,8 @@ def _item_trigger_blocks(script: str) -> list[tuple[str, list[str], str, set[str
         codes = [c for c in codes if c]
         if not codes:
             continue
-        var = var_by_action.get(name)
-        events = _trigger_events(script, var) if var else set()
+        scope, var = acts.get(name, ("", ""))
+        events = _trigger_events(_fn_body(script, scope), var) if scope else set()
         stem = name[: -len("Actions")] if name.endswith("Actions") else name
         blocks.append((stem, codes, body, events))
     return blocks
@@ -1695,6 +1696,34 @@ _ADD_ACTION_RE = re.compile(
 _ADD_COND_RE = re.compile(
     r"TriggerAddCondition\(\s*([A-Za-z_]\w*)\s*,\s*Condition\(function\s+(\w+)\)"
 )
+
+_SCOPE_ADD_COND_RE = re.compile(
+    r"TriggerAddCondition\(\s*([A-Za-z_]\w*)\s*,\s*Condition\(\s*function\s+(\w+)"
+)
+_SCOPE_ADD_ACTION_RE = re.compile(
+    r"TriggerAddAction\(\s*([A-Za-z_]\w*)\s*,\s*function\s+(\w+)"
+)
+
+
+def _scope_registrations(
+    script: str,
+) -> tuple[dict[str, tuple[str, str]], dict[str, tuple[str, str]]]:
+    """(条件函数 -> (注册函数, 变量), 动作函数 -> (注册函数, 变量))。
+
+    注册对必须按所在函数的作用域解析: 局部 trigger 变量 (local trigger t)
+    在多个函数里重名, 全脚本按变量名配对会把无关函数当成处理器
+    (YDWE Version 事故)。"""
+    conds: dict[str, tuple[str, str]] = {}
+    acts: dict[str, tuple[str, str]] = {}
+    for hm in _FN_HEAD_RE.finditer(script):
+        fn = hm.group(1)
+        end = script.find("endfunction", hm.start())
+        body = script[hm.start() : len(script) if end < 0 else end]
+        for var, cond_fn in _SCOPE_ADD_COND_RE.findall(body):
+            conds.setdefault(cond_fn, (fn, var))
+        for var, act_fn in _SCOPE_ADD_ACTION_RE.findall(body):
+            acts.setdefault(act_fn, (fn, var))
+    return conds, acts
 
 
 def load_script(pack_dir: Path) -> str | None:
