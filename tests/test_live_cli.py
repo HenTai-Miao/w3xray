@@ -63,8 +63,18 @@ class TestParse:
         assert opts.pid == "12345"
 
     def test_missing_everything(self):
-        with pytest.raises(LiveCliOptionError, match="缺少地图路径"):
-            parse_live_cli_options(())
+        # 解析层不再拒绝: 无参数时交给入口自动定位当前图 (定位失败才提示)
+        opts = parse_live_cli_options(())
+        assert opts.map_path is None and opts.pack_dir is None
+
+    def test_run_without_map_reports_guidance(self, monkeypatch, capsys):
+        from w3xtool import live_cli
+
+        monkeypatch.setattr(live_cli, "_auto_map_path", lambda: None)
+        code = live_cli.run_live_cli(live_cli.LiveCliOptions())
+        err = capsys.readouterr().err
+        assert code == 2
+        assert "未能自动定位正在使用的图" in err
 
     def test_unknown_option(self):
         with pytest.raises(LiveCliOptionError, match="不支持的参数"):

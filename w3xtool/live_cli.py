@@ -153,8 +153,6 @@ def parse_live_cli_options(argv: Sequence[str]) -> LiveCliOptions:
             raise LiveCliOptionError(f"参数缺少路径值：{option}")
         values[option] = argv[value_index]
         index += 2
-    if map_path is None and "--pack" not in values:
-        raise LiveCliOptionError("缺少地图路径（或用 --pack 指定资料包目录）")
     return LiveCliOptions(
         map_path=map_path,
         pack_dir=values.get("--pack"),
@@ -207,6 +205,39 @@ def _ensure_pack_dir(options: LiveCliOptions) -> str:
     return str(pack_dir)
 
 
+def _auto_map_path() -> str | None:
+    """未给地图路径/--pack 时自动定位正在使用的图 (仅接受唯一「直接证据」)。
+
+    复用 current 的发现逻辑: 仅 FOUND 且唯一候选 (文件使用中) 才采用;
+    SUGGESTED/AMBIGUOUS/NOT_FOUND 一律返回 None——不猜, 交调用方提示显式给路径。"""
+    try:
+        from .current_map_discovery import locate_current_map
+        from .current_map_models import ResolutionStatus
+
+        resolution = locate_current_map()
+    except Exception:  # noqa: BLE001 - 自动定位失败降级为「请显式给路径」
+        return None
+    if resolution.status != ResolutionStatus.FOUND:
+        return None
+    if len(resolution.candidates) != 1:
+        return None
+    path = resolution.candidates[0].path
+    return str(path) if path else None
+
+
+def _resolve_auto_map(options: LiveCliOptions) -> LiveCliOptions:
+    """两者都没给时尝试自动定位当前图; 失败保持原样 (由入口统一提示)。"""
+    if options.map_path is not None or options.pack_dir is not None:
+        return options
+    path = _auto_map_path()
+    if path is None:
+        return options
+    from dataclasses import replace
+
+    print(f"未指定地图: 自动定位正在使用的图 -> {path}")
+    return replace(options, map_path=path)
+
+
 def run_live_cli(options: LiveCliOptions) -> int:
     """准备资料包并运行多策略背包读取；失败返回 2。"""
     configure_cli_output()
@@ -227,6 +258,14 @@ def run_live_cli(options: LiveCliOptions) -> int:
         print(
             "缺少运行依赖 numpy/pillow，请用："
             "uv run --with numpy --with pillow python main.py live ...",
+            file=sys.stderr,
+        )
+        return 2
+    options = _resolve_auto_map(options)
+    if options.map_path is None and options.pack_dir is None:
+        print(
+            "未指定地图路径，且未能自动定位正在使用的图；请:"
+            " main.py live <地图.w3x|.w3n> (或 --pack <资料包目录>)",
             file=sys.stderr,
         )
         return 2
