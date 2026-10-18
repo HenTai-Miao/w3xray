@@ -155,6 +155,22 @@ def pack(tmp_path):
         'call TriggerRegisterPlayerChatEvent(gg_trg_zoom, Player(0), "-", true)\r'
         "call TriggerAddAction(gg_trg_zoom, function Trig_ABCActions)\r"
         "endfunction\r"
+        "function InitTrig_secret takes nothing returns nothing\r"
+        "local trigger t = CreateTrigger()\r"
+        'call TriggerRegisterPlayerChatEvent(t, Player(0), "secret", true)\r'
+        "call TriggerAddAction(t, function Trig_secretActions)\r"
+        "endfunction\r"
+        "function Trig_secretActions takes nothing returns nothing\r"
+        "call DoNothing()\r"
+        "endfunction\r"
+        "function InitTrig_otherLocal takes nothing returns nothing\r"
+        "local trigger t = CreateTrigger()\r"
+        'call TriggerRegisterPlayerChatEvent(t, Player(0), "", false)\r'
+        "call TriggerAddAction(t, function Trig_unrelatedActions)\r"
+        "endfunction\r"
+        "function Trig_unrelatedActions takes nothing returns nothing\r"
+        "call DoNothing()\r"
+        "endfunction\r"
         "function Trig_poolConditions takes nothing returns boolean\r"
         "return ( ( GetUnitTypeId(GetDyingUnit()) == 'nbos' ) )\r"
         "endfunction\r"
@@ -350,6 +366,19 @@ def test_query_refs_chain_termination_and_classification(pack):
 def test_parse_refs_command():
     o = parse_pack_query_cli_options(["pack", "refs", "IZYY"])
     assert (o.command, o.query) == ("refs", "IZYY")
+
+
+def test_query_cmd_scopes_local_trigger_handlers(pack):
+    # 局部 trigger 变量在多个函数里重名: 处理器必须按注册所在函数配对,
+    # 全脚本按变量名配对会把无关函数当动作 (YDWE Version 事故回归)
+    from w3xtool.pack_query_cli import _query_cmd
+
+    text = "\n".join(_query_cmd(pack, "secret", 10))
+    assert '指令 "secret" (精确' in text
+    assert "-> t" in text
+    assert "注册函数: InitTrig_secret" in text
+    assert "动作: function Trig_secretActions" in text
+    assert "Trig_unrelatedActions" not in text
 
 
 def test_query_cmd_exact_precedence_and_loop_registration(pack):

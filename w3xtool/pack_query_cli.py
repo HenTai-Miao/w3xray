@@ -1683,13 +1683,17 @@ def _query_text(pack: Path, query: str, limit: int) -> list[str]:
 
 
 _CHAT_REG_RE = re.compile(
-    r"TriggerRegisterPlayerChatEvent\(\s*(gg_trg_\w+)\s*,\s*"
+    # 触发器变量不一定是 gg_trg_*: 战役脚本用局部/普通全局 (如 t) 注册,
+    # 旧正则只认 gg_trg_ 前缀, "YDWE Version" 这类具名指令因此漏检
+    r"TriggerRegisterPlayerChatEvent\(\s*([A-Za-z_]\w*)\s*,\s*"
     r"([A-Za-z_]\w*(?:\((?:[^()]|\([^()]*\))*\))?)\s*,\s*"
     r'"([^"]*)"\s*,\s*(true|false)\s*\)'
 )
-_ADD_ACTION_RE = re.compile(r"TriggerAddAction\(\s*(gg_trg_\w+)\s*,\s*function\s+(\w+)")
+_ADD_ACTION_RE = re.compile(
+    r"TriggerAddAction\(\s*([A-Za-z_]\w*)\s*,\s*function\s+(\w+)"
+)
 _ADD_COND_RE = re.compile(
-    r"TriggerAddCondition\(\s*(gg_trg_\w+)\s*,\s*Condition\(function\s+(\w+)\)"
+    r"TriggerAddCondition\(\s*([A-Za-z_]\w*)\s*,\s*Condition\(function\s+(\w+)\)"
 )
 
 
@@ -1896,41 +1900,79 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
     return lines
 
 
+_FN_HEAD_RE = re.compile(
+    r"(?m)^(?:function|private function|public function|static function)\s+(\w+)\s+takes"
+)
+
+
+def _function_scope(script: str, pos: int) -> tuple[str, str]:
+    """包含 pos 的 JASS 函数 (函数名, 函数体文本); 找不到返回 ("", script)。
+
+    局部 trigger 变量 (如 local trigger t) 在多个函数里重名——处理器
+    (TriggerAddAction/Condition) 必须按注册语句所在函数的作用域配对,
+    全脚本按变量名配对会把无关函数当成处理器 (YDWE Version 事故:
+    战役 md 的 YDWEVersion_Init 里注册的 t 曾被配到 Unit000312_DropItems)。"""
+    name, start = "", -1
+    for hm in _FN_HEAD_RE.finditer(script, 0, pos):
+        name, start = hm.group(1), hm.start()
+    if start < 0:
+        return "", script
+    end = script.find("endfunction", pos)
+    end = len(script) if end < 0 else end
+    return name, script[start:end]
+
+
 def _query_cmd(pack: Path, query: str, limit: int) -> list[str]:
     script = load_script(pack)
     if script is None:
         return ["未找到脚本 (脚本可读文本/*.j)——该包可能未导出可读脚本"]
-    exact_hits: dict[str, tuple[str, str, int]] = {}
-    loose_hits: dict[str, tuple[str, str, int]] = {}
+    # 每条注册按「所在函数」配对处理器: 同名局部变量跨函数不再串台。
+    # 精确命中优先于前缀命中 (cmd "-" 不应把 "-zs" 一并列出)。
+    exact_hits: dict[tuple[str, str, str, str, str], tuple[str, str, str, str, str, int, str]] = {}
+    loose_hits: dict[tuple[str, str, str, str, str], tuple[str, str, str, str, str, int, str]] = {}
     for m in _CHAT_REG_RE.finditer(script):
         var, cmd, exact = m.group(1), m.group(3), m.group(4)
         if cmd == query:
             bucket = exact_hits
-        elif query in cmd or (cmd in query and len(cmd) > 1):
+        elif len(cmd) > 1 and (query in cmd or cmd in query):
             bucket = loose_hits
         else:
             continue
-        v = bucket.setdefault(var, (cmd, exact, 0))
-        bucket[var] = (v[0], v[1], v[2] + 1)
-    regs = exact_hits or loose_hits
-    if not regs:
+        fn, scope = _function_scope(script, m.start())
+        act = _ADD_ACTION_RE.search(scope)
+        cond = _ADD_COND_RE.search(scope)
+        act_name = act.group(2) if act else ""
+        cond_name = cond.group(2) if cond else ""
+        key = (fn or var, var, cmd, exact, act_name, cond_name)
+        prev = bucket.get(key)
+        bucket[key] = (
+            var,
+            cmd,
+            exact,
+            act_name,
+            cond_name,
+            (prev[5] if prev else 0) + 1,
+            fn,
+        )
+    hits = exact_hits or loose_hits
+    if not hits:
         return ["未找到聊天指令: " + query]
-    actions = dict(_ADD_ACTION_RE.findall(script))
-    conds = dict(_ADD_COND_RE.findall(script))
     lines: list[str] = []
-    for var, (cmd, exact, count) in sorted(regs.items(), key=lambda kv: -kv[1][2]):
+    for var, cmd, exact, act_name, cond_name, count, fn in sorted(
+        hits.values(), key=lambda row: -row[5]
+    ):
         if limit and len(lines) >= limit * 6:
             break
         lines.append(
             f'指令 "{cmd}" ({"精确" if exact == "true" else "前缀"}, 注册{count}个玩家位) -> {var}'
         )
-        cond = conds.get(var)
-        if cond:
-            lines.append("  条件: " + _fn_body(script, cond))
-        act = actions.get(var)
+        if fn:
+            lines.append("  注册函数: " + fn)
+        if cond_name:
+            lines.append("  条件: " + _fn_body(script, cond_name))
         lines.append(
-            "  动作: " + _fn_body(script, act)
-            if act
+            "  动作: " + _fn_body(script, act_name)
+            if act_name
             else "  动作: (未找到 TriggerAddAction)"
         )
         lines.append("")
