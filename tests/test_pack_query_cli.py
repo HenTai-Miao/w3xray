@@ -33,14 +33,21 @@ def pack(tmp_path):
         "物品\tI0DD\t4\tratc\t攻击之爪+12样\t否\t无覆写走基础价\n"
         "物品\tI0EE\t5\tI0EE\t力量戒指SLK\t是\t材料\n"
         "物品\tI0P1\t6\tI0P1\t奖池甲\t是\t测试奖池物1\n"
-        "物品\tI0P2\t7\tI0P2\t奖池乙\t是\t测试奖池物2\n",
+        "物品\tI0P2\t7\tI0P2\t奖池乙\t是\t测试奖池物2\n"
+"物品\tI01O\t8\tI01O\t钻石\t是\t直落\n"
+"物品\tI01P\t9\tI01P\t猎刃\t是\t直落\n"
+"物品\tI0G1\t10\tI0G1\t图腾石\t是\t直落\n",
         encoding="utf-8",
     )
     (obj / "单位.tsv").write_text(
         "单位\t四码\t数值\t四码2\t名称\n"
         "单位\tu0AA\t1\tu0AA\t雪妖\n"
         "单位\th0AA\t2\th0AA\t老伯基蓝\n"
-        "单位\tnbos\t3\tnbos\t奖池怪\n",
+        "单位\tnbos\t3\tnbos\t奖池怪\n"
+"单位\tn018\t4\tn018\t炎石守卫\n"
+"单位\tu00B\t5\tu00B\t样本怪\n"
+"单位\tnen0\t6\tnen0\t样本图腾\n"
+"单位\tnstk\t7\tnstk\t补货兽\n",
         encoding="utf-8",
     )
     (tmp_path / "脚本调用参数索引.tsv").write_text(
@@ -174,7 +181,32 @@ def pack(tmp_path):
         "call TriggerRegisterAnyUnitEventBJ(gg_trg_boss, EVENT_PLAYER_UNIT_DEATH)\r"
         "call TriggerAddCondition(gg_trg_boss, Condition(function Trig_bossConditions))\r"
         "call TriggerAddAction(gg_trg_boss, function Trig_bossActions)\r"
-        "endfunction\r",
+        "endfunction\r"
+        "function Trig_hexConditions takes nothing returns boolean\r"
+        "return GetUnitTypeId(GetDyingUnit())==$6e303138\r"
+        "endfunction\r"
+        "function Trig_hexActions takes nothing returns nothing\r"
+        "call CreateItemLoc($4930314f,GetUnitLoc(GetDyingUnit()))\r"
+        "endfunction\r"
+        "function Trig_hndConditions takes nothing returns boolean\r"
+        "return GetDyingUnit()==udg_HX\r"
+        "endfunction\r"
+        "function Trig_hndActions takes nothing returns nothing\r"
+        "call UnitAddItemByIdSwapped($49303150,GetKillingUnitBJ())\r"
+        "endfunction\r"
+        "function Trig_gguConditions takes nothing returns boolean\r"
+        "return gg_unit_nen0_0001==GetDyingUnit()\r"
+        "endfunction\r"
+        "function Trig_gguActions takes nothing returns nothing\r"
+        "call UnitAddItemByIdSwapped('I0G1',GetKillingUnitBJ())\r"
+        "endfunction\r"
+        "function Trig_stkConditions takes nothing returns boolean\r"
+        "return GetUnitTypeId(GetDyingUnit())=='nstk'\r"
+        "endfunction\r"
+        "function Trig_stkActions takes nothing returns nothing\r"
+        "call AddItemToStockBJ(ChooseRandomItemExBJ(6,ITEM_TYPE_ANY),gg_unit_n000_0001,0,0)\r"
+        "endfunction\r"
+        "set udg_HX=CreateUnit(Player(11),$75303042,0.0,0.0,0.0)\r",
         encoding="utf-8",
     )
     ref_rows = [
@@ -501,6 +533,33 @@ def test_query_fallbacks_route_unit_queries(pack):
     assert "无死亡触发直落/奖池证据" in drop_text
     assert "位置/获取查询用 where <词>" in drop_text
     assert "文案级" not in drop_text
+
+
+def test_query_drop_hex_and_handle_death_codes(pack):
+    # YDWE 把四码编成整数 ($6e303138 = 'n018'), 死亡判定也常走句柄比较
+    # (GetDyingUnit()==udg_X 或 gg_unit_码_序号==GetDyingUnit())——
+    # 四码归一与句柄解析让三类写法都进扫描族。
+    from w3xtool.pack_query_cli import _query_drop
+
+    hex_text = "\n".join(_query_drop(pack, "n018", 20))
+    assert "炎石守卫 [n018]" in hex_text
+    assert "钻石" in hex_text
+    var_text = "\n".join(_query_drop(pack, "u00B", 20))
+    assert "样本怪 [u00B]" in var_text
+    assert "猎刃" in var_text
+    ggu_text = "\n".join(_query_drop(pack, "nen0", 20))
+    assert "样本图腾 [nen0]" in ggu_text
+    assert "图腾石" in ggu_text
+
+
+def test_query_drop_random_stock_evidence(pack):
+    # 死亡触发不产固定物品、只给商店随机补货时, 报机制而不是「无证据」
+    # (迷失国度 drs 死亡触发 ChooseRandomItemExBJ 随机上架即此类)。
+    from w3xtool.pack_query_cli import _query_drop
+
+    text = "\n".join(_query_drop(pack, "nstk", 20))
+    assert "补货兽 [nstk]  ⚠ 按单位反查死亡触发 (无固定物品码, 见运行时随机):" in text
+    assert "随机补货: ChooseRandomItemExBJ(6, ITEM_TYPE_ANY)" in text
 
 
 def test_parse_ok():

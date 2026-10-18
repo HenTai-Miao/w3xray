@@ -33,6 +33,22 @@ function Trig_boss_Actions takes nothing returns nothing
     call CreateTimerDialogBJ(udg_Timer9, "基尔加丹")
     call DisplayTextToForce(GetPlayersAll(), "第10波出现boss！！！可前往挑战！！！")
 endfunction
+function Trig_xdropConditions takes nothing returns boolean
+    return GetOwningPlayer(GetDyingUnit())==Player(10) and GetUnitTypeId(GetDyingUnit())=='n018'
+endfunction
+function Trig_xdropActions takes nothing returns nothing
+    call CreateItemLoc('I01O',GetUnitLoc(GetDyingUnit()))
+    if(GetRandomInt(1,100)<=40)then
+        call UnitAddItemByIdSwapped('I0A9',GetKillingUnitBJ())
+    endif
+endfunction
+function Trig_pdropConditions takes nothing returns boolean
+    return GetUnitTypeId(GetDyingUnit())=='nbos'
+endfunction
+function Trig_pdropActions takes nothing returns nothing
+    call ItemPoolAddItemType(udg_PD[3],'I0P2',100.0)
+    call YDWEPlaceRandomItem(udg_PD[3],0.0,0.0)
+endfunction
 """
 
 
@@ -94,6 +110,46 @@ def _map_data(monkeypatch: pytest.MonkeyPatch) -> MapData:
                 base_id="hpea",
                 name="自定义农民",
                 is_custom=True,
+            ),
+            "n018": GameObject(
+                category="单位",
+                ext="w3u",
+                obj_id="n018",
+                base_id="",
+                name="炎石守卫",
+                is_custom=False,
+            ),
+            "nbos": GameObject(
+                category="单位",
+                ext="w3u",
+                obj_id="nbos",
+                base_id="",
+                name="奖池怪",
+                is_custom=False,
+            ),
+            "I01O": GameObject(
+                category="物品",
+                ext="w3t",
+                obj_id="I01O",
+                base_id="",
+                name="钻石",
+                is_custom=False,
+            ),
+            "I0A9": GameObject(
+                category="物品",
+                ext="w3t",
+                obj_id="I0A9",
+                base_id="",
+                name="猎刃",
+                is_custom=False,
+            ),
+            "I0P2": GameObject(
+                category="物品",
+                ext="w3t",
+                obj_id="I0P2",
+                base_id="",
+                name="奖池物品",
+                is_custom=False,
             ),
         },
         units=[
@@ -157,6 +213,31 @@ def test_full_report_covers_player_facing_sections(
     assert "雷暴元素(nrwm)：召唤卷轴 100%" in report
     assert "计时器标签：基尔加丹" in report
     assert "播报：第10波出现boss！！！可前往挑战！！！" in report
+    # drops 段并入脚本死亡触发证据 (直落掷骰门槛/奖池 N选1)。
+    assert (
+        "炎石守卫(n018)  ⚠ 脚本死亡掉落 (Trig_xdrop, 关系表外证据): "
+        "直落 钻石(I01O) 掷骰:无掷骰；猎刃(I0A9) 掷骰:GetRandomInt(1,100)"
+    ) in report
+    assert (
+        "奖池怪(nbos)  ⚠ 脚本死亡掉落 (Trig_pdrop, 关系表外证据): "
+        "池 udg_PD[3] 共1件N选1: 奖池物品(I0P2) 100/100"
+    ) in report
+
+
+def test_drops_section_includes_script_death_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: 同一张地图 (关系表掉落 + 脚本死亡直落/奖池并存)。
+    md = _map_data(monkeypatch)
+
+    # When: 只请求掉落段。
+    report = format_guide_report(md, "drops")
+
+    # Then: 关系表行与脚本死亡证据并列满量。
+    assert "雷暴元素(nrwm)：召唤卷轴 100%" in report
+    assert "脚本死亡掉落" in report
+    assert "直落 钻石(I01O)" in report
+    assert "池 udg_PD[3] 共1件N选1" in report
 
 
 def test_section_filter_returns_single_section(monkeypatch: pytest.MonkeyPatch) -> None:

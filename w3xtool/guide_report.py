@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 
 from .base_names import BASE_CATEGORIES, BASE_NAMES
 from .item_relation_models import ItemRelation, ItemRelationKind, RelationObject
+from .pack_query_cli import script_death_drop_lines
 from .script_scan import scan_chat_commands
 from .script_sources import analysis_script_texts
 from .wts import map_wts_table, resolve
@@ -196,7 +197,17 @@ def _shop_lines(md: MapData) -> tuple[str, ...]:
 
 
 def _drop_lines(md: MapData) -> tuple[str, ...]:
-    return _grouped_source_lines(md, ItemRelationKind.UNIT_DROP, "；")
+    rows = list(_grouped_source_lines(md, ItemRelationKind.UNIT_DROP, "；"))
+    # 脚本死亡触发证据与关系表满量并列——guide drops 段曾只读掉落表,
+    # BossFH 直落 I01F 类证据在玩家最常跑的出口缺席 (与 pack-query
+    # drop 兜底同源正则, 语义一致: 掷骰不写保底, 奖池 N 选 1)。
+    seen: set[str] = set(rows)
+    for _source, text in analysis_script_texts(md):
+        for line in script_death_drop_lines(text, lambda code: _code_name(md, code)):
+            if line not in seen:
+                seen.add(line)
+                rows.append(line)
+    return tuple(rows)
 
 
 def _clue_lines(md: MapData) -> tuple[str, ...]:

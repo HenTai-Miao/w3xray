@@ -687,16 +687,28 @@ _DEATH_COND_BLOCK_RE = re.compile(
     re.S,
 )
 _POOL_ITEM_RE = re.compile(
-    r"ItemPoolAddItemType\(\s*(udg_\w+)\[(\d+)\]\s*,\s*'(\w{4})'\s*,\s*([\d.]+)"
+    r"ItemPoolAddItemType\(\s*(udg_\w+)\[(\d+)\]\s*,\s*(?:'(\w{4})'|\$([0-9A-Fa-f]{8}))\s*,\s*([\d.]+)"
 )
 _PLACE_POOL_RE = re.compile(r"PlaceRandomItem\(\s*\(?\s*(udg_\w+)\[(\d+)\]")
 _ROLL_RE = re.compile(r"GetRandomInt\(\s*1\s*,\s*(\d+)\s*\)")
 _DIRECT_PLACE_RE = re.compile(
-    r"(?:CreateItemLoc|UnitAddItemByIdSwapped)\(\s*'(\w{4})'", re.I
+    r"(?:CreateItemLoc|UnitAddItemByIdSwapped)\(\s*(?:'(\w{4})'|\$([0-9A-Fa-f]{8}))",
+    re.I,
 )
 _RANDOM_CALL_RE = re.compile(r"GetRandom(?:Real|Int)\([^)]*\)")
 _DEATH_UNIT_RE = re.compile(
-    r"GetUnitTypeId\(Get(?:Dying|Trigger)Unit\(\)\)\s*==\s*'(\w{4})'",
+    r"GetUnitTypeId\(Get(?:Dying|Trigger)Unit\(\)\)\s*==\s*(?:'(\w{4})'|\$([0-9A-Fa-f]{8}))",
+    re.I,
+)
+_DEATH_HANDLE_RE = re.compile(
+    r"(?:Get(?:Dying|Trigger)Unit\(\)\s*==\s*(gg_unit_\w+|udg_\w+)"
+    r"|(gg_unit_\w+|udg_\w+)\s*==\s*Get(?:Dying|Trigger)Unit\(\))",
+    re.I,
+)
+_RANDOM_STOCK_RE = re.compile(r"ChooseRandomItemExBJ\(\s*(\d+)\s*,\s*([A-Za-z_]+)\s*\)")
+_UNIT_VAR_RE = re.compile(
+    r"set\s+(udg_\w+)\s*=\s*(?:CreateUnit\([^,]*,\s*(?:'(\w{4})'|\$([0-9A-Fa-f]{8}))"
+    r"|(gg_unit_\w+))",
     re.I,
 )
 
@@ -714,6 +726,56 @@ def _balanced_call(body: str, start: int) -> str:
     return body[start:]
 
 
+def _fourcc(literal: str, hex_value: str) -> str:
+    """四码归一: 引号形态 'h016' 直接取; YDWE 整数形态 $68303136 -> h016。"""
+    if literal:
+        return literal
+    if len(hex_value) == 8:
+        try:
+            return bytes.fromhex(hex_value).decode("ascii")
+        except (ValueError, UnicodeDecodeError):
+            return ""
+    return ""
+
+
+def _unit_var_codes(script: str) -> dict[str, str]:
+    """udg_X 持有的单位四码 (set udg_X=CreateUnit(...,$hex) 或 =gg_unit_码_序号)。
+
+    YDWE 死亡判定常写 GetDyingUnit()==udg_X 或 gg_unit_码_0122==GetDyingUnit(),
+    句柄比较本身不带四码, 靠初始化赋值与 gg_unit 变量名反推。"""
+    codes: dict[str, str] = {}
+    for m in _UNIT_VAR_RE.finditer(script):
+        var = m.group(1).lower()
+        if m.group(4):
+            g = re.match(r"gg_unit_(\w{4})_\d+", m.group(4), re.I)
+            if g:
+                codes.setdefault(var, g.group(1))
+            continue
+        code = _fourcc(m.group(2), m.group(3))
+        if code:
+            codes.setdefault(var, code)
+    return codes
+
+
+def _death_unit_codes(text: str, var_codes: dict[str, str]) -> list[str]:
+    """死亡判定里的单位四码: 类型比较 (引号/整数) + 句柄比较 (gg_unit/udg) 归一。"""
+    codes: list[str] = []
+    for du in _DEATH_UNIT_RE.finditer(text):
+        code = _fourcc(du.group(1), du.group(2))
+        if code:
+            codes.append(code)
+    for hm in _DEATH_HANDLE_RE.finditer(text):
+        token = (hm.group(1) or hm.group(2) or "").lower()
+        if not token:
+            continue
+        g = re.match(r"gg_unit_(\w{4})_\d+", token)
+        if g:
+            codes.append(g.group(1))
+        elif token in var_codes:
+            codes.append(var_codes[token])
+    return codes
+
+
 def _script_pool_drops(pack: Path, code: str) -> list[str]:
     """死亡触发兜底: 关系表无该单位掉落行时, 扫 GetDyingUnit 条件的两种形态。
 
@@ -724,19 +786,30 @@ def _script_pool_drops(pack: Path, code: str) -> list[str]:
     if script is None or len(code) != 4:
         return []
     want = "'" + code.lower() + "'"
+    want_hex = "$" + code.encode("ascii", "replace").hex()
+    var_codes = _unit_var_codes(script)
     var_by_cond = {fn: var for var, fn in _ADD_COND_RE.findall(script)}
     act_by_var = dict(_ADD_ACTION_RE.findall(script))
     pools: dict[tuple[str, str], list[tuple[str, float]]] = {}
     for pm in _POOL_ITEM_RE.finditer(script):
+        pcode = _fourcc(pm.group(3), pm.group(4))
+        if not pcode:
+            continue
         pools.setdefault((pm.group(1), pm.group(2)), []).append(
-            (pm.group(3), float(pm.group(4)))
+            (pcode, float(pm.group(5)))
         )
     items = load_items(pack)
     units = load_units(pack)
     out: list[str] = []
     for m in _DEATH_COND_BLOCK_RE.finditer(script):
         body = m.group(2)
-        if want not in body.lower() or "GetDyingUnit" not in body:
+        lower = body.lower()
+        matched = want in lower or want_hex.lower() in lower
+        if not matched:
+            matched = any(
+                c.lower() == code.lower() for c in _death_unit_codes(body, var_codes)
+            )
+        if not matched or "GetDyingUnit" not in body:
             continue
         var = var_by_cond.get(m.group(1) + "Conditions")
         act = act_by_var.get(var or "")
@@ -853,7 +926,7 @@ def _script_direct_death_drops(
         death_units = list(_DEATH_UNIT_RE.finditer(action_body))
         hits: list[list[str]] = []
         for dm in _DIRECT_PLACE_RE.finditer(action_body):
-            if dm.group(1).lower() != want:
+            if _fourcc(dm.group(1), dm.group(2)).lower() != want:
                 continue
             cs = action_body.rfind("call ", max(0, dm.start() - 5), dm.start())
             snippet = _balanced_call(action_body, cs if cs >= 0 else dm.start())
@@ -876,7 +949,7 @@ def _script_direct_death_drops(
             lines = [f"  死亡触发 {stem} -> {verb}: {snippet}"]
             killers = [du for du in death_units if du.end() <= dm.start()]
             if killers:
-                ducode = killers[-1].group(1)
+                ducode = _fourcc(killers[-1].group(1), killers[-1].group(2))
                 uname = units.get(ducode) or units.get(ducode.upper()) or ducode
                 lines.append(f"    死亡单位判定: {uname} [{ducode}]")
             lines.append("    " + gate)
@@ -904,6 +977,7 @@ def _script_unit_direct_drops(
     语句与各自掷骰门槛 (不写保底配方)。"""
     want = unit_code.lower()
     iname = units.get(unit_code) or units.get(unit_code.upper()) or unit_code
+    var_codes = _unit_var_codes(script)
     out: list[str] = []
     seen: set[tuple[str, str, str]] = set()
     for m in _DEATH_COND_BLOCK_RE.finditer(script):
@@ -913,14 +987,14 @@ def _script_unit_direct_drops(
         if action_body == "(未找到函数体)":
             continue
         if not any(
-            du.group(1).lower() == want
-            for du in _DEATH_UNIT_RE.finditer(cond_body + "\n" + action_body)
+            c.lower() == want
+            for c in _death_unit_codes(cond_body + "\n" + action_body, var_codes)
         ):
             continue
         randoms = list(_RANDOM_CALL_RE.finditer(action_body))
         rows: list[str] = []
         for dm in _DIRECT_PLACE_RE.finditer(action_body):
-            icode = dm.group(1)
+            icode = _fourcc(dm.group(1), dm.group(2))
             cs = action_body.rfind("call ", max(0, dm.start() - 5), dm.start())
             snippet = _balanced_call(action_body, cs if cs >= 0 else dm.start())
             key = (stem, snippet, icode)
@@ -950,6 +1024,117 @@ def _script_unit_direct_drops(
                 )
             out.append(f"  死亡条件 {stem}Conditions: {cond_body}")
             out.extend(rows)
+            continue
+        # 无固定物品, 但死亡触发在运行时随机补货——如实报机制, 不报成
+        # 「无死亡证据」(迷失国度 drs 死亡触发给商店随机上架即此类)。
+        stock_counts: dict[tuple[str, str], int] = {}
+        for level, kind in _RANDOM_STOCK_RE.findall(action_body):
+            key = (level, kind)
+            stock_counts[key] = stock_counts.get(key, 0) + 1
+        if not stock_counts:
+            continue
+        if not out:
+            out.append(
+                f"{iname} [{unit_code}]  ⚠ 按单位反查死亡触发 (无固定物品码, 见运行时随机):"
+            )
+        out.append(f"  死亡条件 {stem}Conditions: {cond_body}")
+        for (level, kind), count in stock_counts.items():
+            suffix = f" ×{count}" if count > 1 else ""
+            out.append(
+                f"  死亡触发 {stem} -> 随机补货: ChooseRandomItemExBJ({level}, {kind})"
+                + suffix
+                + " (运行时随机选物, 无固定物品码)"
+            )
+    return out
+
+
+def script_death_drop_lines(script: str, name_of) -> list[str]:
+    """guide drops 段的脚本死亡掉落附录: 一遍走全脚本按判定单位聚合。
+
+    与按码查询的 _script_direct_death_drops/_script_unit_direct_drops
+    同正则族, 面向 guide 全量报告——每触发器一行: 直落语句带同函数掷骰
+    门槛原文, 奖池保持「池子 N 选 1+权重」措辞 (防呆五闸④), 关系表
+    UNIT_DROP 行之外的全部脚本死亡证据在此满量浮出。"""
+    pool_items: dict[tuple[str, str], list[tuple[str, float]]] = {}
+    for pm in _POOL_ITEM_RE.finditer(script):
+        pcode = _fourcc(pm.group(3), pm.group(4))
+        if not pcode:
+            continue
+        pool_items.setdefault((pm.group(1), pm.group(2)), []).append(
+            (pcode, float(pm.group(5)))
+        )
+    var_codes = _unit_var_codes(script)
+    out: list[str] = []
+    seen: set[str] = set()
+    for m in _DEATH_COND_BLOCK_RE.finditer(script):
+        cond_body = " ".join(m.group(2).split())
+        stem = m.group(1)
+        action_body = _fn_body(script, stem + "Actions")
+        if action_body == "(未找到函数体)":
+            continue
+        unit_codes: list[str] = []
+        seen_units: set[str] = set()
+        for code in _death_unit_codes(cond_body + "\n" + action_body, var_codes):
+            if code.lower() in seen_units:
+                continue
+            seen_units.add(code.lower())
+            unit_codes.append(code)
+        if not unit_codes:
+            continue
+        randoms = list(_RANDOM_CALL_RE.finditer(action_body))
+        direct: list[str] = []
+        seen_entries: set[str] = set()
+        for dm in _DIRECT_PLACE_RE.finditer(action_body):
+            icode = _fourcc(dm.group(1), dm.group(2))
+            cs = action_body.rfind("call ", max(0, dm.start() - 5), dm.start())
+            snippet = _balanced_call(action_body, cs if cs >= 0 else dm.start())
+            if snippet in seen_entries:
+                continue
+            seen_entries.add(snippet)
+            prior = [r for r in randoms if r.end() <= dm.start()]
+            gate = (
+                _balanced_call(action_body, prior[-1].start()) if prior else "无掷骰"
+            )
+            direct.append(f"{name_of(icode)}({icode}) 掷骰:{gate}")
+        pools: list[str] = []
+        for pvar, pidx in _PLACE_POOL_RE.findall(action_body):
+            regs = pool_items.get((pvar, pidx), [])
+            if not regs:
+                continue
+            total = sum(w for _, w in regs) or 1.0
+            inner = "、".join(
+                f"{name_of(ic)}({ic}) {w:g}/{total:g}" for ic, w in regs
+            )
+            pools.append(f"池 {pvar}[{pidx}] 共{len(regs)}件N选1: {inner}")
+        stock_counts: dict[tuple[str, str], int] = {}
+        for level, kind in _RANDOM_STOCK_RE.findall(action_body):
+            key = (level, kind)
+            stock_counts[key] = stock_counts.get(key, 0) + 1
+        if not direct and not pools and not stock_counts:
+            continue
+        header = "、".join(f"{name_of(uc)}({uc})" for uc in unit_codes)
+        parts: list[str] = []
+        if direct:
+            parts.append("直落 " + "；".join(direct))
+        if pools:
+            parts.append("；".join(pools))
+        if stock_counts:
+            parts.append(
+                "；".join(
+                    f"随机补货 ChooseRandomItemExBJ({level}, {kind})"
+                    + (f" ×{count}" if count > 1 else "")
+                    + " (运行时随机, 无固定码)"
+                    for (level, kind), count in stock_counts.items()
+                )
+            )
+        line = (
+            f"- {header}  ⚠ 脚本死亡掉落 ({stem}, 关系表外证据): "
+            + "；".join(parts)
+        )
+        if line in seen:
+            continue
+        seen.add(line)
+        out.append(line)
     return out
 
 

@@ -22,7 +22,9 @@ __all__ = (
 # 报告段落逻辑变化时同步 bump，使旧缓存整体失效。
 # v2: 满量纪律后的报告语义 (配方证据标注/全文 tooltip/无条数上限)——
 # 代码修复救不了旧缓存, 版本换代让旧报告立刻退役。
-GUIDE_CACHE_VERSION = "guide-v2"
+# v3: drops 段并入脚本死亡触发证据 (直落掷骰/奖池 N选1, 与 pack-query
+# drop 同源正则)——旧 v2 报告的掉落段缺此类证据, 整体退役。
+GUIDE_CACHE_VERSION = "guide-v3"
 
 
 def report_cache_path(map_path: str) -> Path | None:
