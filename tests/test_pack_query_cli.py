@@ -708,6 +708,25 @@ def test_query_recipe_from_relation_rows(pack):
     assert "图腾石  <-  凭证×1;宝物甲×2" in by_mat
 
 
+def test_run_cli_campaign_submap_aggregation(tmp_path, capsys):
+    # 战役容器包 (子地图/*/) 自动逐关查询并分段标注——根目录无对象表,
+    # 旧版对容器直接答「未找到」(永歌余烬 17 关数据全在子地图包里)
+    root = tmp_path / "campaign"
+    root.mkdir()
+    sub = root / "子地图" / "001_x"
+    sub.mkdir(parents=True)
+    (sub / "掉落与获取关系.tsv").write_text(
+        "关系ID\t地图子图\t关系类型\t装备ID\t装备名称\t来源分类\t来源ID\t来源名称\t实例序号\t玩家\tX\tY\tZ\t掉落组\t组内序号\t概率\t槽位\t合成材料ID\t合成材料名称与数量\t证据文件\n"
+        "h1\t测试图\t脚本/触发奖励\tI0A1\t宝物甲\t单位\tu0AA\t雪妖\t\t\t\t\t\t\t\t\t\t\t\tw3x\n",
+        encoding="utf-8",
+    )
+    rc = run_pack_query_cli(parse_pack_query_cli_options([str(root), "where", "宝物甲"]))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "== 子地图 001_x ==" in out
+    assert "宝物甲 [I0A1]" in out
+
+
 def test_parse_ok():
     o = parse_pack_query_cli_options(["pack", "item", "冰晶"])
     assert (o.command, o.query, o.limit) == ("item", "冰晶", 0)  # 默认全量

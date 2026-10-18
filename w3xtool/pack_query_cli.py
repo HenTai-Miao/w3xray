@@ -1979,13 +1979,44 @@ _QUERIES = {
 }
 
 
+def _campaign_subpacks(pack: Path) -> list[Path]:
+    """战役容器包: 子地图/*/ 各自是独立知识包 (根目录本身无对象表)。
+
+    只有战役导出会生成 子地图/*/ 带表的子包 (容器根自己也有 对象ID),
+    因此以子包存在为准, 不看根目录表 (根目录表是容器级, 逐关数据在子包)。"""
+    sub = pack / "子地图"
+    if not sub.is_dir():
+        return []
+    return sorted(
+        p for p in sub.iterdir() if p.is_dir() and (p / "掉落与获取关系.tsv").exists()
+    )
+
+
 def run_pack_query_cli(options: PackQueryCliOptions) -> int:
-    """执行查询并打印结果；返回 0（有结果）或 2（无结果）。"""
+    """执行查询并打印结果；返回 0（有结果）或 2（无结果）。
+
+    战役容器包 (子地图/*/) 自动逐关查询并以「== 子地图 名 ==」分段——
+    容器 guide 只有容器级信息, 逐关数据都在子地图包里 (旧版直接答未找到)。"""
     configure_cli_output()
     pack = Path(options.pack_dir)
     if not pack.is_dir():
         print("资料包目录不存在: " + options.pack_dir, file=sys.stderr)
         return 2
+    subs = _campaign_subpacks(pack)
+    if subs:
+        printed = False
+        for sub in subs:
+            lines = _QUERIES[options.command](sub, options.query, options.limit)
+            if not lines or lines[0].startswith("未找到"):
+                continue
+            print("== 子地图 " + sub.name + " ==")
+            for line in lines:
+                print(line)
+            printed = True
+        if not printed:
+            print("子地图均无结果: " + options.query)
+            return 2
+        return 0
     lines = _QUERIES[options.command](pack, options.query, options.limit)
     for line in lines:
         print(line)
