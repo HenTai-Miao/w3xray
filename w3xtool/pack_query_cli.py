@@ -1335,11 +1335,14 @@ def _unit_death_random_drops(
                     code = _fourcc(cm.group(2), cm.group(3))
             if not code:
                 continue
+            # 处理器必须取注册语句之后最近的一个: 初始化函数里往往有几十处
+            # TriggerAddAction (CreateNeutralHostile 41 处), 从函数头搜会
+            # 把无关处理器配给每个单位 (o604/o605/o606 曾共用 196)
             act = re.search(
                 r"TriggerAddAction\(\s*"
                 + re.escape(trigger_var)
                 + r"\s*,\s*function\s+(\w+)",
-                body,
+                body[rm.start() :],
             )
             if not act:
                 continue
