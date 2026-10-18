@@ -10,6 +10,23 @@ np = pytest.importorskip("numpy")
 from w3xtool.hero_chain import read_inventory  # noqa: E402
 
 BASE = 0x08000000
+
+
+def test_campaign_locate_hint_builds_feature_codes() -> None:
+    # 战役定位握手: 从实时读数压出 locate 命令模板
+    # (选中码+其前两件物品码+匹配单位码, 去重截 4)
+    from w3xtool.live_inventory import campaign_locate_hint
+
+    rep = {
+        "selected_unit": {
+            "code": "E601",
+            "items": [{"code": "I0AT"}, {"code": "I0FB"}, {"code": "I0XX"}],
+        },
+        "unit_matches": [{"code": "E601"}, {"code": "H004"}],
+    }
+    assert campaign_locate_hint(rep) == "E601;I0AT;I0FB;H004"
+    assert campaign_locate_hint({}) == ""
+    assert campaign_locate_hint({"selected_unit": {"code": ""}}) == ""
 SIZE = 0x41000
 
 

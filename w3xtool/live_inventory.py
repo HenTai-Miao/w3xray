@@ -1421,6 +1421,26 @@ def read_live(
     return report
 
 
+def campaign_locate_hint(rep: dict) -> str:
+    """从一次实时读数压出战役 locate 命令模板 (特征码交集定位任务关)。
+
+    战役工作流第④步 (码 × 子地图交集) 此前靠手工从 live 输出抄码:
+    本函数优先取 当前选中单位码+其前两件物品码, 再补匹配单位码,
+    去重截 4 个, 返回 "码1;码2;…" —— 玩家直接在 pack-query locate 后使用。"""
+    codes: list[str] = []
+    sel = rep.get("selected_unit") or {}
+    if sel.get("code"):
+        codes.append(str(sel["code"]))
+    for it in (sel.get("items") or [])[:2]:
+        if it.get("code"):
+            codes.append(str(it["code"]))
+    for u in rep.get("unit_matches") or []:
+        if u.get("code"):
+            codes.append(str(u["code"]))
+    uniq = list(dict.fromkeys(codes))[:4]
+    return ";".join(uniq)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=(__doc__ or __name__).splitlines()[0])
     ap.add_argument("--pack", required=True, help="导出的知识包目录")
@@ -1561,6 +1581,10 @@ def main(argv=None):
         print(f"== 全部单位 ({len(all_rows)}个, 按 所有者+四码 聚合) ==")
         for (o2, c2), n2 in sorted(combo.items()):
             print(f"  P{o2} {names[(o2, c2)]} [{c2}] ×{n2}")
+    hint = campaign_locate_hint(rep)
+    if hint:
+        print("== 战役定位 (若当前为 .w3n 战役, 用本行定位任务关) ==")
+        print("  pack-query <战役包> locate " + hint)
     print(json.dumps(rep, ensure_ascii=False, indent=1, default=str))
     if rep["slots"]:
         return 0
