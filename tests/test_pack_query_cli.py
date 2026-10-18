@@ -163,6 +163,10 @@ def pack(tmp_path):
         'call TriggerRegisterPlayerChatEvent(gg_trg_zoom, Player(0), "-", true)\r'
         "call TriggerAddAction(gg_trg_zoom, function Trig_ABCActions)\r"
         "endfunction\r"
+        "function InitTrig_any takes nothing returns nothing\r"
+        "set gg_trg_any=CreateTrigger()\r"
+        'call TriggerRegisterPlayerChatEvent(gg_trg_any, Player(0), "", false)\r'
+        "endfunction\r"
         "function InitTrig_secret takes nothing returns nothing\r"
         "local trigger t = CreateTrigger()\r"
         'call TriggerRegisterPlayerChatEvent(t, Player(0), "secret", true)\r'
@@ -404,7 +408,10 @@ def test_query_cmd_effect_chain(pack):
     assert '指令 "hg" (前缀' in hg
     assert "条件: function Trig_hgtConditions" in hg
     assert "PanCameraToTimedLocForPlayer" in hg
-    assert _query_cmd(pack, "不存在zz", 10) == ["未找到聊天指令: 不存在zz"]
+    miss = _query_cmd(pack, "不存在zz", 10)
+    # 图里有空串聊天事件时必须如实说明 (不能只答「未找到」)
+    assert miss[0] == "⚠ 未找到具名聊天指令: 不存在zz"
+    assert "空串聊天事件" in miss[1]
 
 
 def test_parse_cmd_command():

@@ -2196,6 +2196,15 @@ def _query_cmd(pack: Path, query: str, limit: int) -> list[str]:
         )
     hits = exact_hits or loose_hits
     if not hits:
+        # 空串聊天事件 = 任意聊天都会触发的监听 (YDWE 系统指令常把参数
+        # 写在条件/动作里)。只答「未找到」会让玩家以为本图无聊天交互。
+        empty = sum(1 for m in _CHAT_REG_RE.finditer(script) if not m.group(3))
+        if empty:
+            return [
+                f"⚠ 未找到具名聊天指令: {query}",
+                f"  （本图另有 {empty} 处空串聊天事件——任意聊天都会触发,"
+                " 具体参数写在条件/动作里; 见 脚本触发注册索引「聊天事件」行）",
+            ]
         return ["未找到聊天指令: " + query]
     lines: list[str] = []
     for var, cmd, exact, act_name, cond_name, count, fn in sorted(
