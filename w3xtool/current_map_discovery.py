@@ -155,13 +155,20 @@ def _in_use_evidence(
 
 
 def _windows_classic_map_roots() -> tuple[Path, ...]:
-    """Fixed classic-install map roots on the Windows system drive."""
+    """Fixed classic-install map and campaign roots on the Windows system drive.
+
+    Campaign sessions load missions from a ``.w3n`` sibling of ``Maps``; without
+    these roots the in-use probe never sees the open campaign file.
+    """
     system_root = os.environ.get("SystemRoot", r"C:\Windows")
     drive = PureWindowsPath(system_root).drive or "C:"
     base = PureWindowsPath(f"{drive}\\") / "Program Files (x86)" / "Warcraft III"
+    tft = base / "Warcraft III Frozen Throne"
     return (
         Path(base / "Maps"),
-        Path(base / "Warcraft III Frozen Throne" / "Maps"),
+        Path(tft / "Maps"),
+        Path(tft / "Campaigns"),
+        Path(base / "Campaigns"),
     )
 
 

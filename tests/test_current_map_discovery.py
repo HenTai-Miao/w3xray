@@ -169,18 +169,21 @@ def test_known_roots_include_windows_classic_install_directories(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Given: a home without Warcraft directories and a Windows system drive
-    # carrying the classic install layout.
+    # carrying the classic install layout, maps alongside campaigns.
     home = Path("/Users/demo")
     classic = Path("C:\\Program Files (x86)\\Warcraft III\\Maps")
-    classic_tft = Path(
-        "C:\\Program Files (x86)\\Warcraft III\\Warcraft III Frozen Throne\\Maps"
+    tft = Path("C:\\Program Files (x86)\\Warcraft III\\Warcraft III Frozen Throne")
+    classic_tft = tft / "Maps"
+    campaign_tft = tft / "Campaigns"
+    campaign_classic = Path(
+        "C:\\Program Files (x86)\\Warcraft III\\Campaigns"
     )
 
     def fake_home() -> Path:
         return home
 
     def fake_lstat(path: Path) -> os.stat_result:
-        if path in (classic, classic_tft):
+        if path in (classic, classic_tft, campaign_tft, campaign_classic):
             return os.stat_result((stat.S_IFDIR, 0, 0, 0, 0, 0, 0, 0, 0, 0))
         raise FileNotFoundError(path)
 
@@ -191,8 +194,13 @@ def test_known_roots_include_windows_classic_install_directories(
     # When: public root discovery checks its fixed candidates.
     roots = discover_default_map_roots()
 
-    # Then: both classic-install map directories are discovered roots.
-    expected = {Path(os.path.abspath(item)) for item in (classic, classic_tft)}
+    # Then: classic-install map directories and campaign directories are
+    # discovered roots; campaign sessions rely on the latter for in-use
+    # evidence about an open .w3n.
+    expected = {
+        Path(os.path.abspath(item))
+        for item in (classic, classic_tft, campaign_tft, campaign_classic)
+    }
     assert expected.issubset(roots)
 
 
