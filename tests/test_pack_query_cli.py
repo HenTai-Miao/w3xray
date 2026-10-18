@@ -426,6 +426,14 @@ def test_unit_death_random_dist_drops(pack):
     item_text = "\n".join(_query_drop(pack, "I0YD", 30))
     assert "死亡随机掉落" in item_text
     assert "nctm" in item_text and "Unit_ydweDropItems" in item_text
+    # guide drops 段与 pack-query 同源: 第三形态同样进入玩家报告
+    from w3xtool.pack_query_cli import script_death_drop_lines
+
+    guide_text = "\n".join(
+        script_death_drop_lines(load_script(pack), lambda c: c)
+    )
+    assert "Unit_ydweDropItems" in guide_text
+    assert "权重70/100" in guide_text
 
 
 def test_item_trigger_blocks_scope_local_vars(pack):

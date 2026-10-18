@@ -1550,6 +1550,12 @@ def _script_unit_direct_drops(
     return out
 
 
+def _item_label(code: str, name_of) -> str:
+    """物品展示: 名字与码相同时只显示码 (避免 I609(I609) 冗余)。"""
+    name = name_of(code)
+    return f"{name}({code})" if name and name != code else f"[{code}]"
+
+
 def script_death_drop_lines(script: str, name_of) -> list[str]:
     """guide drops 段的脚本死亡掉落附录: 一遍走全脚本按判定单位聚合。
 
@@ -1642,6 +1648,15 @@ def script_death_drop_lines(script: str, name_of) -> list[str]:
             continue
         seen.add(line)
         out.append(line)
+    # YDWE 每单位死亡模板: bj_lastDyingWidget + RandomDistAddItem——动作体
+    # 无 GetDyingUnit()/CreateItem, 上面两种形态都发现不了 (永歌余烬 002 实证)
+    for code, fn, regs in _unit_death_random_drops(script):
+        total = sum(w for _c, w in regs) or 1
+        inner = "、".join(
+            (_item_label(ic, name_of) + f" 权重{w}/{total}")
+            for ic, w in regs
+        )
+        out.append(f"- {name_of(code)}[{code}] 死亡随机掉落 ({fn}): {inner}")
     return out
 
 
