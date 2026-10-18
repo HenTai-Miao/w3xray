@@ -1245,6 +1245,7 @@ def _script_pool_drops(pack: Path, code: str) -> list[str]:
                 )
         out.append("")
     out.extend(_script_direct_death_drops(script, code, items, units))
+    out.extend(_script_random_dist_item_drops(script, code, items, units))
     return out
 
 
@@ -1286,6 +1287,114 @@ def _death_blocks(script: str) -> list[tuple[str, str, str, str]]:
         stem = fname[: -len("Actions")] if fname.endswith("Actions") else fname
         blocks.append((stem, f"死亡处理函数 {fname} (动作体内判定)", "", body))
     return blocks
+
+
+_UNIT_DEATH_REG_RE = re.compile(
+    r"TriggerRegisterUnitEvent\(\s*([A-Za-z_]\w*)\s*,\s*([A-Za-z_]\w*)\s*,"
+    r"\s*EVENT_UNIT_DEATH\s*\)"
+)
+_CREATE_UNIT_VAR_RE = re.compile(
+    # 第一个实参常是 Player(0) 这类带括号表达式, 不能用 [^)] 截断;
+    # 按第一个逗号切到单位码参数
+    r"set\s+([A-Za-z_]\w*)\s*=\s*CreateUnit\(\s*[^,\n]+,\s*(?:'(\w{4})'|\$([0-9A-Fa-f]{8}))"
+)
+_RANDOM_DIST_ADD_RE = re.compile(
+    r"RandomDistAddItem\(\s*(?:'(\w{4})'|\$([0-9A-Fa-f]{8}))\s*,\s*(\d+)\s*\)"
+)
+
+
+def _unit_death_random_drops(
+    script: str,
+) -> list[tuple[str, str, list[tuple[str, int]]]]:
+    """YDWE 每单位死亡掉落模板: (单位码, 处理函数, [(物品码, 权重)])。
+
+    该模板用 bj_lastDyingWidget 取死亡单位、RandomDistAddItem 配权重,
+    动作体里既无 GetDyingUnit() 也无 CreateItem 调用——现有两种死亡形态
+    都扫不到 (永歌余烬 E601 的 Unit000078_DropItems 即此法实证)。
+    关联方式: 同函数内 EVENT_UNIT_DEATH 注册的 unit 变量取其前最近的
+    set u=CreateUnit(...,'码',...) 单位码; 触发器变量取 TriggerAddAction。"""
+    out: dict[tuple[str, str], list[tuple[str, int]]] = {}
+    for hm in _FN_HEAD_RE.finditer(script):
+        end = script.find("endfunction", hm.start())
+        body = script[hm.start() : len(script) if end < 0 else end]
+        creates = list(_CREATE_UNIT_VAR_RE.finditer(body))
+        if not creates:
+            continue
+        for rm in _UNIT_DEATH_REG_RE.finditer(body):
+            trigger_var, unit_var = rm.group(1), rm.group(2)
+            code = ""
+            for cm in creates:
+                if cm.start() > rm.start():
+                    break
+                if cm.group(1) == unit_var:
+                    code = _fourcc(cm.group(2), cm.group(3))
+            if not code:
+                continue
+            act = re.search(
+                r"TriggerAddAction\(\s*"
+                + re.escape(trigger_var)
+                + r"\s*,\s*function\s+(\w+)",
+                body,
+            )
+            if not act:
+                continue
+            fn = act.group(1)
+            regs = [
+                (_fourcc(im.group(1), im.group(2)), int(im.group(3)))
+                for im in _RANDOM_DIST_ADD_RE.finditer(_fn_body(script, fn))
+            ]
+            regs = [(c, w) for c, w in regs if c]
+            if not regs:
+                continue
+            out.setdefault((code, fn), []).extend(regs)
+    return [(code, fn, regs) for (code, fn), regs in out.items()]
+
+
+def _script_unit_random_drops(
+    script: str,
+    unit_code: str,
+    items: dict[str, tuple[str, str]],
+    units: dict[str, str],
+) -> list[str]:
+    """单位维度: 该单位的 YDWE 死亡随机掉落模板内容 (权重满量)。"""
+    want = unit_code.lower()
+    out: list[str] = []
+    for ucode, fn, regs in _unit_death_random_drops(script):
+        if ucode.lower() != want:
+            continue
+        total = sum(w for _c, w in regs) or 1
+        inner = "、".join(
+            f"{items.get(c, (c, ''))[0]}({c}) {w}/{total}" for c, w in regs
+        )
+        out.append(f"  死亡触发 {fn} 随机掉落 (权重满量): {inner}")
+    return out
+
+
+def _script_random_dist_item_drops(
+    script: str,
+    code: str,
+    items: dict[str, tuple[str, str]],
+    units: dict[str, str],
+) -> list[str]:
+    """物品维度: 该物品出现在哪些 YDWE 每单位死亡随机掉落模板里。"""
+    want = code.lower()
+    out: list[str] = []
+    for ucode, fn, regs in _unit_death_random_drops(script):
+        hit = [(c, w) for c, w in regs if c.lower() == want]
+        if not hit:
+            continue
+        uname = units.get(ucode) or units.get(ucode.upper()) or ucode
+        total = sum(w for _c, w in regs) or 1
+        out.append(
+            "⚠ 脚本死亡随机掉落 (YDWE 每单位模板, 关系表无行): "
+            + uname
+            + " ["
+            + ucode
+            + "] 死亡触发 "
+            + fn
+            + f" 权重 {hit[0][1]}/{total}"
+        )
+    return out
 
 
 def _script_direct_death_drops(
@@ -1628,6 +1737,9 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
                 script = load_script(pack)
                 if script is not None:
                     got = got + _script_unit_direct_drops(
+                        script, cand, load_items(pack), all_units
+                    )
+                    got = got + _script_unit_random_drops(
                         script, cand, load_items(pack), all_units
                     )
             if got:

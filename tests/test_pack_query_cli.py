@@ -44,7 +44,9 @@ def pack(tmp_path):
 "物品\tI0A1\t15\tI0A1\t宝物甲\t是\t数组池\n"
 "物品\tI0A2\t16\tI0A2\t宝物乙\t是\t数组池\n"
 "物品\tI0TK\t17\tI0TK\t凭证\t是\t拾取触发\n"
-"物品\tI0PG\t18\tI0PG\t奖品\t是\t拾取产出\n",
+"物品\tI0PG\t18\tI0PG\t奖品\t是\t拾取产出\n"
+"物品\tI0YD\t19\tI0YD\t死亡随机甲\t是\tYDWE模板\n"
+"物品\tI0YE\t20\tI0YE\t死亡随机乙\t是\tYDWE模板\n",
         encoding="utf-8",
     )
     (obj / "单位.tsv").write_text(
@@ -303,6 +305,20 @@ def pack(tmp_path):
         "call TriggerAddCondition(gg_trg_pick, Condition(function Trig_pickConditions))\r"
         "call TriggerAddAction(gg_trg_pick, function Trig_pickActions)\r"
         "endfunction\r"
+        "function Unit_ydweDropItems takes nothing returns nothing\r"
+        "call RandomDistReset()\r"
+        "call RandomDistAddItem('I0YD', 70)\r"
+        "call RandomDistAddItem('I0YE', 30)\r"
+        "call UnitDropItem(GetTriggerUnit(), RandomDistChoose())\r"
+        "endfunction\r"
+        "function InitTrig_ydweDrop takes nothing returns nothing\r"
+        "local unit u=null\r"
+        "local trigger t=null\r"
+        "set u=CreateUnit(Player(0),'nctm',0.0,0.0,0.0)\r"
+        "set t=CreateTrigger()\r"
+        "call TriggerRegisterUnitEvent(t,u,EVENT_UNIT_DEATH)\r"
+        "call TriggerAddAction(t,function Unit_ydweDropItems)\r"
+        "endfunction\r"
         "set udg_HX=CreateUnit(Player(11),$75303042,0.0,0.0,0.0)\r",
         encoding="utf-8",
     )
@@ -388,6 +404,28 @@ def test_query_refs_chain_termination_and_classification(pack):
 def test_parse_refs_command():
     o = parse_pack_query_cli_options(["pack", "refs", "IZYY"])
     assert (o.command, o.query) == ("refs", "IZYY")
+
+
+def test_unit_death_random_dist_drops(pack):
+    # YDWE 每单位死亡模板: bj_lastDyingWidget + RandomDistAddItem, 动作体既无
+    # GetDyingUnit() 也无 CreateItem 调用——旧两种死亡形态都扫不到
+    from w3xtool.pack_query_cli import (
+        _query_drop,
+        _unit_death_random_drops,
+        load_script,
+    )
+
+    handlers = {
+        fn: regs
+        for _code, fn, regs in _unit_death_random_drops(load_script(pack))
+    }
+    assert handlers["Unit_ydweDropItems"] == [("I0YD", 70), ("I0YE", 30)]
+    unit_text = "\n".join(_query_drop(pack, "nctm", 30))
+    assert "Unit_ydweDropItems" in unit_text
+    assert "I0YD" in unit_text and "I0YE" in unit_text
+    item_text = "\n".join(_query_drop(pack, "I0YD", 30))
+    assert "死亡随机掉落" in item_text
+    assert "nctm" in item_text and "Unit_ydweDropItems" in item_text
 
 
 def test_item_trigger_blocks_scope_local_vars(pack):
