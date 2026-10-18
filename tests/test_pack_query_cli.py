@@ -87,7 +87,8 @@ def pack(tmp_path):
         "关系ID\t地图子图\t关系类型\t装备ID\t装备名称\t来源分类\t来源ID\t来源名称\t实例序号\t玩家\tX\tY\tZ\t掉落组\t组内序号\t概率\t槽位\t合成材料ID\t合成材料名称与数量\t证据文件\n"
         "h1\t测试图\t脚本/触发奖励\tI0AA\t冰晶\t单位\tu0AA\t雪妖\t\t\t\t\t\t\t\t\t\t\t\t\tw3x\n"
         "h2\t测试图\t合成\tI0P2\t奖池乙\t配方\t\t配方桌\t\t\t\t\t\t\t\t\tI0P1\tx2\t\tw3x\n"
-        "h3\t测试图\t商店制造\tI0P1\t奖池甲\t单位\th0ZZ\t铁匠铺\t\t\t\t\t\t\t\t\t\t\t\tw3x\n",
+        "h3\t测试图\t商店制造\tI0P1\t奖池甲\t单位\th0ZZ\t铁匠铺\t\t\t\t\t\t\t\t\t\t\t\tw3x\n"
+        "h4\t测试图\t可破坏物掉落\tI0G1\t图腾石\t可破坏物\tB007\t路障\t\t\t\t\t\t\t\t\t\t\t\tw3x\n",
         encoding="utf-8",
     )
     (tmp_path / "对象字段.tsv").write_text(
@@ -662,6 +663,17 @@ def test_query_where_pickup_grant_evidence(pack):
     text = "\n".join(_query_where(pack, "I0TK", 50))
     assert "拾取触发产出" in text
     assert "获取 奖品(I0PG) (GetRandomInt(1,300))" in text
+
+
+def test_query_source_side_relation_rows(pack):
+    # 查询词本身是「来源」(可破坏物/商人) 时, 关系表装备列不匹配也要给
+    # 来源侧行——路障 B007 掉三件, 两个命令曾都答「未找到」
+    from w3xtool.pack_query_cli import _query_drop, _query_where
+
+    drop_text = "\n".join(_query_drop(pack, "路障", 20))
+    assert "路障[B007] 可破坏物掉落 -> 图腾石 [I0G1]" in drop_text
+    where_text = "\n".join(_query_where(pack, "路障", 20))
+    assert "来源 路障[B007]: 可破坏物掉落 -> 图腾石 [I0G1]" in where_text
 
 
 def test_parse_ok():

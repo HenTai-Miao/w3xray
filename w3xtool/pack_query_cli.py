@@ -662,6 +662,20 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
         )
         if limit and len(lines) >= limit:
             break
+    # 来源侧: 查询词本身是来源 (可破坏物/商人/单位) 时, 关系表装备列
+    # 不匹配也要给出来源侧行 (路障 B007 掉三件物品, 两个命令曾都答未找到)
+    for r in _read_rows(pack, "掉落与获取关系.tsv"):
+        if len(r) < 8:
+            continue
+        src_name = _clean(r[7])
+        if not _match(query, r[6], src_name):
+            continue
+        lines.append(
+            "来源 " + src_name + "[" + r[6] + "]: " + r[2]
+            + " -> " + _clean(r[4]) + " [" + r[3] + "]"
+        )
+        if limit and len(lines) >= limit:
+            break
     # 使用触发随机产出 (宝箱开箱): 数组池内容静态可解, 满量列出
     script = load_script(pack)
     if script is not None:
@@ -1448,6 +1462,31 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
         if limit and len(lines) >= limit:
             break
     if not lines:
+        # 来源侧: 查询词是来源 (可破坏物/商人/单位) 时给出来源侧关系行,
+        # 曾让「路障掉什么」直接落到「未找到获取途径」
+        src_hits: list[str] = []
+        for r in _read_rows(pack, "掉落与获取关系.tsv"):
+            if len(r) < 8:
+                continue
+            src_name = _clean(r[7])
+            if not _match(query, r[6], src_name):
+                continue
+            src_hits.append(
+                src_name
+                + "["
+                + r[6]
+                + "] "
+                + r[2]
+                + " -> "
+                + _clean(r[4])
+                + " ["
+                + r[3]
+                + "]"
+            )
+            if limit and len(src_hits) >= limit:
+                break
+        if src_hits:
+            return src_hits
         cands = (
             [query] if len(query) == 4 and query.isascii() and query.isalnum() else []
         )
