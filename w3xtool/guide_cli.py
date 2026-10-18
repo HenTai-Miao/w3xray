@@ -95,6 +95,22 @@ def parse_guide_cli_options(argv: Sequence[str]) -> GuideCliOptions:
     return GuideCliOptions(map_path, section, refresh, minimap_marks)
 
 
+def _print_report_lines(text: str, section: str | None, map_path: str) -> None:
+    """打印报告行; 战役容器 (.w3n) 的 --section 空段给逐关指引。
+
+    CLI 的 --section 是从完整报告文本切段 (缓存也存完整报告), 空段旧版
+    什么都不印, 玩家会以为命令失效——.w3n 时输出与全量报告同一指引。"""
+    lines = list(_display_lines(text, section))
+    if section is not None and not lines and map_path.lower().endswith(".w3n"):
+        print(
+            "- 战役容器：该段在各任务关里，用 `pack-query <战役包> <命令> <词>` "
+            "逐关查询（自动聚合）"
+        )
+        return
+    for line in lines:
+        print(single_line_text(line))
+
+
 def run_guide_cli(options: GuideCliOptions) -> int:
     """加载地图并打印攻略速查；缓存命中时跳过解析；失败返回 2。"""
     configure_cli_output()
@@ -108,8 +124,7 @@ def run_guide_cli(options: GuideCliOptions) -> int:
         cached = load_cached_report(cache_path)
         if cached is not None:
             print("（命中攻略缓存；--refresh 强制重算）", file=sys.stderr)
-            for line in _display_lines(cached, options.section):
-                print(single_line_text(line))
+            _print_report_lines(cached, options.section, options.map_path)
             return 0
     context = build_map_load_context()
     try:
@@ -121,8 +136,7 @@ def run_guide_cli(options: GuideCliOptions) -> int:
     # 缓存永远存完整报告，避免 --section 查询把残缺结果留给后续全量查询。
     full_report = format_guide_report(map_data, None)
     store_cached_report(cache_path, full_report)
-    for line in _display_lines(full_report, options.section):
-        print(single_line_text(line))
+    _print_report_lines(full_report, options.section, options.map_path)
     if options.minimap_marks is not None:
         requested = options.minimap_marks
         stem = os.path.splitext(os.path.basename(options.map_path))[0]

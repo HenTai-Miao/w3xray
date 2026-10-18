@@ -112,12 +112,17 @@ def format_guide_report(md: MapData, section: str | None = None) -> str:
         lines.pop()
     # 战役容器 (.w3n): 指令/任务/掉落/合成都在任务关里, 空段不是「无内容」——
     # 尾附逐关指引, 防止把容器级空段误读成这图没指令/没掉落
-    if section is None and str(md.path).lower().endswith(".w3n"):
+    is_campaign = str(md.path).lower().endswith(".w3n")
+    hint = (
+        "- 战役容器：指令/任务/掉落/合成在各任务关里——逐关查询用 "
+        "`pack-query <战役包> <命令> <词>`（自动按「== 子地图 名 ==」聚合）"
+    )
+    if is_campaign and section is None:
         lines.append("")
-        lines.append(
-            "- 战役容器：指令/任务/掉落/合成在各任务关里——逐关查询用 "
-            "`pack-query <战役包> <命令> <词>`（自动按「== 子地图 名 ==」聚合）"
-        )
+        lines.append(hint)
+    elif is_campaign and not lines:
+        # --section 单段在容器上为空时旧版什么都不印, 玩家会以为命令失效
+        return hint
     return "\n".join(lines)
 
 

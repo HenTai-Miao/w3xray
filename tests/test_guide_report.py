@@ -301,6 +301,7 @@ def test_drops_section_includes_script_death_evidence(
 
 def test_campaign_container_report_has_submap_hint(
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     # 战役容器 (.w3n) 的完整报告尾附逐关查询指引, 防止把容器级空段
     # 误读成「这图没指令/没掉落」; 普通 .w3x 报告不附该行。
@@ -311,6 +312,21 @@ def test_campaign_container_report_has_submap_hint(
     assert "pack-query <战役包>" in report
     md.path = "normal.w3x"
     assert "战役容器" not in format_guide_report(md)
+    # --section 空段在容器上不再输出空白: 给同一逐关指引
+    empty = _map_data(monkeypatch)
+    empty.path = "永歌余烬.w3n"
+    empty.scripts = {}
+    section_text = format_guide_report(empty, "commands")
+    assert section_text.startswith("- 战役容器")
+    assert "pack-query <战役包>" in section_text
+    # CLI 的 --section 是切片路径, 空段同样给指引 (缓存/首次两条路径共用)
+    from w3xtool.guide_cli import _print_report_lines
+
+    _print_report_lines("【基本信息】\n- 地图名：x\n", "drops", "x.w3n")
+    out = capsys.readouterr().out
+    assert out.startswith("- 战役容器")
+    _print_report_lines("【基本信息】\n- 地图名：x\n", "drops", "x.w3x")
+    assert capsys.readouterr().out == ""
 
 
 def test_section_filter_returns_single_section(monkeypatch: pytest.MonkeyPatch) -> None:
