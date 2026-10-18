@@ -1853,6 +1853,13 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
                 + "; 未脚本验证——合成/掉落触发以实际游戏为准):"
             )
             return [head] + ["  " + h for h in _bounded(hints, limit)]
+        items_n = len(load_items(pack))
+        units_n = len(load_units(pack))
+        if items_n or units_n:
+            return [
+                "未找到获取途径: " + query,
+                f"  （本图物品表 {items_n} 件 / 单位表 {units_n} 种; 可换四码或关键词再查）",
+            ]
         return ["未找到获取途径: " + query]
     if not any("掉落" in k for k in kinds):
         scan_code = (

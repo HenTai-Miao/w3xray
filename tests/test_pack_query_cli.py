@@ -588,7 +588,9 @@ def test_query_drop_script_pool_fallback(pack):
     # 四字中文名不得被误当 fourcc (月光银狼事故)
     four_char = "\n".join(_query_drop(pack, "四字怪名", 10))
     assert "未找到获取途径: 四字怪名" in four_char
-    assert _query_drop(pack, "zz不存在", 10) == ["未找到获取途径: zz不存在"]
+    miss = _query_drop(pack, "zz不存在", 10)
+    assert miss[0] == "未找到获取途径: zz不存在"
+    assert "物品表" in miss[1]
 
 
 def test_query_drop_script_direct_death_drop(pack):
@@ -667,7 +669,9 @@ def test_query_drop_item_name_resolves_death_evidence(pack):
     assert "⚠ 脚本死亡位置直落" in text
     assert "CreateItemLoc('I0P3',udg_WPP[3])" in text
     # 完全未知名 → 依旧两行负输出
-    assert _query_drop(pack, "zz不存在", 10) == ["未找到获取途径: zz不存在"]
+    miss = _query_drop(pack, "zz不存在", 10)
+    assert miss[0] == "未找到获取途径: zz不存在"
+    assert "物品表" in miss[1]
 
 
 def test_query_where_falls_back_to_relation_rows(pack):
@@ -987,6 +991,15 @@ def test_query_item_and_price_miss_list_totals(pack):
     price_miss = _query_price(pack, "不存在zz", 20)
     assert price_miss[0] == "未找到物品价格: 不存在zz"
     assert "件" in price_miss[1]
+
+
+def test_query_drop_miss_lists_table_sizes(pack):
+    # 兜底未命中时给物品/单位表规模 (否定断言纪律最后一处)
+    from w3xtool.pack_query_cli import _query_drop
+
+    miss = _query_drop(pack, "不存在zz", 20)
+    assert miss[0] == "未找到获取途径: 不存在zz"
+    assert "物品表" in miss[1] and "单位表" in miss[1]
 
 
 def test_parse_ok():
