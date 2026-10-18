@@ -327,6 +327,11 @@ def test_campaign_container_report_has_submap_hint(
     assert out.startswith("- 战役容器")
     _print_report_lines("【基本信息】\n- 地图名：x\n", "drops", "x.w3x")
     assert capsys.readouterr().out == ""
+    # 战役容器小地图失败时给专用指引 (容器没有单张小地图)
+    from w3xtool.guide_cli import _minimap_error_hint
+
+    assert "战役容器不含任务关小地图" in _minimap_error_hint("x.w3n")
+    assert _minimap_error_hint("x.w3x") == ""
 
 
 def test_section_filter_returns_single_section(monkeypatch: pytest.MonkeyPatch) -> None:

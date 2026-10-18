@@ -155,8 +155,21 @@ def run_guide_cli(options: GuideCliOptions) -> int:
                 print(single_line_text(line))
         except Exception as exc:  # noqa: BLE001 - CLI 边界统一转成稳定错误码。
             print(f"小地图标注图生成失败：{exc}", file=sys.stderr)
+            hint = _minimap_error_hint(options.map_path)
+            if hint:
+                print(hint, file=sys.stderr)
             return 2
     return 0
+
+
+def _minimap_error_hint(map_path: str) -> str:
+    """小地图失败时的补充指引: 战役容器没有单张小地图 (各关独立)。"""
+    if map_path.lower().endswith(".w3n"):
+        return (
+            "（战役容器不含任务关小地图：请对具体任务关 .w3x 生成，或先用 "
+            "cli <.w3n> --pack 导出后，用 pack-query near <x> <y> 按坐标定位）"
+        )
+    return ""
 
 
 def _display_lines(full_report: str, section: str | None) -> list[str]:
