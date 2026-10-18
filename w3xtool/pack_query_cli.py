@@ -513,7 +513,24 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
 
 def _match(query: str, code: str, name: str) -> bool:
     q = query.lower()
-    return q == code.lower() or q in name.lower() or name.lower() in q
+    c = code.lower()
+    n = name.lower()
+    # 空字段不得参与匹配: name="" 时 "" in query 恒真, 空来源关系行
+    # (脚本奖励行 来源ID/名称 为空) 会出现在每一个查询里 (来源 [] 噪声)
+    return (bool(c) and q == c) or (bool(n) and (q in n or n in q))
+
+
+def _relation_source_label(r: list[str]) -> str:
+    """关系行来源展示: 有来源对象用「分类 ID」, 脚本奖励行回落证据函数/行号。
+
+    脚本奖励行的 来源ID/名称 为空 (接收者不是来源对象), 旧版打印
+    "来源 []" 与 " <-  " 尾巴; 真实出处是 r[20] 证据函数 / r[21] 行号。"""
+    src = (r[5].strip() + " " + r[6].strip()).strip()
+    if src:
+        return src
+    cols = [r[i].strip() for i in (20, 21) if i < len(r) and r[i].strip()]
+    detail = " ".join(cols)
+    return detail or "脚本奖励(未标来源)"
 
 
 def _query_locate(pack: Path, query: str, limit: int) -> list[str]:
@@ -753,7 +770,7 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
         if not _match(query, code, name):
             continue
         lines.append(
-            name + " [" + code + "]  " + r[2] + " <- " + r[5] + " " + r[6]
+            name + " [" + code + "]  " + r[2] + " <- " + _relation_source_label(r)
         )
         if limit and len(lines) >= limit:
             break
@@ -1554,7 +1571,9 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
         kinds.add(r[2])
         if not first_code:
             first_code = code
-        lines.append(name + " [" + code + "]  " + r[2] + " <- " + r[5] + " " + r[6])
+        lines.append(
+            name + " [" + code + "]  " + r[2] + " <- " + _relation_source_label(r)
+        )
         if limit and len(lines) >= limit:
             break
     if not lines:

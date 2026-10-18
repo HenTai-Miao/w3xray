@@ -91,7 +91,10 @@ def pack(tmp_path):
         "h3\t测试图\t商店制造\tI0P1\t奖池甲\t单位\th0ZZ\t铁匠铺\t\t\t\t\t\t\t\t\t\t\t\tw3x\n"
         "h4\t测试图\t可破坏物掉落\tI0G1\t图腾石\t可破坏物\tB007\t路障\t\t\t\t\t\t\t\t\t\t\t\tw3x\n"
         "h5\t测试图\t合成\tI0G1\t图腾石\t配方\t\t配方桌\t\t\t\t\t\t\t\t\t\tI0CK;I0A1\t凭证×1;宝物甲×2\tw3x\n"
-        "h6\t测试图\t商店出售\tI0A1\t宝物甲\t单位\th0YM\t银月配方商\t\t\t\t\t\t\t\t\t\t\t\tw3x\n",
+        "h6\t测试图\t商店出售\tI0A1\t宝物甲\t单位\th0YM\t银月配方商\t\t\t\t\t\t\t\t\t\t\t\tw3x\n"
+        "h8\t测试图\t脚本/触发奖励\tI0QT\t任务剑"
+        + "\t" * 15
+        + "war3map.j\tTrig_questActions\t行 100\tcall UnitAddItemByIdSwapped('I0QT',udg_LMS)\t已确认\t已确认\n",
         encoding="utf-8",
     )
     (tmp_path / "对象字段.tsv").write_text(
@@ -398,6 +401,18 @@ def test_item_trigger_blocks_scope_local_vars(pack):
     body = hit[0][2]
     assert "CreateItem" in body and "I0LV" in body
     assert "DoNothing" not in body
+
+
+def test_query_where_script_award_shows_evidence_source(pack):
+    # 脚本奖励行没有来源对象: 展示证据函数/行号, 而不是 "来源 []";
+    # 且空来源不得因 "" in query 恒真而出现在任何查询里
+    from w3xtool.pack_query_cli import _query_where
+
+    text = "\n".join(_query_where(pack, "I0QT", 50))
+    assert "脚本/触发奖励 <- Trig_questActions 行 100" in text
+    other = "\n".join(_query_where(pack, "I0A1", 50))
+    assert "I0QT" not in other
+    assert "来源 []" not in other
 
 
 def test_query_cmd_scopes_local_trigger_handlers(pack):
