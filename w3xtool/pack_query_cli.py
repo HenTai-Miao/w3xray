@@ -953,8 +953,9 @@ def _script_use_item_loot(
             arrays.setdefault(m.group(1), []).append((int(m.group(2)), acode))
     if not arrays:
         return []
-    var_by_cond = {fn: var for var, fn in _ADD_COND_RE.findall(script)}
-    act_by_var = dict(_ADD_ACTION_RE.findall(script))
+    # 处理器按注册位置配对: 局部 trigger 变量在初始化函数里反复复用,
+    # 全脚本按变量名配对会把无关动作体当产出 (与 _item_trigger_blocks 同源)
+    conds, _acts = _registration_maps(script)
     out: list[str] = []
     for m in _DEATH_COND_BLOCK_RE.finditer(script):
         cond_body = " ".join(m.group(2).split())
@@ -965,8 +966,12 @@ def _script_use_item_loot(
         if want not in hits:
             continue
         stem = m.group(1)
-        var = var_by_cond.get(stem + "Conditions")
-        act = act_by_var.get(var or "")
+        reg = conds.get(stem + "Conditions")
+        if not reg:
+            continue
+        var, pos = reg
+        _scope, scope_body, scope_start = _function_scope_at(script, pos)
+        act = _action_after_registration(var, pos, scope_body, scope_start)
         if not act:
             continue
         action_body = _fn_body(script, act)
@@ -982,15 +987,6 @@ def _script_use_item_loot(
                 + names_text
             )
     return out
-
-
-def _trigger_events(script: str, var: str) -> set[str]:
-    """触发器变量注册的事件集合 (在变量名之后的窗口里找 EVENT_* 字面量)。"""
-    events: set[str] = set()
-    for m in re.finditer(re.escape(var) + r"[^)\n]*", script):
-        seg = script[m.start() : m.start() + 400]
-        events.update(re.findall(r"EVENT_\w+", seg))
-    return events
 
 
 def _item_trigger_blocks(script: str) -> list[tuple[str, list[str], str, set[str]]]:
@@ -1151,8 +1147,8 @@ def _script_pool_drops(pack: Path, code: str) -> list[str]:
     want = "'" + code.lower() + "'"
     want_hex = "$" + code.encode("ascii", "replace").hex()
     var_codes = _unit_var_codes(script)
-    var_by_cond = {fn: var for var, fn in _ADD_COND_RE.findall(script)}
-    act_by_var = dict(_ADD_ACTION_RE.findall(script))
+    # 处理器按注册位置配对 (变量复用问题同 _script_use_item_loot)
+    conds, _acts = _registration_maps(script)
     pools: dict[tuple[str, str], list[tuple[str, float]]] = {}
     for pm in _POOL_ITEM_RE.finditer(script):
         pcode = _fourcc(pm.group(3), pm.group(4))
@@ -1174,8 +1170,12 @@ def _script_pool_drops(pack: Path, code: str) -> list[str]:
             )
         if not matched or "GetDyingUnit" not in body:
             continue
-        var = var_by_cond.get(m.group(1) + "Conditions")
-        act = act_by_var.get(var or "")
+        reg = conds.get(m.group(1) + "Conditions")
+        if not reg:
+            continue
+        var, pos = reg
+        _scope, scope_body, scope_start = _function_scope_at(script, pos)
+        act = _action_after_registration(var, pos, scope_body, scope_start)
         if not act:
             continue
         action_body = _fn_body(script, act)
@@ -2156,18 +2156,10 @@ _FN_HEAD_RE = re.compile(
 def _function_scope(script: str, pos: int) -> tuple[str, str]:
     """包含 pos 的 JASS 函数 (函数名, 函数体文本); 找不到返回 ("", script)。
 
-    局部 trigger 变量 (如 local trigger t) 在多个函数里重名——处理器
-    (TriggerAddAction/Condition) 必须按注册语句所在函数的作用域配对,
-    全脚本按变量名配对会把无关函数当成处理器 (YDWE Version 事故:
-    战役 md 的 YDWEVersion_Init 里注册的 t 曾被配到 Unit000312_DropItems)。"""
-    name, start = "", -1
-    for hm in _FN_HEAD_RE.finditer(script, 0, pos):
-        name, start = hm.group(1), hm.start()
-    if start < 0:
-        return "", script
-    end = script.find("endfunction", pos)
-    end = len(script) if end < 0 else end
-    return name, script[start:end]
+    与 _function_scope_at 同一实现 (后者额外返回函数体起点用于位置配对)。
+    局部 trigger 变量跨函数重名, 处理器必须按注册位置配对。"""
+    name, body, _start = _function_scope_at(script, pos)
+    return name, body
 
 
 def _query_cmd(pack: Path, query: str, limit: int) -> list[str]:

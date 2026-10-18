@@ -841,6 +841,40 @@ def test_query_near_annotates_source_drops(pack):
     assert "掉: 图腾石[I0G1]" in text
 
 
+def test_script_use_item_loot_scopes_local_vars():
+    # wbc 类使用触发: 同一初始化函数里 t 复用, 条件必须配自己的动作体
+    # (全脚本按变量名配对会把末个动作体当产出——与死亡模板同源事故)
+    from w3xtool.pack_query_cli import _script_use_item_loot
+
+    script = (
+        "function Trig_AA_Conditions takes nothing returns boolean\n"
+        "return GetItemTypeId(GetManipulatedItem())=='I0PA'\n"
+        "endfunction\n"
+        "function Trig_AA_Actions takes nothing returns nothing\n"
+        "call ItemPoolAddItemType(null, udg_PoolA[GetRandomInt(1,1)], 1)\n"
+        "endfunction\n"
+        "function Trig_BB_Conditions takes nothing returns boolean\n"
+        "return GetItemTypeId(GetManipulatedItem())=='I0PB'\n"
+        "endfunction\n"
+        "function Trig_BB_Actions takes nothing returns nothing\n"
+        "call ItemPoolAddItemType(null, udg_PoolB[GetRandomInt(1,1)], 1)\n"
+        "endfunction\n"
+        "function Init takes nothing returns nothing\n"
+        "local trigger t=CreateTrigger()\n"
+        "call TriggerAddCondition(t, Condition(function Trig_AA_Conditions))\n"
+        "call TriggerAddAction(t, function Trig_AA_Actions)\n"
+        "set t=CreateTrigger()\n"
+        "call TriggerAddCondition(t, Condition(function Trig_BB_Conditions))\n"
+        "call TriggerAddAction(t, function Trig_BB_Actions)\n"
+        "endfunction\n"
+        "set udg_PoolA[1]='I0XA'\n"
+        "set udg_PoolB[1]='I0XB'\n"
+    )
+    text = "\n".join(_script_use_item_loot(script, "I0PA", {}))
+    assert "udg_PoolA" in text and "I0XA" in text
+    assert "udg_PoolB" not in text
+
+
 def test_item_trigger_blocks_pair_by_position_in_giant_init(pack):
     # 同一初始化函数里 t 被反复复用: 条件必须配「其后最近」的 action,
     # 事件取各自注册窗口——旧实现按 (作用域,变量) 会把末个 action 配给所有条件
