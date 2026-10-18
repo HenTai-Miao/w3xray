@@ -662,6 +662,13 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
         )
         if limit and len(lines) >= limit:
             break
+    # 使用触发随机产出 (宝箱开箱): 数组池内容静态可解, 满量列出
+    script = load_script(pack)
+    if script is not None:
+        for code, (name, _d) in items.items():
+            if not _match(query, code, name):
+                continue
+            lines.extend(_script_use_item_loot(script, code, names))
     if not lines:
         # 单位查询不该吃物品文案兜底 (邪恶陨石人的任务文本曾被端出来
         # 当「炎石守卫」的来源线索)——路由到 drop 的单位反查
@@ -779,6 +786,66 @@ def _death_unit_codes(text: str, var_codes: dict[str, str]) -> list[str]:
         elif token in var_codes:
             codes.append(var_codes[token])
     return codes
+
+
+_USE_ITEM_COND_RE = re.compile(
+    r"GetItemTypeId\(GetManipulatedItem\(\)\)\s*==\s*(?:'(\w{4})'|\$([0-9A-Fa-f]{8}))",
+    re.I,
+)
+_ARRAY_POOL_RE = re.compile(
+    r"ItemPoolAddItemType\([^;]*?,\s*(udg_\w+)\[\s*GetRandomInt\(\s*1\s*,\s*(\d+)\s*\)\s*\]"
+)
+_ARRAY_SET_RE = re.compile(
+    r"set\s+(udg_\w+)\[(\d+)\]\s*=\s*(?:'(\w{4})'|\$([0-9A-Fa-f]{8}))",
+    re.I,
+)
+
+
+def _script_use_item_loot(
+    script: str, code: str, names: dict[str, str]
+) -> list[str]:
+    """使用物品触发的随机产出证据 (宝箱类: GetManipulatedItem 条件 → 数组池抽件)。
+
+    迷失国度 wbc 系统: 使用物品时创建池子, 逐次
+    ItemPoolAddItemType(池, udg_ZBSD[GetRandomInt(1,44)], 1) 从 45 件
+    数组随机取件, 定时器回调放置——数组内容静态可解, 满量列出。"""
+    want = code.lower()
+    arrays: dict[str, list[tuple[int, str]]] = {}
+    for m in _ARRAY_SET_RE.finditer(script):
+        acode = _fourcc(m.group(3), m.group(4))
+        if acode:
+            arrays.setdefault(m.group(1), []).append((int(m.group(2)), acode))
+    if not arrays:
+        return []
+    var_by_cond = {fn: var for var, fn in _ADD_COND_RE.findall(script)}
+    act_by_var = dict(_ADD_ACTION_RE.findall(script))
+    out: list[str] = []
+    for m in _DEATH_COND_BLOCK_RE.finditer(script):
+        cond_body = " ".join(m.group(2).split())
+        hits = {
+            _fourcc(x.group(1), x.group(2)).lower()
+            for x in _USE_ITEM_COND_RE.finditer(cond_body)
+        }
+        if want not in hits:
+            continue
+        stem = m.group(1)
+        var = var_by_cond.get(stem + "Conditions")
+        act = act_by_var.get(var or "")
+        if not act:
+            continue
+        action_body = _fn_body(script, act)
+        for pm in _ARRAY_POOL_RE.finditer(action_body):
+            arr, cap = pm.group(1), int(pm.group(2))
+            entries = sorted(arrays.get(arr, []))
+            if not entries:
+                continue
+            names_text = "、".join(f"{names.get(c, c)}({c})" for _i, c in entries)
+            out.append(
+                f"⚠ 使用触发随机产出 ({stem}Conditions 命中该物品): "
+                f"从数组池 {arr}[1..{cap}] 随机抽件, 共 {len(entries)} 件: "
+                + names_text
+            )
+    return out
 
 
 def _script_pool_drops(pack: Path, code: str) -> list[str]:

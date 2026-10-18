@@ -39,7 +39,10 @@ def pack(tmp_path):
 "物品\tI0G1\t10\tI0G1\t图腾石\t是\t直落\n"
 "物品\tI0CT\t11\tI0CT\t掉落石\t是\tCreateItem直落\n"
 "物品\tI0SH\t12\tI0SH\t上架货\t是\t上架商店\n"
-"物品\tI0OL\t13\tI0OL\t独行石\t是\t动作体自判\n",
+"物品\tI0OL\t13\tI0OL\t独行石\t是\t动作体自判\n"
+"物品\tI0CK\t14\tI0CK\t宝箱\t是\t使用触发\n"
+"物品\tI0A1\t15\tI0A1\t宝物甲\t是\t数组池\n"
+"物品\tI0A2\t16\tI0A2\t宝物乙\t是\t数组池\n",
         encoding="utf-8",
     )
     (obj / "单位.tsv").write_text(
@@ -229,6 +232,19 @@ def pack(tmp_path):
         "call CreateItemLoc('I0OL',GetUnitLoc(GetDyingUnit()))\r"
         "endif\r"
         "endfunction\r"
+        "function Trig_useConditions takes nothing returns boolean\r"
+        "return GetItemTypeId(GetManipulatedItem())=='I0CK'\r"
+        "endfunction\r"
+        "function Trig_useActions takes nothing returns nothing\r"
+        "call ItemPoolAddItemType(LoadItemPoolHandle(YDLOC,GetHandleId(GetTriggeringTrigger()),$1290C38A),udg_ZBS[GetRandomInt(1,2)],1)\r"
+        "endfunction\r"
+        "function InitTrig_use takes nothing returns nothing\r"
+        "set gg_trg_use=CreateTrigger()\r"
+        "call TriggerAddCondition(gg_trg_use, Condition(function Trig_useConditions))\r"
+        "call TriggerAddAction(gg_trg_use, function Trig_useActions)\r"
+        "endfunction\r"
+        "set udg_ZBS[1]='I0A1'\r"
+        "set udg_ZBS[2]='I0A2'\r"
         "set udg_HX=CreateUnit(Player(11),$75303042,0.0,0.0,0.0)\r",
         encoding="utf-8",
     )
@@ -608,6 +624,18 @@ def test_query_drop_action_only_death_handler(pack):
     assert "独行怪 [nonl]" in text
     assert "独行石 [I0OL]" in text
     assert "死亡处理函数 Trig_onlyActions (动作体内判定)" in text
+
+
+def test_query_where_use_item_array_pool(pack):
+    # 使用物品触发的数组池随机产出 (宝箱开箱): 数组内容静态全解,
+    # 迷失国度 wbc 系统 45/10/10/27 件四池即此法首次全量浮出。
+    from w3xtool.pack_query_cli import _query_where
+
+    text = "\n".join(_query_where(pack, "I0CK", 50))
+    assert "使用触发随机产出" in text
+    assert "从数组池 udg_ZBS[1..2] 随机抽件, 共 2 件" in text
+    assert "宝物甲(I0A1)" in text
+    assert "宝物乙(I0A2)" in text
 
 
 def test_parse_ok():
