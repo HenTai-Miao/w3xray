@@ -334,6 +334,27 @@ def test_campaign_container_report_has_submap_hint(
     assert _minimap_error_hint("x.w3x") == ""
 
 
+def test_hero_section_hint_when_no_preplaced(monkeypatch: pytest.MonkeyPatch) -> None:
+    # 预放置为 0 但对象表有英雄类单位: 用一行说明替代整段缺失
+    md = _map_data(monkeypatch)
+    md.units = []
+    md.obj_index = {
+        **md.obj_index,
+        "H00H": GameObject(
+            category="单位",
+            ext="w3u",
+            obj_id="H00H",
+            base_id="Hamg",
+            name="测试英雄",
+            is_custom=True,
+        ),
+    }
+    report = format_guide_report(md)
+    assert "【英雄阵容】" in report
+    assert "无预放置英雄单位" in report
+    assert "个英雄类单位" in report
+
+
 def test_section_filter_returns_single_section(monkeypatch: pytest.MonkeyPatch) -> None:
     # Given: 同一张地图。
     md = _map_data(monkeypatch)

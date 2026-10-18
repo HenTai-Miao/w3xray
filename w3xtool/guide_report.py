@@ -188,7 +188,17 @@ def _hero_lines(md: MapData) -> tuple[str, ...]:
             continue
         counts[unit.type_id] = counts.get(unit.type_id, 0) + 1
     if not counts:
-        return ()
+        # 预放置为 0 不等于没有英雄: 很多 RPG 由脚本/选择系统在运行时生成。
+        # 对象表里确有英雄类单位时, 用一行说明替代整段缺失 (迷失国度即此形态)。
+        hero_objs = [
+            code for code in md.obj_index if _hero_fine_category(md, code) == "英雄"
+        ]
+        if not hero_objs:
+            return ()
+        return (
+            f"- 无预放置英雄单位；对象表含 {len(hero_objs)} 个英雄类单位"
+            "（英雄可能由脚本/选择系统在运行时生成）",
+        )
     rows = [
         f"- {_code_name(md, code)}({code}) — 预放置 ×{count}"
         for code, count in sorted(counts.items())
