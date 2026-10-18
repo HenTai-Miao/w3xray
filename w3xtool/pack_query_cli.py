@@ -53,6 +53,7 @@ _COMMANDS = (
     "near",
     "cmd",
     "refs",
+    "locate",
 )
 _COLOR_RE = re.compile(r"\|c[0-9A-Fa-f]{8}|\|r")
 
@@ -495,7 +496,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         rest = rest[:2] + [" ".join(rest[2:])]
     if len(rest) != 3:
         raise PackQueryCliOptionError(
-            "用法: pack-query <资料包目录> <item|recipe|where|drop|quest|text|price|shop|tech|cmd|refs|near> <查询词>"
+            "用法: pack-query <资料包目录> <item|recipe|where|drop|quest|text|price|shop|tech|cmd|refs|near|locate> <查询词>"
             + ("  (near 用法: near <x> <y> [radius])" if command == "near" else "")
         )
     pack_dir, query = rest[0], rest[2]
@@ -513,6 +514,34 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
 def _match(query: str, code: str, name: str) -> bool:
     q = query.lower()
     return q == code.lower() or q in name.lower() or name.lower() in q
+
+
+def _query_locate(pack: Path, query: str, limit: int) -> list[str]:
+    """特征码交集: 多个对象码同时出现在本图时报告命中 (战役任务关识别)。
+
+    战役工作流第④步的机械化: live 拿英雄/随从/物品四码, 用本命令扫
+    脚本对象码出现索引.tsv, 「全部码都出现」的子图即候选任务关——
+    容器包由 run_pack_query_cli 自动逐关分段 (== 子地图 名 ==)。"""
+    codes = [c.strip() for c in re.split(r"[;,，；\s]+", query) if c.strip()]
+    if not codes:
+        return ["用法: locate <码1;码2;...> (特征码交集, 全部码都出现才算命中)"]
+    rows = _read_rows(pack, "脚本对象码出现索引.tsv")
+    if not rows:
+        return ["未找到 脚本对象码出现索引.tsv（资料包未导出脚本索引）"]
+    counts: dict[str, int] = {c.lower(): 0 for c in codes}
+    for r in rows:
+        if len(r) < 4:
+            continue
+        key = r[3].lower()
+        if key in counts:
+            counts[key] += 1
+    missing = [c for c in codes if counts[c.lower()] == 0]
+    if missing:
+        return ["未找到: 缺少 " + "、".join(missing) + "（特征码未全部出现）"]
+    lines = ["命中全部 " + str(len(codes)) + " 个特征码: " + "、".join(codes)]
+    for c in codes:
+        lines.append("  " + c + ": " + str(counts[c.lower()]) + " 处引用")
+    return lines
 
 
 def _query_item(pack: Path, query: str, limit: int) -> list[str]:
@@ -1976,6 +2005,7 @@ _QUERIES = {
     "cmd": _query_cmd,
     "refs": _query_refs,
     "near": _query_near,
+    "locate": _query_locate,
 }
 
 

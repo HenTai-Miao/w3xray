@@ -727,6 +727,18 @@ def test_run_cli_campaign_submap_aggregation(tmp_path, capsys):
     assert "宝物甲 [I0A1]" in out
 
 
+def test_query_locate_feature_code_intersection(pack):
+    # 战役任务关识别第④步机械化: 全部特征码都出现才算命中
+    from w3xtool.pack_query_cli import _query_locate
+
+    text = "\n".join(_query_locate(pack, "IZYY;IZZZ", 20))
+    assert "命中全部 2 个特征码: IZYY、IZZZ" in text
+    assert "IZYY: 2 处引用" in text
+    assert "IZZZ: 2 处引用" in text
+    miss = "\n".join(_query_locate(pack, "IZYY;NOPE", 20))
+    assert "缺少 NOPE" in miss
+
+
 def test_parse_ok():
     o = parse_pack_query_cli_options(["pack", "item", "冰晶"])
     assert (o.command, o.query, o.limit) == ("item", "冰晶", 0)  # 默认全量
