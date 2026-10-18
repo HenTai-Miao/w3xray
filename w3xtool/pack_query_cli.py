@@ -376,7 +376,15 @@ def _query_tech(pack: Path, query: str, limit: int) -> list[str]:
         lines.append("")
         if limit and len(lines) >= limit * 8:
             break
-    return lines or ["未找到科技: " + query]
+    if lines:
+        return lines
+    # 未命中时给科技总量提示——「未找到」不代表本图没有科技系统
+    if techs:
+        return [
+            "未找到科技: " + query,
+            f"  （本图共 {len(techs)} 项科技; 可用 tech <名称或四码> 查询）",
+        ]
+    return ["未找到科技: " + query]
 
 
 def _item_price(

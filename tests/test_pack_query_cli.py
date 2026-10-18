@@ -392,7 +392,10 @@ def test_query_tech_sheet_custom_overrides_and_base_inherit(pack):
     assert "效果(1级): 每级+1木" in text
     assert "效果(10级): 高级+2木" in text
     assert "前置: 1级←R0A9" in text
-    assert _query_tech(pack, "zz不存在", 20) == ["未找到科技: zz不存在"]
+    miss = _query_tech(pack, "zz不存在", 20)
+    # 未命中时给科技总量提示 (「未找到」不代表本图没有科技)
+    assert miss[0] == "未找到科技: zz不存在"
+    assert "项科技" in miss[1]
 
 
 def test_query_cmd_effect_chain(pack):
