@@ -756,7 +756,26 @@ def _query_recipe(pack: Path, query: str, limit: int) -> list[str]:
             hits.append("[" + prod + "] " + prod_name + "  <-  " + need)
             if limit and len(hits) >= limit:
                 break
-    return hits or ["未找到相关配方: " + query]
+    if hits:
+        return hits
+    # 未命中时给出配方总量与查询提示——「未找到」不代表本图没有合成
+    total = {
+        r[3]
+        for r in _read_rows(pack, "掉落与获取关系.tsv")
+        if len(r) > 4 and "合成" in r[2]
+    }
+    total.update(
+        r[3]
+        for r in _read_rows(pack, "脚本公式索引.tsv")
+        if len(r) > 3
+    )
+    if total:
+        return [
+            "未找到相关配方: " + query,
+            f"  （本图关系表/公式索引共 {len(total)} 条合成配方; "
+            "可用 recipe <成品或材料名> 查询）",
+        ]
+    return ["未找到相关配方: " + query]
 
 
 def _query_where(pack: Path, query: str, limit: int) -> list[str]:

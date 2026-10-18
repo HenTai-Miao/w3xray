@@ -923,6 +923,15 @@ def test_query_shop_includes_craft_shops(pack):
     assert "铁匠铺[h0ZZ]" in miss[1] and "银月配方商[h0YM]" in miss[1]
 
 
+def test_query_recipe_miss_lists_total(pack):
+    # 未命中时给配方总量提示——「未找到」不代表本图没有合成
+    from w3xtool.pack_query_cli import _query_recipe
+
+    miss = _query_recipe(pack, "不存在zz", 20)
+    assert miss[0] == "未找到相关配方: 不存在zz"
+    assert "条合成配方" in miss[1]
+
+
 def test_query_recipe_from_relation_rows(pack):
     # 关系表「合成」行与脚本公式索引是两套证据 (迷失国度 0 公式但有
     # 秘法瓶/万灵药完整合成行) —— 按成品名或材料名都能查
