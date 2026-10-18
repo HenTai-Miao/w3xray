@@ -648,7 +648,29 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
             )
             if limit and len(lines) >= limit:
                 break
+    # 预放置之外满量附上关系行 (I01F 事故: 任务物品无预放置点,
+    # 关系行明明存在却被跳过, 文案兜底还按描述子串错配到别的物品;
+    # 有预放置也有关系行的物品两类证据都给, 不静默吞掉)
+    for r in _read_rows(pack, "掉落与获取关系.tsv"):
+        if len(r) < 7:
+            continue
+        code, name = r[3], _clean(r[4])
+        if not _match(query, code, name):
+            continue
+        lines.append(
+            name + " [" + code + "]  " + r[2] + " <- " + r[5] + " " + r[6]
+        )
+        if limit and len(lines) >= limit:
+            break
     if not lines:
+        # 单位查询不该吃物品文案兜底 (邪恶陨石人的任务文本曾被端出来
+        # 当「炎石守卫」的来源线索)——路由到 drop 的单位反查
+        for ucode, uname in load_units(pack).items():
+            if _match(query, ucode, uname):
+                return [
+                    "未找到 [" + ucode + "] " + uname + " 的预放置/关系表记录。",
+                    "单位掉落查询用 drop <单位名或码> (按单位反查死亡触发)。",
+                ]
         hints = _tooltip_source_hints(pack, _hint_targets(pack, query), limit)
         if hints:
             head = (
@@ -669,12 +691,35 @@ _POOL_ITEM_RE = re.compile(
 )
 _PLACE_POOL_RE = re.compile(r"PlaceRandomItem\(\s*\(?\s*(udg_\w+)\[(\d+)\]")
 _ROLL_RE = re.compile(r"GetRandomInt\(\s*1\s*,\s*(\d+)\s*\)")
+_DIRECT_PLACE_RE = re.compile(
+    r"(?:CreateItemLoc|UnitAddItemByIdSwapped)\(\s*'(\w{4})'", re.I
+)
+_RANDOM_CALL_RE = re.compile(r"GetRandom(?:Real|Int)\([^)]*\)")
+_DEATH_UNIT_RE = re.compile(
+    r"GetUnitTypeId\(Get(?:Dying|Trigger)Unit\(\)\)\s*==\s*'(\w{4})'",
+    re.I,
+)
+
+
+def _balanced_call(body: str, start: int) -> str:
+    """从 start 起按括号配平取完整调用语句——语句全文, 不截断。"""
+    depth = 0
+    for i in range(start, len(body)):
+        if body[i] == "(":
+            depth += 1
+        elif body[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return body[start : i + 1]
+    return body[start:]
 
 
 def _script_pool_drops(pack: Path, code: str) -> list[str]:
-    """死亡触发奖池兜底: 关系表无该单位掉落行时, 扫脚本 GetDyingUnit 条件 -> PlaceRandomItem 池。
+    """死亡触发兜底: 关系表无该单位掉落行时, 扫 GetDyingUnit 条件的两种形态。
 
-    输出仍是"池子 N 选 1"形态, 不写成固定掉落。"""
+    ①奖池 PlaceRandomItem —— 输出仍是"池子 N 选 1"形态, 不写成固定掉落;
+    ②直落 CreateItemLoc/UnitAddItemByIdSwapped —— 奖池扫描看不见的
+    "死亡位置直发"写法 (BossFH 直落 I01F 曾被漏报为"无掉落记录")。"""
     script = load_script(pack)
     if script is None or len(code) != 4:
         return []
@@ -775,6 +820,136 @@ def _script_pool_drops(pack: Path, code: str) -> list[str]:
                     f"    - {iname} [{icode}]  {w:g}/{total:g}  {price_disp}{tag}"
                 )
         out.append("")
+    out.extend(_script_direct_death_drops(script, code, items, units))
+    return out
+
+
+def _script_direct_death_drops(
+    script: str,
+    code: str,
+    items: dict[str, tuple[str, str]],
+    units: dict[str, str],
+) -> list[str]:
+    """死亡位置直落兜底: GetDyingUnit 条件的动作体里直发该物品。
+
+    CreateItemLoc(码, 死亡位置) 与 UnitAddItemByIdSwapped(码, 击杀者) 两种
+    写法奖池扫描都看不见。掷骰门槛只列「同函数掷骰」原文, 门槛是否套用
+    本物品不猜, 以函数体全文为准 (防呆五闸④: 含随机数不写保底配方)。"""
+    if len(code) != 4:
+        return []
+    want = code.lower()
+    iname = next((un for c, (un, _ud) in items.items() if c.lower() == want), code)
+    out: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    for m in _DEATH_COND_BLOCK_RE.finditer(script):
+        cond_body = " ".join(m.group(2).split())
+        if "GetDyingUnit" not in cond_body:
+            continue
+        stem = m.group(1)
+        action_body = _fn_body(script, stem + "Actions")
+        if action_body == "(未找到函数体)":
+            continue
+        randoms = list(_RANDOM_CALL_RE.finditer(action_body))
+        death_units = list(_DEATH_UNIT_RE.finditer(action_body))
+        hits: list[list[str]] = []
+        for dm in _DIRECT_PLACE_RE.finditer(action_body):
+            if dm.group(1).lower() != want:
+                continue
+            cs = action_body.rfind("call ", max(0, dm.start() - 5), dm.start())
+            snippet = _balanced_call(action_body, cs if cs >= 0 else dm.start())
+            if (stem, snippet) in seen:
+                continue
+            seen.add((stem, snippet))
+            prior = [r for r in randoms if r.end() <= dm.start()]
+            gate = (
+                "同函数掷骰: "
+                + _balanced_call(action_body, prior[-1].start())
+                + " (门槛是否套用本物品以函数体为准)"
+                if prior
+                else "同函数掷骰: 无(本语句之前)"
+            )
+            verb = (
+                "死亡直落语句"
+                if dm.group(0).lower().startswith("createitemloc")
+                else "死亡触发发放"
+            )
+            lines = [f"  死亡触发 {stem} -> {verb}: {snippet}"]
+            killers = [du for du in death_units if du.end() <= dm.start()]
+            if killers:
+                ducode = killers[-1].group(1)
+                uname = units.get(ducode) or units.get(ducode.upper()) or ducode
+                lines.append(f"    死亡单位判定: {uname} [{ducode}]")
+            lines.append("    " + gate)
+            hits.append(lines)
+        if hits:
+            out.append(f"{iname} [{code}]  ⚠ 脚本死亡位置直落 (关系表无此掉落记录):")
+            out.append(f"  死亡条件 {stem}Conditions: {cond_body}")
+            for hit_lines in hits:
+                out.extend(hit_lines)
+    return out
+
+
+def _script_unit_direct_drops(
+    script: str,
+    unit_code: str,
+    items: dict[str, tuple[str, str]],
+    units: dict[str, str],
+) -> list[str]:
+    """按单位反查死亡直落: 该单位死亡触发创建的全部物品。
+
+    「打 X 掉什么」按单位名问时, 物品维度的直落扫描(匹配
+    CreateItemLoc 物品参数)反不进去——奖池扫描能命中条件体单位码,
+    直落证据却缺席。以 GetUnitTypeId(Get(Dying|Trigger)Unit())==
+    \'码\' 在条件体或动作体出现为准, 满量列出该触发器内全部直落
+    语句与各自掷骰门槛 (不写保底配方)。"""
+    want = unit_code.lower()
+    iname = units.get(unit_code) or units.get(unit_code.upper()) or unit_code
+    out: list[str] = []
+    seen: set[tuple[str, str, str]] = set()
+    for m in _DEATH_COND_BLOCK_RE.finditer(script):
+        cond_body = " ".join(m.group(2).split())
+        stem = m.group(1)
+        action_body = _fn_body(script, stem + "Actions")
+        if action_body == "(未找到函数体)":
+            continue
+        if not any(
+            du.group(1).lower() == want
+            for du in _DEATH_UNIT_RE.finditer(cond_body + "\n" + action_body)
+        ):
+            continue
+        randoms = list(_RANDOM_CALL_RE.finditer(action_body))
+        rows: list[str] = []
+        for dm in _DIRECT_PLACE_RE.finditer(action_body):
+            icode = dm.group(1)
+            cs = action_body.rfind("call ", max(0, dm.start() - 5), dm.start())
+            snippet = _balanced_call(action_body, cs if cs >= 0 else dm.start())
+            key = (stem, snippet, icode)
+            if key in seen:
+                continue
+            seen.add(key)
+            prior = [r for r in randoms if r.end() <= dm.start()]
+            gate = (
+                "同函数掷骰: "
+                + _balanced_call(action_body, prior[-1].start())
+                + " (门槛是否套用本物品以函数体为准)"
+                if prior
+                else "同函数掷骰: 无(本语句之前)"
+            )
+            dname = next(
+                (n for c, (n, _d) in items.items() if c.lower() == icode.lower()),
+                icode,
+            )
+            rows.append(
+                f"  死亡触发 {stem} -> 直落: {dname} [{icode}]: {snippet}"
+            )
+            rows.append("    " + gate)
+        if rows:
+            if not out:
+                out.append(
+                    f"{iname} [{unit_code}]  ⚠ 按单位反查死亡直落 (该单位死亡触发创建的物品):"
+                )
+            out.append(f"  死亡条件 {stem}Conditions: {cond_body}")
+            out.extend(rows)
     return out
 
 
@@ -801,6 +976,7 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
     q = query.lower()
     lines = []
     kinds = set()
+    first_code = ""
     for r in _read_rows(pack, "掉落与获取关系.tsv"):
         if len(r) < 7:
             continue
@@ -810,6 +986,8 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
         ):
             continue
         kinds.add(r[2])
+        if not first_code:
+            first_code = code
         lines.append(name + " [" + code + "]  " + r[2] + " <- " + r[5] + " " + r[6])
         if limit and len(lines) >= limit:
             break
@@ -823,10 +1001,33 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
                     cands.append(ucode)
                 if len(cands) >= 3:
                     break
+        if not cands:
+            # 按物品名问「打谁掉」也要进死亡扫描 (I01F 按名查询拿不到直落证据的事故)
+            for icode, (iname, _idesc) in load_items(pack).items():
+                if q in iname.lower():
+                    cands.append(icode)
+                if len(cands) >= 3:
+                    break
+        all_units = load_units(pack)
         for cand in cands:
             got = _script_pool_drops(pack, cand)
+            if cand in all_units or cand.upper() in all_units:
+                # 物品维度直落扫描按物品码匹配 CreateItemLoc 参数,
+                # 单位做查询词(按名或直接敲单位码)都反不进去——
+                # 按单位表归属判定, 补单位维度反查
+                script = load_script(pack)
+                if script is not None:
+                    got = got + _script_unit_direct_drops(
+                        script, cand, load_items(pack), all_units
+                    )
             if got:
                 return got
+        for ucode, uname in load_units(pack).items():
+            if _match(query, ucode, uname):
+                return [
+                    "[" + ucode + "] " + uname + " 无死亡触发直落/奖池证据。",
+                    "位置/获取查询用 where <词>。",
+                ]
         hints = _tooltip_source_hints(pack, _hint_targets(pack, query), limit)
         if hints:
             head = (
@@ -837,11 +1038,28 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
             return [head] + ["  " + h for h in _bounded(hints, limit)]
         return ["未找到获取途径: " + query]
     if not any("掉落" in k for k in kinds):
-        lines.append(
-            "⚠ 防呆: 该物品无 Boss/单位死亡掉落记录(仅 "
-            + "/".join(sorted(kinds))
-            + ")——不得断言打怪掉落; NPC 随身携带不构成掉落证据"
+        scan_code = (
+            query
+            if len(query) == 4 and query.isascii() and query.isalnum()
+            else first_code
         )
+        script_evidence = (
+            _script_pool_drops(pack, scan_code)
+            if scan_code and len(scan_code) == 4
+            else []
+        )
+        if script_evidence:
+            lines.append(
+                "⚠ 防呆: 关系表无 Boss/单位死亡掉落行, 但脚本死亡触发有直发证据"
+                + "(见下); NPC 随身携带仍不构成掉落证据"
+            )
+            lines.extend(script_evidence)
+        else:
+            lines.append(
+                "⚠ 防呆: 该物品无 Boss/单位死亡掉落记录(仅 "
+                + "/".join(sorted(kinds))
+                + ")——不得断言打怪掉落; NPC 随身携带不构成掉落证据"
+            )
     return lines
 
 

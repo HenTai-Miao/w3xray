@@ -151,7 +151,30 @@ def pack(tmp_path):
         "set gg_rct_testrect=Rect(- 5184.0, - 64.0, 4512.0, 64.0)\r"
         "set udg_WPool[2]=CreateItemPool()\r"
         "call ItemPoolAddItemType(udg_WPool[2], 'I0P1', 15.00)\r"
-        "call ItemPoolAddItemType(udg_WPool[2], 'I0P2', 30.00)\r",
+        "call ItemPoolAddItemType(udg_WPool[2], 'I0P2', 30.00)\r"
+        "function Trig_bossConditions takes nothing returns boolean\r"
+        "return((GetOwningPlayer(GetDyingUnit())==Player(10)))\r"
+        "endfunction\r"
+        "function Trig_bossActions takes nothing returns nothing\r"
+        "if((GetUnitTypeId(GetDyingUnit())=='nbld'))then\r"
+        "set udg_WPP[3]=GetUnitLoc(GetDyingUnit())\r"
+        "call CreateItemLoc('I0P3',udg_WPP[3])\r"
+        "call RemoveLocation(udg_WPP[3])\r"
+        "if((GetRandomReal(1.00,1.70)<=(1.00+(1.00*(udg_DYZS[1]*0.01)))))then\r"
+        "set udg_WPP[4]=GetUnitLoc(GetDyingUnit())\r"
+        "call CreateItemLoc('I0P4',udg_WPP[4])\r"
+        "call RemoveLocation(udg_WPP[4])\r"
+        "else\r"
+        "endif\r"
+        "else\r"
+        "endif\r"
+        "endfunction\r"
+        "function InitTrig_boss takes nothing returns nothing\r"
+        "set gg_trg_boss=CreateTrigger()\r"
+        "call TriggerRegisterAnyUnitEventBJ(gg_trg_boss, EVENT_PLAYER_UNIT_DEATH)\r"
+        "call TriggerAddCondition(gg_trg_boss, Condition(function Trig_bossConditions))\r"
+        "call TriggerAddAction(gg_trg_boss, function Trig_bossActions)\r"
+        "endfunction\r",
         encoding="utf-8",
     )
     ref_rows = [
@@ -312,6 +335,172 @@ def test_query_drop_script_pool_fallback(pack):
     four_char = "\n".join(_query_drop(pack, "四字怪名", 10))
     assert "未找到获取途径: 四字怪名" in four_char
     assert _query_drop(pack, "zz不存在", 10) == ["未找到获取途径: zz不存在"]
+
+
+def test_query_drop_script_direct_death_drop(pack):
+    from w3xtool.pack_query_cli import _query_drop
+
+    item_tsv = pack / "对象ID" / "物品.tsv"
+    item_tsv.write_text(
+        item_tsv.read_text(encoding="utf-8")
+        + "物品\tI0P3\t3\tI0P3\t直落木剑\t是\t说明\n"
+        + "物品\tI0P4\t4\tI0P4\t运势木剑\t是\t说明\n",
+        encoding="utf-8",
+    )
+    # I0P3: 死亡位置直落, 本语句之前无掷骰; 动作体内层 if 判定死亡单位 nbld
+    unit_tsv = pack / "对象ID" / "单位.tsv"
+    unit_tsv.write_text(
+        unit_tsv.read_text(encoding="utf-8")
+        + "单位\tnbld\t4\tnbld\t炎石小怪\n",
+        encoding="utf-8",
+    )
+    text = "\n".join(_query_drop(pack, "I0P3", 10))
+    assert "直落木剑 [I0P3]  ⚠ 脚本死亡位置直落 (关系表无此掉落记录):" in text
+    assert (
+        "死亡触发 Trig_boss -> 死亡直落语句: call CreateItemLoc('I0P3',udg_WPP[3])"
+        in text
+    )
+    assert "死亡单位判定: 炎石小怪 [nbld]" in text
+    assert "同函数掷骰: 无(本语句之前)" in text
+    assert "死亡条件 Trig_bossConditions: return((GetOwningPlayer(GetDyingUnit())==Player(10)))" in text
+    # I0P4: 同函数掷骰门槛如实列出, 不写保底配方
+    gate = "\n".join(_query_drop(pack, "I0P4", 10))
+    assert "运势木剑 [I0P4]  ⚠ 脚本死亡位置直落" in gate
+    assert "CreateItemLoc('I0P4',udg_WPP[4])" in gate
+    assert "同函数掷骰: GetRandomReal(1.00,1.70) (门槛是否套用本物品以函数体为准)" in gate
+
+
+def test_query_drop_relation_row_without_drop_kind_gets_script_evidence(pack):
+    # I01F 事故形态: 关系表有"脚本/触发奖励"行 (来源为空), 兜底原本不触发,
+    # 防呆横幅误称"无死亡掉落记录"——现在缺掉落类型也跑死亡扫描并附证据
+    from w3xtool.pack_query_cli import _query_drop
+
+    (pack / "掉落与获取关系.tsv").write_text(
+        "对象\t名称\t关系类型\t对象ID\t装备名称\t来源类型\t来源名称\n"
+        + "物品\tI0P3\t脚本/触发奖励\tI0P3\t直落木剑\t脚本\t\n"
+        + "物品\tI0BB\t脚本/触发奖励\tI0BB\t冰晶\t脚本\t\n",
+        encoding="utf-8",
+    )
+    item_tsv = pack / "对象ID" / "物品.tsv"
+    item_tsv.write_text(
+        item_tsv.read_text(encoding="utf-8")
+        + "物品\tI0P3\t3\tI0P3\t直落木剑\t是\t说明\n",
+        encoding="utf-8",
+    )
+    hit = "\n".join(_query_drop(pack, "I0P3", 10))
+    assert "直落木剑 [I0P3]  脚本/触发奖励" in hit
+    assert "关系表无 Boss/单位死亡掉落行, 但脚本死亡触发有直发证据" in hit
+    assert "⚠ 脚本死亡位置直落" in hit
+    assert "CreateItemLoc('I0P3',udg_WPP[3])" in hit
+    # 无死亡触发证据 → 保留旧防呆措辞 (不得断言打怪掉落)
+    miss = "\n".join(_query_drop(pack, "I0BB", 10))
+    assert "冰晶 [I0BB]  脚本/触发奖励" in miss
+    assert "不得断言打怪掉落" in miss
+    assert "脚本死亡位置直落" not in miss
+
+
+def test_query_drop_item_name_resolves_death_evidence(pack):
+    # I01F 按名查询事故: 单位名无匹配时回退到物品名解析再扫死亡触发
+    from w3xtool.pack_query_cli import _query_drop
+
+    item_tsv = pack / "对象ID" / "物品.tsv"
+    item_tsv.write_text(
+        item_tsv.read_text(encoding="utf-8")
+        + "物品\tI0P3\t3\tI0P3\t直落木剑\t是\t说明\n",
+        encoding="utf-8",
+    )
+    text = "\n".join(_query_drop(pack, "直落木剑", 10))
+    assert "⚠ 脚本死亡位置直落" in text
+    assert "CreateItemLoc('I0P3',udg_WPP[3])" in text
+    # 完全未知名 → 依旧两行负输出
+    assert _query_drop(pack, "zz不存在", 10) == ["未找到获取途径: zz不存在"]
+
+
+def test_query_where_falls_back_to_relation_rows(pack):
+    # I01F 事故形态: 任务物品无预放置点, 关系行存在却被 where 跳过,
+    # 文案兜底按描述子串错配到别的物品——现在补查关系表
+    from w3xtool.pack_query_cli import _query_where
+
+    (pack / "掉落与获取关系.tsv").write_text(
+        "对象\t名称\t关系类型\t对象ID\t装备名称\t来源类型\t来源名称\n"
+        + "物品\tI0P3\t脚本/触发奖励\tI0P3\t直落木剑\t脚本\t死亡触发\n",
+        encoding="utf-8",
+    )
+    item_tsv = pack / "对象ID" / "物品.tsv"
+    item_tsv.write_text(
+        item_tsv.read_text(encoding="utf-8")
+        + "物品\tI0P3\t3\tI0P3\t直落木剑\t是\t说明\n",
+        encoding="utf-8",
+    )
+    text = "\n".join(_query_where(pack, "直落木剑", 10))
+    assert "直落木剑 [I0P3]  脚本/触发奖励 <- 脚本 死亡触发" in text
+    # 文案兜底不再抢跑 (关系行命中后不出现文案线索头)
+    assert "文案级来源线索" not in text
+    # 四码直查同样命中关系行
+    by_code = "\n".join(_query_where(pack, "I0P3", 10))
+    assert "直落木剑 [I0P3]  脚本/触发奖励" in by_code
+    # 既有预放置又有关系行 → 两类证据都给 (满量, 不静默吞)
+    (pack / "掉落与获取关系.tsv").write_text(
+        "对象\t名称\t关系类型\t对象ID\t装备名称\t来源类型\t来源名称\n"
+        + "物品\tI0P3\t脚本/触发奖励\tI0P3\t雪妖皮草\t脚本\t死亡触发\n",
+        encoding="utf-8",
+    )
+    both = "\n".join(_query_where(pack, "雪妖", 10))
+    assert "[u0AA] 雪妖 (单位) -> (-6144, 24320)" in both
+    assert "雪妖皮草 [I0P3]  脚本/触发奖励" in both
+
+
+def test_query_drop_unit_name_reverse_lists_direct_drops(pack):
+    # 「打 X 掉什么」按单位名问: 物品维度直落扫描匹配 CreateItemLoc
+    # 物品参数, 反不进去——需按单位码反查死亡触发, 满量列直落清单
+    from w3xtool.pack_query_cli import _query_drop
+
+    unit_tsv = pack / "对象ID" / "单位.tsv"
+    unit_tsv.write_text(
+        unit_tsv.read_text(encoding="utf-8")
+        + "单位\tnbld\t4\tnbld\t炎石小怪\n",
+        encoding="utf-8",
+    )
+    item_tsv = pack / "对象ID" / "物品.tsv"
+    item_tsv.write_text(
+        item_tsv.read_text(encoding="utf-8")
+        + "物品\tI0P3\t3\tI0P3\t直落木剑\t是\t说明\n"
+        + "物品\tI0P4\t4\tI0P4\t运势木剑\t是\t说明\n",
+        encoding="utf-8",
+    )
+    text = "\n".join(_query_drop(pack, "炎石小怪", 10))
+    assert "炎石小怪 [nbld]  ⚠ 按单位反查死亡直落 (该单位死亡触发创建的物品):" in text
+    assert "死亡条件 Trig_bossConditions: return((GetOwningPlayer(GetDyingUnit())==Player(10)))" in text
+    assert "直落: 直落木剑 [I0P3]" in text
+    assert "直落: 运势木剑 [I0P4]" in text
+    assert "同函数掷骰: 无(本语句之前)" in text
+    assert "同函数掷骰: GetRandomReal(1.00,1.70)" in text
+    # 直接敲单位四码走 ASCII 候选路径, 同样按单位表归属触发反查
+    by_code = "\n".join(_query_drop(pack, "nbld", 10))
+    assert "按单位反查死亡直落" in by_code
+    assert "直落: 直落木剑 [I0P3]" in by_code
+
+
+def test_query_fallbacks_route_unit_queries(pack):
+    # 单位查询两层全空时路由指引, 不再吃物品文案兜底
+    # (邪恶陨石人的任务文本曾被端出来当「炎石守卫」的来源线索);
+    # 用无触发器引用的单位——nbld 会被反查清单优先命中, 轮不到路由
+    from w3xtool.pack_query_cli import _query_drop, _query_where
+
+    unit_tsv = pack / "对象ID" / "单位.tsv"
+    unit_tsv.write_text(
+        unit_tsv.read_text(encoding="utf-8")
+        + "单位\tnrte\t4\tnrte\t路由怪\n",
+        encoding="utf-8",
+    )
+    where_text = "\n".join(_query_where(pack, "路由怪", 10))
+    assert "未找到 [nrte] 路由怪 的预放置/关系表记录。" in where_text
+    assert "单位掉落查询用 drop <单位名或码>" in where_text
+    assert "文案级来源线索" not in where_text
+    drop_text = "\n".join(_query_drop(pack, "路由怪", 10))
+    assert "无死亡触发直落/奖池证据" in drop_text
+    assert "位置/获取查询用 where <词>" in drop_text
+    assert "文案级" not in drop_text
 
 
 def test_parse_ok():
