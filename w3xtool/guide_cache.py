@@ -24,7 +24,9 @@ __all__ = (
 # 代码修复救不了旧缓存, 版本换代让旧报告立刻退役。
 # v3: drops 段并入脚本死亡触发证据 (直落掷骰/奖池 N选1, 与 pack-query
 # drop 同源正则)——旧 v2 报告的掉落段缺此类证据, 整体退役。
-GUIDE_CACHE_VERSION = "guide-v3"
+# v4: 新增「开箱与随机产出」段 (使用触发数组池, 与 where 同源)——旧 v3
+# 报告缺该段落, 整体退役。
+GUIDE_CACHE_VERSION = "guide-v4"
 
 
 def report_cache_path(map_path: str) -> Path | None:

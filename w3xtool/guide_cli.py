@@ -1,7 +1,7 @@
 """guide 子命令：一张地图一键输出玩家攻略骨架。
 
 用法：
-    uv run main.py guide <地图路径> [--section basic|commands|quests|heroes|recipes|shops|drops|clues] [--refresh]
+    uv run main.py guide <地图路径> [--section basic|commands|quests|heroes|recipes|shops|drops|loot|clues] [--refresh]
         [--minimap-marks [输出.png | 点位.json]]
 
 对源地图只读；同一地图版本的重复查询走磁盘缓存（地图改动自动失效），

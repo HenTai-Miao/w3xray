@@ -49,6 +49,19 @@ function Trig_pdropActions takes nothing returns nothing
     call ItemPoolAddItemType(udg_PD[3],'I0P2',100.0)
     call YDWEPlaceRandomItem(udg_PD[3],0.0,0.0)
 endfunction
+function Trig_useConditions takes nothing returns boolean
+    return GetItemTypeId(GetManipulatedItem())=='I0CK'
+endfunction
+function Trig_useActions takes nothing returns nothing
+    call ItemPoolAddItemType(LoadItemPoolHandle(YDLOC,GetHandleId(GetTriggeringTrigger()),$1290C38A),udg_ZBS[GetRandomInt(1,2)],1)
+endfunction
+function InitTrig_use takes nothing returns nothing
+    set gg_trg_use=CreateTrigger()
+    call TriggerAddCondition(gg_trg_use, Condition(function Trig_useConditions))
+    call TriggerAddAction(gg_trg_use, function Trig_useActions)
+endfunction
+set udg_ZBS[1]='I0A1'
+set udg_ZBS[2]='I0A2'
 """
 
 
@@ -151,6 +164,30 @@ def _map_data(monkeypatch: pytest.MonkeyPatch) -> MapData:
                 name="奖池物品",
                 is_custom=False,
             ),
+            "I0CK": GameObject(
+                category="物品",
+                ext="w3t",
+                obj_id="I0CK",
+                base_id="",
+                name="宝箱",
+                is_custom=False,
+            ),
+            "I0A1": GameObject(
+                category="物品",
+                ext="w3t",
+                obj_id="I0A1",
+                base_id="",
+                name="宝物甲",
+                is_custom=False,
+            ),
+            "I0A2": GameObject(
+                category="物品",
+                ext="w3t",
+                obj_id="I0A2",
+                base_id="",
+                name="宝物乙",
+                is_custom=False,
+            ),
         },
         units=[
             Unit(type_id="Zh0", variation=0, x=1.0, y=2.0, z=0.0, angle=0.0, player=15),
@@ -221,6 +258,12 @@ def test_full_report_covers_player_facing_sections(
     assert (
         "奖池怪(nbos)  ⚠ 脚本死亡掉落 (Trig_pdrop, 关系表外证据): "
         "池 udg_PD[3] 共1件N选1: 奖池物品(I0P2) 100/100"
+    ) in report
+    # 开箱与随机产出段: 使用触发数组池 (与 where 同源)。
+    assert "【开箱与随机产出】" in report
+    assert (
+        "使用 宝箱(I0CK) 随机产出: 从数组池 udg_ZBS[1..2] 随机抽件, "
+        "共 2 件: 宝物甲(I0A1)、宝物乙(I0A2)"
     ) in report
 
 

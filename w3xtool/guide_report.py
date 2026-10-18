@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 
 from .base_names import BASE_CATEGORIES, BASE_NAMES
 from .item_relation_models import ItemRelation, ItemRelationKind, RelationObject
-from .pack_query_cli import script_death_drop_lines
+from .pack_query_cli import script_death_drop_lines, use_item_loot_lines
 from .script_scan import scan_chat_commands
 from .script_sources import analysis_script_texts
 from .wts import map_wts_table, resolve
@@ -66,6 +66,7 @@ GUIDE_SECTION_TITLES: dict[str, str] = {
     "recipes": "合成配方",
     "shops": "商店出售",
     "drops": "怪物掉落",
+    "loot": "开箱与随机产出",
     "clues": "波次与播报线索",
 }
 
@@ -80,6 +81,7 @@ def build_guide_sections(md: MapData) -> tuple[GuideSection, ...]:
         GuideSection("recipes", GUIDE_SECTION_TITLES["recipes"], _recipe_lines(md)),
         GuideSection("shops", GUIDE_SECTION_TITLES["shops"], _shop_lines(md)),
         GuideSection("drops", GUIDE_SECTION_TITLES["drops"], _drop_lines(md)),
+        GuideSection("loot", GUIDE_SECTION_TITLES["loot"], _loot_lines(md)),
         GuideSection("clues", GUIDE_SECTION_TITLES["clues"], _clue_lines(md)),
     )
     return tuple(section for section in candidates if section.lines)
@@ -204,6 +206,18 @@ def _drop_lines(md: MapData) -> tuple[str, ...]:
     seen: set[str] = set(rows)
     for _source, text in analysis_script_texts(md):
         for line in script_death_drop_lines(text, lambda code: _code_name(md, code)):
+            if line not in seen:
+                seen.add(line)
+                rows.append(line)
+    return tuple(rows)
+
+
+def _loot_lines(md: MapData) -> tuple[str, ...]:
+    """开箱与随机产出: 使用物品触发的数组池 (与 where 同源, 满量)。"""
+    rows: list[str] = []
+    seen: set[str] = set()
+    for _source, text in analysis_script_texts(md):
+        for line in use_item_loot_lines(text, lambda code: _code_name(md, code)):
             if line not in seen:
                 seen.add(line)
                 rows.append(line)

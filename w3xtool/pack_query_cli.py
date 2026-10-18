@@ -848,6 +848,56 @@ def _script_use_item_loot(
     return out
 
 
+def use_item_loot_lines(script: str, name_of) -> list[str]:
+    """guide「开箱与随机产出」段: 使用物品触发的数组池随机产出, 一遍聚合。
+
+    与 where 的 _script_use_item_loot 同源: 条件 `GetManipulatedItem` 命中的
+    物品列表 + 动作注册的数组池 (`udg_X[GetRandomInt(1,N)]`) → 数组内容
+    静态全解满量列出 (迷失国度 wbc 系统 45/10/10/27 件四池即此法实证)。"""
+    arrays: dict[str, list[tuple[int, str]]] = {}
+    for m in _ARRAY_SET_RE.finditer(script):
+        acode = _fourcc(m.group(3), m.group(4))
+        if acode:
+            arrays.setdefault(m.group(1), []).append((int(m.group(2)), acode))
+    if not arrays:
+        return []
+    var_by_cond = {fn: var for var, fn in _ADD_COND_RE.findall(script)}
+    act_by_var = dict(_ADD_ACTION_RE.findall(script))
+    out: list[str] = []
+    seen: set[str] = set()
+    for m in _DEATH_COND_BLOCK_RE.finditer(script):
+        cond_body = " ".join(m.group(2).split())
+        items_hit = [
+            _fourcc(x.group(1), x.group(2))
+            for x in _USE_ITEM_COND_RE.finditer(cond_body)
+        ]
+        items_hit = [c for c in items_hit if c]
+        if not items_hit:
+            continue
+        stem = m.group(1)
+        var = var_by_cond.get(stem + "Conditions")
+        act = act_by_var.get(var or "")
+        if not act:
+            continue
+        action_body = _fn_body(script, act)
+        users = "、".join(f"{name_of(c)}({c})" for c in items_hit)
+        for pm in _ARRAY_POOL_RE.finditer(action_body):
+            arr, cap = pm.group(1), int(pm.group(2))
+            entries = sorted(arrays.get(arr, []))
+            if not entries:
+                continue
+            line = (
+                f"- 使用 {users} 随机产出: 从数组池 {arr}[1..{cap}] 随机抽件, "
+                f"共 {len(entries)} 件: "
+                + "、".join(f"{name_of(c)}({c})" for _i, c in entries)
+            )
+            if line in seen:
+                continue
+            seen.add(line)
+            out.append(line)
+    return out
+
+
 def _script_pool_drops(pack: Path, code: str) -> list[str]:
     """死亡触发兜底: 关系表无该单位掉落行时, 扫 GetDyingUnit 条件的两种形态。
 
