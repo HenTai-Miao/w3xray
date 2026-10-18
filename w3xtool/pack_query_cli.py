@@ -800,6 +800,11 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
                     script, [code], lambda c: names.get(c, c)
                 )
             )
+            # 第三形态 (YDWE 每单位随机掉落) 与 drop 同源: where 曾答
+            # 「未找到获取途径」而 drop 能给出证据——两命令必须一致
+            lines.extend(
+                _script_random_dist_item_drops(script, code, items, names)
+            )
     if not lines:
         # 单位查询不该吃物品文案兜底 (邪恶陨石人的任务文本曾被端出来
         # 当「炎石守卫」的来源线索)——路由到 drop 的单位反查

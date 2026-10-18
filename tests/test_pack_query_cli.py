@@ -434,6 +434,11 @@ def test_unit_death_random_dist_drops(pack):
     )
     assert "Unit_ydweDropItems" in guide_text
     assert "权重70/100" in guide_text
+    # where 与 drop 同源: 物品获取途径同样能看到第三形态
+    from w3xtool.pack_query_cli import _query_where
+
+    where_text = "\n".join(_query_where(pack, "I0YD", 30))
+    assert "死亡随机掉落" in where_text
 
 
 def test_item_trigger_blocks_scope_local_vars(pack):
