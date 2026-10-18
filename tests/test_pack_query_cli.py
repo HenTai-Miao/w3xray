@@ -46,7 +46,9 @@ def pack(tmp_path):
 "物品\tI0TK\t17\tI0TK\t凭证\t是\t拾取触发\n"
 "物品\tI0PG\t18\tI0PG\t奖品\t是\t拾取产出\n"
 "物品\tI0YD\t19\tI0YD\t死亡随机甲\t是\tYDWE模板\n"
-"物品\tI0YE\t20\tI0YE\t死亡随机乙\t是\tYDWE模板\n",
+"物品\tI0YE\t20\tI0YE\t死亡随机乙\t是\tYDWE模板\n"
+"物品\tI0MA\t21\tI0MA\t复用甲\t是\t同函数复用\n"
+"物品\tI0MB\t22\tI0MB\t复用乙\t是\t同函数复用\n",
         encoding="utf-8",
     )
     (obj / "单位.tsv").write_text(
@@ -319,6 +321,29 @@ def pack(tmp_path):
         "set t=CreateTrigger()\r"
         "call TriggerRegisterUnitEvent(t,u,EVENT_UNIT_DEATH)\r"
         "call TriggerAddAction(t,function Unit_ydweDropItems)\r"
+        "endfunction\r"
+        "function Trig_multiAConditions takes nothing returns boolean\r"
+        "return GetItemTypeId(GetManipulatedItem())=='I0MA'\r"
+        "endfunction\r"
+        "function Trig_multiAActions takes nothing returns nothing\r"
+        "call CreateItem('I0MA',GetUnitX(GetTriggerUnit()),GetUnitY(GetTriggerUnit()))\r"
+        "endfunction\r"
+        "function Trig_multiBConditions takes nothing returns boolean\r"
+        "return GetItemTypeId(GetManipulatedItem())=='I0MB'\r"
+        "endfunction\r"
+        "function Trig_multiBActions takes nothing returns nothing\r"
+        "call CreateItem('I0MB',GetUnitX(GetTriggerUnit()),GetUnitY(GetTriggerUnit()))\r"
+        "endfunction\r"
+        "function InitTrig_multi takes nothing returns nothing\r"
+        "local trigger t=null\r"
+        "set t=CreateTrigger()\r"
+        "call TriggerRegisterPlayerUnitEventSimple(t,Player(0),EVENT_PLAYER_UNIT_USE_ITEM)\r"
+        "call TriggerAddCondition(t, Condition(function Trig_multiAConditions))\r"
+        "call TriggerAddAction(t, function Trig_multiAActions)\r"
+        "set t=CreateTrigger()\r"
+        "call TriggerRegisterPlayerUnitEventSimple(t,Player(0),EVENT_PLAYER_UNIT_PICKUP_ITEM)\r"
+        "call TriggerAddCondition(t, Condition(function Trig_multiBConditions))\r"
+        "call TriggerAddAction(t, function Trig_multiBActions)\r"
         "endfunction\r"
         "set udg_HX=CreateUnit(Player(11),$75303042,0.0,0.0,0.0)\r",
         encoding="utf-8",
@@ -814,6 +839,20 @@ def test_query_near_annotates_source_drops(pack):
     text = "\n".join(_query_near(pack, "12 18 500", 10))
     assert "装饰群: 路障 [B007]" in text
     assert "掉: 图腾石[I0G1]" in text
+
+
+def test_item_trigger_blocks_pair_by_position_in_giant_init(pack):
+    # 同一初始化函数里 t 被反复复用: 条件必须配「其后最近」的 action,
+    # 事件取各自注册窗口——旧实现按 (作用域,变量) 会把末个 action 配给所有条件
+    from w3xtool.pack_query_cli import _item_trigger_blocks, load_script
+
+    blocks = {b[1][0]: b for b in _item_trigger_blocks(load_script(pack))}
+    a = blocks["I0MA"]
+    assert "I0MA" in a[2] and "I0MB" not in a[2]
+    assert "EVENT_PLAYER_UNIT_USE_ITEM" in a[3]
+    b = blocks["I0MB"]
+    assert "I0MB" in b[2] and "I0MA" not in b[2]
+    assert "EVENT_PLAYER_UNIT_PICKUP_ITEM" in b[3]
 
 
 def test_query_near_annotates_script_random_drops(pack):

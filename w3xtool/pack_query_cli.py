@@ -998,9 +998,10 @@ def _item_trigger_blocks(script: str) -> list[tuple[str, list[str], str, set[str
 
     双形态: ①Trig_*Conditions/Trig_*Actions 成对 (wbc 开箱);
     ②动作体自判 (hxsj TBX/JFDH/SJSRWPGM 兑换系统——条件函数不存在,
-    物品判定与发放都在 action 里)。事件集区分拾取/使用维度。"""
-    conds, acts = _scope_registrations(script)
-    act_by_var_scope = {(sc, v): fn for fn, (sc, v) in acts.items()}
+    物品判定与发放都在 action 里)。事件集区分拾取/使用维度。
+    配对按注册位置: 初始化函数里 t 会被反复 CreateTrigger 复用, 只按
+    (作用域, 变量) 会把末个 action 配给所有条件 (YDWE 死亡模板事故)。"""
+    conds, acts = _registration_maps(script)
     blocks: list[tuple[str, list[str], str, set[str]]] = []
     seen_bodies: set[str] = set()
     for m in _DEATH_COND_BLOCK_RE.finditer(script):
@@ -1013,17 +1014,19 @@ def _item_trigger_blocks(script: str) -> list[tuple[str, list[str], str, set[str
         if not codes:
             continue
         stem = m.group(1)
-        scope, var = conds.get(stem + "Conditions", ("", ""))
-        if not var:
+        reg = conds.get(stem + "Conditions")
+        if not reg:
             continue
-        act = act_by_var_scope.get((scope, var), "")
+        var, pos = reg
+        _scope, scope_body, scope_start = _function_scope_at(script, pos)
+        act = _action_after_registration(var, pos, scope_body, scope_start)
         if not act:
             continue
         body = _fn_body(script, act)
         if body == "(未找到函数体)":
             continue
         seen_bodies.add(act)
-        events = _trigger_events(_fn_body(script, scope), var) if scope else set()
+        events = _registration_events(var, pos, scope_body, scope_start)
         blocks.append((stem, codes, body, events))
     for m in _FN_ALL_RE.finditer(script):
         name = m.group(1)
@@ -1039,8 +1042,12 @@ def _item_trigger_blocks(script: str) -> list[tuple[str, list[str], str, set[str
         codes = [c for c in codes if c]
         if not codes:
             continue
-        scope, var = acts.get(name, ("", ""))
-        events = _trigger_events(_fn_body(script, scope), var) if scope else set()
+        reg = acts.get(name)
+        if not reg:
+            continue
+        var, pos = reg
+        _scope, scope_body, scope_start = _function_scope_at(script, pos)
+        events = _registration_events(var, pos, scope_body, scope_start)
         stem = name[: -len("Actions")] if name.endswith("Actions") else name
         blocks.append((stem, codes, body, events))
     return blocks
@@ -1859,25 +1866,63 @@ _SCOPE_ADD_ACTION_RE = re.compile(
 )
 
 
-def _scope_registrations(
-    script: str,
-) -> tuple[dict[str, tuple[str, str]], dict[str, tuple[str, str]]]:
-    """(条件函数 -> (注册函数, 变量), 动作函数 -> (注册函数, 变量))。
+def _function_scope_at(script: str, pos: int) -> tuple[str, str, int]:
+    """包含 pos 的函数 (函数名, 函数体, 函数体起点); 找不到返回 ("", script, 0)。"""
+    name, start = "", -1
+    for hm in _FN_HEAD_RE.finditer(script, 0, pos):
+        name, start = hm.group(1), hm.start()
+    if start < 0:
+        return "", script, 0
+    end = script.find("endfunction", pos)
+    return name, script[start : len(script) if end < 0 else end], start
 
-    注册对必须按所在函数的作用域解析: 局部 trigger 变量 (local trigger t)
-    在多个函数里重名, 全脚本按变量名配对会把无关函数当成处理器
-    (YDWE Version 事故)。"""
-    conds: dict[str, tuple[str, str]] = {}
-    acts: dict[str, tuple[str, str]] = {}
-    for hm in _FN_HEAD_RE.finditer(script):
-        fn = hm.group(1)
-        end = script.find("endfunction", hm.start())
-        body = script[hm.start() : len(script) if end < 0 else end]
-        for var, cond_fn in _SCOPE_ADD_COND_RE.findall(body):
-            conds.setdefault(cond_fn, (fn, var))
-        for var, act_fn in _SCOPE_ADD_ACTION_RE.findall(body):
-            acts.setdefault(act_fn, (fn, var))
+
+def _registration_maps(
+    script: str,
+) -> tuple[dict[str, tuple[str, int]], dict[str, tuple[str, int]]]:
+    """条件/动作函数 -> (触发器变量, 注册语句绝对偏移)。
+
+    偏移是关键: 初始化函数里同一变量 t 会被反复 CreateTrigger 复用
+    (CreateNeutralHostile 41 处 TriggerAddAction 都写 t), 只按
+    (作用域, 变量) 配对必然张冠李戴。"""
+    conds: dict[str, tuple[str, int]] = {}
+    acts: dict[str, tuple[str, int]] = {}
+    for m in _SCOPE_ADD_COND_RE.finditer(script):
+        conds.setdefault(m.group(2), (m.group(1), m.start()))
+    for m in _SCOPE_ADD_ACTION_RE.finditer(script):
+        acts.setdefault(m.group(2), (m.group(1), m.start()))
     return conds, acts
+
+
+def _action_after_registration(
+    var: str, pos: int, scope_body: str, scope_start: int
+) -> str:
+    """同一作用域内, 注册位置之后最近的同变量 TriggerAddAction 函数名。"""
+    rel = max(0, pos - scope_start)
+    m = re.search(
+        r"TriggerAddAction\(\s*" + re.escape(var) + r"\s*,\s*function\s+(\w+)",
+        scope_body[rel:],
+    )
+    return m.group(1) if m else ""
+
+
+def _registration_events(
+    var: str, pos: int, scope_body: str, scope_start: int
+) -> set[str]:
+    """注册窗口内的 EVENT_*: 最近一次 set <var>=CreateTrigger() 到该触发器
+    TriggerAddAction 之间 (同一变量在巨型初始化函数里反复复用)。"""
+    rel = max(0, pos - scope_start)
+    head = scope_body[:rel]
+    creates = list(
+        re.finditer(r"set\s+" + re.escape(var) + r"\s*=\s*CreateTrigger\(\)", head)
+    )
+    start = creates[-1].start() if creates else 0
+    tail = scope_body[rel:]
+    act = re.search(
+        r"TriggerAddAction\(\s*" + re.escape(var) + r"\s*,\s*function\s+\w+", tail
+    )
+    end = rel + (act.end() if act else 400)
+    return set(re.findall(r"EVENT_\w+", scope_body[start:end]))
 
 
 def load_script(pack_dir: Path) -> str | None:
