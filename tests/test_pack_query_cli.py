@@ -42,7 +42,9 @@ def pack(tmp_path):
 "物品\tI0OL\t13\tI0OL\t独行石\t是\t动作体自判\n"
 "物品\tI0CK\t14\tI0CK\t宝箱\t是\t使用触发\n"
 "物品\tI0A1\t15\tI0A1\t宝物甲\t是\t数组池\n"
-"物品\tI0A2\t16\tI0A2\t宝物乙\t是\t数组池\n",
+"物品\tI0A2\t16\tI0A2\t宝物乙\t是\t数组池\n"
+"物品\tI0TK\t17\tI0TK\t凭证\t是\t拾取触发\n"
+"物品\tI0PG\t18\tI0PG\t奖品\t是\t拾取产出\n",
         encoding="utf-8",
     )
     (obj / "单位.tsv").write_text(
@@ -245,6 +247,20 @@ def pack(tmp_path):
         "endfunction\r"
         "set udg_ZBS[1]='I0A1'\r"
         "set udg_ZBS[2]='I0A2'\r"
+        "function Trig_pickConditions takes nothing returns boolean\r"
+        "return GetItemTypeId(GetManipulatedItem())=='I0TK'\r"
+        "endfunction\r"
+        "function Trig_pickActions takes nothing returns nothing\r"
+        "if((GetRandomInt(1,300)<=150))then\r"
+        "call UnitAddItemByIdSwapped('I0PG',GetManipulatingUnit())\r"
+        "endif\r"
+        "endfunction\r"
+        "function InitTrig_pick takes nothing returns nothing\r"
+        "set gg_trg_pick=CreateTrigger()\r"
+        "call TriggerRegisterPlayerUnitEventSimple(gg_trg_pick,Player(0),EVENT_PLAYER_UNIT_PICKUP_ITEM)\r"
+        "call TriggerAddCondition(gg_trg_pick, Condition(function Trig_pickConditions))\r"
+        "call TriggerAddAction(gg_trg_pick, function Trig_pickActions)\r"
+        "endfunction\r"
         "set udg_HX=CreateUnit(Player(11),$75303042,0.0,0.0,0.0)\r",
         encoding="utf-8",
     )
@@ -636,6 +652,16 @@ def test_query_where_use_item_array_pool(pack):
     assert "从数组池 udg_ZBS[1..2] 随机抽件, 共 2 件" in text
     assert "宝物甲(I0A1)" in text
     assert "宝物乙(I0A2)" in text
+
+
+def test_query_where_pickup_grant_evidence(pack):
+    # 拾取凭证/宝箱触发的直接发放 (hxsj 世界商人/铜宝箱系统):
+    # 条件 GetManipulatedItem 命中 + 事件为 PICKUP_ITEM → 产出与掷骰门槛
+    from w3xtool.pack_query_cli import _query_where
+
+    text = "\n".join(_query_where(pack, "I0TK", 50))
+    assert "拾取触发产出" in text
+    assert "获取 奖品(I0PG) (GetRandomInt(1,300))" in text
 
 
 def test_parse_ok():

@@ -669,6 +669,11 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
             if not _match(query, code, name):
                 continue
             lines.extend(_script_use_item_loot(script, code, names))
+            lines.extend(
+                _item_trigger_grant_lines(
+                    script, [code], lambda c: names.get(c, c)
+                )
+            )
     if not lines:
         # 单位查询不该吃物品文案兜底 (邪恶陨石人的任务文本曾被端出来
         # 当「炎石守卫」的来源线索)——路由到 drop 的单位反查
@@ -848,6 +853,114 @@ def _script_use_item_loot(
     return out
 
 
+def _trigger_events(script: str, var: str) -> set[str]:
+    """触发器变量注册的事件集合 (在变量名之后的窗口里找 EVENT_* 字面量)。"""
+    events: set[str] = set()
+    for m in re.finditer(re.escape(var) + r"[^)\n]*", script):
+        seg = script[m.start() : m.start() + 400]
+        events.update(re.findall(r"EVENT_\w+", seg))
+    return events
+
+
+def _item_trigger_blocks(script: str) -> list[tuple[str, list[str], str, set[str]]]:
+    """反应 GetManipulatedItem 的触发块 (stem, 条件物品码, 动作体, 事件集)。
+
+    双形态: ①Trig_*Conditions/Trig_*Actions 成对 (wbc 开箱);
+    ②动作体自判 (hxsj TBX/JFDH/SJSRWPGM 兑换系统——条件函数不存在,
+    物品判定与发放都在 action 里)。事件集区分拾取/使用维度。"""
+    var_by_cond = {fn: var for var, fn in _ADD_COND_RE.findall(script)}
+    act_by_var = dict(_ADD_ACTION_RE.findall(script))
+    var_by_action = {fn: var for var, fn in _ADD_ACTION_RE.findall(script)}
+    blocks: list[tuple[str, list[str], str, set[str]]] = []
+    seen_bodies: set[str] = set()
+    for m in _DEATH_COND_BLOCK_RE.finditer(script):
+        cond_body = " ".join(m.group(2).split())
+        codes = [
+            _fourcc(x.group(1), x.group(2))
+            for x in _USE_ITEM_COND_RE.finditer(cond_body)
+        ]
+        codes = [c for c in codes if c]
+        if not codes:
+            continue
+        stem = m.group(1)
+        var = var_by_cond.get(stem + "Conditions")
+        act = act_by_var.get(var or "")
+        if not act:
+            continue
+        body = _fn_body(script, act)
+        if body == "(未找到函数体)":
+            continue
+        seen_bodies.add(act)
+        events = _trigger_events(script, var) if var else set()
+        blocks.append((stem, codes, body, events))
+    for m in _FN_ALL_RE.finditer(script):
+        name = m.group(1)
+        if name in seen_bodies:
+            continue
+        body = m.group(2)
+        if "GetManipulatedItem" not in body:
+            continue
+        codes = [
+            _fourcc(x.group(1), x.group(2))
+            for x in _USE_ITEM_COND_RE.finditer(body)
+        ]
+        codes = [c for c in codes if c]
+        if not codes:
+            continue
+        var = var_by_action.get(name)
+        events = _trigger_events(script, var) if var else set()
+        stem = name[: -len("Actions")] if name.endswith("Actions") else name
+        blocks.append((stem, codes, body, events))
+    return blocks
+
+
+def _item_trigger_grant_lines(
+    script: str, codes: list[str], name_of, label_all: bool = False
+) -> list[str]:
+    """GetManipulatedItem 条件触发 (拾取/使用) 的直接发放证据。
+
+    拾取凭证/宝箱 → 给物品是 hxsj 世界商人/铜宝箱系统 (I03O 掷骰
+    GetRandomInt(1,300)<=150 给 I01O/I02G/I032 即此类); 与数组池
+    (use_item_loot_lines) 并行, 都按「条件命中物品 → 触发器 → 动作」解析。"""
+    wants = {c.lower() for c in codes}
+    out: list[str] = []
+    seen: set[tuple[str, str, str]] = set()
+    for stem, cond_codes, body, events in _item_trigger_blocks(script):
+        hit = [c for c in cond_codes if label_all or c.lower() in wants]
+        if not hit:
+            continue
+        if "EVENT_PLAYER_UNIT_PICKUP_ITEM" in events:
+            kind = "拾取"
+        elif "EVENT_PLAYER_UNIT_USE_ITEM" in events:
+            kind = "使用"
+        else:
+            kind = "触发"
+        randoms = list(_RANDOM_CALL_RE.finditer(body))
+        local: list[tuple[str, str]] = []
+        for dm in _DIRECT_PLACE_RE.finditer(body):
+            icode = _fourcc(dm.group(1), dm.group(2))
+            if not icode:
+                continue
+            prior = [r for r in randoms if r.end() <= dm.start()]
+            gate = _balanced_call(body, prior[-1].start()) if prior else ""
+            key = (stem, icode, gate)
+            if key in seen:
+                continue
+            seen.add(key)
+            local.append((icode, gate))
+        if not local:
+            continue
+        note = " (同一触发器内多分支, 未必同时获得)" if len(local) > 1 else ""
+        users = "、".join(f"{name_of(c)}({c})" for c in hit)
+        for icode, gate in local:
+            suffix = f" ({gate})" if gate else ""
+            out.append(
+                f"⚠ {kind}触发产出 ({stem} 命中 {users}): "
+                f"获取 {name_of(icode)}({icode}){suffix}{note}"
+            )
+    return out
+
+
 def use_item_loot_lines(script: str, name_of) -> list[str]:
     """guide「开箱与随机产出」段: 使用物品触发的数组池随机产出, 一遍聚合。
 
@@ -861,33 +974,22 @@ def use_item_loot_lines(script: str, name_of) -> list[str]:
             arrays.setdefault(m.group(1), []).append((int(m.group(2)), acode))
     if not arrays:
         return []
-    var_by_cond = {fn: var for var, fn in _ADD_COND_RE.findall(script)}
-    act_by_var = dict(_ADD_ACTION_RE.findall(script))
     out: list[str] = []
     seen: set[str] = set()
-    for m in _DEATH_COND_BLOCK_RE.finditer(script):
-        cond_body = " ".join(m.group(2).split())
-        items_hit = [
-            _fourcc(x.group(1), x.group(2))
-            for x in _USE_ITEM_COND_RE.finditer(cond_body)
-        ]
-        items_hit = [c for c in items_hit if c]
-        if not items_hit:
+    for stem, cond_codes, action_body, events in _item_trigger_blocks(script):
+        if not cond_codes:
             continue
-        stem = m.group(1)
-        var = var_by_cond.get(stem + "Conditions")
-        act = act_by_var.get(var or "")
-        if not act:
-            continue
-        action_body = _fn_body(script, act)
-        users = "、".join(f"{name_of(c)}({c})" for c in items_hit)
+        kind = (
+            "拾取" if "EVENT_PLAYER_UNIT_PICKUP_ITEM" in events else "使用"
+        )
+        users = "、".join(f"{name_of(c)}({c})" for c in cond_codes)
         for pm in _ARRAY_POOL_RE.finditer(action_body):
             arr, cap = pm.group(1), int(pm.group(2))
             entries = sorted(arrays.get(arr, []))
             if not entries:
                 continue
             line = (
-                f"- 使用 {users} 随机产出: 从数组池 {arr}[1..{cap}] 随机抽件, "
+                f"- {kind} {users} 随机产出: 从数组池 {arr}[1..{cap}] 随机抽件, "
                 f"共 {len(entries)} 件: "
                 + "、".join(f"{name_of(c)}({c})" for _i, c in entries)
             )

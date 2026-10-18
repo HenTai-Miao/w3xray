@@ -21,7 +21,11 @@ from typing import TYPE_CHECKING
 
 from .base_names import BASE_CATEGORIES, BASE_NAMES
 from .item_relation_models import ItemRelation, ItemRelationKind, RelationObject
-from .pack_query_cli import script_death_drop_lines, use_item_loot_lines
+from .pack_query_cli import (
+    _item_trigger_grant_lines,
+    script_death_drop_lines,
+    use_item_loot_lines,
+)
 from .script_scan import scan_chat_commands
 from .script_sources import analysis_script_texts
 from .wts import map_wts_table, resolve
@@ -66,7 +70,7 @@ GUIDE_SECTION_TITLES: dict[str, str] = {
     "recipes": "合成配方",
     "shops": "商店出售",
     "drops": "怪物掉落",
-    "loot": "开箱与随机产出",
+    "loot": "开箱与兑换产出",
     "clues": "波次与播报线索",
 }
 
@@ -213,11 +217,17 @@ def _drop_lines(md: MapData) -> tuple[str, ...]:
 
 
 def _loot_lines(md: MapData) -> tuple[str, ...]:
-    """开箱与随机产出: 使用物品触发的数组池 (与 where 同源, 满量)。"""
+    """开箱与兑换产出: 使用/拾取触发的数组池与直接发放 (与 where 同源, 满量)。"""
     rows: list[str] = []
     seen: set[str] = set()
     for _source, text in analysis_script_texts(md):
-        for line in use_item_loot_lines(text, lambda code: _code_name(md, code)):
+        lines = list(use_item_loot_lines(text, lambda code: _code_name(md, code)))
+        lines.extend(
+            _item_trigger_grant_lines(
+                text, [], lambda code: _code_name(md, code), label_all=True
+            )
+        )
+        for line in lines:
             if line not in seen:
                 seen.add(line)
                 rows.append(line)

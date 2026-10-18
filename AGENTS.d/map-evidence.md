@@ -20,7 +20,7 @@
 
 ## 闸门 1：掉落断言前置（防「杀 NPC 掉神装」）
 
-1. 先跑 `pack-query <pack> where <id>` 与 `pack-query <pack> drop <id>`，答案里引用其输出（含防呆结论行）；where 预放置无命中时会给出关系表行（脚本/触发奖励等），引用这些行——不要跳过它们去引用「文案级来源线索」，那是描述子串匹配，曾把别的物品的说明当成来源。**非死亡发放**（任务交付/卖店/指令奖励——drop 的死亡扫描管不到）用 `pack-query refs <id>` 的「给予/创建」段回答（实例：I01G 木剑的 `Trig_MJ1Actions` 进入区域发放，正是任务交付点）。宝箱类物品的「开得出什么」看 where 的「⚠ 使用触发随机产出」段：`GetManipulatedItem` 条件命中 + 动作注册 `ItemPoolAddItemType(池, udg_X[GetRandomInt(1,N)], w)` 的数组池，数组内容静态全解满量列出（迷失国度 wbc 系统 45/10/10/27 件四池即此法首次浮出）——引用时必须写明是「N 件里随机抽」而非固定获得。
+1. 先跑 `pack-query <pack> where <id>` 与 `pack-query <pack> drop <id>`，答案里引用其输出（含防呆结论行）；where 预放置无命中时会给出关系表行（脚本/触发奖励等），引用这些行——不要跳过它们去引用「文案级来源线索」，那是描述子串匹配，曾把别的物品的说明当成来源。**非死亡发放**（任务交付/卖店/指令奖励——drop 的死亡扫描管不到）用 `pack-query refs <id>` 的「给予/创建」段回答（实例：I01G 木剑的 `Trig_MJ1Actions` 进入区域发放，正是任务交付点）。宝箱类物品的「开得出什么」看 where 的「⚠ 使用触发随机产出」段：`GetManipulatedItem` 条件命中 + 动作注册 `ItemPoolAddItemType(池, udg_X[GetRandomInt(1,N)], w)` 的数组池，数组内容静态全解满量列出（迷失国度 wbc 系统 45/10/10/27 件四池即此法首次浮出）——引用时必须写明是「N 件里随机抽」而非固定获得。拾取凭证/宝箱的「能换什么」看 where 的「⚠ 拾取触发产出」段：`GetManipulatedItem` 条件双形态（成对 + 动作体自判，hxsj 世界商人/铜宝箱即后者）+ 事件 `EVENT_PLAYER_UNIT_PICKUP_ITEM`，逐条给产出物与「同函数掷骰」门槛；同一触发器内多分支发放带「未必同时获得」注，不得写成一次全给。
 2. 来源只认三类证据：商店货架行（usei/Sellitems）、掉落表行（单位死亡掉落）、脚本/触发奖励（CreateItemLoc / UnitAddItemByIdSwapped / 奖池 PlaceRandomItem）。
 3. **单位随身物品 ≠ 会掉**：脚本在初始化里塞给 NPC 的物品是展示道具，不构成掉落证据。
 4. 合成类物品：引用脚本里的合成触发（持有原料集合 → 移除原料 → 给产物）说明配方，并对每种原料再过一遍闸门 1。

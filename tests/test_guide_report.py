@@ -260,7 +260,7 @@ def test_full_report_covers_player_facing_sections(
         "池 udg_PD[3] 共1件N选1: 奖池物品(I0P2) 100/100"
     ) in report
     # 开箱与随机产出段: 使用触发数组池 (与 where 同源)。
-    assert "【开箱与随机产出】" in report
+    assert "【开箱与兑换产出】" in report
     assert (
         "使用 宝箱(I0CK) 随机产出: 从数组池 udg_ZBS[1..2] 随机抽件, "
         "共 2 件: 宝物甲(I0A1)、宝物乙(I0A2)"
