@@ -625,6 +625,30 @@ def _query_recipe(pack: Path, query: str, limit: int) -> list[str]:
     items = load_items(pack)
     hits: list[str] = []
     seen: set[tuple[str, tuple[tuple[str, int], ...]]] = set()
+    # 关系表「合成」行与脚本公式索引是两套证据: 公式索引只认脚本形态
+    # (迷失国度 0 公式但关系表有秘法瓶/万灵药两条完整合成行)——两套都要
+    seen_rels: set[tuple[str, str]] = set()
+    for r in _read_rows(pack, "掉落与获取关系.tsv"):
+        if len(r) < 19 or r[2] != "合成":
+            continue
+        prod = r[3]
+        pname = _clean(r[4])
+        mats = _clean(r[18])
+        if not mats:
+            continue
+        if not (
+            _match(query, prod, pname)
+            or (r[17] and query.lower() in r[17].lower())
+            or query in mats
+        ):
+            continue
+        key = (prod, mats)
+        if key in seen_rels:
+            continue
+        seen_rels.add(key)
+        hits.append("[" + prod + "] " + pname + "  <-  " + mats)
+        if limit and len(hits) >= limit:
+            break
     for prod, pairs in load_formulas(pack):
         key = (prod, tuple(pairs))
         if key in seen:
