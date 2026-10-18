@@ -110,6 +110,14 @@ def format_guide_report(md: MapData, section: str | None = None) -> str:
     lines = list(iter_guide_lines(md, section))
     while lines and lines[-1] == "":
         lines.pop()
+    # 战役容器 (.w3n): 指令/任务/掉落/合成都在任务关里, 空段不是「无内容」——
+    # 尾附逐关指引, 防止把容器级空段误读成这图没指令/没掉落
+    if section is None and str(md.path).lower().endswith(".w3n"):
+        lines.append("")
+        lines.append(
+            "- 战役容器：指令/任务/掉落/合成在各任务关里——逐关查询用 "
+            "`pack-query <战役包> <命令> <词>`（自动按「== 子地图 名 ==」聚合）"
+        )
     return "\n".join(lines)
 
 

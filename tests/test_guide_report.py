@@ -299,6 +299,20 @@ def test_drops_section_includes_script_death_evidence(
     assert "池 udg_PD[3] 共1件N选1" in report
 
 
+def test_campaign_container_report_has_submap_hint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # 战役容器 (.w3n) 的完整报告尾附逐关查询指引, 防止把容器级空段
+    # 误读成「这图没指令/没掉落」; 普通 .w3x 报告不附该行。
+    md = _map_data(monkeypatch)
+    md.path = "永歌余烬.w3n"
+    report = format_guide_report(md)
+    assert "战役容器" in report
+    assert "pack-query <战役包>" in report
+    md.path = "normal.w3x"
+    assert "战役容器" not in format_guide_report(md)
+
+
 def test_section_filter_returns_single_section(monkeypatch: pytest.MonkeyPatch) -> None:
     # Given: 同一张地图。
     md = _map_data(monkeypatch)

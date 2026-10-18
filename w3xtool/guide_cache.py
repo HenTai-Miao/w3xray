@@ -30,7 +30,9 @@ __all__ = (
 # 旧 v4 报告缺拾取维度证据, 整体退役。
 # v6: drops 段并入「可破坏物掉落」关系 (箱子/路障, 旧 v5 只读单位掉落)——
 # 旧 v5 报告缺该维度, 整体退役。
-GUIDE_CACHE_VERSION = "guide-v6"
+# v7: 战役容器 (.w3n) 报告尾附逐关查询指引 (旧 v6 容器报告无解释)——
+# 旧 v6 整体退役。
+GUIDE_CACHE_VERSION = "guide-v7"
 
 
 def report_cache_path(map_path: str) -> Path | None:
