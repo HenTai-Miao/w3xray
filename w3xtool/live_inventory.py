@@ -1441,6 +1441,17 @@ def campaign_locate_hint(rep: dict) -> str:
     return ";".join(uniq)
 
 
+def campaign_locate_command(pack: str, rep: dict) -> str:
+    """把定位模板具体化成可直接复制执行的命令 (带上 live 已知的包路径)。
+
+    占位符 `<战役包>` 还要人填路径——而 live 的 --pack 参数本身就是
+    当前图的知识包 (战役时为容器包, locate 自动逐关聚合)。"""
+    codes = campaign_locate_hint(rep)
+    if not codes:
+        return ""
+    return 'pack-query "' + pack + '" locate ' + codes
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=(__doc__ or __name__).splitlines()[0])
     ap.add_argument("--pack", required=True, help="导出的知识包目录")
@@ -1581,10 +1592,10 @@ def main(argv=None):
         print(f"== 全部单位 ({len(all_rows)}个, 按 所有者+四码 聚合) ==")
         for (o2, c2), n2 in sorted(combo.items()):
             print(f"  P{o2} {names[(o2, c2)]} [{c2}] ×{n2}")
-    hint = campaign_locate_hint(rep)
-    if hint:
-        print("== 战役定位 (若当前为 .w3n 战役, 用本行定位任务关) ==")
-        print("  pack-query <战役包> locate " + hint)
+    locate_cmd = campaign_locate_command(args.pack, rep)
+    if locate_cmd:
+        print("== 战役定位 (若当前为 .w3n 战役, 直接复制本行定位任务关) ==")
+        print("  " + locate_cmd)
     print(json.dumps(rep, ensure_ascii=False, indent=1, default=str))
     if rep["slots"]:
         return 0

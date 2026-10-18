@@ -27,6 +27,14 @@ def test_campaign_locate_hint_builds_feature_codes() -> None:
     assert campaign_locate_hint(rep) == "E601;I0AT;I0FB;H004"
     assert campaign_locate_hint({}) == ""
     assert campaign_locate_hint({"selected_unit": {"code": ""}}) == ""
+    # 模板具体化: 带上 live 已知的 --pack 路径, 直接可复制执行
+    from w3xtool.live_inventory import campaign_locate_command
+
+    assert (
+        campaign_locate_command(r"E:\packs\campaign", rep)
+        == 'pack-query "E:\\packs\\campaign" locate E601;I0AT;I0FB;H004'
+    )
+    assert campaign_locate_command("x", {}) == ""
 SIZE = 0x41000
 
 
