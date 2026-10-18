@@ -692,7 +692,12 @@ _POOL_ITEM_RE = re.compile(
 _PLACE_POOL_RE = re.compile(r"PlaceRandomItem\(\s*\(?\s*(udg_\w+)\[(\d+)\]")
 _ROLL_RE = re.compile(r"GetRandomInt\(\s*1\s*,\s*(\d+)\s*\)")
 _DIRECT_PLACE_RE = re.compile(
-    r"(?:CreateItemLoc|UnitAddItemByIdSwapped)\(\s*(?:'(\w{4})'|\$([0-9A-Fa-f]{8}))",
+    r"(?:CreateItemLoc|CreateItem|UnitAddItemByIdSwapped)\("
+    r"\s*(?:'(\w{4})'|\$([0-9A-Fa-f]{8}))",
+    re.I,
+)
+_STOCK_ITEM_RE = re.compile(
+    r"AddItemToStockBJ\(\s*(?:'(\w{4})'|\$([0-9A-Fa-f]{8}))",
     re.I,
 )
 _RANDOM_CALL_RE = re.compile(r"GetRandom(?:Real|Int)\([^)]*\)")
@@ -897,6 +902,46 @@ def _script_pool_drops(pack: Path, code: str) -> list[str]:
     return out
 
 
+_FN_ALL_RE = re.compile(
+    r"function\s+(\w+)\s+takes[^\n]*\n(.*?)endfunction",
+    re.S,
+)
+
+
+def _death_blocks(script: str) -> list[tuple[str, str, str, str]]:
+    """死亡处理块 (stem, label, cond_text, body)。
+
+    两种真实形态都要发现: ①Trig_*Conditions/Trig_*Actions 成对;
+    ②动作体自判——无独立条件函数, GetDyingUnit 判定写在 action 里
+    (hxsj Trig_____________ZZ2Actions 的 CreateItem('I07H') 曾被整类漏扫)。
+    label 是证据行展示名: 成对形态用「死亡条件 {stem}Conditions」。"""
+    blocks: list[tuple[str, str, str, str]] = []
+    done: set[str] = set()
+    for m in _DEATH_COND_BLOCK_RE.finditer(script):
+        stem = m.group(1)
+        fname = stem + "Actions"
+        action = _fn_body(script, fname)
+        if action == "(未找到函数体)":
+            continue
+        done.add(fname)
+        label = f"死亡条件 {stem}Conditions"
+        blocks.append((stem, label, " ".join(m.group(2).split()), action))
+    for m in _FN_ALL_RE.finditer(script):
+        fname = m.group(1)
+        if fname in done:
+            continue
+        sig = m.group(0)[: m.group(0).find("\n")]
+        if "returns boolean" in sig:
+            continue
+        body = m.group(2)
+        if "GetDyingUnit()" not in body:
+            continue
+        done.add(fname)
+        stem = fname[: -len("Actions")] if fname.endswith("Actions") else fname
+        blocks.append((stem, f"死亡处理函数 {fname} (动作体内判定)", "", body))
+    return blocks
+
+
 def _script_direct_death_drops(
     script: str,
     code: str,
@@ -914,13 +959,8 @@ def _script_direct_death_drops(
     iname = next((un for c, (un, _ud) in items.items() if c.lower() == want), code)
     out: list[str] = []
     seen: set[tuple[str, str]] = set()
-    for m in _DEATH_COND_BLOCK_RE.finditer(script):
-        cond_body = " ".join(m.group(2).split())
-        if "GetDyingUnit" not in cond_body:
-            continue
-        stem = m.group(1)
-        action_body = _fn_body(script, stem + "Actions")
-        if action_body == "(未找到函数体)":
+    for stem, label, cond_body, action_body in _death_blocks(script):
+        if "GetDyingUnit" not in cond_body + action_body:
             continue
         randoms = list(_RANDOM_CALL_RE.finditer(action_body))
         death_units = list(_DEATH_UNIT_RE.finditer(action_body))
@@ -943,7 +983,7 @@ def _script_direct_death_drops(
             )
             verb = (
                 "死亡直落语句"
-                if dm.group(0).lower().startswith("createitemloc")
+                if dm.group(0).lower().startswith("createitem")
                 else "死亡触发发放"
             )
             lines = [f"  死亡触发 {stem} -> {verb}: {snippet}"]
@@ -956,7 +996,7 @@ def _script_direct_death_drops(
             hits.append(lines)
         if hits:
             out.append(f"{iname} [{code}]  ⚠ 脚本死亡位置直落 (关系表无此掉落记录):")
-            out.append(f"  死亡条件 {stem}Conditions: {cond_body}")
+            out.append(f"  {label}: {cond_body}" if cond_body else f"  {label}")
             for hit_lines in hits:
                 out.extend(hit_lines)
     return out
@@ -980,12 +1020,7 @@ def _script_unit_direct_drops(
     var_codes = _unit_var_codes(script)
     out: list[str] = []
     seen: set[tuple[str, str, str]] = set()
-    for m in _DEATH_COND_BLOCK_RE.finditer(script):
-        cond_body = " ".join(m.group(2).split())
-        stem = m.group(1)
-        action_body = _fn_body(script, stem + "Actions")
-        if action_body == "(未找到函数体)":
-            continue
+    for stem, label, cond_body, action_body in _death_blocks(script):
         if not any(
             c.lower() == want
             for c in _death_unit_codes(cond_body + "\n" + action_body, var_codes)
@@ -1022,7 +1057,7 @@ def _script_unit_direct_drops(
                 out.append(
                     f"{iname} [{unit_code}]  ⚠ 按单位反查死亡直落 (该单位死亡触发创建的物品):"
                 )
-            out.append(f"  死亡条件 {stem}Conditions: {cond_body}")
+            out.append(f"  {label}: {cond_body}" if cond_body else f"  {label}")
             out.extend(rows)
             continue
         # 无固定物品, 但死亡触发在运行时随机补货——如实报机制, 不报成
@@ -1031,13 +1066,25 @@ def _script_unit_direct_drops(
         for level, kind in _RANDOM_STOCK_RE.findall(action_body):
             key = (level, kind)
             stock_counts[key] = stock_counts.get(key, 0) + 1
-        if not stock_counts:
+        stock_items: list[str] = []
+        for sm in _STOCK_ITEM_RE.finditer(action_body):
+            scode = _fourcc(sm.group(1), sm.group(2))
+            if scode and scode not in stock_items:
+                stock_items.append(scode)
+        if not stock_counts and not stock_items:
             continue
         if not out:
+            tail = "见运行时随机" if stock_counts else "死亡触发上架商店"
             out.append(
-                f"{iname} [{unit_code}]  ⚠ 按单位反查死亡触发 (无固定物品码, 见运行时随机):"
+                f"{iname} [{unit_code}]  ⚠ 按单位反查死亡触发 (无固定掉落, {tail}):"
             )
         out.append(f"  死亡条件 {stem}Conditions: {cond_body}")
+        for scode in stock_items:
+            sname = next(
+                (n for c, (n, _d) in items.items() if c.lower() == scode.lower()),
+                scode,
+            )
+            out.append(f"  死亡触发 {stem} -> 上架商店: {sname} [{scode}]")
         for (level, kind), count in stock_counts.items():
             suffix = f" ×{count}" if count > 1 else ""
             out.append(
@@ -1066,12 +1113,7 @@ def script_death_drop_lines(script: str, name_of) -> list[str]:
     var_codes = _unit_var_codes(script)
     out: list[str] = []
     seen: set[str] = set()
-    for m in _DEATH_COND_BLOCK_RE.finditer(script):
-        cond_body = " ".join(m.group(2).split())
-        stem = m.group(1)
-        action_body = _fn_body(script, stem + "Actions")
-        if action_body == "(未找到函数体)":
-            continue
+    for stem, label, cond_body, action_body in _death_blocks(script):
         unit_codes: list[str] = []
         seen_units: set[str] = set()
         for code in _death_unit_codes(cond_body + "\n" + action_body, var_codes):
@@ -1110,7 +1152,12 @@ def script_death_drop_lines(script: str, name_of) -> list[str]:
         for level, kind in _RANDOM_STOCK_RE.findall(action_body):
             key = (level, kind)
             stock_counts[key] = stock_counts.get(key, 0) + 1
-        if not direct and not pools and not stock_counts:
+        stock_items = [
+            _fourcc(sm.group(1), sm.group(2))
+            for sm in _STOCK_ITEM_RE.finditer(action_body)
+        ]
+        stock_items = [sc for sc in stock_items if sc]
+        if not direct and not pools and not stock_counts and not stock_items:
             continue
         header = "、".join(f"{name_of(uc)}({uc})" for uc in unit_codes)
         parts: list[str] = []
@@ -1118,6 +1165,11 @@ def script_death_drop_lines(script: str, name_of) -> list[str]:
             parts.append("直落 " + "；".join(direct))
         if pools:
             parts.append("；".join(pools))
+        if stock_items:
+            parts.append(
+                "上架商店 "
+                + "、".join(f"{name_of(sc)}({sc})" for sc in stock_items)
+            )
         if stock_counts:
             parts.append(
                 "；".join(

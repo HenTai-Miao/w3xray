@@ -36,7 +36,10 @@ def pack(tmp_path):
         "物品\tI0P2\t7\tI0P2\t奖池乙\t是\t测试奖池物2\n"
 "物品\tI01O\t8\tI01O\t钻石\t是\t直落\n"
 "物品\tI01P\t9\tI01P\t猎刃\t是\t直落\n"
-"物品\tI0G1\t10\tI0G1\t图腾石\t是\t直落\n",
+"物品\tI0G1\t10\tI0G1\t图腾石\t是\t直落\n"
+"物品\tI0CT\t11\tI0CT\t掉落石\t是\tCreateItem直落\n"
+"物品\tI0SH\t12\tI0SH\t上架货\t是\t上架商店\n"
+"物品\tI0OL\t13\tI0OL\t独行石\t是\t动作体自判\n",
         encoding="utf-8",
     )
     (obj / "单位.tsv").write_text(
@@ -47,7 +50,10 @@ def pack(tmp_path):
 "单位\tn018\t4\tn018\t炎石守卫\n"
 "单位\tu00B\t5\tu00B\t样本怪\n"
 "单位\tnen0\t6\tnen0\t样本图腾\n"
-"单位\tnstk\t7\tnstk\t补货兽\n",
+"单位\tnstk\t7\tnstk\t补货兽\n"
+"单位\tnctm\t8\tnctm\t坐标怪\n"
+"单位\tnshp\t9\tnshp\t上架怪\n"
+"单位\tnonl\t10\tnonl\t独行怪\n",
         encoding="utf-8",
     )
     (tmp_path / "脚本调用参数索引.tsv").write_text(
@@ -205,6 +211,23 @@ def pack(tmp_path):
         "endfunction\r"
         "function Trig_stkActions takes nothing returns nothing\r"
         "call AddItemToStockBJ(ChooseRandomItemExBJ(6,ITEM_TYPE_ANY),gg_unit_n000_0001,0,0)\r"
+        "endfunction\r"
+        "function Trig_ctmConditions takes nothing returns boolean\r"
+        "return GetUnitTypeId(GetDyingUnit())=='nctm'\r"
+        "endfunction\r"
+        "function Trig_ctmActions takes nothing returns nothing\r"
+        "call CreateItem('I0CT',100.0,200.0)\r"
+        "endfunction\r"
+        "function Trig_shpConditions takes nothing returns boolean\r"
+        "return GetUnitTypeId(GetDyingUnit())=='nshp'\r"
+        "endfunction\r"
+        "function Trig_shpActions takes nothing returns nothing\r"
+        "call AddItemToStockBJ('I0SH',gg_unit_n000_0001,0,0)\r"
+        "endfunction\r"
+        "function Trig_onlyActions takes nothing returns nothing\r"
+        "if((GetUnitTypeId(GetDyingUnit())=='nonl'))then\r"
+        "call CreateItemLoc('I0OL',GetUnitLoc(GetDyingUnit()))\r"
+        "endif\r"
         "endfunction\r"
         "set udg_HX=CreateUnit(Player(11),$75303042,0.0,0.0,0.0)\r",
         encoding="utf-8",
@@ -558,8 +581,33 @@ def test_query_drop_random_stock_evidence(pack):
     from w3xtool.pack_query_cli import _query_drop
 
     text = "\n".join(_query_drop(pack, "nstk", 20))
-    assert "补货兽 [nstk]  ⚠ 按单位反查死亡触发 (无固定物品码, 见运行时随机):" in text
+    assert "补货兽 [nstk]  ⚠ 按单位反查死亡触发 (无固定掉落, 见运行时随机):" in text
     assert "随机补货: ChooseRandomItemExBJ(6, ITEM_TYPE_ANY)" in text
+
+
+def test_query_drop_createitem_and_stock_evidence(pack):
+    # 死亡直落的第三种写法 CreateItem(码,x,y) 与「指定物品上架商店」
+    # 都是真数据结构 (hxsj Trig_ZZ2 的 CreateItem('I07H',..) 曾被扫空)。
+    from w3xtool.pack_query_cli import _query_drop
+
+    ctm = "\n".join(_query_drop(pack, "nctm", 20))
+    assert "坐标怪 [nctm]" in ctm
+    assert "掉落石 [I0CT]" in ctm
+    assert "call CreateItem('I0CT',100.0,200.0)" in ctm
+    shp = "\n".join(_query_drop(pack, "nshp", 20))
+    assert "上架怪 [nshp]" in shp
+    assert "上架商店: 上架货 [I0SH]" in shp
+
+
+def test_query_drop_action_only_death_handler(pack):
+    # 无独立 Conditions 函数的死亡处理 (判定写在 action 里) 也要被扫到
+    # ——hxsj Trig_____________ZZ2Actions 即此形态, CreateItem 曾被整类漏扫。
+    from w3xtool.pack_query_cli import _query_drop
+
+    text = "\n".join(_query_drop(pack, "nonl", 20))
+    assert "独行怪 [nonl]" in text
+    assert "独行石 [I0OL]" in text
+    assert "死亡处理函数 Trig_onlyActions (动作体内判定)" in text
 
 
 def test_parse_ok():
