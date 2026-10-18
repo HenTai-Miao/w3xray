@@ -74,7 +74,8 @@ def pack(tmp_path):
     (tmp_path / "预放置单位.tsv").write_text(
         "序号\t类型ID\t名称\t玩家\tX\tY\tZ\n"
         "1\tu0AA\t雪妖\t敌对\t10.0\t20.0\t0\n"
-        "2\th0AA\t老伯基蓝\t中立\t9000.0\t9000.0\t0\n",
+        "2\th0AA\t老伯基蓝\t中立\t9000.0\t9000.0\t0\n"
+        "3\tnctm\t坐标怪\t敌对\t500.0\t500.0\t0\n",
         encoding="utf-8",
     )
     # 列位故意多一列(名称后带备注)，验证表头驱动而非固定列位
@@ -813,6 +814,15 @@ def test_query_near_annotates_source_drops(pack):
     text = "\n".join(_query_near(pack, "12 18 500", 10))
     assert "装饰群: 路障 [B007]" in text
     assert "掉: 图腾石[I0G1]" in text
+
+
+def test_query_near_annotates_script_random_drops(pack):
+    # near 注解同源: YDWE 每单位死亡随机掉落 (关系表无行) 也进「掉:」清单
+    from w3xtool.pack_query_cli import _query_near
+
+    text = "\n".join(_query_near(pack, "500 500 200", 10))
+    assert "坐标怪 [nctm]" in text
+    assert "死亡随机甲[I0YD]" in text
 
 
 def test_query_shop_includes_craft_shops(pack):

@@ -1958,8 +1958,12 @@ def _num(s: str) -> float:
 
 
 def _source_drop_map(pack: Path) -> dict[str, str]:
-    """来源ID -> 掉落物品清单 (关系表 掉落 行, 供 near 就近注解)。"""
+    """来源ID -> 掉落物品清单 (关系表 掉落 行 + YDWE 每单位死亡随机模板)。
+
+    脚本独有掉落 (关系表无行) 同样要进 near 的「掉:」注解——第三形态与
+    drop/where/guide 同源, 否则脚底单位注解会漏报。"""
     drops: dict[str, list[str]] = {}
+    codes_by_src: dict[str, set[str]] = {}
     for r in _read_rows(pack, "掉落与获取关系.tsv"):
         if len(r) < 8 or "掉落" not in r[2]:
             continue
@@ -1970,7 +1974,23 @@ def _source_drop_map(pack: Path) -> dict[str, str]:
         lst = drops.setdefault(src, [])
         if entry not in lst:
             lst.append(entry)
-    return {code: "、".join(items) for code, items in drops.items()}
+        codes_by_src.setdefault(src, set()).add(r[3])
+    script = load_script(pack)
+    if script is not None:
+        item_names = load_items(pack)
+        for code, _fn, regs in _unit_death_random_drops(script):
+            known = codes_by_src.setdefault(code, set())
+            lst = drops.setdefault(code, [])
+            for icode, _w in regs:
+                if icode in known:
+                    continue
+                known.add(icode)
+                iname = item_names.get(icode, (icode, ""))[0]
+                lst.append(
+                    (iname if iname and iname != icode else "")
+                    + "[" + icode + "]"
+                )
+    return {code: "、".join(entries) for code, entries in drops.items()}
 
 
 def _query_near(pack: Path, query: str, limit: int) -> list[str]:
