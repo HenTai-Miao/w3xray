@@ -917,6 +917,10 @@ def test_query_shop_includes_craft_shops(pack):
     sell_text = "\n".join(_query_shop(pack, "银月配方商", 20))
     assert "== 银月配方商 [h0YM]  (关系表出售)" in sell_text
     assert "宝物甲 [I0A1]" in sell_text
+    # 口语店名不命中时列出本图真实商店 (「商人」不在完整店名里的场景)
+    miss = _query_shop(pack, "不存在zz", 20)
+    assert miss[0] == "⚠ 未找到商店: 不存在zz"
+    assert "铁匠铺[h0ZZ]" in miss[1] and "银月配方商[h0YM]" in miss[1]
 
 
 def test_query_recipe_from_relation_rows(pack):

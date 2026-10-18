@@ -686,7 +686,30 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
         for item in entries:
             lines.append("  " + item)
         lines.append("")
-    return lines or ["未找到商店: " + query]
+    if lines:
+        return lines
+    # 口语店名常不含在完整名里 (「商人」不在「银月配方商」中) —— 答「未找到」
+    # 前先把本图真实商店列出来, 并加 ⚠ 前缀让容器聚合把容器级结果打印出来
+    known: list[str] = []
+    seen_codes: set[str] = set()
+    for code, name, _codes in load_shop_stocks(pack):
+        if code not in seen_codes:
+            seen_codes.add(code)
+            known.append(f"{name}[{code}]")
+    for code, (name, _entries) in craft.items():
+        if code not in seen_codes:
+            seen_codes.add(code)
+            known.append(f"{name}[{code}]")
+    for code, (name, _entries) in sell.items():
+        if code not in seen_codes:
+            seen_codes.add(code)
+            known.append(f"{name}[{code}]")
+    if known:
+        return [
+            "⚠ 未找到商店: " + query,
+            "  （本图商店: " + "、".join(known) + "）",
+        ]
+    return ["未找到商店: " + query]
 
 
 def _query_recipe(pack: Path, query: str, limit: int) -> list[str]:
