@@ -595,7 +595,15 @@ def _query_item(pack: Path, query: str, limit: int) -> list[str]:
             lines.append("  " + (tooltips.get(code, "") or desc))  # ides/utub 全文
             if limit and len(lines) >= limit * 3:
                 break
-    return lines or ["未找到物品: " + query]
+    if lines:
+        return lines
+    # 未命中时给物品总量提示 (「未找到」不代表本图没有物品表)
+    if items:
+        return [
+            "未找到物品: " + query,
+            f"  （本图物品表共 {len(items)} 件; 可用 item <名称或四码> 查询）",
+        ]
+    return ["未找到物品: " + query]
 
 
 def _query_price(pack: Path, query: str, limit: int) -> list[str]:
@@ -629,7 +637,14 @@ def _query_price(pack: Path, query: str, limit: int) -> list[str]:
         price = _base_prices().get(query.lower())
         if price:
             lines.append("基础物品 [" + query.lower() + "]  金币: " + price)
-    return lines or ["未找到物品价格: " + query]
+    if lines:
+        return lines
+    if items:
+        return [
+            "未找到物品价格: " + query,
+            f"  （本图物品表共 {len(items)} 件; 可用 price <名称或四码> 查询）",
+        ]
+    return ["未找到物品价格: " + query]
 
 
 def _query_shop(pack: Path, query: str, limit: int) -> list[str]:

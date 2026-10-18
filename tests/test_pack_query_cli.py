@@ -977,6 +977,18 @@ def test_query_locate_feature_code_intersection(pack):
     assert "缺少 NOPE" in miss
 
 
+def test_query_item_and_price_miss_list_totals(pack):
+    # 未命中时给物品总量提示 (与 shop/recipe/tech 同一纪律)
+    from w3xtool.pack_query_cli import _query_item, _query_price
+
+    item_miss = _query_item(pack, "不存在zz", 20)
+    assert item_miss[0] == "未找到物品: 不存在zz"
+    assert "件" in item_miss[1]
+    price_miss = _query_price(pack, "不存在zz", 20)
+    assert price_miss[0] == "未找到物品价格: 不存在zz"
+    assert "件" in price_miss[1]
+
+
 def test_parse_ok():
     o = parse_pack_query_cli_options(["pack", "item", "冰晶"])
     assert (o.command, o.query, o.limit) == ("item", "冰晶", 0)  # 默认全量
