@@ -99,6 +99,19 @@ def _recipe_relation() -> ItemRelation:
     )
 
 
+def _destructible_relation() -> ItemRelation:
+    return ItemRelation(
+        kind=ItemRelationKind.DESTRUCTABLE_DROP,
+        item=RelationObject("物品", "I0G1", "图腾石"),
+        source=RelationObject("可破坏物", "B007", "路障"),
+        evidence=RelationEvidence(
+            source="war3map.j", line=9, trigger="Trig_dropActions"
+        ),
+        confidence=RelationConfidence.CONFIRMED,
+        completeness=RelationCompleteness.COMPLETE,
+    )
+
+
 def _map_data(monkeypatch: pytest.MonkeyPatch) -> MapData:
     monkeypatch.setitem(BASE_CATEGORIES, "Zh0", ("英雄", "Hero"))
     monkeypatch.setitem(BASE_CATEGORIES, "hpea", ("单位", "Peasant"))
@@ -215,6 +228,8 @@ def _map_data(monkeypatch: pytest.MonkeyPatch) -> MapData:
                 _recipe_relation(),
                 _relation(ItemRelationKind.SHOP_SELL, "tret", "经验之书"),
                 _relation(ItemRelationKind.UNIT_DROP, "I03L", "召唤卷轴"),
+                # 可破坏物掉落是独立关系类型: 箱子/路障也要进 drops 段。
+                _destructible_relation(),
                 # 同一商店第二出售槽（证据行号不同）：同名物品应折叠为一条。
                 _relation(ItemRelationKind.SHOP_SELL, "tret", "经验之书", line=99),
             )
@@ -246,6 +261,7 @@ def test_full_report_covers_player_facing_sections(
         "混沌天痕(I009) = 光之灵×1 〔war3map.j:6736 Trig_xianzhiUPActions〕" in report
     )
     assert "恐怖霜狼(nwwd)：经验之书" in report
+    assert "路障(B007)：图腾石" in report
     assert report.count("经验之书") == 1
     assert "雷暴元素(nrwm)：召唤卷轴 100%" in report
     assert "计时器标签：基尔加丹" in report

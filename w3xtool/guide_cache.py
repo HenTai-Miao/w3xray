@@ -28,7 +28,9 @@ __all__ = (
 # 报告缺该段落, 整体退役。
 # v5: loot 段扩为「开箱与兑换产出」(并入拾取触发的直接发放/掷骰门槛)——
 # 旧 v4 报告缺拾取维度证据, 整体退役。
-GUIDE_CACHE_VERSION = "guide-v5"
+# v6: drops 段并入「可破坏物掉落」关系 (箱子/路障, 旧 v5 只读单位掉落)——
+# 旧 v5 报告缺该维度, 整体退役。
+GUIDE_CACHE_VERSION = "guide-v6"
 
 
 def report_cache_path(map_path: str) -> Path | None:
