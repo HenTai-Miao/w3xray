@@ -211,6 +211,7 @@ class ExportActionsMixin:
                     game_data_path=self.game_data_path,
                     profile=load_profile(),
                 )
+                self._last_pack_dir = out
                 _ = self._post_gui_worker(
                     ticket,
                     lambda: self._show_pack_result(out, report),

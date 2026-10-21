@@ -20,6 +20,7 @@ from .theme import (
 )
 
 
+from .gui_pack_query import open_pack_query_dialog
 from .gui_profile_settings import open_extraction_profile_dialog  # 提取开关设置对话框
 
 
@@ -124,6 +125,20 @@ def build_topbar(app) -> None:
         **secondary_button_style(),
     )
     app.profile_settings_button.pack(side="left", padx=(0, 4))
+    app.pack_query_button = ctk.CTkButton(
+        source_tools,
+        text="包查询",
+        width=68,
+        height=26,
+        font=(FONT, 11),
+        command=lambda: open_pack_query_dialog(
+            app,
+            lambda: getattr(app, "_last_pack_dir", None),
+            app.on_export_pack,
+        ),
+        **secondary_button_style(),
+    )
+    app.pack_query_button.pack(side="left", padx=(0, 4))
     app.data_tools_button = ctk.CTkButton(
         source_tools,
         text="数据工具",
