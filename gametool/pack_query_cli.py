@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import bisect
+import os
 import csv
 import math
 import re
@@ -62,6 +63,7 @@ _COMMANDS = (
     "list",
     "doc",
     "buffs",
+    "export",
     "heroes",
 )
 _COLOR_RE = re.compile(r"\|c[0-9A-Fa-f]{8}|\|r")
@@ -2724,6 +2726,23 @@ def _query_heroes(pack: Path, query: str, limit: int) -> list[str]:
     if not out:
         return ["未找到: " + query]
     return out
+
+
+def _query_export(pack: Path, query: str, limit: int) -> list[str]:
+    """export 单对象全景落盘: doc 报告写临时目录并打印文件路径。
+    给 AI/文档喂上下文时复制文件比复制终端输出方便。query 是四码或名称。"""
+    lines = _query_doc(pack, query, limit)
+    if lines[0].startswith("未找到"):
+        return lines
+    from .archive_export import tmp_extract_dir
+    safe = "".join(
+        char if char not in '\\/:*?"<>|' else "_" for char in query
+    ).strip() or "object"
+    out_dir = tmp_extract_dir("pack-query-export")
+    out_path = os.path.join(out_dir, safe + ".md")
+    with open(out_path, "w", encoding="utf-8") as handle:
+        handle.write("\n".join(lines))
+    return [f"已导出: {out_path}"] + lines
 _QUERIES = {
     "item": _query_item,
     "recipe": _query_recipe,
@@ -2745,6 +2764,7 @@ _QUERIES = {
     "list": _query_list,
     "doc": _query_doc,
     "buffs": _query_buffs,
+    "export": _query_export,
     "heroes": _query_heroes,
 }
 

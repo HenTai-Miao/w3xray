@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 
 import pytest
@@ -1296,3 +1297,16 @@ def test_query_heroes_missing_table_points_to_search(tmp_path, pack, capsys) -> 
     text = capsys.readouterr().out.strip()
     assert "本包无 英雄.tsv" in text
     assert "search" in text
+
+
+def test_query_export_writes_markdown(tmp_path, pack, capsys) -> None:
+    run_pack_query_cli(
+        parse_pack_query_cli_options((str(tmp_path), "export", "冰晶"))
+    )
+    out = capsys.readouterr().out
+    assert "已导出: " in out
+    export_path = out.splitlines()[0].split("已导出: ", 1)[1]
+    assert os.path.exists(export_path)
+    content = open(export_path, encoding="utf-8").read()
+    assert "I0AA" in content
+    assert "冰晶" in content
