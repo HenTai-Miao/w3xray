@@ -68,7 +68,7 @@ _sparse_decompress = sparse_decompress
 # 把已解压字节按（块索引, 名字候选字节）留在有上限的缓存里直接复用。
 _PAYLOAD_CACHE_BUDGET: Final = 512 * 1024 * 1024
 # 命名查找要重放编码候选并逐项探测哈希表；导出对每个名字会查三次，必须记忆化。
-_RESOLVE_CACHE_LIMIT: Final = 262_144
+_RESOLVE_CACHE_LIMIT: Final = 2_000_000
 
 
 class MPQArchive:
@@ -148,8 +148,11 @@ class MPQArchive:
         if name in cache:
             return cache[name]
         match = self._compute_hash_match(name)
-        if len(cache) < _RESOLVE_CACHE_LIMIT:
-            cache[name] = match
+        if len(cache) >= _RESOLVE_CACHE_LIMIT:
+            # FIFO 逐出旧名字, 巨图百万文件名也能全量记忆化
+            for stale in list(cache)[: len(cache) // 4]:
+                cache.pop(stale)
+        cache[name] = match
         return match
 
     def _compute_hash_match(self, name: str):
@@ -216,9 +219,16 @@ class MPQArchive:
         block = self.block_table[bi]
         payload = self._read_block(block, real, name_bytes=candidate)
         total = self._payload_cache_bytes + len(payload)
-        if total <= _PAYLOAD_CACHE_BUDGET:
+        if total > _PAYLOAD_CACHE_BUDGET:
+            # FIFO 逐出旧条目直到放得下；单条超预算则不缓存 (下次重解压一次)
+            for stale_key in list(self._payload_cache):
+                if total <= _PAYLOAD_CACHE_BUDGET:
+                    break
+                stale = self._payload_cache.pop(stale_key)
+                self._payload_cache_bytes -= len(stale)
+        if len(payload) <= _PAYLOAD_CACHE_BUDGET:
             self._payload_cache[cache_key] = payload
-            self._payload_cache_bytes = total
+            self._payload_cache_bytes += len(payload)
         return payload
 
     def declared_file_size(self, name: str) -> int | None:
