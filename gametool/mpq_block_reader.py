@@ -22,7 +22,7 @@ from .mpq_layout import ArchiveBytes, _Block
 
 DERIVE_KEY: Final = -1
 BLOCK_RECOVERY_ERRORS: Final = (KeyError, ValueError, struct.error)
-MAX_DECOMPRESSED_FILE_SIZE: Final = 256 * 1024 * 1024
+MAX_DECOMPRESSED_FILE_SIZE: Final = 1024 * 1024 * 1024
 
 
 class MPQBlockError(ValueError):

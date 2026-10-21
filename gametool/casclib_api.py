@@ -18,7 +18,7 @@ from .casclib_enumeration import (
 
 ERROR_FILE_NOT_FOUND: Final = 2
 ERROR_PROC_NOT_FOUND: Final = 127
-MAX_CASC_FILE_SIZE: Final = 40 * 1024 * 1024
+MAX_CASC_FILE_SIZE: Final = 2 * 1024 * 1024 * 1024
 
 
 class CascLibApi(Protocol):

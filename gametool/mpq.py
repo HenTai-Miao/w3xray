@@ -66,7 +66,7 @@ _sparse_decompress = sparse_decompress
 
 # 组件解析与台账盘点会对同名文件各读一次；解压是纯 Python 的最重开销，
 # 把已解压字节按（块索引, 名字候选字节）留在有上限的缓存里直接复用。
-_PAYLOAD_CACHE_BUDGET: Final = 256 * 1024 * 1024
+_PAYLOAD_CACHE_BUDGET: Final = 512 * 1024 * 1024
 # 命名查找要重放编码候选并逐项探测哈希表；导出对每个名字会查三次，必须记忆化。
 _RESOLVE_CACHE_LIMIT: Final = 262_144
 

@@ -18,8 +18,8 @@ _RESOURCE_NAME_RE = re.compile(
     rb"(?:blp|mdx|mdl|wav|mp3|ogg|tga|dds|txt|slk|ttf|j|lua|doo|wtg|wct|"
     rb"w3u|w3t|w3a|w3q|w3b|w3d|w3h|w3r|w3c|w3s|wgc))"
 )
-_MAX_RECOVERY_SCAN_BYTES: Final = 128 * 1024 * 1024
-_MAX_RECOVERY_EXPORT_BYTES: Final = 256 * 1024 * 1024
+_MAX_RECOVERY_SCAN_BYTES: Final = 1024 * 1024 * 1024
+_MAX_RECOVERY_EXPORT_BYTES: Final = 1024 * 1024 * 1024
 _MAX_RECOVERY_CANDIDATES: Final = 100_000
 
 

@@ -44,8 +44,8 @@ KNOWN_EXPORT_FILES = [
     "testconfig.wgc",
     "(listfile)",
 ]
-_MAX_NAMED_EXPORT_BYTES: Final = 512 * 1024 * 1024
-_MAX_UNKNOWN_EXPORT_BYTES: Final = 512 * 1024 * 1024
+_MAX_NAMED_EXPORT_BYTES: Final = 4 * 1024 * 1024 * 1024
+_MAX_UNKNOWN_EXPORT_BYTES: Final = 4 * 1024 * 1024 * 1024
 
 
 class ExportArchive(Protocol):

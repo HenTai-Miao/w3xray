@@ -21,7 +21,7 @@ from .script_protection import (
 if TYPE_CHECKING:
     from .api import MapData
 
-_MAX_UNKNOWN_EXPORT_BYTES: Final = 512 * 1024 * 1024
+_MAX_UNKNOWN_EXPORT_BYTES: Final = 4 * 1024 * 1024 * 1024
 _MAX_UNKNOWN_MANIFEST_ROWS: Final = 5_000_000
 
 

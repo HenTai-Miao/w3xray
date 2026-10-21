@@ -33,9 +33,9 @@ from .description_cache_publication import publish_description_cache
 
 _STATE_NAME: Final = "批量提取状态.json"
 _REPORT_NAME: Final = "对象描述.tsv"
-_MAX_STATE_BYTES: Final = 64 * 1024 * 1024
-_MAX_CACHE_BYTES: Final = 512 * 1024 * 1024
-_MAX_REPORT_BYTES: Final = 512 * 1024 * 1024
+_MAX_STATE_BYTES: Final = 512 * 1024 * 1024
+_MAX_CACHE_BYTES: Final = 4 * 1024 * 1024 * 1024
+_MAX_REPORT_BYTES: Final = 4 * 1024 * 1024 * 1024
 
 
 def migrate_description_cache(

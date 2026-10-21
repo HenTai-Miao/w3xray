@@ -28,7 +28,7 @@ from .description_cache_retained_siblings import capture_relevant_siblings
 from .description_cache_retained_tree_snapshot import RetainedScanBounds
 
 
-MAX_RETAINED_FILE_BYTES: Final = 64 * 1024 * 1024
+MAX_RETAINED_FILE_BYTES: Final = 1024 * 1024 * 1024
 MAX_RETAINED_TREE_BYTES: Final = 512 * 1024 * 1024
 MAX_RETAINED_FILE_COUNT: Final = 100_000
 MAX_RETAINED_ENTRY_COUNT: Final = 125_000
