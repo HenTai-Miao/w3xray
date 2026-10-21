@@ -20,11 +20,11 @@ def _artifact(tmp_path: Path) -> tuple[Path, Path]:
 def test_retained_scanner_publishes_exact_fixed_bounds() -> None:
     getattr(snapshot_api, "inspect_retained_description_caches")
 
-    assert snapshot_api.MAX_RETAINED_FILE_BYTES == 64 * 1024 * 1024
-    assert snapshot_api.MAX_RETAINED_TREE_BYTES == 512 * 1024 * 1024
-    assert snapshot_api.MAX_RETAINED_FILE_COUNT == 100_000
-    assert snapshot_api.MAX_RETAINED_ENTRY_COUNT == 125_000
-    assert snapshot_api.MAX_RETAINED_DEPTH == 64
+    assert snapshot_api.MAX_RETAINED_FILE_BYTES == 1024 * 1024 * 1024
+    assert snapshot_api.MAX_RETAINED_TREE_BYTES == 8 * 1024 * 1024 * 1024
+    assert snapshot_api.MAX_RETAINED_FILE_COUNT == 1_000_000
+    assert snapshot_api.MAX_RETAINED_ENTRY_COUNT == 1_250_000
+    assert snapshot_api.MAX_RETAINED_DEPTH == 256
 
 
 @pytest.mark.parametrize(
