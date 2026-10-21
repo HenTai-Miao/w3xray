@@ -10,7 +10,7 @@ from io import BytesIO
 
 # 单边像素上限：真实地图图标(64)/纹理/载入图远小于此。BLP 来自不可信地图，
 # 头里 width*height 直接驱动内存分配，必须设硬上限防解压炸弹(否则可被构造成 ~17GB)。
-_MAX_DIM = 4096
+_MAX_DIM = 16384
 
 
 def _palette_rgba(Image, pal, idx, alpha_data, width, height):
