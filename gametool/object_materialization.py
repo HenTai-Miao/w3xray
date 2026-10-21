@@ -144,12 +144,12 @@ _worker_base_table: BaseObjectTable | None = None
 
 
 def _configured_workers() -> int:
-    """GAMEXRAY_MATERIALIZE_WORKERS 控制并行度（默认 1=串行，上限 32）。"""
+    """GAMEXRAY_MATERIALIZE_WORKERS 控制并行度（默认 1=串行）。"""
     try:
         requested = int(os.environ.get("GAMEXRAY_MATERIALIZE_WORKERS", "1"))
     except ValueError:
         return 1
-    return max(1, min(requested, 32))
+    return max(1, requested)
 
 
 def _init_worker(base_objects: BaseObjectTable) -> None:

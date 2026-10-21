@@ -309,7 +309,7 @@ def _classify_text(path: Path, text: str | None) -> SaveFileKind:
 
 
 def _looks_like_mpq(payload: bytes) -> bool:
-    return payload[:4096].find(b"MPQ\x1a") >= 0
+    return payload[:1048576].find(b"MPQ\x1a") >= 0
 
 
 def _read_mpq_text(snapshot: bytes) -> tuple[str | None, str]:
