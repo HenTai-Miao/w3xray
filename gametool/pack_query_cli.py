@@ -22,6 +22,7 @@
 
 from __future__ import annotations
 
+import bisect
 import csv
 import math
 import re
@@ -64,10 +65,18 @@ def _clean(text: str) -> str:
     return _COLOR_RE.sub("", text).replace("|n", " ")
 
 
+_ROWS_CACHE: dict[tuple[str, str], list[list[str]]] = {}
+
+
 def _read_rows(pack_dir: Path, rel: str) -> list[list[str]]:
     path = pack_dir / rel
     if not path.exists():
         return []
+    stat = path.stat()
+    cache_key = (str(pack_dir), rel)
+    cached = _ROWS_CACHE.get(cache_key)
+    if cached is not None and cached[0] == (stat.st_mtime_ns, stat.st_size):
+        return cached[1]
     # 内存对象表导出的长富文本字段 (UR 物品全文效果) 可超 csv 默认 131072;
     # 与 batch_report_reader 同纪律: 拉满上限读满, 不截断不报错。
     previous_limit = csv.field_size_limit()
@@ -77,9 +86,11 @@ def _read_rows(pack_dir: Path, rel: str) -> list[list[str]]:
         csv.field_size_limit(2**31 - 1)
     try:
         with path.open(encoding="utf-8", newline="") as f:
-            return list(csv.reader(f, delimiter="\t"))
+            rows = list(csv.reader(f, delimiter="\t"))
     finally:
         csv.field_size_limit(previous_limit)
+    _ROWS_CACHE[cache_key] = ((stat.st_mtime_ns, stat.st_size), rows)
+    return rows
 
 
 def load_items(pack_dir: Path) -> dict[str, tuple[str, str]]:
@@ -1960,13 +1971,35 @@ _SCOPE_ADD_ACTION_RE = re.compile(
 )
 
 
+_SCOPE_CACHE: dict[str, tuple[list[int], list[str]]] = {}
+
+
+def _script_function_spans(script: str) -> tuple[list[int], list[str]]:
+    """按脚本文本缓存 (函数起点列表, 对应函数名列表), 二分定位 O(log n)。
+
+    where/drop/refs 等命令对同一脚本反复查作用域; 旧实现每次 finditer 从头
+    扫到 pos, 1428 次 × 4 万行 = 12.6s。缓存后同一脚本只扫一遍。"""
+    cached = _SCOPE_CACHE.get(script)
+    if cached is None:
+        starts: list[int] = []
+        names: list[str] = []
+        for hm in _FN_HEAD_RE.finditer(script):
+            starts.append(hm.start())
+            names.append(hm.group(1))
+        cached = (starts, names)
+        _SCOPE_CACHE[script] = cached
+    return cached
+
+
 def _function_scope_at(script: str, pos: int) -> tuple[str, str, int]:
     """包含 pos 的函数 (函数名, 函数体, 函数体起点); 找不到返回 ("", script, 0)。"""
-    name, start = "", -1
-    for hm in _FN_HEAD_RE.finditer(script, 0, pos):
-        name, start = hm.group(1), hm.start()
-    if start < 0:
+    starts, names = _script_function_spans(script)
+    if not starts:
         return "", script, 0
+    i = bisect.bisect_right(starts, pos) - 1
+    if i < 0:
+        return "", script, 0
+    name, start = names[i], starts[i]
     end = script.find("endfunction", pos)
     return name, script[start : len(script) if end < 0 else end], start
 
