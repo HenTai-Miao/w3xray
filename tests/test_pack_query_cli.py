@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import shutil
+
 import pytest
 
 from gametool.pack_query_cli import (
@@ -1203,3 +1205,61 @@ def test_load_item_gold_overrides_accepts_goldcost(pack):
     o = load_item_gold_overrides(pack)
     assert o.get("I0CC") == "123"  # igol 路径保持不变
     assert o.get("I0BB") == "4500"  # goldcost 路径（西方世界的劫难系）
+
+
+def test_query_search_spans_object_tables(tmp_path, pack, capsys) -> None:
+    # Given: the synthetic pack with 冰晶/熊掌/爪 items.
+    # When: search crosses every object table with one keyword.
+    run_pack_query_cli(
+        parse_pack_query_cli_options((str(tmp_path), "search", "攻击之爪"))
+    )
+    text = capsys.readouterr().out
+    # Then: hits from 物品 table are listed with per-table counts.
+    assert "攻击之爪" in text
+    assert "物品 (" in text
+
+
+def test_query_search_no_hit_reports_miss(tmp_path, pack, capsys) -> None:
+    run_pack_query_cli(
+        parse_pack_query_cli_options((str(tmp_path), "search", "不存在的词"))
+    )
+    assert capsys.readouterr().out.strip() == "未找到: 不存在的词"
+
+
+def test_query_diff_reports_added_and_removed(tmp_path, pack, capsys) -> None:
+    # Given: an "old" pack copy missing one item.
+    old = tmp_path / "old-pack"
+    (old / "对象ID").mkdir(parents=True)
+    src = (tmp_path / "对象ID" / "物品.tsv").read_text(encoding="utf-8")
+    lines_src = src.splitlines(keepends=True)
+    removed_id = "I0EE"
+    kept = [l for l in lines_src if not l.startswith(f"物品	{removed_id}	")]
+    assert len(kept) < len(lines_src)
+    (old / "对象ID" / "物品.tsv").write_text("".join(kept), encoding="utf-8")
+
+    # When: diff compares the new pack against the old one.
+    run_pack_query_cli(
+        parse_pack_query_cli_options((str(tmp_path), "diff", str(old)))
+    )
+    text = capsys.readouterr().out
+
+    # Then: the item missing from the old pack is reported as an addition.
+    assert f"+ [{removed_id}]" in text
+    assert "新增 1" in text
+
+
+def test_query_diff_identical_packs_report_no_difference(tmp_path, pack, capsys) -> None:
+    old = tmp_path / "same-pack"
+    (old / "对象ID").mkdir(parents=True)
+    shutil.copy(
+        tmp_path / "对象ID" / "物品.tsv",
+        old / "对象ID" / "物品.tsv",
+    )
+    shutil.copy(
+        tmp_path / "对象ID" / "单位.tsv",
+        old / "对象ID" / "单位.tsv",
+    )
+    run_pack_query_cli(
+        parse_pack_query_cli_options((str(tmp_path), "diff", str(old)))
+    )
+    assert capsys.readouterr().out.strip() == "两包对象表无差异"

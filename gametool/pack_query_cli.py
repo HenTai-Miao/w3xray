@@ -57,6 +57,8 @@ _COMMANDS = (
     "locate",
     "affixes",
     "registered",
+    "search",
+    "diff",
 )
 _COLOR_RE = re.compile(r"\|c[0-9A-Fa-f]{8}|\|r")
 
@@ -493,6 +495,7 @@ class PackQueryCliOptions:
     command: str
     query: str
     limit: int = 0  # 0 = 不限量 (满量输出); --limit N 显式缩减
+    pack_dir_b: str = ""  # diff 子命令的第二个包
 
 
 @dataclass(frozen=True, slots=True)
@@ -522,10 +525,17 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         if limit < 0:
             raise PackQueryCliOptionError("--limit 必须为非负整数 (0=不限量)")
         rest = rest[:i] + rest[i + 2 :]
+    against = ""
+    if "--against" in rest:
+        i = rest.index("--against")
+        if i + 1 >= len(rest):
+            raise PackQueryCliOptionError("--against 需要第二个资料包目录")
+        against = rest[i + 1]
+        rest = rest[:i] + rest[i + 2 :]
     command = rest[1] if len(rest) > 1 else ""
     if command == "near" and len(rest) in (4, 5):
         rest = rest[:2] + [" ".join(rest[2:])]
-    if command in ("affixes", "registered") and len(rest) == 2:
+    if command in ("affixes", "registered", "diff") and len(rest) == 2:
         # 这两个子命令查询词可省 (全量列出)
         rest = rest + [""]
     if len(rest) != 3:
@@ -535,8 +545,8 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
             + "> <查询词>"
             + ("  (near 用法: near <x> <y> [radius])" if command == "near" else "")
             + (
-                "  (affixes/registered 查询词可省 = 全量列出)"
-                if command in ("affixes", "registered")
+                "  (affixes/registered 查询词可省 = 全量列出; diff 用法: diff <旧包目录>)"
+                if command in ("affixes", "registered", "diff")
                 else ""
             )
         )
@@ -545,10 +555,14 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         raise PackQueryCliOptionError(
             "未知子命令: " + command + " (可选: " + ",".join(_COMMANDS) + ")"
         )
-    if not query.strip() and command not in ("affixes", "registered"):
+    if not query.strip() and command not in ("affixes", "registered", "diff"):
         raise PackQueryCliOptionError("查询词不能为空")
     return PackQueryCliOptions(
-        pack_dir=pack_dir, command=command, query=query.strip(), limit=limit
+        pack_dir=pack_dir,
+        command=command,
+        query=query.strip(),
+        limit=limit,
+        pack_dir_b=against,
     )
 
 
@@ -2519,6 +2533,101 @@ def _query_registered(pack: Path, query: str, limit: int) -> list[str]:
     return lines
 
 
+def _query_search(pack: Path, query: str, limit: int) -> list[str]:
+    """search 全包统一搜索: 一个词不知道属于哪个命令时用。
+    扫 对象ID/物品,单位,技能,英雄,增益,科技.tsv 的名称列+ID列, 每表给出
+    命中数与首屏示例 (--limit 控制示例数, 总数始终全量统计)。"""
+    needle = _clean(query).casefold()
+    if not needle:
+        return ["未找到: 查询词为空"]
+    tables = (
+        "物品",
+        "单位",
+        "技能",
+        "英雄",
+        "增益",
+        "科技",
+    )
+    sample_cap = limit if limit > 0 else 5
+    out: list[str] = []
+    for table in tables:
+        rows = _read_rows(pack, f"对象ID/{table}.tsv")
+        if not rows:
+            continue
+        hits: list[str] = []
+        for r in rows[1:]:
+            if len(r) < 5:
+                continue
+            code, name = r[1], _clean(r[4])
+            if needle in code.casefold() or needle in name.casefold():
+                hits.append(f"  [{code}] {name}")
+        if not hits:
+            continue
+        out.append(f"== {table} ({len(hits)} 个)==")
+        out.extend(hits[:sample_cap])
+        if len(hits) > sample_cap:
+            out.append(f"  …… 其余 {len(hits) - sample_cap} 条加大 limit 查看")
+    if not out:
+        return ["未找到: " + query]
+    return out
+
+
+
+
+def _query_diff(pack: Path, query: str, limit: int, pack_b: str = "") -> list[str]:
+    """diff 双包对比: 地图更新后新包 vs 旧包, 列出对象表新增/删除的物品与单位。
+    比较维度: 对象ID/物品.tsv 与 对象ID/单位.tsv 的 ID 集合 (行内容以 ID 为主键)。
+    query 可传子表名过滤 (物品/单位), 空 = 全部。"""
+    if not pack_b:
+        return ["diff 需要第二个包: pack-query <新包> diff <旧包目录>"]
+    old_pack = Path(pack_b)
+    if not old_pack.is_dir():
+        return ["第二个包目录不存在: " + pack_b]
+    tables = (
+        "物品",
+        "单位",
+        "技能",
+        "英雄",
+    )
+    filter_table = query.strip() if query.strip() in tables else ""
+    out: list[str] = []
+    for table in tables:
+        if filter_table and table != filter_table:
+            continue
+        old_rows = _read_rows(old_pack, f"对象ID/{table}.tsv")
+        new_rows = _read_rows(pack, f"对象ID/{table}.tsv")
+        if not old_rows and not new_rows:
+            continue
+        old_by_id = {r[1]: r for r in old_rows[1:] if len(r) > 4}
+        new_by_id = {r[1]: r for r in new_rows[1:] if len(r) > 4}
+        added = [i for i in new_by_id if i not in old_by_id]
+        removed = [i for i in old_by_id if i not in new_by_id]
+        changed = [
+            i
+            for i in new_by_id
+            if i in old_by_id and new_by_id[i] != old_by_id[i]
+        ]
+        if not added and not removed and not changed:
+            continue
+        out.append(f"== {table}: 新增 {len(added)} / 删除 {len(removed)} / 变更 {len(changed)} ==")
+        for i in added:
+            name = _clean(new_by_id[i][4]) if len(new_by_id[i]) > 4 else i
+            out.append(f"  + [{i}] {name}")
+        for i in removed:
+            name = _clean(old_by_id[i][4]) if len(old_by_id[i]) > 4 else i
+            out.append(f"  - [{i}] {name}")
+        shown = 0
+        cap = limit if limit > 0 else 20
+        for i in changed:
+            if shown >= cap:
+                out.append(f"  …… 其余 {len(changed) - shown} 条变更加大 limit 查看")
+                break
+            name = _clean(new_by_id[i][4]) if len(new_by_id[i]) > 4 else i
+            out.append(f"  ~ [{i}] {name} (字段有变化, 详见两包 对象字段.tsv)")
+            shown += 1
+    if not out:
+        return ["两包对象表无差异"]
+    return out
 _QUERIES = {
     "item": _query_item,
     "recipe": _query_recipe,
@@ -2535,6 +2644,8 @@ _QUERIES = {
     "locate": _query_locate,
     "affixes": _query_affix,
     "registered": _query_registered,
+    "diff": _query_diff,
+    "search": _query_search,
 }
 
 
@@ -2561,6 +2672,12 @@ def run_pack_query_cli(options: PackQueryCliOptions) -> int:
     if not pack.is_dir():
         print("资料包目录不存在: " + options.pack_dir, file=sys.stderr)
         return 2
+    if options.command == "diff":
+        other = options.pack_dir_b or options.query
+        lines = _query_diff(pack, options.query, options.limit, other)
+        for line in lines:
+            print(line)
+        return 0 if not lines[0].startswith(("未找到", "diff 需要", "第二个包")) else 2
     subs = _campaign_subpacks(pack)
     if subs:
         printed = False
