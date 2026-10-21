@@ -90,7 +90,7 @@ uv run --with basedpyright basedpyright --level error <paths>
 ## Required acceptance invariants
 
 1. Snapshot formatting/parsing is canonical; roots are unique/nonoverlapping; no symlink or special entry is followed; content and nanosecond mtime changes compare as differences.
-2. Retained-cache bounds are exact: 64 MiB/file, 512 MiB/tree, 100,000 files, 125,000 entries, and accepted depth 64; the first exceeded unit reports `oversized` without a partial digest.
+2. Retained-cache bounds are exact: 1 GiB/file, 8 GiB/tree, 1,000,000 files, 1,250,000 entries, and accepted depth 256; the first exceeded unit reports `oversized` without a partial digest.
 3. Retained artifacts receive two complete tree intervals in two whole-set rounds. File/child mutation is `unstable`; active-root, top-level retained identity, or relevant sibling namespace replacement is a code-2 command boundary with no report.
 4. A `previous` directory validates only the five already captured owned payloads. Pathname cache loaders are never called; retained failed/recovery objects are never description sources.
 5. Codes 0/1 write canonical retained reports; 0 permits only valid-cache/ordinary partial evidence with no transient/malformed rows, 1 represents artifact violations, and 2 represents request/binding/namespace/report-write boundaries.

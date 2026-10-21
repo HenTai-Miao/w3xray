@@ -47,7 +47,7 @@ a = Analysis(
 pyz = PYZ(a.pure)
 
 common_exe_options = {
-    'name': '魔兽地图提取器',
+    'name': 'GameXRay 游戏档案透视器',
     'debug': False,
     'bootloader_ignore_signals': False,
     'strip': False,
@@ -87,5 +87,5 @@ else:
         strip=False,
         upx=False,
         upx_exclude=[],
-        name='魔兽地图提取器',
+        name='GameXRay 游戏档案透视器',
     )
