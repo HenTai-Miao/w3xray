@@ -59,6 +59,8 @@ _COMMANDS = (
     "registered",
     "search",
     "diff",
+    "list",
+    "doc",
 )
 _COLOR_RE = re.compile(r"\|c[0-9A-Fa-f]{8}|\|r")
 
@@ -535,8 +537,8 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
     command = rest[1] if len(rest) > 1 else ""
     if command == "near" and len(rest) in (4, 5):
         rest = rest[:2] + [" ".join(rest[2:])]
-    if command in ("affixes", "registered", "diff") and len(rest) == 2:
-        # 这两个子命令查询词可省 (全量列出)
+    if command in ("affixes", "registered", "diff", "list") and len(rest) == 2:
+        # 这些子命令查询词可省 (全量列出)
         rest = rest + [""]
     if len(rest) != 3:
         raise PackQueryCliOptionError(
@@ -545,8 +547,8 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
             + "> <查询词>"
             + ("  (near 用法: near <x> <y> [radius])" if command == "near" else "")
             + (
-                "  (affixes/registered 查询词可省 = 全量列出; diff 用法: diff <旧包目录>)"
-                if command in ("affixes", "registered", "diff")
+                "  (affixes/registered/list 查询词可省 = 全量列出; diff 用法: diff <旧包目录>)"
+                if command in ("affixes", "registered", "diff", "list")
                 else ""
             )
         )
@@ -555,7 +557,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         raise PackQueryCliOptionError(
             "未知子命令: " + command + " (可选: " + ",".join(_COMMANDS) + ")"
         )
-    if not query.strip() and command not in ("affixes", "registered", "diff"):
+    if not query.strip() and command not in ("affixes", "registered", "diff", "list"):
         raise PackQueryCliOptionError("查询词不能为空")
     return PackQueryCliOptions(
         pack_dir=pack_dir,
@@ -834,11 +836,7 @@ def _query_recipe(pack: Path, query: str, limit: int) -> list[str]:
         for r in _read_rows(pack, "掉落与获取关系.tsv")
         if len(r) > 4 and "合成" in r[2]
     }
-    total.update(
-        r[3]
-        for r in _read_rows(pack, "脚本公式索引.tsv")
-        if len(r) > 3
-    )
+    total.update(r[3] for r in _read_rows(pack, "脚本公式索引.tsv") if len(r) > 3)
     if total:
         return [
             "未找到相关配方: " + query,
@@ -895,8 +893,17 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
         if not _match(query, r[6], src_name):
             continue
         lines.append(
-            "来源 " + src_name + "[" + r[6] + "]: " + r[2]
-            + " -> " + _clean(r[4]) + " [" + r[3] + "]"
+            "来源 "
+            + src_name
+            + "["
+            + r[6]
+            + "]: "
+            + r[2]
+            + " -> "
+            + _clean(r[4])
+            + " ["
+            + r[3]
+            + "]"
         )
         if limit and len(lines) >= limit:
             break
@@ -908,15 +915,11 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
                 continue
             lines.extend(_script_use_item_loot(script, code, names))
             lines.extend(
-                _item_trigger_grant_lines(
-                    script, [code], lambda c: names.get(c, c)
-                )
+                _item_trigger_grant_lines(script, [code], lambda c: names.get(c, c))
             )
             # 第三形态 (YDWE 每单位随机掉落) 与 drop 同源: where 曾答
             # 「未找到获取途径」而 drop 能给出证据——两命令必须一致
-            lines.extend(
-                _script_random_dist_item_drops(script, code, items, names)
-            )
+            lines.extend(_script_random_dist_item_drops(script, code, items, names))
     if not lines:
         # 单位查询不该吃物品文案兜底 (邪恶陨石人的任务文本曾被端出来
         # 当「炎石守卫」的来源线索)——路由到 drop 的单位反查
@@ -993,7 +996,7 @@ def _fourcc(literal: str, hex_value: str) -> str:
     if len(hex_value) == 8:
         try:
             return bytes.fromhex(hex_value).decode("ascii")
-        except (ValueError, UnicodeDecodeError):
+        except ValueError, UnicodeDecodeError:
             return ""
     return ""
 
@@ -1049,9 +1052,7 @@ _ARRAY_SET_RE = re.compile(
 )
 
 
-def _script_use_item_loot(
-    script: str, code: str, names: dict[str, str]
-) -> list[str]:
+def _script_use_item_loot(script: str, code: str, names: dict[str, str]) -> list[str]:
     """使用物品触发的随机产出证据 (宝箱类: GetManipulatedItem 条件 → 数组池抽件)。
 
     迷失国度 wbc 系统: 使用物品时创建池子, 逐次
@@ -1144,8 +1145,7 @@ def _item_trigger_blocks(script: str) -> list[tuple[str, list[str], str, set[str
         if "GetManipulatedItem" not in body:
             continue
         codes = [
-            _fourcc(x.group(1), x.group(2))
-            for x in _USE_ITEM_COND_RE.finditer(body)
+            _fourcc(x.group(1), x.group(2)) for x in _USE_ITEM_COND_RE.finditer(body)
         ]
         codes = [c for c in codes if c]
         if not codes:
@@ -1226,9 +1226,7 @@ def use_item_loot_lines(script: str, name_of) -> list[str]:
     for stem, cond_codes, action_body, events in _item_trigger_blocks(script):
         if not cond_codes:
             continue
-        kind = (
-            "拾取" if "EVENT_PLAYER_UNIT_PICKUP_ITEM" in events else "使用"
-        )
+        kind = "拾取" if "EVENT_PLAYER_UNIT_PICKUP_ITEM" in events else "使用"
         users = "、".join(f"{name_of(c)}({c})" for c in cond_codes)
         for pm in _ARRAY_POOL_RE.finditer(action_body):
             arr, cap = pm.group(1), int(pm.group(2))
@@ -1630,9 +1628,7 @@ def _script_unit_direct_drops(
                 (n for c, (n, _d) in items.items() if c.lower() == icode.lower()),
                 icode,
             )
-            rows.append(
-                f"  死亡触发 {stem} -> 直落: {dname} [{icode}]: {snippet}"
-            )
+            rows.append(f"  死亡触发 {stem} -> 直落: {dname} [{icode}]: {snippet}")
             rows.append("    " + gate)
         if rows:
             if not out:
@@ -1722,9 +1718,7 @@ def script_death_drop_lines(script: str, name_of) -> list[str]:
                 continue
             seen_entries.add(snippet)
             prior = [r for r in randoms if r.end() <= dm.start()]
-            gate = (
-                _balanced_call(action_body, prior[-1].start()) if prior else "无掷骰"
-            )
+            gate = _balanced_call(action_body, prior[-1].start()) if prior else "无掷骰"
             direct.append(f"{name_of(icode)}({icode}) 掷骰:{gate}")
         pools: list[str] = []
         for pvar, pidx in _PLACE_POOL_RE.findall(action_body):
@@ -1732,9 +1726,7 @@ def script_death_drop_lines(script: str, name_of) -> list[str]:
             if not regs:
                 continue
             total = sum(w for _, w in regs) or 1.0
-            inner = "、".join(
-                f"{name_of(ic)}({ic}) {w:g}/{total:g}" for ic, w in regs
-            )
+            inner = "、".join(f"{name_of(ic)}({ic}) {w:g}/{total:g}" for ic, w in regs)
             pools.append(f"池 {pvar}[{pidx}] 共{len(regs)}件N选1: {inner}")
         stock_counts: dict[tuple[str, str], int] = {}
         for level, kind in _RANDOM_STOCK_RE.findall(action_body):
@@ -1755,8 +1747,7 @@ def script_death_drop_lines(script: str, name_of) -> list[str]:
             parts.append("；".join(pools))
         if stock_items:
             parts.append(
-                "上架商店 "
-                + "、".join(f"{name_of(sc)}({sc})" for sc in stock_items)
+                "上架商店 " + "、".join(f"{name_of(sc)}({sc})" for sc in stock_items)
             )
         if stock_counts:
             parts.append(
@@ -1767,10 +1758,7 @@ def script_death_drop_lines(script: str, name_of) -> list[str]:
                     for (level, kind), count in stock_counts.items()
                 )
             )
-        line = (
-            f"- {header}  ⚠ 脚本死亡掉落 ({stem}, 关系表外证据): "
-            + "；".join(parts)
-        )
+        line = f"- {header}  ⚠ 脚本死亡掉落 ({stem}, 关系表外证据): " + "；".join(parts)
         if line in seen:
             continue
         seen.add(line)
@@ -1780,8 +1768,7 @@ def script_death_drop_lines(script: str, name_of) -> list[str]:
     for code, fn, regs in _unit_death_random_drops(script):
         total = sum(w for _c, w in regs) or 1
         inner = "、".join(
-            (_item_label(ic, name_of) + f" 权重{w}/{total}")
-            for ic, w in regs
+            (_item_label(ic, name_of) + f" 权重{w}/{total}") for ic, w in regs
         )
         out.append(f"- {name_of(code)}[{code}] 死亡随机掉落 ({fn}): {inner}")
     return out
@@ -2181,8 +2168,7 @@ def _source_drop_map(pack: Path) -> dict[str, str]:
                 known.add(icode)
                 iname = item_names.get(icode, (icode, ""))[0]
                 lst.append(
-                    (iname if iname and iname != icode else "")
-                    + "[" + icode + "]"
+                    (iname if iname and iname != icode else "") + "[" + icode + "]"
                 )
     return {code: "、".join(entries) for code, entries in drops.items()}
 
@@ -2288,9 +2274,7 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
         for d, code, x, y in _bounded(spawned, limit):
             name = load_units(pack).get(code, code)
             drop = f"  掉: {drop_map[code]}" if code in drop_map else ""
-            lines.append(
-                f"  脚本单位: {name} [{code}] @({x:g},{y:g}) 距{d:.0f}{drop}"
-            )
+            lines.append(f"  脚本单位: {name} [{code}] @({x:g},{y:g}) 距{d:.0f}{drop}")
     return lines
 
 
@@ -2314,8 +2298,12 @@ def _query_cmd(pack: Path, query: str, limit: int) -> list[str]:
         return ["未找到脚本 (脚本可读文本/*.j)——该包可能未导出可读脚本"]
     # 每条注册按「所在函数」配对处理器: 同名局部变量跨函数不再串台。
     # 精确命中优先于前缀命中 (cmd "-" 不应把 "-zs" 一并列出)。
-    exact_hits: dict[tuple[str, str, str, str, str], tuple[str, str, str, str, str, int, str]] = {}
-    loose_hits: dict[tuple[str, str, str, str, str], tuple[str, str, str, str, str, int, str]] = {}
+    exact_hits: dict[
+        tuple[str, str, str, str, str], tuple[str, str, str, str, str, int, str]
+    ] = {}
+    loose_hits: dict[
+        tuple[str, str, str, str, str], tuple[str, str, str, str, str, int, str]
+    ] = {}
     for m in _CHAT_REG_RE.finditer(script):
         var, cmd, exact = m.group(1), m.group(3), m.group(4)
         if cmd == query:
@@ -2572,8 +2560,6 @@ def _query_search(pack: Path, query: str, limit: int) -> list[str]:
     return out
 
 
-
-
 def _query_diff(pack: Path, query: str, limit: int, pack_b: str = "") -> list[str]:
     """diff 双包对比: 地图更新后新包 vs 旧包, 列出对象表新增/删除的物品与单位。
     比较维度: 对象ID/物品.tsv 与 对象ID/单位.tsv 的 ID 集合 (行内容以 ID 为主键)。
@@ -2603,13 +2589,13 @@ def _query_diff(pack: Path, query: str, limit: int, pack_b: str = "") -> list[st
         added = [i for i in new_by_id if i not in old_by_id]
         removed = [i for i in old_by_id if i not in new_by_id]
         changed = [
-            i
-            for i in new_by_id
-            if i in old_by_id and new_by_id[i] != old_by_id[i]
+            i for i in new_by_id if i in old_by_id and new_by_id[i] != old_by_id[i]
         ]
         if not added and not removed and not changed:
             continue
-        out.append(f"== {table}: 新增 {len(added)} / 删除 {len(removed)} / 变更 {len(changed)} ==")
+        out.append(
+            f"== {table}: 新增 {len(added)} / 删除 {len(removed)} / 变更 {len(changed)} =="
+        )
         for i in added:
             name = _clean(new_by_id[i][4]) if len(new_by_id[i]) > 4 else i
             out.append(f"  + [{i}] {name}")
@@ -2628,6 +2614,65 @@ def _query_diff(pack: Path, query: str, limit: int, pack_b: str = "") -> list[st
     if not out:
         return ["两包对象表无差异"]
     return out
+
+
+def _query_list(pack: Path, query: str, limit: int) -> list[str]:
+    """list 按表列出全部对象 ID+名称 (供脚本/AI 消费的纯清单)。
+    query 可传表名过滤 (物品/单位/技能/英雄/增益/科技), 空 = 全部表。"""
+    tables = (
+        "物品",
+        "单位",
+        "技能",
+        "英雄",
+        "增益",
+        "科技",
+    )
+    want = query.strip()
+    out: list[str] = []
+    for table in tables:
+        if want and table != want:
+            continue
+        rows = _read_rows(pack, f"对象ID/{table}.tsv")
+        if len(rows) <= 1:
+            continue
+        out.append(f"== {table} ({len(rows) - 1}) ==")
+        for r in rows[1:]:
+            if len(r) < 5:
+                continue
+            out.append(f"[{r[1]}] {_clean(r[4])}")
+    if not out:
+        return ["未找到对象表: " + (want or "全表")]
+    return out
+
+
+def _query_doc(pack: Path, query: str, limit: int) -> list[str]:
+    """doc 单对象全景报告: 一个对象一次看全 item/price/where/drop/refs。
+    query 是对象四码或名称 (与 item 同语义)。"""
+    sections = (
+        ("item", "基本信息/效果"),
+        ("price", "价格"),
+        ("where", "获取途径"),
+        ("drop", "掉落"),
+        ("refs", "引用分析"),
+    )
+    out: list[str] = []
+    for cmd, title in sections:
+        query_fn = _QUERIES[cmd]
+        lines = query_fn(pack, query, limit)
+        if not lines or lines[0].startswith("未找到"):
+            continue
+        out.append(f"==== {title} ({cmd}) ====")
+        out.extend(lines)
+        out.append("")
+    if not out:
+        return [
+            "未找到: "
+            + query
+            + " (doc 聚合 item/price/where/drop/refs 五个维度, 全部未命中)"
+        ]
+    return out
+
+
 _QUERIES = {
     "item": _query_item,
     "recipe": _query_recipe,
@@ -2646,6 +2691,8 @@ _QUERIES = {
     "registered": _query_registered,
     "diff": _query_diff,
     "search": _query_search,
+    "list": _query_list,
+    "doc": _query_doc,
 }
 
 

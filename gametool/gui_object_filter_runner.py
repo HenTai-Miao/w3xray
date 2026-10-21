@@ -75,6 +75,7 @@ if TYPE_CHECKING:
             iid: str,
             image: str,
             text: str,
+            values: tuple[str, ...] = (),
             tags: tuple[str, ...],
         ) -> str: ...
 
@@ -207,6 +208,7 @@ class ObjectFilterRunnerMixin(_ObjectFilterHost):
                 iid=str(index),
                 image="",
                 text=f" {obj.name}{mark}",
+                values=(obj.obj_id,),
                 tags=("odd" if index % 2 else "even",),
             )
         tree.tag_configure("odd", background=ROW_ALT)

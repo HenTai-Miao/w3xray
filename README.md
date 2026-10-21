@@ -192,6 +192,10 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
 - **全包统一搜索**：`pack-query <包> search <关键词>`——不知道关键词属于物品/单位/技能还是科技时，
   一次扫全部对象表，按表分组给出命中数与示例。
 - **双包对比**：`pack-query <新包> diff <旧包>`——地图更新后一键列出对象表新增/删除/变更
+- **资产清单**：`pack-query <包> list [表名]`——按表列出全部对象 ID+名称的纯清单
+  （物品/单位/技能/英雄/增益/科技），供脚本或 AI 直接消费，无截断。
+- **单对象全景**：`pack-query <包> doc <四码或名称>`——一次聚合 item/price/where/drop/refs
+  五个维度，问"这个装备什么效果、怎么获得"一个命令出全。
   （物品/单位/技能/英雄四表，按 ID 主键对比），升级补丁内容一目了然。
 - **运行时只读透视**：`main.py live` 从运行中的游戏进程只读提取地图与对象信息（`ReadProcessMemory`，绝不写入），加密壳图静态解析失败时经内存层导出完整知识包：`live --dump-objects <目录>` 产出对象表/字段/注册数据/词缀表 TSV，供 `pack-query` 查询。
 - **获取当前地图**：GUI 顶栏按钮或 CLI `main.py current` 根据游戏进程与磁盘证据定位 `.w3x/.w3m/.w3n`，通过置信度门槛后只解析私有临时快照，不改源地图。
