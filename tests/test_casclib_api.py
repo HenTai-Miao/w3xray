@@ -6,7 +6,7 @@ import ctypes
 
 import pytest
 
-from w3xtool.casclib_api import (
+from gametool.casclib_api import (
     MAX_CASC_FILE_SIZE,
     CascFileNotFoundError,
     CascFileTooLargeError,

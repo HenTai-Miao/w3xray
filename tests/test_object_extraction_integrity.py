@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from w3xtool.api import GameObject, MapData
-from w3xtool.knowledge_pack import write_knowledge_pack
-from w3xtool.object_candidates import (
+from gametool.api import GameObject, MapData
+from gametool.knowledge_pack import write_knowledge_pack
+from gametool.object_candidates import (
     ObjectCandidate,
     ObjectFieldValue,
     ObjectSourceKind,
 )
-from w3xtool.object_materialization import merge_object_candidates
-import w3xtool.object_candidates as object_candidates
+from gametool.object_materialization import merge_object_candidates
+import gametool.object_candidates as object_candidates
 
 
 def test_explicit_empty_object_field_overrides_inherited_value() -> None:

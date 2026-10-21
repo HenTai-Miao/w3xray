@@ -15,19 +15,19 @@ from tests.description_cache_publication_fixture import (
     rename_in_parent,
 )
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool import description_cache_publication_evidence as publication_evidence
-from w3xtool import description_cache_publication_recovery as recovery
-from w3xtool import description_cache_publication_recovery_state as recovery_state
-from w3xtool.description_cache_publication_errors import (
+from gametool import description_cache_publication_evidence as publication_evidence
+from gametool import description_cache_publication_recovery as recovery
+from gametool import description_cache_publication_recovery_state as recovery_state
+from gametool.description_cache_publication_errors import (
     DescriptionCachePublicationError,
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_models import (
+from gametool.description_cache_publication_models import (
     RetainedCacheRecord,
     RetainedCacheRole,
 )
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
-from w3xtool.trusted_description_cache import (
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool.trusted_description_cache import (
     VerifiedDescriptionCache,
     load_trusted_description_cache,
 )
@@ -67,7 +67,7 @@ def test_recovery_normalization_keeps_original_then_normalization_fault(
     output = new_source.rename(tmp_path / "trusted")
     names = RetainedCacheNames(tmp_path, "1" * 32)
     recovery_path = old_source.rename(names.path(RetainedCacheRole.RECOVERY))
-    stage = tmp_path / ".w3xray-description-cache-stage-1"
+    stage = tmp_path / ".gamexray-description-cache-stage-1"
     old_identity = _identity(recovery_path)
     new_identity = _identity(output)
     seed_fault = OSError("existing primary ledger")

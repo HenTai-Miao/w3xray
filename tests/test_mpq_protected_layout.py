@@ -8,11 +8,11 @@ from typing import Final
 
 import pytest
 
-from w3xtool.archive_diagnostics import (
+from gametool.archive_diagnostics import (
     ArchiveDiagnosisKind,
     diagnose_archive_open,
 )
-from w3xtool.mpq import MPQArchive
+from gametool.mpq import MPQArchive
 
 from .test_mpq_names_locale import build_archive_bytes
 

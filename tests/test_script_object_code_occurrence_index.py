@@ -4,16 +4,16 @@ import importlib
 import importlib.util
 import unittest
 
-from w3xtool.api import GameObject, MapData
+from gametool.api import GameObject, MapData
 
 
 def _format_occurrences(md: MapData) -> str:
-    spec = importlib.util.find_spec("w3xtool.script_object_code_occurrence_index")
+    spec = importlib.util.find_spec("gametool.script_object_code_occurrence_index")
     if spec is None:
         raise AssertionError(
-            "w3xtool.script_object_code_occurrence_index module is missing"
+            "gametool.script_object_code_occurrence_index module is missing"
         )
-    module = importlib.import_module("w3xtool.script_object_code_occurrence_index")
+    module = importlib.import_module("gametool.script_object_code_occurrence_index")
     index = module.build_script_object_code_occurrence_index(md)
     return module.format_script_object_code_occurrence_index_tsv(index)
 

@@ -9,7 +9,7 @@ import struct
 import tempfile
 import unittest
 
-from w3xtool.icons import _open_game_mpq, _GAME_MPQ_CACHE, IconResolver
+from gametool.icons import _open_game_mpq, _GAME_MPQ_CACHE, IconResolver
 
 _WAR3 = r"C:\Program Files (x86)\Warcraft III\war3\war3.mpq"
 

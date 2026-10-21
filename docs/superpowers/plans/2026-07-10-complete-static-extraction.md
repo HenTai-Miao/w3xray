@@ -25,9 +25,9 @@
 ### Task 1: Real TriggerData and TriggerStrings Schema
 
 **Files:**
-- Create: `w3xtool/trigger_schema.py`
-- Create: `w3xtool/trigger_strings.py`
-- Modify: `w3xtool/triggerdata.py`
+- Create: `gametool/trigger_schema.py`
+- Create: `gametool/trigger_strings.py`
+- Modify: `gametool/triggerdata.py`
 - Create: `tests/fixtures/trigger/TriggerData.txt`
 - Create: `tests/fixtures/trigger/TriggerStrings.txt`
 - Create: `tests/fixtures/trigger/README.md`
@@ -82,7 +82,7 @@ def test_missing_trigger_strings_keeps_signature_without_fake_template() -> None
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_trigger_schema.py -q -p no:cacheprovider`
 
-Expected: FAIL because `w3xtool.trigger_schema` does not exist.
+Expected: FAIL because `gametool.trigger_schema` does not exist.
 
 - [ ] **Step 3: Implement typed schema parsing**
 
@@ -138,7 +138,7 @@ def load_trigger_schema_from_source(
     return parse_trigger_schema(_decode(data), _decode(strings or b""))
 ```
 
-Import the existing `CascUnsupportedError` from `w3xtool.casc_source`; Task 1
+Import the existing `CascUnsupportedError` from `gametool.casc_source`; Task 1
 does not introduce a second CASC error hierarchy.
 
 - [ ] **Step 5: Run schema and legacy semantic tests**
@@ -150,24 +150,24 @@ Expected: PASS; no output contains `0,force,StringExt(...)` as a semantic senten
 - [ ] **Step 6: Commit the schema task**
 
 ```bash
-git add w3xtool/trigger_schema.py w3xtool/trigger_strings.py w3xtool/triggerdata.py tests/fixtures/trigger tests/fixtures/licenses tests/test_trigger_schema.py tests/test_triggerdata_semantics.py
+git add gametool/trigger_schema.py gametool/trigger_strings.py gametool/triggerdata.py tests/fixtures/trigger tests/fixtures/licenses tests/test_trigger_schema.py tests/test_triggerdata_semantics.py
 git commit -m "feat: parse real trigger schemas"
 ```
 
 ### Task 2: Spec-Driven Classic and Reforged WTG ECA
 
 **Files:**
-- Create: `w3xtool/wtg_models.py`
-- Create: `w3xtool/wtg_reader.py`
-- Create: `w3xtool/wtg_classic.py`
-- Create: `w3xtool/wtg_reforged.py`
-- Create: `w3xtool/wtg_diagnostics.py`
-- Create: `w3xtool/load_context.py`
-- Rewrite: `w3xtool/wtg_eca.py`
-- Modify: `w3xtool/wtg.py`
-- Modify: `w3xtool/api.py`
-- Modify: `w3xtool/map_extras.py`
-- Modify: `w3xtool/trigger_exports.py`
+- Create: `gametool/wtg_models.py`
+- Create: `gametool/wtg_reader.py`
+- Create: `gametool/wtg_classic.py`
+- Create: `gametool/wtg_reforged.py`
+- Create: `gametool/wtg_diagnostics.py`
+- Create: `gametool/load_context.py`
+- Rewrite: `gametool/wtg_eca.py`
+- Modify: `gametool/wtg.py`
+- Modify: `gametool/api.py`
+- Modify: `gametool/map_extras.py`
+- Modify: `gametool/trigger_exports.py`
 - Create: `tests/fixtures/wtg/classic-wc3libs-war3map.wtg`
 - Create: `tests/fixtures/wtg/reforged-war3net-map-script-builder.wtg`
 - Create: `tests/fixtures/wtg/README.md`
@@ -258,7 +258,7 @@ class TriggerTreeSummary:
     parse_failures: tuple[TriggerParseFailure, ...] = ()
 ```
 
-Keep `w3xtool.wtg` as the compatibility facade and move version-specific layouts out before new code pushes it over 250 pure LOC.
+Keep `gametool.wtg` as the compatibility facade and move version-specific layouts out before new code pushes it over 250 pure LOC.
 
 - [ ] **Step 4: Implement schema-counted normal parameters and special forms**
 
@@ -317,17 +317,17 @@ Expected: PASS for real and synthetic header fixtures; the obsolete fake ECA-cou
 - [ ] **Step 7: Commit the WTG task**
 
 ```bash
-git add w3xtool/wtg*.py w3xtool/load_context.py w3xtool/api.py w3xtool/map_extras.py w3xtool/trigger_exports.py tests/fixtures/wtg tests/fixtures/maps tests/fixtures/licenses tests/test_wtg.py tests/test_wtg_eca_exports.py tests/test_wtg_real_fixture.py
+git add gametool/wtg*.py gametool/load_context.py gametool/api.py gametool/map_extras.py gametool/trigger_exports.py tests/fixtures/wtg tests/fixtures/maps tests/fixtures/licenses tests/test_wtg.py tests/test_wtg_eca_exports.py tests/test_wtg_real_fixture.py
 git commit -m "fix: parse WTG ECA from real schemas"
 ```
 
 ### Task 3: GUI Trigger ECA Workbench
 
 **Files:**
-- Create: `w3xtool/gui_trigger_eca.py`
-- Modify: `w3xtool/gui_shell.py`
-- Modify: `w3xtool/gui_data_refresh.py`
-- Modify: `w3xtool/gui.py`
+- Create: `gametool/gui_trigger_eca.py`
+- Modify: `gametool/gui_shell.py`
+- Modify: `gametool/gui_data_refresh.py`
+- Modify: `gametool/gui.py`
 - Modify: `tests/gui_base.py`
 - Create: `tests/test_gui_trigger_eca.py`
 - Modify: `tests/test_gui_layout.py`
@@ -389,21 +389,21 @@ Expected: PASS with nested nodes, details, search, missing schema, and parse fai
 - [ ] **Step 6: Commit the GUI task**
 
 ```bash
-git add w3xtool/gui_trigger_eca.py w3xtool/gui_shell.py w3xtool/gui_data_refresh.py w3xtool/gui.py tests/gui_base.py tests/test_gui_trigger_eca.py tests/test_gui_layout.py
+git add gametool/gui_trigger_eca.py gametool/gui_shell.py gametool/gui_data_refresh.py gametool/gui.py tests/gui_base.py tests/test_gui_trigger_eca.py tests/test_gui_layout.py
 git commit -m "feat: add GUI trigger ECA browser"
 ```
 
 ### Task 4: Verified External Listfile and Dynamic Coverage
 
 **Files:**
-- Modify: `w3xtool/load_context.py`
-- Modify: `w3xtool/external_listfile.py`
-- Modify: `w3xtool/api.py`
-- Modify: `w3xtool/gui_lifecycle.py`
-- Modify: `w3xtool/gui_loader.py`
-- Modify: `w3xtool/gui_loader_runner.py`
-- Modify: `w3xtool/knowledge_pack.py`
-- Rewrite: `w3xtool/knowledge_requirements.py`
+- Modify: `gametool/load_context.py`
+- Modify: `gametool/external_listfile.py`
+- Modify: `gametool/api.py`
+- Modify: `gametool/gui_lifecycle.py`
+- Modify: `gametool/gui_loader.py`
+- Modify: `gametool/gui_loader_runner.py`
+- Modify: `gametool/knowledge_pack.py`
+- Rewrite: `gametool/knowledge_requirements.py`
 - Modify: `tests/test_external_listfile_gui.py`
 - Create: `tests/test_external_listfile_loading.py`
 - Create: `tests/test_requirement_coverage_dynamic.py`
@@ -413,7 +413,7 @@ git commit -m "feat: add GUI trigger ECA browser"
 - Produces: `ExternalListfileReport(confirmed, missing, unsafe, duplicates)`.
 - Changes compatibly: `load_map(path, ..., load_context: MapLoadContext | None = None)`.
 - Changes compatibly: `format_requirement_coverage(md: MapData | None = None, capabilities: ExtractionCapabilities | None = None) -> str`.
-- Produces in `w3xtool/knowledge_requirements.py`:
+- Produces in `gametool/knowledge_requirements.py`:
   `ExtractionCapabilities(game_data_kind, has_trigger_schema, has_trigger_strings,
   external_listfile, archive_diagnosis_kind)` with immutable fields and defaults for
   the legacy no-argument report.
@@ -493,21 +493,21 @@ Expected: PASS; repeated pack exports leave `md.all_files` unchanged.
 - [ ] **Step 7: Commit the loading task**
 
 ```bash
-git add w3xtool/load_context.py w3xtool/external_listfile.py w3xtool/api.py w3xtool/gui_lifecycle.py w3xtool/gui_loader.py w3xtool/gui_loader_runner.py w3xtool/knowledge_pack.py w3xtool/knowledge_requirements.py tests/test_external_listfile_gui.py tests/test_external_listfile_loading.py tests/test_requirement_coverage_dynamic.py
+git add gametool/load_context.py gametool/external_listfile.py gametool/api.py gametool/gui_lifecycle.py gametool/gui_loader.py gametool/gui_loader_runner.py gametool/knowledge_pack.py gametool/knowledge_requirements.py tests/test_external_listfile_gui.py tests/test_external_listfile_loading.py tests/test_requirement_coverage_dynamic.py
 git commit -m "fix: verify external listfile analysis"
 ```
 
 ### Task 5: Unified Safe Output
 
 **Files:**
-- Create: `w3xtool/safe_output.py`
-- Modify: `w3xtool/archive_export_paths.py`
-- Modify: `w3xtool/archive_export.py`
-- Modify: `w3xtool/knowledge_io.py`
-- Modify: `w3xtool/knowledge_assets.py`
-- Modify: `w3xtool/knowledge_unknown_exports.py`
-- Modify: `w3xtool/knowledge_object_exports.py`
-- Modify: `w3xtool/knowledge_script_exports.py`
+- Create: `gametool/safe_output.py`
+- Modify: `gametool/archive_export_paths.py`
+- Modify: `gametool/archive_export.py`
+- Modify: `gametool/knowledge_io.py`
+- Modify: `gametool/knowledge_assets.py`
+- Modify: `gametool/knowledge_unknown_exports.py`
+- Modify: `gametool/knowledge_object_exports.py`
+- Modify: `gametool/knowledge_script_exports.py`
 - Modify: `tests/test_export_safety.py`
 - Create: `tests/test_safe_output.py`
 
@@ -581,17 +581,17 @@ Expected: PASS; no path outside a temporary output root is created.
 - [ ] **Step 6: Commit the output task**
 
 ```bash
-git add w3xtool/safe_output.py w3xtool/archive_export_paths.py w3xtool/archive_export.py w3xtool/knowledge_io.py w3xtool/knowledge_assets.py w3xtool/knowledge_unknown_exports.py w3xtool/knowledge_object_exports.py w3xtool/knowledge_script_exports.py tests/test_export_safety.py tests/test_safe_output.py
+git add gametool/safe_output.py gametool/archive_export_paths.py gametool/archive_export.py gametool/knowledge_io.py gametool/knowledge_assets.py gametool/knowledge_unknown_exports.py gametool/knowledge_object_exports.py gametool/knowledge_script_exports.py tests/test_export_safety.py tests/test_safe_output.py
 git commit -m "fix: contain all extraction outputs"
 ```
 
 ### Task 6: Archive Diagnostics and CLI Workflows
 
 **Files:**
-- Create: `w3xtool/archive_diagnostics.py`
-- Create: `w3xtool/cli_options.py`
-- Modify: `w3xtool/extraction_completeness.py`
-- Modify: `w3xtool/gui_loader_runner.py`
+- Create: `gametool/archive_diagnostics.py`
+- Create: `gametool/cli_options.py`
+- Modify: `gametool/extraction_completeness.py`
+- Modify: `gametool/gui_loader_runner.py`
 - Modify: `main.py`
 - Create: `tests/test_archive_diagnostics.py`
 - Create: `tests/test_cli_options.py`
@@ -684,22 +684,22 @@ Expected: PASS with stable nonzero errors.
 - [ ] **Step 7: Commit the diagnostics task**
 
 ```bash
-git add w3xtool/archive_diagnostics.py w3xtool/cli_options.py w3xtool/extraction_completeness.py w3xtool/gui_loader_runner.py main.py tests/test_archive_diagnostics.py tests/test_cli_options.py tests/test_cli_audit.py
+git add gametool/archive_diagnostics.py gametool/cli_options.py gametool/extraction_completeness.py gametool/gui_loader_runner.py main.py tests/test_archive_diagnostics.py tests/test_cli_options.py tests/test_cli_audit.py
 git commit -m "feat: diagnose archive open failures"
 ```
 
 ### Task 7: Windows CascLib Backend and Packaging
 
 **Files:**
-- Create: `w3xtool/casclib_api.py`
-- Create: `w3xtool/casclib_source.py`
-- Modify: `w3xtool/game_data_source.py`
+- Create: `gametool/casclib_api.py`
+- Create: `gametool/casclib_source.py`
+- Modify: `gametool/game_data_source.py`
 - Create: `third_party/CascLib/README.md`
 - Create: `third_party/CascLib/LICENSE`
 - Create: `third_party/CascLib/SOURCE_PROVENANCE.json`
 - Create: `tools/build_casclib.ps1`
 - Modify: `魔兽地图提取器.spec`
-- Modify: `w3xtool/dist_build.py`
+- Modify: `gametool/dist_build.py`
 - Create: `tests/test_casclib_source.py`
 - Create: `tests/test_casclib_windows_integration.py`
 - Modify: `tests/test_game_data_source.py`
@@ -724,7 +724,7 @@ def test_casclib_source_reads_internal_file_and_closes_handles() -> None:
 
 
 def test_native_probe_prefers_casclib_without_path_map(monkeypatch) -> None:
-    monkeypatch.setattr("w3xtool.casclib_source.casclib_available", lambda: True)
+    monkeypatch.setattr("gametool.casclib_source.casclib_available", lambda: True)
     probe = probe_game_data_path(native_install_fixture())
     assert probe.backend == "casclib"
     assert probe.is_readable
@@ -786,11 +786,11 @@ or the binary is not x64 PE. Non-Windows tests and builds do not require it.
 
 ```python
 @unittest.skipUnless(
-    sys.platform == "win32" and os.getenv("W3XRAY_WAR3_DIR"),
+    sys.platform == "win32" and os.getenv("GAMEXRAY_WAR3_DIR"),
     "需要 Windows Warcraft III CASC 安装",
 )
 def test_real_install_reads_trigger_schema_and_icon() -> None:
-    with CascLibDataSource(os.environ["W3XRAY_WAR3_DIR"]) as source:
+    with CascLibDataSource(os.environ["GAMEXRAY_WAR3_DIR"]) as source:
         assert source.read_file("UI/TriggerData.txt")
         assert source.read_file("UI/TriggerStrings.txt")
         assert source.read_file(
@@ -807,7 +807,7 @@ Expected on macOS: fake API and packaging tests PASS; real Windows integration S
 - [ ] **Step 8: Commit the CascLib task**
 
 ```bash
-git add w3xtool/casclib_api.py w3xtool/casclib_source.py w3xtool/game_data_source.py third_party/CascLib tools/build_casclib.ps1 魔兽地图提取器.spec w3xtool/dist_build.py tests/test_casclib_source.py tests/test_casclib_windows_integration.py tests/test_game_data_source.py tests/test_dist_build.py
+git add gametool/casclib_api.py gametool/casclib_source.py gametool/game_data_source.py third_party/CascLib tools/build_casclib.ps1 魔兽地图提取器.spec gametool/dist_build.py tests/test_casclib_source.py tests/test_casclib_windows_integration.py tests/test_game_data_source.py tests/test_dist_build.py
 git commit -m "feat: read native CASC through CascLib"
 ```
 
@@ -819,7 +819,7 @@ git commit -m "feat: read native CASC through CascLib"
 - Modify: `docs/KKWE借鉴清单.md`
 - Modify: `progress.md`
 - Modify: `findings.md`
-- Modify: `w3xtool/knowledge_manifest.py`
+- Modify: `gametool/knowledge_manifest.py`
 - Modify: relevant tests when user-visible filenames or tab labels change
 
 **Interfaces:**
@@ -883,7 +883,7 @@ Run:
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_gui_trigger_eca.py tests/test_gui_layout.py tests/test_cli_options.py -q -p no:cacheprovider
-uv run main.py cli tests/fixtures/maps/war3net-map-script-builder.w3x --game-data tests/fixtures/trigger --pack "${TMPDIR:-/tmp}/w3xray-final-pack"
+uv run main.py cli tests/fixtures/maps/war3net-map-script-builder.w3x --game-data tests/fixtures/trigger --pack "${TMPDIR:-/tmp}/gamexray-final-pack"
 ```
 
 Expected: GUI tests PASS; CLI exits 0 and writes ECA, dynamic coverage, listfile diagnostics, resources, and map identity reports.
@@ -895,7 +895,7 @@ Use `review-work` with five independent lanes. Any failed lane blocks completion
 - [ ] **Step 7: Commit final integration documentation**
 
 ```bash
-git add README.md docs/KKWE借鉴清单.md progress.md findings.md w3xtool/knowledge_manifest.py tests
+git add README.md docs/KKWE借鉴清单.md progress.md findings.md gametool/knowledge_manifest.py tests
 git commit -m "docs: align extraction capability claims"
 ```
 

@@ -9,13 +9,13 @@ import hashlib
 from pathlib import Path
 import unittest
 
-from w3xtool.slk_objects import (
+from gametool.slk_objects import (
     parse_category_objects,
     has_any_slk_objects,
     slk_col_label,
     SLK_CATEGORY_FILES,
 )
-from w3xtool.references import extract_refs_by_column
+from gametool.references import extract_refs_by_column
 
 REFERENCE_MAP = (
     Path(__file__).parent / "fixtures" / "reference" / "stormlib-slk-map.w3x"
@@ -137,7 +137,7 @@ class ParseCategoryTest(unittest.TestCase):
         self.assertEqual(slk_col_label("Zz9"), "Zz9")
 
     def test_noise_cols(self):
-        from w3xtool.slk_objects import is_noise_col
+        from gametool.slk_objects import is_noise_col
 
         self.assertTrue(is_noise_col("code", "技能"))  # 冗余自码
         self.assertTrue(is_noise_col("comments", "技能"))  # [AlwaysEmpty]
@@ -155,7 +155,7 @@ class ParseCategoryTest(unittest.TestCase):
 class ReferenceSlkMapTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from w3xtool.api import load_map
+        from gametool.api import load_map
 
         cls.md = load_map(str(REFERENCE_MAP))
 

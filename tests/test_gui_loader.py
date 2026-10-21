@@ -5,22 +5,22 @@ import unittest
 
 from PIL import Image
 
-from w3xtool.api import MapData
-from w3xtool.icon_evidence_index import IconEvidenceIndex, empty_icon_evidence_index
-from w3xtool.gui_icon_evidence_loader import (
+from gametool.api import MapData
+from gametool.icon_evidence_index import IconEvidenceIndex, empty_icon_evidence_index
+from gametool.gui_icon_evidence_loader import (
     safe_custom_icon_resolver,
     safe_default_icon_resolver,
 )
-from w3xtool.gui_loader import (
+from gametool.gui_loader import (
     LoadedMap,
     PreparedIconResolver,
     load_path_payload,
     prepare_map_view,
     switch_map_payload,
 )
-from w3xtool.load_context import MapLoadContext
-from w3xtool.load_options import object_only_load_options
-from w3xtool.script_scan import ChatCommand, Recipe
+from gametool.load_context import MapLoadContext
+from gametool.load_options import object_only_load_options
+from gametool.script_scan import ChatCommand, Recipe
 
 
 class _Resolver:
@@ -133,7 +133,7 @@ class TestGuiLoader(unittest.TestCase):
         # Given
         from unittest.mock import patch
 
-        from w3xtool import gui_loader
+        from gametool import gui_loader
 
         md = MapData("map.w3x", "map")
         expected = IconEvidenceIndex.build()

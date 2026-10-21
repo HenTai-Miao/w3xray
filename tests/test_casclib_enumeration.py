@@ -5,10 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 import ctypes
 
-import w3xtool.casclib_source as casclib_source
+import gametool.casclib_source as casclib_source
 from tests.test_casclib_api import FakeNativeLibrary, NativeFunction
-from w3xtool.casclib_api import CtypesCascLibApi
-from w3xtool.casclib_enumeration import CascFindData, CascNameType
+from gametool.casclib_api import CtypesCascLibApi
+from gametool.casclib_enumeration import CascFindData, CascNameType
 
 
 @dataclass

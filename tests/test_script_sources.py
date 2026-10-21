@@ -5,15 +5,15 @@ from __future__ import annotations
 import struct
 from unittest.mock import patch
 
-from w3xtool.api import MapData, _best_script_text, commands_from_map, recipes_from_map
-from w3xtool.extraction_diagnostics import DiagnosticSeverity, ExtractionDiagnostic
-from w3xtool.knowledge_script_exports import all_script_text
-from w3xtool.load_context import MapLoadContext
-from w3xtool.map_loader import _load_map_impl
-from w3xtool.script_mechanics import scan_script_features
-from w3xtool.script_sources import analysis_script_texts, collect_readable_scripts
-from w3xtool.script_text_export import build_readable_script_exports
-from w3xtool.wct import WctDiagnostic
+from gametool.api import MapData, _best_script_text, commands_from_map, recipes_from_map
+from gametool.extraction_diagnostics import DiagnosticSeverity, ExtractionDiagnostic
+from gametool.knowledge_script_exports import all_script_text
+from gametool.load_context import MapLoadContext
+from gametool.map_loader import _load_map_impl
+from gametool.script_mechanics import scan_script_features
+from gametool.script_sources import analysis_script_texts, collect_readable_scripts
+from gametool.script_text_export import build_readable_script_exports
+from gametool.wct import WctDiagnostic
 
 
 class _MemoryArchive:
@@ -230,7 +230,7 @@ def test_map_loading_parses_wts_from_original_mixed_encoding_bytes() -> None:
         return {}
 
     # When: map loading parses strings for object metadata.
-    with patch("w3xtool.map_loader.parse_wts", side_effect=capture_wts):
+    with patch("gametool.map_loader.parse_wts", side_effect=capture_wts):
         _load_map_impl(archive, "memory.w3x", 0, None, MapLoadContext())
 
     # Then: the byte-oriented parser receives the untouched mixed stream.

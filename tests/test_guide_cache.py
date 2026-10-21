@@ -4,12 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.guide_cache import (
+from gametool.guide_cache import (
     load_cached_report,
     report_cache_path,
     store_cached_report,
 )
-from w3xtool.guide_cli import (
+from gametool.guide_cli import (
     GuideCliOptionError,
     _display_lines,
     parse_guide_cli_options,
@@ -28,7 +28,7 @@ def test_report_cache_roundtrip_and_invalidation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Given: 指定缓存目录与一张地图文件。
-    monkeypatch.setenv("W3XRAY_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("GAMEXRAY_CACHE_DIR", str(tmp_path / "cache"))
     map_file = _fake_map(tmp_path)
 
     # When: 存取同一份报告。
@@ -48,8 +48,8 @@ def test_cache_disabled_via_environment(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Given: 显式关闭攻略缓存。
-    monkeypatch.setenv("W3XRAY_CACHE_DIR", str(tmp_path))
-    monkeypatch.setenv("W3XRAY_GUIDE_CACHE", "0")
+    monkeypatch.setenv("GAMEXRAY_CACHE_DIR", str(tmp_path))
+    monkeypatch.setenv("GAMEXRAY_GUIDE_CACHE", "0")
     map_file = _fake_map(tmp_path)
 
     # Then: 不派生缓存路径，写入/读取均为无操作。

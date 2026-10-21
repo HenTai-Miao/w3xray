@@ -5,18 +5,18 @@ from pathlib import Path
 import pytest
 
 from tests.gui_base import GuiTestCase
-from w3xtool import gui_current_map as current_gui
-from w3xtool.gui_current_map import CurrentMapGuiMixin
-from w3xtool.current_map_models import (
+from gametool import gui_current_map as current_gui
+from gametool.gui_current_map import CurrentMapGuiMixin
+from gametool.current_map_models import (
     CurrentMapResolution,
     EvidenceKind,
     MapCandidate,
     MapEvidence,
     ResolutionStatus,
 )
-from w3xtool.current_map_snapshot import CurrentMapSnapshot
-from w3xtool.gui_worker_host import GuiWorkerHostMixin
-from w3xtool.gui_worker_registry import GuiWorkerRegistry
+from gametool.current_map_snapshot import CurrentMapSnapshot
+from gametool.gui_worker_host import GuiWorkerHostMixin
+from gametool.gui_worker_registry import GuiWorkerRegistry
 
 
 class _Widget:

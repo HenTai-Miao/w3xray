@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool import description_cache_publication_errors as errors
-from w3xtool import description_cache_publication_stage as stage
-from w3xtool.description_cache_publication_errors import (
+from gametool import description_cache_publication_errors as errors
+from gametool import description_cache_publication_stage as stage
+from gametool.description_cache_publication_errors import (
     DescriptionCachePublicationError,
     PublicationCommitContextError,
 )

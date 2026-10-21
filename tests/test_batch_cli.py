@@ -9,15 +9,15 @@ import sys
 import pytest
 
 import main as entrypoint
-import w3xtool.batch_cli as batch_cli
+import gametool.batch_cli as batch_cli
 from tests.batch_cli_fixture import batch_cli_result
-from w3xtool.batch_models import (
+from gametool.batch_models import (
     BATCH_SCHEMA_VERSION,
     BatchState,
     MapBatchState,
 )
-from w3xtool.batch_runner import DEFAULT_BATCH_OUTPUT, BatchOptions
-from w3xtool.batch_runtime import BatchAction, BatchProgress
+from gametool.batch_runner import DEFAULT_BATCH_OUTPUT, BatchOptions
+from gametool.batch_runtime import BatchAction, BatchProgress
 
 
 def test_parse_batch_cli_uses_documented_default_output() -> None:

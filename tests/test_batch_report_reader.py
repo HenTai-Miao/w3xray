@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from w3xtool.batch_report_reader import (
+from gametool.batch_report_reader import (
     BatchReportValidationError,
     read_report_rows_bytes,
 )
-from w3xtool.batch_tsv import format_tsv_rows
-from w3xtool.item_relation_exports import (
+from gametool.batch_tsv import format_tsv_rows
+from gametool.item_relation_exports import (
     ACQUISITION_REPORT_HEADER,
     ACQUISITION_REPORT_LEGACY_HEADERS,
 )

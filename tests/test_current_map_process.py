@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.current_map_models import EvidenceKind, GameProcess, MapEvidence
-from w3xtool.current_map_probe_command import CommandResult
-from w3xtool.current_map_process import (
+from gametool.current_map_models import EvidenceKind, GameProcess, MapEvidence
+from gametool.current_map_probe_command import CommandResult
+from gametool.current_map_process import (
     OpenMapProbeReport,
     ProbeIssue,
     ProcessProbeReport,
@@ -163,9 +163,9 @@ def test_public_open_probe_falls_back_to_lsof_after_proc_denial(
         return True
 
     monkeypatch.setattr(Path, "is_dir", proc_exists)
-    monkeypatch.setattr("w3xtool.current_map_process.probe_proc_open_maps", denied_proc)
-    monkeypatch.setattr("w3xtool.current_map_process._find_absolute_tool", fixed_lsof)
-    monkeypatch.setattr("w3xtool.current_map_process.run_bounded_command", lsof_result)
+    monkeypatch.setattr("gametool.current_map_process.probe_proc_open_maps", denied_proc)
+    monkeypatch.setattr("gametool.current_map_process._find_absolute_tool", fixed_lsof)
+    monkeypatch.setattr("gametool.current_map_process.run_bounded_command", lsof_result)
 
     # When: the public direct-file probe handles proc denial.
     report = probe_open_map_files((process,))

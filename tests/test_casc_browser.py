@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 import importlib
 from pathlib import Path
 
-from w3xtool.casclib_enumeration import CascEntry, CascNameType
+from gametool.casclib_enumeration import CascEntry, CascNameType
 
 
 def _entry(name: str, name_type: CascNameType) -> CascEntry:
@@ -50,7 +50,7 @@ def test_inventory_pages_include_resolved_and_unknown_root_entries() -> None:
         _entry("UI\\TriggerData.txt", CascNameType.FULL),
         _entry("File00000123", CascNameType.FILE_DATA_ID),
     )
-    casc_browser = importlib.import_module("w3xtool.casc_browser")
+    casc_browser = importlib.import_module("gametool.casc_browser")
     browser_type = getattr(casc_browser, "CascBrowserModel")
     browser = browser_type(FakeInventorySource(entries), page_size=1)
 
@@ -72,7 +72,7 @@ def test_export_selected_unknown_entry_uses_stable_read_name(tmp_path: Path) -> 
     # Given: a selected unknown-path entry that remains addressable by FileDataID.
     entry = _entry("File00000123", CascNameType.FILE_DATA_ID)
     source = FakeInventorySource((entry,))
-    casc_browser = importlib.import_module("w3xtool.casc_browser")
+    casc_browser = importlib.import_module("gametool.casc_browser")
     browser_type = getattr(casc_browser, "CascBrowserModel")
     browser = browser_type(source, page_size=10)
 

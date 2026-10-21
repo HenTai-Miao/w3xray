@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from w3xtool.load_context import MapLoadContext, build_map_load_context
+from gametool.load_context import MapLoadContext, build_map_load_context
 
 
 def test_build_context_retains_compatibility_bundle_path() -> None:

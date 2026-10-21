@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 
-from w3xtool.api import _campaign_inner_maps
-from w3xtool.campaign_sources import campaign_inner_maps, open_map_source
-from w3xtool.map_data import MapData
-from w3xtool.w3f import CampaignMapEntry, W3fInfo
+from gametool.api import _campaign_inner_maps
+from gametool.campaign_sources import campaign_inner_maps, open_map_source
+from gametool.map_data import MapData
+from gametool.w3f import CampaignMapEntry, W3fInfo
 
 
 def test_campaign_inner_maps_prefers_w3f_order_and_archive_spelling() -> None:

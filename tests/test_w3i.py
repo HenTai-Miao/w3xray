@@ -7,7 +7,7 @@ import os
 import struct
 import unittest
 
-from w3xtool.w3i import parse_w3i
+from gametool.w3i import parse_w3i
 
 FIX = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -148,7 +148,7 @@ def _build_w3f_tail(version=1, buttons=(), orders=(), truncate_after=None):
 
 class TestParseW3f(unittest.TestCase):
     def test_basic(self):
-        from w3xtool.w3i import parse_w3f
+        from gametool.w3i import parse_w3f
 
         info = parse_w3f(_build_w3f(name="远古战役", author="老李"))
         self.assertEqual(info.name, "远古战役")
@@ -156,18 +156,18 @@ class TestParseW3f(unittest.TestCase):
         self.assertEqual(info.difficulty, "普通")
 
     def test_trigstr_resolved(self):
-        from w3xtool.w3i import parse_w3f
+        from gametool.w3i import parse_w3f
 
         info = parse_w3f(_build_w3f(name="TRIGSTR_003"), wts={3: "真战役名"})
         self.assertEqual(info.name, "真战役名")
 
     def test_garbage_returns_none(self):
-        from w3xtool.w3i import parse_w3f
+        from gametool.w3i import parse_w3f
 
         self.assertIsNone(parse_w3f(b""))
 
     def test_v1_uses_map_order_and_resolves_title_metadata(self):
-        from w3xtool.w3i import parse_w3f
+        from gametool.w3i import parse_w3f
 
         info = parse_w3f(
             _build_w3f_tail(
@@ -187,7 +187,7 @@ class TestParseW3f(unittest.TestCase):
         self.assertTrue(info.maps[0].initially_visible)
 
     def test_v2_consumes_background_version_before_map_buttons(self):
-        from w3xtool.w3i import parse_w3f
+        from gametool.w3i import parse_w3f
 
         info = parse_w3f(
             _build_w3f_tail(
@@ -201,7 +201,7 @@ class TestParseW3f(unittest.TestCase):
         self.assertFalse(info.maps[0].initially_visible)
 
     def test_truncation_keeps_only_complete_map_buttons(self):
-        from w3xtool.w3i import W3fDiagnostic, parse_w3f
+        from gametool.w3i import W3fDiagnostic, parse_w3f
 
         header = _build_w3f_tail()[:-8]
         data = header + struct.pack("<i", 2)
@@ -214,7 +214,7 @@ class TestParseW3f(unittest.TestCase):
         self.assertEqual(info.diagnostic, W3fDiagnostic.TRUNCATED)
 
     def test_malicious_map_count_is_bounded(self):
-        from w3xtool.w3i import W3fDiagnostic, parse_w3f
+        from gametool.w3i import W3fDiagnostic, parse_w3f
 
         data = _build_w3f_tail()[:-4] + struct.pack("<i", 2_147_483_647)
         info = parse_w3f(data)
@@ -223,7 +223,7 @@ class TestParseW3f(unittest.TestCase):
         self.assertEqual(info.diagnostic, W3fDiagnostic.TRUNCATED)
 
     def test_truncated_header_returns_none(self):
-        from w3xtool.w3i import parse_w3f
+        from gametool.w3i import parse_w3f
 
         self.assertIsNone(parse_w3f(_build_w3f()[:-1]))
 
@@ -247,7 +247,7 @@ class _FakeArchive:
 
 class TestW3iIntegration(unittest.TestCase):
     def test_add_w3i_sets_mapdata_and_name(self):
-        from w3xtool.api import _add_w3i, MapData
+        from gametool.api import _add_w3i, MapData
 
         w3i = _build_v25(map_name="真实地图名", author="作者X")
         md = MapData(path="x", name="占位名")
@@ -257,7 +257,7 @@ class TestW3iIntegration(unittest.TestCase):
         self.assertEqual(md.name, "真实地图名")  # 地图名优先取 w3i
 
     def test_add_w3i_keeps_name_if_w3i_absent(self):
-        from w3xtool.api import _add_w3i, MapData
+        from gametool.api import _add_w3i, MapData
 
         md = MapData(path="x", name="占位名")
         _add_w3i(md, _FakeArchive({}), {})

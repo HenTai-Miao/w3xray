@@ -6,8 +6,8 @@ import tempfile
 from unittest.mock import patch
 
 from tests.gui_base import GuiTestCase
-from w3xtool.api import GameObject, MapData
-from w3xtool.knowledge_object_exports import (
+from gametool.api import GameObject, MapData
+from gametool.knowledge_object_exports import (
     format_box_id_text,
     sorted_unique_objects,
     write_box_ids,
@@ -220,11 +220,11 @@ class GuiReferenceIdReportTest(GuiTestCase):
         # When: the GUI ID export completes through the shared worker registry.
         with (
             patch(
-                "w3xtool.gui_export_actions.tmp_extract_dir",
+                "gametool.gui_export_actions.tmp_extract_dir",
                 return_value=str(output),
             ),
-            patch("w3xtool.gui_export_actions.os.startfile", create=True),
-            patch("w3xtool.gui_export_actions.messagebox.showinfo") as showinfo,
+            patch("gametool.gui_export_actions.os.startfile", create=True),
+            patch("gametool.gui_export_actions.messagebox.showinfo") as showinfo,
         ):
             self.app.on_export_ids()
             self.pump_events_until(lambda: showinfo.called)
@@ -236,7 +236,7 @@ class GuiReferenceIdReportTest(GuiTestCase):
         assert "描述：称谓：称谓甲\n\n说明甲" in text
 
     def create_temp_dir(self) -> str:
-        directory = tempfile.mkdtemp(prefix="w3xray-reference-id-")
+        directory = tempfile.mkdtemp(prefix="gamexray-reference-id-")
         self.addCleanup(self._remove_tree, directory)
         return directory
 

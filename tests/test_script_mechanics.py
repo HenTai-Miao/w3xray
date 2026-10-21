@@ -2,7 +2,7 @@
 
 import unittest
 
-from w3xtool.script_mechanics import (
+from gametool.script_mechanics import (
     format_script_mechanism_report,
     scan_script_need_marks,
 )

@@ -4,24 +4,24 @@ from __future__ import annotations
 
 import pytest
 
-from w3xtool.batch_global_evidence_models import (
+from gametool.batch_global_evidence_models import (
     GlobalAnonymousIcon,
     GlobalEvidenceIndex,
     GlobalEvidenceError,
     GlobalIconGap,
     GlobalResolvedIcon,
 )
-from w3xtool.icon_candidate_bindings import build_icon_candidate_bindings
-from w3xtool.batch_global_evidence_reports import (
+from gametool.icon_candidate_bindings import build_icon_candidate_bindings
+from gametool.batch_global_evidence_reports import (
     format_icon_candidates_tsv,
     parse_icon_candidates_tsv,
 )
-from w3xtool.icon_evidence_models import (
+from gametool.icon_evidence_models import (
     IconCandidateKind,
     IconGapReason,
     IconResolutionLayer,
 )
-from w3xtool.icon_resources import IconObjectReference
+from gametool.icon_resources import IconObjectReference
 
 
 class _CountingDigest(str):

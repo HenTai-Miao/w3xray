@@ -8,14 +8,14 @@ from pathlib import Path
 import pytest
 
 from tests.description_cache_publication_fixture import rename_in_parent
-from w3xtool import description_cache_publication_retention as retention
-from w3xtool.description_cache_publication_errors import (
+from gametool import description_cache_publication_retention as retention
+from gametool.description_cache_publication_errors import (
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_models import RetainedCacheRole
-from w3xtool.description_cache_publication_models import RetainedCacheRecord
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
-from w3xtool import description_cache_publication_errors as errors
+from gametool.description_cache_publication_models import RetainedCacheRole
+from gametool.description_cache_publication_models import RetainedCacheRecord
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool import description_cache_publication_errors as errors
 
 
 def _identity(path: Path) -> tuple[int, int]:
@@ -36,7 +36,7 @@ def _open_parent(path: Path) -> int:
 def test_retain_object_moves_the_exact_inode_without_overwrite(
     tmp_path: Path,
 ) -> None:
-    source = tmp_path / ".w3xray-description-cache-backup-a"
+    source = tmp_path / ".gamexray-description-cache-backup-a"
     source.mkdir()
     expected = _identity(source)
     names = RetainedCacheNames(tmp_path, "1" * 32)
@@ -64,7 +64,7 @@ def test_retain_object_moves_the_exact_inode_without_overwrite(
 def test_source_swap_immediately_before_retention_preserves_both_directories(
     tmp_path: Path,
 ) -> None:
-    source = tmp_path / ".w3xray-description-cache-backup-b"
+    source = tmp_path / ".gamexray-description-cache-backup-b"
     source.mkdir()
     expected = _identity(source)
     displaced = tmp_path / "displaced-expected"
@@ -122,7 +122,7 @@ def test_source_swap_immediately_before_retention_preserves_both_directories(
 def test_retain_object_never_overwrites_an_existing_retained_name(
     tmp_path: Path,
 ) -> None:
-    source = tmp_path / ".w3xray-description-cache-stage-c"
+    source = tmp_path / ".gamexray-description-cache-stage-c"
     source.mkdir()
     expected = _identity(source)
     names = RetainedCacheNames(tmp_path, "4" * 32)
@@ -155,7 +155,7 @@ def test_retain_object_never_overwrites_an_existing_retained_name(
 def test_unmoved_exact_source_does_not_create_an_absent_target_transient(
     tmp_path: Path,
 ) -> None:
-    source = tmp_path / ".w3xray-description-cache-stage-d"
+    source = tmp_path / ".gamexray-description-cache-stage-d"
     source.mkdir()
     expected = _identity(source)
     names = RetainedCacheNames(tmp_path, "5" * 32)

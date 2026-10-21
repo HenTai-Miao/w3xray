@@ -6,12 +6,12 @@ import struct
 
 import pytest
 
-from w3xtool.client_object_data import snapshot_client_base_objects
-from w3xtool.load_context import build_map_load_context
-from w3xtool.map_data import MapData
-from w3xtool.map_loader import _load_map_impl
-from w3xtool.object_pipeline import load_object_pipeline
-from w3xtool.object_text_models import ObjectTextState
+from gametool.client_object_data import snapshot_client_base_objects
+from gametool.load_context import build_map_load_context
+from gametool.map_data import MapData
+from gametool.map_loader import _load_map_impl
+from gametool.object_pipeline import load_object_pipeline
+from gametool.object_text_models import ObjectTextState
 
 
 class FakeClientSource:
@@ -75,7 +75,7 @@ def test_load_context_snapshots_client_bases_before_closing_source(
     # Given: the shared source must not survive beyond context construction.
     source = _client_source()
     monkeypatch.setattr(
-        "w3xtool.game_data_source.open_game_data_source", lambda _path: source
+        "gametool.game_data_source.open_game_data_source", lambda _path: source
     )
 
     # When: context construction reads client data and closes its source.
@@ -170,7 +170,7 @@ def test_client_snapshot_prefers_zhcn_locale_strings() -> None:
 def test_client_snapshot_prefers_zhcn_from_exported_directory_layout(tmp_path) -> None:
     # Given: a CASC export flattened the locale namespace into nested folders
     # and both a zhCN and a neutral variant of the same strings file exist.
-    from w3xtool.game_data_source import DirectoryDataSource
+    from gametool.game_data_source import DirectoryDataSource
 
     zh_dir = tmp_path / "war3.w3mod" / "_locales" / "zhcn.w3mod" / "units"
     zh_dir.mkdir(parents=True)

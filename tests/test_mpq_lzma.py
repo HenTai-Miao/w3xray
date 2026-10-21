@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.mpq_compression import MPQCompressionError, decompress_mpq_sector
+from gametool.mpq_compression import MPQCompressionError, decompress_mpq_sector
 
 
 FIXTURE_PATH = (
@@ -68,7 +68,7 @@ def test_lzma_decode_does_not_depend_on_format_alone_container(
         return original(format=format, filters=filters)
 
     monkeypatch.setattr(
-        "w3xtool.mpq_compression.lzma.LZMADecompressor", platform_decoder
+        "gametool.mpq_compression.lzma.LZMADecompressor", platform_decoder
     )
     expected = b"cross-platform raw LZMA" * 8
 

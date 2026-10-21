@@ -14,8 +14,8 @@
 
 - Never call `shutil.rmtree`, `os.rmdir`, or any recursive deletion path for a stage, backup, output, rollback, recovery, or retained trusted-description-cache generation.
 - Allocate exactly one cryptographically random 32-character lowercase hexadecimal transaction identifier per publication attempt.
-- Keep transient names exactly `.w3xray-description-cache-stage-<transaction-id>` and `.w3xray-description-cache-backup-<transaction-id>`.
-- Keep retained names exactly `.w3xray-description-cache-retained-<transaction-id>-<role>` where role is one of `previous`, `failed-stage`, `failed-output`, or `recovery`.
+- Keep transient names exactly `.gamexray-description-cache-stage-<transaction-id>` and `.gamexray-description-cache-backup-<transaction-id>`.
+- Keep retained names exactly `.gamexray-description-cache-retained-<transaction-id>-<role>` where role is one of `previous`, `failed-stage`, `failed-output`, or `recovery`.
 - Every rename is descriptor-relative, atomic, and no-replace; compare `(device, inode)` before and after every retention move.
 - Every atomic-move return or ordinary exception, including `FileExistsError`, enters the same source/destination postcondition proof; exception class never proves that a move did not happen, and every reachable side remains retained or transient evidence.
 - A recovery move is clean only when its source is readably absent and its destination has the exact expected identity; a source name reacquired after a normal-return move is preserved as transient evidence beside the recovery record and forces typed `NEEDS_CONTEXT`.
@@ -51,18 +51,18 @@
 - Preserve source maps and historical outputs as read-only; do not execute map scripts, EXE/DLL files, or `Game.dll`, and do not read game memory.
 - Every production change follows real RED → GREEN → refactor; every edited or created hand-written Python module remains at or below 250 pure LOC.
 - Changed Python annotations contain neither `Any` nor `object`; stable generation state uses exact aliases or frozen typed values so the mandatory no-excuse gate can pass.
-- Do not grow `w3xtool/description_cache_publication_replacement.py`, `w3xtool/description_cache_migration.py`, or `tests/test_description_cache_publication.py` without moving the new responsibility into a focused file first.
+- Do not grow `gametool/description_cache_publication_replacement.py`, `gametool/description_cache_migration.py`, or `tests/test_description_cache_publication.py` without moving the new responsibility into a focused file first.
 - No exception boundary may execute `raise error from error` or overwrite an existing explicit cause with a later failure. Re-raising the same typed instance preserves its cause; a distinct wrapper may use one original exception as its explicit cause only before that wrapper has a cause. Every boundary appends initiating, read, recovery, synchronization, normalization, finalization, and close failures to `failures` before evidence finalization, binds the returned typed object, and bare-raises it so a finalizer-created cause is never displaced.
 - A readable `FileNotFoundError` from any named-leaf proof means absence and contributes neither `identity=None` evidence nor a failure object unless a distinct held descriptor requires held evidence. Every other `OSError` produces current evidence with `identity=None` and keeps that exact exception in the ordered failure ledger; shared immutable named-leaf proofs and scan states carry the object until the typed boundary.
 
 ## Verified Repo Truths
 
-- `w3xtool/description_cache_publication_fs.py:31-45` checks a directory identity and then separately calls `shutil.rmtree(name, dir_fd=...)`; that split is the uncloseable destructive check/use race this plan removes.
+- `gametool/description_cache_publication_fs.py:31-45` checks a directory identity and then separately calls `shutil.rmtree(name, dir_fd=...)`; that split is the uncloseable destructive check/use race this plan removes.
 - The deletion callable currently reaches absent-output rollback, replacement commit, recovered-stage cleanup, and final-stage cleanup through `description_cache_publication_absent.py`, `description_cache_publication_commit.py`, `description_cache_publication_recovery.py`, `description_cache_publication_stage.py`, and `description_cache_publication_transaction.py`.
-- `w3xtool/atomic_rename.py` already supplies fail-closed descriptor-relative no-replace and exchange primitives for macOS and Linux and raises `AtomicRenameUnavailableError` on unsupported hosts.
+- `gametool/atomic_rename.py` already supplies fail-closed descriptor-relative no-replace and exchange primitives for macOS and Linux and raises `AtomicRenameUnavailableError` on unsupported hosts.
 - `DescriptionCacheMigrationResult` currently contains only accepted/rejected counts, rejection rows, and the output path; `run_description_cache_cli()` currently prints only those counts and output.
 - `tests/test_trusted_description_cache_anchored.py::test_anchored_loader_proves_the_same_bytes_as_public_loader` already locks public/descriptor loader parity and remains in the focused gate.
-- No `CLAUDE.md` exists in the worktree; `/Users/zhongerbing/Documents/xm/war3_xg/w3xray/AGENTS.md` is the applicable checked-in repository guide.
+- No `CLAUDE.md` exists in the worktree; `/Users/zhongerbing/Documents/xm/war3_xg/gamexray/AGENTS.md` is the applicable checked-in repository guide.
 
 ---
 
@@ -134,12 +134,12 @@ the specification again, but the implementation plan itself must never remain un
 ### Task 1: Immutable retained-generation model and atomic preservation primitive
 
 **Files:**
-- Create: `w3xtool/description_cache_publication_models.py`
-- Create: `w3xtool/description_cache_publication_retention_names.py`
-- Create: `w3xtool/description_cache_publication_named_leaf.py`
-- Create: `w3xtool/description_cache_publication_retention.py`
-- Create: `w3xtool/description_cache_publication_retention_installed.py`
-- Create: `w3xtool/description_cache_publication_retention_recovery.py`
+- Create: `gametool/description_cache_publication_models.py`
+- Create: `gametool/description_cache_publication_retention_names.py`
+- Create: `gametool/description_cache_publication_named_leaf.py`
+- Create: `gametool/description_cache_publication_retention.py`
+- Create: `gametool/description_cache_publication_retention_installed.py`
+- Create: `gametool/description_cache_publication_retention_recovery.py`
 - Create: `tests/test_description_cache_publication_retention.py`
 - Create: `tests/test_description_cache_retained_generations.py`
 - Create: `tests/test_description_cache_publication_retention_collisions.py`
@@ -149,7 +149,7 @@ the specification again, but the implementation plan itself must never remain un
 - Create: `tests/test_description_cache_publication_stage_io.py`
 - Create: `tests/test_description_cache_publication_descriptor_close.py`
 - Create: `tests/test_description_cache_cli_retention.py`
-- Modify: `w3xtool/description_cache_publication_errors.py`
+- Modify: `gametool/description_cache_publication_errors.py`
 - Modify: `tests/test_atomic_rename.py`
 
 **Interfaces:**
@@ -274,10 +274,10 @@ from pathlib import Path
 import pytest
 
 from tests.description_cache_publication_fixture import rename_in_parent
-from w3xtool.description_cache_publication_errors import (
+from gametool.description_cache_publication_errors import (
     PublicationCommitContextError,
 )
-from w3xtool import description_cache_publication_fs as retention
+from gametool import description_cache_publication_fs as retention
 
 
 def _identity(path: Path) -> tuple[int, int]:
@@ -298,7 +298,7 @@ def _open_parent(path: Path) -> int:
 def test_retain_object_moves_the_exact_inode_without_overwrite(
     tmp_path: Path,
 ) -> None:
-    source = tmp_path / ".w3xray-description-cache-backup-a"
+    source = tmp_path / ".gamexray-description-cache-backup-a"
     source.mkdir()
     expected = _identity(source)
     names = retention.RetainedCacheNames(tmp_path, "1" * 32)
@@ -326,7 +326,7 @@ def test_retain_object_moves_the_exact_inode_without_overwrite(
 def test_source_swap_immediately_before_retention_preserves_both_directories(
     tmp_path: Path,
 ) -> None:
-    source = tmp_path / ".w3xray-description-cache-backup-b"
+    source = tmp_path / ".gamexray-description-cache-backup-b"
     source.mkdir()
     expected = _identity(source)
     displaced = tmp_path / "displaced-expected"
@@ -385,7 +385,7 @@ def test_source_swap_immediately_before_retention_preserves_both_directories(
 def test_retain_object_never_overwrites_an_existing_retained_name(
     tmp_path: Path,
 ) -> None:
-    source = tmp_path / ".w3xray-description-cache-stage-c"
+    source = tmp_path / ".gamexray-description-cache-stage-c"
     source.mkdir()
     expected = _identity(source)
     names = retention.RetainedCacheNames(tmp_path, "3" * 32)
@@ -421,7 +421,7 @@ def test_retain_object_never_overwrites_an_existing_retained_name(
 def test_unmoved_exact_source_does_not_create_an_absent_target_transient(
     tmp_path: Path,
 ) -> None:
-    source = tmp_path / ".w3xray-description-cache-stage-d"
+    source = tmp_path / ".gamexray-description-cache-stage-d"
     source.mkdir()
     expected = _identity(source)
     names = retention.RetainedCacheNames(tmp_path, "4" * 32)
@@ -505,7 +505,7 @@ Expected: collection succeeds, then tests fail at their `When` or observable `Th
 
 - [ ] **Step 3: Add the closed immutable model and exact retained-name builder**
 
-Create `w3xtool/description_cache_publication_models.py`:
+Create `gametool/description_cache_publication_models.py`:
 
 ```python
 """Immutable outcomes for retained trusted-cache publication."""
@@ -618,7 +618,7 @@ __all__ = (
 
 After the model module exists but before editing `description_cache_publication_errors.py`, add three `merge_retained` unit cases to the primitive test file: completely disjoint groups must remain `(earlier..., later...)`; partially overlapping groups must keep the first occurrence in transaction order; and fully repeated groups must collapse to one copy. Add the same three shapes for `merge_failures`, but compare exception object identity and include two distinct exception instances with equal text to prove they are not collapsed. Import the existing errors module as a namespace and call the missing helpers inside the test body, then run all six cases and require runtime RED rather than collection failure.
 
-In `w3xtool/description_cache_publication_errors.py`, retain existing subclasses and add failure evidence to the base constructor. Exceptions remain deliberately mutable because Python attaches traceback state. One pure `merge_retained(earlier, later)` function preserves transaction order and removes duplicates; `replace_retained()`, `replace_transient()`, `replace_failures()`, and the close-context appender are the only evidence mutation points on a propagating error:
+In `gametool/description_cache_publication_errors.py`, retain existing subclasses and add failure evidence to the base constructor. Exceptions remain deliberately mutable because Python attaches traceback state. One pure `merge_retained(earlier, later)` function preserves transaction order and removes duplicates; `replace_retained()`, `replace_transient()`, `replace_failures()`, and the close-context appender are the only evidence mutation points on a propagating error:
 
 ```python
 from .description_cache_publication_models import (
@@ -745,7 +745,7 @@ rebuilds `retained`/`transient`. Raw retention raises this subtype whenever the 
 role was observed exact after the atomic move, and the durable adapter preserves the subtype
 through every later failure.
 
-Create the name contract in the dedicated `w3xtool/description_cache_publication_retention_names.py`; the move primitive imports this model and does not also own naming validation:
+Create the name contract in the dedicated `gametool/description_cache_publication_retention_names.py`; the move primitive imports this model and does not also own naming validation:
 
 ```python
 """Validated retained-generation names for one publication transaction."""
@@ -760,7 +760,7 @@ from .description_cache_publication_errors import DescriptionCachePublicationErr
 from .description_cache_publication_models import RetainedCacheRole
 
 
-_RETAINED_PREFIX: Final = ".w3xray-description-cache-retained-"
+_RETAINED_PREFIX: Final = ".gamexray-description-cache-retained-"
 _HEX: Final = frozenset("0123456789abcdef")
 
 
@@ -785,7 +785,7 @@ __all__ = ("RetainedCacheNames",)
 ```
 
 Create the shared no-follow proof in
-`w3xtool/description_cache_publication_named_leaf.py`. This is the only helper that
+`gametool/description_cache_publication_named_leaf.py`. This is the only helper that
 classifies named-read exceptions: readable `FileNotFoundError` is absence, while every other
 `OSError` remains attached to the immutable proof by identity.
 
@@ -1053,7 +1053,7 @@ def _proof_transient(
 __all__ = ("retain_object",)
 ```
 
-Create `w3xtool/description_cache_publication_retention_installed.py` for the
+Create `gametool/description_cache_publication_retention_installed.py` for the
 commit-crossing intended-target outcome. It receives only the already-read source-side
 proof, handles source-name reacquisition, and preserves the installed-target subtype:
 
@@ -1181,7 +1181,7 @@ typed `recovery_error` stays reachable as `installed_error.__cause__`; it is del
 not appended as a third ledger entry. The exact RED therefore remains
 `(move_fault, recovery_fault)` with length two.
 
-Create `w3xtool/description_cache_publication_retention_recovery.py` for the recovery move
+Create `gametool/description_cache_publication_retention_recovery.py` for the recovery move
 and its complete two-name proof. The intended-role state machine above imports only this
 function; it does not duplicate recovery proof state. This keeps both modules below the
 250-pure-LOC ceiling while preserving the rule that a callable return or exception has no
@@ -1388,7 +1388,7 @@ require a cache directory already supply an identity captured by `directory_iden
 
 - [ ] **Step 5: Prove the new primitive has no destructive dependency**
 
-Run: `rg -n 'shutil|rmtree|rmdir|unlink|remove_directory' w3xtool/description_cache_publication_models.py w3xtool/description_cache_publication_retention_names.py w3xtool/description_cache_publication_retention.py w3xtool/description_cache_publication_retention_installed.py w3xtool/description_cache_publication_retention_recovery.py`
+Run: `rg -n 'shutil|rmtree|rmdir|unlink|remove_directory' gametool/description_cache_publication_models.py gametool/description_cache_publication_retention_names.py gametool/description_cache_publication_retention.py gametool/description_cache_publication_retention_installed.py gametool/description_cache_publication_retention_recovery.py`
 
 Expected: no matches. Leave the existing remover in `description_cache_publication_fs.py` until Task 2 migrates every import and call in the same green commit.
 
@@ -1398,11 +1398,11 @@ Run: `uv run python -m pytest -q tests/test_description_cache_publication_retent
 
 Expected: PASS, including the real source-name swap and collision preservation cases.
 
-Run: `uv run --with ruff ruff check w3xtool/description_cache_publication_models.py w3xtool/description_cache_publication_retention_names.py w3xtool/description_cache_publication_retention.py w3xtool/description_cache_publication_retention_installed.py w3xtool/description_cache_publication_retention_recovery.py w3xtool/description_cache_publication_errors.py tests/test_description_cache_publication_retention.py`
+Run: `uv run --with ruff ruff check gametool/description_cache_publication_models.py gametool/description_cache_publication_retention_names.py gametool/description_cache_publication_retention.py gametool/description_cache_publication_retention_installed.py gametool/description_cache_publication_retention_recovery.py gametool/description_cache_publication_errors.py tests/test_description_cache_publication_retention.py`
 
-Run: `uv run --with ruff ruff format --check w3xtool/description_cache_publication_models.py w3xtool/description_cache_publication_retention_names.py w3xtool/description_cache_publication_retention.py w3xtool/description_cache_publication_retention_installed.py w3xtool/description_cache_publication_retention_recovery.py w3xtool/description_cache_publication_errors.py tests/test_description_cache_publication_retention.py`
+Run: `uv run --with ruff ruff format --check gametool/description_cache_publication_models.py gametool/description_cache_publication_retention_names.py gametool/description_cache_publication_retention.py gametool/description_cache_publication_retention_installed.py gametool/description_cache_publication_retention_recovery.py gametool/description_cache_publication_errors.py tests/test_description_cache_publication_retention.py`
 
-Run: `uv run --with basedpyright basedpyright --level error w3xtool/description_cache_publication_models.py w3xtool/description_cache_publication_retention_names.py w3xtool/description_cache_publication_retention.py w3xtool/description_cache_publication_retention_installed.py w3xtool/description_cache_publication_retention_recovery.py w3xtool/description_cache_publication_errors.py tests/test_description_cache_publication_retention.py`
+Run: `uv run --with basedpyright basedpyright --level error gametool/description_cache_publication_models.py gametool/description_cache_publication_retention_names.py gametool/description_cache_publication_retention.py gametool/description_cache_publication_retention_installed.py gametool/description_cache_publication_retention_recovery.py gametool/description_cache_publication_errors.py tests/test_description_cache_publication_retention.py`
 
 - [ ] **Step 7: Hold the preservation slice until the complete behavioral suite is GREEN**
 
@@ -1413,13 +1413,13 @@ Do not commit Task 1 separately while the pre-implementation lifecycle/CLI tests
 ### Task 2: Non-destructive publication lifecycle and retained-result reporting
 
 **Files:**
-- Continue from Task 1: `w3xtool/description_cache_publication_models.py`
-- Continue from Task 1: `w3xtool/description_cache_publication_retention_names.py`
-- Continue from Task 1: `w3xtool/description_cache_publication_named_leaf.py`
-- Continue from Task 1: `w3xtool/description_cache_publication_retention.py`
-- Continue from Task 1: `w3xtool/description_cache_publication_retention_installed.py`
-- Continue from Task 1: `w3xtool/description_cache_publication_retention_recovery.py`
-- Continue from Task 1: `w3xtool/description_cache_publication_errors.py`
+- Continue from Task 1: `gametool/description_cache_publication_models.py`
+- Continue from Task 1: `gametool/description_cache_publication_retention_names.py`
+- Continue from Task 1: `gametool/description_cache_publication_named_leaf.py`
+- Continue from Task 1: `gametool/description_cache_publication_retention.py`
+- Continue from Task 1: `gametool/description_cache_publication_retention_installed.py`
+- Continue from Task 1: `gametool/description_cache_publication_retention_recovery.py`
+- Continue from Task 1: `gametool/description_cache_publication_errors.py`
 - Continue from Task 1: `tests/test_description_cache_publication_retention.py`
 - Continue from Task 1: `tests/test_description_cache_retained_generations.py`
 - Continue from Task 1: `tests/test_description_cache_publication_retention_collisions.py`
@@ -1430,23 +1430,23 @@ Do not commit Task 1 separately while the pre-implementation lifecycle/CLI tests
 - Continue from Task 1: `tests/test_description_cache_publication_stage_io.py`
 - Continue from Task 1: `tests/test_description_cache_publication_descriptor_close.py`
 - Create: `tests/test_description_cache_publication_imports.py`
-- Create: `w3xtool/description_cache_publication_build.py`
-- Create: `w3xtool/description_cache_publication_backup_finalization.py`
-- Create: `w3xtool/description_cache_publication_descriptor_close.py`
-- Create: `w3xtool/description_cache_publication_evidence.py`
-- Create: `w3xtool/description_cache_publication_generation_evidence.py`
-- Create: `w3xtool/description_cache_publication_parent_identity.py`
-- Create: `w3xtool/description_cache_publication_private_attempt.py`
-- Create: `w3xtool/description_cache_publication_recovery_state.py`
-- Create: `w3xtool/description_cache_publication_retention_durability.py`
-- Create: `w3xtool/description_cache_publication_result_evidence.py`
-- Create: `w3xtool/description_cache_publication_rollback_selection.py`
-- Create: `w3xtool/description_cache_publication_stage_finalization.py`
-- Create: `w3xtool/description_cache_publication_stage_io.py`
-- Create: `w3xtool/description_cache_publication_stage_location.py`
-- Create: `w3xtool/description_cache_publication_stage_location_scan.py`
-- Create: `w3xtool/description_cache_publication_stage_normalization.py`
-- Create: `w3xtool/trusted_description_cache_generation_io.py`
+- Create: `gametool/description_cache_publication_build.py`
+- Create: `gametool/description_cache_publication_backup_finalization.py`
+- Create: `gametool/description_cache_publication_descriptor_close.py`
+- Create: `gametool/description_cache_publication_evidence.py`
+- Create: `gametool/description_cache_publication_generation_evidence.py`
+- Create: `gametool/description_cache_publication_parent_identity.py`
+- Create: `gametool/description_cache_publication_private_attempt.py`
+- Create: `gametool/description_cache_publication_recovery_state.py`
+- Create: `gametool/description_cache_publication_retention_durability.py`
+- Create: `gametool/description_cache_publication_result_evidence.py`
+- Create: `gametool/description_cache_publication_rollback_selection.py`
+- Create: `gametool/description_cache_publication_stage_finalization.py`
+- Create: `gametool/description_cache_publication_stage_io.py`
+- Create: `gametool/description_cache_publication_stage_location.py`
+- Create: `gametool/description_cache_publication_stage_location_scan.py`
+- Create: `gametool/description_cache_publication_stage_normalization.py`
+- Create: `gametool/trusted_description_cache_generation_io.py`
 - Modify: `tests/description_cache_publication_fixture.py`
 - Modify: `tests/test_description_cache_publication.py`
 - Modify: `tests/test_description_cache_publication_concurrency.py`
@@ -1454,23 +1454,23 @@ Do not commit Task 1 separately while the pre-implementation lifecycle/CLI tests
 - Modify: `tests/test_description_cache_publication_validation.py`
 - Modify: `tests/test_trusted_description_cache_anchored.py`
 - Modify: `tests/test_atomic_rename.py`
-- Modify: `w3xtool/atomic_rename.py`
-- Modify: `w3xtool/description_cache_publication.py`
-- Modify: `w3xtool/description_cache_owned_schema.py`
-- Modify: `w3xtool/description_cache_publication_absent.py`
-- Modify: `w3xtool/description_cache_publication_commit.py`
-- Modify: `w3xtool/description_cache_publication_parent.py`
-- Modify: `w3xtool/description_cache_publication_recovery.py`
-- Modify: `w3xtool/description_cache_publication_replacement.py`
-- Modify: `w3xtool/description_cache_publication_stage.py`
-- Modify: `w3xtool/description_cache_publication_transaction.py`
-- Modify: `w3xtool/description_cache_publication_fs.py`
-- Modify: `w3xtool/trusted_description_cache.py`
-- Modify: `w3xtool/trusted_description_cache_io.py`
-- Modify: `w3xtool/trusted_description_cache_models.py`
-- Modify: `w3xtool/description_cache_migration.py`
-- Modify: `w3xtool/description_cache_migration_models.py`
-- Modify: `w3xtool/description_cache_cli.py`
+- Modify: `gametool/atomic_rename.py`
+- Modify: `gametool/description_cache_publication.py`
+- Modify: `gametool/description_cache_owned_schema.py`
+- Modify: `gametool/description_cache_publication_absent.py`
+- Modify: `gametool/description_cache_publication_commit.py`
+- Modify: `gametool/description_cache_publication_parent.py`
+- Modify: `gametool/description_cache_publication_recovery.py`
+- Modify: `gametool/description_cache_publication_replacement.py`
+- Modify: `gametool/description_cache_publication_stage.py`
+- Modify: `gametool/description_cache_publication_transaction.py`
+- Modify: `gametool/description_cache_publication_fs.py`
+- Modify: `gametool/trusted_description_cache.py`
+- Modify: `gametool/trusted_description_cache_io.py`
+- Modify: `gametool/trusted_description_cache_models.py`
+- Modify: `gametool/description_cache_migration.py`
+- Modify: `gametool/description_cache_migration_models.py`
+- Modify: `gametool/description_cache_cli.py`
 
 **Interfaces:**
 - Changes: `publish_description_cache(...) -> DescriptionCachePublicationResult`.
@@ -1525,18 +1525,18 @@ import pytest
 
 from tests.description_cache_publication_fixture import replacement_inputs
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool import description_cache_publication as publication
-from w3xtool.description_cache_migration import (
+from gametool import description_cache_publication as publication
+from gametool.description_cache_migration import (
     DescriptionCacheMigrationOptions,
     migrate_description_cache,
 )
-from w3xtool.description_cache_publication import (
+from gametool.description_cache_publication import (
     DescriptionCachePublicationError,
 )
-from w3xtool.description_cache_publication_commit import (
+from gametool.description_cache_publication_commit import (
     PublicationCommitContextError,
 )
-from w3xtool.trusted_description_cache import (
+from gametool.trusted_description_cache import (
     VerifiedDescriptionCache,
     load_trusted_description_cache,
 )
@@ -1551,15 +1551,15 @@ def transient_publication_paths(output: Path) -> tuple[Path, ...]:
     return tuple(
         path
         for pattern in (
-            ".w3xray-description-cache-stage-*",
-            ".w3xray-description-cache-backup-*",
+            ".gamexray-description-cache-stage-*",
+            ".gamexray-description-cache-backup-*",
         )
         for path in output.parent.glob(pattern)
     )
 
 
 def retained_publication_paths(output: Path) -> tuple[Path, ...]:
-    return tuple(output.parent.glob(".w3xray-description-cache-retained-*-*"))
+    return tuple(output.parent.glob(".gamexray-description-cache-retained-*-*"))
 
 
 def test_replacement_retains_exact_previous_inode_without_rmtree(
@@ -1753,7 +1753,7 @@ fault creation-failure cleanup after both descriptors exist, requiring both clos
 and the already-normalized typed error. No test patches process-wide `os.close` during pytest
 fixture cleanup: call the production close boundary through its injected close callable or a
 focused publication seam. In the initial RED form, import the already-existing
-`w3xtool.description_cache_publication_stage` module namespace and access the proposed close
+`gametool.description_cache_publication_stage` module namespace and access the proposed close
 boundary inside each test body, so collection succeeds and behavior fails at runtime. After
 Task 1 defines the installed-target subtype, refactor the in-flight case to construct that
 exact subtype without changing its assertions; the close helper remains missing until this
@@ -1974,7 +1974,7 @@ def test_stage_io_unsupported_fails_before_any_publication_effect(
 ) -> None:
     legacy_output, legacy_cache = replacement_inputs(tmp_path, "first")
     output = tmp_path / "trusted"
-    stage_io = importlib.import_module("w3xtool.description_cache_publication_stage_io")
+    stage_io = importlib.import_module("gametool.description_cache_publication_stage_io")
     calls = _instrument_preflight_effects(monkeypatch)
     monkeypatch.setattr(stage_io, "_STAGE_IO_AVAILABLE", False)
 
@@ -2070,9 +2070,9 @@ def test_recovery_role_collision_preserves_transient_without_overwrite(
         destination_name: str,
     ) -> None:
         exchange_in_parent(parent_descriptor, source_name, destination_name)
-        transaction_id = source_name.removeprefix(".w3xray-description-cache-stage-")
+        transaction_id = source_name.removeprefix(".gamexray-description-cache-stage-")
         collision = root.parent / (
-            f".w3xray-description-cache-retained-{transaction_id}-recovery"
+            f".gamexray-description-cache-retained-{transaction_id}-recovery"
         )
         collision.mkdir()
         (collision / "foreign.txt").write_text("foreign", encoding="utf-8")
@@ -2142,7 +2142,7 @@ Before editing lifecycle code, use this state table as the required postconditio
 
 No row authorizes deletion. A transient name is acceptable only in an impossible-normalization row (occupied destinations, rejected atomic operation, lost parent binding, or unknown/moved leaf), never on success and never when the exact object and a free retained role are both provable.
 
-Add `require_atomic_rename_support()` to `w3xtool/atomic_rename.py`. It loads the platform's existing rename symbol without mutating the filesystem and requires both no-replace/exchange support. Add `require_stage_io_support()` to the focused stage-I/O module for every descriptor capability listed in Task 2's interfaces. `publish_description_cache()` invokes the atomic preflight and then the stage-I/O preflight before `uuid4()`, descriptor-relative `mkdir`, the stage build/writer, no-replace, or exchange. Unknown/insufficient hosts fail closed and create no evidence path. A later filesystem-level `ENOTSUP` remains the impossible-normalization row above.
+Add `require_atomic_rename_support()` to `gametool/atomic_rename.py`. It loads the platform's existing rename symbol without mutating the filesystem and requires both no-replace/exchange support. Add `require_stage_io_support()` to the focused stage-I/O module for every descriptor capability listed in Task 2's interfaces. `publish_description_cache()` invokes the atomic preflight and then the stage-I/O preflight before `uuid4()`, descriptor-relative `mkdir`, the stage build/writer, no-replace, or exchange. Unknown/insufficient hosts fail closed and create no evidence path. A later filesystem-level `ENOTSUP` remains the impossible-normalization row above.
 
 Add this runtime RED to `tests/test_atomic_rename.py`; import the existing module namespace so the missing preflight symbol fails inside the test body rather than during collection:
 
@@ -2183,7 +2183,7 @@ than collection failure:
 def test_stage_io_support_preflight_rejects_incomplete_host_without_transaction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    stage_io = importlib.import_module("w3xtool.description_cache_publication_stage_io")
+    stage_io = importlib.import_module("gametool.description_cache_publication_stage_io")
     calls = {
         "uuid4": 0,
         "rename_noreplace": 0,
@@ -3364,7 +3364,7 @@ Confirm the initial Task 1 RED files already contain four capture/durability cas
 
 Confirm the initial Task 1 RED suite already contains `tests/test_description_cache_publication_stage_io.py` with three behavioral cases. The first wraps the current publish dispatch, replaces all five just-written leaves with a different self-consistent valid cache before current self-validation, and requires publication to reject rather than publish the substitute. The second replaces one leaf immediately after its writer returns and before held-stage reading and must fail on device/inode/size/mtime/ctime/mode/SHA-256 mismatch once the proof API is implemented. The third lets descriptor validation of stage A finish, replaces all five leaves with self-consistent stage B before the first atomic rename, and requires the transaction's second complete held-stage reread to reject it before any output rename; the foreign/current stage is normalized as evidence, and the original output remains unchanged. Add a fourth case that mutates the first file in place after it is read and before the fifth file is read while preserving directory inode and byte length; whole-generation post-snapshot/hash proof must reject it. The initial RED imports only currently available publication/loader namespaces and fails at the observable assertion, not collection; after `TrustedCacheLeafProof` exists, refactor imports without changing the scenarios. Use real descriptor-relative rename/write operations and no sleeps. Run this file in the exact Task 1 Step 2 gate and record the expected behavioral failures before any stage-I/O/loader production edit.
 
-Create `w3xtool/description_cache_publication_descriptor_close.py` before adding the bound
+Create `gametool/description_cache_publication_descriptor_close.py` before adding the bound
 context manager. It is the only descriptor-close boundary. The mutable ledger exists solely
 to remember the last immutable evidence proven on a nominal success path; its documented
 mutation is not domain-state mutation. Every close callable is attempted, and close failure
@@ -4496,7 +4496,7 @@ def finalize_private_artifacts(
     )
 ```
 
-Create `w3xtool/description_cache_publication_private_attempt.py` for the ordinary-exception
+Create `gametool/description_cache_publication_private_attempt.py` for the ordinary-exception
 capture that lets the second private leaf run. It receives the exact leaf and optional held
 identity. A typed publication error is already an authoritative evidence-bound outcome and
 is returned unchanged; only an otherwise ordinary exception receives a fresh named-leaf
@@ -4599,7 +4599,7 @@ def record_tuple(
 __all__ = ("PrivateAttempt", "attempt_private", "record_tuple")
 ```
 
-Create `w3xtool/description_cache_publication_backup_finalization.py` for backup-only
+Create `gametool/description_cache_publication_backup_finalization.py` for backup-only
 normalization. It never imports the stage locator or two-attempt orchestrator:
 
 ```python
@@ -4687,7 +4687,7 @@ in `description_cache_publication_private_attempt.py`, and keeps backup normaliz
 own module. Measure all three independently; each targets below 200 pure LOC and none may
 use `SIZE_OK`.
 
-Extend `w3xtool/description_cache_publication_named_leaf.py` with the complete immutable
+Extend `gametool/description_cache_publication_named_leaf.py` with the complete immutable
 capture/reproof API below. Every function returns filesystem rows and exact read failures as
 one `RetainedEvidenceReproof`; callers are forbidden to select `.transient` without also
 merging `.failures` at the same typed boundary.
@@ -4819,7 +4819,7 @@ __all__ = (
 )
 ```
 
-Create `w3xtool/description_cache_publication_evidence.py` as the sole conversion point between descriptor-proved internal evidence and caller-visible paths. It deliberately accepts the held-parent fields rather than `BoundDescriptionCacheStage`, so stage-creation normalization can use it before a bound-stage value exists and the module does not introduce a cycle. `finalize_error_evidence()` preserves event order as earlier failures/records, the current error, later failures/records, then failures raised by its own reproofs. It always re-proves through the held descriptor before checking the public parent. If the public binding is gone, the returned error is the typed parent-context error, `retained` is empty, and every still-live held leaf is represented only as freshly rebuilt transient evidence:
+Create `gametool/description_cache_publication_evidence.py` as the sole conversion point between descriptor-proved internal evidence and caller-visible paths. It deliberately accepts the held-parent fields rather than `BoundDescriptionCacheStage`, so stage-creation normalization can use it before a bound-stage value exists and the module does not introduce a cycle. `finalize_error_evidence()` preserves event order as earlier failures/records, the current error, later failures/records, then failures raised by its own reproofs. It always re-proves through the held descriptor before checking the public parent. If the public binding is gone, the returned error is the typed parent-context error, `retained` is empty, and every still-live held leaf is represented only as freshly rebuilt transient evidence:
 
 ```python
 """Caller-visible evidence boundaries for trusted-cache publication."""
@@ -5211,7 +5211,7 @@ class VerifiedDescriptionCacheGeneration:
 
 Export all three proof models beside the existing payload/error/result models.
 
-Create `w3xtool/description_cache_publication_stage_io.py` for the only stage-file writer. The allowed set is exactly the three payload names, manifest, and marker. `write_stage_text()` rejects every other or non-leaf name, uses `O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC`, writes and fsyncs through `write_chunks_to_descriptor()`, compares regular-file mode, `(device, inode)`, and final byte count through both `fstat()` and no-follow `stat(..., dir_fd=stage_descriptor)`, and returns the exact identity/size/SHA-256 proof. It never opens, creates, resolves, or writes `display_root`:
+Create `gametool/description_cache_publication_stage_io.py` for the only stage-file writer. The allowed set is exactly the three payload names, manifest, and marker. `write_stage_text()` rejects every other or non-leaf name, uses `O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC`, writes and fsyncs through `write_chunks_to_descriptor()`, compares regular-file mode, `(device, inode)`, and final byte count through both `fstat()` and no-follow `stat(..., dir_fd=stage_descriptor)`, and returns the exact identity/size/SHA-256 proof. It never opens, creates, resolves, or writes `display_root`:
 
 ```python
 _ALLOWED_STAGE_FILES: Final = frozenset(TRUSTED_DESCRIPTION_CACHE_OWNED_INVENTORY)
@@ -5812,7 +5812,7 @@ Do not enumerate retained siblings in the loader, batch code, or GUI. A retained
 
 - [ ] **Step 8: Remove the old recursive primitive and reconcile inherited tests**
 
-After all production callers use retention, remove `import shutil` and `remove_directory()` from `w3xtool/description_cache_publication_fs.py`; its `__all__` becomes exactly:
+After all production callers use retention, remove `import shutil` and `remove_directory()` from `gametool/description_cache_publication_fs.py`; its `__all__` becomes exactly:
 
 ```python
 __all__ = (
@@ -5827,14 +5827,14 @@ In `tests/description_cache_publication_fixture.py`, replace `private_publicatio
 ```python
 def transient_publication_paths(output: Path) -> tuple[Path, ...]:
     patterns = (
-        ".w3xray-description-cache-stage-*",
-        ".w3xray-description-cache-backup-*",
+        ".gamexray-description-cache-stage-*",
+        ".gamexray-description-cache-backup-*",
     )
     return tuple(path for pattern in patterns for path in output.parent.glob(pattern))
 
 
 def retained_publication_paths(output: Path) -> tuple[Path, ...]:
-    return tuple(output.parent.glob(".w3xray-description-cache-retained-*-*"))
+    return tuple(output.parent.glob(".gamexray-description-cache-retained-*-*"))
 
 
 def assert_live_retained_records(
@@ -5849,7 +5849,7 @@ Update inherited success/failure tests to assert zero transient paths and the co
 
 Rename the inherited final-sync success test to `test_final_parent_sync_failure_preserves_both_generations_and_needs_context`. It must now require `PublicationCommitContextError`, one error record with role `previous`, the new valid active cache, the old valid retained cache, and zero transient names. Adapt the output-takeover-after-final-sync test to require the same retained previous inode plus the untouched foreign output and displaced new generation. Adapt the existing output-takeover-after-exchange test to require the exact old inode under a `recovery` retained name when that role is free; the separate recovery-collision test is the only intentional transient case.
 
-Run: `rg -n 'remove_directory|remove_stage|shutil\.rmtree|os\.rmdir|os\.unlink|\.unlink\(' w3xtool/description_cache_publication*.py` and `rg -n 'private_publication_paths' tests/test_description_cache_publication*.py tests/description_cache_publication_fixture.py`
+Run: `rg -n 'remove_directory|remove_stage|shutil\.rmtree|os\.rmdir|os\.unlink|\.unlink\(' gametool/description_cache_publication*.py` and `rg -n 'private_publication_paths' tests/test_description_cache_publication*.py tests/description_cache_publication_fixture.py`
 
 Expected: no production removal matches and no stale fixture name. The test-side `monkeypatch.delattr(shutil, "rmtree")` guard is allowed because it proves publication never resolves the removed attribute.
 
@@ -5870,47 +5870,47 @@ import pytest
 
 
 _MODULES: Final[tuple[str, ...]] = (
-    "w3xtool.atomic_rename",
-    "w3xtool.description_cache_owned_schema",
-    "w3xtool.trusted_description_cache_models",
-    "w3xtool.trusted_description_cache_io",
-    "w3xtool.trusted_description_cache_generation_io",
-    "w3xtool.description_cache_publication_fs",
-    "w3xtool.description_cache_publication_models",
-    "w3xtool.description_cache_publication_errors",
-    "w3xtool.description_cache_publication_retention_names",
-    "w3xtool.description_cache_publication_retention_recovery",
-    "w3xtool.description_cache_publication_retention_installed",
-    "w3xtool.description_cache_publication_retention",
-    "w3xtool.description_cache_publication_parent_identity",
-    "w3xtool.description_cache_publication_named_leaf",
-    "w3xtool.description_cache_publication_evidence",
-    "w3xtool.description_cache_publication_retention_durability",
-    "w3xtool.description_cache_publication_descriptor_close",
-    "w3xtool.description_cache_publication_stage_normalization",
-    "w3xtool.description_cache_publication_stage",
-    "w3xtool.description_cache_publication_private_attempt",
-    "w3xtool.description_cache_publication_backup_finalization",
-    "w3xtool.description_cache_publication_stage_location_scan",
-    "w3xtool.description_cache_publication_stage_location",
-    "w3xtool.description_cache_publication_stage_finalization",
-    "w3xtool.description_cache_publication_stage_io",
-    "w3xtool.description_cache_publication_build",
-    "w3xtool.description_cache_publication_rollback_selection",
-    "w3xtool.description_cache_publication_recovery_state",
-    "w3xtool.description_cache_publication_generation_evidence",
-    "w3xtool.description_cache_publication_result_evidence",
-    "w3xtool.description_cache_publication_parent",
-    "w3xtool.description_cache_publication_recovery",
-    "w3xtool.description_cache_publication_commit",
-    "w3xtool.description_cache_publication_replacement",
-    "w3xtool.description_cache_publication_absent",
-    "w3xtool.description_cache_publication_transaction",
-    "w3xtool.description_cache_publication",
-    "w3xtool.description_cache_migration_models",
-    "w3xtool.description_cache_migration",
-    "w3xtool.description_cache_cli",
-    "w3xtool.trusted_description_cache",
+    "gametool.atomic_rename",
+    "gametool.description_cache_owned_schema",
+    "gametool.trusted_description_cache_models",
+    "gametool.trusted_description_cache_io",
+    "gametool.trusted_description_cache_generation_io",
+    "gametool.description_cache_publication_fs",
+    "gametool.description_cache_publication_models",
+    "gametool.description_cache_publication_errors",
+    "gametool.description_cache_publication_retention_names",
+    "gametool.description_cache_publication_retention_recovery",
+    "gametool.description_cache_publication_retention_installed",
+    "gametool.description_cache_publication_retention",
+    "gametool.description_cache_publication_parent_identity",
+    "gametool.description_cache_publication_named_leaf",
+    "gametool.description_cache_publication_evidence",
+    "gametool.description_cache_publication_retention_durability",
+    "gametool.description_cache_publication_descriptor_close",
+    "gametool.description_cache_publication_stage_normalization",
+    "gametool.description_cache_publication_stage",
+    "gametool.description_cache_publication_private_attempt",
+    "gametool.description_cache_publication_backup_finalization",
+    "gametool.description_cache_publication_stage_location_scan",
+    "gametool.description_cache_publication_stage_location",
+    "gametool.description_cache_publication_stage_finalization",
+    "gametool.description_cache_publication_stage_io",
+    "gametool.description_cache_publication_build",
+    "gametool.description_cache_publication_rollback_selection",
+    "gametool.description_cache_publication_recovery_state",
+    "gametool.description_cache_publication_generation_evidence",
+    "gametool.description_cache_publication_result_evidence",
+    "gametool.description_cache_publication_parent",
+    "gametool.description_cache_publication_recovery",
+    "gametool.description_cache_publication_commit",
+    "gametool.description_cache_publication_replacement",
+    "gametool.description_cache_publication_absent",
+    "gametool.description_cache_publication_transaction",
+    "gametool.description_cache_publication",
+    "gametool.description_cache_migration_models",
+    "gametool.description_cache_migration",
+    "gametool.description_cache_cli",
+    "gametool.trusted_description_cache",
 )
 
 
@@ -5972,16 +5972,16 @@ Define one exact changed-path set, then use the same set for Ruff, basedpyright,
 
 ```bash
 PYTHON_PATHS=(
-  w3xtool/description_cache_publication*.py
-  w3xtool/atomic_rename.py
-  w3xtool/description_cache_owned_schema.py
-  w3xtool/description_cache_migration.py
-  w3xtool/description_cache_migration_models.py
-  w3xtool/description_cache_cli.py
-  w3xtool/trusted_description_cache.py
-  w3xtool/trusted_description_cache_generation_io.py
-  w3xtool/trusted_description_cache_io.py
-  w3xtool/trusted_description_cache_models.py
+  gametool/description_cache_publication*.py
+  gametool/atomic_rename.py
+  gametool/description_cache_owned_schema.py
+  gametool/description_cache_migration.py
+  gametool/description_cache_migration_models.py
+  gametool/description_cache_cli.py
+  gametool/trusted_description_cache.py
+  gametool/trusted_description_cache_generation_io.py
+  gametool/trusted_description_cache_io.py
+  gametool/trusted_description_cache_models.py
   tests/description_cache_publication_fixture.py
   tests/test_description_cache_publication*.py
   tests/test_description_cache_retained_generations.py
@@ -5999,9 +5999,9 @@ uv run /Users/zhongerbing/.codex/skills/programming/scripts/python/check-no-excu
 
 Expected: all five commands exit `0`; the dedicated first Ruff command makes F401/F821 an
 explicit executable gate rather than an implication of syntax/import smoke tests. The
-no-excuse audit's `oversized-module` rule reports every hand-written path at `<= 250` pure LOC. Do not add `SIZE_OK`, type-ignore, lint-ignore, or unrelated suppression. `BROAD_EXCEPT_OK` is permitted only on the exact ordinary-exception evidence catches in `retain_object()`, `move_object_to_recovery()`, `retain_durably()`, `_synchronize_installed_error()`, `publish_absent()`, `normalize_recovery_failure()`, `restore_previous_generation()`'s ordinary-cause wrapper, `create_stage_and_capture()` after the parent is held, `attempt_private()`, `close_publication_descriptors()`, `require_live_result_evidence()`, `publish_description_cache()`, and `_raise_after_private_finalization()`. Run `rg -n 'except (BaseException|Exception)|BROAD_EXCEPT_OK' w3xtool/description_cache_publication*.py`; require every `except Exception` line to carry one specific `BROAD_EXCEPT_OK` reason, no `BaseException` match, no site outside that function set, and no handler that swallows the cause or returns success.
+no-excuse audit's `oversized-module` rule reports every hand-written path at `<= 250` pure LOC. Do not add `SIZE_OK`, type-ignore, lint-ignore, or unrelated suppression. `BROAD_EXCEPT_OK` is permitted only on the exact ordinary-exception evidence catches in `retain_object()`, `move_object_to_recovery()`, `retain_durably()`, `_synchronize_installed_error()`, `publish_absent()`, `normalize_recovery_failure()`, `restore_previous_generation()`'s ordinary-cause wrapper, `create_stage_and_capture()` after the parent is held, `attempt_private()`, `close_publication_descriptors()`, `require_live_result_evidence()`, `publish_description_cache()`, and `_raise_after_private_finalization()`. Run `rg -n 'except (BaseException|Exception)|BROAD_EXCEPT_OK' gametool/description_cache_publication*.py`; require every `except Exception` line to carry one specific `BROAD_EXCEPT_OK` reason, no `BaseException` match, no site outside that function set, and no handler that swallows the cause or returns success.
 
-Run: `! rg -n 'shutil\.rmtree|os\.rmdir|os\.unlink|\.unlink\(|remove_directory|remove_stage' w3xtool/description_cache_publication*.py`
+Run: `! rg -n 'shutil\.rmtree|os\.rmdir|os\.unlink|\.unlink\(|remove_directory|remove_stage' gametool/description_cache_publication*.py`
 
 Run this exhaustive production-path gate; the glob intentionally includes top-level
 publication, evidence, result-evidence, generation-evidence, stage-I/O, and every future
@@ -6009,11 +6009,11 @@ focused sibling module:
 
 ```bash
 RAW_RETAIN_PATHS=$(
-  rg -l 'retain_object' w3xtool/description_cache_publication*.py | sort
+  rg -l 'retain_object' gametool/description_cache_publication*.py | sort
 )
 EXPECTED_RAW_RETAIN_PATHS=$(printf '%s\n' \
-  w3xtool/description_cache_publication_retention.py \
-  w3xtool/description_cache_publication_retention_durability.py)
+  gametool/description_cache_publication_retention.py \
+  gametool/description_cache_publication_retention_durability.py)
 test "$RAW_RETAIN_PATHS" = "$EXPECTED_RAW_RETAIN_PATHS"
 ```
 
@@ -6025,12 +6025,12 @@ Run the matching recovery-boundary gate:
 
 ```bash
 RECOVERY_MOVE_PATHS=$(
-  rg -l 'move_object_to_recovery' w3xtool/description_cache_publication*.py | sort
+  rg -l 'move_object_to_recovery' gametool/description_cache_publication*.py | sort
 )
 EXPECTED_RECOVERY_MOVE_PATHS=$(printf '%s\n' \
-  w3xtool/description_cache_publication_retention.py \
-  w3xtool/description_cache_publication_retention_installed.py \
-  w3xtool/description_cache_publication_retention_recovery.py)
+  gametool/description_cache_publication_retention.py \
+  gametool/description_cache_publication_retention_installed.py \
+  gametool/description_cache_publication_retention_recovery.py)
 test "$RECOVERY_MOVE_PATHS" = "$EXPECTED_RECOVERY_MOVE_PATHS"
 ```
 
@@ -6041,16 +6041,16 @@ state machine and its installed-target postcondition helper, both behind the dur
 
 ```bash
 git add \
-  w3xtool/atomic_rename.py \
-  w3xtool/description_cache_owned_schema.py \
-  w3xtool/description_cache_publication*.py \
-  w3xtool/description_cache_migration.py \
-  w3xtool/description_cache_migration_models.py \
-  w3xtool/description_cache_cli.py \
-  w3xtool/trusted_description_cache.py \
-  w3xtool/trusted_description_cache_generation_io.py \
-  w3xtool/trusted_description_cache_io.py \
-  w3xtool/trusted_description_cache_models.py \
+  gametool/atomic_rename.py \
+  gametool/description_cache_owned_schema.py \
+  gametool/description_cache_publication*.py \
+  gametool/description_cache_migration.py \
+  gametool/description_cache_migration_models.py \
+  gametool/description_cache_cli.py \
+  gametool/trusted_description_cache.py \
+  gametool/trusted_description_cache_generation_io.py \
+  gametool/trusted_description_cache_io.py \
+  gametool/trusted_description_cache_models.py \
   tests/description_cache_publication_fixture.py \
   tests/test_atomic_rename.py \
   tests/test_description_cache_publication*.py \
@@ -6080,8 +6080,8 @@ git commit -m "fix: retain non-active description caches"
 Under Task 10's file list, add:
 
 ```markdown
-- Create: `w3xtool/description_cache_retained_integrity_models.py`
-- Create: `w3xtool/description_cache_retained_integrity.py`
+- Create: `gametool/description_cache_retained_integrity_models.py`
+- Create: `gametool/description_cache_retained_integrity.py`
 - Create: `tests/test_description_cache_retained_integrity.py`
 - Create: `tests/test_description_cache_retained_integrity_bounds.py`
 - Create: `tests/test_description_cache_retained_integrity_stability.py`
@@ -6106,7 +6106,7 @@ Under Task 10's interfaces, add:
   `previous` therefore never reaches `partial-evidence`, and every non-directory
   `previous` exits `1`. Replacement of its top-level sibling identity remains a command
   boundary failure/exit `2` before this table is applied.
-- Parses only exact `.w3xray-description-cache-retained-<32 lowercase hex>-<closed role>` sibling leaves; malformed retained-prefix leaves are violations and are never inferred into a role.
+- Parses only exact `.gamexray-description-cache-retained-<32 lowercase hex>-<closed role>` sibling leaves; malformed retained-prefix leaves are violations and are never inferred into a role.
 - Uses descriptor-relative no-follow traversal; directories receive a complete tree snapshot before any payload read and another complete tree snapshot after every payload read. A tree snapshot contains every relative path in UTF-8 path-byte order plus kind/device/inode/size/`mtime_ns`/`ctime_ns`/mode. The scanner requires the two tree snapshots to match before accepting that artifact's size/digest. Regular files receive the same bounded content proof, while symlinks/special files are recorded as unsafe without following or reading their target.
 - Fixes scanner bounds as constants: `MAX_RETAINED_FILE_BYTES = 64 * 1024 * 1024`, `MAX_RETAINED_TREE_BYTES = 512 * 1024 * 1024`, `MAX_RETAINED_FILE_COUNT = 100_000`, `MAX_RETAINED_ENTRY_COUNT = 125_000`, and `MAX_RETAINED_DEPTH = 64`. Tree bytes sum regular-file payload sizes; file count counts regular files; entry count counts every no-follow directory entry. The retained root is depth `0`, its direct children are depth `1`, depth `64` is accepted, and the first entry at depth `65` is oversized. Crossing any bound stops that artifact scan without following another entry and yields `oversized`; it never truncates bytes and then reports a complete digest.
 - Opens every hashed regular file with no-follow semantics and compares descriptor `(device, inode, size, mtime_ns, ctime_ns, mode)` before/after reading and against its anchored name. Permission/I/O denial for a named leaf produces explicit `unknown`/`identity=None` evidence and `unreadable`; only `FileNotFoundError` removes a formerly observed name. Inability to bind the explicitly requested active root is command-level code `2`.
@@ -6118,7 +6118,7 @@ Under Task 10's interfaces, add:
 - Computes each complete tree SHA-256 from one UTF-8 stream of canonical JSON arrays `[relative_path, kind, device, inode, size, mtime_ns, ctime_ns, mode, file_sha256]`, one compact `separators=(",", ":")` array plus `"\n"` per entry in UTF-8 relative-path-byte order. Directory/symlink/special entries use JSON null for `file_sha256`; a bounded regular file uses its lowercase digest. An oversized, unstable, or unreadable tree has no complete tree digest.
 ```
 
-Insert a retained-scanner RED substep immediately after Task 10 Step 3 has created the existing snapshot modules and before any retained-integrity production module is written. Keep core classification/format tests in `tests/test_description_cache_retained_integrity.py`, hard limits in `tests/test_description_cache_retained_integrity_bounds.py`, and mutation/readability/no-follow races in `tests/test_description_cache_retained_integrity_stability.py`; every file must remain below 200 pure LOC. These three files use only the then-importable `w3xtool.integrity_snapshot` module namespace, call the proposed scanner attribute inside each test body, and compare enum-like results by their string values. Require collection success plus runtime failure; a missing-module or top-level missing-import error is a test defect. Run this scanner-only RED exactly once:
+Insert a retained-scanner RED substep immediately after Task 10 Step 3 has created the existing snapshot modules and before any retained-integrity production module is written. Keep core classification/format tests in `tests/test_description_cache_retained_integrity.py`, hard limits in `tests/test_description_cache_retained_integrity_bounds.py`, and mutation/readability/no-follow races in `tests/test_description_cache_retained_integrity_stability.py`; every file must remain below 200 pure LOC. These three files use only the then-importable `gametool.integrity_snapshot` module namespace, call the proposed scanner attribute inside each test body, and compare enum-like results by their string values. Require collection success plus runtime failure; a missing-module or top-level missing-import error is a test defect. Run this scanner-only RED exactly once:
 
 ```bash
 uv run python -m pytest -q \
@@ -6129,7 +6129,7 @@ uv run python -m pytest -q \
 
 Expected: tests collect and fail at the in-body scanner lookup/observable assertion because the existing snapshot namespace has no retained-cache behavior; no failure is a collection import error. Only after this RED may the dedicated retained model/scanner modules be created and the three test imports refactored without changing assertions.
 
-Complete the parent Task 10 Steps 4–5 next so `w3xtool.integrity_cli` and
+Complete the parent Task 10 Steps 4–5 next so `gametool.integrity_cli` and
 `run_integrity_cli()` really exist with the base `snapshot`/`verify` actions. Immediately
 after Step 5, create `tests/test_integrity_cli_retained_cache.py`, import that existing
 function normally, and add all retained-cache exit-code cases. Before adding the
@@ -6142,7 +6142,7 @@ uv run python -m pytest -q tests/test_integrity_cli_retained_cache.py
 Expected: collection succeeds and the existing CLI rejects the unknown `retained-cache`
 action at the observable exit-code/output assertion. Only then extend the existing CLI and
 run all four retained-integrity files together for GREEN. This ordering never asks a test to
-import `w3xtool.integrity_cli` before the parent plan creates it.
+import `gametool.integrity_cli` before the parent plan creates it.
 
 Use the trusted-cache fixture to create independently valid `active` and `previous` roots, then rename the latter to an exact retained `previous` sibling. The final GREEN test shape is:
 
@@ -6153,17 +6153,17 @@ def test_retained_integrity_separates_valid_partial_and_transient_objects(
     active = published_cache(tmp_path / "active-source", raw="active")
     old = published_cache(tmp_path / "old-source", raw="previous")
     previous = active.parent / (
-        f".w3xray-description-cache-retained-{'1' * 32}-previous"
+        f".gamexray-description-cache-retained-{'1' * 32}-previous"
     )
     old.rename(previous)
     failed = active.parent / (
-        f".w3xray-description-cache-retained-{'2' * 32}-failed-stage"
+        f".gamexray-description-cache-retained-{'2' * 32}-failed-stage"
     )
     failed.mkdir()
     (failed / "partial.bin").write_bytes(b"partial")
-    transient = active.parent / (f".w3xray-description-cache-stage-{'3' * 32}")
+    transient = active.parent / (f".gamexray-description-cache-stage-{'3' * 32}")
     transient.write_bytes(b"transient")
-    unsafe = active.parent / (f".w3xray-description-cache-retained-{'4' * 32}-recovery")
+    unsafe = active.parent / (f".gamexray-description-cache-retained-{'4' * 32}-recovery")
     unsafe.symlink_to(tmp_path / "outside", target_is_directory=True)
 
     report = inspect_retained_description_caches(active)
@@ -6250,11 +6250,11 @@ Confirm `git status --short --ignored .superpowers/sdd/progress.md` reports the 
 ## Final verification for this amendment
 
 - [ ] Run the focused Task 5 lane from Task 2 Step 9 with no skipped case.
-- [ ] Run: `uv run w3xray-quality`.
-- [ ] Run: `uv run w3xray-test`.
+- [ ] Run: `uv run gamexray-quality`.
+- [ ] Run: `uv run gamexray-test`.
 - [ ] Run Ruff format/check, basedpyright, no-excuse, and pure-LOC gates for every changed Python path.
-- [ ] Run: `! rg -n '\bisinstance\(' w3xtool/description_cache_publication*.py w3xtool/description_cache_migration.py w3xtool/description_cache_migration_models.py w3xtool/description_cache_cli.py tests/test_description_cache_publication*.py tests/test_description_cache_retained_generations.py tests/test_description_cache_cli_retention.py`.
-- [ ] Run: `! rg -n 'shutil\.rmtree|os\.rmdir|os\.unlink|\.unlink\(|remove_directory|remove_stage' w3xtool/description_cache_publication*.py`.
+- [ ] Run: `! rg -n '\bisinstance\(' gametool/description_cache_publication*.py gametool/description_cache_migration.py gametool/description_cache_migration_models.py gametool/description_cache_cli.py tests/test_description_cache_publication*.py tests/test_description_cache_retained_generations.py tests/test_description_cache_cli_retention.py`.
+- [ ] Run: `! rg -n 'shutil\.rmtree|os\.rmdir|os\.unlink|\.unlink\(|remove_directory|remove_stage' gametool/description_cache_publication*.py`.
 - [ ] Run: `git diff --check` and `git status --short`.
 - [ ] Require zero transient stage/backup names in every successful fixture while allowing and validating intentional retained siblings.
 - [ ] Confirm no source map, historical output, v5 external output, executable, DLL, or game process was read or mutated by these unit/integration tests.

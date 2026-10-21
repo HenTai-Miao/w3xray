@@ -8,12 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.safe_output import write_bytes_safely
-from w3xtool.safe_output_models import SafeWriteStatus
-from w3xtool.atomic_rename import rename_exchange as real_rename_exchange
-from w3xtool import safe_output_publication as publication_api
-from w3xtool import safe_output_publication_exchange_rollback as exchange_rollback_api
-from w3xtool import safe_output_publication_existing as existing_api
+from gametool.safe_output import write_bytes_safely
+from gametool.safe_output_models import SafeWriteStatus
+from gametool.atomic_rename import rename_exchange as real_rename_exchange
+from gametool import safe_output_publication as publication_api
+from gametool import safe_output_publication_exchange_rollback as exchange_rollback_api
+from gametool import safe_output_publication_existing as existing_api
 
 
 class _SimulatedCrash(BaseException):
@@ -148,7 +148,7 @@ def test_backup_claim_failure_rolls_back_from_displaced_stage(
 
     assert result.status is SafeWriteStatus.UNSAFE
     assert destination.read_bytes() == b"previous"
-    assert not tuple(tmp_path.glob(".w3xray-backup-*.tmp"))
+    assert not tuple(tmp_path.glob(".gamexray-backup-*.tmp"))
 
 
 def test_destination_replacement_between_rollback_proof_and_exchange_is_restored(

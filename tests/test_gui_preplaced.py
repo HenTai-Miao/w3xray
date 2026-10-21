@@ -3,8 +3,8 @@
 import unittest
 
 from tests.gui_base import GuiTestCase
-from w3xtool.api import MapData
-from w3xtool.doo import Unit, Doodad
+from gametool.api import MapData
+from gametool.doo import Unit, Doodad
 
 
 def _md_with_preplaced():

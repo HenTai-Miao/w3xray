@@ -19,18 +19,18 @@
 - Preserve raw and readable text without length limits; TSV must round-trip tabs, quotes, formula prefixes, CRLF, and physical newlines.
 - Project version is `0.1.4`; batch schema and extraction revision are both `5`; schema-4 results are never reusable by revision 5.
 - Every production change follows red → green → refactor, and every edited/created hand-written Python module remains at or below 250 pure LOC.
-- `w3xtool/object_text_index.py` is already 249 pure LOC, so move selection logic out before adding behavior.
+- `gametool/object_text_index.py` is already 249 pure LOC, so move selection logic out before adding behavior.
 
 ---
 
 ### Task 1: Exact icon-field eligibility and selected field evidence
 
 **Files:**
-- Create: `w3xtool/icon_field_evidence.py`
-- Modify: `w3xtool/map_data.py:27-63`
-- Modify: `w3xtool/object_field_selection.py:12-134`
-- Modify: `w3xtool/object_materialization.py:96-185`
-- Modify: `w3xtool/object_candidates.py:27-35`
+- Create: `gametool/icon_field_evidence.py`
+- Modify: `gametool/map_data.py:27-63`
+- Modify: `gametool/object_field_selection.py:12-134`
+- Modify: `gametool/object_materialization.py:96-185`
+- Modify: `gametool/object_candidates.py:27-35`
 - Test: `tests/test_icon_field_evidence.py`
 - Test: `tests/test_object_candidate_merge.py`
 - Test: `tests/test_object_pipeline_priority.py`
@@ -199,14 +199,14 @@ Delete `bgsc`, `dfil`, `aical`, and `gico` from `_DISPLAY_ALIASES`, remove the u
 
 Run: `uv run python -m pytest -q tests/test_icon_field_evidence.py tests/test_object_candidate_merge.py tests/test_object_pipeline_priority.py tests/test_item_relation_resilience.py`
 
-Run: `uv run --with ruff ruff check w3xtool/icon_field_evidence.py w3xtool/map_data.py w3xtool/object_field_selection.py w3xtool/object_materialization.py tests/test_icon_field_evidence.py`
+Run: `uv run --with ruff ruff check gametool/icon_field_evidence.py gametool/map_data.py gametool/object_field_selection.py gametool/object_materialization.py tests/test_icon_field_evidence.py`
 
-Run: `uv run --with basedpyright basedpyright --level error w3xtool/icon_field_evidence.py w3xtool/map_data.py w3xtool/object_field_selection.py w3xtool/object_materialization.py`
+Run: `uv run --with basedpyright basedpyright --level error gametool/icon_field_evidence.py gametool/map_data.py gametool/object_field_selection.py gametool/object_materialization.py`
 
 - [ ] **Step 6: Commit the independently testable eligibility change**
 
 ```bash
-git add w3xtool/icon_field_evidence.py w3xtool/map_data.py w3xtool/object_field_selection.py w3xtool/object_materialization.py w3xtool/object_candidates.py tests/test_icon_field_evidence.py tests/test_object_candidate_merge.py tests/test_object_pipeline_priority.py
+git add gametool/icon_field_evidence.py gametool/map_data.py gametool/object_field_selection.py gametool/object_materialization.py gametool/object_candidates.py tests/test_icon_field_evidence.py tests/test_object_candidate_merge.py tests/test_object_pipeline_priority.py
 git commit -m "fix: retain exact icon field evidence"
 ```
 
@@ -215,16 +215,16 @@ git commit -m "fix: retain exact icon field evidence"
 ### Task 2: Strict icon paths, lookup layers, and immutable gap index
 
 **Files:**
-- Create: `w3xtool/icon_evidence_models.py`
-- Create: `w3xtool/icon_path_evidence.py`
-- Create: `w3xtool/icon_evidence_builder.py`
-- Modify: `w3xtool/icon_resources.py:13-241`
-- Modify: `w3xtool/game_data_source.py:18-118`
-- Modify: `w3xtool/classic_mpq_source.py:76-101`
-- Modify: `w3xtool/casc_source.py:48-65`
-- Modify: `w3xtool/casclib_source.py:53-78`
-- Modify: `w3xtool/trusted_icon_cache.py:52-158`
-- Modify: `w3xtool/map_data.py:67-112`
+- Create: `gametool/icon_evidence_models.py`
+- Create: `gametool/icon_path_evidence.py`
+- Create: `gametool/icon_evidence_builder.py`
+- Modify: `gametool/icon_resources.py:13-241`
+- Modify: `gametool/game_data_source.py:18-118`
+- Modify: `gametool/classic_mpq_source.py:76-101`
+- Modify: `gametool/casc_source.py:48-65`
+- Modify: `gametool/casclib_source.py:53-78`
+- Modify: `gametool/trusted_icon_cache.py:52-158`
+- Modify: `gametool/map_data.py:67-112`
 - Test: `tests/test_icon_path_evidence.py`
 - Test: `tests/test_icon_evidence_builder.py`
 - Test: `tests/test_icon_resources.py`
@@ -467,14 +467,14 @@ Map/campaign archives use their exact member lookup. If `game_source` is not a `
 
 Run: `uv run python -m pytest -q tests/test_icon_path_evidence.py tests/test_icon_evidence_builder.py tests/test_icon_resources.py tests/test_game_data_source.py tests/test_casc_source.py tests/test_casclib_source.py tests/test_classic_mpq_source.py tests/test_trusted_icon_cache.py`
 
-Run: `uv run --with ruff ruff check w3xtool/icon_evidence_models.py w3xtool/icon_path_evidence.py w3xtool/icon_evidence_builder.py w3xtool/icon_resources.py w3xtool/game_data_source.py w3xtool/trusted_icon_cache.py`
+Run: `uv run --with ruff ruff check gametool/icon_evidence_models.py gametool/icon_path_evidence.py gametool/icon_evidence_builder.py gametool/icon_resources.py gametool/game_data_source.py gametool/trusted_icon_cache.py`
 
-Run: `uv run --with basedpyright basedpyright --level error w3xtool/icon_evidence_models.py w3xtool/icon_path_evidence.py w3xtool/icon_evidence_builder.py w3xtool/icon_resources.py w3xtool/game_data_source.py w3xtool/trusted_icon_cache.py`
+Run: `uv run --with basedpyright basedpyright --level error gametool/icon_evidence_models.py gametool/icon_path_evidence.py gametool/icon_evidence_builder.py gametool/icon_resources.py gametool/game_data_source.py gametool/trusted_icon_cache.py`
 
 - [ ] **Step 9: Commit the strict evidence index**
 
 ```bash
-git add w3xtool/icon_evidence_models.py w3xtool/icon_path_evidence.py w3xtool/icon_evidence_builder.py w3xtool/icon_resources.py w3xtool/game_data_source.py w3xtool/classic_mpq_source.py w3xtool/casc_source.py w3xtool/casclib_source.py w3xtool/trusted_icon_cache.py w3xtool/map_data.py tests/test_icon_path_evidence.py tests/test_icon_evidence_builder.py tests/test_icon_resources.py tests/test_game_data_source.py tests/test_casc_source.py tests/test_trusted_icon_cache.py
+git add gametool/icon_evidence_models.py gametool/icon_path_evidence.py gametool/icon_evidence_builder.py gametool/icon_resources.py gametool/game_data_source.py gametool/classic_mpq_source.py gametool/casc_source.py gametool/casclib_source.py gametool/trusted_icon_cache.py gametool/map_data.py tests/test_icon_path_evidence.py tests/test_icon_evidence_builder.py tests/test_icon_resources.py tests/test_game_data_source.py tests/test_casc_source.py tests/test_trusted_icon_cache.py
 git commit -m "feat: index strict icon resolution evidence"
 ```
 
@@ -483,14 +483,14 @@ git commit -m "feat: index strict icon resolution evidence"
 ### Task 3: Per-map icon gap reports and reconciled publication
 
 **Files:**
-- Create: `w3xtool/icon_evidence_exports.py`
-- Modify: `w3xtool/batch_map_icons.py:27-145`
-- Modify: `w3xtool/batch_icon_export.py:24-254`
-- Modify: `w3xtool/batch_map_processing.py:24-184`
-- Modify: `w3xtool/batch_reports.py:31-224`
-- Modify: `w3xtool/batch_map_result.py:11-59`
-- Modify: `w3xtool/batch_manifest_models.py:10-68`
-- Modify: `w3xtool/batch_report_validation.py:22-118`
+- Create: `gametool/icon_evidence_exports.py`
+- Modify: `gametool/batch_map_icons.py:27-145`
+- Modify: `gametool/batch_icon_export.py:24-254`
+- Modify: `gametool/batch_map_processing.py:24-184`
+- Modify: `gametool/batch_reports.py:31-224`
+- Modify: `gametool/batch_map_result.py:11-59`
+- Modify: `gametool/batch_manifest_models.py:10-68`
+- Modify: `gametool/batch_report_validation.py:22-118`
 - Test: `tests/test_icon_evidence_exports.py`
 - Test: `tests/test_batch_map_icons.py`
 - Test: `tests/test_batch_map_processing.py`
@@ -627,7 +627,7 @@ Run: `uv run python -m pytest -q tests/test_icon_evidence_exports.py tests/test_
 - [ ] **Step 7: Commit the per-map report slice**
 
 ```bash
-git add w3xtool/icon_evidence_exports.py w3xtool/batch_map_icons.py w3xtool/batch_icon_export.py w3xtool/batch_map_processing.py w3xtool/batch_reports.py w3xtool/batch_map_result.py w3xtool/batch_manifest_models.py w3xtool/batch_report_validation.py tests/batch_publication_fixture.py tests/test_icon_evidence_exports.py tests/test_batch_map_icons.py tests/test_batch_map_processing.py tests/test_batch_reports.py tests/test_batch_manifest.py
+git add gametool/icon_evidence_exports.py gametool/batch_map_icons.py gametool/batch_icon_export.py gametool/batch_map_processing.py gametool/batch_reports.py gametool/batch_map_result.py gametool/batch_manifest_models.py gametool/batch_report_validation.py tests/batch_publication_fixture.py tests/test_icon_evidence_exports.py tests/test_batch_map_icons.py tests/test_batch_map_processing.py tests/test_batch_reports.py tests/test_batch_manifest.py
 git commit -m "feat: publish structured icon gap reports"
 ```
 
@@ -636,15 +636,15 @@ git commit -m "feat: publish structured icon gap reports"
 ### Task 4: Exact text identities and priority-based current-value selection
 
 **Files:**
-- Create: `w3xtool/object_text_selection.py`
-- Modify: `w3xtool/object_text_roles.py:10-134`
-- Modify: `w3xtool/object_text_evidence.py:13-182`
-- Modify: `w3xtool/object_text_models.py:12-104`
-- Modify: `w3xtool/object_text_index.py:1-279`
-- Modify: `w3xtool/object_text_exports.py:10-69`
-- Modify: `w3xtool/object_text_presentation.py:8-49`
-- Modify: `w3xtool/batch_item_reports.py:18-88`
-- Modify: `w3xtool/batch_report_validation.py:42-75`
+- Create: `gametool/object_text_selection.py`
+- Modify: `gametool/object_text_roles.py:10-134`
+- Modify: `gametool/object_text_evidence.py:13-182`
+- Modify: `gametool/object_text_models.py:12-104`
+- Modify: `gametool/object_text_index.py:1-279`
+- Modify: `gametool/object_text_exports.py:10-69`
+- Modify: `gametool/object_text_presentation.py:8-49`
+- Modify: `gametool/batch_item_reports.py:18-88`
+- Modify: `gametool/batch_report_validation.py:42-75`
 - Test: `tests/test_object_text_roles.py`
 - Test: `tests/test_object_text_index.py`
 - Test: `tests/test_object_text_pipeline.py`
@@ -914,14 +914,14 @@ Insert `规范字段身份`, `证据优先级`, `是否当前值`, and `选择�
 
 Run: `uv run python -m pytest -q tests/test_object_text_roles.py tests/test_object_text_index.py tests/test_object_text_pipeline.py tests/test_object_text_priority.py tests/test_batch_item_report_processing.py tests/test_batch_reports.py`
 
-Run: `awk '!/^[[:space:]]*$/ && !/^[[:space:]]*#/' w3xtool/object_text_index.py | wc -l`
+Run: `awk '!/^[[:space:]]*$/ && !/^[[:space:]]*#/' gametool/object_text_index.py | wc -l`
 
 Expected: PASS and at most 200 pure LOC in `object_text_index.py`; `object_text_selection.py` is at most 250 pure LOC.
 
 - [ ] **Step 9: Commit the exact text selector**
 
 ```bash
-git add w3xtool/object_text_selection.py w3xtool/object_text_roles.py w3xtool/object_text_evidence.py w3xtool/object_text_models.py w3xtool/object_text_index.py w3xtool/object_text_exports.py w3xtool/object_text_presentation.py w3xtool/batch_item_reports.py w3xtool/batch_report_validation.py tests/batch_map_processing_fixture.py tests/test_object_text_roles.py tests/test_object_text_index.py tests/test_object_text_pipeline.py tests/test_object_text_priority.py tests/test_batch_item_report_processing.py
+git add gametool/object_text_selection.py gametool/object_text_roles.py gametool/object_text_evidence.py gametool/object_text_models.py gametool/object_text_index.py gametool/object_text_exports.py gametool/object_text_presentation.py gametool/batch_item_reports.py gametool/batch_report_validation.py tests/batch_map_processing_fixture.py tests/test_object_text_roles.py tests/test_object_text_index.py tests/test_object_text_pipeline.py tests/test_object_text_priority.py tests/test_batch_item_report_processing.py
 git commit -m "fix: select text by exact field priority"
 ```
 
@@ -930,15 +930,15 @@ git commit -m "fix: select text by exact field priority"
 ### Task 5: Fail-closed historical description-cache migration
 
 **Files:**
-- Create: `w3xtool/description_cache_migration_models.py`
-- Create: `w3xtool/description_cache_migration_rows.py`
-- Create: `w3xtool/description_cache_publication.py`
-- Create: `w3xtool/description_cache_migration.py`
-- Create: `w3xtool/trusted_description_cache.py`
-- Create: `w3xtool/description_cache_cli.py`
-- Modify: `w3xtool/description_cache_models.py:10-93`
-- Modify: `w3xtool/description_cache_schema.py:8-42`
-- Modify: `w3xtool/description_cache.py:11-124`
+- Create: `gametool/description_cache_migration_models.py`
+- Create: `gametool/description_cache_migration_rows.py`
+- Create: `gametool/description_cache_publication.py`
+- Create: `gametool/description_cache_migration.py`
+- Create: `gametool/trusted_description_cache.py`
+- Create: `gametool/description_cache_cli.py`
+- Modify: `gametool/description_cache_models.py:10-93`
+- Modify: `gametool/description_cache_schema.py:8-42`
+- Modify: `gametool/description_cache.py:11-124`
 - Modify: `main.py:15-76`
 - Test: `tests/test_description_cache_migration.py`
 - Test: `tests/test_description_cache_publication.py`
@@ -950,7 +950,7 @@ git commit -m "fix: select text by exact field priority"
 - Produces: `DescriptionCacheMigrationOptions`, `DescriptionCacheRejectionReason`, `DescriptionCacheRejection`, and `DescriptionCacheMigrationResult`.
 - Produces: `migrate_description_cache(options) -> DescriptionCacheMigrationResult`.
 - Produces: `VerifiedDescriptionCache(cache, manifest_sha256, content_sha256)` and `load_trusted_description_cache(root) -> VerifiedDescriptionCache`.
-- Owns: `.w3xray-trusted-description-cache`, `可信描述缓存.tsv`, `来源清单.tsv`, `可信缓存迁移拒绝.tsv`, and `内容清单.json`.
+- Owns: `.gamexray-trusted-description-cache`, `可信描述缓存.tsv`, `来源清单.tsv`, `可信缓存迁移拒绝.tsv`, and `内容清单.json`.
 
 - [ ] **Step 1: Write failing migration acceptance/rejection tests using exact legacy schemas**
 
@@ -1304,7 +1304,7 @@ def _raise_os_error(*_args: object, **_kwargs: object) -> None:
 - [ ] **Step 6: Publish and validate the owned cache atomically**
 
 ```python
-TRUSTED_DESCRIPTION_CACHE_MARKER: Final = ".w3xray-trusted-description-cache"
+TRUSTED_DESCRIPTION_CACHE_MARKER: Final = ".gamexray-trusted-description-cache"
 TRUSTED_DESCRIPTION_CACHE_SCHEMA: Final = 1
 TRUSTED_DESCRIPTION_CACHE_FILES: Final = (
     "可信描述缓存.tsv",
@@ -1341,14 +1341,14 @@ def run_description_cache_cli(argv: tuple[str, ...]) -> int:
 
 Run: `uv run python -m pytest -q tests/test_description_cache_migration.py tests/test_description_cache_publication.py tests/test_trusted_description_cache.py tests/test_description_cache.py tests/test_cli_options.py`
 
-Run: `uv run --with ruff ruff check w3xtool/description_cache_migration_models.py w3xtool/description_cache_migration_rows.py w3xtool/description_cache_publication.py w3xtool/description_cache_migration.py w3xtool/trusted_description_cache.py w3xtool/description_cache_cli.py main.py`
+Run: `uv run --with ruff ruff check gametool/description_cache_migration_models.py gametool/description_cache_migration_rows.py gametool/description_cache_publication.py gametool/description_cache_migration.py gametool/trusted_description_cache.py gametool/description_cache_cli.py main.py`
 
-Run: `uv run --with basedpyright basedpyright --level error w3xtool/description_cache_migration_models.py w3xtool/description_cache_migration_rows.py w3xtool/description_cache_publication.py w3xtool/description_cache_migration.py w3xtool/trusted_description_cache.py w3xtool/description_cache_cli.py main.py`
+Run: `uv run --with basedpyright basedpyright --level error gametool/description_cache_migration_models.py gametool/description_cache_migration_rows.py gametool/description_cache_publication.py gametool/description_cache_migration.py gametool/trusted_description_cache.py gametool/description_cache_cli.py main.py`
 
 - [ ] **Step 9: Commit the migration boundary**
 
 ```bash
-git add main.py w3xtool/description_cache_migration_models.py w3xtool/description_cache_migration_rows.py w3xtool/description_cache_publication.py w3xtool/description_cache_migration.py w3xtool/trusted_description_cache.py w3xtool/description_cache_cli.py w3xtool/description_cache_models.py w3xtool/description_cache_schema.py w3xtool/description_cache.py tests/test_description_cache_migration.py tests/test_description_cache_publication.py tests/test_trusted_description_cache.py tests/test_description_cache.py
+git add main.py gametool/description_cache_migration_models.py gametool/description_cache_migration_rows.py gametool/description_cache_publication.py gametool/description_cache_migration.py gametool/trusted_description_cache.py gametool/description_cache_cli.py gametool/description_cache_models.py gametool/description_cache_schema.py gametool/description_cache.py tests/test_description_cache_migration.py tests/test_description_cache_publication.py tests/test_trusted_description_cache.py tests/test_description_cache.py
 git commit -m "feat: migrate trusted description evidence"
 ```
 
@@ -1357,19 +1357,19 @@ git commit -m "feat: migrate trusted description evidence"
 ### Task 6: Explicit cache input and dependency-bound batch execution
 
 **Files:**
-- Delete: `w3xtool/batch_description_cache.py`
-- Delete: `w3xtool/description_cache_batch.py`
-- Modify: `w3xtool/batch_configuration.py:12-120`
-- Modify: `w3xtool/batch_cli.py:24-211`
-- Modify: `w3xtool/batch_runner.py:43-157`
-- Modify: `w3xtool/batch_dependencies.py:22-105`
-- Modify: `w3xtool/batch_execution_request.py:13-79`
-- Modify: `w3xtool/description_cache.py:11-124`
-- Modify: `w3xtool/load_context.py:17-59`
-- Modify: `w3xtool/gui_external_data.py:37-132`
-- Modify: `w3xtool/gui_topbar.py:80-88`
-- Modify: `w3xtool/gui_loader.py:79-181`
-- Modify: `w3xtool/gui_loader_runner.py:30-96`
+- Delete: `gametool/batch_description_cache.py`
+- Delete: `gametool/description_cache_batch.py`
+- Modify: `gametool/batch_configuration.py:12-120`
+- Modify: `gametool/batch_cli.py:24-211`
+- Modify: `gametool/batch_runner.py:43-157`
+- Modify: `gametool/batch_dependencies.py:22-105`
+- Modify: `gametool/batch_execution_request.py:13-79`
+- Modify: `gametool/description_cache.py:11-124`
+- Modify: `gametool/load_context.py:17-59`
+- Modify: `gametool/gui_external_data.py:37-132`
+- Modify: `gametool/gui_topbar.py:80-88`
+- Modify: `gametool/gui_loader.py:79-181`
+- Modify: `gametool/gui_loader_runner.py:30-96`
 - Test: `tests/test_batch_cli.py`
 - Test: `tests/test_batch_dependencies.py`
 - Test: `tests/test_batch_description_cache.py`
@@ -1434,7 +1434,7 @@ Expected: FAIL because there is no explicit option and `_run_batch_locked()` cal
 
 - [ ] **Step 3: Normalize and validate the explicit cache root**
 
-Append `description_cache_path` to `BatchOptions`/`BatchCliOptions`, parse it through the existing closed `_ValueOption` match, expand it to an absolute path, and reject a symlink, missing root, overlap with source/output, or a root that fails `load_trusted_description_cache()`. `None` selects `EMPTY_DESCRIPTION_CACHE` with the fixed identity `sha256(b"w3xray:no-description-cache")`.
+Append `description_cache_path` to `BatchOptions`/`BatchCliOptions`, parse it through the existing closed `_ValueOption` match, expand it to an absolute path, and reject a symlink, missing root, overlap with source/output, or a root that fails `load_trusted_description_cache()`. `None` selects `EMPTY_DESCRIPTION_CACHE` with the fixed identity `sha256(b"gamexray:no-description-cache")`.
 
 - [ ] **Step 4: Load once before workers and propagate only immutable entries**
 
@@ -1465,7 +1465,7 @@ Run: `uv run python -m pytest -q tests/test_batch_cli.py tests/test_batch_depend
 - [ ] **Step 7: Commit explicit cache consumption**
 
 ```bash
-git add -A w3xtool/batch_description_cache.py w3xtool/description_cache_batch.py w3xtool/batch_configuration.py w3xtool/batch_cli.py w3xtool/batch_runner.py w3xtool/batch_dependencies.py w3xtool/batch_execution_request.py w3xtool/description_cache.py w3xtool/load_context.py w3xtool/gui_external_data.py w3xtool/gui_topbar.py w3xtool/gui_loader.py w3xtool/gui_loader_runner.py tests/test_batch_cli.py tests/test_batch_dependencies.py tests/test_batch_description_cache.py tests/test_description_cache_manifest_binding.py tests/test_batch_runner.py tests/test_batch_resume_runner.py tests/test_gui_description_cache.py tests/test_map_relation_loading.py
+git add -A gametool/batch_description_cache.py gametool/description_cache_batch.py gametool/batch_configuration.py gametool/batch_cli.py gametool/batch_runner.py gametool/batch_dependencies.py gametool/batch_execution_request.py gametool/description_cache.py gametool/load_context.py gametool/gui_external_data.py gametool/gui_topbar.py gametool/gui_loader.py gametool/gui_loader_runner.py tests/test_batch_cli.py tests/test_batch_dependencies.py tests/test_batch_description_cache.py tests/test_description_cache_manifest_binding.py tests/test_batch_runner.py tests/test_batch_resume_runner.py tests/test_gui_description_cache.py tests/test_map_relation_loading.py
 git commit -m "feat: bind batch runs to explicit description cache"
 ```
 
@@ -1474,22 +1474,22 @@ git commit -m "feat: bind batch runs to explicit description cache"
 ### Task 7: Schema-5 three-axis state and split counters
 
 **Files:**
-- Create: `w3xtool/batch_status.py`
-- Create: `w3xtool/batch_result_parser.py`
-- Modify: `w3xtool/batch_models.py:9-76`
-- Modify: `w3xtool/batch_map_result.py:11-59`
-- Modify: `w3xtool/batch_map_processing.py:78-151`
-- Modify: `w3xtool/batch_map_attempt.py:156-235`
-- Modify: `w3xtool/batch_state_io.py:13-98`
-- Modify: `w3xtool/batch_state_parser.py:14-153`
-- Modify: `w3xtool/batch_reports.py:120-173`
-- Modify: `w3xtool/batch_manifest_models.py:38-68`
-- Modify: `w3xtool/batch_manifest_io.py:78-186`
-- Modify: `w3xtool/batch_manifest_validation.py:43-74`
-- Modify: `w3xtool/batch_resume.py:100-151`
-- Modify: `w3xtool/batch_map_retirement.py:45-123`
-- Modify: `w3xtool/acceptance_batch.py:94-128`
-- Modify: `w3xtool/batch_cli.py:164-201`
+- Create: `gametool/batch_status.py`
+- Create: `gametool/batch_result_parser.py`
+- Modify: `gametool/batch_models.py:9-76`
+- Modify: `gametool/batch_map_result.py:11-59`
+- Modify: `gametool/batch_map_processing.py:78-151`
+- Modify: `gametool/batch_map_attempt.py:156-235`
+- Modify: `gametool/batch_state_io.py:13-98`
+- Modify: `gametool/batch_state_parser.py:14-153`
+- Modify: `gametool/batch_reports.py:120-173`
+- Modify: `gametool/batch_manifest_models.py:38-68`
+- Modify: `gametool/batch_manifest_io.py:78-186`
+- Modify: `gametool/batch_manifest_validation.py:43-74`
+- Modify: `gametool/batch_resume.py:100-151`
+- Modify: `gametool/batch_map_retirement.py:45-123`
+- Modify: `gametool/acceptance_batch.py:94-128`
+- Modify: `gametool/batch_cli.py:164-201`
 - Modify test fixture: `tests/batch_publication_fixture.py:61-105`
 - Test: `tests/test_batch_status.py`
 - Test: `tests/test_batch_result_parser.py`
@@ -1655,14 +1655,14 @@ Update `require_authoritative_batch()` and retirement selection the same way: au
 
 Run: `uv run python -m pytest -q tests/test_batch_status.py tests/test_batch_result_parser.py tests/test_batch_state_reports.py tests/test_batch_manifest.py tests/test_batch_global_publication.py tests/test_batch_execution.py tests/test_batch_resume.py tests/test_batch_resume_loading.py tests/test_batch_resume_runner.py tests/test_batch_runner.py tests/test_batch_map_retirement.py tests/test_batch_cli.py tests/test_acceptance_runner.py`
 
-Run: `awk '!/^[[:space:]]*$/ && !/^[[:space:]]*#/' w3xtool/batch_state_parser.py | wc -l`
+Run: `awk '!/^[[:space:]]*$/ && !/^[[:space:]]*#/' gametool/batch_state_parser.py | wc -l`
 
 Expected: PASS and at most 170 pure LOC in `batch_state_parser.py`; `batch_result_parser.py` is at most 250 pure LOC.
 
 - [ ] **Step 7: Commit schema-5 state semantics**
 
 ```bash
-git add w3xtool/batch_status.py w3xtool/batch_result_parser.py w3xtool/batch_models.py w3xtool/batch_map_result.py w3xtool/batch_map_processing.py w3xtool/batch_map_attempt.py w3xtool/batch_state_io.py w3xtool/batch_state_parser.py w3xtool/batch_reports.py w3xtool/batch_manifest_models.py w3xtool/batch_manifest_io.py w3xtool/batch_manifest_validation.py w3xtool/batch_resume.py w3xtool/batch_map_retirement.py w3xtool/acceptance_batch.py w3xtool/batch_cli.py tests/batch_publication_fixture.py tests/test_batch_status.py tests/test_batch_result_parser.py tests/test_batch_state_reports.py tests/test_batch_manifest.py tests/test_batch_global_publication.py tests/test_batch_execution.py tests/test_batch_resume.py tests/test_batch_resume_loading.py tests/test_batch_resume_runner.py tests/test_batch_runner.py tests/test_batch_map_retirement.py tests/test_batch_cli.py tests/test_acceptance_runner.py
+git add gametool/batch_status.py gametool/batch_result_parser.py gametool/batch_models.py gametool/batch_map_result.py gametool/batch_map_processing.py gametool/batch_map_attempt.py gametool/batch_state_io.py gametool/batch_state_parser.py gametool/batch_reports.py gametool/batch_manifest_models.py gametool/batch_manifest_io.py gametool/batch_manifest_validation.py gametool/batch_resume.py gametool/batch_map_retirement.py gametool/acceptance_batch.py gametool/batch_cli.py tests/batch_publication_fixture.py tests/test_batch_status.py tests/test_batch_result_parser.py tests/test_batch_state_reports.py tests/test_batch_manifest.py tests/test_batch_global_publication.py tests/test_batch_execution.py tests/test_batch_resume.py tests/test_batch_resume_loading.py tests/test_batch_resume_runner.py tests/test_batch_runner.py tests/test_batch_map_retirement.py tests/test_batch_cli.py tests/test_acceptance_runner.py
 git commit -m "feat: split batch status into three axes"
 ```
 
@@ -1671,17 +1671,17 @@ git commit -m "feat: split batch status into three axes"
 ### Task 8: Global icon evidence, candidate reports, and authoritative reconciliation
 
 **Files:**
-- Create: `w3xtool/icon_candidate_bindings.py`
-- Create: `w3xtool/batch_global_evidence_models.py`
-- Create: `w3xtool/batch_global_evidence.py`
-- Create: `w3xtool/batch_global_evidence_reports.py`
-- Create: `w3xtool/batch_global_payloads.py`
-- Modify: `w3xtool/batch_global_models.py:10-65`
-- Modify: `w3xtool/batch_global_publication.py:52-224`
-- Modify: `w3xtool/batch_global_validation.py:32-119`
-- Modify: `w3xtool/batch_checkpoint_publication.py:11-29`
-- Modify: `w3xtool/batch_global_reports.py:9-75`
-- Modify: `w3xtool/acceptance_batch.py:42-90`
+- Create: `gametool/icon_candidate_bindings.py`
+- Create: `gametool/batch_global_evidence_models.py`
+- Create: `gametool/batch_global_evidence.py`
+- Create: `gametool/batch_global_evidence_reports.py`
+- Create: `gametool/batch_global_payloads.py`
+- Modify: `gametool/batch_global_models.py:10-65`
+- Modify: `gametool/batch_global_publication.py:52-224`
+- Modify: `gametool/batch_global_validation.py:32-119`
+- Modify: `gametool/batch_checkpoint_publication.py:11-29`
+- Modify: `gametool/batch_global_reports.py:9-75`
+- Modify: `gametool/acceptance_batch.py:42-90`
 - Test: `tests/test_icon_candidate_bindings.py`
 - Test: `tests/test_batch_global_evidence.py`
 - Test: `tests/test_batch_global_publication.py`
@@ -1974,18 +1974,18 @@ Add all four names to `GLOBAL_PAYLOAD_NAMES`. Validation parses both TSV evidenc
 
 Run: `uv run python -m pytest -q tests/test_icon_candidate_bindings.py tests/test_batch_global_evidence.py tests/test_batch_global_publication.py tests/test_batch_state_reports.py tests/test_batch_e2e.py tests/test_batch_resume_loading.py tests/test_batch_map_retirement_safety.py`
 
-Run: `uv run --with ruff ruff check w3xtool/icon_candidate_bindings.py w3xtool/batch_global_evidence_models.py w3xtool/batch_global_evidence.py w3xtool/batch_global_evidence_reports.py w3xtool/batch_global_payloads.py w3xtool/batch_global_models.py w3xtool/batch_global_publication.py w3xtool/batch_global_validation.py`
+Run: `uv run --with ruff ruff check gametool/icon_candidate_bindings.py gametool/batch_global_evidence_models.py gametool/batch_global_evidence.py gametool/batch_global_evidence_reports.py gametool/batch_global_payloads.py gametool/batch_global_models.py gametool/batch_global_publication.py gametool/batch_global_validation.py`
 
-Run: `uv run --with basedpyright basedpyright --level error w3xtool/icon_candidate_bindings.py w3xtool/batch_global_evidence_models.py w3xtool/batch_global_evidence.py w3xtool/batch_global_evidence_reports.py w3xtool/batch_global_payloads.py w3xtool/batch_global_models.py w3xtool/batch_global_publication.py w3xtool/batch_global_validation.py`
+Run: `uv run --with basedpyright basedpyright --level error gametool/icon_candidate_bindings.py gametool/batch_global_evidence_models.py gametool/batch_global_evidence.py gametool/batch_global_evidence_reports.py gametool/batch_global_payloads.py gametool/batch_global_models.py gametool/batch_global_publication.py gametool/batch_global_validation.py`
 
-Run: `awk '!/^[[:space:]]*$/ && !/^[[:space:]]*#/' w3xtool/batch_global_publication.py | wc -l`
+Run: `awk '!/^[[:space:]]*$/ && !/^[[:space:]]*#/' gametool/batch_global_publication.py | wc -l`
 
 Expected: all tests/static gates PASS and `batch_global_publication.py` is at most 190 pure LOC.
 
 - [ ] **Step 11: Commit authoritative global evidence**
 
 ```bash
-git add w3xtool/icon_candidate_bindings.py w3xtool/batch_global_evidence_models.py w3xtool/batch_global_evidence.py w3xtool/batch_global_evidence_reports.py w3xtool/batch_global_payloads.py w3xtool/batch_global_models.py w3xtool/batch_global_publication.py w3xtool/batch_global_validation.py w3xtool/batch_checkpoint_publication.py w3xtool/batch_global_reports.py w3xtool/acceptance_batch.py tests/test_icon_candidate_bindings.py tests/test_batch_global_evidence.py tests/test_batch_global_publication.py tests/test_batch_state_reports.py tests/test_batch_e2e.py
+git add gametool/icon_candidate_bindings.py gametool/batch_global_evidence_models.py gametool/batch_global_evidence.py gametool/batch_global_evidence_reports.py gametool/batch_global_payloads.py gametool/batch_global_models.py gametool/batch_global_publication.py gametool/batch_global_validation.py gametool/batch_checkpoint_publication.py gametool/batch_global_reports.py gametool/acceptance_batch.py tests/test_icon_candidate_bindings.py tests/test_batch_global_evidence.py tests/test_batch_global_publication.py tests/test_batch_state_reports.py tests/test_batch_e2e.py
 git commit -m "feat: publish reconciled global icon evidence"
 ```
 
@@ -1994,21 +1994,21 @@ git commit -m "feat: publish reconciled global icon evidence"
 ### Task 9: GUI icon-gap workspace, complete-text controls, and three-axis batch view
 
 **Files:**
-- Create: `w3xtool/icon_evidence_query.py`
-- Create: `w3xtool/icon_evidence_presentation.py`
-- Create: `w3xtool/gui_icon_gap_layout.py`
-- Create: `w3xtool/gui_icon_gaps.py`
-- Create: `w3xtool/gui_batch_status_layout.py`
-- Create: `w3xtool/gui_batch_status.py`
-- Create: `w3xtool/gui_object_text_controls.py`
-- Modify: `w3xtool/icons.py:47-138`
-- Modify: `w3xtool/gui_loader.py:48-272`
-- Modify: `w3xtool/gui.py:12-106`
-- Modify: `w3xtool/gui_shell.py:35-213`
-- Modify: `w3xtool/gui_module_refresh.py:20-92`
-- Modify: `w3xtool/gui_object_detail.py:18-89`
-- Modify: `w3xtool/object_text_presentation.py:8-48`
-- Modify: `w3xtool/gui_acceptance.py:22-43`
+- Create: `gametool/icon_evidence_query.py`
+- Create: `gametool/icon_evidence_presentation.py`
+- Create: `gametool/gui_icon_gap_layout.py`
+- Create: `gametool/gui_icon_gaps.py`
+- Create: `gametool/gui_batch_status_layout.py`
+- Create: `gametool/gui_batch_status.py`
+- Create: `gametool/gui_object_text_controls.py`
+- Modify: `gametool/icons.py:47-138`
+- Modify: `gametool/gui_loader.py:48-272`
+- Modify: `gametool/gui.py:12-106`
+- Modify: `gametool/gui_shell.py:35-213`
+- Modify: `gametool/gui_module_refresh.py:20-92`
+- Modify: `gametool/gui_object_detail.py:18-89`
+- Modify: `gametool/object_text_presentation.py:8-48`
+- Modify: `gametool/gui_acceptance.py:22-43`
 - Test: `tests/test_icon_evidence_query.py`
 - Test: `tests/test_gui_icon_gaps.py`
 - Test: `tests/test_gui_batch_status.py`
@@ -2322,7 +2322,7 @@ def test_batch_status_loader_uses_a_validated_generation(tmp_path: Path) -> None
 
 
 def test_batch_status_loader_rejects_an_invalid_current_pointer(tmp_path: Path) -> None:
-    (tmp_path / ".w3xray-global").mkdir()
+    (tmp_path / ".gamexray-global").mkdir()
     with pytest.raises(BatchStatusLoadError, match="validated generation"):
         load_batch_status(tmp_path)
 ```
@@ -2364,16 +2364,16 @@ Add `IconGapGuiMixin` and `BatchStatusGuiMixin` to `App`, initialize their state
 
 Run: `uv run python -m pytest -q tests/test_icon_evidence_query.py tests/test_gui_icon_gaps.py tests/test_gui_batch_status.py tests/test_gui_object_presentation.py tests/test_gui_layout.py tests/test_gui_loader.py tests/test_gui_loader_runner.py tests/test_acceptance_runner.py`
 
-Run: `uv run --with ruff ruff check w3xtool/icon_evidence_query.py w3xtool/icon_evidence_presentation.py w3xtool/gui_icon_gap_layout.py w3xtool/gui_icon_gaps.py w3xtool/gui_batch_status_layout.py w3xtool/gui_batch_status.py w3xtool/gui_object_text_controls.py w3xtool/icons.py w3xtool/gui_loader.py w3xtool/gui.py w3xtool/gui_shell.py w3xtool/gui_module_refresh.py w3xtool/gui_object_detail.py w3xtool/object_text_presentation.py`
+Run: `uv run --with ruff ruff check gametool/icon_evidence_query.py gametool/icon_evidence_presentation.py gametool/gui_icon_gap_layout.py gametool/gui_icon_gaps.py gametool/gui_batch_status_layout.py gametool/gui_batch_status.py gametool/gui_object_text_controls.py gametool/icons.py gametool/gui_loader.py gametool/gui.py gametool/gui_shell.py gametool/gui_module_refresh.py gametool/gui_object_detail.py gametool/object_text_presentation.py`
 
-Run: `uv run --with basedpyright basedpyright --level error w3xtool/icon_evidence_query.py w3xtool/icon_evidence_presentation.py w3xtool/gui_icon_gap_layout.py w3xtool/gui_icon_gaps.py w3xtool/gui_batch_status_layout.py w3xtool/gui_batch_status.py w3xtool/gui_object_text_controls.py w3xtool/icons.py w3xtool/gui_loader.py w3xtool/gui_object_detail.py w3xtool/object_text_presentation.py`
+Run: `uv run --with basedpyright basedpyright --level error gametool/icon_evidence_query.py gametool/icon_evidence_presentation.py gametool/gui_icon_gap_layout.py gametool/gui_icon_gaps.py gametool/gui_batch_status_layout.py gametool/gui_batch_status.py gametool/gui_object_text_controls.py gametool/icons.py gametool/gui_loader.py gametool/gui_object_detail.py gametool/object_text_presentation.py`
 
 Expected: PASS; every new GUI module is at most 250 pure LOC and `gui_shell.py` remains at most 240 pure LOC.
 
 - [ ] **Step 13: Commit the complete GUI evidence surfaces**
 
 ```bash
-git add w3xtool/icon_evidence_query.py w3xtool/icon_evidence_presentation.py w3xtool/gui_icon_gap_layout.py w3xtool/gui_icon_gaps.py w3xtool/gui_batch_status_layout.py w3xtool/gui_batch_status.py w3xtool/gui_object_text_controls.py w3xtool/icons.py w3xtool/gui_loader.py w3xtool/gui.py w3xtool/gui_shell.py w3xtool/gui_module_refresh.py w3xtool/gui_object_detail.py w3xtool/object_text_presentation.py w3xtool/gui_acceptance.py tests/test_icon_evidence_query.py tests/test_gui_icon_gaps.py tests/test_gui_batch_status.py tests/test_gui_object_presentation.py tests/test_gui_layout.py tests/test_gui_loader.py tests/test_gui_loader_runner.py tests/test_acceptance_runner.py
+git add gametool/icon_evidence_query.py gametool/icon_evidence_presentation.py gametool/gui_icon_gap_layout.py gametool/gui_icon_gaps.py gametool/gui_batch_status_layout.py gametool/gui_batch_status.py gametool/gui_object_text_controls.py gametool/icons.py gametool/gui_loader.py gametool/gui.py gametool/gui_shell.py gametool/gui_module_refresh.py gametool/gui_object_detail.py gametool/object_text_presentation.py gametool/gui_acceptance.py tests/test_icon_evidence_query.py tests/test_gui_icon_gaps.py tests/test_gui_batch_status.py tests/test_gui_object_presentation.py tests/test_gui_layout.py tests/test_gui_loader.py tests/test_gui_loader_runner.py tests/test_acceptance_runner.py
 git commit -m "feat: expose icon and text evidence in GUI"
 ```
 
@@ -2382,12 +2382,12 @@ git commit -m "feat: expose icon and text evidence in GUI"
 ### Task 10: Integrity snapshots, release metadata, workflow, and operator documentation
 
 **Files:**
-- Create: `w3xtool/integrity_snapshot_models.py`
-- Create: `w3xtool/integrity_snapshot.py`
-- Create: `w3xtool/integrity_snapshot_io.py`
-- Create: `w3xtool/integrity_cli.py`
-- Create: `w3xtool/description_cache_retained_integrity_models.py`
-- Create: `w3xtool/description_cache_retained_integrity.py`
+- Create: `gametool/integrity_snapshot_models.py`
+- Create: `gametool/integrity_snapshot.py`
+- Create: `gametool/integrity_snapshot_io.py`
+- Create: `gametool/integrity_cli.py`
+- Create: `gametool/description_cache_retained_integrity_models.py`
+- Create: `gametool/description_cache_retained_integrity.py`
 - Create: `tests/test_integrity_snapshot.py`
 - Create: `tests/test_integrity_cli.py`
 - Create: `tests/test_description_cache_retained_integrity.py`
@@ -2395,8 +2395,8 @@ git commit -m "feat: expose icon and text evidence in GUI"
 - Create: `tests/test_description_cache_retained_integrity_stability.py`
 - Create: `tests/test_integrity_cli_retained_cache.py`
 - Modify: `main.py:15-76`
-- Modify: `w3xtool/__init__.py:1-4`
-- Modify: `w3xtool/quality_gate.py:10-170`
+- Modify: `gametool/__init__.py:1-4`
+- Modify: `gametool/quality_gate.py:10-170`
 - Modify: `tests/test_quality_gate.py:12-139`
 - Modify: `tests/test_release_metadata.py:10-74`
 - Modify: `tests/test_posix_package_assets.py:11-86`
@@ -2428,7 +2428,7 @@ git commit -m "feat: expose icon and text evidence in GUI"
   `previous` therefore never reaches `partial-evidence`, and every non-directory
   `previous` exits `1`. Replacement of its top-level sibling identity remains a command
   boundary failure/exit `2` before this table is applied.
-- Parses only exact `.w3xray-description-cache-retained-<32 lowercase hex>-<closed role>` sibling leaves; malformed retained-prefix leaves are violations and are never inferred into a role.
+- Parses only exact `.gamexray-description-cache-retained-<32 lowercase hex>-<closed role>` sibling leaves; malformed retained-prefix leaves are violations and are never inferred into a role.
 - Uses descriptor-relative no-follow traversal; directories receive a complete tree snapshot before any payload read and another complete tree snapshot after every payload read. A tree snapshot contains every relative path in UTF-8 path-byte order plus kind/device/inode/size/`mtime_ns`/`ctime_ns`/mode. The scanner requires the two tree snapshots to match before accepting that artifact's size/digest. Regular files receive the same bounded content proof, while symlinks/special files are recorded as unsafe without following or reading their target.
 - Fixes scanner bounds as constants: `MAX_RETAINED_FILE_BYTES = 64 * 1024 * 1024`, `MAX_RETAINED_TREE_BYTES = 512 * 1024 * 1024`, `MAX_RETAINED_FILE_COUNT = 100_000`, `MAX_RETAINED_ENTRY_COUNT = 125_000`, and `MAX_RETAINED_DEPTH = 64`. Tree bytes sum regular-file payload sizes; file count counts regular files; entry count counts every no-follow directory entry. The retained root is depth `0`, its direct children are depth `1`, depth `64` is accepted, and the first entry at depth `65` is oversized. Crossing any bound stops that artifact scan without following another entry and yields `oversized`; it never truncates bytes and then reports a complete digest.
 - Opens every hashed regular file with no-follow semantics and compares descriptor `(device, inode, size, mtime_ns, ctime_ns, mode)` before/after reading and against its anchored name. Permission/I/O denial for a named leaf produces explicit `unknown`/`identity=None` evidence and `unreadable`; only `FileNotFoundError` removes a formerly observed name. Inability to bind the explicitly requested active root is command-level code `2`.
@@ -2537,7 +2537,7 @@ Before any retained-integrity production module exists, create
 `tests/test_description_cache_retained_integrity_stability.py`. Keep core
 classification/format tests, hard-limit tests, and mutation/readability/no-follow race tests
 in those respective files, with every file below 200 pure LOC. The tests initially import
-only the then-importable `w3xtool.integrity_snapshot` module namespace, look up the proposed
+only the then-importable `gametool.integrity_snapshot` module namespace, look up the proposed
 scanner attribute inside each test body, and compare enum-like results by string value.
 
 Run exactly once:
@@ -2589,17 +2589,17 @@ def test_retained_integrity_separates_valid_partial_and_transient_objects(
     active = published_cache(tmp_path / "active-source", raw="active")
     old = published_cache(tmp_path / "old-source", raw="previous")
     previous = active.parent / (
-        f".w3xray-description-cache-retained-{'1' * 32}-previous"
+        f".gamexray-description-cache-retained-{'1' * 32}-previous"
     )
     old.rename(previous)
     failed = active.parent / (
-        f".w3xray-description-cache-retained-{'2' * 32}-failed-stage"
+        f".gamexray-description-cache-retained-{'2' * 32}-failed-stage"
     )
     failed.mkdir()
     (failed / "partial.bin").write_bytes(b"partial")
-    transient = active.parent / (f".w3xray-description-cache-stage-{'3' * 32}")
+    transient = active.parent / (f".gamexray-description-cache-stage-{'3' * 32}")
     transient.write_bytes(b"transient")
-    unsafe = active.parent / (f".w3xray-description-cache-retained-{'4' * 32}-recovery")
+    unsafe = active.parent / (f".gamexray-description-cache-retained-{'4' * 32}-recovery")
     unsafe.symlink_to(tmp_path / "outside", target_is_directory=True)
 
     report = inspect_retained_description_caches(active)
@@ -2700,9 +2700,9 @@ transient artifact.
 
 Run: `uv run python -m pytest -q tests/test_integrity_snapshot.py tests/test_integrity_cli.py tests/test_description_cache_retained_integrity.py tests/test_description_cache_retained_integrity_bounds.py tests/test_description_cache_retained_integrity_stability.py tests/test_integrity_cli_retained_cache.py tests/test_cli_options.py`
 
-Run: `uv run --with ruff ruff check w3xtool/integrity_snapshot_models.py w3xtool/integrity_snapshot.py w3xtool/integrity_snapshot_io.py w3xtool/integrity_cli.py w3xtool/description_cache_retained_integrity_models.py w3xtool/description_cache_retained_integrity.py tests/test_description_cache_retained_integrity.py tests/test_description_cache_retained_integrity_bounds.py tests/test_description_cache_retained_integrity_stability.py tests/test_integrity_cli_retained_cache.py main.py`
+Run: `uv run --with ruff ruff check gametool/integrity_snapshot_models.py gametool/integrity_snapshot.py gametool/integrity_snapshot_io.py gametool/integrity_cli.py gametool/description_cache_retained_integrity_models.py gametool/description_cache_retained_integrity.py tests/test_description_cache_retained_integrity.py tests/test_description_cache_retained_integrity_bounds.py tests/test_description_cache_retained_integrity_stability.py tests/test_integrity_cli_retained_cache.py main.py`
 
-Run: `uv run --with basedpyright basedpyright --level error w3xtool/integrity_snapshot_models.py w3xtool/integrity_snapshot.py w3xtool/integrity_snapshot_io.py w3xtool/integrity_cli.py w3xtool/description_cache_retained_integrity_models.py w3xtool/description_cache_retained_integrity.py tests/test_description_cache_retained_integrity.py tests/test_description_cache_retained_integrity_bounds.py tests/test_description_cache_retained_integrity_stability.py tests/test_integrity_cli_retained_cache.py main.py`
+Run: `uv run --with basedpyright basedpyright --level error gametool/integrity_snapshot_models.py gametool/integrity_snapshot.py gametool/integrity_snapshot_io.py gametool/integrity_cli.py gametool/description_cache_retained_integrity_models.py gametool/description_cache_retained_integrity.py tests/test_description_cache_retained_integrity.py tests/test_description_cache_retained_integrity_bounds.py tests/test_description_cache_retained_integrity_stability.py tests/test_integrity_cli_retained_cache.py main.py`
 
 - [ ] **Step 7: Write failing version, workflow, and quality-gate assertions**
 
@@ -2714,15 +2714,15 @@ Expected: FAIL on `0.1.3`, the old workflow input default, and missing strict pa
 
 - [ ] **Step 8: Update version authorities and regenerate the lockfile**
 
-Change `pyproject.toml` and `w3xtool/__init__.py` to `0.1.4`, change `.github/workflows/posix-package.yml`'s manual default to `v0.1.4`, then run:
+Change `pyproject.toml` and `gametool/__init__.py` to `0.1.4`, change `.github/workflows/posix-package.yml`'s manual default to `v0.1.4`, then run:
 
 Run: `uv lock`
 
-Expected: the editable `w3xray` package in `uv.lock` is exactly `0.1.4` and no unrelated dependency version changes are introduced.
+Expected: the editable `gamexray` package in `uv.lock` is exactly `0.1.4` and no unrelated dependency version changes are introduced.
 
 - [ ] **Step 9: Update the maintained quality authority**
 
-Remove the Task 6 deleted `w3xtool/batch_description_cache.py` and `w3xtool/description_cache_batch.py` paths, then add all created/modified Python modules and their focused tests from this plan to `STRICT_PATHS`, explicitly including `w3xtool/description_cache_retained_integrity_models.py`, `w3xtool/description_cache_retained_integrity.py`, `tests/test_description_cache_retained_integrity.py`, `tests/test_description_cache_retained_integrity_bounds.py`, `tests/test_description_cache_retained_integrity_stability.py`, and `tests/test_integrity_cli_retained_cache.py`. Preserve one sorted duplicate-free tuple and all three commands (`ruff check`, `ruff format --check`, `basedpyright --level error`). Do not add new files to `tool.basedpyright.ignore`.
+Remove the Task 6 deleted `gametool/batch_description_cache.py` and `gametool/description_cache_batch.py` paths, then add all created/modified Python modules and their focused tests from this plan to `STRICT_PATHS`, explicitly including `gametool/description_cache_retained_integrity_models.py`, `gametool/description_cache_retained_integrity.py`, `tests/test_description_cache_retained_integrity.py`, `tests/test_description_cache_retained_integrity_bounds.py`, `tests/test_description_cache_retained_integrity_stability.py`, and `tests/test_integrity_cli_retained_cache.py`. Preserve one sorted duplicate-free tuple and all three commands (`ruff check`, `ruff format --check`, `basedpyright --level error`). Do not add new files to `tool.basedpyright.ignore`.
 
 - [ ] **Step 10: Document schema 5 commands and evidence semantics**
 
@@ -2742,14 +2742,14 @@ Explain the four new global reports, `图标未解析.tsv`, current/all text vie
 
 Run: `uv run python -m pytest -q tests/test_integrity_snapshot.py tests/test_integrity_cli.py tests/test_description_cache_retained_integrity.py tests/test_description_cache_retained_integrity_bounds.py tests/test_description_cache_retained_integrity_stability.py tests/test_integrity_cli_retained_cache.py tests/test_release_metadata.py tests/test_posix_package_assets.py tests/test_quality_gate.py tests/test_batch_dependencies.py tests/test_batch_e2e.py tests/test_acceptance_runner.py`
 
-Run: `uv run w3xray-quality`
+Run: `uv run gamexray-quality`
 
 Expected: PASS; `git diff --check` reports no whitespace errors, `AGENTS.md` is at most 120 lines, and no generated output directory is tracked.
 
 - [ ] **Step 12: Commit the operator and release boundary**
 
 ```bash
-git add main.py w3xtool/integrity_snapshot_models.py w3xtool/integrity_snapshot.py w3xtool/integrity_snapshot_io.py w3xtool/integrity_cli.py w3xtool/description_cache_retained_integrity_models.py w3xtool/description_cache_retained_integrity.py w3xtool/__init__.py w3xtool/quality_gate.py tests/test_integrity_snapshot.py tests/test_integrity_cli.py tests/test_description_cache_retained_integrity.py tests/test_description_cache_retained_integrity_bounds.py tests/test_description_cache_retained_integrity_stability.py tests/test_integrity_cli_retained_cache.py tests/test_quality_gate.py tests/test_release_metadata.py tests/test_posix_package_assets.py pyproject.toml uv.lock .github/workflows/posix-package.yml README.md docs/batch-icon-description-extraction.md AGENTS.md AGENTS.d/runtime.md AGENTS.d/testing.md
+git add main.py gametool/integrity_snapshot_models.py gametool/integrity_snapshot.py gametool/integrity_snapshot_io.py gametool/integrity_cli.py gametool/description_cache_retained_integrity_models.py gametool/description_cache_retained_integrity.py gametool/__init__.py gametool/quality_gate.py tests/test_integrity_snapshot.py tests/test_integrity_cli.py tests/test_description_cache_retained_integrity.py tests/test_description_cache_retained_integrity_bounds.py tests/test_description_cache_retained_integrity_stability.py tests/test_integrity_cli_retained_cache.py tests/test_quality_gate.py tests/test_release_metadata.py tests/test_posix_package_assets.py pyproject.toml uv.lock .github/workflows/posix-package.yml README.md docs/batch-icon-description-extraction.md AGENTS.md AGENTS.d/runtime.md AGENTS.d/testing.md
 git commit -m "feat: add schema five integrity acceptance tools"
 ```
 
@@ -2760,7 +2760,7 @@ git commit -m "feat: add schema five integrity acceptance tools"
 **Files:**
 - Create: `tests/test_real_map_schema5_acceptance.py`
 - Modify: `tests/test_real_map_item_relation_acceptance.py:1-150`
-- Modify: `w3xtool/quality_gate.py:10-190`
+- Modify: `gametool/quality_gate.py:10-190`
 - Modify: `tests/test_quality_gate.py:45-130`
 - Test inputs, read-only: `/Users/zhongerbing/Desktop/Maps`
 - Historical evidence, read-only: `/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output`
@@ -2774,7 +2774,7 @@ git commit -m "feat: add schema five integrity acceptance tools"
 - Retained-cache integrity evidence output: `/Users/zhongerbing/Documents/xm/war3_xg/schema5-retained-cache-integrity.json`
 
 **Interfaces:**
-- Adds an opt-in real-data acceptance module gated by `W3XRAY_MAPS_ROOT`, `W3XRAY_V4_OUTPUT`, `W3XRAY_V5_OUTPUT`, and `W3XRAY_DESCRIPTION_CACHE`.
+- Adds an opt-in real-data acceptance module gated by `GAMEXRAY_MAPS_ROOT`, `GAMEXRAY_V4_OUTPUT`, `GAMEXRAY_V5_OUTPUT`, and `GAMEXRAY_DESCRIPTION_CACHE`.
 - Reuses `require_authoritative_batch()`, the standard TSV decoder, trusted-cache loader, schema-5 state models, and integrity CLI; it does not implement parallel acceptance-only parsers.
 - Requires first-run progress to contain 39 `processed` results and the immediate identical run to contain 39 `reused` results.
 - Requires successful cache publication to have zero stage/backup names; retained objects and impossible-normalization transient violations are reported separately by the no-follow retained-cache integrity action.
@@ -2786,8 +2786,8 @@ git commit -m "feat: add schema five integrity acceptance tools"
 pytestmark = pytest.mark.skipif(
     not all(os.environ.get(name) for name in _ENV_NAMES),
     reason=(
-        "set W3XRAY_MAPS_ROOT/W3XRAY_V4_OUTPUT/"
-        "W3XRAY_V5_OUTPUT/W3XRAY_DESCRIPTION_CACHE"
+        "set GAMEXRAY_MAPS_ROOT/GAMEXRAY_V4_OUTPUT/"
+        "GAMEXRAY_V5_OUTPUT/GAMEXRAY_DESCRIPTION_CACHE"
     ),
 )
 
@@ -2805,9 +2805,9 @@ class Schema5Context:
 
 @pytest.fixture(scope="module")
 def schema5_context() -> Schema5Context:
-    maps_root = Path(os.environ["W3XRAY_MAPS_ROOT"])
-    v4_root = Path(os.environ["W3XRAY_V4_OUTPUT"])
-    v5_root = Path(os.environ["W3XRAY_V5_OUTPUT"])
+    maps_root = Path(os.environ["GAMEXRAY_MAPS_ROOT"])
+    v4_root = Path(os.environ["GAMEXRAY_V4_OUTPUT"])
+    v5_root = Path(os.environ["GAMEXRAY_V5_OUTPUT"])
     maps = tuple(
         sorted(
             (
@@ -2829,7 +2829,7 @@ def schema5_context() -> Schema5Context:
     new_by_digest = {
         result.source.sha256: directory for result, directory in authority.publications
     }
-    cache = load_trusted_description_cache(Path(os.environ["W3XRAY_DESCRIPTION_CACHE"]))
+    cache = load_trusted_description_cache(Path(os.environ["GAMEXRAY_DESCRIPTION_CACHE"]))
     return Schema5Context(
         maps,
         authority,
@@ -2951,10 +2951,10 @@ Add both real-data modules to `STRICT_PATHS` and the quality-gate coverage asser
 Run:
 
 ```bash
-W3XRAY_MAPS_ROOT=/Users/zhongerbing/Desktop/Maps \
-W3XRAY_V4_OUTPUT=/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v4 \
-W3XRAY_V5_OUTPUT=/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v5 \
-W3XRAY_DESCRIPTION_CACHE=/Users/zhongerbing/Documents/xm/war3_xg/trusted-description-cache-v5 \
+GAMEXRAY_MAPS_ROOT=/Users/zhongerbing/Desktop/Maps \
+GAMEXRAY_V4_OUTPUT=/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v4 \
+GAMEXRAY_V5_OUTPUT=/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v5 \
+GAMEXRAY_DESCRIPTION_CACHE=/Users/zhongerbing/Documents/xm/war3_xg/trusted-description-cache-v5 \
 uv run python -m pytest -q \
   tests/test_real_map_schema5_acceptance.py::test_schema_five_publishes_all_sources_with_independent_axes
 ```
@@ -2970,7 +2970,7 @@ Expected: PASS with the real-data cases skipped because the four environment var
 - [ ] **Step 4: Commit the real-data acceptance contract**
 
 ```bash
-git add tests/test_real_map_schema5_acceptance.py tests/test_real_map_item_relation_acceptance.py w3xtool/quality_gate.py tests/test_quality_gate.py
+git add tests/test_real_map_schema5_acceptance.py tests/test_real_map_item_relation_acceptance.py gametool/quality_gate.py tests/test_quality_gate.py
 git commit -m "test: define schema five real-map acceptance"
 ```
 
@@ -2982,9 +2982,9 @@ Expected: PASS with no skipped test in this focused lane.
 
 - [ ] **Step 6: Run the maintained static gate and complete repository suite**
 
-Run: `uv run w3xray-quality`
+Run: `uv run gamexray-quality`
 
-Run: `uv run w3xray-test`
+Run: `uv run gamexray-test`
 
 Expected: both commands PASS; only platform/real-data tests with documented unavailable prerequisites may skip.
 
@@ -3037,7 +3037,7 @@ action: regular files, symlinks, special objects, and directories must all be ob
 
 Then load the cache through the public verifier:
 
-Run: `uv run python -c 'from w3xtool.trusted_description_cache import load_trusted_description_cache; c=load_trusted_description_cache("/Users/zhongerbing/Documents/xm/war3_xg/trusted-description-cache-v5"); print(len(c.cache.entries), c.manifest_sha256, c.content_sha256)'`
+Run: `uv run python -c 'from gametool.trusted_description_cache import load_trusted_description_cache; c=load_trusted_description_cache("/Users/zhongerbing/Documents/xm/war3_xg/trusted-description-cache-v5"); print(len(c.cache.entries), c.manifest_sha256, c.content_sha256)'`
 
 Run:
 
@@ -3054,7 +3054,7 @@ Expected: migration exits `0`, accepted plus rejected equals the 3,043 legacy ca
 Run:
 
 ```bash
-SMOKE_ROOT="$(mktemp -d /tmp/w3xray-schema5-smoke.XXXXXX)"
+SMOKE_ROOT="$(mktemp -d /tmp/gamexray-schema5-smoke.XXXXXX)"
 mkdir -p "$SMOKE_ROOT/small" "$SMOKE_ROOT/large"
 cp /Users/zhongerbing/Desktop/Maps/dz/rpg/BFAAEE0242CEE0A218514B5B83598991.w3x "$SMOKE_ROOT/small/"
 cp /Users/zhongerbing/Desktop/Maps/dz/rpg/C0562022DB31F58AB6EBC69850DE3E46.w3x "$SMOKE_ROOT/large/"
@@ -3104,12 +3104,12 @@ Expected: exit `0`; 39/39 publication results are `已发布`; failed/cancelled/
 Run:
 
 ```bash
-W3XRAY_MAPS_ROOT=/Users/zhongerbing/Desktop/Maps \
-W3XRAY_V4_OUTPUT=/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v4 \
-W3XRAY_V5_OUTPUT=/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v5 \
-W3XRAY_DESCRIPTION_CACHE=/Users/zhongerbing/Documents/xm/war3_xg/trusted-description-cache-v5 \
-W3XRAY_OLD_OUTPUT=/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output \
-W3XRAY_NEW_OUTPUT=/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v5 \
+GAMEXRAY_MAPS_ROOT=/Users/zhongerbing/Desktop/Maps \
+GAMEXRAY_V4_OUTPUT=/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v4 \
+GAMEXRAY_V5_OUTPUT=/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v5 \
+GAMEXRAY_DESCRIPTION_CACHE=/Users/zhongerbing/Documents/xm/war3_xg/trusted-description-cache-v5 \
+GAMEXRAY_OLD_OUTPUT=/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output \
+GAMEXRAY_NEW_OUTPUT=/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v5 \
 uv run python -m pytest -q \
   tests/test_real_map_schema5_acceptance.py \
   tests/test_real_map_item_relation_acceptance.py
@@ -3156,9 +3156,9 @@ Expected: all three commands exit `0`, with no differences across `maps`, `legac
 
 - [ ] **Step 14: Run final repository checks and inspect tracked scope**
 
-Run: `uv run w3xray-quality`
+Run: `uv run gamexray-quality`
 
-Run: `uv run w3xray-test`
+Run: `uv run gamexray-test`
 
 Run: `git diff --check`
 

@@ -2,9 +2,9 @@
 
 import unittest
 
-from w3xtool.api import GameObject, MapData
-from w3xtool.order_ids import ORDER_ID_NAMES
-from w3xtool.orders import build_order_report
+from gametool.api import GameObject, MapData
+from gametool.order_ids import ORDER_ID_NAMES
+from gametool.orders import build_order_report
 
 
 def _ability(obj_id, name, order):

@@ -4,7 +4,7 @@
 import random
 import unittest
 
-from w3xtool.explode import _copy_match, explode
+from gametool.explode import _copy_match, explode
 
 
 class TestExplodeTruncated(unittest.TestCase):

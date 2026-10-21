@@ -65,7 +65,7 @@ jobs:
         shell: bash
         run: |
           uv sync --dev
-          uv run w3xray-quality
+          uv run gamexray-quality
           uv run python -c 'import tkinter; print(tkinter.TkVersion)'
       - name: Run full test suite on macOS
         if: runner.os == 'macOS'
@@ -85,7 +85,7 @@ jobs:
             )
           fi
           for Attempt in 1 2; do
-            if uv run w3xray-test "${PytestArgs[@]}"; then
+            if uv run gamexray-test "${PytestArgs[@]}"; then
               exit 0
             fi
             if [[ "$Attempt" == '2' ]]; then
@@ -101,7 +101,7 @@ jobs:
           test -w /dev/shm
           PytestArgs=(
             -q
-            --basetemp /dev/shm/w3xray-pytest
+            --basetemp /dev/shm/gamexray-pytest
             # Tk 9 resolves this Windows-only font as "fixed" on Linux. The
             # remaining GUI suite and packaged GUI acceptance stay mandatory.
             --deselect
@@ -115,7 +115,7 @@ jobs:
             tests/test_gui_pane_state.py::TestPaneState::test_object_editor_pane_positions_save_on_drag_release
           )
           for Attempt in 1 2; do
-            if xvfb-run -a uv run w3xray-test "${PytestArgs[@]}"; then
+            if xvfb-run -a uv run gamexray-test "${PytestArgs[@]}"; then
               exit 0
             fi
             if [[ "$Attempt" == '2' ]]; then
@@ -138,7 +138,7 @@ jobs:
             printf '%s\n' 'hiddenimports = ["PIL._tkinter_finder"]' \
               >"$PyInstallerHookDir/hook-PIL.ImageTk.py"
           fi
-          uv run w3xray-dist
+          uv run gamexray-dist
       - name: Execute packaged acceptance
         shell: bash
         env:
@@ -176,10 +176,10 @@ jobs:
           if [[ '${{ matrix.platform }}' == 'macos' ]]; then
             ditto -c -k --keepParent \
               "$AppDir" \
-              "$ReleaseDir/w3xray-v$Version-macos-${{ matrix.arch }}.zip"
+              "$ReleaseDir/gamexray-v$Version-macos-${{ matrix.arch }}.zip"
           else
             tar -C dist -czf \
-              "$ReleaseDir/w3xray-v$Version-linux-${{ matrix.arch }}.tar.gz" \
+              "$ReleaseDir/gamexray-v$Version-linux-${{ matrix.arch }}.tar.gz" \
               "魔兽地图提取器"
           fi
           cp "$Report" "$ReleaseDir/${{ matrix.platform }}-${{ matrix.arch }}-acceptance.json"
@@ -196,7 +196,7 @@ jobs:
           rm -rf "$ExtractDir"
           mkdir -p "$ExtractDir"
           if [[ "$TARGET_PLATFORM" == 'macos' ]]; then
-            Package="$ReleaseDir/w3xray-v$Version-macos-$TARGET_ARCH.zip"
+            Package="$ReleaseDir/gamexray-v$Version-macos-$TARGET_ARCH.zip"
             unzip -tq "$Package"
             ditto -x -k "$Package" "$ExtractDir"
             ExpectedArchitecture="$TARGET_ARCH"
@@ -204,7 +204,7 @@ jobs:
               ExpectedArchitecture='x86_64'
             fi
           else
-            Package="$ReleaseDir/w3xray-v$Version-linux-$TARGET_ARCH.tar.gz"
+            Package="$ReleaseDir/gamexray-v$Version-linux-$TARGET_ARCH.tar.gz"
             tar -tzf "$Package" >/dev/null
             tar -xzf "$Package" -C "$ExtractDir"
             ExpectedArchitecture='x86-64'
@@ -216,6 +216,6 @@ jobs:
       - name: Upload release assets
         uses: actions/upload-artifact@v4
         with:
-          name: w3xray-${{ matrix.platform }}-${{ matrix.arch }}-release-assets
+          name: gamexray-${{ matrix.platform }}-${{ matrix.arch }}-release-assets
           path: artifacts/${{ matrix.platform }}-${{ matrix.arch }}-release/*
           if-no-files-found: error

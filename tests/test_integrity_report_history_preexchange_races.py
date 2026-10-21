@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool import integrity_report_publication as publication_api
-from w3xtool.integrity_cli import run_integrity_cli
-from w3xtool.integrity_report_history_directory import BoundIntegrityHistoryStage
+from gametool import integrity_report_publication as publication_api
+from gametool.integrity_cli import run_integrity_cli
+from gametool.integrity_report_history_directory import BoundIntegrityHistoryStage
 
 
 def _snapshot(root: Path, output: Path) -> int:
@@ -39,7 +39,7 @@ def test_staged_report_replacement_before_exchange_never_reaches_public_name(
         forbidden_identities: frozenset[tuple[int, int]],
     ) -> BoundIntegrityHistoryStage:
         history = original(parent_descriptor, destination, forbidden_identities)
-        (stage,) = tmp_path.glob(".w3xray-stage-*.tmp")
+        (stage,) = tmp_path.glob(".gamexray-stage-*.tmp")
         stage.rename(retained_new_report)
         stage.write_bytes(attacker_payload)
         return history
@@ -58,7 +58,7 @@ def test_staged_report_replacement_before_exchange_never_reaches_public_name(
     assert code == 2
     assert output.read_bytes() == previous_payload
     assert retained_new_report.read_bytes() != attacker_payload
-    (replacement,) = tmp_path.glob(".w3xray-stage-*.tmp")
+    (replacement,) = tmp_path.glob(".gamexray-stage-*.tmp")
     assert replacement.read_bytes() == attacker_payload
 
 
@@ -102,4 +102,4 @@ def test_public_report_replacement_before_exchange_is_never_overwritten(
     assert code == 2
     assert output.read_bytes() == concurrent_payload
     assert retained_previous.read_bytes() == previous_payload
-    assert not tuple(tmp_path.glob(".w3xray-stage-*.tmp"))
+    assert not tuple(tmp_path.glob(".gamexray-stage-*.tmp"))

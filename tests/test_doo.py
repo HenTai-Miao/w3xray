@@ -9,7 +9,7 @@ import os
 import struct
 import unittest
 
-from w3xtool.doo import parse_doodads, parse_units
+from gametool.doo import parse_doodads, parse_units
 
 FIX = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -475,7 +475,7 @@ class _PreplacedArchive:
 
 class TestPreplacedIntegration(unittest.TestCase):
     def test_add_preplaced_fills_mapdata(self):
-        from w3xtool.api import _add_preplaced, MapData
+        from gametool.api import _add_preplaced, MapData
 
         doo = _build_doo(
             [_doodad("LTlt", 0, (1.0, 2.0, 0.0), 0.0, (1, 1, 1), 2, 100, [], 1)]
@@ -510,7 +510,7 @@ class TestPreplacedIntegration(unittest.TestCase):
         self.assertEqual(md.units[0].type_id, "hpea")
 
     def test_add_preplaced_no_files_is_noop(self):
-        from w3xtool.api import _add_preplaced, MapData
+        from gametool.api import _add_preplaced, MapData
 
         md = MapData(path="x", name="x")
         _add_preplaced(md, _PreplacedArchive({}))

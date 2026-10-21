@@ -8,22 +8,22 @@ from pathlib import Path
 import pytest
 
 from tests.batch_publication_fixture import empty_result, write_empty_publication
-import w3xtool.batch_checkpoint_publication as checkpoint_publication
-import w3xtool.batch_map_attempt as batch_map_attempt
-import w3xtool.batch_runner as batch_runner
-from w3xtool.batch_global_publication import load_current_batch_state
-from w3xtool.batch_models import (
+import gametool.batch_checkpoint_publication as checkpoint_publication
+import gametool.batch_map_attempt as batch_map_attempt
+import gametool.batch_runner as batch_runner
+from gametool.batch_global_publication import load_current_batch_state
+from gametool.batch_models import (
     BATCH_SCHEMA_VERSION,
     BatchState,
     MapBatchResult,
     MapBatchState,
     SourceFingerprint,
 )
-from w3xtool.batch_output_lock import BatchOutputLease
-from w3xtool.batch_resume import PreviousBatchState
-from w3xtool.batch_runner import BatchOptions, BatchOutputError, run_batch
-from w3xtool.batch_status import PublicationResult, derive_batch_axes
-from w3xtool.load_context import MapLoadContext
+from gametool.batch_output_lock import BatchOutputLease
+from gametool.batch_resume import PreviousBatchState
+from gametool.batch_runner import BatchOptions, BatchOutputError, run_batch
+from gametool.batch_status import PublicationResult, derive_batch_axes
+from gametool.load_context import MapLoadContext
 
 
 def test_runner_reuses_manifest_verified_partial_result(

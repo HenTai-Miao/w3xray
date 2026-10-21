@@ -5,21 +5,21 @@
 
 from __future__ import annotations
 
-from w3xtool.api import GameObject
-from w3xtool.field_meta import (
+from gametool.api import GameObject
+from gametool.field_meta import (
     FIELD_TYPES,
     GENERATED_FIELD_APPLICABILITY,
     GENERATED_FIELD_BOUNDS,
     GENERATED_FIELD_CONSTANTS,
     GENERATED_FIELD_LABELS,
 )
-from w3xtool.fields import (
+from gametool.fields import (
     ability_field_applicable,
     ability_field_bounds,
     ability_field_constant,
     ability_field_specificity,
 )
-from w3xtool.object_detail_presentation import format_object_fields
+from gametool.object_detail_presentation import format_object_fields
 
 import build_field_labels as bfl
 

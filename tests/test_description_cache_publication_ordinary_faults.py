@@ -14,24 +14,24 @@ from tests.description_cache_publication_fixture import (
     rename_in_parent,
     transient_publication_paths,
 )
-from w3xtool import description_cache_publication as publication
-from w3xtool import description_cache_publication_stage as publication_stage
-from w3xtool import description_cache_publication_stage_finalization as finalization
-from w3xtool.description_cache_migration_models import (
+from gametool import description_cache_publication as publication
+from gametool import description_cache_publication_stage as publication_stage
+from gametool import description_cache_publication_stage_finalization as finalization
+from gametool.description_cache_migration_models import (
     DescriptionCacheRejection,
     ProvenDescriptionCandidate,
 )
-from w3xtool.description_cache_publication_errors import (
+from gametool.description_cache_publication_errors import (
     DescriptionCachePublicationError,
 )
-from w3xtool.description_cache_publication_models import (
+from gametool.description_cache_publication_models import (
     RetainedCacheRecord,
     RetainedCacheRole,
 )
-from w3xtool.description_cache_publication_private_attempt import PrivateAttempt
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
-from w3xtool.description_cache_publication_stage import BoundDescriptionCacheStage
-from w3xtool.trusted_description_cache_models import TrustedCacheLeafProof
+from gametool.description_cache_publication_private_attempt import PrivateAttempt
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool.description_cache_publication_stage import BoundDescriptionCacheStage
+from gametool.trusted_description_cache_models import TrustedCacheLeafProof
 
 
 type TransactionSite = Literal["build", "validation", "absent-proof"]

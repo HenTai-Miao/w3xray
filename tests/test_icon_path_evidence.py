@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from w3xtool.icon_path_evidence import plan_icon_path
+from gametool.icon_path_evidence import plan_icon_path
 
 
 def test_path_plan_preserves_original_normalized_and_attempt_order() -> None:

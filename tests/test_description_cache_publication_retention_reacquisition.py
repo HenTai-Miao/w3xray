@@ -13,13 +13,13 @@ from tests.description_cache_publication_fixture import (
     open_parent,
     rename_in_parent,
 )
-from w3xtool.description_cache_publication_errors import (
+from gametool.description_cache_publication_errors import (
     PublicationCommitContextError,
     RetainedObjectInstalledContextError,
 )
-from w3xtool.description_cache_publication_models import RetainedCacheRole
-from w3xtool.description_cache_publication_retention import retain_object
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool.description_cache_publication_models import RetainedCacheRole
+from gametool.description_cache_publication_retention import retain_object
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
 
 
 def _identity(path: Path) -> tuple[int, int]:

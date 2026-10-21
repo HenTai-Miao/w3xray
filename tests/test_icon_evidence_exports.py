@@ -6,19 +6,19 @@ import json
 from typing import Final
 
 from tests.real_map_text_acceptance import read_tsv_text
-from w3xtool.icon_evidence_exports import (
+from gametool.icon_evidence_exports import (
     format_unresolved_icon_tsv,
     normalized_icon_gap_count,
 )
-from w3xtool.icon_evidence_index import IconEvidenceIndex
-from w3xtool.icon_evidence_models import (
+from gametool.icon_evidence_index import IconEvidenceIndex
+from gametool.icon_evidence_models import (
     FilteredIconEvidence,
     IconGapReason,
     IconLookupAttempt,
     IconResolutionLayer,
     UnresolvedIconEvidence,
 )
-from w3xtool.icon_resources import IconObjectReference
+from gametool.icon_resources import IconObjectReference
 
 _DIGEST: Final = "a" * 64
 _PATH: Final = r"Icons\Missing.blp"

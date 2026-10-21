@@ -13,17 +13,17 @@ from tests.description_cache_publication_fixture import (
     replacement_inputs,
 )
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool import description_cache_publication as publication
-from w3xtool.description_cache_migration import (
+from gametool import description_cache_publication as publication
+from gametool.description_cache_migration import (
     DescriptionCacheMigrationOptions,
     migrate_description_cache,
 )
-from w3xtool.description_cache_publication_errors import PublicationCommitContextError
-from w3xtool.trusted_description_cache import (
+from gametool.description_cache_publication_errors import PublicationCommitContextError
+from gametool.trusted_description_cache import (
     VerifiedDescriptionCache,
     load_trusted_description_cache,
 )
-from w3xtool.trusted_description_cache_models import TrustedCacheLeafProof
+from gametool.trusted_description_cache_models import TrustedCacheLeafProof
 
 
 def _identity(path: Path) -> tuple[int, int]:
@@ -34,7 +34,7 @@ def _identity(path: Path) -> tuple[int, int]:
 def _retained(output: Path, role: str) -> tuple[Path, ...]:
     return tuple(
         path
-        for path in output.parent.glob(".w3xray-description-cache-retained-*-*")
+        for path in output.parent.glob(".gamexray-description-cache-retained-*-*")
         if path.name.endswith(f"-{role}")
     )
 
@@ -43,8 +43,8 @@ def _private(output: Path) -> tuple[Path, ...]:
     return tuple(
         path
         for pattern in (
-            ".w3xray-description-cache-stage-*",
-            ".w3xray-description-cache-backup-*",
+            ".gamexray-description-cache-stage-*",
+            ".gamexray-description-cache-backup-*",
         )
         for path in output.parent.glob(pattern)
     )
@@ -110,9 +110,9 @@ def test_recovery_role_collision_preserves_transient_without_overwrite(
         target_name: str,
     ) -> None:
         exchange_in_parent(descriptor, source_name, target_name)
-        transaction_id = source_name.removeprefix(".w3xray-description-cache-stage-")
+        transaction_id = source_name.removeprefix(".gamexray-description-cache-stage-")
         collision = root.parent / (
-            f".w3xray-description-cache-retained-{transaction_id}-recovery"
+            f".gamexray-description-cache-retained-{transaction_id}-recovery"
         )
         collision.mkdir()
         (collision / "foreign.txt").write_text("foreign", encoding="utf-8")

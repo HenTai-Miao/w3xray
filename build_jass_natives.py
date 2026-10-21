@@ -1,10 +1,10 @@
-"""一次性脚本：从 common.j / blizzard.j 提取派生事实表，生成 w3xtool/jass_natives.py。
+"""一次性脚本：从 common.j / blizzard.j 提取派生事实表，生成 gametool/jass_natives.py。
 
 只抽取派生事实（native 参数的对象类别、BJ 函数体里的对象码、bj_*_CODE 常量），
 不复制 .j 本身——与 build_base_names.py 从游戏数据离线生成同一立场，运行时零依赖。
 
 注意：.j 文件**不随仓库**（Blizzard 版权 + 体积），仓库里提交的是烤好的产物
-`w3xtool/jass_natives.py`，那才是运行时唯一依赖。仅在需要**重新生成**该表时才用本脚本，
+`gametool/jass_natives.py`，那才是运行时唯一依赖。仅在需要**重新生成**该表时才用本脚本，
 此时需自备 common.j / blizzard.j（如外部魔兽工具包/游戏目录）并用 --src 指向其目录。
 
 用法：
@@ -183,7 +183,7 @@ def main():
     )  # 特征标签全保留（即便某 BJ 体内无 rawcode 也算特征命中）
     bj_const = parse_bj_code_constants(blizzards)
 
-    out_path = os.path.join("w3xtool", "jass_natives.py")
+    out_path = os.path.join("gametool", "jass_natives.py")
     with open(out_path, "w", encoding="utf-8") as f:
         f.write(
             "# 自动生成：从 common.j/blizzard.j 提取的 native 参数对象类别 & BJ 隐式引用码。\n"

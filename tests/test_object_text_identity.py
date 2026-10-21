@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from tests.object_text_priority_fixture import build_text_index, text_field
-from w3xtool.description_cache import DescriptionCache, DescriptionCacheEntry
-from w3xtool.object_candidates import ObjectSourceKind
+from gametool.description_cache import DescriptionCache, DescriptionCacheEntry
+from gametool.object_candidates import ObjectSourceKind
 
 
 def test_distinct_semantic_fields_with_one_role_do_not_conflict() -> None:

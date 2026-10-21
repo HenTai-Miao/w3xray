@@ -7,11 +7,11 @@ import tempfile
 import unittest
 from dataclasses import dataclass
 
-from w3xtool.api import MapData
-from w3xtool.audit import AuditSeverity, build_audit_report
-from w3xtool.knowledge_unknown_exports import write_unknown_files_from_archive
-from w3xtool.mpq import FLAG_EXISTS
-from w3xtool.script_protection import detect_encrypted_script_label
+from gametool.api import MapData
+from gametool.audit import AuditSeverity, build_audit_report
+from gametool.knowledge_unknown_exports import write_unknown_files_from_archive
+from gametool.mpq import FLAG_EXISTS
+from gametool.script_protection import detect_encrypted_script_label
 
 
 @dataclass(frozen=True, slots=True)

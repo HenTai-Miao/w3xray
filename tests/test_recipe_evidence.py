@@ -1,8 +1,8 @@
 """Source-bearing, comment-safe recipe evidence."""
 
-from w3xtool.api import recipes_from_map
-from w3xtool.map_data import MapData
-from w3xtool.script_scan import scan_recipes
+from gametool.api import recipes_from_map
+from gametool.map_data import MapData
+from gametool.script_scan import scan_recipes
 
 
 def test_recipe_keeps_source_function_result_line_and_duplicate_materials() -> None:

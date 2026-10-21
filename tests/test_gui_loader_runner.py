@@ -10,12 +10,12 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from w3xtool.api import MapData
-from w3xtool.icon_evidence_index import IconEvidenceIndex
-from w3xtool.gui_loader import LoadedMap
-from w3xtool.gui_loader_runner import BackgroundLoaderMixin
-from w3xtool.gui_worker_host import GuiWorkerHostMixin
-from w3xtool.gui_worker_registry import GuiWorkerTicket
+from gametool.api import MapData
+from gametool.icon_evidence_index import IconEvidenceIndex
+from gametool.gui_loader import LoadedMap
+from gametool.gui_loader_runner import BackgroundLoaderMixin
+from gametool.gui_worker_host import GuiWorkerHostMixin
+from gametool.gui_worker_registry import GuiWorkerTicket
 
 
 class _Status:
@@ -190,7 +190,7 @@ def test_source_open_failure_uses_archive_diagnosis() -> None:
 
         # When
         with patch(
-            "w3xtool.gui_loader_runner.messagebox.showerror",
+            "gametool.gui_loader_runner.messagebox.showerror",
             side_effect=lambda _title, message: shown.append(message),
         ):
             runner._start_loader_job(
@@ -218,7 +218,7 @@ def test_map_switch_failure_keeps_non_archive_error() -> None:
 
     # When
     with patch(
-        "w3xtool.gui_loader_runner.messagebox.showerror",
+        "gametool.gui_loader_runner.messagebox.showerror",
         side_effect=lambda _title, message: shown.append(message),
     ):
         runner._start_loader_job(

@@ -4,8 +4,8 @@ import os
 import tempfile
 import unittest
 
-from w3xtool.api import MapData
-from w3xtool.knowledge_pack import write_knowledge_pack
+from gametool.api import MapData
+from gametool.knowledge_pack import write_knowledge_pack
 
 
 class KnowledgePackScriptTriggerRegistrationIndexTest(unittest.TestCase):

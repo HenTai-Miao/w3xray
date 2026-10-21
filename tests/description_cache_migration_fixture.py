@@ -6,12 +6,12 @@ import json
 from pathlib import Path
 from typing import Literal, assert_never
 
-from w3xtool.batch_tsv import format_tsv_rows
-from w3xtool.description_cache_schema import (
+from gametool.batch_tsv import format_tsv_rows
+from gametool.description_cache_schema import (
     LEGACY_CACHE_HEADER,
     LEGACY_DESCRIPTION_HEADER,
 )
-from w3xtool.object_text_evidence import readable_text
+from gametool.object_text_evidence import readable_text
 
 
 SOURCE_DIGEST = "a" * 64

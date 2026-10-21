@@ -6,7 +6,7 @@
 
 **Architecture:** Immutable observations feed a pure evidence resolver. Platform probes and a bounded hint scanner are adapters; a separate snapshot module owns stable copying. GUI and CLI orchestration consume the same typed resolution without changing the map parser.
 
-**Tech Stack:** Python 3.14, standard library, pytest, CustomTkinter, existing W3XRAY loader.
+**Tech Stack:** Python 3.14, standard library, pytest, CustomTkinter, existing GAMEXRAY loader.
 
 ## Global Constraints
 
@@ -22,7 +22,7 @@
 ### Task 1: Typed evidence resolution
 
 **Files:**
-- Create: `w3xtool/current_map_models.py`
+- Create: `gametool/current_map_models.py`
 - Test: `tests/test_current_map_resolution.py`
 
 **Interfaces:**
@@ -37,7 +37,7 @@
 ### Task 2: Process-linked platform probes
 
 **Files:**
-- Create: `w3xtool/current_map_process.py`
+- Create: `gametool/current_map_process.py`
 - Test: `tests/test_current_map_process.py`
 
 **Interfaces:**
@@ -53,7 +53,7 @@
 ### Task 3: Bounded disk hints and orchestration
 
 **Files:**
-- Create: `w3xtool/current_map_discovery.py`
+- Create: `gametool/current_map_discovery.py`
 - Test: `tests/test_current_map_discovery.py`
 
 **Interfaces:**
@@ -68,7 +68,7 @@
 ### Task 4: Stable source snapshot
 
 **Files:**
-- Create: `w3xtool/current_map_snapshot.py`
+- Create: `gametool/current_map_snapshot.py`
 - Test: `tests/test_current_map_snapshot.py`
 
 **Interfaces:**
@@ -82,7 +82,7 @@
 ### Task 5: CLI entry
 
 **Files:**
-- Create: `w3xtool/current_map_cli.py`
+- Create: `gametool/current_map_cli.py`
 - Modify: `main.py`
 - Test: `tests/test_current_map_cli.py`
 
@@ -98,10 +98,10 @@
 ### Task 6: Non-blocking GUI entry
 
 **Files:**
-- Create: `w3xtool/gui_current_map.py`
-- Modify: `w3xtool/gui.py`
-- Modify: `w3xtool/gui_topbar.py`
-- Modify: `w3xtool/gui_lifecycle.py`
+- Create: `gametool/gui_current_map.py`
+- Modify: `gametool/gui.py`
+- Modify: `gametool/gui_topbar.py`
+- Modify: `gametool/gui_lifecycle.py`
 - Test: `tests/test_gui_current_map.py`
 
 **Interfaces:**

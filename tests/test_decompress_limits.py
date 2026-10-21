@@ -8,7 +8,7 @@ import bz2
 import unittest
 import zlib
 
-from w3xtool.mpq import (
+from gametool.mpq import (
     _decompress_sector,
     _sparse_decompress,
     COMP_ZLIB,

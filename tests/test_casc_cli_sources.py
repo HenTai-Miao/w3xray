@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections.abc import Generator
 from pathlib import Path
 
-from w3xtool.casc_cli import run_casc_cli
-from w3xtool.casclib_enumeration import CascEntry, CascNameType
-from w3xtool.game_data_inventory import GameDataInventoryView
+from gametool.casc_cli import run_casc_cli
+from gametool.casclib_enumeration import CascEntry, CascNameType
+from gametool.game_data_inventory import GameDataInventoryView
 
 
 class _KnownPathSource:
@@ -54,7 +54,7 @@ def test_inventory_uses_common_known_path_source(
     source = _KnownPathSource()
     output = tmp_path / "inventory.tsv"
     monkeypatch.setattr(
-        "w3xtool.casc_cli.open_game_data_source", lambda _path: source, raising=False
+        "gametool.casc_cli.open_game_data_source", lambda _path: source, raising=False
     )
 
     # When: the CLI writes an inventory.
@@ -79,7 +79,7 @@ def test_extract_uses_common_known_path_source(tmp_path: Path, monkeypatch) -> N
     # Given: the common opener selects a readable fallback source.
     source = _KnownPathSource()
     monkeypatch.setattr(
-        "w3xtool.casc_cli.open_game_data_source", lambda _path: source, raising=False
+        "gametool.casc_cli.open_game_data_source", lambda _path: source, raising=False
     )
 
     # When: one real logical path is extracted.

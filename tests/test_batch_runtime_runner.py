@@ -11,15 +11,15 @@ import threading
 import pytest
 
 from tests.batch_publication_fixture import publish_empty_result
-import w3xtool.batch_output_lock as batch_output_lock
-import w3xtool.batch_runner as batch_runner
-from w3xtool.batch_configuration import BatchOutputError
-from w3xtool.batch_global_publication import load_current_generation
-from w3xtool.batch_models import MapBatchResult, MapBatchState, SourceFingerprint
-from w3xtool.batch_runner import BatchOptions, run_batch
-from w3xtool.batch_runtime import BatchAction, BatchProgress
-from w3xtool.batch_status import ArchiveIntegrity, PublicationResult
-from w3xtool.load_context import MapLoadContext
+import gametool.batch_output_lock as batch_output_lock
+import gametool.batch_runner as batch_runner
+from gametool.batch_configuration import BatchOutputError
+from gametool.batch_global_publication import load_current_generation
+from gametool.batch_models import MapBatchResult, MapBatchState, SourceFingerprint
+from gametool.batch_runner import BatchOptions, run_batch
+from gametool.batch_runtime import BatchAction, BatchProgress
+from gametool.batch_status import ArchiveIntegrity, PublicationResult
+from gametool.load_context import MapLoadContext
 
 
 def test_disk_preflight_failure_never_calls_map_processor(
@@ -231,7 +231,7 @@ def test_output_lock_validates_a_windows_root_without_a_directory_descriptor(
     # Given: Windows can lock regular files but cannot os.open a directory.
     root = tmp_path / "output"
     root.mkdir()
-    lock = root / ".w3xray-output.lock"
+    lock = root / ".gamexray-output.lock"
     lock.write_bytes(b"\0")
     lock_descriptor = os.open(lock, os.O_RDWR)
     monkeypatch.setattr(

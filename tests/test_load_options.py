@@ -2,7 +2,7 @@
 
 import unittest
 
-from w3xtool.load_options import (
+from gametool.load_options import (
     COMMANDS_KEY,
     OBJECT_BROWSER_KEY,
     RECIPES_KEY,

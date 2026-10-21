@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-import w3xtool.mpq as mpq_facade
-from w3xtool.explode import explode
-from w3xtool.mpq import (
+import gametool.mpq as mpq_facade
+from gametool.explode import explode
+from gametool.mpq import (
     FLAG_COMPRESS,
     FLAG_ENCRYPTED,
     FLAG_EXISTS,
@@ -18,8 +18,8 @@ from w3xtool.mpq import (
     _decompress_sector,
     guess_extension,
 )
-from w3xtool.mpq_block_reader import parse_sector_offsets, read_mpq_block
-from w3xtool.mpq_compression import MPQCompressionError, decompress_mpq_sector
+from gametool.mpq_block_reader import parse_sector_offsets, read_mpq_block
+from gametool.mpq_compression import MPQCompressionError, decompress_mpq_sector
 
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "reference"

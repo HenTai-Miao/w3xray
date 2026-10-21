@@ -6,7 +6,7 @@
 
 **Architecture:** 把脚本的数据源抽象为统一的 `has_file/read_file` 接口；新增 `DirSource` 把一个文件夹伪装成与 `MPQArchive` 同接口的源，匹配大小写/斜杠不敏感且容忍 `war3.w3mod/` 命名空间前缀。CLI 增 `--from-dir`，CASC 格式解析交给外部成熟工具，仓库内只加今天即可在 1.27 上验证的文件夹读取器。
 
-**Tech Stack:** Python 3（标准库 `os`/`argparse`），pytest，现有 `w3xtool.mpq.MPQArchive`。
+**Tech Stack:** Python 3（标准库 `os`/`argparse`），pytest，现有 `gametool.mpq.MPQArchive`。
 
 ---
 
@@ -91,7 +91,7 @@ git commit -m "test: 守护 stdout.reconfigure 使 build_base_names 可被测试
 新增 `DirSource`，实现 `has_file/read_file`，匹配大小写/斜杠不敏感并容忍命名空间前缀。
 
 **Files:**
-- Modify: `build_base_names.py`（在 `from w3xtool.mpq import MPQArchive` 之后、`GAME = ...` 之前插入类定义）
+- Modify: `build_base_names.py`（在 `from gametool.mpq import MPQArchive` 之后、`GAME = ...` 之前插入类定义）
 - Test: `tests/test_build_base_names.py`
 
 - [ ] **Step 1: Write the failing tests**
@@ -161,7 +161,7 @@ Expected: 新增的 7 个 `test_dirsource_*` 全部 FAIL（`AttributeError: modu
 
 - [ ] **Step 3: Write minimal implementation**
 
-在 `build_base_names.py` 顶部 `from w3xtool.mpq import MPQArchive` 之后插入：
+在 `build_base_names.py` 顶部 `from gametool.mpq import MPQArchive` 之后插入：
 
 ```python
 import os
@@ -244,7 +244,7 @@ git commit -m "feat: build_base_names 新增 DirSource 文件夹数据源"
 
 ### Task 3: CLI 与数据源装配（`build_sources` + argparse + `--out-dir`）
 
-把数据源装配与输出目录抽出来，新增 `--from-dir`/`--game`/`--out-dir`；`main()` 与 `build_base_objects()` 改为接收参数。`--out-dir`（默认 `w3xtool`）让端到端测试不会覆盖真实生成文件。
+把数据源装配与输出目录抽出来，新增 `--from-dir`/`--game`/`--out-dir`；`main()` 与 `build_base_objects()` 改为接收参数。`--out-dir`（默认 `gametool`）让端到端测试不会覆盖真实生成文件。
 
 **Files:**
 - Modify: `build_base_names.py`（`main` 签名与开头、三处输出路径、`build_base_objects` 签名与输出路径、`__main__` 块）
@@ -290,7 +290,7 @@ def main():
 
 ```python
 def main(args):
-    out_dir = getattr(args, "out_dir", None) or "w3xtool"
+    out_dir = getattr(args, "out_dir", None) or "gametool"
     names = {}
     total_files = 0
     archives = build_sources(args)
@@ -301,7 +301,7 @@ def main(args):
 `base_names.py` 输出，把：
 
 ```python
-    with open("w3xtool/base_names.py", "w", encoding="utf-8") as f:
+    with open("gametool/base_names.py", "w", encoding="utf-8") as f:
 ```
 
 改为：
@@ -313,7 +313,7 @@ def main(args):
 `westrings.py` 输出，把：
 
 ```python
-    with open("w3xtool/westrings.py", "w", encoding="utf-8") as f:
+    with open("gametool/westrings.py", "w", encoding="utf-8") as f:
 ```
 
 改为：
@@ -351,7 +351,7 @@ def build_base_objects(archives, out_dir):
 把其中：
 
 ```python
-    with open("w3xtool/base_objects.py", "w", encoding="utf-8") as f:
+    with open("gametool/base_objects.py", "w", encoding="utf-8") as f:
 ```
 
 改为：
@@ -388,8 +388,8 @@ if __name__ == "__main__":
     p.add_argument(
         "--out-dir",
         dest="out_dir",
-        default="w3xtool",
-        help="生成的 .py 写到哪个目录（默认 w3xtool）",
+        default="gametool",
+        help="生成的 .py 写到哪个目录（默认 gametool）",
     )
     main(p.parse_args())
 ```
@@ -554,12 +554,12 @@ def test_folder_mode_end_to_end(tmp_path):
     assert (out / "westrings.py").exists()
 ```
 
-注：SLK 字面量只需让 `parse_slk` 不报错即可；断言聚焦 `base_names.py`。若实测 `parse_slk` 对该最小 SLK 解析方式不同，按 `w3xtool/slk.py` 的实际格式微调这串内容，保持「至少生成三个产物且 base_names 含 hfoo/步兵」的断言不变。
+注：SLK 字面量只需让 `parse_slk` 不报错即可；断言聚焦 `base_names.py`。若实测 `parse_slk` 对该最小 SLK 解析方式不同，按 `gametool/slk.py` 的实际格式微调这串内容，保持「至少生成三个产物且 base_names 含 hfoo/步兵」的断言不变。
 
 - [ ] **Step 2: Run test to verify behavior**
 
 Run: `uv run pytest tests/test_build_base_names.py::test_folder_mode_end_to_end -v`
-Expected: PASS。若因 SLK 字面量格式 FAIL，读 `w3xtool/slk.py` 确认 `parse_slk` 期望的最小有效 SLK，调整 Step 1 的 `ItemData.slk` 内容后重跑至 PASS。
+Expected: PASS。若因 SLK 字面量格式 FAIL，读 `gametool/slk.py` 确认 `parse_slk` 期望的最小有效 SLK，调整 Step 1 的 `ItemData.slk` 内容后重跑至 PASS。
 
 - [ ] **Step 3: Run full test file**
 
@@ -588,7 +588,7 @@ git commit -m "test: build_base_names 文件夹模式端到端冒烟测试"
 把 `build_base_names.py` 顶部：
 
 ```python
-"""一次性脚本：从游戏 MPQ 提取 原版对象 码→中文名，生成 w3xtool/base_names.py。
+"""一次性脚本：从游戏 MPQ 提取 原版对象 码→中文名，生成 gametool/base_names.py。
 
 数据来源：war3/{war3,War3x,War3Patch,War3xLocal}.mpq 里的 Units\\*Strings.txt。
 重装/换语言后可重跑本脚本刷新。
@@ -598,7 +598,7 @@ git commit -m "test: build_base_names 文件夹模式端到端冒烟测试"
 替换为：
 
 ```python
-"""一次性脚本：从游戏数据提取 原版对象 码→中文名/默认字段，生成 w3xtool/*.py。
+"""一次性脚本：从游戏数据提取 原版对象 码→中文名/默认字段，生成 gametool/*.py。
 
 经典版（<=1.29，MPQ）：默认从 war3/{war3,War3x,War3Patch,War3xLocal}.mpq 读
     Units\\*Strings.txt / *Func.txt / *Data.slk。可用 --game 覆盖安装目录。
@@ -616,7 +616,7 @@ git commit -m "test: build_base_names 文件夹模式端到端冒烟测试"
 
 ```markdown
 ## 刷新原版数据（base_names / base_objects / westrings）
-`w3xtool/base_names.py` 等三份内置数据由 `build_base_names.py` 从**游戏本体**一次性生成，运行时不读游戏。换语言/升级后想刷新：
+`gametool/base_names.py` 等三份内置数据由 `build_base_names.py` 从**游戏本体**一次性生成，运行时不读游戏。换语言/升级后想刷新：
 
 - **经典版（≤1.29，MPQ）**：
   ```bash

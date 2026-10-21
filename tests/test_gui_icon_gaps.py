@@ -1,17 +1,17 @@
 """GUI rendering for immutable icon-gap projections."""
 
 from tests.gui_base import GuiTestCase
-from w3xtool.api import MapData
-from w3xtool.icon_evidence_index import IconEvidenceIndex
-from w3xtool.icon_evidence_models import (
+from gametool.api import MapData
+from gametool.icon_evidence_index import IconEvidenceIndex
+from gametool.icon_evidence_models import (
     IconDiagnosticFlag,
     IconGapReason,
     UnresolvedIconEvidence,
 )
-from w3xtool.icon_evidence_query import IconGapViewRow
-from w3xtool.icon_resources import IconObjectReference
-from w3xtool.extraction_ledger import build_extraction_ledger
-from w3xtool.map_data import GameObject
+from gametool.icon_evidence_query import IconGapViewRow
+from gametool.icon_resources import IconObjectReference
+from gametool.extraction_ledger import build_extraction_ledger
+from gametool.map_data import GameObject
 
 
 class IconGapGuiTest(GuiTestCase):

@@ -11,17 +11,17 @@ from typing import Final, Self
 
 import pytest
 
-from w3xtool import current_map_snapshot as snapshot_module
-from w3xtool.current_map_snapshot import (
+from gametool import current_map_snapshot as snapshot_module
+from gametool.current_map_snapshot import (
     CurrentMapSnapshotError,
     cleanup_current_map_snapshot,
     create_current_map_snapshot,
 )
 
 
-_SNAPSHOT_DIR_PREFIX: Final = "w3xray-current-map-"
-_OWNER_MARKER_NAME: Final = ".w3xray-current-map-owner"
-_OWNER_MARKER_CONTENT: Final = b"W3XRAY_CURRENT_MAP_SNAPSHOT_V1\n"
+_SNAPSHOT_DIR_PREFIX: Final = "gamexray-current-map-"
+_OWNER_MARKER_NAME: Final = ".gamexray-current-map-owner"
+_OWNER_MARKER_CONTENT: Final = b"GAMEXRAY_CURRENT_MAP_SNAPSHOT_V1\n"
 _STALE_AFTER_NS: Final = 24 * 60 * 60 * 1_000_000_000
 _MAX_STALE_REMOVALS: Final = 8
 
@@ -62,7 +62,7 @@ def _isolated_snapshot_root(
     root = tmp_path / "snapshots"
     root.mkdir()
     monkeypatch.setattr(
-        "w3xtool.current_map_snapshot.tempfile.gettempdir",
+        "gametool.current_map_snapshot.tempfile.gettempdir",
         lambda: str(root),
     )
     return root
@@ -141,7 +141,7 @@ def test_later_snapshot_never_cleans_older_active_snapshot(
     first = create_current_map_snapshot(_source(tmp_path, "first.w3x"))
     future_ns = time.time_ns() + _STALE_AFTER_NS + 1_000_000_000
     monkeypatch.setattr(
-        "w3xtool.current_map_snapshot.time.time_ns",
+        "gametool.current_map_snapshot.time.time_ns",
         lambda: future_ns,
     )
 
@@ -262,7 +262,7 @@ def test_stale_scan_does_not_fetch_entry_beyond_limit(
         return _CountingScandir(captured, fetched)
 
     monkeypatch.setattr(
-        "w3xtool.current_map_snapshot_cleanup.os.scandir", counting_scandir
+        "gametool.current_map_snapshot_cleanup.os.scandir", counting_scandir
     )
 
     # When: session-start cleanup performs its bounded stale scan.
@@ -282,7 +282,7 @@ def test_chmod_failure_removes_just_created_empty_directory(
     def failing_chmod(_path: Path, _mode: int) -> None:
         raise PermissionError("injected chmod failure")
 
-    monkeypatch.setattr("w3xtool.current_map_snapshot_cleanup.os.chmod", failing_chmod)
+    monkeypatch.setattr("gametool.current_map_snapshot_cleanup.os.chmod", failing_chmod)
 
     # When/Then: creation fails without leaving the empty directory behind.
     with pytest.raises(CurrentMapSnapshotError, match="create snapshot"):
@@ -305,7 +305,7 @@ def test_initial_temp_lstat_failure_removes_just_created_empty_directory(
         return real_lstat(path)
 
     monkeypatch.setattr(
-        "w3xtool.current_map_snapshot_cleanup.os.lstat", failing_temp_lstat
+        "gametool.current_map_snapshot_cleanup.os.lstat", failing_temp_lstat
     )
 
     # When/Then: creation fails without relying on a captured directory identity.

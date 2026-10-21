@@ -6,7 +6,7 @@ import struct
 
 import pytest
 
-from w3xtool.mpq import (
+from gametool.mpq import (
     FLAG_COMPRESS,
     FLAG_ENCRYPTED,
     FLAG_EXISTS,
@@ -15,7 +15,7 @@ from w3xtool.mpq import (
     MPQArchive,
     _Block,
 )
-from w3xtool.mpq_crypto import CRYPT_TABLE
+from gametool.mpq_crypto import CRYPT_TABLE
 
 
 def _encrypt(data: bytes, key: int) -> bytes:

@@ -6,13 +6,13 @@ import hashlib
 import struct
 from pathlib import Path
 
-from w3xtool.batch_icon_export import (
+from gametool.batch_icon_export import (
     IconExportState,
     export_anonymous_icon,
     export_named_icon,
 )
-from w3xtool.extraction_ledger import BlockSource, BlockState
-from w3xtool.icon_resources import AnonymousIconResource, NamedIconResource
+from gametool.extraction_ledger import BlockSource, BlockState
+from gametool.icon_resources import AnonymousIconResource, NamedIconResource
 
 
 def _anonymous_resource(

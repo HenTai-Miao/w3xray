@@ -6,7 +6,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from w3xtool.object_text_models import (
+from gametool.object_text_models import (
     ObjectTextIndex,
     ObjectTextRecord,
     ObjectTextState,
@@ -14,7 +14,7 @@ from w3xtool.object_text_models import (
     TextSourcePriority,
     empty_object_text_index,
 )
-from w3xtool.object_text_roles import TextRoleMatch, classify_text_field
+from gametool.object_text_roles import TextRoleMatch, classify_text_field
 
 
 @pytest.mark.parametrize(

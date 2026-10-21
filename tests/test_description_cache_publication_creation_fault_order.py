@@ -14,13 +14,13 @@ from tests.description_cache_publication_fixture import (
     open_parent,
     rename_in_parent,
 )
-from w3xtool import description_cache_publication_evidence as publication_evidence
-from w3xtool import description_cache_publication_stage_normalization as normalization
-from w3xtool.description_cache_publication_errors import (
+from gametool import description_cache_publication_evidence as publication_evidence
+from gametool import description_cache_publication_stage_normalization as normalization
+from gametool.description_cache_publication_errors import (
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_models import NamedLeafProof
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool.description_cache_publication_models import NamedLeafProof
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
 
 
 type CreationSequence = Literal["parent", "read", "retention", "final-parent"]

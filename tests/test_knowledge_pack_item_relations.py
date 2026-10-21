@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from w3xtool.item_relation_models import (
+from gametool.item_relation_models import (
     ItemRelation,
     ItemRelationIndex,
     ItemRelationKind,
@@ -14,9 +14,9 @@ from w3xtool.item_relation_models import (
     RelationEvidence,
     RelationObject,
 )
-from w3xtool.knowledge_pack import write_knowledge_pack
-from w3xtool.map_data import MapData
-from w3xtool.object_text_models import (
+from gametool.knowledge_pack import write_knowledge_pack
+from gametool.map_data import MapData
+from gametool.object_text_models import (
     ObjectTextIndex,
     ObjectTextRecord,
     ObjectTextState,

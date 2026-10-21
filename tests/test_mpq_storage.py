@@ -8,10 +8,10 @@ import sys
 
 import pytest
 
-from w3xtool import mpq_storage
-from w3xtool.mpq import MPQArchive
-from w3xtool.mpq_layout import MPQLayoutError
-from w3xtool.mpq_storage import MPQBackingStore, open_mpq_backing
+from gametool import mpq_storage
+from gametool.mpq import MPQArchive
+from gametool.mpq_layout import MPQLayoutError
+from gametool.mpq_storage import MPQBackingStore, open_mpq_backing
 
 
 class _UnexpectedMmapError(RuntimeError):
@@ -65,7 +65,7 @@ def test_archive_constructor_closes_backing_when_layout_fails(
     store = open_mpq_backing(str(path))
     mapped = store.data
     source_handle = store.handle
-    monkeypatch.setattr("w3xtool.mpq.open_mpq_backing", lambda _path: store)
+    monkeypatch.setattr("gametool.mpq.open_mpq_backing", lambda _path: store)
     with pytest.raises(MPQLayoutError):
         MPQArchive(str(path))
     assert isinstance(mapped, mmap.mmap) and mapped.closed
@@ -83,7 +83,7 @@ def test_archive_constructor_removes_fallback_copy_when_layout_fails(
         handle=None,
         temporary_path=str(temporary),
     )
-    monkeypatch.setattr("w3xtool.mpq.open_mpq_backing", lambda _path: store)
+    monkeypatch.setattr("gametool.mpq.open_mpq_backing", lambda _path: store)
     with pytest.raises(MPQLayoutError):
         MPQArchive("source.w3x")
     assert not temporary.exists()
@@ -126,7 +126,7 @@ def test_fifo_source_is_rejected_without_waiting_for_writer(tmp_path: Path) -> N
     script = "\n".join(
         (
             "import sys",
-            "from w3xtool.mpq_storage import open_mpq_backing",
+            "from gametool.mpq_storage import open_mpq_backing",
             "try:",
             "    open_mpq_backing(sys.argv[1])",
             "except OSError as error:",

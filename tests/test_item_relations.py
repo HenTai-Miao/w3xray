@@ -1,13 +1,13 @@
 """Structural item acquisition and equipment-skill relations."""
 
-from w3xtool.doo import Doodad, Unit
-from w3xtool.doo_drops import DropEntry, DropSet
-from w3xtool.item_relation_builder import (
+from gametool.doo import Doodad, Unit
+from gametool.doo_drops import DropEntry, DropSet
+from gametool.item_relation_builder import (
     build_item_relation_index,
     build_structural_item_relations,
 )
-from w3xtool.item_relation_models import ItemRelationKind, RelationCompleteness
-from w3xtool.map_data import GameObject, MapData
+from gametool.item_relation_models import ItemRelationKind, RelationCompleteness
+from gametool.map_data import GameObject, MapData
 
 
 def _object(

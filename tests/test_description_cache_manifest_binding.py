@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool.trusted_description_cache import (
+from gametool.trusted_description_cache import (
     TrustedDescriptionCacheError,
     load_trusted_description_cache,
 )

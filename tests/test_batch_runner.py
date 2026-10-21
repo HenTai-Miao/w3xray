@@ -10,21 +10,21 @@ from typing import assert_never
 import pytest
 
 from tests.batch_publication_fixture import publish_empty_result
-import w3xtool.batch_map_attempt as batch_map_attempt
-import w3xtool.batch_runner as batch_runner
-from w3xtool.batch_models import (
+import gametool.batch_map_attempt as batch_map_attempt
+import gametool.batch_runner as batch_runner
+from gametool.batch_models import (
     MapBatchResult,
     MapBatchState,
     SourceFingerprint,
 )
-from w3xtool.batch_runner import (
+from gametool.batch_runner import (
     BatchConfigurationError,
     BatchOptions,
     run_batch,
 )
-from w3xtool.batch_status import PublicationResult, derive_batch_axes
-from w3xtool.load_context import MapLoadContext
-from w3xtool.map_directory import scan_map_sources
+from gametool.batch_status import PublicationResult, derive_batch_axes
+from gametool.load_context import MapLoadContext
+from gametool.map_directory import scan_map_sources
 
 
 def _write_map(path: Path, payload: bytes = b"map") -> Path:

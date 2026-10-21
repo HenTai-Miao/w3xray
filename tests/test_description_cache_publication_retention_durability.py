@@ -8,18 +8,18 @@ import pytest
 
 from tests.description_cache_publication_fixture import replacement_inputs
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool import description_cache_publication as publication
-from w3xtool import description_cache_publication_parent as publication_parent
-from w3xtool.description_cache_migration import (
+from gametool import description_cache_publication as publication
+from gametool import description_cache_publication_parent as publication_parent
+from gametool.description_cache_migration import (
     DescriptionCacheMigrationOptions,
     migrate_description_cache,
 )
-from w3xtool.description_cache_publication_errors import (
+from gametool.description_cache_publication_errors import (
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_models import RetainedCacheRecord
-from w3xtool.durable_io import sync_directory_descriptor
-from w3xtool.trusted_description_cache import (
+from gametool.description_cache_publication_models import RetainedCacheRecord
+from gametool.durable_io import sync_directory_descriptor
+from gametool.trusted_description_cache import (
     VerifiedDescriptionCache,
     load_trusted_description_cache,
 )
@@ -118,7 +118,7 @@ def test_failed_stage_retention_sync_failure_keeps_live_record(
     original = getattr(publication, "_require_valid_at")
 
     def reject_stage(descriptor: int, path: Path) -> VerifiedDescriptionCache:
-        if path.name.startswith(".w3xray-description-cache-stage-"):
+        if path.name.startswith(".gamexray-description-cache-stage-"):
             raise OSError("stage rejected")
         return original(descriptor, path)
 
@@ -162,5 +162,5 @@ def test_parent_loss_after_retention_demotes_record_to_transient(
 
     assert raised.value.retained == ()
     assert raised.value.transient
-    assert not tuple(output.parent.glob(".w3xray-description-cache-retained-*-*"))
-    assert tuple(displaced_parent.glob(".w3xray-description-cache-retained-*-*"))
+    assert not tuple(output.parent.glob(".gamexray-description-cache-retained-*-*"))
+    assert tuple(displaced_parent.glob(".gamexray-description-cache-retained-*-*"))

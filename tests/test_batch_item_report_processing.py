@@ -10,17 +10,17 @@ from pathlib import Path
 import pytest
 
 from tests.batch_map_processing_fixture import COMPLETE_RAW, ArchiveSource, loaded_map
-import w3xtool.batch_map_processing as batch_map_processing
-from w3xtool.batch_map_processing import process_one_map
-from w3xtool.batch_item_reports import build_batch_item_reports
-from w3xtool.batch_models import MapBatchResult, MapBatchState
-from w3xtool.batch_status import KnowledgeGapReason
-from w3xtool.batch_status import PublicationResult
-from w3xtool.batch_runner import BatchOptions, fingerprint_source
-from w3xtool.item_relation_models import ItemRelationIndex, RelationCompleteness
-from w3xtool.load_context import MapLoadContext
-from w3xtool.map_data import MapData
-from w3xtool.object_text_models import (
+import gametool.batch_map_processing as batch_map_processing
+from gametool.batch_map_processing import process_one_map
+from gametool.batch_item_reports import build_batch_item_reports
+from gametool.batch_models import MapBatchResult, MapBatchState
+from gametool.batch_status import KnowledgeGapReason
+from gametool.batch_status import PublicationResult
+from gametool.batch_runner import BatchOptions, fingerprint_source
+from gametool.item_relation_models import ItemRelationIndex, RelationCompleteness
+from gametool.load_context import MapLoadContext
+from gametool.map_data import MapData
+from gametool.object_text_models import (
     ObjectTextIndex,
     ObjectTextState,
     TextSelectionReason,

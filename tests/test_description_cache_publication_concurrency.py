@@ -18,22 +18,22 @@ from tests.description_cache_publication_fixture import (
     transient_publication_paths,
 )
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool import description_cache_publication as publication
-from w3xtool.description_cache_migration import (
+from gametool import description_cache_publication as publication
+from gametool.description_cache_migration import (
     DescriptionCacheMigrationOptions,
     migrate_description_cache,
 )
-from w3xtool.description_cache_publication import (
+from gametool.description_cache_publication import (
     DescriptionCacheConcurrentDestinationError,
     DescriptionCachePublicationError,
 )
-from w3xtool.description_cache_publication_commit import (
+from gametool.description_cache_publication_commit import (
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_models import RetainedCacheRecord
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
-from w3xtool.description_cache_publication_stage import BoundDescriptionCacheStage
-from w3xtool.trusted_description_cache import load_trusted_description_cache
+from gametool.description_cache_publication_models import RetainedCacheRecord
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool.description_cache_publication_stage import BoundDescriptionCacheStage
+from gametool.trusted_description_cache import load_trusted_description_cache
 
 
 def test_foreign_takeover_after_exchange_preserves_previous_generation(
@@ -81,7 +81,7 @@ def test_foreign_takeover_after_exchange_preserves_previous_generation(
     status = os.stat(root, follow_symlinks=False)
     assert (status.st_dev, status.st_ino) == foreign_identities[0]
     assert (root / "foreign.txt").read_text(encoding="utf-8") == "foreign"
-    assert not (root / ".w3xray-trusted-description-cache").exists()
+    assert not (root / ".gamexray-trusted-description-cache").exists()
     recovery_paths = tuple(
         path
         for path in retained_publication_paths(root)
@@ -247,7 +247,7 @@ def test_absent_destination_created_before_publish_is_never_replaced(
         destination_name: str,
     ) -> None:
         if destination_name == output.name and source_name.startswith(
-            ".w3xray-description-cache-stage-"
+            ".gamexray-description-cache-stage-"
         ):
             output.mkdir()
             _ = (output / "foreign.txt").write_text("foreign", encoding="utf-8")

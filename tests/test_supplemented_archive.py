@@ -7,16 +7,16 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.bounded_file import sha256_regular_file
-from w3xtool.extraction_ledger import BlockSource
-from w3xtool.mpq import FLAG_ENCRYPTED, FLAG_EXISTS, _Block
-from w3xtool.supplemental_evidence import (
+from gametool.bounded_file import sha256_regular_file
+from gametool.extraction_ledger import BlockSource
+from gametool.mpq import FLAG_ENCRYPTED, FLAG_EXISTS, _Block
+from gametool.supplemental_evidence import (
     SupplementalEvidence,
     SupplementalEvidenceError,
     SupplementalFile,
     SupplementalKey,
 )
-from w3xtool.supplemented_archive import SupplementedArchive
+from gametool.supplemented_archive import SupplementedArchive
 
 
 class _BaseArchive:

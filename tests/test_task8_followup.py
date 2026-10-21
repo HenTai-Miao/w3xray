@@ -8,15 +8,15 @@ from contextlib import nullcontext
 from pathlib import Path
 
 from tests.test_terrain import _w3e_header
-from w3xtool.cli_detail_summary import (
+from gametool.cli_detail_summary import (
     iter_gameplay_constant_summary_lines,
     iter_slk_summary_lines,
 )
-from w3xtool.cli_structure import iter_map_structure_summary_lines
-from w3xtool.cli_terrain import iter_terrain_summary_lines
-from w3xtool.gui_archive_reports import build_archive_blocks
-from w3xtool.map_data import MapData
-from w3xtool.map_identity import build_map_identity
+from gametool.cli_structure import iter_map_structure_summary_lines
+from gametool.cli_terrain import iter_terrain_summary_lines
+from gametool.gui_archive_reports import build_archive_blocks
+from gametool.map_data import MapData
+from gametool.map_identity import build_map_identity
 
 
 class _Archive:

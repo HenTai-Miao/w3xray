@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import TypedDict, assert_never
 
-from w3xtool.batch_models import MapBatchState
-from w3xtool.batch_status import (
+from gametool.batch_models import MapBatchState
+from gametool.batch_status import (
     ArchiveIntegrity,
     BatchAxes,
     KnowledgeEvidence,

@@ -2,34 +2,34 @@
 
 from types import SimpleNamespace
 
-from w3xtool.api import MapData, commands_from_map, recipes_from_map
-from w3xtool.cheats import build_cheat_report
-from w3xtool.compat import build_compat_report
-from w3xtool.crash import build_crash_report
-from w3xtool.diagnostics import build_script_diagnostics
-from w3xtool.gui_script_mechanics_reports import build_script_mechanics_block
-from w3xtool.object_id_usage import build_object_id_usage
-from w3xtool.orders import build_order_report
-from w3xtool.resources import build_resource_report
-from w3xtool.save_analysis import build_save_report
-from w3xtool.script_assignment_index import build_script_assignment_index
-from w3xtool.script_call_argument_index import build_script_call_argument_index
-from w3xtool.script_call_catalog import build_script_call_catalog
-from w3xtool.script_condition_branch_index import build_script_condition_branch_index
-from w3xtool.script_function_index import build_script_function_index
-from w3xtool.script_global_index import build_script_global_index
-from w3xtool.script_local_index import build_script_local_index
-from w3xtool.script_loop_index import build_script_loop_index
-from w3xtool.script_object_code_occurrence_index import (
+from gametool.api import MapData, commands_from_map, recipes_from_map
+from gametool.cheats import build_cheat_report
+from gametool.compat import build_compat_report
+from gametool.crash import build_crash_report
+from gametool.diagnostics import build_script_diagnostics
+from gametool.gui_script_mechanics_reports import build_script_mechanics_block
+from gametool.object_id_usage import build_object_id_usage
+from gametool.orders import build_order_report
+from gametool.resources import build_resource_report
+from gametool.save_analysis import build_save_report
+from gametool.script_assignment_index import build_script_assignment_index
+from gametool.script_call_argument_index import build_script_call_argument_index
+from gametool.script_call_catalog import build_script_call_catalog
+from gametool.script_condition_branch_index import build_script_condition_branch_index
+from gametool.script_function_index import build_script_function_index
+from gametool.script_global_index import build_script_global_index
+from gametool.script_local_index import build_script_local_index
+from gametool.script_loop_index import build_script_loop_index
+from gametool.script_object_code_occurrence_index import (
     build_script_object_code_occurrence_index,
 )
-from w3xtool.script_return_index import build_script_return_index
-from w3xtool.script_string_index import build_script_string_index
-from w3xtool.script_trigger_registration_index import (
+from gametool.script_return_index import build_script_return_index
+from gametool.script_string_index import build_script_string_index
+from gametool.script_trigger_registration_index import (
     build_script_trigger_registration_index,
 )
-from w3xtool.script_variable_usage_index import build_script_variable_usage_index
-from w3xtool.ui_texts import build_ui_text_report
+from gametool.script_variable_usage_index import build_script_variable_usage_index
+from gametool.ui_texts import build_ui_text_report
 
 _ANALYSIS_SOURCES = {
     "war3map.j",

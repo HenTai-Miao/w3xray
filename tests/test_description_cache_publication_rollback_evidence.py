@@ -10,11 +10,11 @@ from tests.description_cache_publication_fixture import (
     assert_live_retained_records,
     open_parent,
 )
-from w3xtool.description_cache_publication_errors import (
+from gametool.description_cache_publication_errors import (
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_models import PublicationTransientRecord
-from w3xtool.description_cache_publication_rollback_selection import (
+from gametool.description_cache_publication_models import PublicationTransientRecord
+from gametool.description_cache_publication_rollback_selection import (
     select_live_identity_path,
 )
 

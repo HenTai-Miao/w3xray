@@ -5,10 +5,10 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
-from w3xtool.casc_browser import CascBrowserModel
-from w3xtool.casc_source import CascDataSource
-from w3xtool.casclib_enumeration import CascNameType
-from w3xtool.game_data_source import DirectoryDataSource
+from gametool.casc_browser import CascBrowserModel
+from gametool.casc_source import CascDataSource
+from gametool.casclib_enumeration import CascNameType
+from gametool.game_data_source import DirectoryDataSource
 
 
 def _idx_row(encoding_key: bytes, offset: int, size: int) -> bytes:
@@ -32,7 +32,7 @@ def _path_map_source(root: Path, paths: tuple[str, ...]) -> CascDataSource:
     key = bytes.fromhex("00112233445566778899aabbccddeeff")
     (data_dir / "0000000000000000.idx").write_bytes(_idx_row(key, offset, len(payload)))
     lines = "".join(f"{path}\t{key.hex()}\n" for path in paths)
-    (root / "w3xray-casc-paths.tsv").write_text(lines, encoding="utf-8")
+    (root / "gamexray-casc-paths.tsv").write_text(lines, encoding="utf-8")
     return CascDataSource(str(root))
 
 
@@ -78,7 +78,7 @@ def test_path_map_source_exposes_deterministic_known_path_inventory(
 
 def test_supports_inventory_and_browser_accept_fallback_sources(tmp_path: Path) -> None:
     # Given: one readable directory source and an unrelated read-only object.
-    from w3xtool.game_data_inventory import (
+    from gametool.game_data_inventory import (
         GameDataInventoryView,
         supports_inventory,
     )

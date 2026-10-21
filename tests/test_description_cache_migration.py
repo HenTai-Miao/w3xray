@@ -20,9 +20,9 @@ from tests.description_cache_migration_fixture import (
     write_mutated_inputs,
 )
 from tests.description_cache_conflict_fixture import write_conflicting_inputs
-from w3xtool import description_cache_migration_rows as migration_rows
-from w3xtool.description_cache import load_description_cache
-from w3xtool.description_cache_migration import (
+from gametool import description_cache_migration_rows as migration_rows
+from gametool.description_cache import load_description_cache
+from gametool.description_cache_migration import (
     DescriptionCacheMigrationError,
     DescriptionCacheMigrationOptions,
     migrate_description_cache,
@@ -58,7 +58,7 @@ _LEGACY_DESCRIPTION_HEADER = (
 
 def test_migration_boundary_exists_when_task5_is_enabled() -> None:
     # Given: the repository is at the pre-Task-5 cache implementation.
-    module_name = "w3xtool.description_cache_migration"
+    module_name = "gametool.description_cache_migration"
 
     # When: the explicit migration boundary is discovered.
     specification = importlib.util.find_spec(module_name)
@@ -69,7 +69,7 @@ def test_migration_boundary_exists_when_task5_is_enabled() -> None:
 
 def test_migration_boundary_exposes_typed_contracts() -> None:
     # Given: the dedicated migration module can be imported.
-    module = import_module("w3xtool.description_cache_migration")
+    module = import_module("gametool.description_cache_migration")
 
     # When: its public Task 5 contracts are inspected.
     names = (
@@ -87,7 +87,7 @@ def test_migration_boundary_exposes_typed_contracts() -> None:
 
 def test_legacy_headers_are_exact_when_parsing_historical_evidence() -> None:
     # Given: the current cache schema deliberately differs from schema 2.
-    schema = import_module("w3xtool.description_cache_schema")
+    schema = import_module("gametool.description_cache_schema")
 
     # When: the two historical headers are selected explicitly.
     cache_header = getattr(schema, "LEGACY_CACHE_HEADER", None)

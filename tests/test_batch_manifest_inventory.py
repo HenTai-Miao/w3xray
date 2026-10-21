@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-import w3xtool.batch_manifest_inventory as manifest_inventory
+import gametool.batch_manifest_inventory as manifest_inventory
 
 
 def test_report_snapshot_rejects_before_exceeding_aggregate_peak(

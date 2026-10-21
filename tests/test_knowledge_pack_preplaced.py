@@ -4,11 +4,11 @@ import os
 import tempfile
 import unittest
 
-from w3xtool.api import GameObject, MapData
-from w3xtool.doo import Doodad, Unit
-from w3xtool.doo_drops import DropEntry, DropSet
-from w3xtool.knowledge_pack import write_knowledge_pack
-from w3xtool.knowledge_preplaced_exports import (
+from gametool.api import GameObject, MapData
+from gametool.doo import Doodad, Unit
+from gametool.doo_drops import DropEntry, DropSet
+from gametool.knowledge_pack import write_knowledge_pack
+from gametool.knowledge_preplaced_exports import (
     format_preplaced_doodads_tsv,
     format_preplaced_units_tsv,
 )

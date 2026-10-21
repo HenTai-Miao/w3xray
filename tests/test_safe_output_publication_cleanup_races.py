@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.safe_output_models import SafeWriteStatus
-from w3xtool import safe_output_cleanup as cleanup_api
-from w3xtool import safe_output_publication_identity as identity_api
-from w3xtool import safe_output_publication_rollback as rollback_api
+from gametool.safe_output_models import SafeWriteStatus
+from gametool import safe_output_cleanup as cleanup_api
+from gametool import safe_output_publication_identity as identity_api
+from gametool import safe_output_publication_rollback as rollback_api
 
 
 def _identity(path: Path) -> tuple[int, int]:
@@ -85,7 +85,7 @@ def test_cleanup_preserves_replacement_after_claim_before_unlink(
     ) -> tuple[int, int] | None:
         nonlocal raced
         observed = original_identity(parent_descriptor, name)
-        if not raced and "w3xray-cleanup" in name and observed == expected:
+        if not raced and "gamexray-cleanup" in name and observed == expected:
             os.rename(
                 name,
                 "retained-owned",
@@ -135,7 +135,7 @@ def test_cleanup_unlink_failure_reports_proved_retained_path(
         *,
         dir_fd: int | None = None,
     ) -> None:
-        if "w3xray-cleanup" in name:
+        if "gamexray-cleanup" in name:
             raise PermissionError("synthetic cleanup denial")
         original_unlink(name, dir_fd=dir_fd)
 
@@ -165,7 +165,7 @@ def test_restore_carries_expected_identity_and_never_publishes_replacement(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    backup = tmp_path / ".w3xray-backup-test.tmp"
+    backup = tmp_path / ".gamexray-backup-test.tmp"
     backup.write_bytes(b"previous")
     previous = _identity(backup)
     destination = tmp_path / "report.json"
@@ -215,10 +215,10 @@ def test_recovery_message_requires_reproved_previous_identity(
 ) -> None:
     destination = tmp_path / "report.json"
     destination.write_bytes(b"concurrent destination")
-    backup = tmp_path / ".w3xray-backup-test.tmp"
+    backup = tmp_path / ".gamexray-backup-test.tmp"
     backup.write_bytes(b"previous")
     previous = _identity(backup)
-    staged = tmp_path / ".w3xray-stage-test.tmp"
+    staged = tmp_path / ".gamexray-stage-test.tmp"
     staged.write_bytes(b"staged")
     staged_identity = _identity(staged)
     original_identity = rollback_api.regular_identity

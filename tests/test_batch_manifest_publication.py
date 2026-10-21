@@ -18,7 +18,10 @@ from tests.batch_schema_evidence_fixture import (
     write_batch_schema_evidence_reports,
 )
 from tests.symlink_capability import skip_if_symlinks_unsupported
-from w3xtool.batch_manifest_validation import build_map_manifest, verify_map_publication
+from gametool.batch_manifest_validation import (
+    build_map_manifest,
+    verify_map_publication,
+)
 
 
 __test__ = False

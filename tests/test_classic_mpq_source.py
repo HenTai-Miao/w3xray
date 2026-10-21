@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.classic_mpq_source import ClassicMpqDataSource, classic_mpq_paths
-from w3xtool.game_data_source import open_game_data_source, probe_game_data_path
+from gametool.classic_mpq_source import ClassicMpqDataSource, classic_mpq_paths
+from gametool.game_data_source import open_game_data_source, probe_game_data_path
 
 
 class _FakeArchive:

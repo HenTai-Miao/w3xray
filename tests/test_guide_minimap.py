@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from w3xtool.guide_minimap import (
+from gametool.guide_minimap import (
     GuideMinimapError,
     crop_to_playable,
     extra_marks_from_json,
@@ -15,8 +15,8 @@ from w3xtool.guide_minimap import (
     shop_marks,
     world_to_pixel,
 )
-from w3xtool.map_data import GameObject, MapData
-from w3xtool.w3i import W3iInfo
+from gametool.map_data import GameObject, MapData
+from gametool.w3i import W3iInfo
 
 
 def _md_with_bounds() -> MapData:

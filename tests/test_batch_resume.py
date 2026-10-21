@@ -9,15 +9,15 @@ import pytest
 
 from tests.batch_axis_fixture import axis_fields
 from tests.batch_publication_fixture import empty_result, write_empty_publication
-from w3xtool.batch_manifest_models import CONTENT_MANIFEST_NAME
-from w3xtool.batch_models import (
+from gametool.batch_manifest_models import CONTENT_MANIFEST_NAME
+from gametool.batch_models import (
     BATCH_SCHEMA_VERSION,
     BatchState,
     MapBatchResult,
     MapBatchState,
     SourceFingerprint,
 )
-from w3xtool.batch_resume import (
+from gametool.batch_resume import (
     PreviousBatchState,
     checkpoint_state,
     find_reusable_result,

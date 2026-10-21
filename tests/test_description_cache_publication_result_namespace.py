@@ -13,25 +13,25 @@ from tests.description_cache_publication_fixture import (
     replacement_inputs,
 )
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool import (
+from gametool import (
     description_cache_publication_generation_evidence as generation_evidence,
 )
-from w3xtool import description_cache_publication_result_evidence as result_evidence
-from w3xtool import description_cache_publication_stage_finalization as finalization
-from w3xtool.description_cache_migration import (
+from gametool import description_cache_publication_result_evidence as result_evidence
+from gametool import description_cache_publication_stage_finalization as finalization
+from gametool.description_cache_migration import (
     DescriptionCacheMigrationOptions,
     migrate_description_cache,
 )
-from w3xtool.description_cache_publication_errors import (
+from gametool.description_cache_publication_errors import (
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_models import (
+from gametool.description_cache_publication_models import (
     RetainedCacheRecord,
     RetainedEvidenceReproof,
 )
-from w3xtool.description_cache_publication_private_attempt import PrivateAttempt
-from w3xtool.description_cache_publication_stage import BoundDescriptionCacheStage
-from w3xtool.trusted_description_cache import load_trusted_description_cache
+from gametool.description_cache_publication_private_attempt import PrivateAttempt
+from gametool.description_cache_publication_stage import BoundDescriptionCacheStage
+from gametool.trusted_description_cache import load_trusted_description_cache
 
 
 type LatePrivateKind = Literal["stage", "backup", "both"]
@@ -152,7 +152,7 @@ def test_public_parent_replaced_after_final_leaf_reproof_is_never_mutated(
         _identity(path)
         for path in displaced.iterdir()
         if path.is_dir()
-        and not path.name.startswith(".w3xray-description-cache-stage-")
+        and not path.name.startswith(".gamexray-description-cache-stage-")
     }
     transient_identities = {
         item.identity for item in raised.value.transient if item.identity is not None
@@ -230,8 +230,8 @@ def test_late_private_insertion_is_attempted_and_forbids_result(
     # Then: backup and stage are independently attempted and all inserted inodes survive.
     assert rounds == 1
     assert len(attempts) >= 2
-    assert attempts[0].startswith(".w3xray-description-cache-backup-")
-    assert attempts[1].startswith(".w3xray-description-cache-stage-")
+    assert attempts[0].startswith(".gamexray-description-cache-backup-")
+    assert attempts[1].startswith(".gamexray-description-cache-stage-")
     surfaced = {record.identity for record in raised.value.retained} | {
         item.identity for item in raised.value.transient if item.identity is not None
     }

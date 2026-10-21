@@ -9,8 +9,8 @@ import sys
 import pytest
 
 from tests.retained_integrity_fixture import active_cache
-from w3xtool.integrity_cli import run_integrity_cli
-from w3xtool.integrity_cli_options import (
+from gametool.integrity_cli import run_integrity_cli
+from gametool.integrity_cli_options import (
     IntegrityCliOptionError,
     parse_integrity_cli_options,
 )

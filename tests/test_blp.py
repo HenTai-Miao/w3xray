@@ -7,7 +7,7 @@ BLP 调色板是 BGRA 存储；解码应映射成 RGBA（B/R 交换），无 alp
 import struct
 import unittest
 
-from w3xtool.blp import decode_blp
+from gametool.blp import decode_blp
 
 
 def _build_blp2_palette(width, height, palette_bgra, indices, alpha=None):

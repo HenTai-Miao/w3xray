@@ -8,7 +8,7 @@ from types import MappingProxyType
 
 import pytest
 
-from w3xtool.object_text_sources import (
+from gametool.object_text_sources import (
     TextObjectRecord,
     TextObjectSourceKind,
     collect_text_object_records,

@@ -6,16 +6,16 @@ from collections.abc import Iterator
 from pathlib import Path
 import struct
 
-from w3xtool.trigger_schema import (
+from gametool.trigger_schema import (
     TriggerFunctionKind,
     TriggerFunctionSchema,
     TriggerSchema,
     parse_trigger_schema,
 )
-from w3xtool.api import MapData
-from w3xtool.load_context import MapLoadContext
-from w3xtool.map_extras import add_trigger_summary
-from w3xtool.wtg import TriggerEcaFunction, parse_wtg
+from gametool.api import MapData
+from gametool.load_context import MapLoadContext
+from gametool.map_extras import add_trigger_summary
+from gametool.wtg import TriggerEcaFunction, parse_wtg
 
 FIXTURE_ROOT = Path(__file__).with_name("fixtures")
 CLASSIC_FIXTURE = FIXTURE_ROOT / "wtg" / "classic-wc3libs-war3map.wtg"

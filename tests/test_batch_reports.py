@@ -9,23 +9,23 @@ import io
 import pytest
 
 from tests.batch_publication_fixture import empty_result
-import w3xtool.batch_tsv as batch_tsv
-from w3xtool.batch_descriptions import DescriptionRecord, DescriptionState
-from w3xtool.batch_icon_export import (
+import gametool.batch_tsv as batch_tsv
+from gametool.batch_descriptions import DescriptionRecord, DescriptionState
+from gametool.batch_icon_export import (
     IconExportRecord,
     IconExportState,
     IconKind,
 )
-from w3xtool.batch_reports import (
+from gametool.batch_reports import (
     format_description_groups_tsv,
     format_description_tsv,
     format_icon_index_tsv,
     format_map_summary,
 )
-from w3xtool.batch_models import MapBatchState, SourceFingerprint
-from w3xtool.batch_status import KnowledgeEvidence, KnowledgeGapReason
-from w3xtool.icon_evidence_models import IconResolutionLayer
-from w3xtool.icon_resources import IconObjectReference
+from gametool.batch_models import MapBatchState, SourceFingerprint
+from gametool.batch_status import KnowledgeEvidence, KnowledgeGapReason
+from gametool.icon_evidence_models import IconResolutionLayer
+from gametool.icon_resources import IconObjectReference
 
 
 def _description_record(

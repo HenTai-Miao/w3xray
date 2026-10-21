@@ -36,9 +36,9 @@ def test_posix_workflow_tests_accepts_and_archives_onedir_package() -> None:
         "sudo apt-get install --no-install-recommends -y xauth xvfb",
         "uv sync --dev",
         "import tkinter; print(tkinter.TkVersion)",
-        "uv run w3xray-test",
-        "xvfb-run -a uv run w3xray-test",
-        "--basetemp /dev/shm/w3xray-pytest",
+        "uv run gamexray-test",
+        "xvfb-run -a uv run gamexray-test",
+        "--basetemp /dev/shm/gamexray-pytest",
         "for Attempt in 1 2",
         "retrying the complete suite in a fresh process",
         "tests/test_gui_pane_state.py::TestPaneState::test_object_editor_pane_positions_restore_from_named_config",
@@ -49,7 +49,7 @@ def test_posix_workflow_tests_accepts_and_archives_onedir_package() -> None:
         'export LD_LIBRARY_PATH="$PythonLibDir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"',
         "hook-PIL.ImageTk.py",
         'hiddenimports = ["PIL._tkinter_finder"]',
-        "uv run w3xray-dist",
+        "uv run gamexray-dist",
         'Executable="dist/魔兽地图提取器/魔兽地图提取器"',
         "AcceptanceArgs=(acceptance",
         '"$Executable" "${AcceptanceArgs[@]}"',
@@ -62,8 +62,8 @@ def test_posix_workflow_tests_accepts_and_archives_onedir_package() -> None:
         'test -x "$ArchivedExecutable"',
         'file "$ArchivedExecutable"',
         'grep -Fq "$ExpectedArchitecture"',
-        "w3xray-v$Version-macos-${{ matrix.arch }}.zip",
-        "w3xray-v$Version-linux-${{ matrix.arch }}.tar.gz",
+        "gamexray-v$Version-macos-${{ matrix.arch }}.zip",
+        "gamexray-v$Version-linux-${{ matrix.arch }}.tar.gz",
         "actions/upload-artifact@v4",
         "if-no-files-found: error",
     ):
@@ -79,7 +79,7 @@ def test_linux_geometry_exclusions_keep_packaged_gui_acceptance_mandatory() -> N
     )[1].split("      - name: Build onedir executable\n", maxsplit=1)[0]
 
     assert linux_tests.count("tests/test_gui_pane_state.py::") == 2
-    assert "xvfb-run -a uv run w3xray-test" in linux_tests
+    assert "xvfb-run -a uv run gamexray-test" in linux_tests
     assert 'xvfb-run -a "$Executable"' in workflow
 
 
@@ -88,9 +88,9 @@ def test_readme_lists_macos_and_linux_release_assets() -> None:
     release_section = readme.split("## 开发运行（uv）", maxsplit=1)[0]
 
     for asset in (
-        "w3xray-v0.1.4-macos-arm64.zip",
-        "w3xray-v0.1.4-macos-x64.zip",
-        "w3xray-v0.1.4-linux-x64.tar.gz",
+        "gamexray-v0.1.4-macos-arm64.zip",
+        "gamexray-v0.1.4-macos-x64.zip",
+        "gamexray-v0.1.4-linux-x64.tar.gz",
     ):
         assert asset in release_section
     assert "Apple Silicon" in release_section

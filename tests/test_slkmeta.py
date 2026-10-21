@@ -1,6 +1,6 @@
 """地图内嵌 SLK 文件清单摘要。"""
 
-from w3xtool.slkmeta import build_slk_inventory
+from gametool.slkmeta import build_slk_inventory
 
 
 def test_build_slk_inventory_reports_rows_and_columns():

@@ -6,32 +6,32 @@ from dataclasses import replace
 from pathlib import Path
 from typing import assert_never
 
-from w3xtool.batch_tsv import format_tsv_rows
-from w3xtool.batch_manifest_models import CONTENT_MANIFEST_NAME, OWNERSHIP_MARKER_NAME
-from w3xtool.batch_map_manifest import finalize_map_manifest
-from w3xtool.batch_models import MapBatchResult, MapBatchState, SourceFingerprint
-from w3xtool.batch_reports import (
+from gametool.batch_tsv import format_tsv_rows
+from gametool.batch_manifest_models import CONTENT_MANIFEST_NAME, OWNERSHIP_MARKER_NAME
+from gametool.batch_map_manifest import finalize_map_manifest
+from gametool.batch_models import MapBatchResult, MapBatchState, SourceFingerprint
+from gametool.batch_reports import (
     format_description_completeness,
     format_description_tsv,
     format_icon_index_tsv,
     format_map_summary,
 )
-from w3xtool.batch_status import PublicationResult, derive_batch_axes
-from w3xtool.icon_evidence_exports import (
+from gametool.batch_status import PublicationResult, derive_batch_axes
+from gametool.icon_evidence_exports import (
     format_icon_integrity,
     format_unresolved_icon_tsv,
 )
-from w3xtool.icon_evidence_index import empty_icon_evidence_index
-from w3xtool.item_relation_exports import (
+from gametool.icon_evidence_index import empty_icon_evidence_index
+from gametool.item_relation_exports import (
     format_equipment_skills_tsv,
     format_item_acquisition_tsv,
     format_relation_completeness,
 )
-from w3xtool.item_relation_models import ItemRelationIndex
-from w3xtool.object_text_exports import format_object_text_tsv
-from w3xtool.object_text_exports import OBJECT_TEXT_REPORT_HEADER
-from w3xtool.object_text_models import ObjectTextIndex
-from w3xtool.object_text_roles import semantic_field_for_role
+from gametool.item_relation_models import ItemRelationIndex
+from gametool.object_text_exports import format_object_text_tsv
+from gametool.object_text_exports import OBJECT_TEXT_REPORT_HEADER
+from gametool.object_text_models import ObjectTextIndex
+from gametool.object_text_roles import semantic_field_for_role
 
 
 type PublishedTextValue = tuple[str, str] | tuple[str, str, str]

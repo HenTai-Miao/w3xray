@@ -10,11 +10,11 @@ from typing import Never
 import pytest
 
 from tests.retained_integrity_fixture import active_cache, install_previous
-from w3xtool import description_cache_retained_integrity as retained_api
-from w3xtool import description_cache_retained_tree as tree_api
-from w3xtool import trusted_description_cache_validation as validation_api
-from w3xtool.description_cache_retained_file_proof import RetainedFileRead
-from w3xtool.integrity_cli import run_integrity_cli
+from gametool import description_cache_retained_integrity as retained_api
+from gametool import description_cache_retained_tree as tree_api
+from gametool import trusted_description_cache_validation as validation_api
+from gametool.description_cache_retained_file_proof import RetainedFileRead
+from gametool.integrity_cli import run_integrity_cli
 
 
 def test_previous_validation_uses_only_ten_captured_leaf_reads(

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from w3xtool.batch_descriptions import DescriptionRecord, DescriptionState
-from w3xtool.batch_icon_export import IconExportRecord, IconExportState, IconKind
-from w3xtool.batch_models import MapBatchState
-from w3xtool.batch_reports import derive_map_state
+from gametool.batch_descriptions import DescriptionRecord, DescriptionState
+from gametool.batch_icon_export import IconExportRecord, IconExportState, IconKind
+from gametool.batch_models import MapBatchState
+from gametool.batch_reports import derive_map_state
 
 
 def _description_record(state: DescriptionState) -> DescriptionRecord:

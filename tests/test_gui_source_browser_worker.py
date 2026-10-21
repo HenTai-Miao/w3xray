@@ -7,9 +7,9 @@ import threading
 
 import pytest
 
-import w3xtool.gui_source_browser as source_browser
-from w3xtool.gui_source_browser import SourceBrowserMixin
-from w3xtool.gui_worker_host import GuiWorkerHostMixin
+import gametool.gui_source_browser as source_browser
+from gametool.gui_source_browser import SourceBrowserMixin
+from gametool.gui_worker_host import GuiWorkerHostMixin
 
 
 class _Status:

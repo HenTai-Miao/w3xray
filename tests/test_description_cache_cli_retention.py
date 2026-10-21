@@ -8,9 +8,9 @@ import pytest
 
 from tests.description_cache_publication_fixture import replacement_inputs
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool import description_cache_cli as cli
-from w3xtool import description_cache_publication as publication
-from w3xtool.trusted_description_cache import VerifiedDescriptionCache
+from gametool import description_cache_cli as cli
+from gametool import description_cache_publication as publication
+from gametool.trusted_description_cache import VerifiedDescriptionCache
 
 
 def test_description_cache_cli_reports_retained_previous_generation(

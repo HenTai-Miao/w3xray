@@ -4,8 +4,8 @@ import os
 import tempfile
 import unittest
 
-from w3xtool.api import GameObject, MapData
-from w3xtool.knowledge_pack import write_knowledge_pack
+from gametool.api import GameObject, MapData
+from gametool.knowledge_pack import write_knowledge_pack
 
 
 class KnowledgePackScriptObjectCodeOccurrenceIndexTest(unittest.TestCase):

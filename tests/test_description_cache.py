@@ -7,7 +7,7 @@ import io
 from pathlib import Path
 
 from tests.symlink_capability import skip_if_symlinks_unsupported
-from w3xtool.description_cache import (
+from gametool.description_cache import (
     DescriptionCache,
     DescriptionCacheEntry,
     format_description_cache_tsv,

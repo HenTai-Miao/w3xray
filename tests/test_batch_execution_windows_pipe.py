@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from time import monotonic
 
-from w3xtool.batch_execution import MapExecutionFailure, _wait_for_child
+from gametool.batch_execution import MapExecutionFailure, _wait_for_child
 
 
 class _ExitedProcess:

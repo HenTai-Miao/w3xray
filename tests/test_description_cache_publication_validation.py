@@ -13,19 +13,19 @@ from tests.description_cache_publication_fixture import (
     transient_publication_paths,
 )
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool import description_cache_publication as publication
-from w3xtool.description_cache_migration import (
+from gametool import description_cache_publication as publication
+from gametool.description_cache_migration import (
     DescriptionCacheMigrationOptions,
     migrate_description_cache,
 )
-from w3xtool.description_cache_publication import DescriptionCachePublicationError
-from w3xtool.description_cache_publication_errors import PublicationCommitContextError
-from w3xtool.trusted_description_cache import (
+from gametool.description_cache_publication import DescriptionCachePublicationError
+from gametool.description_cache_publication_errors import PublicationCommitContextError
+from gametool.trusted_description_cache import (
     VerifiedDescriptionCache,
     load_trusted_description_cache,
     load_trusted_description_cache_from_parent,
 )
-from w3xtool.trusted_description_cache_models import TrustedCacheLeafProof
+from gametool.trusted_description_cache_models import TrustedCacheLeafProof
 
 
 def test_stage_self_validation_failure_keeps_destination_unchanged(

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.integrity_snapshot import (
+from gametool.integrity_snapshot import (
     IntegritySnapshotError,
     SnapshotRoot,
     build_integrity_snapshot,

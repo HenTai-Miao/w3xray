@@ -16,19 +16,19 @@ from tests.description_cache_publication_fixture import (
     rename_in_parent,
 )
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool import description_cache_publication_recovery as recovery
-from w3xtool.description_cache_publication_errors import (
+from gametool import description_cache_publication_recovery as recovery
+from gametool.description_cache_publication_errors import (
     DescriptionCachePublicationError,
 )
-from w3xtool.description_cache_publication_models import (
+from gametool.description_cache_publication_models import (
     RetainedCacheRecord,
     RetainedCacheRole,
 )
-from w3xtool.description_cache_publication_retention_durability import (
+from gametool.description_cache_publication_retention_durability import (
     retain_durably,
 )
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
-from w3xtool.trusted_description_cache import (
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool.trusted_description_cache import (
     VerifiedDescriptionCache,
     load_trusted_description_cache,
 )
@@ -88,7 +88,7 @@ def test_post_reverse_exchange_fault_restores_old_and_retains_new(
     output = new_source.rename(tmp_path / "trusted")
     names = RetainedCacheNames(tmp_path, "1" * 32)
     recovery_path = old_source.rename(names.path(RetainedCacheRole.RECOVERY))
-    stage = tmp_path / ".w3xray-description-cache-stage-1"
+    stage = tmp_path / ".gamexray-description-cache-stage-1"
     old_identity = _identity(recovery_path)
     new_identity = _identity(output)
     fault = OSError(boundary.label)

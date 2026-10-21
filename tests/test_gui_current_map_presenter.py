@@ -6,9 +6,9 @@ from typing import Never
 import pytest
 
 from tests.test_gui_current_map import _candidate, _harness, _snapshot
-from w3xtool import gui_current_map as current_gui
-from w3xtool import gui_current_map_presenter as presenter
-from w3xtool.current_map_models import (
+from gametool import gui_current_map as current_gui
+from gametool import gui_current_map_presenter as presenter
+from gametool.current_map_models import (
     CurrentMapResolution,
     EvidenceKind,
     ResolutionStatus,

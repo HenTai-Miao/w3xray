@@ -2,8 +2,8 @@
 
 import unittest
 
-from w3xtool.api import MapData
-from w3xtool.script_call_catalog import (
+from gametool.api import MapData
+from gametool.script_call_catalog import (
     build_script_call_catalog,
     format_script_call_catalog_tsv,
 )

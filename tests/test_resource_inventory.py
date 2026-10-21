@@ -2,9 +2,9 @@
 
 import unittest
 
-from w3xtool.api import GameObject, MapData
-from w3xtool.imp import ImportEntry, ImportSummary
-from w3xtool.resource_inventory import (
+from gametool.api import GameObject, MapData
+from gametool.imp import ImportEntry, ImportSummary
+from gametool.resource_inventory import (
     build_resource_inventory,
     format_resource_inventory_tsv,
 )

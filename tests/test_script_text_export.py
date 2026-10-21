@@ -2,8 +2,8 @@
 
 import unittest
 
-from w3xtool.api import MapData
-from w3xtool.script_text_export import build_readable_script_exports
+from gametool.api import MapData
+from gametool.script_text_export import build_readable_script_exports
 
 
 class ScriptTextExportTest(unittest.TestCase):

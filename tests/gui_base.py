@@ -13,9 +13,9 @@ import atexit
 import time
 import unittest
 
-from w3xtool.gui import App
-from w3xtool.load_options import default_load_options
-from w3xtool.object_text_presentation import ObjectTextView
+from gametool.gui import App
+from gametool.load_options import default_load_options
+from gametool.object_text_presentation import ObjectTextView
 
 _APP = None
 

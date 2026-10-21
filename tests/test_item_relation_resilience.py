@@ -4,19 +4,19 @@ from __future__ import annotations
 
 import pytest
 
-import w3xtool.item_relation_builder as relation_builder
-from w3xtool.doo import Unit
-from w3xtool.doo_drops import DropEntry, DropSet
-from w3xtool.extraction_diagnostics import record_component_parse_issue
-from w3xtool.item_relation_builder import (
+import gametool.item_relation_builder as relation_builder
+from gametool.doo import Unit
+from gametool.doo_drops import DropEntry, DropSet
+from gametool.extraction_diagnostics import record_component_parse_issue
+from gametool.item_relation_builder import (
     build_item_relation_index,
     build_structural_item_relations,
 )
-from w3xtool.item_relation_endpoints import resolve_relation_object
-from w3xtool.item_relation_fields import object_field_relations
-from w3xtool.item_relation_models import ItemRelationKind, RelationCompleteness
-from w3xtool.item_relation_scripts import build_script_item_relations
-from w3xtool.map_data import GameObject, GameObjectFieldEvidence, MapData
+from gametool.item_relation_endpoints import resolve_relation_object
+from gametool.item_relation_fields import object_field_relations
+from gametool.item_relation_models import ItemRelationKind, RelationCompleteness
+from gametool.item_relation_scripts import build_script_item_relations
+from gametool.map_data import GameObject, GameObjectFieldEvidence, MapData
 
 
 class _RelationChannelFailure(RuntimeError):

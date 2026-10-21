@@ -8,16 +8,16 @@ import struct
 import tempfile
 import unittest
 
-from w3xtool.api import GameObject, MapData
-from w3xtool.knowledge_pack import write_knowledge_pack
-from w3xtool.trigger_schema import (
+from gametool.api import GameObject, MapData
+from gametool.knowledge_pack import write_knowledge_pack
+from gametool.trigger_schema import (
     TriggerFunctionKind,
     TriggerFunctionSchema,
     TriggerSchema,
 )
-from w3xtool.trigger_exports import format_trigger_eca_tsv, format_trigger_tree_tsv
-from w3xtool.wtg import TriggerParseFailure, UnknownTriggerFunction, parse_wtg
-from w3xtool.wtg_eca import TriggerEcaParameter
+from gametool.trigger_exports import format_trigger_eca_tsv, format_trigger_tree_tsv
+from gametool.wtg import TriggerParseFailure, UnknownTriggerFunction, parse_wtg
+from gametool.wtg_eca import TriggerEcaParameter
 
 
 def _i(value: int) -> bytes:

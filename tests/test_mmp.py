@@ -3,8 +3,8 @@
 import struct
 import unittest
 
-from w3xtool.api import MapData
-from w3xtool.mmp import parse_preview_icons
+from gametool.api import MapData
+from gametool.mmp import parse_preview_icons
 
 
 def _i(value):
@@ -53,7 +53,7 @@ class PreviewIconParseTest(unittest.TestCase):
 
     def test_add_preview_icons_fills_mapdata(self):
         # Given: an archive exposing war3map.mmp.
-        from w3xtool.map_extras import add_preview_icons
+        from gametool.map_extras import add_preview_icons
 
         md = MapData(path="x", name="x")
         archive = _FakeArchive({"war3map.mmp": _mmp()})

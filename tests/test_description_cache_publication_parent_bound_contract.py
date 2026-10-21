@@ -11,17 +11,17 @@ from tests.description_cache_publication_fixture import (
     assert_live_retained_records,
     open_parent,
 )
-from w3xtool import description_cache_publication_evidence as publication_evidence
-from w3xtool.description_cache_publication_errors import (
+from gametool import description_cache_publication_evidence as publication_evidence
+from gametool.description_cache_publication_errors import (
     PublicationCommitContextError,
     RetainedObjectInstalledContextError,
 )
-from w3xtool.description_cache_publication_models import (
+from gametool.description_cache_publication_models import (
     RetainedCacheRecord,
     RetainedCacheRole,
 )
-from w3xtool.description_cache_publication_parent import ParentBoundValidator
-from w3xtool.trusted_description_cache import (
+from gametool.description_cache_publication_parent import ParentBoundValidator
+from gametool.trusted_description_cache import (
     VerifiedDescriptionCache,
     load_trusted_description_cache,
 )
@@ -69,7 +69,7 @@ def test_parent_bound_validation_and_parent_proof_keep_both_faults(
         raise AssertionError("validation must not retain")
 
     monkeypatch.setattr(
-        "w3xtool.description_cache_publication_parent.require_parent_identity",
+        "gametool.description_cache_publication_parent.require_parent_identity",
         check_parent,
     )
     binding = ParentBoundValidator(
@@ -148,7 +148,7 @@ def test_parent_bound_retained_install_keeps_finalized_error(
         return retained
 
     monkeypatch.setattr(
-        "w3xtool.description_cache_publication_parent.require_parent_identity",
+        "gametool.description_cache_publication_parent.require_parent_identity",
         bound_parent,
     )
     monkeypatch.setattr(publication_evidence, "require_parent_identity", final_parent)

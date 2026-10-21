@@ -2,20 +2,20 @@
 
 import unittest
 
-from w3xtool.api import GameObject, MapData
-from w3xtool.gameconfig import (
+from gametool.api import GameObject, MapData
+from gametool.gameconfig import (
     GameConfiguration,
     GameConfigPlayer,
     NamedGameConfiguration,
 )
-from w3xtool.gui_reports import (
+from gametool.gui_reports import (
     build_analysis_blocks,
     build_overview_blocks,
     format_blocks,
 )
-from w3xtool.imp import ImportEntry, ImportSummary
-from w3xtool.mmp import PreviewIcon, PreviewIconSummary
-from w3xtool.wtg import (
+from gametool.imp import ImportEntry, ImportSummary
+from gametool.mmp import PreviewIcon, PreviewIconSummary
+from gametool.wtg import (
     TriggerCategory,
     TriggerHeader,
     TriggerParseFailure,

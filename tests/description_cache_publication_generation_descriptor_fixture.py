@@ -9,8 +9,8 @@ from typing import assert_never
 
 import pytest
 
-from w3xtool import description_cache_publication_generation_evidence as evidence
-from w3xtool.description_cache_publication_models import RetainedEvidenceReproof
+from gametool import description_cache_publication_generation_evidence as evidence
+from gametool.description_cache_publication_models import RetainedEvidenceReproof
 
 
 type GenerationRoundAction = Callable[

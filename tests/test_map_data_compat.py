@@ -7,7 +7,7 @@ from typing import Never
 
 import pytest
 
-from w3xtool.api import GameObject, MapData
+from gametool.api import GameObject, MapData
 
 
 def test_legacy_models_keep_decimal_category_counts_and_default_fields() -> None:
@@ -51,10 +51,10 @@ def test_legacy_models_keep_decimal_category_counts_and_default_fields() -> None
 
 def test_api_reexports_map_models() -> None:
     # Given: the split public model module.
-    from w3xtool.api import GameObject as ApiObject
-    from w3xtool.api import MapData as ApiMap
-    from w3xtool.map_data import GameObject as SplitObject
-    from w3xtool.map_data import MapData as SplitMap
+    from gametool.api import GameObject as ApiObject
+    from gametool.api import MapData as ApiMap
+    from gametool.map_data import GameObject as SplitObject
+    from gametool.map_data import MapData as SplitMap
 
     # When/Then: existing facade imports retain object identity.
     assert ApiObject is SplitObject
@@ -63,8 +63,8 @@ def test_api_reexports_map_models() -> None:
 
 def test_load_map_initializes_a_path_archive_source() -> None:
     # Given: a valid on-disk MPQ fixture passed through the compatibility facade.
-    from w3xtool.api import load_map
-    from w3xtool.archive_source import PathArchiveSource
+    from gametool.api import load_map
+    from gametool.archive_source import PathArchiveSource
 
     fixture = "tests/fixtures/maps/war3net-map-script-builder.w3x"
 
@@ -82,7 +82,7 @@ def test_load_map_initializes_a_path_archive_source() -> None:
 
 def test_campaign_child_archive_source_reopens_after_load_returns() -> None:
     # Given: a campaign whose child is extracted through a temporary path.
-    from w3xtool.api import load_map
+    from gametool.api import load_map
 
     fixture = Path("tests/fixtures/reference/stormlib-campaign.w3n")
     campaign = load_map(str(fixture))
@@ -107,7 +107,7 @@ def test_archive_sources_open_real_mpq_bytes_repeatedly_then_reject_after_close(
     None
 ):
     # Given: immutable bytes from a pinned valid MPQ fixture.
-    from w3xtool.archive_source import (
+    from gametool.archive_source import (
         ArchiveSourceClosedError,
         BytesArchiveSource,
         PathArchiveSource,
@@ -139,8 +139,8 @@ def test_bytes_archive_source_removes_temp_file_when_mpq_open_fails(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Given: invalid bytes and a tracked temporary-file allocation.
-    import w3xtool.archive_source as archive_source
-    from w3xtool.archive_source import BytesArchiveSource
+    import gametool.archive_source as archive_source
+    from gametool.archive_source import BytesArchiveSource
 
     created_paths: list[Path] = []
     original_mkstemp = archive_source.tempfile.mkstemp
@@ -179,8 +179,8 @@ def test_bytes_archive_source_removes_temp_file_after_successful_context_exit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Given: valid MPQ bytes and a tracked temporary-file allocation.
-    import w3xtool.archive_source as archive_source
-    from w3xtool.archive_source import BytesArchiveSource
+    import gametool.archive_source as archive_source
+    from gametool.archive_source import BytesArchiveSource
 
     created_paths: list[Path] = []
     original_mkstemp = archive_source.tempfile.mkstemp
@@ -216,7 +216,7 @@ def test_bytes_archive_source_removes_temp_file_after_successful_context_exit(
 
 def test_map_data_close_closes_source_and_sub_maps_idempotently() -> None:
     # Given: a map hierarchy with independently closable archive sources.
-    from w3xtool.map_data import MapData as SplitMap
+    from gametool.map_data import MapData as SplitMap
 
     class CloseRecorder:
         path = "recorder.w3x"

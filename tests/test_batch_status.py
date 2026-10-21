@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from w3xtool.batch_status import (
+from gametool.batch_status import (
     ArchiveIntegrity,
     KnowledgeEvidence,
     KnowledgeGapReason,
@@ -10,8 +10,8 @@ from w3xtool.batch_status import (
     derive_batch_axes,
     derive_legacy_map_state,
 )
-from w3xtool.batch_models import MapBatchState
-from w3xtool.object_text_models import ObjectTextState
+from gametool.batch_models import MapBatchState
+from gametool.object_text_models import ObjectTextState
 
 
 def test_published_map_with_icon_gap_is_not_a_publication_failure() -> None:

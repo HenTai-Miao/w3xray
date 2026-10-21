@@ -2,7 +2,7 @@
 
 import unittest
 
-from w3xtool.slk import parse_slk
+from gametool.slk import parse_slk
 
 
 class TestParseSlk(unittest.TestCase):

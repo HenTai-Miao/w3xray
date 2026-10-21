@@ -12,7 +12,7 @@ Files:
 
 Copy method:
 - Mechanically copied with `cp` from the verified local source files under
-  `/tmp/codex-w3xray-sources-20260710/`.
+  `/tmp/codex-gamexray-sources-20260710/`.
 - No normalization, filtering, or line rewriting was applied.
 
 Coverage notes:

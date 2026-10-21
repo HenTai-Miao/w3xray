@@ -9,15 +9,15 @@ from pathlib import Path
 import pytest
 
 from tests.symlink_capability import skip_if_symlinks_unsupported
-from w3xtool import archive_export, safe_output
-from w3xtool.knowledge_pack import write_knowledge_pack_report
-from w3xtool.knowledge_results import KnowledgeWriteStatus
-from w3xtool.map_data import MapData
-from w3xtool.mpq_block_reader import MPQBlockError, read_mpq_block
-from w3xtool.mpq_constants import FLAG_EXISTS
-from w3xtool.mpq_layout import _Block
-from w3xtool.safe_output_models import SafeWriteStatus
-from w3xtool.slk import parse_slk
+from gametool import archive_export, safe_output
+from gametool.knowledge_pack import write_knowledge_pack_report
+from gametool.knowledge_results import KnowledgeWriteStatus
+from gametool.map_data import MapData
+from gametool.mpq_block_reader import MPQBlockError, read_mpq_block
+from gametool.mpq_constants import FLAG_EXISTS
+from gametool.mpq_layout import _Block
+from gametool.safe_output_models import SafeWriteStatus
+from gametool.slk import parse_slk
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,7 +44,7 @@ def test_temp_extract_name_cannot_escape_cleanup_root(
     # Then: cleanup remains under the owned extraction base.
     assert marker.read_text(encoding="utf-8") == "keep"
     assert result.parent.parent == temp_root
-    assert result.parent.name.startswith("w3xtool提取-")
+    assert result.parent.name.startswith("gametool提取-")
     assert result.name == "map"
 
 

@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.author_plaintext_bundle import AuthorBundleFile, AuthorPlaintextBundle
-from w3xtool.bounded_file import FileIdentity, sha256_regular_file
-from w3xtool.extraction_ledger import BlockSource
-from w3xtool.supplemental_evidence import (
+from gametool.author_plaintext_bundle import AuthorBundleFile, AuthorPlaintextBundle
+from gametool.bounded_file import FileIdentity, sha256_regular_file
+from gametool.extraction_ledger import BlockSource
+from gametool.supplemental_evidence import (
     SupplementalEvidence,
     SupplementalEvidenceError,
     SupplementalFile,

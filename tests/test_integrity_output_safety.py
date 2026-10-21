@@ -9,9 +9,9 @@ from pathlib import Path
 import pytest
 
 from tests.retained_integrity_fixture import active_cache, backup, retained, stage
-from w3xtool import integrity_output as output_api
-from w3xtool import safe_output_publication as publication_api
-from w3xtool.integrity_cli import run_integrity_cli
+from gametool import integrity_output as output_api
+from gametool import safe_output_publication as publication_api
+from gametool.integrity_cli import run_integrity_cli
 
 
 def _snapshot_argv(root: Path, output: Path) -> tuple[str, ...]:

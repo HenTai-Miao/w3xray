@@ -1,4 +1,4 @@
-"""一次性脚本：从游戏数据提取 原版对象 码→中文名/默认字段，生成 w3xtool/*.py。
+"""一次性脚本：从游戏数据提取 原版对象 码→中文名/默认字段，生成 gametool/*.py。
 
 经典版（<=1.29，MPQ）：默认从 war3/{war3,War3x,War3Patch,War3xLocal}.mpq 读
     Units\\*Strings.txt / *Func.txt / *Data.slk。可用 --game 覆盖安装目录。
@@ -25,7 +25,7 @@ try:
         _reconfigure(encoding="utf-8")
 except Exception:
     pass
-from w3xtool.mpq import MPQArchive
+from gametool.mpq import MPQArchive
 
 
 class DirSource:
@@ -107,10 +107,10 @@ class CascSource:
 
     def __init__(self, root: str, source=None):
         if source is None:
-            from w3xtool.casclib_source import CascLibDataSource
+            from gametool.casclib_source import CascLibDataSource
 
             source = CascLibDataSource(root)
-        from w3xtool.client_object_data import locale_text_candidates
+        from gametool.client_object_data import locale_text_candidates
 
         self._candidates = locale_text_candidates
         self._source = source
@@ -260,7 +260,7 @@ def append_extra_tables(lines: list[str]) -> None:
     静默丢弃（无表时是空操作）。build_base_catalog.py 复用本函数。
     """
     try:
-        from w3xtool import base_names as module
+        from gametool import base_names as module
     except Exception:
         return
     en_names: dict[str, str] = dict(getattr(module, "BASE_NAMES_EN", None) or {})
@@ -317,7 +317,7 @@ def merge_names_from_dir(src_dir: str, out_dir: str):
     """
     current_names: dict[str, str]
     try:
-        from w3xtool.base_names import BASE_NAMES
+        from gametool.base_names import BASE_NAMES
 
         current_names = dict(BASE_NAMES)
     except Exception:
@@ -384,9 +384,9 @@ def merge_all_from_source(archives, out_dir):
     用于 --merge-from-casc：经典表条目原样保留，Reforged 里的新增对象/
     字符串按需补进，避免整体替换译名（preserve-and-fill）。
     """
-    from w3xtool.base_names import BASE_NAMES
-    from w3xtool.base_objects import BASE_OBJECTS
-    from w3xtool.westrings import WESTRINGS
+    from gametool.base_names import BASE_NAMES
+    from gametool.base_objects import BASE_OBJECTS
+    from gametool.westrings import WESTRINGS
 
     names = dict(BASE_NAMES)
     for kind in ("Strings", "Func"):
@@ -420,15 +420,15 @@ def main(args):
     if getattr(args, "merge_from_casc", None):
         merge_all_from_source(
             [CascSource(args.merge_from_casc)],
-            getattr(args, "out_dir", None) or "w3xtool",
+            getattr(args, "out_dir", None) or "gametool",
         )
         return
     if getattr(args, "merge_from_dir", None):
         merge_names_from_dir(
-            args.merge_from_dir, getattr(args, "out_dir", None) or "w3xtool"
+            args.merge_from_dir, getattr(args, "out_dir", None) or "gametool"
         )
         return
-    out_dir = getattr(args, "out_dir", None) or "w3xtool"
+    out_dir = getattr(args, "out_dir", None) or "gametool"
     names = {}
     total_files = 0
     archives = build_sources(args)
@@ -566,7 +566,7 @@ SLK_GROUPS = {
 
 def collect_base_objects(archives) -> dict[str, tuple[str, list[tuple[str, str]]]]:
     """解析 *Data.slk 为 {码: (分类, [(标签, 值), ...])}，不写文件。"""
-    from w3xtool.slk import parse_slk
+    from gametool.slk import parse_slk
 
     def read(fn):
         for a in archives:
@@ -653,7 +653,7 @@ if __name__ == "__main__":
     p.add_argument(
         "--out-dir",
         dest="out_dir",
-        default="w3xtool",
-        help="生成的 .py 写到哪个目录（默认 w3xtool）",
+        default="gametool",
+        help="生成的 .py 写到哪个目录（默认 gametool）",
     )
     main(p.parse_args())

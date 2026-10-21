@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from w3xtool.object_candidates import (
+from gametool.object_candidates import (
     ObjectCandidate,
     ObjectFieldValue,
     ObjectSourceKind,
 )
-from w3xtool.object_pipeline import merge_object_candidates
+from gametool.object_pipeline import merge_object_candidates
 
 
 def test_auxiliary_metadata_icon_does_not_evict_an_inherited_primary_icon() -> None:

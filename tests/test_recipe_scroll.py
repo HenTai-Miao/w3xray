@@ -3,7 +3,7 @@
 import unittest
 
 from tests.gui_base import GuiTestCase
-from w3xtool.script_scan import Recipe
+from gametool.script_scan import Recipe
 
 
 class TestRecipeScroll(GuiTestCase):

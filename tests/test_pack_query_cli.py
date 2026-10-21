@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import pytest
 
-from w3xtool.pack_query_cli import (
+from gametool.pack_query_cli import (
     PackQueryCliOptionError,
     _base_prices,
     load_formulas,
@@ -377,7 +377,7 @@ def test_parse_tech_command():
 
 
 def test_query_tech_sheet_custom_overrides_and_base_inherit(pack):
-    from w3xtool.pack_query_cli import _query_tech, load_tech_fields, load_techs
+    from gametool.pack_query_cli import _query_tech, load_tech_fields, load_techs
 
     assert load_techs(pack)["R0AA"][0] == "改良伐木测试"
     assert load_tech_fields(pack)["R0AA"]["glvl"] == "10"
@@ -399,7 +399,7 @@ def test_query_tech_sheet_custom_overrides_and_base_inherit(pack):
 
 
 def test_query_cmd_effect_chain(pack):
-    from w3xtool.pack_query_cli import _query_cmd, load_script
+    from gametool.pack_query_cli import _query_cmd, load_script
 
     script = load_script(pack)
     assert script is not None and "\r" not in script
@@ -423,7 +423,7 @@ def test_parse_cmd_command():
 
 
 def test_query_refs_chain_termination_and_classification(pack):
-    from w3xtool.pack_query_cli import _query_refs
+    from gametool.pack_query_cli import _query_refs
 
     dead = "\n".join(_query_refs(pack, "IZYY", 10))
     assert "[IZYY] 断链弓  (物品)  共2处引用" in dead
@@ -445,7 +445,7 @@ def test_parse_refs_command():
 def test_unit_death_random_dist_drops(pack):
     # YDWE 每单位死亡模板: bj_lastDyingWidget + RandomDistAddItem, 动作体既无
     # GetDyingUnit() 也无 CreateItem 调用——旧两种死亡形态都扫不到
-    from w3xtool.pack_query_cli import (
+    from gametool.pack_query_cli import (
         _query_drop,
         _unit_death_random_drops,
         load_script,
@@ -463,7 +463,7 @@ def test_unit_death_random_dist_drops(pack):
     assert "死亡随机掉落" in item_text
     assert "nctm" in item_text and "Unit_ydweDropItems" in item_text
     # guide drops 段与 pack-query 同源: 第三形态同样进入玩家报告
-    from w3xtool.pack_query_cli import script_death_drop_lines
+    from gametool.pack_query_cli import script_death_drop_lines
 
     guide_text = "\n".join(
         script_death_drop_lines(load_script(pack), lambda c: c)
@@ -471,7 +471,7 @@ def test_unit_death_random_dist_drops(pack):
     assert "Unit_ydweDropItems" in guide_text
     assert "权重70/100" in guide_text
     # where 与 drop 同源: 物品获取途径同样能看到第三形态
-    from w3xtool.pack_query_cli import _query_where
+    from gametool.pack_query_cli import _query_where
 
     where_text = "\n".join(_query_where(pack, "I0YD", 30))
     assert "死亡随机掉落" in where_text
@@ -480,7 +480,7 @@ def test_unit_death_random_dist_drops(pack):
 def test_item_trigger_blocks_scope_local_vars(pack):
     # 局部 trigger t 跨函数重名: 条件/动作必须按注册所在函数配对,
     # 否则 I0LV 的使用触发器会配到 decoy 的动作体 (假证据)
-    from w3xtool.pack_query_cli import _item_trigger_blocks, load_script
+    from gametool.pack_query_cli import _item_trigger_blocks, load_script
 
     blocks = _item_trigger_blocks(load_script(pack))
     hit = [b for b in blocks if "I0LV" in b[1]]
@@ -493,7 +493,7 @@ def test_item_trigger_blocks_scope_local_vars(pack):
 def test_query_where_script_award_shows_evidence_source(pack):
     # 脚本奖励行没有来源对象: 展示证据函数/行号, 而不是 "来源 []";
     # 且空来源不得因 "" in query 恒真而出现在任何查询里
-    from w3xtool.pack_query_cli import _query_where
+    from gametool.pack_query_cli import _query_where
 
     text = "\n".join(_query_where(pack, "I0QT", 50))
     assert "脚本/触发奖励 <- Trig_questActions 行 100" in text
@@ -505,7 +505,7 @@ def test_query_where_script_award_shows_evidence_source(pack):
 def test_query_cmd_scopes_local_trigger_handlers(pack):
     # 局部 trigger 变量在多个函数里重名: 处理器必须按注册所在函数配对,
     # 全脚本按变量名配对会把无关函数当动作 (YDWE Version 事故回归)
-    from w3xtool.pack_query_cli import _query_cmd
+    from gametool.pack_query_cli import _query_cmd
 
     text = "\n".join(_query_cmd(pack, "secret", 10))
     assert '指令 "secret" (精确' in text
@@ -516,7 +516,7 @@ def test_query_cmd_scopes_local_trigger_handlers(pack):
 
 
 def test_query_cmd_exact_precedence_and_loop_registration(pack):
-    from w3xtool.pack_query_cli import _query_cmd
+    from gametool.pack_query_cli import _query_cmd
 
     zs = "\n".join(_query_cmd(pack, "-zs", 10))
     assert '指令 "-zs" (精确' in zs
@@ -527,7 +527,7 @@ def test_query_cmd_exact_precedence_and_loop_registration(pack):
 
 
 def test_query_near_header_driven_and_rect_normalize(pack):
-    from w3xtool.pack_query_cli import _query_near
+    from gametool.pack_query_cli import _query_near
 
     lines = _query_near(pack, "15 20 200", 10)
     text = "\n".join(lines)
@@ -543,7 +543,7 @@ def test_query_near_header_driven_and_rect_normalize(pack):
 
 
 def test_query_drop_script_pool_fallback(pack):
-    from w3xtool.pack_query_cli import _query_drop
+    from gametool.pack_query_cli import _query_drop
 
     lines = _query_drop(pack, "nbos", 10)
     text = "\n".join(lines)
@@ -575,7 +575,7 @@ def test_query_drop_script_pool_fallback(pack):
     )
     assert "奖池乙 [I0P2]  30/45  600金@杂货铺/黑店·可合成" in re_run
     # 名称推断的部位标注 (月光银狼池样例形态)
-    from w3xtool.pack_query_cli import _item_slot_by_name
+    from gametool.pack_query_cli import _item_slot_by_name
 
     assert _item_slot_by_name("狼牙链") == "饰品"
     assert _item_slot_by_name("月光手套") == "手部"
@@ -594,7 +594,7 @@ def test_query_drop_script_pool_fallback(pack):
 
 
 def test_query_drop_script_direct_death_drop(pack):
-    from w3xtool.pack_query_cli import _query_drop
+    from gametool.pack_query_cli import _query_drop
 
     item_tsv = pack / "对象ID" / "物品.tsv"
     item_tsv.write_text(
@@ -629,7 +629,7 @@ def test_query_drop_script_direct_death_drop(pack):
 def test_query_drop_relation_row_without_drop_kind_gets_script_evidence(pack):
     # I01F 事故形态: 关系表有"脚本/触发奖励"行 (来源为空), 兜底原本不触发,
     # 防呆横幅误称"无死亡掉落记录"——现在缺掉落类型也跑死亡扫描并附证据
-    from w3xtool.pack_query_cli import _query_drop
+    from gametool.pack_query_cli import _query_drop
 
     (pack / "掉落与获取关系.tsv").write_text(
         "对象\t名称\t关系类型\t对象ID\t装备名称\t来源类型\t来源名称\n"
@@ -657,7 +657,7 @@ def test_query_drop_relation_row_without_drop_kind_gets_script_evidence(pack):
 
 def test_query_drop_item_name_resolves_death_evidence(pack):
     # I01F 按名查询事故: 单位名无匹配时回退到物品名解析再扫死亡触发
-    from w3xtool.pack_query_cli import _query_drop
+    from gametool.pack_query_cli import _query_drop
 
     item_tsv = pack / "对象ID" / "物品.tsv"
     item_tsv.write_text(
@@ -677,7 +677,7 @@ def test_query_drop_item_name_resolves_death_evidence(pack):
 def test_query_where_falls_back_to_relation_rows(pack):
     # I01F 事故形态: 任务物品无预放置点, 关系行存在却被 where 跳过,
     # 文案兜底按描述子串错配到别的物品——现在补查关系表
-    from w3xtool.pack_query_cli import _query_where
+    from gametool.pack_query_cli import _query_where
 
     (pack / "掉落与获取关系.tsv").write_text(
         "对象\t名称\t关系类型\t对象ID\t装备名称\t来源类型\t来源名称\n"
@@ -711,7 +711,7 @@ def test_query_where_falls_back_to_relation_rows(pack):
 def test_query_drop_unit_name_reverse_lists_direct_drops(pack):
     # 「打 X 掉什么」按单位名问: 物品维度直落扫描匹配 CreateItemLoc
     # 物品参数, 反不进去——需按单位码反查死亡触发, 满量列直落清单
-    from w3xtool.pack_query_cli import _query_drop
+    from gametool.pack_query_cli import _query_drop
 
     unit_tsv = pack / "对象ID" / "单位.tsv"
     unit_tsv.write_text(
@@ -743,7 +743,7 @@ def test_query_fallbacks_route_unit_queries(pack):
     # 单位查询两层全空时路由指引, 不再吃物品文案兜底
     # (邪恶陨石人的任务文本曾被端出来当「炎石守卫」的来源线索);
     # 用无触发器引用的单位——nbld 会被反查清单优先命中, 轮不到路由
-    from w3xtool.pack_query_cli import _query_drop, _query_where
+    from gametool.pack_query_cli import _query_drop, _query_where
 
     unit_tsv = pack / "对象ID" / "单位.tsv"
     unit_tsv.write_text(
@@ -765,7 +765,7 @@ def test_query_drop_hex_and_handle_death_codes(pack):
     # YDWE 把四码编成整数 ($6e303138 = 'n018'), 死亡判定也常走句柄比较
     # (GetDyingUnit()==udg_X 或 gg_unit_码_序号==GetDyingUnit())——
     # 四码归一与句柄解析让三类写法都进扫描族。
-    from w3xtool.pack_query_cli import _query_drop
+    from gametool.pack_query_cli import _query_drop
 
     hex_text = "\n".join(_query_drop(pack, "n018", 20))
     assert "炎石守卫 [n018]" in hex_text
@@ -781,7 +781,7 @@ def test_query_drop_hex_and_handle_death_codes(pack):
 def test_query_drop_random_stock_evidence(pack):
     # 死亡触发不产固定物品、只给商店随机补货时, 报机制而不是「无证据」
     # (迷失国度 drs 死亡触发 ChooseRandomItemExBJ 随机上架即此类)。
-    from w3xtool.pack_query_cli import _query_drop
+    from gametool.pack_query_cli import _query_drop
 
     text = "\n".join(_query_drop(pack, "nstk", 20))
     assert "补货兽 [nstk]  ⚠ 按单位反查死亡触发 (无固定掉落, 见运行时随机):" in text
@@ -791,7 +791,7 @@ def test_query_drop_random_stock_evidence(pack):
 def test_query_drop_createitem_and_stock_evidence(pack):
     # 死亡直落的第三种写法 CreateItem(码,x,y) 与「指定物品上架商店」
     # 都是真数据结构 (hxsj Trig_ZZ2 的 CreateItem('I07H',..) 曾被扫空)。
-    from w3xtool.pack_query_cli import _query_drop
+    from gametool.pack_query_cli import _query_drop
 
     ctm = "\n".join(_query_drop(pack, "nctm", 20))
     assert "坐标怪 [nctm]" in ctm
@@ -805,7 +805,7 @@ def test_query_drop_createitem_and_stock_evidence(pack):
 def test_query_drop_action_only_death_handler(pack):
     # 无独立 Conditions 函数的死亡处理 (判定写在 action 里) 也要被扫到
     # ——hxsj Trig_____________ZZ2Actions 即此形态, CreateItem 曾被整类漏扫。
-    from w3xtool.pack_query_cli import _query_drop
+    from gametool.pack_query_cli import _query_drop
 
     text = "\n".join(_query_drop(pack, "nonl", 20))
     assert "独行怪 [nonl]" in text
@@ -816,7 +816,7 @@ def test_query_drop_action_only_death_handler(pack):
 def test_query_where_use_item_array_pool(pack):
     # 使用物品触发的数组池随机产出 (宝箱开箱): 数组内容静态全解,
     # 迷失国度 wbc 系统 45/10/10/27 件四池即此法首次全量浮出。
-    from w3xtool.pack_query_cli import _query_where
+    from gametool.pack_query_cli import _query_where
 
     text = "\n".join(_query_where(pack, "I0CK", 50))
     assert "使用触发随机产出" in text
@@ -828,7 +828,7 @@ def test_query_where_use_item_array_pool(pack):
 def test_query_where_pickup_grant_evidence(pack):
     # 拾取凭证/宝箱触发的直接发放 (hxsj 世界商人/铜宝箱系统):
     # 条件 GetManipulatedItem 命中 + 事件为 PICKUP_ITEM → 产出与掷骰门槛
-    from w3xtool.pack_query_cli import _query_where
+    from gametool.pack_query_cli import _query_where
 
     text = "\n".join(_query_where(pack, "I0TK", 50))
     assert "拾取触发产出" in text
@@ -838,7 +838,7 @@ def test_query_where_pickup_grant_evidence(pack):
 def test_query_source_side_relation_rows(pack):
     # 查询词本身是「来源」(可破坏物/商人) 时, 关系表装备列不匹配也要给
     # 来源侧行——路障 B007 掉三件, 两个命令曾都答「未找到」
-    from w3xtool.pack_query_cli import _query_drop, _query_where
+    from gametool.pack_query_cli import _query_drop, _query_where
 
     drop_text = "\n".join(_query_drop(pack, "路障", 20))
     assert "路障[B007] 可破坏物掉落 -> 图腾石 [I0G1]" in drop_text
@@ -848,7 +848,7 @@ def test_query_source_side_relation_rows(pack):
 
 def test_query_near_annotates_source_drops(pack):
     # 脚底/附近的可破坏物带掉落清单 (来源侧关系行): 路障 B007 掉图腾石
-    from w3xtool.pack_query_cli import _query_near
+    from gametool.pack_query_cli import _query_near
 
     text = "\n".join(_query_near(pack, "12 18 500", 10))
     assert "装饰群: 路障 [B007]" in text
@@ -858,7 +858,7 @@ def test_query_near_annotates_source_drops(pack):
 def test_script_use_item_loot_scopes_local_vars():
     # wbc 类使用触发: 同一初始化函数里 t 复用, 条件必须配自己的动作体
     # (全脚本按变量名配对会把末个动作体当产出——与死亡模板同源事故)
-    from w3xtool.pack_query_cli import _script_use_item_loot
+    from gametool.pack_query_cli import _script_use_item_loot
 
     script = (
         "function Trig_AA_Conditions takes nothing returns boolean\n"
@@ -892,7 +892,7 @@ def test_script_use_item_loot_scopes_local_vars():
 def test_item_trigger_blocks_pair_by_position_in_giant_init(pack):
     # 同一初始化函数里 t 被反复复用: 条件必须配「其后最近」的 action,
     # 事件取各自注册窗口——旧实现按 (作用域,变量) 会把末个 action 配给所有条件
-    from w3xtool.pack_query_cli import _item_trigger_blocks, load_script
+    from gametool.pack_query_cli import _item_trigger_blocks, load_script
 
     blocks = {b[1][0]: b for b in _item_trigger_blocks(load_script(pack))}
     a = blocks["I0MA"]
@@ -905,7 +905,7 @@ def test_item_trigger_blocks_pair_by_position_in_giant_init(pack):
 
 def test_query_near_annotates_script_random_drops(pack):
     # near 注解同源: YDWE 每单位死亡随机掉落 (关系表无行) 也进「掉:」清单
-    from w3xtool.pack_query_cli import _query_near
+    from gametool.pack_query_cli import _query_near
 
     text = "\n".join(_query_near(pack, "500 500 200", 10))
     assert "坐标怪 [nctm]" in text
@@ -915,7 +915,7 @@ def test_query_near_annotates_script_random_drops(pack):
 def test_query_shop_includes_craft_shops(pack):
     # 「商店制造」是独立通道: 制造商店没有 usei 货架, 只靠 stock 扫描
     # 会答「未找到商店」(迷失国度 奇迹古树/神秘藏宝室 即此类)。
-    from w3xtool.pack_query_cli import _query_shop
+    from gametool.pack_query_cli import _query_shop
 
     text = "\n".join(_query_shop(pack, "铁匠铺", 20))
     assert "== 铁匠铺 [h0ZZ]  (商店制造)" in text
@@ -932,7 +932,7 @@ def test_query_shop_includes_craft_shops(pack):
 
 def test_query_recipe_miss_lists_total(pack):
     # 未命中时给配方总量提示——「未找到」不代表本图没有合成
-    from w3xtool.pack_query_cli import _query_recipe
+    from gametool.pack_query_cli import _query_recipe
 
     miss = _query_recipe(pack, "不存在zz", 20)
     assert miss[0] == "未找到相关配方: 不存在zz"
@@ -942,7 +942,7 @@ def test_query_recipe_miss_lists_total(pack):
 def test_query_recipe_from_relation_rows(pack):
     # 关系表「合成」行与脚本公式索引是两套证据 (迷失国度 0 公式但有
     # 秘法瓶/万灵药完整合成行) —— 按成品名或材料名都能查
-    from w3xtool.pack_query_cli import _query_recipe
+    from gametool.pack_query_cli import _query_recipe
 
     text = "\n".join(_query_recipe(pack, "图腾石", 20))
     assert "[I0G1] 图腾石  <-  凭证×1;宝物甲×2" in text
@@ -971,7 +971,7 @@ def test_run_cli_campaign_submap_aggregation(tmp_path, capsys):
 
 def test_query_locate_feature_code_intersection(pack):
     # 战役任务关识别第④步机械化: 全部特征码都出现才算命中
-    from w3xtool.pack_query_cli import _query_locate
+    from gametool.pack_query_cli import _query_locate
 
     text = "\n".join(_query_locate(pack, "IZYY;IZZZ", 20))
     assert "命中全部 2 个特征码: IZYY、IZZZ" in text
@@ -983,7 +983,7 @@ def test_query_locate_feature_code_intersection(pack):
 
 def test_query_item_and_price_miss_list_totals(pack):
     # 未命中时给物品总量提示 (与 shop/recipe/tech 同一纪律)
-    from w3xtool.pack_query_cli import _query_item, _query_price
+    from gametool.pack_query_cli import _query_item, _query_price
 
     item_miss = _query_item(pack, "不存在zz", 20)
     assert item_miss[0] == "未找到物品: 不存在zz"
@@ -995,7 +995,7 @@ def test_query_item_and_price_miss_list_totals(pack):
 
 def test_query_drop_miss_lists_table_sizes(pack):
     # 兜底未命中时给物品/单位表规模 (否定断言纪律最后一处)
-    from w3xtool.pack_query_cli import _query_drop
+    from gametool.pack_query_cli import _query_drop
 
     miss = _query_drop(pack, "不存在zz", 20)
     assert miss[0] == "未找到获取途径: 不存在zz"

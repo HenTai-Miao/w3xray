@@ -14,22 +14,22 @@ from tests.description_cache_publication_fixture import (
     replacement_inputs,
 )
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool import description_cache_publication as publication
-from w3xtool import description_cache_publication_retention as retention
-from w3xtool.description_cache_migration import (
+from gametool import description_cache_publication as publication
+from gametool import description_cache_publication_retention as retention
+from gametool.description_cache_migration import (
     DescriptionCacheMigrationOptions,
     migrate_description_cache,
 )
-from w3xtool.description_cache_publication_errors import (
+from gametool.description_cache_publication_errors import (
     DescriptionCachePublicationError,
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_models import (
+from gametool.description_cache_publication_models import (
     RetainedCacheRecord,
     RetainedCacheRole,
 )
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
-from w3xtool.trusted_description_cache import load_trusted_description_cache
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool.trusted_description_cache import load_trusted_description_cache
 
 
 type ObjectFactory = Callable[[Path], str | None]
@@ -180,7 +180,7 @@ def test_source_swap_records_non_directory_recovery_without_following(
     tmp_path: Path,
     factory: ObjectFactory,
 ) -> None:
-    source = tmp_path / ".w3xray-description-cache-stage-object"
+    source = tmp_path / ".gamexray-description-cache-stage-object"
     source.mkdir()
     expected = _identity(source)
     displaced = tmp_path / "displaced-directory"

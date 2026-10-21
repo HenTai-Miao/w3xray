@@ -2,7 +2,7 @@
 
 import unittest
 
-from w3xtool.fields import label_for, field_type, FIELD_LABELS
+from gametool.fields import label_for, field_type, FIELD_LABELS
 
 
 class TestFieldLabels(unittest.TestCase):
@@ -25,7 +25,7 @@ class TestFieldLabels(unittest.TestCase):
         self.assertEqual(field_type("zzzz"), "")
 
     def test_is_concat_type(self):
-        from w3xtool.fields import is_concat_type
+        from gametool.fields import is_concat_type
 
         self.assertTrue(is_concat_type("iabi"))  # abilityList
         self.assertFalse(is_concat_type("unam"))  # string
@@ -33,14 +33,14 @@ class TestFieldLabels(unittest.TestCase):
 
 class TestExpandCodes(unittest.TestCase):
     def test_resolves_known_codes_keeps_unknown(self):
-        from w3xtool.api import _expand_codes
+        from gametool.api import _expand_codes
 
         names = {"Hpal": "圣骑士", "AHbz": "暴风雪"}
         out = _expand_codes("Hpal,AHbz,xxyy", names)
         self.assertEqual(out, "圣骑士(Hpal), 暴风雪(AHbz), xxyy")
 
     def test_non_list_value_unchanged(self):
-        from w3xtool.api import _expand_codes
+        from gametool.api import _expand_codes
 
         self.assertEqual(_expand_codes("单个值", {}), "单个值")
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from w3xtool.war3_encoding import decode_warcraft_string, default_legacy_codecs
+from gametool.war3_encoding import decode_warcraft_string, default_legacy_codecs
 
 
 def test_single_byte_windows_acp_does_not_mask_gbk_text() -> None:
@@ -13,7 +13,7 @@ def test_single_byte_windows_acp_does_not_mask_gbk_text() -> None:
 
     # When: the default legacy codec order is built for cp1252.
     with patch(
-        "w3xtool.war3_encoding.locale.getpreferredencoding", return_value="cp1252"
+        "gametool.war3_encoding.locale.getpreferredencoding", return_value="cp1252"
     ):
         decoded = decode_warcraft_string(raw)
 
@@ -27,7 +27,7 @@ def test_multibyte_windows_acp_remains_ahead_of_gbk() -> None:
 
     # When: the default codec order is built for cp950.
     with patch(
-        "w3xtool.war3_encoding.locale.getpreferredencoding", return_value="cp950"
+        "gametool.war3_encoding.locale.getpreferredencoding", return_value="cp950"
     ):
         codecs = default_legacy_codecs()
         decoded = decode_warcraft_string(raw)

@@ -4,19 +4,19 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from w3xtool.extraction_ledger import build_extraction_ledger
-from w3xtool.icon_evidence_builder import build_icon_evidence_index
-from w3xtool.icon_evidence_models import (
+from gametool.extraction_ledger import build_extraction_ledger
+from gametool.icon_evidence_builder import build_icon_evidence_index
+from gametool.icon_evidence_models import (
     IconArchiveLayer,
     IconGapReason,
     IconResolutionLayer,
 )
-from w3xtool.icon_resources import (
+from gametool.icon_resources import (
     HistoricalIconEvidenceSet,
     IconObjectReference,
     NamedIconResource,
 )
-from w3xtool.map_data import GameObject, GameObjectFieldEvidence, MapData
+from gametool.map_data import GameObject, GameObjectFieldEvidence, MapData
 
 _DIGEST = "a" * 64
 _PATH = r"ReplaceableTextures\CommandButtons\BTNHero.blp"

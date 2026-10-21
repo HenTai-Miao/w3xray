@@ -12,10 +12,10 @@ from tests.retained_integrity_fixture import (
     retained,
     stage,
 )
-from w3xtool import description_cache_retained_integrity as retained_api
-from w3xtool import description_cache_retained_set_scan as set_api
-from w3xtool.description_cache_retained_integrity_models import SiblingState
-from w3xtool.integrity_cli import run_integrity_cli
+from gametool import description_cache_retained_integrity as retained_api
+from gametool import description_cache_retained_set_scan as set_api
+from gametool.description_cache_retained_integrity_models import SiblingState
+from gametool.integrity_cli import run_integrity_cli
 
 
 def _argv(active: Path, output: Path) -> tuple[str, ...]:
@@ -67,7 +67,7 @@ def test_retained_cache_cli_returns_one_and_writes_artifact_violations(
     elif violation == "transient":
         stage(active, "2").mkdir()
     else:
-        (active.parent / ".w3xray-description-cache-retained-bad").mkdir()
+        (active.parent / ".gamexray-description-cache-retained-bad").mkdir()
     output = tmp_path / f"{violation}.json"
 
     code = run_integrity_cli(_argv(active, output))

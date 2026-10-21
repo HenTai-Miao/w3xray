@@ -2,8 +2,8 @@
 
 import unittest
 
-from w3xtool.api import MapData
-from w3xtool.save_analysis import build_save_report, format_save_report_tsv
+from gametool.api import MapData
+from gametool.save_analysis import build_save_report, format_save_report_tsv
 
 
 class SaveAnalysisTest(unittest.TestCase):

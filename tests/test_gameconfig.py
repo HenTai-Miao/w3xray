@@ -5,13 +5,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from w3xtool.api import MapData
-from w3xtool.gameconfig import (
+from gametool.api import MapData
+from gametool.gameconfig import (
     find_internal_game_config_names,
     parse_game_configuration,
     read_game_configuration_file,
 )
-from w3xtool.map_extras import add_game_configs
+from gametool.map_extras import add_game_configs
 
 
 def _i(value):

@@ -6,17 +6,17 @@ from pathlib import Path
 import pytest
 
 from tests.batch_publication_fixture import empty_result, publish_empty_result
-from w3xtool.batch_global_publication import publish_global_generation
-from w3xtool.batch_models import BATCH_SCHEMA_VERSION, BatchState, SourceFingerprint
-from w3xtool.batch_status import (
+from gametool.batch_global_publication import publish_global_generation
+from gametool.batch_models import BATCH_SCHEMA_VERSION, BatchState, SourceFingerprint
+from gametool.batch_status import (
     ArchiveIntegrity,
     KnowledgeEvidence,
     KnowledgeGapReason,
     PublicationResult,
 )
-from w3xtool.description_cache import format_description_cache_tsv
-from w3xtool.description_cache_models import EMPTY_DESCRIPTION_CACHE
-from w3xtool.gui_batch_status import (
+from gametool.description_cache import format_description_cache_tsv
+from gametool.description_cache_models import EMPTY_DESCRIPTION_CACHE
+from gametool.gui_batch_status import (
     BatchStatusLoadError,
     batch_status_rows,
     load_batch_status,
@@ -49,7 +49,7 @@ def test_batch_status_rows_expose_three_independent_axes() -> None:
 
 def test_batch_status_layout_has_a_source_coverage_column() -> None:
     # Given
-    from w3xtool.gui_batch_status_layout import _COLUMNS
+    from gametool.gui_batch_status_layout import _COLUMNS
 
     # When
     columns = {key: title for key, title, _width in _COLUMNS}
@@ -75,7 +75,7 @@ def test_batch_status_loader_uses_a_validated_generation(tmp_path: Path) -> None
 
 def test_batch_status_loader_rejects_an_invalid_current_pointer(tmp_path: Path) -> None:
     # Given
-    (tmp_path / ".w3xray-global").mkdir()
+    (tmp_path / ".gamexray-global").mkdir()
     # When / Then
     with pytest.raises(BatchStatusLoadError, match="validated generation"):
         load_batch_status(tmp_path)

@@ -2,8 +2,8 @@
 
 import unittest
 
-from w3xtool.api import MapData, commands_from_map
-from w3xtool.script_scan import scan_chat_commands, _codes_in
+from gametool.api import MapData, commands_from_map
+from gametool.script_scan import scan_chat_commands, _codes_in
 
 
 class TestChatCommands(unittest.TestCase):

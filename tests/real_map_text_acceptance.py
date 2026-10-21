@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from w3xtool.batch_tsv import decode_tsv_cell
+from gametool.batch_tsv import decode_tsv_cell
 
 _PLACEHOLDERS: Final = frozenset(("", "-", "_", ",", '""', "''"))
 

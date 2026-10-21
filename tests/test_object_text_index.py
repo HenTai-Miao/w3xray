@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from w3xtool.client_object_data import ClientBaseObject
-from w3xtool.description_cache import DescriptionCache, DescriptionCacheEntry
-from w3xtool.map_data import GameObject
-from w3xtool.object_candidates import (
+from gametool.client_object_data import ClientBaseObject
+from gametool.description_cache import DescriptionCache, DescriptionCacheEntry
+from gametool.map_data import GameObject
+from gametool.object_candidates import (
     ObjectCandidate,
     ObjectFieldValue,
     ObjectSourceKind,
 )
-from w3xtool.object_text_index import build_object_text_index
-from w3xtool.object_text_models import ObjectTextRecord, ObjectTextState
+from gametool.object_text_index import build_object_text_index
+from gametool.object_text_models import ObjectTextRecord, ObjectTextState
 
 
 def test_resolution_preserves_all_roles_levels_long_values_and_named_conflicts() -> (

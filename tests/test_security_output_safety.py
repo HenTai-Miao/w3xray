@@ -9,15 +9,15 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.cli_options import CliOptionError, CliOptions, parse_cli_options, run_cli
-from w3xtool.investigation_exports import format_map_object_id_index
-from w3xtool.knowledge_io import KnowledgeWriteRecorder, safe_filename, tsv
-from w3xtool.load_context import MapLoadContext
-from w3xtool.map_data import MapData
-from w3xtool.presentation_safety import format_user_exception
-from w3xtool.safe_output_models import SafeWriteResult, SafeWriteStatus
-from w3xtool.w3world import Region
-from w3xtool.world_exports import format_regions_tsv
+from gametool.cli_options import CliOptionError, CliOptions, parse_cli_options, run_cli
+from gametool.investigation_exports import format_map_object_id_index
+from gametool.knowledge_io import KnowledgeWriteRecorder, safe_filename, tsv
+from gametool.load_context import MapLoadContext
+from gametool.map_data import MapData
+from gametool.presentation_safety import format_user_exception
+from gametool.safe_output_models import SafeWriteResult, SafeWriteStatus
+from gametool.w3world import Region
+from gametool.world_exports import format_regions_tsv
 
 
 @pytest.mark.parametrize("marker", ("=", "+", "-", "@"))
@@ -52,7 +52,7 @@ def test_map_identity_tsv_uses_shared_formula_protection() -> None:
 
 def test_no_production_module_defines_a_private_tsv_copy() -> None:
     # Given: TSV policy is centralized in knowledge_io.tsv.
-    source_root = Path(__file__).resolve().parents[1] / "w3xtool"
+    source_root = Path(__file__).resolve().parents[1] / "gametool"
     copies: list[str] = []
 
     # When: every production module is inspected structurally.
@@ -148,7 +148,7 @@ def test_cli_redacts_absolute_paths_from_boundary_errors(
     def fail_summary(_md: MapData):
         raise OSError(errno.EACCES, "denied", str(secret))
 
-    monkeypatch.setattr("w3xtool.cli_options.iter_cli_summary_lines", fail_summary)
+    monkeypatch.setattr("gametool.cli_options.iter_cli_summary_lines", fail_summary)
 
     # When: the CLI converts that exception into a user-facing error.
     assert run_cli(CliOptions("fixture.w3x")) == 2
@@ -180,9 +180,9 @@ def test_world_tsv_prefixes_spreadsheet_formula_cells() -> None:
 
 
 def _patch_cli_load(monkeypatch: pytest.MonkeyPatch, md: MapData) -> None:
-    monkeypatch.setattr("w3xtool.cli_options.read_external_listfile", lambda _path: ())
+    monkeypatch.setattr("gametool.cli_options.read_external_listfile", lambda _path: ())
     monkeypatch.setattr(
-        "w3xtool.cli_options.build_map_load_context",
+        "gametool.cli_options.build_map_load_context",
         lambda **_kwargs: MapLoadContext(),
     )
-    monkeypatch.setattr("w3xtool.cli_options.load_map", lambda _path, **_kwargs: md)
+    monkeypatch.setattr("gametool.cli_options.load_map", lambda _path, **_kwargs: md)

@@ -7,7 +7,7 @@ from time import monotonic
 
 import pytest
 
-from w3xtool.gui_worker_registry import (
+from gametool.gui_worker_registry import (
     GuiWorkerRegistry,
     GuiWorkerRegistryStopped,
     GuiWorkerTicket,

@@ -1,4 +1,4 @@
-"""一次性脚本：把社区 enUS 快照的英文名与细类并入 w3xtool/base_names.py。
+"""一次性脚本：把社区 enUS 快照的英文名与细类并入 gametool/base_names.py。
 
 数据源：flowtsohg/war3-objectdata（MIT）检出的 objectdata 目录
     https://github.com/flowtsohg/war3-objectdata/tree/dc5e2da21217dba8e5f750c1e867d691ab193ec1
@@ -8,7 +8,7 @@
     - 单位细类：units/UnitBalance.slk 的 Primary（英雄主属性）/isbldg（建筑）列
 
 用法：
-    python build_base_catalog.py --objectdata-dir <objectdata 目录> [--out-dir w3xtool]
+    python build_base_catalog.py --objectdata-dir <objectdata 目录> [--out-dir gametool]
 
 只重写 base_names.py：BASE_NAMES（中文名）原样保留，追加/刷新
 BASE_NAMES_EN 与 BASE_CATEGORIES。rawcode 大小写以现有 BASE_NAMES 为准。
@@ -101,7 +101,7 @@ def parse_object_categories(objectdata_dir: str) -> dict[str, tuple[str, str]]:
 
 def parse_object_categories_from_source(src) -> dict[str, tuple[str, str]]:
     """从一个 has_file/read_file 数据源解析三张 SLK 的细类表。"""
-    from w3xtool.slk import parse_slk
+    from gametool.slk import parse_slk
 
     def rows(fn: str) -> dict[str, dict[str, str]]:
         text = src.read_file("Units\\" + fn).decode("utf-8", "replace")
@@ -162,7 +162,7 @@ def _load_current_tables() -> tuple[
 ]:
     """读包内当前 base_names.py 的三张表（缺项返回空）。"""
     try:
-        from w3xtool import base_names as module
+        from gametool import base_names as module
     except Exception:
         return {}, {}, {}
     names: dict[str, str] = dict(getattr(module, "BASE_NAMES", None) or {})
@@ -218,7 +218,7 @@ def write_base_names_module(
 def merge_objectdata(
     objectdata_dir: str | None = None,
     casc_root: str | None = None,
-    out_dir: str = "w3xtool",
+    out_dir: str = "gametool",
 ) -> None:
     """把 enUS 来源的英文名/细类只补缺地并入 base_names.py，中文名原样保留。
 
@@ -231,7 +231,7 @@ def merge_objectdata(
     names, en_names, categories = _load_current_tables()
     if not names:
         raise SystemExit(
-            "当前 w3xtool/base_names.py 缺少 BASE_NAMES：先运行 build_base_names.py 完成中文名生成"
+            "当前 gametool/base_names.py 缺少 BASE_NAMES：先运行 build_base_names.py 完成中文名生成"
         )
     if objectdata_dir:
         enus = _enus_source(objectdata_dir)
@@ -242,7 +242,7 @@ def merge_objectdata(
         _fill_en_names(enus, root, en_names)
         _fill_categories_into(root, categories, names)
     if casc_root:
-        from w3xtool.casclib_source import CascLibDataSource
+        from gametool.casclib_source import CascLibDataSource
 
         casc = CascLibDataSource(casc_root)
         try:
@@ -265,7 +265,7 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="把 enUS 来源的英文名/细类只补缺地并入 w3xtool/base_names.py"
+        description="把 enUS 来源的英文名/细类只补缺地并入 gametool/base_names.py"
     )
     parser.add_argument(
         "--objectdata-dir",
@@ -280,8 +280,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--out-dir",
         dest="out_dir",
-        default="w3xtool",
-        help="base_names.py 所在目录（默认 w3xtool）",
+        default="gametool",
+        help="base_names.py 所在目录（默认 gametool）",
     )
     args = parser.parse_args()
     if not args.objectdata_dir and not args.casc_root:

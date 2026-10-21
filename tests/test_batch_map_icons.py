@@ -6,14 +6,14 @@ from dataclasses import replace
 from pathlib import Path
 
 from tests.batch_map_processing_fixture import loaded_map
-import w3xtool.batch_map_icons as batch_map_icons
-from w3xtool.batch_icon_export import (
+import gametool.batch_map_icons as batch_map_icons
+from gametool.batch_icon_export import (
     IconExportRecord,
     IconExportState,
     IconKind,
 )
-from w3xtool.icon_evidence_models import IconResolutionLayer
-from w3xtool.map_data import GameObjectFieldEvidence, MapData
+from gametool.icon_evidence_models import IconResolutionLayer
+from gametool.map_data import GameObjectFieldEvidence, MapData
 
 
 def test_canonicalize_icon_paths_records_actual_filesystem_casing(

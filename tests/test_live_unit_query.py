@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import pytest
 
-from w3xtool.live_cli import LiveCliOptionError, parse_live_cli_options
-from w3xtool.live_handle_chain import match_unit_entries
+from gametool.live_cli import LiveCliOptionError, parse_live_cli_options
+from gametool.live_handle_chain import match_unit_entries
 
 UNITS = [
     {"unit": "寒冰游侠", "code": "H004", "items": []},

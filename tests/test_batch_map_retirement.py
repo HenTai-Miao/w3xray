@@ -10,20 +10,20 @@ from pathlib import Path
 import pytest
 
 from tests.batch_publication_fixture import empty_result, write_empty_publication
-import w3xtool.batch_map_attempt as batch_map_attempt
-import w3xtool.batch_map_retirement as batch_map_retirement
-import w3xtool.batch_runner as batch_runner
-from w3xtool.batch_configuration import BatchOptions
-from w3xtool.batch_manifest_models import PublicationValidation
-from w3xtool.batch_models import (
+import gametool.batch_map_attempt as batch_map_attempt
+import gametool.batch_map_retirement as batch_map_retirement
+import gametool.batch_runner as batch_runner
+from gametool.batch_configuration import BatchOptions
+from gametool.batch_manifest_models import PublicationValidation
+from gametool.batch_models import (
     BATCH_SCHEMA_VERSION,
     BatchState,
     MapBatchResult,
     MapBatchState,
     SourceFingerprint,
 )
-from w3xtool.batch_status import PublicationResult
-from w3xtool.load_context import MapLoadContext
+from gametool.batch_status import PublicationResult
+from gametool.load_context import MapLoadContext
 
 
 def _publish_named_result(
@@ -142,7 +142,7 @@ def test_retirement_preserves_unproved_foreign_and_current_directories(
     old_directory = output / relative[0]
     unowned = output / "地图" / "unowned"
     unowned.mkdir()
-    (unowned / ".w3xray-batch-owned").write_text(
+    (unowned / ".gamexray-batch-owned").write_text(
         hashlib.sha256(b"map").hexdigest(),
         encoding="ascii",
     )

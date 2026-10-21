@@ -12,8 +12,8 @@
 
 | 路径 | 说明 |
 |------|------|
-| `w3xtool/aicli/`（`__init__/autopt/config/improve/runner`） | AI 调用层 |
-| `w3xtool/audit.py` | 本地诊断（结构化「缺斤少两」信号，只为喂 AI/人审） |
+| `gametool/aicli/`（`__init__/autopt/config/improve/runner`） | AI 调用层 |
+| `gametool/audit.py` | 本地诊断（结构化「缺斤少两」信号，只为喂 AI/人审） |
 | `tools_audit.py` | 诊断命令行入口 |
 | `prompts/`（`annotate.md/attribution.md/autopt.md`） | AI 提示词模板 |
 | `tests/test_aicli_autopt.py` `test_aicli_config.py` `test_aicli_improve.py` `test_aicli_runner.py` | AI 单测 |
@@ -21,7 +21,7 @@
 | `tests/test_audit.py` | 诊断单测 |
 | `docs/superpowers/specs/2026-06-10-ai-cli-self-improvement-design.md` | AI 自改进设计文档 |
 
-### 编辑 `w3xtool/gui.py`
+### 编辑 `gametool/gui.py`
 
 - 删除 AI/audit 的 import（`from .aicli.* import ...`、`from .audit import audit_loaded`）。
 - 删除构造器里 `_ai_config = load_ai_config()`、`_settings_win`、`_ai_busy` 的初始化。
@@ -49,6 +49,6 @@
 ## 验证标准
 
 1. `uv run pytest` 全绿——剩余测试不依赖任何被删模块（删测试前先确认没有跨文件 import）。
-2. `python -c "import w3xtool.gui"` 无 ImportError。
+2. `python -c "import gametool.gui"` 无 ImportError。
 3. GUI 启动后顶栏只剩「打开地图/战役 + 导出三件套」，标签页只剩「对象浏览 / 隐藏指令 / 合成配方」。
 4. `git grep -niE "aicli|audit|annotate|autopt|质检"` 在源码/测试/README/spec 中无残留（docs 历史日志除外）。

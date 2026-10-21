@@ -3,9 +3,9 @@
 from tkinter import ttk
 
 from tests.gui_base import GuiTestCase
-from w3xtool.api import MapData
-from w3xtool.wtg_diagnostics import TriggerParseFailure, UnknownTriggerFunction
-from w3xtool.wtg_models import (
+from gametool.api import MapData
+from gametool.wtg_diagnostics import TriggerParseFailure, UnknownTriggerFunction
+from gametool.wtg_models import (
     TriggerEcaFunction,
     TriggerEcaParameter,
     TriggerHeader,

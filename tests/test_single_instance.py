@@ -6,7 +6,7 @@ import sys
 import time
 import unittest
 
-from w3xtool.single_instance import _decide, _terminate, _image_path, _pid_alive
+from gametool.single_instance import _decide, _terminate, _image_path, _pid_alive
 
 
 class TestDecide(unittest.TestCase):

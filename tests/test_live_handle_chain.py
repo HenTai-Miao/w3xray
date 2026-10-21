@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import struct
 
-from w3xtool.live_handle_chain import (
+from gametool.live_handle_chain import (
     HANDLE_CHAIN_OFFSETS,
     HandleSystem,
     MemoryReader,

@@ -5,19 +5,19 @@ from unittest.mock import patch
 from types import SimpleNamespace
 
 from main import iter_cli_summary_lines, iter_game_config_summary_lines
-from w3xtool.api import GameObject, MapData
-from w3xtool.gameconfig import (
+from gametool.api import GameObject, MapData
+from gametool.gameconfig import (
     GameConfiguration,
     GameConfigPlayer,
     NamedGameConfiguration,
 )
-from w3xtool.gameplay import GameplayConstant
-from w3xtool.imp import ImportEntry, ImportSummary
-from w3xtool.mapmeta import MapStructureReport, PathingSummary
-from w3xtool.mmp import PreviewIcon, PreviewIconSummary
-from w3xtool.slkmeta import SlkFileSummary, SlkInventoryReport
-from w3xtool.terrain import TerrainInfo
-from w3xtool.wtg import (
+from gametool.gameplay import GameplayConstant
+from gametool.imp import ImportEntry, ImportSummary
+from gametool.mapmeta import MapStructureReport, PathingSummary
+from gametool.mmp import PreviewIcon, PreviewIconSummary
+from gametool.slkmeta import SlkFileSummary, SlkInventoryReport
+from gametool.terrain import TerrainInfo
+from gametool.wtg import (
     TriggerCategory,
     TriggerHeader,
     TriggerParseFailure,
@@ -247,7 +247,7 @@ class CliAuditTest(unittest.TestCase):
         )
 
         # When: CLI summary lines are rendered.
-        with patch("w3xtool.terrain.terrain_info_from_map_path", return_value=info):
+        with patch("gametool.terrain.terrain_info_from_map_path", return_value=info):
             lines = list(iter_cli_summary_lines(md))
 
         # Then: terrain texture and grid metadata is visible.
@@ -313,7 +313,7 @@ class CliAuditTest(unittest.TestCase):
 
         # When: CLI summary lines are rendered.
         with patch(
-            "w3xtool.mapmeta.map_structure_report_from_map_path", return_value=report
+            "gametool.mapmeta.map_structure_report_from_map_path", return_value=report
         ):
             lines = list(iter_cli_summary_lines(md))
 
@@ -339,7 +339,7 @@ class CliAuditTest(unittest.TestCase):
         )
 
         # When: CLI summary lines are rendered.
-        with patch("w3xtool.slkmeta.slk_inventory_from_map_path", return_value=report):
+        with patch("gametool.slkmeta.slk_inventory_from_map_path", return_value=report):
             lines = list(iter_cli_summary_lines(md))
 
         # Then: the SLK table inventory is visible.
@@ -361,7 +361,7 @@ class CliAuditTest(unittest.TestCase):
 
         # When: CLI summary lines are rendered.
         with patch(
-            "w3xtool.gameplay.gameplay_constants_from_map_path", return_value=constants
+            "gametool.gameplay.gameplay_constants_from_map_path", return_value=constants
         ):
             lines = list(iter_cli_summary_lines(md))
 

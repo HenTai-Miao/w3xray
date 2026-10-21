@@ -3,8 +3,8 @@
 import unittest
 
 from tests.gui_base import GuiTestCase
-from w3xtool.gui_pane_state import _apply_sash_positions, _paned_sash_positions
-from w3xtool.theme import LAYOUT_VERSION
+from gametool.gui_pane_state import _apply_sash_positions, _paned_sash_positions
+from gametool.theme import LAYOUT_VERSION
 
 _SASH_TEST_MARGIN = 20
 

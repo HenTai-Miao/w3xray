@@ -8,13 +8,13 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.load_context import MapLoadContext
-from w3xtool.map_components import _add_w3f
-from w3xtool.map_data import MapData
-from w3xtool.map_loader import _load_map_impl
-from w3xtool.mpq import MPQArchive
-from w3xtool.object_text_sources import collect_text_object_records
-from w3xtool.slk_objects import parse_category_objects
+from gametool.load_context import MapLoadContext
+from gametool.map_components import _add_w3f
+from gametool.map_data import MapData
+from gametool.map_loader import _load_map_impl
+from gametool.mpq import MPQArchive
+from gametool.object_text_sources import collect_text_object_records
+from gametool.slk_objects import parse_category_objects
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,7 +115,7 @@ def test_text_object_parser_exception_is_captured_at_parse_stage(
     def fail_parser(_text: str):
         raise _TextObjectParseError("bad text object syntax")
 
-    monkeypatch.setattr("w3xtool.object_text_sources.parse_text_objects", fail_parser)
+    monkeypatch.setattr("gametool.object_text_sources.parse_text_objects", fail_parser)
 
     # When: named text objects are collected.
     records = collect_text_object_records(archive, md=md)
@@ -167,7 +167,7 @@ def test_failed_campaign_child_does_not_consume_retained_byte_budget(
         path="fixture.w3n",
     )
     monkeypatch.setattr(
-        "w3xtool.map_loader._MAX_CAMPAIGN_CHILD_BYTES",
+        "gametool.map_loader._MAX_CAMPAIGN_CHILD_BYTES",
         len(valid_child) + len(malformed_child) - 1,
     )
 

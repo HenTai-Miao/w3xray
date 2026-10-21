@@ -15,19 +15,19 @@ from typing import Never
 
 import pytest
 
-from w3xtool import current_map_discovery as discovery
-from w3xtool.current_map_discovery import (
+from gametool import current_map_discovery as discovery
+from gametool.current_map_discovery import (
     discover_default_map_roots,
     locate_current_map,
 )
-from w3xtool.current_map_models import (
+from gametool.current_map_models import (
     CurrentMapResolution,
     EvidenceKind,
     GameProcess,
     MapEvidence,
     ResolutionStatus,
 )
-from w3xtool.current_map_process import OpenMapProbeReport, ProcessProbeReport
+from gametool.current_map_process import OpenMapProbeReport, ProcessProbeReport
 
 _NOW_NS = 1_800_000_000_000_000_000
 _WINDOW_NS = 4 * 60 * 60 * 1_000_000_000

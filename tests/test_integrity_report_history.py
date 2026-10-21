@@ -7,13 +7,13 @@ import json
 import os
 from pathlib import Path
 
-from w3xtool.integrity_cli import run_integrity_cli
-from w3xtool.integrity_output_naming import probe_filesystem_naming
-from w3xtool.safe_output import write_bytes_safely
-from w3xtool.safe_output_models import SafeWriteStatus
+from gametool.integrity_cli import run_integrity_cli
+from gametool.integrity_output_naming import probe_filesystem_naming
+from gametool.safe_output import write_bytes_safely
+from gametool.safe_output_models import SafeWriteStatus
 
 
-_HISTORY_ROOT = ".w3xray-integrity-history"
+_HISTORY_ROOT = ".gamexray-integrity-history"
 _MANIFEST_NAME = "历史清单.json"
 _REPORT_NAME = "report.json"
 
@@ -142,7 +142,7 @@ def test_integrity_report_cannot_use_the_history_root_as_its_public_name(
     # Then: it rejects the namespace collision before writing any report.
     assert code == 2
     assert not output.exists()
-    assert not tuple(tmp_path.glob(".w3xray-stage-*.tmp"))
+    assert not tuple(tmp_path.glob(".gamexray-stage-*.tmp"))
 
 
 def test_history_root_case_alias_follows_the_exact_parent_filesystem(

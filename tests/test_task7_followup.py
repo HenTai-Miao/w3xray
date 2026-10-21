@@ -6,11 +6,11 @@ from contextlib import nullcontext
 from unittest.mock import patch
 
 from tests.test_script_sources import _MemoryArchive, _classic_wct
-from w3xtool.api import MapData, commands_from_map, scan_commands
-from w3xtool.load_context import MapLoadContext
-from w3xtool.map_loader import _load_map_impl
-from w3xtool.script_string_index import build_script_string_index
-from w3xtool.wts import map_wts_table
+from gametool.api import MapData, commands_from_map, scan_commands
+from gametool.load_context import MapLoadContext
+from gametool.map_loader import _load_map_impl
+from gametool.script_string_index import build_script_string_index
+from gametool.wts import map_wts_table
 
 
 def test_map_loading_isolates_malformed_source_object_reference_state() -> None:
@@ -73,7 +73,7 @@ def test_scan_commands_parses_original_mixed_encoding_wts_bytes() -> None:
     )
 
     # When: the standalone path API collects and scans the archive.
-    with patch("w3xtool.api.MPQArchive", return_value=nullcontext(archive)):
+    with patch("gametool.api.MPQArchive", return_value=nullcontext(archive)):
         commands = scan_commands("memory.w3x")
 
     # Then: the hint comes from raw per-entry WTS parsing, without mojibake.

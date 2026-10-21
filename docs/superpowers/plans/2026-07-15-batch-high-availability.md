@@ -15,7 +15,7 @@
 - Preserve unrelated user changes and stage only reviewed paths.
 - Do not add runtime dependencies.
 - Legacy state/ownership is not reusable under the new schema and is never deleted merely for being legacy.
-- Root reports remain compatibility mirrors; `.w3xray-global/current.json` is the only resume authority.
+- Root reports remain compatibility mirrors; `.gamexray-global/current.json` is the only resume authority.
 - New and substantively changed Python modules must remain below 250 pure lines.
 - Every behavior change follows RED → GREEN → REFACTOR and every focused gate must pass before starting the next task.
 
@@ -25,21 +25,21 @@
 
 ### New batch modules
 
-- `w3xtool/durable_io.py` — file/directory synchronization primitives and typed durability errors.
-- `w3xtool/batch_manifest_models.py` — immutable manifest, artifact, ownership, and validation records.
-- `w3xtool/batch_manifest_io.py` — deterministic manifest/marker formatting and strict parsing.
-- `w3xtool/batch_manifest_validation.py` — bounded hashing, file-set verification, and report/count reconciliation.
-- `w3xtool/batch_publication_recovery.py` — strict per-map transaction records and idempotent recovery.
-- `w3xtool/batch_global_publication.py` — global generation staging, manifest, current pointer, and compatibility mirrors.
-- `w3xtool/batch_dependencies.py` — bounded client/cache/options dependency fingerprint.
-- `w3xtool/batch_resume.py` — prior-state loading, reusable-result validation, and checkpoint-tail merge.
-- `w3xtool/batch_execution.py` — spawn child protocol, cancellation, timeout, termination, and resource-limit outcomes.
-- `w3xtool/batch_runtime.py` — disk preflight, RSS sampling, progress, ETA, and structured diagnostics.
+- `gametool/durable_io.py` — file/directory synchronization primitives and typed durability errors.
+- `gametool/batch_manifest_models.py` — immutable manifest, artifact, ownership, and validation records.
+- `gametool/batch_manifest_io.py` — deterministic manifest/marker formatting and strict parsing.
+- `gametool/batch_manifest_validation.py` — bounded hashing, file-set verification, and report/count reconciliation.
+- `gametool/batch_publication_recovery.py` — strict per-map transaction records and idempotent recovery.
+- `gametool/batch_global_publication.py` — global generation staging, manifest, current pointer, and compatibility mirrors.
+- `gametool/batch_dependencies.py` — bounded client/cache/options dependency fingerprint.
+- `gametool/batch_resume.py` — prior-state loading, reusable-result validation, and checkpoint-tail merge.
+- `gametool/batch_execution.py` — spawn child protocol, cancellation, timeout, termination, and resource-limit outcomes.
+- `gametool/batch_runtime.py` — disk preflight, RSS sampling, progress, ETA, and structured diagnostics.
 
 ### New GUI modules
 
-- `w3xtool/gui_worker_registry.py` — tickets, group generations, cancellation, guarded callbacks, reaping, and bounded shutdown.
-- `w3xtool/gui_worker_host.py` — static host Protocol for worker-aware mixins.
+- `gametool/gui_worker_registry.py` — tickets, group generations, cancellation, guarded callbacks, reaping, and bounded shutdown.
+- `gametool/gui_worker_host.py` — static host Protocol for worker-aware mixins.
 
 ### New tests
 
@@ -57,23 +57,23 @@
 
 ### Existing integration points
 
-- Safe writes: `w3xtool/safe_output_chunk_writer.py`, `safe_output_publication.py`, `safe_output.py`.
-- Per-map output: `w3xtool/batch_map_publication.py`, `batch_map_processing.py`.
-- State/cache/global output: `w3xtool/batch_models.py`, `batch_state_io.py`, `batch_description_cache.py`, `description_cache.py`, `description_cache_models.py`.
-- Orchestration/CLI: `w3xtool/batch_runner.py`, `batch_cli.py`.
-- GUI: `w3xtool/gui.py`, `gui_lifecycle.py`, `gui_loader_runner.py`, `gui_loader_host.py`, `gui_object_filter_runner.py`, `gui_current_map.py`, `gui_source_browser.py`, `gui_external_data.py`, `gui_export_actions.py`, `gui_casc_browser.py`.
-- Quality/acceptance: `pyproject.toml`, `uv.lock`, `w3xtool/quality_gate.py`, `w3xtool/acceptance_batch.py`, `w3xtool/acceptance_runner.py`, `.github/workflows/*.yml`, `tools/run_windows_acceptance.ps1`.
+- Safe writes: `gametool/safe_output_chunk_writer.py`, `safe_output_publication.py`, `safe_output.py`.
+- Per-map output: `gametool/batch_map_publication.py`, `batch_map_processing.py`.
+- State/cache/global output: `gametool/batch_models.py`, `batch_state_io.py`, `batch_description_cache.py`, `description_cache.py`, `description_cache_models.py`.
+- Orchestration/CLI: `gametool/batch_runner.py`, `batch_cli.py`.
+- GUI: `gametool/gui.py`, `gui_lifecycle.py`, `gui_loader_runner.py`, `gui_loader_host.py`, `gui_object_filter_runner.py`, `gui_current_map.py`, `gui_source_browser.py`, `gui_external_data.py`, `gui_export_actions.py`, `gui_casc_browser.py`.
+- Quality/acceptance: `pyproject.toml`, `uv.lock`, `gametool/quality_gate.py`, `gametool/acceptance_batch.py`, `gametool/acceptance_runner.py`, `.github/workflows/*.yml`, `tools/run_windows_acceptance.ps1`.
 
 ---
 
 ### Task 1: Durable staged-file publication
 
 **Files:**
-- Create: `w3xtool/durable_io.py`
+- Create: `gametool/durable_io.py`
 - Create: `tests/test_durable_io.py`
-- Modify: `w3xtool/safe_output_chunk_writer.py`
-- Modify: `w3xtool/safe_output_publication.py`
-- Modify: `w3xtool/safe_output.py`
+- Modify: `gametool/safe_output_chunk_writer.py`
+- Modify: `gametool/safe_output_publication.py`
+- Modify: `gametool/safe_output.py`
 - Modify: `tests/test_safe_output.py`
 
 **Interfaces:**
@@ -142,16 +142,16 @@ Call `sync_file_descriptor` once after all chunks. For an existing destination, 
 
 Run: `uv run python -m pytest -q tests/test_durable_io.py tests/test_safe_output.py`
 
-Expected: PASS with zero leftover `.w3xray-stage-*` or `.w3xray-backup-*` files.
+Expected: PASS with zero leftover `.gamexray-stage-*` or `.gamexray-backup-*` files.
 
 - [x] **Step 5: Run static gates and commit**
 
 Run:
 
 ```bash
-uv run --with ruff ruff check w3xtool/durable_io.py w3xtool/safe_output_chunk_writer.py w3xtool/safe_output_publication.py w3xtool/safe_output.py tests/test_durable_io.py tests/test_safe_output.py
-uv run --with ruff ruff format --check w3xtool/durable_io.py w3xtool/safe_output_chunk_writer.py w3xtool/safe_output_publication.py w3xtool/safe_output.py tests/test_durable_io.py tests/test_safe_output.py
-uv run --with basedpyright basedpyright --level error w3xtool/durable_io.py w3xtool/safe_output_chunk_writer.py w3xtool/safe_output_publication.py
+uv run --with ruff ruff check gametool/durable_io.py gametool/safe_output_chunk_writer.py gametool/safe_output_publication.py gametool/safe_output.py tests/test_durable_io.py tests/test_safe_output.py
+uv run --with ruff ruff format --check gametool/durable_io.py gametool/safe_output_chunk_writer.py gametool/safe_output_publication.py gametool/safe_output.py tests/test_durable_io.py tests/test_safe_output.py
+uv run --with basedpyright basedpyright --level error gametool/durable_io.py gametool/safe_output_chunk_writer.py gametool/safe_output_publication.py
 ```
 
 Commit: `fix: make staged writes durable`
@@ -161,13 +161,13 @@ Commit: `fix: make staged writes durable`
 ### Task 2: Immutable per-map manifest and ownership binding
 
 **Files:**
-- Create: `w3xtool/batch_manifest_models.py`
-- Create: `w3xtool/batch_manifest_io.py`
-- Create: `w3xtool/batch_manifest_validation.py`
+- Create: `gametool/batch_manifest_models.py`
+- Create: `gametool/batch_manifest_io.py`
+- Create: `gametool/batch_manifest_validation.py`
 - Create: `tests/test_batch_manifest.py`
-- Modify: `w3xtool/batch_models.py`
-- Modify: `w3xtool/batch_map_processing.py`
-- Modify: `w3xtool/batch_map_publication.py`
+- Modify: `gametool/batch_models.py`
+- Modify: `gametool/batch_map_processing.py`
+- Modify: `gametool/batch_map_publication.py`
 - Modify: `tests/test_batch_map_processing.py`
 
 **Interfaces:**
@@ -249,9 +249,9 @@ Run:
 
 ```bash
 uv run python -m pytest -q tests/test_batch_manifest.py tests/test_batch_map_processing.py tests/test_batch_reports.py
-uv run --with ruff ruff check w3xtool/batch_manifest_models.py w3xtool/batch_manifest_io.py w3xtool/batch_manifest_validation.py w3xtool/batch_models.py w3xtool/batch_map_processing.py w3xtool/batch_map_publication.py tests/test_batch_manifest.py tests/test_batch_map_processing.py
-uv run --with ruff ruff format --check w3xtool/batch_manifest_models.py w3xtool/batch_manifest_io.py w3xtool/batch_manifest_validation.py w3xtool/batch_models.py w3xtool/batch_map_processing.py w3xtool/batch_map_publication.py tests/test_batch_manifest.py tests/test_batch_map_processing.py
-uv run --with basedpyright basedpyright --level error w3xtool/batch_manifest_models.py w3xtool/batch_manifest_io.py w3xtool/batch_manifest_validation.py
+uv run --with ruff ruff check gametool/batch_manifest_models.py gametool/batch_manifest_io.py gametool/batch_manifest_validation.py gametool/batch_models.py gametool/batch_map_processing.py gametool/batch_map_publication.py tests/test_batch_manifest.py tests/test_batch_map_processing.py
+uv run --with ruff ruff format --check gametool/batch_manifest_models.py gametool/batch_manifest_io.py gametool/batch_manifest_validation.py gametool/batch_models.py gametool/batch_map_processing.py gametool/batch_map_publication.py tests/test_batch_manifest.py tests/test_batch_map_processing.py
+uv run --with basedpyright basedpyright --level error gametool/batch_manifest_models.py gametool/batch_manifest_io.py gametool/batch_manifest_validation.py
 ```
 
 Commit: `feat: bind map output to content manifests`
@@ -261,10 +261,10 @@ Commit: `feat: bind map output to content manifests`
 ### Task 3: Recoverable per-map directory transactions
 
 **Files:**
-- Create: `w3xtool/batch_publication_recovery.py`
+- Create: `gametool/batch_publication_recovery.py`
 - Create: `tests/test_batch_publication_recovery.py`
-- Modify: `w3xtool/batch_map_publication.py`
-- Modify: `w3xtool/batch_map_processing.py`
+- Modify: `gametool/batch_map_publication.py`
+- Modify: `gametool/batch_map_processing.py`
 
 **Interfaces:**
 - Produces: `MapPublicationStage(stage: Path, transaction_id: str, relative: str, digest: str)`.
@@ -290,7 +290,7 @@ def test_recovery_keeps_exactly_one_valid_generation(
     destination = tmp_path / publication.relative
     assert verify_map_publication(destination).valid
     assert destination in {old, tmp_path / publication.relative}
-    assert not tuple((tmp_path / "地图").glob(".w3xray-map-*-*"))
+    assert not tuple((tmp_path / "地图").glob(".gamexray-map-*-*"))
     assert all(item.code != "unproved_path" for item in diagnostics)
 ```
 
@@ -336,9 +336,9 @@ Run:
 
 ```bash
 uv run python -m pytest -q tests/test_batch_publication_recovery.py tests/test_batch_map_processing.py tests/test_batch_runner.py
-uv run --with ruff ruff check w3xtool/batch_publication_recovery.py w3xtool/batch_map_publication.py w3xtool/batch_map_processing.py tests/test_batch_publication_recovery.py
-uv run --with ruff ruff format --check w3xtool/batch_publication_recovery.py w3xtool/batch_map_publication.py w3xtool/batch_map_processing.py tests/test_batch_publication_recovery.py
-uv run --with basedpyright basedpyright --level error w3xtool/batch_publication_recovery.py w3xtool/batch_map_publication.py
+uv run --with ruff ruff check gametool/batch_publication_recovery.py gametool/batch_map_publication.py gametool/batch_map_processing.py tests/test_batch_publication_recovery.py
+uv run --with ruff ruff format --check gametool/batch_publication_recovery.py gametool/batch_map_publication.py gametool/batch_map_processing.py tests/test_batch_publication_recovery.py
+uv run --with basedpyright basedpyright --level error gametool/batch_publication_recovery.py gametool/batch_map_publication.py
 ```
 
 Commit: `feat: recover interrupted map publications`
@@ -348,15 +348,15 @@ Commit: `feat: recover interrupted map publications`
 ### Task 4: Strict global generations, state validation, cache binding, and dependencies
 
 **Files:**
-- Create: `w3xtool/batch_global_publication.py`
-- Create: `w3xtool/batch_dependencies.py`
+- Create: `gametool/batch_global_publication.py`
+- Create: `gametool/batch_dependencies.py`
 - Create: `tests/test_batch_global_publication.py`
 - Create: `tests/test_batch_dependencies.py`
-- Modify: `w3xtool/batch_models.py`
-- Modify: `w3xtool/batch_state_io.py`
-- Modify: `w3xtool/batch_description_cache.py`
-- Modify: `w3xtool/description_cache.py`
-- Modify: `w3xtool/description_cache_models.py`
+- Modify: `gametool/batch_models.py`
+- Modify: `gametool/batch_state_io.py`
+- Modify: `gametool/batch_description_cache.py`
+- Modify: `gametool/description_cache.py`
+- Modify: `gametool/description_cache_models.py`
 - Modify: `tests/test_batch_state_reports.py`
 - Modify: `tests/test_description_cache.py`
 - Modify: `tests/test_batch_description_cache.py`
@@ -450,9 +450,9 @@ Run:
 
 ```bash
 uv run python -m pytest -q tests/test_batch_global_publication.py tests/test_batch_dependencies.py tests/test_batch_state_reports.py tests/test_description_cache.py tests/test_batch_description_cache.py
-uv run --with ruff ruff check w3xtool/batch_global_publication.py w3xtool/batch_dependencies.py w3xtool/batch_models.py w3xtool/batch_state_io.py w3xtool/batch_description_cache.py w3xtool/description_cache.py w3xtool/description_cache_models.py tests/test_batch_global_publication.py tests/test_batch_dependencies.py tests/test_batch_state_reports.py tests/test_description_cache.py tests/test_batch_description_cache.py
-uv run --with ruff ruff format --check w3xtool/batch_global_publication.py w3xtool/batch_dependencies.py w3xtool/batch_models.py w3xtool/batch_state_io.py w3xtool/batch_description_cache.py w3xtool/description_cache.py w3xtool/description_cache_models.py tests/test_batch_global_publication.py tests/test_batch_dependencies.py tests/test_batch_state_reports.py tests/test_description_cache.py tests/test_batch_description_cache.py
-uv run --with basedpyright basedpyright --level error w3xtool/batch_global_publication.py w3xtool/batch_dependencies.py w3xtool/batch_models.py w3xtool/batch_state_io.py
+uv run --with ruff ruff check gametool/batch_global_publication.py gametool/batch_dependencies.py gametool/batch_models.py gametool/batch_state_io.py gametool/batch_description_cache.py gametool/description_cache.py gametool/description_cache_models.py tests/test_batch_global_publication.py tests/test_batch_dependencies.py tests/test_batch_state_reports.py tests/test_description_cache.py tests/test_batch_description_cache.py
+uv run --with ruff ruff format --check gametool/batch_global_publication.py gametool/batch_dependencies.py gametool/batch_models.py gametool/batch_state_io.py gametool/batch_description_cache.py gametool/description_cache.py gametool/description_cache_models.py tests/test_batch_global_publication.py tests/test_batch_dependencies.py tests/test_batch_state_reports.py tests/test_description_cache.py tests/test_batch_description_cache.py
+uv run --with basedpyright basedpyright --level error gametool/batch_global_publication.py gametool/batch_dependencies.py gametool/batch_models.py gametool/batch_state_io.py
 ```
 
 Commit: `feat: publish validated global generations`
@@ -462,9 +462,9 @@ Commit: `feat: publish validated global generations`
 ### Task 5: Manifest-verified reuse and lossless checkpoints
 
 **Files:**
-- Create: `w3xtool/batch_resume.py`
+- Create: `gametool/batch_resume.py`
 - Create: `tests/test_batch_resume.py`
-- Modify: `w3xtool/batch_runner.py`
+- Modify: `gametool/batch_runner.py`
 - Modify: `tests/test_batch_runner.py`
 
 **Interfaces:**
@@ -525,9 +525,9 @@ Run:
 
 ```bash
 uv run python -m pytest -q tests/test_batch_resume.py tests/test_batch_runner.py tests/test_batch_e2e.py
-uv run --with ruff ruff check w3xtool/batch_resume.py w3xtool/batch_runner.py tests/test_batch_resume.py tests/test_batch_runner.py
-uv run --with ruff ruff format --check w3xtool/batch_resume.py w3xtool/batch_runner.py tests/test_batch_resume.py tests/test_batch_runner.py
-uv run --with basedpyright basedpyright --level error w3xtool/batch_resume.py w3xtool/batch_runner.py
+uv run --with ruff ruff check gametool/batch_resume.py gametool/batch_runner.py tests/test_batch_resume.py tests/test_batch_runner.py
+uv run --with ruff ruff format --check gametool/batch_resume.py gametool/batch_runner.py tests/test_batch_resume.py tests/test_batch_runner.py
+uv run --with basedpyright basedpyright --level error gametool/batch_resume.py gametool/batch_runner.py
 ```
 
 Commit: `feat: resume verified partial map results`
@@ -537,13 +537,13 @@ Commit: `feat: resume verified partial map results`
 ### Task 6: Isolated map execution, cancellation, resource preflight, and diagnostics
 
 **Files:**
-- Create: `w3xtool/batch_execution.py`
-- Create: `w3xtool/batch_runtime.py`
+- Create: `gametool/batch_execution.py`
+- Create: `gametool/batch_runtime.py`
 - Create: `tests/test_batch_execution.py`
 - Create: `tests/test_batch_runtime.py`
-- Modify: `w3xtool/batch_models.py`
-- Modify: `w3xtool/batch_runner.py`
-- Modify: `w3xtool/batch_cli.py`
+- Modify: `gametool/batch_models.py`
+- Modify: `gametool/batch_runner.py`
+- Modify: `gametool/batch_cli.py`
 - Modify: `tests/test_batch_cli.py`
 - Modify: `tests/test_batch_runner.py`
 
@@ -628,9 +628,9 @@ Run:
 
 ```bash
 uv run python -m pytest -q tests/test_batch_execution.py tests/test_batch_runtime.py tests/test_batch_cli.py tests/test_batch_runner.py tests/test_batch_e2e.py
-uv run --with ruff ruff check w3xtool/batch_execution.py w3xtool/batch_runtime.py w3xtool/batch_runner.py w3xtool/batch_cli.py tests/test_batch_execution.py tests/test_batch_runtime.py tests/test_batch_cli.py tests/test_batch_runner.py
-uv run --with ruff ruff format --check w3xtool/batch_execution.py w3xtool/batch_runtime.py w3xtool/batch_runner.py w3xtool/batch_cli.py tests/test_batch_execution.py tests/test_batch_runtime.py tests/test_batch_cli.py tests/test_batch_runner.py
-uv run --with basedpyright basedpyright --level error w3xtool/batch_execution.py w3xtool/batch_runtime.py w3xtool/batch_runner.py w3xtool/batch_cli.py
+uv run --with ruff ruff check gametool/batch_execution.py gametool/batch_runtime.py gametool/batch_runner.py gametool/batch_cli.py tests/test_batch_execution.py tests/test_batch_runtime.py tests/test_batch_cli.py tests/test_batch_runner.py
+uv run --with ruff ruff format --check gametool/batch_execution.py gametool/batch_runtime.py gametool/batch_runner.py gametool/batch_cli.py tests/test_batch_execution.py tests/test_batch_runtime.py tests/test_batch_cli.py tests/test_batch_runner.py
+uv run --with basedpyright basedpyright --level error gametool/batch_execution.py gametool/batch_runtime.py gametool/batch_runner.py gametool/batch_cli.py
 ```
 
 Commit: `feat: bound and observe batch map workers`
@@ -640,20 +640,20 @@ Commit: `feat: bound and observe batch map workers`
 ### Task 7: Unified bounded GUI worker lifecycle
 
 **Files:**
-- Create: `w3xtool/gui_worker_registry.py`
-- Create: `w3xtool/gui_worker_host.py`
+- Create: `gametool/gui_worker_registry.py`
+- Create: `gametool/gui_worker_host.py`
 - Create: `tests/test_gui_worker_registry.py`
 - Create: `tests/test_gui_object_filter_runner.py`
-- Modify: `w3xtool/gui.py`
-- Modify: `w3xtool/gui_lifecycle.py`
-- Modify: `w3xtool/gui_loader_runner.py`
-- Modify: `w3xtool/gui_loader_host.py`
-- Modify: `w3xtool/gui_object_filter_runner.py`
-- Modify: `w3xtool/gui_current_map.py`
-- Modify: `w3xtool/gui_source_browser.py`
-- Modify: `w3xtool/gui_external_data.py`
-- Modify: `w3xtool/gui_export_actions.py`
-- Modify: `w3xtool/gui_casc_browser.py`
+- Modify: `gametool/gui.py`
+- Modify: `gametool/gui_lifecycle.py`
+- Modify: `gametool/gui_loader_runner.py`
+- Modify: `gametool/gui_loader_host.py`
+- Modify: `gametool/gui_object_filter_runner.py`
+- Modify: `gametool/gui_current_map.py`
+- Modify: `gametool/gui_source_browser.py`
+- Modify: `gametool/gui_external_data.py`
+- Modify: `gametool/gui_export_actions.py`
+- Modify: `gametool/gui_casc_browser.py`
 - Modify: related GUI tests.
 
 **Interfaces:**
@@ -729,9 +729,9 @@ Run:
 
 ```bash
 uv run python -m pytest -q tests/test_gui_worker_registry.py tests/test_gui_loader_runner.py tests/test_gui_object_filter_runner.py tests/test_gui_current_map_lifecycle.py tests/test_gui_export_safety.py tests/test_external_listfile_gui.py tests/test_gui_casc_browser.py
-uv run --with ruff ruff check w3xtool/gui_worker_registry.py w3xtool/gui_worker_host.py w3xtool/gui.py w3xtool/gui_lifecycle.py w3xtool/gui_loader_runner.py w3xtool/gui_loader_host.py w3xtool/gui_object_filter_runner.py w3xtool/gui_current_map.py w3xtool/gui_source_browser.py w3xtool/gui_external_data.py w3xtool/gui_export_actions.py w3xtool/gui_casc_browser.py tests/test_gui_worker_registry.py tests/test_gui_loader_runner.py tests/test_gui_object_filter_runner.py
-uv run --with ruff ruff format --check w3xtool/gui_worker_registry.py w3xtool/gui_worker_host.py w3xtool/gui.py w3xtool/gui_lifecycle.py w3xtool/gui_loader_runner.py w3xtool/gui_loader_host.py w3xtool/gui_object_filter_runner.py w3xtool/gui_current_map.py w3xtool/gui_source_browser.py w3xtool/gui_external_data.py w3xtool/gui_export_actions.py w3xtool/gui_casc_browser.py tests/test_gui_worker_registry.py tests/test_gui_loader_runner.py tests/test_gui_object_filter_runner.py
-uv run --with basedpyright basedpyright --level error w3xtool/gui_worker_registry.py w3xtool/gui_worker_host.py w3xtool/gui_loader_runner.py w3xtool/gui_object_filter_runner.py
+uv run --with ruff ruff check gametool/gui_worker_registry.py gametool/gui_worker_host.py gametool/gui.py gametool/gui_lifecycle.py gametool/gui_loader_runner.py gametool/gui_loader_host.py gametool/gui_object_filter_runner.py gametool/gui_current_map.py gametool/gui_source_browser.py gametool/gui_external_data.py gametool/gui_export_actions.py gametool/gui_casc_browser.py tests/test_gui_worker_registry.py tests/test_gui_loader_runner.py tests/test_gui_object_filter_runner.py
+uv run --with ruff ruff format --check gametool/gui_worker_registry.py gametool/gui_worker_host.py gametool/gui.py gametool/gui_lifecycle.py gametool/gui_loader_runner.py gametool/gui_loader_host.py gametool/gui_object_filter_runner.py gametool/gui_current_map.py gametool/gui_source_browser.py gametool/gui_external_data.py gametool/gui_export_actions.py gametool/gui_casc_browser.py tests/test_gui_worker_registry.py tests/test_gui_loader_runner.py tests/test_gui_object_filter_runner.py
+uv run --with basedpyright basedpyright --level error gametool/gui_worker_registry.py gametool/gui_worker_host.py gametool/gui_loader_runner.py gametool/gui_object_filter_runner.py
 ```
 
 Commit: `fix: bound GUI background worker shutdown`
@@ -741,13 +741,13 @@ Commit: `fix: bound GUI background worker shutdown`
 ### Task 8: Quality gate, batch acceptance, and soak coverage
 
 **Files:**
-- Create: `w3xtool/quality_gate.py`
-- Create: `w3xtool/acceptance_batch.py`
+- Create: `gametool/quality_gate.py`
+- Create: `gametool/acceptance_batch.py`
 - Create: `tests/test_quality_gate.py`
 - Create: `tests/test_batch_soak.py`
 - Modify: `pyproject.toml`
 - Modify: `uv.lock`
-- Modify: `w3xtool/acceptance_runner.py`
+- Modify: `gametool/acceptance_runner.py`
 - Modify: `tests/test_acceptance_runner.py`
 - Modify: `.github/workflows/posix-package.yml`
 - Modify: `.github/workflows/windows-package.yml`
@@ -755,7 +755,7 @@ Commit: `fix: bound GUI background worker shutdown`
 - Modify: `tools/run_windows_acceptance.ps1`
 
 **Interfaces:**
-- Adds project script `w3xray-quality = "w3xtool.quality_gate:main"`.
+- Adds project script `gamexray-quality = "gametool.quality_gate:main"`.
 - Produces one immutable strict path tuple and executes Ruff check, Ruff format check, and basedpyright with the current Python executable/environment.
 - Adds acceptance check `batch_publication`.
 
@@ -769,7 +769,7 @@ def test_quality_gate_builds_all_three_cross_platform_commands() -> None:
         "ruff-format",
         "basedpyright",
     ]
-    assert all("w3xtool/batch_manifest_io.py" in command.argv for command in commands)
+    assert all("gametool/batch_manifest_io.py" in command.argv for command in commands)
     assert all("shell=True" not in command.argv for command in commands)
 ```
 
@@ -789,7 +789,7 @@ Add Ruff and basedpyright to the dev group. Configure Python 3.14, project exclu
 
 - [x] **Step 5: Add CI and acceptance gates**
 
-Run `uv run w3xray-quality` immediately after `uv sync --dev` in POSIX, Windows packaging, and real-Windows scripts. Add `batch_publication` to source and packaged acceptance and require its manifest/resume/source-hash detail.
+Run `uv run gamexray-quality` immediately after `uv sync --dev` in POSIX, Windows packaging, and real-Windows scripts. Add `batch_publication` to source and packaged acceptance and require its manifest/resume/source-hash detail.
 
 - [x] **Step 6: Run focused quality, acceptance, and soak verification**
 
@@ -797,7 +797,7 @@ Run:
 
 ```bash
 uv sync --dev
-uv run w3xray-quality
+uv run gamexray-quality
 uv run python -m pytest -q tests/test_quality_gate.py tests/test_batch_soak.py tests/test_acceptance_runner.py tests/test_batch_e2e.py tests/test_windows_acceptance_assets.py
 ```
 
@@ -842,8 +842,8 @@ Expected: every new/substantively changed file is at or below 250 pure lines; fi
 Run:
 
 ```bash
-uv run w3xray-quality
-uv run w3xray-test
+uv run gamexray-quality
+uv run gamexray-test
 git diff --check
 ```
 
@@ -857,8 +857,8 @@ Run:
 uv run main.py acceptance \
   --map tests/fixtures/maps/war3net-map-script-builder.w3x \
   --campaign tests/fixtures/reference/stormlib-campaign.w3n \
-  --output /tmp/w3xray-ha-acceptance \
-  --report /tmp/w3xray-ha-acceptance/acceptance.json \
+  --output /tmp/gamexray-ha-acceptance \
+  --report /tmp/gamexray-ha-acceptance/acceptance.json \
   --repeat 5 --no-gui
 ```
 

@@ -5,7 +5,7 @@ from types import MappingProxyType
 
 import pytest
 
-from w3xtool.item_relation_models import (
+from gametool.item_relation_models import (
     ItemRelation,
     ItemRelationIndex,
     ItemRelationKind,

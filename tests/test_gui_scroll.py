@@ -4,8 +4,8 @@
 import unittest
 
 from tests.gui_base import GuiTestCase
-from w3xtool.api import MapData, GameObject
-from w3xtool.script_scan import ChatCommand
+from gametool.api import MapData, GameObject
+from gametool.script_scan import ChatCommand
 
 
 def _obj(name, cat="物品"):

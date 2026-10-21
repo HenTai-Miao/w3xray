@@ -5,7 +5,7 @@ from __future__ import annotations
 import subprocess
 import sys
 
-from w3xtool.dev_test import build_pytest_module_command
+from gametool.dev_test import build_pytest_module_command
 
 
 def test_build_pytest_module_command_defaults_to_quiet_full_suite() -> None:
@@ -21,7 +21,7 @@ def test_build_pytest_module_command_defaults_to_quiet_full_suite() -> None:
 
 def test_dev_test_module_can_forward_to_pytest_without_console_script() -> None:
     # Given: the project test runner is invoked as a module.
-    command = [sys.executable, "-m", "w3xtool.dev_test", "--version"]
+    command = [sys.executable, "-m", "gametool.dev_test", "--version"]
 
     # When: it forwards to pytest.
     result = subprocess.run(

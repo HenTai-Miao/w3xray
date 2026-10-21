@@ -19,7 +19,7 @@ if (-not $CampaignPath) {
 }
 if (-not $EvidenceDir) {
     $stamp = Get-Date -Format "yyyyMMdd-HHmmss"
-    $EvidenceDir = Join-Path ([System.IO.Path]::GetTempPath()) "w3xray-acceptance-$stamp"
+    $EvidenceDir = Join-Path ([System.IO.Path]::GetTempPath()) "gamexray-acceptance-$stamp"
 }
 
 if (-not (Test-Path -LiteralPath (Join-Path $War3Dir ".build.info") -PathType Leaf)) {
@@ -35,7 +35,7 @@ if (-not (Test-Path -LiteralPath $CampaignPath -PathType Leaf)) {
 $MapPath = (Resolve-Path -LiteralPath $MapPath).Path
 $CampaignPath = (Resolve-Path -LiteralPath $CampaignPath).Path
 $EvidenceDir = [System.IO.Path]::GetFullPath($EvidenceDir)
-$env:W3XRAY_WAR3_DIR = (Resolve-Path -LiteralPath $War3Dir).Path
+$env:GAMEXRAY_WAR3_DIR = (Resolve-Path -LiteralPath $War3Dir).Path
 
 & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "build_casclib.ps1")
 if ($LASTEXITCODE -ne 0) { throw "build_casclib.ps1 failed" }
@@ -43,14 +43,14 @@ if ($LASTEXITCODE -ne 0) { throw "build_casclib.ps1 failed" }
 & uv sync --dev
 if ($LASTEXITCODE -ne 0) { throw "uv sync failed" }
 
-& uv run w3xray-quality
-if ($LASTEXITCODE -ne 0) { throw "uv run w3xray-quality failed" }
+& uv run gamexray-quality
+if ($LASTEXITCODE -ne 0) { throw "uv run gamexray-quality failed" }
 
-& uv run w3xray-test
-if ($LASTEXITCODE -ne 0) { throw "uv run w3xray-test failed" }
+& uv run gamexray-test
+if ($LASTEXITCODE -ne 0) { throw "uv run gamexray-test failed" }
 
-& uv run w3xray-dist
-if ($LASTEXITCODE -ne 0) { throw "uv run w3xray-dist failed" }
+& uv run gamexray-dist
+if ($LASTEXITCODE -ne 0) { throw "uv run gamexray-dist failed" }
 
 $DistDir = Join-Path $RepoRoot "dist"
 $OnedirEvidenceDir = Join-Path $EvidenceDir "windows-onedir"
@@ -78,7 +78,7 @@ $OnedirAcceptanceArgs = @(
     "--report", $OnedirReport,
     "--repeat", "5",
     "--require-windows",
-    "--war3-dir", $env:W3XRAY_WAR3_DIR
+    "--war3-dir", $env:GAMEXRAY_WAR3_DIR
 )
 $OnedirCommandLine = ConvertTo-WindowsCommandLine $OnedirAcceptanceArgs
 $OnedirProcess = Start-Process `
@@ -102,8 +102,8 @@ if (-not [StringComparer]::OrdinalIgnoreCase.Equals($ReportedExecutable, $Onedir
     throw "Onedir EXE acceptance report identifies a different executable: $ReportedExecutable"
 }
 
-& uv run w3xray-dist --onefile
-if ($LASTEXITCODE -ne 0) { throw "uv run w3xray-dist --onefile failed" }
+& uv run gamexray-dist --onefile
+if ($LASTEXITCODE -ne 0) { throw "uv run gamexray-dist --onefile failed" }
 
 $OnefileEvidenceDir = Join-Path $EvidenceDir "windows-onefile"
 $OnefileWorkingDirectory = $RepoRoot
@@ -126,7 +126,7 @@ $OnefileAcceptanceArgs = @(
     "--report", $OnefileReport,
     "--repeat", "5",
     "--require-windows",
-    "--war3-dir", $env:W3XRAY_WAR3_DIR
+    "--war3-dir", $env:GAMEXRAY_WAR3_DIR
 )
 $OnefileCommandLine = ConvertTo-WindowsCommandLine $OnefileAcceptanceArgs
 $OnefileProcess = Start-Process `

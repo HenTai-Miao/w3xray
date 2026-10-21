@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import SupportsIndex, assert_never
 
-from w3xtool.save_call_context import extract_call_args
+from gametool.save_call_context import extract_call_args
 
 
 class _NoOpenEndedSlice(str):

@@ -2,8 +2,8 @@
 
 import unittest
 
-from w3xtool.api import MapData
-from w3xtool.ui_texts import (
+from gametool.api import MapData
+from gametool.ui_texts import (
     build_ui_text_report,
     format_ui_text_references_tsv,
     format_ui_text_strings_tsv,

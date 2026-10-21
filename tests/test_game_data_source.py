@@ -10,14 +10,14 @@ from unittest.mock import patch
 import pytest
 from PIL import Image
 
-import w3xtool.game_data_source as game_data_source
-from w3xtool.casclib_source import CascLibProbe
-from w3xtool.game_data_source import (
+import gametool.game_data_source as game_data_source
+from gametool.casclib_source import CascLibProbe
+from gametool.game_data_source import (
     DirectoryDataSource,
     open_game_data_source,
     probe_game_data_path,
 )
-from w3xtool.icons import IconResolver
+from gametool.icons import IconResolver
 
 
 def test_directory_exact_lookup_does_not_use_suffix_or_basename(tmp_path) -> None:
@@ -44,7 +44,7 @@ class GameDataSourceTest(unittest.TestCase):
                 handle.write(b"data")
 
             # When: no GUI preference has been saved yet.
-            with patch.dict(os.environ, {"W3XRAY_WAR3_DIR": root}, clear=False):
+            with patch.dict(os.environ, {"GAMEXRAY_WAR3_DIR": root}, clear=False):
                 found = game_data_source.discover_game_data_path()
 
             # Then: base object metadata and icons can be connected automatically.
@@ -140,7 +140,7 @@ class GameDataSourceTest(unittest.TestCase):
             decoded = Image.new("RGBA", (16, 16), (1, 2, 3, 255))
 
             # When: the resolver is configured with that data directory.
-            with patch("w3xtool.icons.decode_blp", return_value=decoded) as decode:
+            with patch("gametool.icons.decode_blp", return_value=decoded) as decode:
                 resolver = IconResolver(map_file.name, game_data_path=root)
                 image = resolver.get_image(
                     "ReplaceableTextures\\CommandButtons\\BTNHero.blp"
@@ -171,7 +171,7 @@ def test_native_probe_prefers_casclib_without_path_map(
     # Given: a native install that CascLib can open without an application path map.
     _native_install(str(tmp_path))
     monkeypatch.setattr(
-        "w3xtool.game_data_source.probe_casclib",
+        "gametool.game_data_source.probe_casclib",
         lambda _root: CascLibProbe(
             is_available=True, reason="CascLib storage readable"
         ),
@@ -191,9 +191,9 @@ def test_native_probe_falls_back_to_path_map_with_casclib_reason(
 ) -> None:
     # Given: CascLib cannot load but the legacy path map is present.
     _native_install(str(tmp_path))
-    (tmp_path / "w3xray-casc-paths.tsv").write_text("UI/Test.txt\t001122334455667788\n")
+    (tmp_path / "gamexray-casc-paths.tsv").write_text("UI/Test.txt\t001122334455667788\n")
     monkeypatch.setattr(
-        "w3xtool.game_data_source.probe_casclib",
+        "gametool.game_data_source.probe_casclib",
         lambda _root: CascLibProbe(
             is_available=False, reason="CascLib.dll 架构错误 (193)"
         ),
@@ -215,7 +215,7 @@ def test_native_probe_reports_open_storage_failure_without_fallback(
     # Given: the DLL loads but CascOpenStorage rejects this installation.
     _native_install(str(tmp_path))
     monkeypatch.setattr(
-        "w3xtool.game_data_source.probe_casclib",
+        "gametool.game_data_source.probe_casclib",
         lambda _root: CascLibProbe(
             is_available=False,
             reason="CascOpenStorage 失败，native error=1006",
@@ -241,11 +241,11 @@ def test_open_native_source_uses_casclib_backend(
     _native_install(str(tmp_path))
     sentinel = DirectoryDataSource.__new__(DirectoryDataSource)
     monkeypatch.setattr(
-        "w3xtool.game_data_source.probe_casclib",
+        "gametool.game_data_source.probe_casclib",
         lambda _root: CascLibProbe(is_available=True, reason="readable"),
     )
     monkeypatch.setattr(
-        "w3xtool.game_data_source.CascLibDataSource", lambda _root: sentinel
+        "gametool.game_data_source.CascLibDataSource", lambda _root: sentinel
     )
 
     # When: the unified source factory opens the install.
@@ -266,7 +266,7 @@ def test_icon_resolver_closes_game_data_source() -> None:
 
     source = ClosableSource()
     with tempfile.NamedTemporaryFile(suffix=".w3x") as map_file:
-        with patch("w3xtool.icons._open_game_data_source", return_value=source):
+        with patch("gametool.icons._open_game_data_source", return_value=source):
             resolver = IconResolver(map_file.name, game_data_path="C:/Warcraft III")
 
         # When: the resolver lifecycle ends.

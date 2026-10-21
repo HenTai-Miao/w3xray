@@ -13,12 +13,13 @@ from main import (
     iter_cli_summary_lines as main_cli_summary,
     iter_game_config_summary_lines as main_game_config_summary,
 )
-from w3xtool.api import MapData
-from w3xtool.cli_summary import iter_cli_summary_lines
-from w3xtool.cli_options import CliOptionError, CliOptions, parse_cli_options, run_cli
-from w3xtool.game_config_summary import iter_game_config_summary_lines
-from w3xtool.knowledge_results import KnowledgeWriteItem, KnowledgeWriteReport
-from w3xtool.load_context import MapLoadContext
+from gametool.api import MapData
+from gametool.cli_summary import iter_cli_summary_lines
+from gametool.cli_options import CliOptionError, CliOptions, parse_cli_options, run_cli
+from gametool.extraction_profile import parse_profile_arg
+from gametool.game_config_summary import iter_game_config_summary_lines
+from gametool.knowledge_results import KnowledgeWriteItem, KnowledgeWriteReport
+from gametool.load_context import MapLoadContext
 
 
 def test_main_reexports_responsibility_split_summaries() -> None:
@@ -53,6 +54,22 @@ def test_parse_cli_options_accepts_all_supported_sources(tmp_path: Path) -> None
         pack_dir=str(tmp_path / "pack"),
         author_bundle_path=str(tmp_path / "author-bundle"),
     )
+
+
+def test_parse_cli_options_accepts_profile_switches() -> None:
+    # Given: the extraction-category profile switches.
+    # When: CLI arguments cross the typed parsing boundary.
+    options = parse_cli_options(("map.w3x", "--profile", "objects,units,-triggers"))
+
+    # Then: the profile text is retained verbatim for the export boundary.
+    assert options.profile_text == "objects,units,-triggers"
+
+
+def test_parse_cli_options_profile_unknown_category_rejected() -> None:
+    # Given: a profile naming an unknown category.
+    # When/Then: parsing fails at the boundary instead of silently exporting all.
+    with pytest.raises(ValueError, match="未知提取类目"):
+        parse_profile_arg("-nonexistent")
 
 
 @pytest.mark.parametrize(
@@ -96,11 +113,11 @@ def test_run_cli_reuses_listfile_context_and_pack_writer(
     calls = []
 
     monkeypatch.setattr(
-        "w3xtool.cli_options.read_external_listfile",
+        "gametool.cli_options.read_external_listfile",
         lambda path: calls.append(("listfile", path)) or ("hidden.blp",),
     )
     monkeypatch.setattr(
-        "w3xtool.cli_options.build_map_load_context",
+        "gametool.cli_options.build_map_load_context",
         lambda *, external_names, game_data_path, author_bundle_path: (
             calls.append(
                 ("context", (external_names, game_data_path, author_bundle_path))
@@ -109,19 +126,19 @@ def test_run_cli_reuses_listfile_context_and_pack_writer(
         ),
     )
     monkeypatch.setattr(
-        "w3xtool.cli_options.load_map",
+        "gametool.cli_options.load_map",
         lambda path, *, load_context: (
             calls.append(("load", (path, load_context))) or md
         ),
     )
     monkeypatch.setattr(
-        "w3xtool.cli_options.iter_cli_summary_lines",
+        "gametool.cli_options.iter_cli_summary_lines",
         lambda _md: iter(("地图: CLI fixture",)),
     )
     monkeypatch.setattr(
-        "w3xtool.cli_options.write_knowledge_pack_report",
-        lambda _md, out, external_names=(), game_data_path=None: (
-            calls.append(("pack", (out, external_names, game_data_path)))
+        "gametool.cli_options.write_knowledge_pack_report",
+        lambda _md, out, external_names=(), game_data_path=None, profile=None: (
+            calls.append(("pack", (out, external_names, game_data_path, profile)))
             or KnowledgeWriteReport(
                 tuple(
                     KnowledgeWriteItem(f"file-{index}.txt", True, index, None)
@@ -144,7 +161,7 @@ def test_run_cli_reuses_listfile_context_and_pack_writer(
         ("listfile", "names.txt"),
         ("context", (("hidden.blp",), "game-data", "author-bundle")),
         ("load", ("fixture.w3x", context)),
-        ("pack", (str(tmp_path / "pack"), ("hidden.blp",), "game-data")),
+        ("pack", (str(tmp_path / "pack"), ("hidden.blp",), "game-data", None)),
     ]
 
 
@@ -183,15 +200,15 @@ def test_cli_reports_partial_and_failed_pack_results(
 ) -> None:
     # Given: map loading succeeds and publication returns a non-complete result.
     md = MapData(path="fixture.w3x", name="CLI fixture")
-    monkeypatch.setattr("w3xtool.cli_options.read_external_listfile", lambda _path: ())
+    monkeypatch.setattr("gametool.cli_options.read_external_listfile", lambda _path: ())
     monkeypatch.setattr(
-        "w3xtool.cli_options.build_map_load_context",
+        "gametool.cli_options.build_map_load_context",
         lambda **_kwargs: MapLoadContext(),
     )
-    monkeypatch.setattr("w3xtool.cli_options.load_map", lambda _path, **_kwargs: md)
-    monkeypatch.setattr("w3xtool.cli_options.iter_cli_summary_lines", lambda _md: ())
+    monkeypatch.setattr("gametool.cli_options.load_map", lambda _path, **_kwargs: md)
+    monkeypatch.setattr("gametool.cli_options.iter_cli_summary_lines", lambda _md: ())
     monkeypatch.setattr(
-        "w3xtool.cli_options.write_knowledge_pack_report",
+        "gametool.cli_options.write_knowledge_pack_report",
         lambda *_args, **_kwargs: report,
     )
 
@@ -210,14 +227,14 @@ def test_cli_summary_failure_returns_two_without_archive_diagnosis(
 ) -> None:
     # Given: a map that opened successfully but whose summary renderer fails.
     md = MapData(path="fixture.w3x", name="CLI fixture")
-    monkeypatch.setattr("w3xtool.cli_options.read_external_listfile", lambda _path: ())
+    monkeypatch.setattr("gametool.cli_options.read_external_listfile", lambda _path: ())
     monkeypatch.setattr(
-        "w3xtool.cli_options.build_map_load_context",
+        "gametool.cli_options.build_map_load_context",
         lambda **_kwargs: MapLoadContext(),
     )
-    monkeypatch.setattr("w3xtool.cli_options.load_map", lambda _path, **_kwargs: md)
+    monkeypatch.setattr("gametool.cli_options.load_map", lambda _path, **_kwargs: md)
     monkeypatch.setattr(
-        "w3xtool.cli_options.iter_cli_summary_lines",
+        "gametool.cli_options.iter_cli_summary_lines",
         lambda _md: (_ for _ in ()).throw(ValueError("summary failed")),
     )
 

@@ -2,7 +2,7 @@
 
 - 日期：2026-07-13
 - 状态：用户已批准规格，进入实施
-- 目标项目：`w3xray`
+- 目标项目：`gamexray`
 
 ## 背景与已确认事实
 
@@ -48,7 +48,7 @@
 
 ```text
 bundle/
-  w3xray-compat-bundle.tsv
+  gamexray-compat-bundle.tsv
   files/
     war3map.j
     ...
@@ -57,7 +57,7 @@ bundle/
 清单是 UTF-8 TSV，格式固定为：
 
 ```text
-W3XRAY-COMPAT-BUNDLE\t1
+GAMEXRAY-COMPAT-BUNDLE\t1
 source_sha256\t<64 位小写十六进制>
 name\t<MPQ 内部路径>
 file\t<MPQ 内部路径>\t<文件 SHA-256>
@@ -76,7 +76,7 @@ mpq_key\t<十进制 block 索引>\t<8 位十六进制有效文件密钥>\t<明�
 - 清单最多 2 MiB、`name` 最多 100,000 行、`file` 最多 10,000 行、`mpq_key` 最多 262,144 行；单个明文最多 256 MiB，明文总量最多 512 MiB。所有目录和文件符号链接拒绝。
 - 只接受 regular file。FIFO、设备、socket、路径替换和验证后的内容变化均失败关闭。
 
-现有 `w3xray-author-bundle.tsv` v1 保持兼容。两种格式在内部归一化为不可变的补充证据模型；作者明文包不必迁移。
+现有 `gamexray-author-bundle.tsv` v1 保持兼容。两种格式在内部归一化为不可变的补充证据模型；作者明文包不必迁移。
 
 ### 证据优先级与冲突
 
@@ -126,7 +126,7 @@ python main.py compat build <源地图> <已导出目录> --output <兼容包目
 
 命令只读取源地图和已导出目录，生成 `file` 行与哈希，不执行产生这些文件的软件。扫描拒绝符号链接，限制深度、文件数、单文件和总字节；输出目录必须为空或不存在，并通过私有 staging 目录原子发布。重复规范化路径、大小写冲突和不安全路径使整个构建失败。
 
-可选的 `--listfile` 复用现有外部 listfile 格式。`--keyfile` 是 UTF-8 TSV：首行必须为 `W3XRAY-MPQ-KEYS<TAB>1`，后续每行严格包含 block 索引、8 位十六进制有效文件密钥、明文 SHA-256，以及安全内部路径或单个 `-`。构建阶段立即对源地图试解并复核哈希，无法验证的 key 不写入兼容包。
+可选的 `--listfile` 复用现有外部 listfile 格式。`--keyfile` 是 UTF-8 TSV：首行必须为 `GAMEXRAY-MPQ-KEYS<TAB>1`，后续每行严格包含 block 索引、8 位十六进制有效文件密钥、明文 SHA-256，以及安全内部路径或单个 `-`。构建阶段立即对源地图试解并复核哈希，无法验证的 key 不写入兼容包。
 
 ## 单图入口
 

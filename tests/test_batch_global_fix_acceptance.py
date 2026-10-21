@@ -6,20 +6,20 @@ from pathlib import Path
 
 import pytest
 
-import w3xtool.acceptance_batch as acceptance_batch
+import gametool.acceptance_batch as acceptance_batch
 from tests.batch_global_evidence_fixture import (
     GAP_PATH,
     publish_nonempty_icon_result,
     terminal_result_with_evidence,
 )
 from tests.batch_publication_fixture import publish_empty_result
-from w3xtool.batch_global_evidence_models import GlobalEvidenceError
-from w3xtool.batch_global_evidence_reports import parse_icon_candidates_tsv
-from w3xtool.batch_global_publication import publish_global_generation
-from w3xtool.batch_models import BATCH_SCHEMA_VERSION, BatchState, SourceFingerprint
-from w3xtool.description_cache import format_description_cache_tsv
-from w3xtool.description_cache_models import EMPTY_DESCRIPTION_CACHE
-from w3xtool.icon_evidence_models import IconCandidateKind
+from gametool.batch_global_evidence_models import GlobalEvidenceError
+from gametool.batch_global_evidence_reports import parse_icon_candidates_tsv
+from gametool.batch_global_publication import publish_global_generation
+from gametool.batch_models import BATCH_SCHEMA_VERSION, BatchState, SourceFingerprint
+from gametool.description_cache import format_description_cache_tsv
+from gametool.description_cache_models import EMPTY_DESCRIPTION_CACHE
+from gametool.icon_evidence_models import IconCandidateKind
 
 
 def test_terminal_result_is_axis_only_and_authority_remains_loadable(

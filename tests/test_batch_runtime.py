@@ -8,8 +8,8 @@ import shutil
 
 import pytest
 
-import w3xtool.batch_runtime as batch_runtime
-from w3xtool.batch_runtime import (
+import gametool.batch_runtime as batch_runtime
+from gametool.batch_runtime import (
     BatchAction,
     BatchDiagnostic,
     DiskPreflightInsufficient,

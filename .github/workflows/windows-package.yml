@@ -18,14 +18,14 @@ jobs:
       - name: Install Python dependencies
         run: uv sync --dev
       - name: Run changed-path quality gate
-        run: uv run w3xray-quality
+        run: uv run gamexray-quality
       - name: Build pinned x64 CascLib
         shell: powershell
         run: powershell -ExecutionPolicy Bypass -File tools/build_casclib.ps1
       - name: Run full test suite
-        run: uv run w3xray-test
+        run: uv run gamexray-test
       - name: Build onedir executable
-        run: uv run w3xray-dist
+        run: uv run gamexray-dist
       - name: Execute packaged onedir acceptance
         shell: powershell
         run: |
@@ -77,7 +77,7 @@ jobs:
             throw "Onedir EXE acceptance report identifies a different executable: $ReportedExecutable"
           }
       - name: Build onefile executable
-        run: uv run w3xray-dist --onefile
+        run: uv run gamexray-dist --onefile
       - name: Execute packaged onefile acceptance
         shell: powershell
         run: |
@@ -136,13 +136,13 @@ jobs:
           if ($Onedir.Count -ne 1) { throw "Expected one onedir directory" }
           $DirectExe = @(Get-ChildItem -LiteralPath ".\dist" -Filter "*.exe" -File)
           if ($DirectExe.Count -ne 1) { throw "Expected one direct executable" }
-          Compress-Archive -LiteralPath $Onedir[0].FullName -DestinationPath "$ReleaseDir\w3xray-v$Version-windows-x64.zip"
-          Copy-Item -LiteralPath $DirectExe[0].FullName -Destination "$ReleaseDir\w3xray-v$Version-windows-x64.exe"
+          Compress-Archive -LiteralPath $Onedir[0].FullName -DestinationPath "$ReleaseDir\gamexray-v$Version-windows-x64.zip"
+          Copy-Item -LiteralPath $DirectExe[0].FullName -Destination "$ReleaseDir\gamexray-v$Version-windows-x64.exe"
           Copy-Item -LiteralPath ".\artifacts/windows-onedir/acceptance.json" -Destination "$ReleaseDir\windows-onedir-acceptance.json"
           Copy-Item -LiteralPath ".\artifacts/windows-onefile/acceptance.json" -Destination "$ReleaseDir\windows-onefile-acceptance.json"
       - name: Upload release assets
         uses: actions/upload-artifact@v4
         with:
-          name: w3xray-windows-release-assets
+          name: gamexray-windows-release-assets
           path: artifacts/windows-release/*
           if-no-files-found: error

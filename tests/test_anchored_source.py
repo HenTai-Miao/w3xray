@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.anchored_source import (
+from gametool.anchored_source import (
     AnchoredSourceRoot,
     AnchoredSourceUnavailableError,
 )
@@ -18,7 +18,7 @@ def test_anchored_source_has_no_pathname_fallback_when_platform_is_unsupported(
 ) -> None:
     # Given
     monkeypatch.setattr(
-        "w3xtool.anchored_source._ANCHORED_OPEN_AVAILABLE",
+        "gametool.anchored_source._ANCHORED_OPEN_AVAILABLE",
         False,
     )
 

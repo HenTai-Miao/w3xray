@@ -5,7 +5,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
-from w3xtool.batch_cli import BatchCliOptions, run_batch_cli
+from gametool.batch_cli import BatchCliOptions, run_batch_cli
 
 _FIXTURE = (
     Path(__file__).parent / "fixtures" / "maps" / "war3net-map-script-builder.w3x"

@@ -12,17 +12,17 @@ from tests.description_cache_publication_fixture import (
     open_parent,
     rename_in_parent,
 )
-from w3xtool.description_cache_publication_errors import (
+from gametool.description_cache_publication_errors import (
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_models import (
+from gametool.description_cache_publication_models import (
     RetainedCacheRecord,
     RetainedCacheRole,
 )
-from w3xtool.description_cache_publication_recovery_state import (
+from gametool.description_cache_publication_recovery_state import (
     normalize_recovery_failure,
 )
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
 
 
 def _identity(path: Path) -> tuple[int, int]:

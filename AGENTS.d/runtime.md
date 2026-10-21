@@ -57,7 +57,7 @@ uv run main.py integrity retained-cache \
 - Retained `previous`, failed-stage, failed-output, and recovery evidence is reported separately from stage/backup transient violations. Retained objects are never automatically loaded as description sources and are never deleted by inspection.
 - An integrity output that already exists is atomically exchanged with the new
   report. The new report keeps the requested path; the displaced inode moves to
-  `.w3xray-integrity-history/<sha256(output leaf)>/<generation-id>/report.json`.
+  `.gamexray-integrity-history/<sha256(output leaf)>/<generation-id>/report.json`.
   Its exact two-file generation also contains `历史清单.json`, which binds
   schema, generation ID, original output leaf, size, and SHA-256.
 - History roots, buckets, stages, and finalized generations are descriptor-held
@@ -88,9 +88,9 @@ Development and Task 10 acceptance use only `tmp_path`/system-temp fixtures. Gen
 
 ## Publication and reports
 
-Each map publication requires `内容清单.json`, `.w3xray-batch-owned`, and all reports in `REQUIRED_MAP_REPORTS`, including `图标未解析.tsv`, `对象完整描述.tsv`, both relation TSVs, and `关系完整性.txt`.
+Each map publication requires `内容清单.json`, `.gamexray-batch-owned`, and all reports in `REQUIRED_MAP_REPORTS`, including `图标未解析.tsv`, `对象完整描述.tsv`, both relation TSVs, and `关系完整性.txt`.
 
-Each immutable global generation binds the ordinary summary/state/retry/cache/diagnostic payloads plus `图标缺口汇总.tsv`, `图标候选绑定.tsv`, `图标缺口统计.txt`, and `三轴状态汇总.tsv` through `全局清单.json`. Root copies are compatibility mirrors; `.w3xray-global/current.json` selecting a validated generation is the only resume authority.
+Each immutable global generation binds the ordinary summary/state/retry/cache/diagnostic payloads plus `图标缺口汇总.tsv`, `图标候选绑定.tsv`, `图标缺口统计.txt`, and `三轴状态汇总.tsv` through `全局清单.json`. Root copies are compatibility mirrors; `.gamexray-global/current.json` selecting a validated generation is the only resume authority.
 
 `图标候选绑定.tsv` is non-authoritative suggestion evidence and every row remains unadopted. `三轴状态汇总.tsv` keeps publication result, archive integrity, and knowledge completeness independent. Current-text counters use only `是否当前值=是`; all text evidence remains in the report and GUI “全部证据” view.
 

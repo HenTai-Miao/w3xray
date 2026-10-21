@@ -12,13 +12,13 @@ from tests.description_cache_publication_fixture import (
     bound_stage,
     rename_in_parent,
 )
-from w3xtool import description_cache_publication_stage_location as stage_location
-from w3xtool import description_cache_publication_stage_retention as stage_retention
-from w3xtool.description_cache_publication_errors import (
+from gametool import description_cache_publication_stage_location as stage_location
+from gametool import description_cache_publication_stage_retention as stage_retention
+from gametool.description_cache_publication_errors import (
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_models import RetainedCacheRole
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool.description_cache_publication_models import RetainedCacheRole
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
 
 
 type RetentionLocation = Literal["foreign", "failed-stage"]

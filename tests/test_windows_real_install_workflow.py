@@ -18,7 +18,7 @@ def test_real_install_workflow_requires_dedicated_self_hosted_machine() -> None:
     # When/Then: it cannot accidentally claim hosted synthetic coverage as real-install evidence.
     assert "workflow_dispatch" in workflow
     assert "self-hosted" in workflow
-    assert "w3xray-war3" in workflow
+    assert "gamexray-war3" in workflow
     assert "run_windows_acceptance.ps1" in workflow
     assert "war3_dir" in workflow
 
@@ -28,8 +28,8 @@ def test_real_install_input_reaches_powershell_through_environment() -> None:
     workflow = _WORKFLOW.read_text(encoding="utf-8")
 
     # When/Then: the expression is data in env, never source text in the run block.
-    assert "W3XRAY_ACCEPTANCE_WAR3_DIR: ${{ inputs.war3_dir }}" in workflow
-    assert "-War3Dir $env:W3XRAY_ACCEPTANCE_WAR3_DIR" in workflow
+    assert "GAMEXRAY_ACCEPTANCE_WAR3_DIR: ${{ inputs.war3_dir }}" in workflow
+    assert "-War3Dir $env:GAMEXRAY_ACCEPTANCE_WAR3_DIR" in workflow
     assert "-War3Dir '${{ inputs.war3_dir }}'" not in workflow
 
 
@@ -41,7 +41,7 @@ def test_real_install_runner_executes_exact_reviewed_sha_in_protected_environmen
 
     # When/Then: the reviewed commit is immutable, verified, and environment-gated.
     assert "permissions:\n  contents: read" in workflow
-    assert "environment: w3xray-real-war3" in workflow
+    assert "environment: gamexray-real-war3" in workflow
     assert "source_sha:" in workflow
     assert "ref: ${{ inputs.source_sha }}" in workflow
     assert "SOURCE_SHA_INPUT: ${{ inputs.source_sha }}" in workflow

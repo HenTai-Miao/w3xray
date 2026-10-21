@@ -1,13 +1,13 @@
 """Conservative JASS, Lua, registration, and WTG item reward relations."""
 
-from w3xtool.item_relation_models import (
+from gametool.item_relation_models import (
     ItemRelationKind,
     RelationCompleteness,
     RelationConfidence,
 )
-from w3xtool.item_relation_scripts import build_script_item_relations
-from w3xtool.map_data import GameObject, MapData
-from w3xtool.wtg_models import (
+from gametool.item_relation_scripts import build_script_item_relations
+from gametool.map_data import GameObject, MapData
+from gametool.wtg_models import (
     TriggerEcaFunction,
     TriggerEcaParameter,
     TriggerTreeSummary,

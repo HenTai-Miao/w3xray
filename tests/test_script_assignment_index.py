@@ -4,14 +4,14 @@ import importlib
 import importlib.util
 import unittest
 
-from w3xtool.api import MapData
+from gametool.api import MapData
 
 
 def _format_assignments(md: MapData) -> str:
-    spec = importlib.util.find_spec("w3xtool.script_assignment_index")
+    spec = importlib.util.find_spec("gametool.script_assignment_index")
     if spec is None:
-        raise AssertionError("w3xtool.script_assignment_index module is missing")
-    module = importlib.import_module("w3xtool.script_assignment_index")
+        raise AssertionError("gametool.script_assignment_index module is missing")
+    module = importlib.import_module("gametool.script_assignment_index")
     index = module.build_script_assignment_index(md)
     return module.format_script_assignment_index_tsv(index)
 

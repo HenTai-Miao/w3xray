@@ -9,17 +9,17 @@ from pathlib import Path
 
 import pytest
 
-import w3xtool.batch_global_publication as global_publication
+import gametool.batch_global_publication as global_publication
 from tests.batch_publication_fixture import publish_empty_result
-from w3xtool.batch_global_io import format_global_manifest, parse_global_manifest
-from w3xtool.batch_global_validation import validate_global_generation
-from w3xtool.batch_models import (
+from gametool.batch_global_io import format_global_manifest, parse_global_manifest
+from gametool.batch_global_validation import validate_global_generation
+from gametool.batch_models import (
     BATCH_SCHEMA_VERSION,
     BatchState,
     SourceFingerprint,
 )
-from w3xtool.description_cache import format_description_cache_tsv
-from w3xtool.description_cache_models import EMPTY_DESCRIPTION_CACHE
+from gametool.description_cache import format_description_cache_tsv
+from gametool.description_cache_models import EMPTY_DESCRIPTION_CACHE
 
 
 def test_global_generation_round_trip_selects_only_validated_payloads(
@@ -153,7 +153,7 @@ def test_current_pointer_rejects_traversal_and_manifest_hash_drift(
         _cache_text(),
         "",
     )
-    pointer = tmp_path / ".w3xray-global" / "current.json"
+    pointer = tmp_path / ".gamexray-global" / "current.json"
     pointer.write_text(
         json.dumps(
             {

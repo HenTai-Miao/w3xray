@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.safe_output import write_bytes_safely
-from w3xtool.safe_output_anchored import ANCHORED_WRITES_AVAILABLE
-from w3xtool.safe_output_models import SafeWriteStatus
-from w3xtool import safe_output_publication_displaced as displaced_api
+from gametool.safe_output import write_bytes_safely
+from gametool.safe_output_anchored import ANCHORED_WRITES_AVAILABLE
+from gametool.safe_output_models import SafeWriteStatus
+from gametool import safe_output_publication_displaced as displaced_api
 
 
 class _UnexpectedWrapperError(RuntimeError):

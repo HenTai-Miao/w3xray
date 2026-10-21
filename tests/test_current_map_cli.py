@@ -11,16 +11,16 @@ from typing import Never
 
 import pytest
 
-from w3xtool import current_map_cli as cli
-from w3xtool.cli_options import CliOptions
-from w3xtool.current_map_models import (
+from gametool import current_map_cli as cli
+from gametool.cli_options import CliOptions
+from gametool.current_map_models import (
     CurrentMapResolution,
     EvidenceKind,
     MapCandidate,
     MapEvidence,
     ResolutionStatus,
 )
-from w3xtool.current_map_snapshot import CurrentMapSnapshotError
+from gametool.current_map_snapshot import CurrentMapSnapshotError
 
 
 @dataclass(frozen=True, slots=True)

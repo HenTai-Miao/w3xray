@@ -9,10 +9,10 @@ from unittest.mock import patch
 
 from tests.gui_base import GuiTestCase
 from tests.gui_worker_fakes import InlineGuiThread
-from w3xtool.api import MapData, _export_all_impl
-from w3xtool.archive_source import BytesArchiveSource
-from w3xtool.external_listfile import read_external_listfile
-from w3xtool.gui_worker_registry import GuiWorkerRegistry
+from gametool.api import MapData, _export_all_impl
+from gametool.archive_source import BytesArchiveSource
+from gametool.external_listfile import read_external_listfile
+from gametool.gui_worker_registry import GuiWorkerRegistry
 
 
 class ExternalListfileCoreTest(unittest.TestCase):
@@ -86,7 +86,7 @@ class ExternalListfileGuiTest(GuiTestCase):
         try:
             # When: the selector callback runs.
             with patch(
-                "w3xtool.gui_lifecycle.filedialog.askopenfilename", return_value=path
+                "gametool.gui_lifecycle.filedialog.askopenfilename", return_value=path
             ):
                 self.app.on_pick_external_listfile()
 
@@ -110,7 +110,7 @@ class ExternalListfileGuiTest(GuiTestCase):
             path = handle.name
         try:
             with patch(
-                "w3xtool.gui_lifecycle.filedialog.askopenfilename", return_value=path
+                "gametool.gui_lifecycle.filedialog.askopenfilename", return_value=path
             ):
                 with patch.object(
                     self.app, "_start_path_load", side_effect=calls.append
@@ -166,7 +166,7 @@ class ExternalListfileGuiTest(GuiTestCase):
 
             # When: the user clicks export all.
             with patch(
-                "w3xtool.gui_export_actions.export_all_files", side_effect=fake_export
+                "gametool.gui_export_actions.export_all_files", side_effect=fake_export
             ):
                 with patch.object(
                     self.app,
@@ -218,11 +218,11 @@ class ExternalListfileGuiTest(GuiTestCase):
                 return out
 
             with patch(
-                "w3xtool.gui_export_actions.export_loaded_map_files",
+                "gametool.gui_export_actions.export_loaded_map_files",
                 side_effect=fake_source_export,
             ):
                 with patch(
-                    "w3xtool.gui_export_actions.export_all_files",
+                    "gametool.gui_export_actions.export_all_files",
                     side_effect=lambda path, **_kwargs: path_calls.append(path) or out,
                 ):
                     with patch.object(
@@ -233,7 +233,7 @@ class ExternalListfileGuiTest(GuiTestCase):
                         ),
                     ):
                         with patch(
-                            "w3xtool.gui_export_actions.messagebox.showerror",
+                            "gametool.gui_export_actions.messagebox.showerror",
                             side_effect=lambda _title, message: errors.append(message),
                         ):
                             with patch.object(
@@ -256,7 +256,7 @@ class ExternalListfileGuiTest(GuiTestCase):
         # Given: a Reforged data directory selected through the GUI.
         with tempfile.TemporaryDirectory() as data_dir:
             with patch(
-                "w3xtool.gui_lifecycle.filedialog.askdirectory", return_value=data_dir
+                "gametool.gui_lifecycle.filedialog.askdirectory", return_value=data_dir
             ):
                 self.app.on_pick_game_data_dir()
 

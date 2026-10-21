@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool import archive_export, knowledge_unknown_exports, map_loader
-from w3xtool.cli_options import CliOptions, _write_cli_packs
-from w3xtool.load_context import MapLoadContext
-from w3xtool.map_data import MapData
-from w3xtool.mpq_files import list_archive_files
+from gametool import archive_export, knowledge_unknown_exports, map_loader
+from gametool.cli_options import CliOptions, _write_cli_packs
+from gametool.load_context import MapLoadContext
+from gametool.map_data import MapData
+from gametool.mpq_files import list_archive_files
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,7 +97,7 @@ def test_temp_cleanup_rejects_symlinked_extraction_base(
     target.mkdir(parents=True)
     marker = target / "keep.txt"
     marker.write_text("keep", encoding="utf-8")
-    _symlink_or_skip(temp_root / "w3xtool提取", outside)
+    _symlink_or_skip(temp_root / "gametool提取", outside)
     monkeypatch.setattr(archive_export.tempfile, "gettempdir", lambda: str(temp_root))
 
     # When: a fresh extraction directory is requested.
@@ -105,7 +105,7 @@ def test_temp_cleanup_rejects_symlinked_extraction_base(
 
     # Then: it uses a new private root and leaves the predictable link untouched.
     assert marker.read_text(encoding="utf-8") == "keep"
-    assert result.parent.name.startswith("w3xtool提取-")
+    assert result.parent.name.startswith("gametool提取-")
     assert result.parent.parent == temp_root
 
 
@@ -121,7 +121,7 @@ def test_temp_cleanup_cannot_race_component_check_with_symlink_swap(
     target.mkdir(parents=True)
     marker = target / "keep.txt"
     marker.write_text("keep", encoding="utf-8")
-    base = temp_root / "w3xtool提取"
+    base = temp_root / "gametool提取"
     original_check = getattr(
         archive_export, "_reject_unsafe_temp_component", lambda _path: None
     )
@@ -163,8 +163,8 @@ def test_temp_extract_calls_use_distinct_private_roots(
 
     # Then: each call owns an independently created private root.
     assert first.parent != second.parent
-    assert first.parent.name.startswith("w3xtool提取-")
-    assert second.parent.name.startswith("w3xtool提取-")
+    assert first.parent.name.startswith("gametool提取-")
+    assert second.parent.name.startswith("gametool提取-")
 
 
 def test_campaign_child_pack_stays_anchored_to_requested_root(tmp_path: Path) -> None:

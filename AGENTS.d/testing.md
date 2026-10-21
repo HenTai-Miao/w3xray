@@ -43,7 +43,7 @@ states, exchange-reversal races, and continuous-name publication regressions:
 Repository gate:
 
 ```bash
-uv run w3xray-test
+uv run gamexray-test
 ```
 
 On Windows, `tests/conftest.py` marks only suites that require POSIX dir-fd,
@@ -57,18 +57,18 @@ passed, 18 skipped, and 1 subtest passed.
 Maintained strict-path gate:
 
 ```bash
-uv run w3xray-quality
+uv run gamexray-quality
 ```
 
 The quality command runs Ruff lint, Ruff format check, and basedpyright `--level error` over one sorted, duplicate-free maintained path tuple. New paths must not be added to `tool.basedpyright.ignore`.
 
-Verified on 2026-07-19 after immutable integrity-report history: `w3xray-test`
+Verified on 2026-07-19 after immutable integrity-report history: `gamexray-test`
 reported 2131 passed, 18 skipped, and 1 subtest passed. Ruff check and format
 covered 287 maintained files, and basedpyright reported 0 errors, 0 warnings,
 and 0 notes. The changed-file no-excuse audit passed.
 
 Verified on 2026-07-19 after the revision-6 three-defect closure: the focused
-regression suite reported 153 passed; `w3xray-test` reported 2166 passed,
+regression suite reported 153 passed; `gamexray-test` reported 2166 passed,
 18 skipped, and 1 subtest passed. Ruff check and format covered 313 maintained
 files, basedpyright reported 0 errors, 0 warnings, and 0 notes, and the
 changed-file no-excuse audit reported no violations in 74 files.

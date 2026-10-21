@@ -2,9 +2,9 @@
 
 import unittest
 
-from w3xtool.api import MapData, _add_base_objects
-from w3xtool.base_objects import BASE_OBJECTS
-from w3xtool.base_names import BASE_NAMES
+from gametool.api import MapData, _add_base_objects
+from gametool.base_objects import BASE_OBJECTS
+from gametool.base_names import BASE_NAMES
 
 
 class TestAddBaseObjects(unittest.TestCase):

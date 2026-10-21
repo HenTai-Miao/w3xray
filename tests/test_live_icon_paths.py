@@ -11,7 +11,7 @@ import pytest
 
 pytest.importorskip("numpy")
 
-from w3xtool.live_inventory import _icon_paths_from_pack  # noqa: E402
+from gametool.live_inventory import _icon_paths_from_pack  # noqa: E402
 
 
 def _write_pack(tmp_path: Path, rows: list[str]) -> Path:

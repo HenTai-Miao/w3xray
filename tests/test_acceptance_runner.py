@@ -12,9 +12,9 @@ import sys
 
 import pytest
 
-from w3xtool.casclib_enumeration import CascEntry, CascNameType
-from w3xtool.batch_models import MapBatchState, SourceFingerprint
-from w3xtool.batch_status import PublicationResult
+from gametool.casclib_enumeration import CascEntry, CascNameType
+from gametool.batch_models import MapBatchState, SourceFingerprint
+from gametool.batch_status import PublicationResult
 from tests.batch_publication_fixture import empty_result
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -26,7 +26,7 @@ def test_core_acceptance_executes_map_campaign_export_and_repeat_load(
     tmp_path: Path,
 ) -> None:
     # Given: portable real map/campaign fixtures and a clean evidence directory.
-    module = importlib.import_module("w3xtool.acceptance_runner")
+    module = importlib.import_module("gametool.acceptance_runner")
     config = module.AcceptanceConfig(
         map_path=_MAP,
         campaign_path=_CAMPAIGN,
@@ -54,7 +54,7 @@ def test_core_acceptance_executes_map_campaign_export_and_repeat_load(
 
 def test_portable_acceptance_skips_bundled_casclib(tmp_path: Path) -> None:
     # Given: a portable acceptance run that does not require Windows.
-    module = importlib.import_module("w3xtool.acceptance_runner")
+    module = importlib.import_module("gametool.acceptance_runner")
     config = module.AcceptanceConfig(
         map_path=_MAP,
         campaign_path=None,
@@ -77,7 +77,7 @@ def test_windows_acceptance_loads_bundled_casclib(
     tmp_path: Path,
 ) -> None:
     # Given: a packaged DLL path and an observable native API constructor.
-    module = importlib.import_module("w3xtool.acceptance_runner")
+    module = importlib.import_module("gametool.acceptance_runner")
     dll = tmp_path / "CascLib.dll"
     dll.write_bytes(b"MZfixture")
     loaded: list[Path] = []
@@ -177,9 +177,9 @@ def test_packaged_acceptance_rejects_partial_publication(
     tmp_path: Path,
 ) -> None:
     # Given: publication writes its manifest but reports one failed artifact.
-    module = importlib.import_module("w3xtool.acceptance_runner")
-    from w3xtool.knowledge_results import KnowledgeWriteItem, KnowledgeWriteReport
-    from w3xtool.map_data import MapData
+    module = importlib.import_module("gametool.acceptance_runner")
+    from gametool.knowledge_results import KnowledgeWriteItem, KnowledgeWriteReport
+    from gametool.map_data import MapData
 
     partial = KnowledgeWriteReport(
         (
@@ -206,7 +206,7 @@ def test_packaged_acceptance_rejects_partial_publication(
 
 def test_batch_acceptance_rejects_legacy_partial_failed_publication() -> None:
     # Given: the compatibility state is partial but no authoritative publication exists.
-    module = importlib.import_module("w3xtool.acceptance_batch")
+    module = importlib.import_module("gametool.acceptance_batch")
     result = empty_result(
         SourceFingerprint("/maps/failed.w3x", 3, 4, "a" * 64),
         "地图/001_failed_aaaaaaaa",
@@ -226,7 +226,7 @@ def test_real_casc_acceptance_reopens_one_unknown_root_identity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Given: native enumeration exposes a local FileDataID entry after a known path.
-    module = importlib.import_module("w3xtool.acceptance_runner")
+    module = importlib.import_module("gametool.acceptance_runner")
     unknown_name = "FILE0000004D.dat"
 
     class FakeSource:

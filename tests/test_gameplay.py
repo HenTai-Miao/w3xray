@@ -1,6 +1,6 @@
 """war3mapMisc.txt 游戏平衡常数解析。"""
 
-from w3xtool.gameplay import GameplayConstant, parse_gameplay_constants
+from gametool.gameplay import GameplayConstant, parse_gameplay_constants
 
 
 def test_parse_gameplay_constants_reads_sections_and_values():

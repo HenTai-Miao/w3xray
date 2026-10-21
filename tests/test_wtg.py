@@ -3,8 +3,8 @@
 import struct
 import unittest
 
-from w3xtool.api import MapData
-from w3xtool.wtg import parse_wtg
+from gametool.api import MapData
+from gametool.wtg import parse_wtg
 
 
 def _i(value):
@@ -178,7 +178,7 @@ class WtgParseTest(unittest.TestCase):
 
     def test_add_trigger_summary_fills_mapdata(self):
         # Given: an archive exposing war3map.wtg.
-        from w3xtool.map_extras import add_trigger_summary
+        from gametool.map_extras import add_trigger_summary
 
         md = MapData(path="x", name="x")
         archive = _FakeArchive({"war3map.wtg": _classic_wtg()})

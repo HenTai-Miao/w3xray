@@ -12,28 +12,28 @@ from tests.description_cache_publication_fixture import (
     replacement_inputs,
 )
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool import description_cache_publication as publication
-from w3xtool import (
+from gametool import description_cache_publication as publication
+from gametool import (
     description_cache_publication_generation_evidence as generation_evidence,
 )
-from w3xtool.description_cache_migration import (
+from gametool.description_cache_migration import (
     DescriptionCacheMigrationOptions,
     migrate_description_cache,
 )
-from w3xtool.description_cache_owned_schema import (
+from gametool.description_cache_owned_schema import (
     TRUSTED_DESCRIPTION_CACHE_MARKER,
 )
-from w3xtool.description_cache_publication_errors import (
+from gametool.description_cache_publication_errors import (
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_models import (
+from gametool.description_cache_publication_models import (
     DescriptionCachePublicationProof,
     DescriptionCachePublicationResult,
 )
-from w3xtool.trusted_description_cache_generation_io import (
+from gametool.trusted_description_cache_generation_io import (
     TrustedCacheGenerationState,
 )
-from w3xtool.trusted_description_cache_models import TrustedDescriptionCachePayloads
+from gametool.trusted_description_cache_models import TrustedDescriptionCachePayloads
 
 
 type Generation = Literal["active", "retained"]

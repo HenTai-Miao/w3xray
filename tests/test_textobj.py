@@ -5,7 +5,7 @@
 
 import unittest
 
-from w3xtool.textobj import classify, parse_text_objects
+from gametool.textobj import classify, parse_text_objects
 
 
 def test_parse_text_objects_and_classify_preserve_current_behavior() -> None:

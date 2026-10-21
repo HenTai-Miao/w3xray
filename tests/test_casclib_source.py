@@ -8,15 +8,15 @@ from typing import Never
 
 import pytest
 
-import w3xtool.casclib_api as casclib_api
-import w3xtool.casclib_source as casclib_source
-from w3xtool.casclib_api import (
+import gametool.casclib_api as casclib_api
+import gametool.casclib_source as casclib_source
+from gametool.casclib_api import (
     CascFileNotFoundError,
     CascLibLoadError,
     CascNativeError,
     CtypesCascLibApi,
 )
-from w3xtool.casclib_source import CascLibDataSource, probe_casclib
+from gametool.casclib_source import CascLibDataSource, probe_casclib
 
 
 @dataclass(slots=True)  # noqa: MUTABLE_OK - fake tracks native handle lifecycle.

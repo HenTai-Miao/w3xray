@@ -3,14 +3,14 @@
 from pathlib import Path
 
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool.description_cache import DescriptionCache, DescriptionCacheEntry
-from w3xtool.gui_loader import LoadedMap, load_path_payload
-from w3xtool.load_context import MapLoadContext
-from w3xtool.map_data import MapData
-from w3xtool.map_loader import _load_map_impl
-from w3xtool.object_candidates import ObjectCandidate
-from w3xtool.object_pipeline import populate_object_pipeline
-from w3xtool.object_text_models import ObjectTextState
+from gametool.description_cache import DescriptionCache, DescriptionCacheEntry
+from gametool.gui_loader import LoadedMap, load_path_payload
+from gametool.load_context import MapLoadContext
+from gametool.map_data import MapData
+from gametool.map_loader import _load_map_impl
+from gametool.object_candidates import ObjectCandidate
+from gametool.object_pipeline import populate_object_pipeline
+from gametool.object_text_models import ObjectTextState
 
 
 class _Archive:

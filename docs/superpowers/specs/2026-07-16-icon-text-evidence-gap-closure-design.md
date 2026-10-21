@@ -240,7 +240,7 @@ uv run main.py description-cache migrate \
 
 缓存目录包含：
 
-- `.w3xray-trusted-description-cache` 所有权与 schema 标记；
+- `.gamexray-trusted-description-cache` 所有权与 schema 标记；
 - `可信描述缓存.tsv`；
 - `来源清单.tsv`；
 - `可信缓存迁移拒绝.tsv`；

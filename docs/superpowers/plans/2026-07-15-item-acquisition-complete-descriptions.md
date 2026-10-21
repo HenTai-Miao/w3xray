@@ -27,16 +27,16 @@
 
 ### New production modules
 
-- `w3xtool/object_text_models.py` — immutable text states, rows, index, and query/count methods.
-- `w3xtool/object_text_roles.py` — deterministic field-key/label to semantic-role and level mapping.
-- `w3xtool/object_text_index.py` — map/client/cache evidence resolution and conflict handling.
-- `w3xtool/description_cache.py` — owned batch-output cache discovery, validation, parsing, and TSV formatting.
-- `w3xtool/object_text_exports.py` — complete-description TSV and completeness text.
-- `w3xtool/item_relation_models.py` — relation enums, immutable endpoints/evidence/records, stable IDs, and reverse indexes.
-- `w3xtool/item_relation_builder.py` — DOO, placement, shop, recipe, and item-skill relation builders.
-- `w3xtool/item_relation_scripts.py` — script-call/trigger/WTG reward evidence extraction.
-- `w3xtool/item_relation_exports.py` — acquisition, equipment-skill, and completeness reports.
-- `w3xtool/gui_item_relations.py` — relation-tab layout, filtering, evidence details, and object navigation.
+- `gametool/object_text_models.py` — immutable text states, rows, index, and query/count methods.
+- `gametool/object_text_roles.py` — deterministic field-key/label to semantic-role and level mapping.
+- `gametool/object_text_index.py` — map/client/cache evidence resolution and conflict handling.
+- `gametool/description_cache.py` — owned batch-output cache discovery, validation, parsing, and TSV formatting.
+- `gametool/object_text_exports.py` — complete-description TSV and completeness text.
+- `gametool/item_relation_models.py` — relation enums, immutable endpoints/evidence/records, stable IDs, and reverse indexes.
+- `gametool/item_relation_builder.py` — DOO, placement, shop, recipe, and item-skill relation builders.
+- `gametool/item_relation_scripts.py` — script-call/trigger/WTG reward evidence extraction.
+- `gametool/item_relation_exports.py` — acquisition, equipment-skill, and completeness reports.
+- `gametool/gui_item_relations.py` — relation-tab layout, filtering, evidence details, and object navigation.
 
 ### New focused tests
 
@@ -51,11 +51,11 @@
 
 ### Existing files changed
 
-- Object loading: `w3xtool/textobj.py`, `w3xtool/wts.py`, `w3xtool/object_text_sources.py`, `w3xtool/object_candidates.py`, `client_object_data.py`, `object_pipeline.py`, `load_context.py`, `map_data.py`, `map_loader.py`.
-- Placement and recipes: `w3xtool/doo.py`, `script_scan.py`, `api.py`, `object_id_summary.py`, `knowledge_preplaced_exports.py`.
-- Exports: `w3xtool/knowledge_pack_contents.py`, `knowledge_manifest.py`, `knowledge_requirements.py`, `knowledge_requirement_dynamic.py`, `knowledge_audit.py`.
-- Batch: `w3xtool/batch_runner.py`, `batch_map_processing.py`, `batch_models.py`, `batch_state_io.py`, `batch_reports.py`, `batch_global_reports.py`.
-- GUI: `w3xtool/object_detail_presentation.py`, `gui_object_detail.py`, `gui.py`, `gui_shell.py`, `gui_module_refresh.py`, `gui_loader.py`, `gui_loader_runner.py`, `gui_lifecycle.py`, `gui_external_data.py`, `gui_topbar.py`.
+- Object loading: `gametool/textobj.py`, `gametool/wts.py`, `gametool/object_text_sources.py`, `gametool/object_candidates.py`, `client_object_data.py`, `object_pipeline.py`, `load_context.py`, `map_data.py`, `map_loader.py`.
+- Placement and recipes: `gametool/doo.py`, `script_scan.py`, `api.py`, `object_id_summary.py`, `knowledge_preplaced_exports.py`.
+- Exports: `gametool/knowledge_pack_contents.py`, `knowledge_manifest.py`, `knowledge_requirements.py`, `knowledge_requirement_dynamic.py`, `knowledge_audit.py`.
+- Batch: `gametool/batch_runner.py`, `batch_map_processing.py`, `batch_models.py`, `batch_state_io.py`, `batch_reports.py`, `batch_global_reports.py`.
+- GUI: `gametool/object_detail_presentation.py`, `gui_object_detail.py`, `gui.py`, `gui_shell.py`, `gui_module_refresh.py`, `gui_loader.py`, `gui_loader_runner.py`, `gui_lifecycle.py`, `gui_external_data.py`, `gui_topbar.py`.
 - Regression fixtures/tests: `tests/test_doo.py`, `test_client_object_data.py`, `test_object_pipeline.py`, `test_map_data_compat.py`, `test_map_reuse.py`, `test_batch_reports.py`, `test_batch_runner.py`, `test_batch_map_processing.py`, `test_knowledge_pack.py`, `test_knowledge_pack_manifest.py`, `test_gui_layout.py`, `tests/gui_base.py`.
 
 ---
@@ -63,8 +63,8 @@
 ### Task 1: Immutable complete-text models and semantic role classifier
 
 **Files:**
-- Create: `w3xtool/object_text_models.py`
-- Create: `w3xtool/object_text_roles.py`
+- Create: `gametool/object_text_models.py`
+- Create: `gametool/object_text_roles.py`
 - Create: `tests/test_object_text_roles.py`
 
 **Interfaces:**
@@ -78,12 +78,12 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from w3xtool.object_text_models import (
+from gametool.object_text_models import (
     ObjectTextIndex,
     ObjectTextRecord,
     ObjectTextState,
 )
-from w3xtool.object_text_roles import TextRoleMatch, classify_text_field
+from gametool.object_text_roles import TextRoleMatch, classify_text_field
 
 
 def test_roles_cover_all_requested_tooltip_variants_and_levels() -> None:
@@ -133,7 +133,7 @@ def test_text_index_is_immutable_and_queries_by_category_and_id() -> None:
 - [ ] **Step 2: Run the tests and verify import failure**
 
 Run: `uv run python -m pytest -q tests/test_object_text_roles.py`
-Expected: FAIL because `w3xtool.object_text_models` and `object_text_roles` do not exist.
+Expected: FAIL because `gametool.object_text_models` and `object_text_roles` do not exist.
 
 - [ ] **Step 3: Implement the frozen records, mapping proxies, role table, and level parser**
 
@@ -197,7 +197,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit only the three new files**
 
 ```bash
-git add -- w3xtool/object_text_models.py w3xtool/object_text_roles.py tests/test_object_text_roles.py
+git add -- gametool/object_text_models.py gametool/object_text_roles.py tests/test_object_text_roles.py
 git diff --cached --check
 git commit -m "feat: model complete object text evidence"
 ```
@@ -207,9 +207,9 @@ git commit -m "feat: model complete object text evidence"
 ### Task 2: Trusted description cache and client evidence snapshot
 
 **Files:**
-- Create: `w3xtool/description_cache.py`
+- Create: `gametool/description_cache.py`
 - Create: `tests/test_description_cache.py`
-- Modify: `w3xtool/client_object_data.py`
+- Modify: `gametool/client_object_data.py`
 - Modify: `tests/test_client_object_data.py`
 
 **Interfaces:**
@@ -224,13 +224,13 @@ git commit -m "feat: model complete object text evidence"
 import csv
 from pathlib import Path
 
-from w3xtool.description_cache import build_description_cache_from_batch
+from gametool.description_cache import build_description_cache_from_batch
 
 
 def test_cache_accepts_only_owned_unique_client_fill_rows(tmp_path: Path) -> None:
     owned = tmp_path / "地图" / "001_map_deadbeef"
     owned.mkdir(parents=True)
-    (owned / ".w3xray-batch-owned").write_text("d" * 64, encoding="ascii")
+    (owned / ".gamexray-batch-owned").write_text("d" * 64, encoding="ascii")
     with (owned / "对象描述.tsv").open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle, delimiter="\t", lineterminator="\n")
         writer.writerow(
@@ -316,14 +316,14 @@ Build `ClientBaseObject.evidence_fields` directly from collected client candidat
 Run: `uv run python -m pytest -q tests/test_description_cache.py tests/test_client_object_data.py tests/test_load_context_compat.py`
 Expected: PASS.
 
-Run: `uv run --with ruff ruff check w3xtool/description_cache.py w3xtool/client_object_data.py tests/test_description_cache.py tests/test_client_object_data.py`
+Run: `uv run --with ruff ruff check gametool/description_cache.py gametool/client_object_data.py tests/test_description_cache.py tests/test_client_object_data.py`
 Expected: PASS.
 
 - [ ] **Step 5: Stage new files and only reviewed client-data hunks**
 
 ```bash
-git add -- w3xtool/description_cache.py tests/test_description_cache.py
-git add -p -- w3xtool/client_object_data.py tests/test_client_object_data.py
+git add -- gametool/description_cache.py tests/test_description_cache.py
+git add -p -- gametool/client_object_data.py tests/test_client_object_data.py
 git diff --cached --check
 git commit -m "feat: validate trusted description cache"
 ```
@@ -333,16 +333,16 @@ git commit -m "feat: validate trusted description cache"
 ### Task 3: Resolve all map, client, and cache text into `MapData`
 
 **Files:**
-- Create: `w3xtool/object_text_index.py`
+- Create: `gametool/object_text_index.py`
 - Create: `tests/test_object_text_index.py`
-- Modify: `w3xtool/textobj.py`
-- Modify: `w3xtool/wts.py`
-- Modify: `w3xtool/object_text_sources.py`
-- Modify: `w3xtool/object_candidates.py`
-- Modify: `w3xtool/object_pipeline.py`
-- Modify: `w3xtool/load_context.py`
-- Modify: `w3xtool/map_data.py`
-- Modify: `w3xtool/map_loader.py`
+- Modify: `gametool/textobj.py`
+- Modify: `gametool/wts.py`
+- Modify: `gametool/object_text_sources.py`
+- Modify: `gametool/object_candidates.py`
+- Modify: `gametool/object_pipeline.py`
+- Modify: `gametool/load_context.py`
+- Modify: `gametool/map_data.py`
+- Modify: `gametool/map_loader.py`
 - Modify: `tests/test_object_pipeline.py`
 - Modify: `tests/test_wts.py`
 - Modify: `tests/test_object_text_sources.py`
@@ -360,8 +360,8 @@ git commit -m "feat: validate trusted description cache"
 - [ ] **Step 1: Add failing resolution tests for every state and lossless long text**
 
 ```python
-from w3xtool.object_text_index import build_object_text_index
-from w3xtool.object_text_models import ObjectTextState
+from gametool.object_text_index import build_object_text_index
+from gametool.object_text_models import ObjectTextState
 
 
 def test_resolution_preserves_all_roles_levels_placeholders_and_conflicts() -> None:
@@ -594,8 +594,8 @@ Expected: PASS.
 - [ ] **Step 5: Commit reviewed task hunks**
 
 ```bash
-git add -- w3xtool/object_text_index.py tests/test_object_text_index.py
-git add -p -- w3xtool/textobj.py w3xtool/wts.py w3xtool/object_text_sources.py w3xtool/object_candidates.py w3xtool/object_pipeline.py w3xtool/load_context.py w3xtool/map_data.py w3xtool/map_loader.py tests/test_wts.py tests/test_object_text_sources.py tests/test_object_candidate_collection.py tests/test_object_pipeline.py tests/test_map_data_compat.py
+git add -- gametool/object_text_index.py tests/test_object_text_index.py
+git add -p -- gametool/textobj.py gametool/wts.py gametool/object_text_sources.py gametool/object_candidates.py gametool/object_pipeline.py gametool/load_context.py gametool/map_data.py gametool/map_loader.py tests/test_wts.py tests/test_object_text_sources.py tests/test_object_candidate_collection.py tests/test_object_pipeline.py tests/test_map_data_compat.py
 git diff --cached --check
 git commit -m "feat: retain complete object text evidence"
 ```
@@ -605,10 +605,10 @@ git commit -m "feat: retain complete object text evidence"
 ### Task 4: Preserve nested unit and destructable drop sets
 
 **Files:**
-- Modify: `w3xtool/doo.py`
+- Modify: `gametool/doo.py`
 - Modify: `tests/test_doo.py`
-- Modify: `w3xtool/object_id_summary.py`
-- Modify: `w3xtool/knowledge_preplaced_exports.py`
+- Modify: `gametool/object_id_summary.py`
+- Modify: `gametool/knowledge_preplaced_exports.py`
 - Modify: `tests/test_knowledge_pack_preplaced.py`
 
 **Interfaces:**
@@ -688,7 +688,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit reviewed placement hunks**
 
 ```bash
-git add -p -- w3xtool/doo.py w3xtool/object_id_summary.py w3xtool/knowledge_preplaced_exports.py tests/test_doo.py tests/test_knowledge_pack_preplaced.py
+git add -p -- gametool/doo.py gametool/object_id_summary.py gametool/knowledge_preplaced_exports.py tests/test_doo.py tests/test_knowledge_pack_preplaced.py
 git diff --cached --check
 git commit -m "fix: preserve nested placement drop sets"
 ```
@@ -698,8 +698,8 @@ git commit -m "fix: preserve nested placement drop sets"
 ### Task 5: Relation models and structural acquisition builders
 
 **Files:**
-- Create: `w3xtool/item_relation_models.py`
-- Create: `w3xtool/item_relation_builder.py`
+- Create: `gametool/item_relation_models.py`
+- Create: `gametool/item_relation_builder.py`
 - Create: `tests/test_item_relation_models.py`
 - Create: `tests/test_item_relations.py`
 
@@ -792,7 +792,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit the four new files**
 
 ```bash
-git add -- w3xtool/item_relation_models.py w3xtool/item_relation_builder.py tests/test_item_relation_models.py tests/test_item_relations.py
+git add -- gametool/item_relation_models.py gametool/item_relation_builder.py tests/test_item_relation_models.py tests/test_item_relations.py
 git diff --cached --check
 git commit -m "feat: index structural item acquisition relations"
 ```
@@ -802,8 +802,8 @@ git commit -m "feat: index structural item acquisition relations"
 ### Task 6: Evidence-bearing recipes without breaking the legacy recipe view
 
 **Files:**
-- Modify: `w3xtool/script_scan.py`
-- Modify: `w3xtool/api.py`
+- Modify: `gametool/script_scan.py`
+- Modify: `gametool/api.py`
 - Modify: `tests/test_map_reuse.py`
 - Modify: `tests/test_recipe_scroll.py`
 - Create: `tests/test_recipe_evidence.py`
@@ -863,7 +863,7 @@ Expected: PASS.
 
 ```bash
 git add -- tests/test_recipe_evidence.py
-git add -p -- w3xtool/script_scan.py w3xtool/api.py tests/test_map_reuse.py tests/test_recipe_scroll.py
+git add -p -- gametool/script_scan.py gametool/api.py tests/test_map_reuse.py tests/test_recipe_scroll.py
 git diff --cached --check
 git commit -m "feat: retain recipe source evidence"
 ```
@@ -873,9 +873,9 @@ git commit -m "feat: retain recipe source evidence"
 ### Task 7: Script and WTG item reward evidence
 
 **Files:**
-- Create: `w3xtool/item_relation_scripts.py`
+- Create: `gametool/item_relation_scripts.py`
 - Create: `tests/test_item_relation_scripts.py`
-- Modify: `w3xtool/item_relation_builder.py`
+- Modify: `gametool/item_relation_builder.py`
 - Modify: `tests/test_item_relations.py`
 
 **Interfaces:**
@@ -949,8 +949,8 @@ Expected: PASS.
 - [ ] **Step 5: Commit script relation files/hunks**
 
 ```bash
-git add -- w3xtool/item_relation_scripts.py tests/test_item_relation_scripts.py
-git add -p -- w3xtool/item_relation_builder.py tests/test_item_relations.py
+git add -- gametool/item_relation_scripts.py tests/test_item_relation_scripts.py
+git add -p -- gametool/item_relation_builder.py tests/test_item_relations.py
 git diff --cached --check
 git commit -m "feat: index script and trigger item rewards"
 ```
@@ -960,12 +960,12 @@ git commit -m "feat: index script and trigger item rewards"
 ### Task 8: Build both indexes once during map loading and expose compatibility APIs
 
 **Files:**
-- Modify: `w3xtool/map_data.py`
-- Modify: `w3xtool/map_loader.py`
-- Modify: `w3xtool/load_context.py`
-- Modify: `w3xtool/gui_loader.py`
-- Modify: `w3xtool/gui_loader_runner.py`
-- Modify: `w3xtool/api.py`
+- Modify: `gametool/map_data.py`
+- Modify: `gametool/map_loader.py`
+- Modify: `gametool/load_context.py`
+- Modify: `gametool/gui_loader.py`
+- Modify: `gametool/gui_loader_runner.py`
+- Modify: `gametool/api.py`
 - Modify: `tests/test_map_reuse.py`
 - Create: `tests/test_map_relation_loading.py`
 
@@ -1011,7 +1011,7 @@ Expected: PASS.
 
 ```bash
 git add -- tests/test_map_relation_loading.py
-git add -p -- w3xtool/map_data.py w3xtool/map_loader.py w3xtool/load_context.py w3xtool/gui_loader.py w3xtool/gui_loader_runner.py w3xtool/api.py tests/test_map_reuse.py
+git add -p -- gametool/map_data.py gametool/map_loader.py gametool/load_context.py gametool/gui_loader.py gametool/gui_loader_runner.py gametool/api.py tests/test_map_reuse.py
 git diff --cached --check
 git commit -m "feat: build item intelligence during map load"
 ```
@@ -1021,8 +1021,8 @@ git commit -m "feat: build item intelligence during map load"
 ### Task 9: Lossless complete-text and relation TSV formatters
 
 **Files:**
-- Create: `w3xtool/object_text_exports.py`
-- Create: `w3xtool/item_relation_exports.py`
+- Create: `gametool/object_text_exports.py`
+- Create: `gametool/item_relation_exports.py`
 - Create: `tests/test_item_relation_exports.py`
 - Modify: `tests/test_batch_reports.py`
 
@@ -1096,7 +1096,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit formatter files**
 
 ```bash
-git add -- w3xtool/object_text_exports.py w3xtool/item_relation_exports.py tests/test_item_relation_exports.py
+git add -- gametool/object_text_exports.py gametool/item_relation_exports.py tests/test_item_relation_exports.py
 git add -p -- tests/test_batch_reports.py
 git diff --cached --check
 git commit -m "feat: export complete item intelligence TSVs"
@@ -1107,11 +1107,11 @@ git commit -m "feat: export complete item intelligence TSVs"
 ### Task 10: Publish complete descriptions and relations in knowledge packs
 
 **Files:**
-- Modify: `w3xtool/knowledge_pack_contents.py`
-- Modify: `w3xtool/knowledge_manifest.py`
-- Modify: `w3xtool/knowledge_requirements.py`
-- Modify: `w3xtool/knowledge_requirement_dynamic.py`
-- Modify: `w3xtool/knowledge_audit.py`
+- Modify: `gametool/knowledge_pack_contents.py`
+- Modify: `gametool/knowledge_manifest.py`
+- Modify: `gametool/knowledge_requirements.py`
+- Modify: `gametool/knowledge_requirement_dynamic.py`
+- Modify: `gametool/knowledge_audit.py`
 - Modify: `tests/test_knowledge_pack.py`
 - Modify: `tests/test_knowledge_pack_manifest.py`
 - Create: `tests/test_knowledge_pack_item_relations.py`
@@ -1164,7 +1164,7 @@ Expected: PASS.
 
 ```bash
 git add -- tests/test_knowledge_pack_item_relations.py
-git add -p -- w3xtool/knowledge_pack_contents.py w3xtool/knowledge_manifest.py w3xtool/knowledge_requirements.py w3xtool/knowledge_requirement_dynamic.py w3xtool/knowledge_audit.py tests/test_knowledge_pack.py tests/test_knowledge_pack_manifest.py
+git add -p -- gametool/knowledge_pack_contents.py gametool/knowledge_manifest.py gametool/knowledge_requirements.py gametool/knowledge_requirement_dynamic.py gametool/knowledge_audit.py tests/test_knowledge_pack.py tests/test_knowledge_pack_manifest.py
 git diff --cached --check
 git commit -m "feat: publish item relations in knowledge packs"
 ```
@@ -1174,12 +1174,12 @@ git commit -m "feat: publish item relations in knowledge packs"
 ### Task 11: Batch schema v2, trusted-cache reuse, and per-map relation reports
 
 **Files:**
-- Modify: `w3xtool/batch_models.py`
-- Modify: `w3xtool/batch_state_io.py`
-- Modify: `w3xtool/batch_runner.py`
-- Modify: `w3xtool/batch_map_processing.py`
-- Modify: `w3xtool/batch_reports.py`
-- Modify: `w3xtool/batch_global_reports.py`
+- Modify: `gametool/batch_models.py`
+- Modify: `gametool/batch_state_io.py`
+- Modify: `gametool/batch_runner.py`
+- Modify: `gametool/batch_map_processing.py`
+- Modify: `gametool/batch_reports.py`
+- Modify: `gametool/batch_global_reports.py`
 - Modify: `tests/test_batch_reports.py`
 - Modify: `tests/test_batch_runner.py`
 - Modify: `tests/test_batch_map_processing.py`
@@ -1243,7 +1243,7 @@ Expected: PASS.
 
 ```bash
 git add -- tests/test_batch_description_cache.py
-git add -p -- w3xtool/batch_models.py w3xtool/batch_state_io.py w3xtool/batch_runner.py w3xtool/batch_map_processing.py w3xtool/batch_reports.py w3xtool/batch_global_reports.py tests/test_batch_reports.py tests/test_batch_runner.py tests/test_batch_map_processing.py
+git add -p -- gametool/batch_models.py gametool/batch_state_io.py gametool/batch_runner.py gametool/batch_map_processing.py gametool/batch_reports.py gametool/batch_global_reports.py tests/test_batch_reports.py tests/test_batch_runner.py tests/test_batch_map_processing.py
 git diff --cached --check
 git commit -m "feat: publish relation-aware batch schema"
 ```
@@ -1253,8 +1253,8 @@ git commit -m "feat: publish relation-aware batch schema"
 ### Task 12: Complete text and bidirectional relations in object details
 
 **Files:**
-- Modify: `w3xtool/object_detail_presentation.py`
-- Modify: `w3xtool/gui_object_detail.py`
+- Modify: `gametool/object_detail_presentation.py`
+- Modify: `gametool/gui_object_detail.py`
 - Modify: `tests/test_gui_object_presentation.py`
 
 **Interfaces:**
@@ -1307,7 +1307,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit only reviewed detail hunks**
 
 ```bash
-git add -p -- w3xtool/object_detail_presentation.py w3xtool/gui_object_detail.py tests/test_gui_object_presentation.py
+git add -p -- gametool/object_detail_presentation.py gametool/gui_object_detail.py tests/test_gui_object_presentation.py
 git diff --cached --check
 git commit -m "feat: show complete item intelligence in details"
 ```
@@ -1317,16 +1317,16 @@ git commit -m "feat: show complete item intelligence in details"
 ### Task 13: Searchable independent acquisition page and cache selection
 
 **Files:**
-- Create: `w3xtool/gui_item_relations.py`
+- Create: `gametool/gui_item_relations.py`
 - Create: `tests/test_gui_item_relations.py`
-- Modify: `w3xtool/gui.py`
-- Modify: `w3xtool/gui_shell.py`
-- Modify: `w3xtool/gui_module_refresh.py`
-- Modify: `w3xtool/gui_topbar.py`
-- Modify: `w3xtool/gui_external_data.py`
-- Modify: `w3xtool/gui_lifecycle.py`
-- Modify: `w3xtool/gui_loader.py`
-- Modify: `w3xtool/gui_loader_runner.py`
+- Modify: `gametool/gui.py`
+- Modify: `gametool/gui_shell.py`
+- Modify: `gametool/gui_module_refresh.py`
+- Modify: `gametool/gui_topbar.py`
+- Modify: `gametool/gui_external_data.py`
+- Modify: `gametool/gui_lifecycle.py`
+- Modify: `gametool/gui_loader.py`
+- Modify: `gametool/gui_loader_runner.py`
 - Modify: `tests/gui_base.py`
 - Modify: `tests/test_gui_layout.py`
 
@@ -1382,8 +1382,8 @@ Expected: PASS.
 - [ ] **Step 5: Commit the new mixin and reviewed GUI hunks**
 
 ```bash
-git add -- w3xtool/gui_item_relations.py tests/test_gui_item_relations.py
-git add -p -- w3xtool/gui.py w3xtool/gui_shell.py w3xtool/gui_module_refresh.py w3xtool/gui_topbar.py w3xtool/gui_external_data.py w3xtool/gui_lifecycle.py w3xtool/gui_loader.py w3xtool/gui_loader_runner.py tests/gui_base.py tests/test_gui_layout.py
+git add -- gametool/gui_item_relations.py tests/test_gui_item_relations.py
+git add -p -- gametool/gui.py gametool/gui_shell.py gametool/gui_module_refresh.py gametool/gui_topbar.py gametool/gui_external_data.py gametool/gui_lifecycle.py gametool/gui_loader.py gametool/gui_loader_runner.py tests/gui_base.py tests/test_gui_layout.py
 git diff --cached --check
 git commit -m "feat: add searchable item acquisition workspace"
 ```
@@ -1429,16 +1429,16 @@ Expected: all selected tests pass.
 Run:
 
 ```bash
-uv run --with ruff ruff format --check w3xtool tests
-uv run --with ruff ruff check w3xtool tests
-uv run --with basedpyright basedpyright --level error w3xtool tests
+uv run --with ruff ruff format --check gametool tests
+uv run --with ruff ruff check gametool tests
+uv run --with basedpyright basedpyright --level error gametool tests
 ```
 
 Expected: zero Ruff errors and zero basedpyright errors. If repository-wide pre-existing diagnostics appear, rerun the exact changed-file list and record both outputs without suppressing new diagnostics.
 
 - [ ] **Step 3: Run the full regression suite**
 
-Run: `uv run w3xray-test`
+Run: `uv run gamexray-test`
 Expected: exit 0; all tests pass, with only the repository's explicitly skipped tests.
 
 - [ ] **Step 4: Record immutable source identities before batch processing**
@@ -1471,9 +1471,9 @@ Expected: 39 published per-map directories; every directory contains `对象描�
 Run the repository acceptance test through explicit environment variables; the test reads these three variables with `os.environ[...]` and does not register private pytest options:
 
 ```bash
-W3XRAY_MAPS_ROOT='/Users/zhongerbing/Desktop/Maps' \
-W3XRAY_OLD_OUTPUT='/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output' \
-W3XRAY_NEW_OUTPUT='/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v2' \
+GAMEXRAY_MAPS_ROOT='/Users/zhongerbing/Desktop/Maps' \
+GAMEXRAY_OLD_OUTPUT='/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output' \
+GAMEXRAY_NEW_OUTPUT='/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v2' \
 uv run python -m pytest -q tests/test_real_map_item_relation_acceptance.py
 ```
 

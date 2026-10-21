@@ -13,11 +13,11 @@ from tests.description_cache_publication_generation_descriptor_fixture import (
     stable_generation_round,
 )
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool import description_cache_publication_generation_evidence as evidence
-from w3xtool.description_cache_publication_errors import (
+from gametool import description_cache_publication_generation_evidence as evidence
+from gametool.description_cache_publication_errors import (
     PublicationCommitContextError,
 )
-from w3xtool.trusted_description_cache import load_trusted_description_cache
+from gametool.trusted_description_cache import load_trusted_description_cache
 
 
 _DIRECTORY_FLAGS: Final = (

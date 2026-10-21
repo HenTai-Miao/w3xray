@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import struct
 
-from w3xtool.doo import parse_units
+from gametool.doo import parse_units
 
 
 def test_parse_units_keeps_fixed_units_with_negative_one_random_flag() -> None:

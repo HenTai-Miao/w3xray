@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from tests.retained_integrity_fixture import active_cache, install_previous, retained
-from w3xtool import description_cache_retained_integrity as retained_api
+from gametool import description_cache_retained_integrity as retained_api
 
 
 type JsonValue = (

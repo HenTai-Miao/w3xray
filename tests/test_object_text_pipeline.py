@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from w3xtool.client_object_data import ClientBaseObject
-from w3xtool.description_cache import DescriptionCache
-from w3xtool.map_data import MapData
-from w3xtool.object_candidates import (
+from gametool.client_object_data import ClientBaseObject
+from gametool.description_cache import DescriptionCache
+from gametool.map_data import MapData
+from gametool.object_candidates import (
     ObjectCandidate,
     ObjectFieldValue,
     ObjectSourceKind,
 )
-from w3xtool.object_pipeline import populate_object_pipeline
-from w3xtool.object_text_models import ObjectTextState
+from gametool.object_pipeline import populate_object_pipeline
+from gametool.object_text_models import ObjectTextState
 
 
 def test_map_data_default_keeps_legacy_construction_with_an_empty_text_index() -> None:

@@ -3,14 +3,14 @@
 import struct
 import unittest
 
-from w3xtool.terrain import (
+from gametool.terrain import (
     TerrainBounds,
     TerrainInfo,
     TerrainPointSummary,
     parse_w3e_header,
     terrain_info_from_map_path,
 )
-from w3xtool.terrain_tiles import describe_terrain_tile, format_terrain_tile_list
+from gametool.terrain_tiles import describe_terrain_tile, format_terrain_tile_list
 
 
 def _w3e_header() -> bytes:

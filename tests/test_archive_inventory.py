@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import hashlib
 
-from w3xtool.archive_inventory import build_archive_inventory
-from w3xtool.extraction_ledger import BlockSource, BlockState, ExtractionStatus
-from w3xtool.mpq import FLAG_ENCRYPTED, FLAG_EXISTS
-from w3xtool.mpq_layout import _Block
+from gametool.archive_inventory import build_archive_inventory
+from gametool.extraction_ledger import BlockSource, BlockState, ExtractionStatus
+from gametool.mpq import FLAG_ENCRYPTED, FLAG_EXISTS
+from gametool.mpq_layout import _Block
 
 
 class _Archive:

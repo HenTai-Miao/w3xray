@@ -4,10 +4,10 @@ import unittest
 
 import pytest
 
-import w3xtool.script_function_index as script_function_index
-from w3xtool.api import MapData
-from w3xtool.script_call_catalog import ScriptCall
-from w3xtool.script_function_index import (
+import gametool.script_function_index as script_function_index
+from gametool.api import MapData
+from gametool.script_call_catalog import ScriptCall
+from gametool.script_function_index import (
     build_script_function_index,
     format_script_function_index_tsv,
 )

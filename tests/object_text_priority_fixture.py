@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from w3xtool.client_object_data import ClientBaseObject
-from w3xtool.description_cache import EMPTY_DESCRIPTION_CACHE, DescriptionCache
-from w3xtool.map_data import GameObject
-from w3xtool.object_candidates import (
+from gametool.client_object_data import ClientBaseObject
+from gametool.description_cache import EMPTY_DESCRIPTION_CACHE, DescriptionCache
+from gametool.map_data import GameObject
+from gametool.object_candidates import (
     ObjectCandidate,
     ObjectFieldValue,
     ObjectSourceKind,
 )
-from w3xtool.object_text_index import build_object_text_index
-from w3xtool.object_text_models import ObjectTextIndex
+from gametool.object_text_index import build_object_text_index
+from gametool.object_text_models import ObjectTextIndex
 
 
 def build_text_index(

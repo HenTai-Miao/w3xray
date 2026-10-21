@@ -14,9 +14,9 @@ from tests.batch_publication_fixture import (
     publish_empty_result,
     write_empty_publication,
 )
-import w3xtool.batch_map_publication as publication_module
-from w3xtool.batch_manifest_validation import verify_map_publication
-from w3xtool.batch_models import SourceFingerprint
+import gametool.batch_map_publication as publication_module
+from gametool.batch_manifest_validation import verify_map_publication
+from gametool.batch_models import SourceFingerprint
 
 
 _DIGEST = "a" * 64
@@ -35,9 +35,9 @@ def test_create_map_stage_persists_a_building_transaction(tmp_path: Path) -> Non
     )
 
     # Then: the typed stage and durable record bind the private names.
-    record = tmp_path / "地图" / f".w3xray-map-transaction-{_NEW_TRANSACTION}.json"
+    record = tmp_path / "地图" / f".gamexray-map-transaction-{_NEW_TRANSACTION}.json"
     payload = json.loads(record.read_text(encoding="utf-8"))
-    assert staged.stage.name == f".w3xray-map-stage-{_NEW_TRANSACTION}"
+    assert staged.stage.name == f".gamexray-map-stage-{_NEW_TRANSACTION}"
     assert staged.relative == _RELATIVE
     assert payload["phase"] == "building"
     assert payload["source_sha256"] == _DIGEST
@@ -82,7 +82,7 @@ def test_recovery_keeps_exactly_one_valid_generation_after_publication_failure(
         old.manifest_sha256,
         new.manifest_sha256,
     }
-    assert not tuple((tmp_path / "地图").glob(".w3xray-map-*-*"))
+    assert not tuple((tmp_path / "地图").glob(".gamexray-map-*-*"))
     assert all(item.code != "unproved_path" for item in diagnostics)
 
 
@@ -139,10 +139,10 @@ def test_recovery_leaves_unowned_private_names_and_invalid_record_untouched(
     # Given: similarly named paths were not created by a valid transaction.
     maps_root = tmp_path / "地图"
     maps_root.mkdir()
-    fake_stage = maps_root / f".w3xray-map-stage-{'c' * 32}"
+    fake_stage = maps_root / f".gamexray-map-stage-{'c' * 32}"
     fake_stage.mkdir()
     (fake_stage / "payload.bin").write_bytes(b"user")
-    forged = maps_root / f".w3xray-map-transaction-{'d' * 32}.json"
+    forged = maps_root / f".gamexray-map-transaction-{'d' * 32}.json"
     forged.write_text("{}\n", encoding="utf-8")
 
     # When: recovery scans strict transaction names.
@@ -162,7 +162,7 @@ def test_discard_removes_only_its_matching_building_stage(tmp_path: Path) -> Non
         _DIGEST,
         transaction_id=_NEW_TRANSACTION,
     )
-    fake = tmp_path / "地图" / f".w3xray-map-stage-{'c' * 32}"
+    fake = tmp_path / "地图" / f".gamexray-map-stage-{'c' * 32}"
     fake.mkdir()
 
     # When: the map processor abandons its building stage.

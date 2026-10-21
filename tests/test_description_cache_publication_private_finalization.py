@@ -12,13 +12,13 @@ from tests.description_cache_publication_fixture import (
     bound_stage,
     rename_in_parent,
 )
-from w3xtool.description_cache_publication_errors import (
+from gametool.description_cache_publication_errors import (
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_models import RetainedCacheRole
-from w3xtool.description_cache_publication_private_attempt import attempt_private
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
-from w3xtool.description_cache_publication_stage_finalization import (
+from gametool.description_cache_publication_models import RetainedCacheRole
+from gametool.description_cache_publication_private_attempt import attempt_private
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool.description_cache_publication_stage_finalization import (
     finalize_private_artifacts,
 )
 
@@ -32,7 +32,7 @@ def test_typed_private_attempt_error_passes_through_by_identity(
     tmp_path: Path,
 ) -> None:
     # Given: a private operation already produced authoritative typed evidence.
-    stage = tmp_path / ".w3xray-description-cache-stage-a"
+    stage = tmp_path / ".gamexray-description-cache-stage-a"
     stage.mkdir()
     original = OSError("original")
     typed = PublicationCommitContextError(
@@ -57,8 +57,8 @@ def test_backup_recovery_record_stays_disjoint_from_later_stage_transient(
     tmp_path: Path,
 ) -> None:
     # Given: backup can normalize, while the stage's failed-stage target is occupied.
-    stage = tmp_path / ".w3xray-description-cache-stage-b"
-    backup = tmp_path / ".w3xray-description-cache-backup-b"
+    stage = tmp_path / ".gamexray-description-cache-stage-b"
+    backup = tmp_path / ".gamexray-description-cache-backup-b"
     output = tmp_path / "trusted"
     stage.mkdir()
     backup.mkdir()

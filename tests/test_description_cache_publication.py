@@ -14,17 +14,17 @@ from tests.description_cache_publication_fixture import (
     transient_publication_paths,
 )
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool import description_cache_publication as publication
-from w3xtool.description_cache_migration import (
+from gametool import description_cache_publication as publication
+from gametool.description_cache_migration import (
     DescriptionCacheMigrationOptions,
     migrate_description_cache,
 )
-from w3xtool.description_cache_publication import DescriptionCachePublicationError
-from w3xtool.description_cache_publication_commit import (
+from gametool.description_cache_publication import DescriptionCachePublicationError
+from gametool.description_cache_publication_commit import (
     PublicationCommitContextError,
 )
-from w3xtool.durable_io import sync_directory_descriptor
-from w3xtool.trusted_description_cache import (
+from gametool.durable_io import sync_directory_descriptor
+from gametool.trusted_description_cache import (
     load_trusted_description_cache,
 )
 

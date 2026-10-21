@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
-import w3xtool.batch_dependencies as batch_dependencies
+import gametool.batch_dependencies as batch_dependencies
 from tests.symlink_capability import skip_if_symlinks_unsupported
-from w3xtool.batch_models import SourceFingerprint
-from w3xtool.batch_runner import BatchOptions
+from gametool.batch_models import SourceFingerprint
+from gametool.batch_runner import BatchOptions
 
 
 def test_dependency_fingerprint_is_stable_and_binds_source_and_cache(

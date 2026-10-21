@@ -2,8 +2,8 @@
 
 import unittest
 
-from w3xtool.api import MapData
-from w3xtool.diagnostics import DiagnosticSeverity, build_script_diagnostics
+from gametool.api import MapData
+from gametool.diagnostics import DiagnosticSeverity, build_script_diagnostics
 
 
 class ScriptDiagnosticsTest(unittest.TestCase):

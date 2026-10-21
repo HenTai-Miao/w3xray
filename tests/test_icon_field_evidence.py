@@ -4,18 +4,18 @@ from __future__ import annotations
 
 import pytest
 
-from w3xtool.icon_field_evidence import (
+from gametool.icon_field_evidence import (
     IconFieldDecision,
     IconFieldDisposition,
     classify_icon_field,
 )
-from w3xtool.map_data import GameObject, GameObjectFieldEvidence
-from w3xtool.object_candidates import (
+from gametool.map_data import GameObject, GameObjectFieldEvidence
+from gametool.object_candidates import (
     ObjectCandidate,
     ObjectFieldValue,
     ObjectSourceKind,
 )
-from w3xtool.object_pipeline import merge_object_candidates
+from gametool.object_pipeline import merge_object_candidates
 
 
 @pytest.mark.parametrize(

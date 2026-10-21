@@ -7,13 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool import (
+from gametool import (
     archive_export,
     archive_export_recovery,
     knowledge_unknown_exports,
     map_loader,
 )
-from w3xtool.load_context import MapLoadContext
+from gametool.load_context import MapLoadContext
 
 
 class _CampaignArchive:

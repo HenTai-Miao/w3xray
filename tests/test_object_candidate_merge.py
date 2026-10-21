@@ -7,12 +7,12 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from w3xtool.object_candidates import (
+from gametool.object_candidates import (
     ObjectCandidate,
     ObjectFieldValue,
     ObjectSourceKind,
 )
-from w3xtool.object_pipeline import build_object_index, merge_object_candidates
+from gametool.object_pipeline import build_object_index, merge_object_candidates
 
 
 def field(

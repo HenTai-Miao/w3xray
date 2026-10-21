@@ -7,7 +7,7 @@ import os
 
 import pytest
 
-from w3xtool.live_cli import (
+from gametool.live_cli import (
     LiveCliOptionError,
     live_pack_cache_dir,
     parse_live_cli_options,
@@ -68,7 +68,7 @@ class TestParse:
         assert opts.map_path is None and opts.pack_dir is None
 
     def test_run_without_map_reports_guidance(self, monkeypatch, capsys):
-        from w3xtool import live_cli
+        from gametool import live_cli
 
         monkeypatch.setattr(live_cli, "_auto_map_path", lambda: None)
         code = live_cli.run_live_cli(live_cli.LiveCliOptions())
@@ -102,7 +102,7 @@ class TestPackCacheDir:
     def test_key_changes_with_mtime(self, tmp_path, monkeypatch):
         mp = tmp_path / "m.w3x"
         mp.write_bytes(b"data")
-        monkeypatch.setenv("W3XRAY_CACHE_DIR", str(tmp_path / "cache"))
+        monkeypatch.setenv("GAMEXRAY_CACHE_DIR", str(tmp_path / "cache"))
         d1 = live_pack_cache_dir(str(mp))
         os.utime(mp, (1, 100))
         d2 = live_pack_cache_dir(str(mp))
@@ -114,7 +114,7 @@ class TestRunCli:
     def test_missing_deps_message(self, monkeypatch, tmp_path):
         import builtins
 
-        from w3xtool import live_cli
+        from gametool import live_cli
 
         real_import = builtins.__import__
 
@@ -133,7 +133,7 @@ def test_read_live_offline_snapshot_fail_open(tmp_path):
     import json
 
     pytest.importorskip("numpy")
-    from w3xtool.live_inventory import read_live
+    from gametool.live_inventory import read_live
 
     d = tmp_path / "snap"
     d.mkdir()

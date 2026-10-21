@@ -7,8 +7,8 @@ import os
 import tempfile
 import unittest
 
-from w3xtool.casc_source import CascDataSource
-from w3xtool.game_data_source import open_game_data_source, probe_game_data_path
+from gametool.casc_source import CascDataSource
+from gametool.game_data_source import open_game_data_source, probe_game_data_path
 
 
 def _blte(payload: bytes) -> bytes:
@@ -42,7 +42,7 @@ def test_casc_exact_lookup_does_not_use_path_map_suffix(tmp_path) -> None:
     (data_dir / "data.000").write_bytes((b"\0" * offset) + block)
     key = bytes.fromhex("00112233445566778899aabbccddeeff")
     (data_dir / "0000000000000000.idx").write_bytes(_idx_row(key, 0, offset, len(blte)))
-    (tmp_path / "w3xray-casc-paths.tsv").write_text(
+    (tmp_path / "gamexray-casc-paths.tsv").write_text(
         "war3.w3mod\\Icons\\BTNHero.blp\t00112233445566778899aabbccddeeff\n",
         encoding="utf-8",
     )
@@ -82,7 +82,7 @@ class CascSourceTest(unittest.TestCase):
             with open(os.path.join(data_dir, "0000000000000000.idx"), "wb") as handle:
                 handle.write(_idx_row(key, 0, offset, len(blte)))
             with open(
-                os.path.join(root, "w3xray-casc-paths.tsv"), "w", encoding="utf-8"
+                os.path.join(root, "gamexray-casc-paths.tsv"), "w", encoding="utf-8"
             ) as handle:
                 handle.write(
                     "war3.w3mod\\units\\HumanUnitStrings.txt\t00112233445566778899aabbccddeeff\n"

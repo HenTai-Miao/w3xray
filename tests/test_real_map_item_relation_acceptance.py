@@ -11,19 +11,19 @@ from typing import Final
 
 import pytest
 
-from w3xtool.acceptance_batch import require_authoritative_batch
-from w3xtool.batch_models import BATCH_SCHEMA_VERSION, MapBatchResult
-from w3xtool.item_relation_exports import (
+from gametool.acceptance_batch import require_authoritative_batch
+from gametool.batch_models import BATCH_SCHEMA_VERSION, MapBatchResult
+from gametool.item_relation_exports import (
     format_equipment_skills_tsv,
     format_item_acquisition_tsv,
 )
-from w3xtool.item_relation_models import (
+from gametool.item_relation_models import (
     ItemRelationKind,
     RelationCompleteness,
     RelationConfidence,
 )
-from w3xtool.item_relation_query import filter_item_relations
-from w3xtool.map_loader import load_map
+from gametool.item_relation_query import filter_item_relations
+from gametool.map_loader import load_map
 
 from tests.real_map_text_acceptance import (
     TsvTable,
@@ -35,9 +35,9 @@ from tests.real_map_text_acceptance import (
 )
 
 _ENV_NAMES: Final = (
-    "W3XRAY_MAPS_ROOT",
-    "W3XRAY_OLD_OUTPUT",
-    "W3XRAY_NEW_OUTPUT",
+    "GAMEXRAY_MAPS_ROOT",
+    "GAMEXRAY_OLD_OUTPUT",
+    "GAMEXRAY_NEW_OUTPUT",
 )
 _HEX_256: Final = re.compile(r"[0-9a-f]{64}")
 _REQUIRED_ARTIFACTS: Final = frozenset(
@@ -81,7 +81,7 @@ _SKILL_KINDS: Final = frozenset(
 
 pytestmark = pytest.mark.skipif(
     not all(os.environ.get(name) for name in _ENV_NAMES),
-    reason="set W3XRAY_MAPS_ROOT/W3XRAY_OLD_OUTPUT/W3XRAY_NEW_OUTPUT",
+    reason="set GAMEXRAY_MAPS_ROOT/GAMEXRAY_OLD_OUTPUT/GAMEXRAY_NEW_OUTPUT",
 )
 
 
@@ -95,9 +95,9 @@ class AcceptanceContext:
 
 @pytest.fixture(scope="module")
 def acceptance_context() -> AcceptanceContext:
-    maps_root = Path(os.environ["W3XRAY_MAPS_ROOT"])
-    old_root = Path(os.environ["W3XRAY_OLD_OUTPUT"])
-    new_root = Path(os.environ["W3XRAY_NEW_OUTPUT"])
+    maps_root = Path(os.environ["GAMEXRAY_MAPS_ROOT"])
+    old_root = Path(os.environ["GAMEXRAY_OLD_OUTPUT"])
+    new_root = Path(os.environ["GAMEXRAY_NEW_OUTPUT"])
     maps = tuple(
         sorted(
             (

@@ -6,15 +6,15 @@
 
 import unittest
 
-from w3xtool.api import GameObject, MapData
-from w3xtool.references import (
+from gametool.api import GameObject, MapData
+from gametool.references import (
     _split_codes,
     extract_refs_by_type,
     extract_refs_by_column,
     build_reference_graph,
     REF_TYPES,
 )
-from w3xtool.w3obj import Modification
+from gametool.w3obj import Modification
 
 
 class _FakeType:
@@ -203,7 +203,7 @@ class BuildGraphTest(unittest.TestCase):
 
     def test_unloaded_ref_falls_back_to_base_names(self):
         # 引用到一个未作为对象加载的标准 buff，名字应回退取 BASE_NAMES(而非裸码/None)
-        from w3xtool import base_names
+        from gametool import base_names
 
         code = next((k for k in base_names.BASE_NAMES if k[:1] == "B"), None)
         self.assertIsNotNone(code)  # 表里应有 buff 名(本次补充后)
@@ -245,7 +245,7 @@ class BuildGraphTest(unittest.TestCase):
         self.assertFalse(md.ref_low_coverage)
 
     def test_preplaced_type_is_root(self):
-        from w3xtool.doo import Unit
+        from gametool.doo import Unit
 
         md, _u, _a, item = self._mk()
         # 把孤立物品改成被预放置引用(假装它是个被摆上去的单位类型)

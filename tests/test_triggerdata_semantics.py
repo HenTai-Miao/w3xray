@@ -8,12 +8,12 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from w3xtool.api import MapData
-from w3xtool.knowledge_pack import write_knowledge_pack
-from w3xtool.trigger_schema import TriggerSchema, parse_trigger_schema
-from w3xtool.trigger_exports import format_trigger_eca_tsv
-from w3xtool.triggerdata import render_eca_semantic
-from w3xtool.wtg_eca import TriggerEcaFunction, TriggerEcaParameter
+from gametool.api import MapData
+from gametool.knowledge_pack import write_knowledge_pack
+from gametool.trigger_schema import TriggerSchema, parse_trigger_schema
+from gametool.trigger_exports import format_trigger_eca_tsv
+from gametool.triggerdata import render_eca_semantic
+from gametool.wtg_eca import TriggerEcaFunction, TriggerEcaParameter
 
 
 @dataclass(frozen=True, slots=True)

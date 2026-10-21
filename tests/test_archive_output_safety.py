@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.api import _export_all_impl, _export_recovered_named_files
-from w3xtool.mpq import FLAG_EXISTS, HASH_NAME_A, HASH_NAME_B, _Block, _hash
+from gametool.api import _export_all_impl, _export_recovered_named_files
+from gametool.mpq import FLAG_EXISTS, HASH_NAME_A, HASH_NAME_B, _Block, _hash
 
 
 class _NamedArchive:

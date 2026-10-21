@@ -13,9 +13,9 @@ from tests.description_cache_migration_fixture import (
     write_legacy_inputs,
     write_mutated_inputs,
 )
-from w3xtool import description_cache_cli as cli
-from w3xtool.description_cache_migration import DescriptionCacheMigrationOptions
-from w3xtool.trusted_description_cache import (
+from gametool import description_cache_cli as cli
+from gametool.description_cache_migration import DescriptionCacheMigrationOptions
+from gametool.trusted_description_cache import (
     TrustedDescriptionCacheError,
     load_trusted_description_cache,
 )

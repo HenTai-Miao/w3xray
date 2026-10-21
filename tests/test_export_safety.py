@@ -10,18 +10,18 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from w3xtool.api import (
+from gametool.api import (
     GameObject,
     MapData,
     _export_all_impl,
     _export_recovered_named_files,
     _safe_export_path,
 )
-from w3xtool.knowledge_assets import export_resource_bodies
-from w3xtool.knowledge_object_exports import write_object_ids
-from w3xtool.knowledge_script_exports import write_readable_scripts
-from w3xtool.knowledge_unknown_exports import write_unknown_files_from_archive
-from w3xtool.mpq import (
+from gametool.knowledge_assets import export_resource_bodies
+from gametool.knowledge_object_exports import write_object_ids
+from gametool.knowledge_script_exports import write_readable_scripts
+from gametool.knowledge_unknown_exports import write_unknown_files_from_archive
+from gametool.mpq import (
     FLAG_ENCRYPTED,
     FLAG_EXISTS,
     HASH_NAME_A,

@@ -21,13 +21,13 @@ from tests.trusted_description_cache_fixture import (
     resign_source_evidence,
     rewrite_source_record,
 )
-from w3xtool import anchored_source
-from w3xtool import trusted_description_cache_path as trusted_cache_path
-from w3xtool import trusted_description_cache_sources as trusted_sources
-from w3xtool.batch_tsv import format_tsv_rows
-from w3xtool.bounded_file import FileIdentity
-from w3xtool.description_cache_schema import LEGACY_DESCRIPTION_HEADER
-from w3xtool.trusted_description_cache import (
+from gametool import anchored_source
+from gametool import trusted_description_cache_path as trusted_cache_path
+from gametool import trusted_description_cache_sources as trusted_sources
+from gametool.batch_tsv import format_tsv_rows
+from gametool.bounded_file import FileIdentity
+from gametool.description_cache_schema import LEGACY_DESCRIPTION_HEADER
+from gametool.trusted_description_cache import (
     TrustedDescriptionCacheError,
     load_trusted_description_cache,
 )
@@ -41,7 +41,7 @@ _REQUIRES_ANCHORED_SOURCE = pytest.mark.skipif(
 
 def test_trusted_description_cache_loader_boundary_exists() -> None:
     # Given: Task 5 requires an explicit owned-cache trust boundary.
-    module_name = "w3xtool.trusted_description_cache"
+    module_name = "gametool.trusted_description_cache"
 
     # When
     specification = importlib.util.find_spec(module_name)
@@ -80,7 +80,7 @@ def test_trusted_cache_rejects_source_manifest_tampering(tmp_path: Path) -> None
     (
         ("可信描述缓存.tsv", "payload hash mismatch"),
         ("内容清单.json", "manifest hash mismatch"),
-        (".w3xray-trusted-description-cache", "invalid owned metadata"),
+        (".gamexray-trusted-description-cache", "invalid owned metadata"),
     ),
 )
 def test_trusted_cache_rejects_cache_manifest_and_marker_tampering(

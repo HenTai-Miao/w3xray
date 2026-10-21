@@ -2,9 +2,9 @@
 
 import unittest
 
-from w3xtool.api import GameObject, MapData
-from w3xtool.doo import Doodad, Unit
-from w3xtool.object_id_summary import format_object_id_usage_summary
+from gametool.api import GameObject, MapData
+from gametool.doo import Doodad, Unit
+from gametool.object_id_summary import format_object_id_usage_summary
 
 
 class ObjectIdSummaryTest(unittest.TestCase):

@@ -11,9 +11,9 @@
 `Units\*Strings.txt`、`Units\*Func.txt`、`Units\*Data.slk` 以及
 `UI\WorldEditStrings.txt` 等，生成内置数据文件：
 
-- `w3xtool/base_names.py`（原版码→中文名）
-- `w3xtool/base_objects.py`（原版默认字段）
-- `w3xtool/westrings.py`（编辑器字符串）
+- `gametool/base_names.py`（原版码→中文名）
+- `gametool/base_objects.py`（原版默认字段）
+- `gametool/westrings.py`（编辑器字符串）
 
 运行时**不读游戏文件**，只用这三个烤好的 `.py`，因此解析地图与游戏版本无关。
 
@@ -153,5 +153,5 @@ CLI args ──▶ build_sources()
 ## 影响面
 
 - 仅改 `build_base_names.py` + 新增一个测试文件 + README/docstring。
-- 不动 `w3xtool/` 运行时代码、不动打包、不改三份生成数据本身。
+- 不动 `gametool/` 运行时代码、不动打包、不改三份生成数据本身。
 - 默认无参调用行为与现状完全一致。

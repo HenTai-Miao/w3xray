@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool import integrity_snapshot as snapshot_api
-from w3xtool import integrity_snapshot_tree as tree_api
+from gametool import integrity_snapshot as snapshot_api
+from gametool import integrity_snapshot_tree as tree_api
 
 
 def test_snapshot_does_not_accept_an_os_walk_ancestor_swap(

@@ -6,8 +6,8 @@ import json
 from pathlib import Path
 
 from tests.description_cache_migration_fixture import candidate, legacy_client_fill
-from w3xtool.batch_tsv import format_tsv_rows
-from w3xtool.description_cache_schema import (
+from gametool.batch_tsv import format_tsv_rows
+from gametool.description_cache_schema import (
     LEGACY_CACHE_HEADER,
     LEGACY_DESCRIPTION_HEADER,
 )

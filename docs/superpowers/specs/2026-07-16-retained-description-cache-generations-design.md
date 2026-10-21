@@ -41,15 +41,15 @@ implicitly loaded or promoted.
 Each migration allocates one cryptographically random transaction identifier. Transient
 names remain:
 
-- `.w3xray-description-cache-stage-<transaction-id>`;
-- `.w3xray-description-cache-backup-<transaction-id>`.
+- `.gamexray-description-cache-stage-<transaction-id>`;
+- `.gamexray-description-cache-backup-<transaction-id>`.
 
 Before returning success, and before returning any failure whose exact object can reach a
 free retained role, every surviving transient name is atomically renamed with no-replace
 semantics to:
 
 ```text
-.w3xray-description-cache-retained-<transaction-id>-<role>
+.gamexray-description-cache-retained-<transaction-id>-<role>
 ```
 
 The closed role set is:

@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool import map_loader
-from w3xtool.load_context import MapLoadContext
-from w3xtool.map_archive_reader import MapArchiveReader
-from w3xtool.map_components import _add_script_refs
-from w3xtool.map_data import GameObject, MapData
+from gametool import map_loader
+from gametool.load_context import MapLoadContext
+from gametool.map_archive_reader import MapArchiveReader
+from gametool.map_components import _add_script_refs
+from gametool.map_data import GameObject, MapData
 
 
 def test_script_refs_select_shared_object_when_rawcodes_collide() -> None:

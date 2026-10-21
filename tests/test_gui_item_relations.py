@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from tests.gui_base import GuiTestCase
-from w3xtool.api import GameObject, MapData
-from w3xtool.item_relation_models import (
+from gametool.api import GameObject, MapData
+from gametool.item_relation_models import (
     ItemRelation,
     ItemRelationIndex,
     ItemRelationKind,

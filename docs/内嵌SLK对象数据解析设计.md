@@ -10,7 +10,7 @@ U9 失落的宿命图：自定义技能名字来自 `Units\*AbilityStrings.txt`(
 与引用(如 `AHwe → UnitID1:hwat` 召唤水元素)藏在 `Units\AbilityData.slk`(未解析)。
 现有 `slk.py` 实测能干净解出(1271 技能)。
 
-## 模块 w3xtool/slk_objects.py
+## 模块 gametool/slk_objects.py
 - **分类 → SLK 文件**：
   - 技能=AbilityData.slk　物品=ItemData.slk　增益=AbilityBuffData.slk
   - 可破坏物=DestructableData.slk　科技=UpgradeData.slk　装饰物=Doodads.slk

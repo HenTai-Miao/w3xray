@@ -6,8 +6,8 @@ import os
 from pathlib import Path
 import sys
 
-from w3xtool.current_map_models import EvidenceKind, GameProcess, MapEvidence
-from w3xtool.current_map_probe_command import (
+from gametool.current_map_models import EvidenceKind, GameProcess, MapEvidence
+from gametool.current_map_probe_command import (
     parse_lsof_open_maps,
     parse_posix_processes,
     parse_windows_processes,

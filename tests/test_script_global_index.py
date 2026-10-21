@@ -4,14 +4,14 @@ import importlib
 import importlib.util
 import unittest
 
-from w3xtool.api import MapData
+from gametool.api import MapData
 
 
 def _format_globals(md: MapData) -> str:
-    spec = importlib.util.find_spec("w3xtool.script_global_index")
+    spec = importlib.util.find_spec("gametool.script_global_index")
     if spec is None:
-        raise AssertionError("w3xtool.script_global_index module is missing")
-    module = importlib.import_module("w3xtool.script_global_index")
+        raise AssertionError("gametool.script_global_index module is missing")
+    module = importlib.import_module("gametool.script_global_index")
     index = module.build_script_global_index(md)
     return module.format_script_global_index_tsv(index)
 

@@ -5,9 +5,9 @@ import unittest
 from PIL import Image
 
 from tests.gui_base import GuiTestCase
-from w3xtool.api import GameObject, MapData
-from w3xtool.object_gallery import _show_selected_object
-from w3xtool.script_scan import ChatCommand, Recipe
+from gametool.api import GameObject, MapData
+from gametool.object_gallery import _show_selected_object
+from gametool.script_scan import ChatCommand, Recipe
 
 
 class TestEditorStyleLayout(GuiTestCase):

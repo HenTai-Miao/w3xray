@@ -12,15 +12,15 @@ from tests.batch_manifest_fixture import (
     MANIFEST_TRANSACTION_ID,
     write_empty_manifest_stage,
 )
-from w3xtool.batch_manifest_io import format_map_manifest, parse_map_manifest
-from w3xtool.batch_manifest_models import (
+from gametool.batch_manifest_io import format_map_manifest, parse_map_manifest
+from gametool.batch_manifest_models import (
     BatchManifestFormatError,
     CONTENT_MANIFEST_NAME,
     OWNERSHIP_MARKER_NAME,
 )
-from w3xtool.batch_manifest_validation import build_map_manifest
-from w3xtool.batch_models import MapBatchState
-from w3xtool.batch_status import (
+from gametool.batch_manifest_validation import build_map_manifest
+from gametool.batch_models import MapBatchState
+from gametool.batch_status import (
     ArchiveIntegrity,
     KnowledgeEvidence,
     KnowledgeGapReason,

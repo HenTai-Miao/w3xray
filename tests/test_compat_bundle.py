@@ -7,15 +7,15 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.api import load_map
-from w3xtool.compat_bundle import (
+from gametool.api import load_map
+from gametool.compat_bundle import (
     COMPAT_MANIFEST_NAME,
     CompatBundleError,
     load_compat_bundle,
 )
-from w3xtool.extraction_ledger import BlockSource
-from w3xtool.load_context import MapLoadContext
-from w3xtool.supplemented_source import SupplementedPathArchiveSource
+from gametool.extraction_ledger import BlockSource
+from gametool.load_context import MapLoadContext
+from gametool.supplemented_source import SupplementedPathArchiveSource
 
 
 def _sha(payload: bytes) -> str:
@@ -31,7 +31,7 @@ def _write_source(tmp_path: Path, payload: bytes = b"map-source") -> Path:
 def _write_manifest(root: Path, source: Path, rows: tuple[str, ...]) -> None:
     root.mkdir()
     lines = (
-        "W3XRAY-COMPAT-BUNDLE\t1",
+        "GAMEXRAY-COMPAT-BUNDLE\t1",
         f"source_sha256\t{_sha(source.read_bytes())}",
         *rows,
     )

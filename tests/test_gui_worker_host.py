@@ -6,8 +6,8 @@ from collections.abc import Callable
 import threading
 from tkinter import TclError
 
-from w3xtool.gui_worker_host import GuiWorkerHostMixin
-from w3xtool.gui_worker_registry import GuiWorkerTicket
+from gametool.gui_worker_host import GuiWorkerHostMixin
+from gametool.gui_worker_registry import GuiWorkerTicket
 
 
 class _Host(GuiWorkerHostMixin):

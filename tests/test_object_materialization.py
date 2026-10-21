@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from w3xtool.object_candidates import (
+from gametool.object_candidates import (
     ObjectCandidate,
     ObjectFieldValue,
     ObjectSourceKind,
 )
-from w3xtool.object_materialization import merge_object_candidates
+from gametool.object_materialization import merge_object_candidates
 
 NL = chr(10)
 
@@ -44,9 +44,9 @@ def test_parallel_merge_matches_serial(monkeypatch: pytest.MonkeyPatch) -> None:
     candidates = _candidates(80)
 
     # When: 串行与并行各跑一次。
-    monkeypatch.setenv("W3XRAY_MATERIALIZE_WORKERS", "1")
+    monkeypatch.setenv("GAMEXRAY_MATERIALIZE_WORKERS", "1")
     serial = merge_object_candidates(candidates, {})
-    monkeypatch.setenv("W3XRAY_MATERIALIZE_WORKERS", "2")
+    monkeypatch.setenv("GAMEXRAY_MATERIALIZE_WORKERS", "2")
     parallel = merge_object_candidates(candidates, {})
 
     # Then: 逐对象完全一致（物化是纯函数，并行只换执行方式）。
@@ -58,7 +58,7 @@ def test_invalid_workers_value_falls_back_to_serial(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Given: 非法并行度配置。
-    monkeypatch.setenv("W3XRAY_MATERIALIZE_WORKERS", "not-a-number")
+    monkeypatch.setenv("GAMEXRAY_MATERIALIZE_WORKERS", "not-a-number")
 
     # When: 正常物化。
     result = merge_object_candidates(_candidates(4), {})

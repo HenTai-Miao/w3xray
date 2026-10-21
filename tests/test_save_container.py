@@ -8,7 +8,7 @@ from typing import Final
 
 import pytest
 
-from w3xtool.save_container import (
+from gametool.save_container import (
     MAX_SAVE_CONTAINER_BLOCKS,
     looks_like_save_container,
     parse_save_container_header,

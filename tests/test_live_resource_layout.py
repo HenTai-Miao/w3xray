@@ -7,7 +7,7 @@ import struct
 
 import pytest
 
-from w3xtool.live_handle_chain import (
+from gametool.live_handle_chain import (
     MemoryReader,
     PlayerResources,
     find_auto_resource_rows,
@@ -21,7 +21,7 @@ from w3xtool.live_handle_chain import (
 def _clear_resource_anchors():
     """模块级锚缓存会跨测试泄漏 (全量套件中先前测试留下的锚被复验
     分支错误命中, 合成 reader 地址恰好兼容) — 前后都清, 隔离测试。"""
-    import w3xtool.live_handle_chain as lh
+    import gametool.live_handle_chain as lh
 
     lh._resource_anchors = []
     lh._resource_cache_hit = False

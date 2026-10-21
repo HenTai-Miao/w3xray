@@ -8,19 +8,19 @@ from typing import ContextManager
 
 import pytest
 
-from w3xtool.knowledge_pack import write_knowledge_pack, write_knowledge_pack_report
-from w3xtool.knowledge_results import (
+from gametool.knowledge_pack import write_knowledge_pack, write_knowledge_pack_report
+from gametool.knowledge_results import (
     KnowledgeWriteItem,
     KnowledgeWriteReport,
     KnowledgeWriteStatus,
 )
-from w3xtool.knowledge_requirements import (
+from gametool.knowledge_requirements import (
     ExtractionCapabilities,
     format_requirement_coverage,
 )
-from w3xtool.map_data import GameObject, MapData
-from w3xtool.map_archive_reader import MapArchiveReader
-from w3xtool.safe_output_models import SafeWriteResult, SafeWriteStatus
+from gametool.map_data import GameObject, MapData
+from gametool.map_archive_reader import MapArchiveReader
+from gametool.safe_output_models import SafeWriteResult, SafeWriteStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,7 +39,7 @@ def test_pack_reports_partial_success_instead_of_counting_failed_file(
     tmp_path: Path,
 ) -> None:
     # Given: one category report fails while every other pack artifact remains writable.
-    from w3xtool import knowledge_io
+    from gametool import knowledge_io
 
     original = knowledge_io.write_text_safely
 
@@ -169,7 +169,7 @@ def test_pack_reports_failed_when_every_attempted_path_fails(
     tmp_path: Path,
 ) -> None:
     # Given: the output boundary rejects every requested text artifact.
-    from w3xtool import knowledge_io
+    from gametool import knowledge_io
 
     monkeypatch.setattr(
         knowledge_io,

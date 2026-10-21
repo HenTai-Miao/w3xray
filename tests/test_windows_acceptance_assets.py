@@ -29,8 +29,8 @@ def _onedir_acceptance_sources() -> tuple[tuple[str, str], ...]:
     script = (_ROOT / "tools" / "run_windows_acceptance.ps1").read_text(
         encoding="utf-8"
     )
-    onedir_script = script.split("\n& uv run w3xray-dist\n", maxsplit=1)[1].split(
-        "\n& uv run w3xray-dist --onefile\n",
+    onedir_script = script.split("\n& uv run gamexray-dist\n", maxsplit=1)[1].split(
+        "\n& uv run gamexray-dist --onefile\n",
         maxsplit=1,
     )[0]
 
@@ -52,22 +52,22 @@ def test_windows_acceptance_script_builds_tests_packages_and_runs_exe() -> None:
 
     # When/Then: every required gate executes in order through the packaged EXE.
     required = (
-        "$env:W3XRAY_WAR3_DIR",
+        "$env:GAMEXRAY_WAR3_DIR",
         "build_casclib.ps1",
-        "uv run w3xray-test",
-        "\n& uv run w3xray-dist\n",
+        "uv run gamexray-test",
+        "\n& uv run gamexray-dist\n",
         "windows-onedir",
         "Get-ChildItem",
         '"*.exe"',
         "$OnedirExe.Count -ne 1",
-        "\n& uv run w3xray-dist --onefile\n",
+        "\n& uv run gamexray-dist --onefile\n",
         "windows-onefile",
         "$OnefileExe.Count -ne 1",
     )
     positions = [script.index(value) for value in required]
     assert positions == sorted(positions)
-    assert script.count("\n& uv run w3xray-dist\n") == 1
-    assert script.count("\n& uv run w3xray-dist --onefile\n") == 1
+    assert script.count("\n& uv run gamexray-dist\n") == 1
+    assert script.count("\n& uv run gamexray-dist --onefile\n") == 1
     assert script.count('"--repeat", "5"') == 2
     for argument in ('"acceptance"', '"--require-windows"', '"--war3-dir"'):
         assert script.count(argument) == 2
@@ -99,14 +99,14 @@ def test_hosted_windows_workflow_packages_and_executes_artifact() -> None:
         assert trigger in workflow
     assert (
         workflow.count(
-            "      - name: Build onedir executable\n        run: uv run w3xray-dist\n"
+            "      - name: Build onedir executable\n        run: uv run gamexray-dist\n"
         )
         == 1
     )
     assert (
         workflow.count(
             "      - name: Build onefile executable\n"
-            "        run: uv run w3xray-dist --onefile\n"
+            "        run: uv run gamexray-dist --onefile\n"
         )
         == 1
     )
@@ -123,14 +123,14 @@ def test_hosted_windows_workflow_packages_and_executes_artifact() -> None:
     assert "$DirectExe[0].FullName" in release_preparation
     assert "$OnefileExe" not in release_preparation
     for release_filename in (
-        "w3xray-v$Version-windows-x64.zip",
-        "w3xray-v$Version-windows-x64.exe",
+        "gamexray-v$Version-windows-x64.zip",
+        "gamexray-v$Version-windows-x64.exe",
         "windows-onedir-acceptance.json",
         "windows-onefile-acceptance.json",
     ):
         assert release_filename in release_preparation
     assert "actions/upload-artifact@v4" in upload_step
-    assert "name: w3xray-windows-release-assets" in upload_step
+    assert "name: gamexray-windows-release-assets" in upload_step
     assert "if-no-files-found: error" in upload_step
 
 
@@ -139,8 +139,8 @@ def test_real_machine_onedir_discovery_ignores_stale_direct_exe() -> None:
     script = (_ROOT / "tools" / "run_windows_acceptance.ps1").read_text(
         encoding="utf-8"
     )
-    onedir_phase = script.split("\n& uv run w3xray-dist\n", maxsplit=1)[1].split(
-        "\n& uv run w3xray-dist --onefile\n",
+    onedir_phase = script.split("\n& uv run gamexray-dist\n", maxsplit=1)[1].split(
+        "\n& uv run gamexray-dist --onefile\n",
         maxsplit=1,
     )[0]
 

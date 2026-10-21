@@ -6,7 +6,7 @@ from types import TracebackType
 from typing import Self, override
 from unittest.mock import patch
 
-from w3xtool.external_listfile import read_external_listfile
+from gametool.external_listfile import read_external_listfile
 
 
 class _RecordingReader:

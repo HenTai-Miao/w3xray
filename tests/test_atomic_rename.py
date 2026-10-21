@@ -8,8 +8,8 @@ import sys
 
 import pytest
 
-from w3xtool import atomic_rename
-from w3xtool.atomic_rename import (
+from gametool import atomic_rename
+from gametool.atomic_rename import (
     AtomicRenameUnavailableError,
     rename_noreplace,
 )

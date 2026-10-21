@@ -6,8 +6,8 @@ commands_from_map / recipes_from_map 直接吃 md.scripts，
 
 import unittest
 
-from w3xtool.api import MapData, commands_from_map, recipes_from_map
-from w3xtool.item_relation_models import (
+from gametool.api import MapData, commands_from_map, recipes_from_map
+from gametool.item_relation_models import (
     ItemRelation,
     ItemRelationIndex,
     ItemRelationKind,
@@ -17,8 +17,8 @@ from w3xtool.item_relation_models import (
     RelationIngredient,
     RelationObject,
 )
-from w3xtool.script_scan import scan_chat_commands
-from w3xtool.script_scan import scan_recipes as _scan_recipes_text
+from gametool.script_scan import scan_chat_commands
+from gametool.script_scan import scan_recipes as _scan_recipes_text
 
 
 # 一段含聊天指令的 JASS 片段（足够触发 scan_chat_commands）

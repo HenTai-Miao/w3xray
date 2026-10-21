@@ -13,7 +13,7 @@ import zlib
 
 import pytest
 
-from w3xtool.api import GameObject, MapData
+from gametool.api import GameObject, MapData
 
 
 def _map_with_save_contract() -> MapData:
@@ -52,7 +52,7 @@ def test_preload_save_matches_script_key_and_map_object_without_modifying_file(
         encoding="utf-8",
     )
     before = hashlib.sha256(save.read_bytes()).hexdigest()
-    save_module = importlib.import_module("w3xtool.real_save_files")
+    save_module = importlib.import_module("gametool.real_save_files")
 
     # When: the real save directory is analyzed against the loaded map.
     report = save_module.analyze_real_save_path(save.parent, _map_with_save_contract())
@@ -71,7 +71,7 @@ def test_binary_save_is_inventoried_without_false_text_evidence(tmp_path: Path) 
     # Given: an opaque binary platform save with no readable payload.
     save = tmp_path / "opaque.sav"
     save.write_bytes(bytes(range(256)) * 4)
-    save_module = importlib.import_module("w3xtool.real_save_files")
+    save_module = importlib.import_module("gametool.real_save_files")
 
     # When: it crosses the bounded read-only analyzer.
     report = save_module.analyze_real_save_path(save, _map_with_save_contract())
@@ -111,7 +111,7 @@ def test_w3z_save_container_yields_decoded_binary_evidence(tmp_path: Path) -> No
     )
     save.write_bytes(_build_w3z_container(raw))
     before = hashlib.sha256(save.read_bytes()).hexdigest()
-    save_module = importlib.import_module("w3xtool.real_save_files")
+    save_module = importlib.import_module("gametool.real_save_files")
 
     # When: the container crosses the bounded read-only analyzer.
     report = save_module.analyze_real_save_path(save, _map_with_save_contract())
@@ -137,7 +137,7 @@ def test_w3z_corrupt_container_reports_failure_without_evidence(tmp_path: Path) 
     container = bytearray(_build_w3z_container(b"state\x00payload"))
     container[-1] ^= 0xFF
     save.write_bytes(bytes(container))
-    save_module = importlib.import_module("w3xtool.real_save_files")
+    save_module = importlib.import_module("gametool.real_save_files")
 
     # When: the analyzer meets the corrupt container.
     report = save_module.analyze_real_save_path(save, _map_with_save_contract())
@@ -155,7 +155,7 @@ def test_save_report_tsv_keeps_file_key_and_object_evidence(tmp_path: Path) -> N
     # Given: one JSON save carrying the same key and object ID used by the map.
     save = tmp_path / "profile.json"
     save.write_text('{"hero.level": 7, "unit": "H001"}', encoding="utf-8")
-    save_module = importlib.import_module("w3xtool.real_save_files")
+    save_module = importlib.import_module("gametool.real_save_files")
     report = save_module.analyze_real_save_path(save, _map_with_save_contract())
 
     # When: the report is rendered for export.
@@ -223,7 +223,7 @@ def test_save_file_swap_after_metadata_check_does_not_read_symlink_target(
         return original_read_bytes(path)
 
     monkeypatch.setattr(Path, "read_bytes", racing_read_bytes)
-    save_module = importlib.import_module("w3xtool.real_save_files")
+    save_module = importlib.import_module("gametool.real_save_files")
 
     # When: the directory is analyzed across the metadata/read boundary.
     report = save_module.analyze_real_save_path(save_dir, _map_with_save_contract())
@@ -241,7 +241,7 @@ def test_mpq_member_is_read_whatever_its_declared_size(
     # Given: an MPQ-like save whose named member declares an oversized output.
     save = tmp_path / "profile.sav"
     save.write_bytes(b"MPQ\x1a" + b"\0" * 64)
-    save_module = importlib.import_module("w3xtool.real_save_files")
+    save_module = importlib.import_module("gametool.real_save_files")
     read_calls = 0
 
     class OversizedBlock:
@@ -287,7 +287,7 @@ def test_mpq_named_text_reads_every_member(
     # Given: several individually valid members exceed the aggregate text budget.
     save = tmp_path / "profile.sav"
     save.write_bytes(b"MPQ\x1a" + b"\0" * 64)
-    save_module = importlib.import_module("w3xtool.real_save_files")
+    save_module = importlib.import_module("gametool.real_save_files")
     member_size = 3 * 1024 * 1024
     read_calls = 0
 
@@ -333,7 +333,7 @@ def test_mpq_binary_members_are_still_read_and_classified(
     # Given: named members decompress successfully but are not readable text.
     save = tmp_path / "profile.sav"
     save.write_bytes(b"MPQ\x1a" + b"\0" * 64)
-    save_module = importlib.import_module("w3xtool.real_save_files")
+    save_module = importlib.import_module("gametool.real_save_files")
     member_size = 3 * 1024 * 1024
     read_calls = 0
 

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.current_map_inuse_probe import probe_in_use_files
+from gametool.current_map_inuse_probe import probe_in_use_files
 
 _GENERIC_READ = 0x80000000
 _OPEN_EXISTING = 3

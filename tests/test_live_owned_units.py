@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import struct
 
-from w3xtool import live_cli
-from w3xtool.live_handle_chain import (
+from gametool import live_cli
+from gametool.live_handle_chain import (
     UNIT_OWNER_OFF,
     UNIT_POS_X_OFF,
     MemoryReader,
@@ -15,7 +15,7 @@ from w3xtool.live_handle_chain import (
     read_unit_pos,
     summarize_owners,
 )
-from w3xtool.live_handle_chain import (
+from gametool.live_handle_chain import (
     PlayerResources,
     format_player_rows,
     owner_slot_codes,

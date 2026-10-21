@@ -4,18 +4,18 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from w3xtool.api import MapData
-from w3xtool.archive_source import PathArchiveSource
-from w3xtool.extraction_diagnostics import read_component
-from w3xtool.external_listfile import ExternalListfileReport
-from w3xtool.knowledge_pack import write_knowledge_pack
-from w3xtool.knowledge_requirements import (
+from gametool.api import MapData
+from gametool.archive_source import PathArchiveSource
+from gametool.extraction_diagnostics import read_component
+from gametool.external_listfile import ExternalListfileReport
+from gametool.knowledge_pack import write_knowledge_pack
+from gametool.knowledge_requirements import (
     ExtractionCapabilities,
     format_requirement_coverage,
 )
-from w3xtool.w3f import CampaignMapEntry, W3fInfo
-from w3xtool.wtg_diagnostics import UnknownTriggerFunction
-from w3xtool.wtg_models import TriggerHeader, TriggerTreeSummary
+from gametool.w3f import CampaignMapEntry, W3fInfo
+from gametool.wtg_diagnostics import UnknownTriggerFunction
+from gametool.wtg_models import TriggerHeader, TriggerTreeSummary
 
 
 def test_requirement_coverage_uses_map_results() -> None:

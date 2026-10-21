@@ -34,8 +34,8 @@ EXE。现有 `v0.1.0` Release 因此发布的是便携 ZIP。
 
 ## 目标
 
-- 默认 `uv run w3xray-dist` 行为保持不变，继续生成 onedir。
-- `uv run w3xray-dist --onefile` 生成单文件 Windows EXE。
+- 默认 `uv run gamexray-dist` 行为保持不变，继续生成 onedir。
+- `uv run gamexray-dist --onefile` 生成单文件 Windows EXE。
 - 两种产物必须来自同一提交、同一 Python 依赖和同一固定 CascLib 源码。
 - Windows workflow 分别实跑两种产物的地图、战役、资料包、重复加载和 GUI 标签验收。
 - workflow 上传 release-ready 的 onedir ZIP、单文件 EXE 和各自的 `acceptance.json`。
@@ -54,7 +54,7 @@ EXE。现有 `v0.1.0` Release 因此发布的是便携 ZIP。
 
 ### 构建入口
 
-`w3xtool/dist_build.py` 增加显式构建格式：默认 onedir，`--onefile` 选择单文件。构建配置负责：
+`gametool/dist_build.py` 增加显式构建格式：默认 onedir，`--onefile` 选择单文件。构建配置负责：
 
 - 选择产物路径：
   - onedir：`dist/魔兽地图提取器/魔兽地图提取器.exe`
@@ -94,8 +94,8 @@ self-hosted workflow 负责。
 
 - 实施提交通过 Windows workflow 后创建下一补丁版本标签。
 - Release 附件至少包含：
-  - `w3xray-vX.Y.Z-windows-x64.zip`
-  - `w3xray-vX.Y.Z-windows-x64.exe`
+  - `gamexray-vX.Y.Z-windows-x64.zip`
+  - `gamexray-vX.Y.Z-windows-x64.exe`
   - 两种格式的验收报告。
 - ZIP SHA-256 和 EXE SHA-256 写入 Release 说明。
 - Release 说明明确：ZIP 启动更快、便于排查；单文件 EXE 首次启动较慢且可能被 SmartScreen

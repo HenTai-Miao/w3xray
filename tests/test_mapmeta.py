@@ -2,7 +2,7 @@
 
 import struct
 
-from w3xtool.mapmeta import (
+from gametool.mapmeta import (
     MapStructureReport,
     PathingSummary,
     ShadowSummary,

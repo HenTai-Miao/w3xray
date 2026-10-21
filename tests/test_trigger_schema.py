@@ -9,11 +9,11 @@ from pathlib import Path
 from typing import Final
 from unittest.mock import patch
 
-from w3xtool.trigger_schema import (
+from gametool.trigger_schema import (
     TriggerFunctionKind,
     parse_trigger_schema,
 )
-from w3xtool.triggerdata import load_trigger_schema_from_source
+from gametool.triggerdata import load_trigger_schema_from_source
 
 
 _MINIMAL_TRIGGER_DATA: Final = (
@@ -137,7 +137,7 @@ def test_source_loading_returns_none_for_unicode_decode_failure() -> None:
     source = _Source({"TriggerData.txt": _MINIMAL_TRIGGER_DATA})
 
     with patch(
-        "w3xtool.triggerdata.decode_warcraft_string",
+        "gametool.triggerdata.decode_warcraft_string",
         side_effect=UnicodeError("invalid trigger metadata encoding"),
     ):
         assert load_trigger_schema_from_source(source) is None
@@ -147,7 +147,7 @@ def test_source_loading_returns_none_for_value_parse_failure() -> None:
     source = _Source({"TriggerData.txt": _MINIMAL_TRIGGER_DATA})
 
     with patch(
-        "w3xtool.triggerdata.parse_trigger_schema",
+        "gametool.triggerdata.parse_trigger_schema",
         side_effect=ValueError("invalid trigger metadata value"),
     ):
         assert load_trigger_schema_from_source(source) is None
@@ -157,7 +157,7 @@ def test_source_loading_returns_none_for_csv_parse_failure() -> None:
     source = _Source({"TriggerData.txt": _MINIMAL_TRIGGER_DATA})
 
     with patch(
-        "w3xtool.triggerdata.parse_trigger_schema",
+        "gametool.triggerdata.parse_trigger_schema",
         side_effect=csv.Error("invalid trigger metadata CSV"),
     ):
         assert load_trigger_schema_from_source(source) is None

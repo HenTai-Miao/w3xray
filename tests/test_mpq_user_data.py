@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.mpq import MPQArchive
-from w3xtool.mpq_layout import locate_mpq_layout
+from gametool.mpq import MPQArchive
+from gametool.mpq_layout import locate_mpq_layout
 
 from .test_mpq_names_locale import build_archive_bytes
 

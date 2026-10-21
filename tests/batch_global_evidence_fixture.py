@@ -6,30 +6,30 @@ from dataclasses import replace
 from pathlib import Path
 
 from tests.batch_publication_fixture import empty_result, write_empty_publication
-from w3xtool.batch_icon_models import IconExportRecord, IconExportState, IconKind
-from w3xtool.batch_manifest_models import CONTENT_MANIFEST_NAME, OWNERSHIP_MARKER_NAME
-from w3xtool.batch_map_manifest import finalize_map_manifest
-from w3xtool.batch_models import MapBatchResult, SourceFingerprint
-from w3xtool.batch_reports import format_icon_index_tsv, format_map_summary
-from w3xtool.batch_status import (
+from gametool.batch_icon_models import IconExportRecord, IconExportState, IconKind
+from gametool.batch_manifest_models import CONTENT_MANIFEST_NAME, OWNERSHIP_MARKER_NAME
+from gametool.batch_map_manifest import finalize_map_manifest
+from gametool.batch_models import MapBatchResult, SourceFingerprint
+from gametool.batch_reports import format_icon_index_tsv, format_map_summary
+from gametool.batch_status import (
     PublicationResult,
     derive_batch_axes,
     derive_legacy_map_state,
 )
-from w3xtool.extraction_ledger import BlockSource, BlockState
-from w3xtool.icon_evidence_exports import (
+from gametool.extraction_ledger import BlockSource, BlockState
+from gametool.icon_evidence_exports import (
     format_icon_integrity,
     format_unresolved_icon_tsv,
 )
-from w3xtool.icon_evidence_index import IconEvidenceIndex
-from w3xtool.icon_evidence_models import (
+from gametool.icon_evidence_index import IconEvidenceIndex
+from gametool.icon_evidence_models import (
     IconDiagnosticFlag,
     IconGapReason,
     IconResolutionLayer,
     ResolvedIconEvidence,
     UnresolvedIconEvidence,
 )
-from w3xtool.icon_resources import AnonymousIconResource, IconObjectReference
+from gametool.icon_resources import AnonymousIconResource, IconObjectReference
 
 
 GAP_PATH = r"ReplaceableTextures\CommandButtons\BTNMissing.blp"

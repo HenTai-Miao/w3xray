@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import w3xtool.api as api
-import w3xtool.map_components as map_components
-import w3xtool.map_loader as map_loader
+import gametool.api as api
+import gametool.map_components as map_components
+import gametool.map_loader as map_loader
 
 
 def test_api_reexports_split_map_loading_symbols_by_identity() -> None:

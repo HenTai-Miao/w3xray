@@ -6,7 +6,7 @@ import tomllib
 from pathlib import Path
 from typing import Final
 
-from w3xtool import __version__
+from gametool import __version__
 
 
 _ROOT: Final = Path(__file__).resolve().parents[1]
@@ -22,7 +22,7 @@ def test_release_version_matches_project_runtime_and_lockfile() -> None:
     locked_versions = [
         package["version"]
         for package in lock["package"]
-        if package["name"] == "w3xray" and package["source"] == {"editable": "."}
+        if package["name"] == "gamexray" and package["source"] == {"editable": "."}
     ]
 
     # Then: every authoritative version source identifies the same release.
@@ -37,8 +37,8 @@ def test_readme_describes_windows_package_tradeoffs() -> None:
     release_section = readme.split("## 开发运行（uv）", maxsplit=1)[0]
 
     # When/Then: both formats and their operational tradeoffs are explicit.
-    assert "w3xray-v0.1.4-windows-x64.zip" in release_section
-    assert "w3xray-v0.1.4-windows-x64.exe" in release_section
+    assert "gamexray-v0.1.4-windows-x64.zip" in release_section
+    assert "gamexray-v0.1.4-windows-x64.exe" in release_section
     assert "功能相同" in release_section
     assert "启动更快" in release_section
     assert "更容易诊断" in release_section
@@ -56,8 +56,8 @@ def test_readme_documents_both_developer_build_modes() -> None:
     readme = (_ROOT / "README.md").read_text(encoding="utf-8")
 
     # When/Then: the default onedir and explicit onefile commands are visible.
-    assert "\nuv run w3xray-dist\n" in readme
-    assert "\nuv run w3xray-dist --onefile\n" in readme
+    assert "\nuv run gamexray-dist\n" in readme
+    assert "\nuv run gamexray-dist --onefile\n" in readme
 
 
 def test_readme_points_to_both_windows_acceptance_reports() -> None:
@@ -65,6 +65,6 @@ def test_readme_points_to_both_windows_acceptance_reports() -> None:
     readme = (_ROOT / "README.md").read_text(encoding="utf-8")
 
     # When/Then: the timestamped evidence root and both relative reports are visible.
-    assert "w3xray-acceptance-" in readme
+    assert "gamexray-acceptance-" in readme
     assert "windows-onedir/acceptance.json" in readme
     assert "windows-onefile/acceptance.json" in readme

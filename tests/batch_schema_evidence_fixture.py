@@ -6,29 +6,29 @@ from pathlib import Path
 from typing import Literal, assert_never
 
 from dataclasses import replace
-from w3xtool.batch_reports import format_icon_index_tsv
-from w3xtool.batch_tsv import format_tsv_rows
-from w3xtool.batch_models import MapBatchResult
-from w3xtool.batch_status import (
+from gametool.batch_reports import format_icon_index_tsv
+from gametool.batch_tsv import format_tsv_rows
+from gametool.batch_models import MapBatchResult
+from gametool.batch_status import (
     PublicationResult,
     derive_batch_axes,
     derive_legacy_map_state,
 )
-from w3xtool.icon_evidence_exports import (
+from gametool.icon_evidence_exports import (
     format_icon_integrity,
     format_unresolved_icon_tsv,
 )
-from w3xtool.icon_evidence_index import IconEvidenceIndex
-from w3xtool.icon_evidence_models import (
+from gametool.icon_evidence_index import IconEvidenceIndex
+from gametool.icon_evidence_models import (
     IconDiagnosticFlag,
     IconGapReason,
     UnresolvedIconEvidence,
 )
-from w3xtool.icon_resources import IconObjectReference
-from w3xtool.item_relation_exports import ACQUISITION_REPORT_HEADER
-from w3xtool.item_relation_models import ItemRelationKind, RelationCompleteness
-from w3xtool.object_text_exports import OBJECT_TEXT_REPORT_HEADER
-from w3xtool.object_text_models import ObjectTextState
+from gametool.icon_resources import IconObjectReference
+from gametool.item_relation_exports import ACQUISITION_REPORT_HEADER
+from gametool.item_relation_models import ItemRelationKind, RelationCompleteness
+from gametool.object_text_exports import OBJECT_TEXT_REPORT_HEADER
+from gametool.object_text_models import ObjectTextState
 
 
 type EvidenceKind = Literal["current_text", "relation", "icon_diagnostic"]

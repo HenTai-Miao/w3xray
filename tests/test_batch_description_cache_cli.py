@@ -1,6 +1,6 @@
 """CLI boundary for explicit trusted-description cache roots."""
 
-from w3xtool.batch_cli import parse_batch_cli_options
+from gametool.batch_cli import parse_batch_cli_options
 
 
 def test_batch_cli_accepts_owned_description_cache_root() -> None:

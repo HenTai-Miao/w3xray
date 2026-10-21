@@ -6,10 +6,10 @@
 
 from __future__ import annotations
 
-from w3xtool.api import GameObject
-from w3xtool.base_names import BASE_CATEGORIES, BASE_NAMES, BASE_NAMES_EN
-from w3xtool.base_objects import BASE_OBJECTS
-from w3xtool.item_relation_models import (
+from gametool.api import GameObject
+from gametool.base_names import BASE_CATEGORIES, BASE_NAMES, BASE_NAMES_EN
+from gametool.base_objects import BASE_OBJECTS
+from gametool.item_relation_models import (
     ItemRelation,
     ItemRelationKind,
     RelationCompleteness,
@@ -17,9 +17,9 @@ from w3xtool.item_relation_models import (
     RelationEvidence,
     RelationObject,
 )
-from w3xtool.item_relation_query import filter_item_relations
-from w3xtool.object_detail_presentation import format_object_summary
-from w3xtool.object_materialization import (
+from gametool.item_relation_query import filter_item_relations
+from gametool.object_detail_presentation import format_object_summary
+from gametool.object_materialization import (
     merge_object_candidates,
     named_base_candidates,
 )
@@ -138,8 +138,8 @@ def test_relation_filter_selects_by_fine_category():
 
 
 def test_relation_endpoints_carry_fine_category():
-    from w3xtool.api import MapData
-    from w3xtool.item_relation_endpoints import resolve_relation_object
+    from gametool.api import MapData
+    from gametool.item_relation_endpoints import resolve_relation_object
 
     md = MapData(path="x", name="x")
     crown, resolved = resolve_relation_object(md, "ckng", "物品")
@@ -155,7 +155,7 @@ def test_relation_endpoints_carry_fine_category():
 
 
 def test_base_catalog_helpers_use_base_first_lookup():
-    from w3xtool.base_catalog import english_name_for, fine_category_for
+    from gametool.base_catalog import english_name_for, fine_category_for
 
     # 基础码优先：自定义码无条目时回退其原版基底
     assert english_name_for("ratf", "I001") == "Claws of Attack +15"

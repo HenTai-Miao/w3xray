@@ -2,7 +2,7 @@
 
 - 日期：2026-07-10
 - 状态：已实施；真实 Windows 魔兽安装仍需在指定 self-hosted 环境留存验收证据
-- 范围：`w3xray` 的只读地图分析、资料包、桌面 GUI、CLI 和 Windows 打包
+- 范围：`gamexray` 的只读地图分析、资料包、桌面 GUI、CLI 和 Windows 打包
 
 ## 背景
 
@@ -294,5 +294,5 @@ GUI/CLI 选择地图、listfile、游戏数据
   测试。fixture 输入、源码 commit、许可证与 SHA256 均固定在仓库中。
 
 真实 Windows 魔兽安装是外部环境验收，不可由 macOS 单元测试伪造。只有
-`windows-real-war3.yml` 在带 `w3xray-war3` 标签的机器上产出通过报告后，文档才能把
+`windows-real-war3.yml` 在带 `gamexray-war3` 标签的机器上产出通过报告后，文档才能把
 该项从“已实现、待真机证据”改成“真机已验证”。

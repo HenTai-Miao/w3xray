@@ -10,16 +10,16 @@ from tests.description_cache_publication_fixture import (
     assert_failure_order,
     bound_stage,
 )
-from w3xtool import description_cache_publication_named_leaf as named_leaf
-from w3xtool.description_cache_publication_errors import (
+from gametool import description_cache_publication_named_leaf as named_leaf
+from gametool.description_cache_publication_errors import (
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_models import (
+from gametool.description_cache_publication_models import (
     PublicationTransientRecord,
     RetainedCacheRole,
 )
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
-from w3xtool.description_cache_publication_stage_location import locate_consumed_stage
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool.description_cache_publication_stage_location import locate_consumed_stage
 
 
 @pytest.mark.parametrize("start_ordinal", (1, 2))
@@ -34,7 +34,7 @@ def test_locator_scan_named_read_matrix(
     fault_type: type[OSError],
     records_failure: bool,
 ) -> None:
-    stage = tmp_path / ".w3xray-description-cache-stage-a"
+    stage = tmp_path / ".gamexray-description-cache-stage-a"
     output = tmp_path / "trusted"
     stage.mkdir()
     names = RetainedCacheNames(tmp_path, "3" * 32)

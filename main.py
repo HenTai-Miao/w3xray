@@ -1,14 +1,14 @@
-"""魔兽地图提取器入口：默认 GUI，并保留 CLI 与游戏配置模式。"""
+"""GameXRay 游戏档案透视器入口：默认 GUI，并保留 CLI 与游戏配置模式。"""
 
 from __future__ import annotations
 
 import multiprocessing
 import sys
 
-from w3xtool.cli_options import CliOptionError, parse_cli_options, run_cli
-from w3xtool.cli_output import configure_cli_output
-from w3xtool.cli_summary import iter_cli_summary_lines
-from w3xtool.game_config_summary import iter_game_config_summary_lines
+from gametool.cli_options import CliOptionError, parse_cli_options, run_cli
+from gametool.cli_output import configure_cli_output
+from gametool.cli_summary import iter_cli_summary_lines
+from gametool.game_config_summary import iter_game_config_summary_lines
 
 __all__ = ("iter_cli_summary_lines", "iter_game_config_summary_lines", "main")
 
@@ -18,15 +18,15 @@ def main() -> None:
     multiprocessing.freeze_support()
     configure_cli_output()
     if len(sys.argv) >= 2 and sys.argv[1] == "integrity":
-        from w3xtool.integrity_cli import run_integrity_cli
+        from gametool.integrity_cli import run_integrity_cli
 
         raise SystemExit(run_integrity_cli(tuple(sys.argv[2:])))
     if len(sys.argv) >= 2 and sys.argv[1] == "description-cache":
-        from w3xtool.description_cache_cli import run_description_cache_cli
+        from gametool.description_cache_cli import run_description_cache_cli
 
         raise SystemExit(run_description_cache_cli(tuple(sys.argv[2:])))
     if len(sys.argv) >= 2 and sys.argv[1] == "batch":
-        from w3xtool.batch_cli import (
+        from gametool.batch_cli import (
             BatchCliOptionError,
             parse_batch_cli_options,
             run_batch_cli,
@@ -39,23 +39,23 @@ def main() -> None:
             raise SystemExit(2) from None
         raise SystemExit(run_batch_cli(options))
     if len(sys.argv) >= 2 and sys.argv[1] == "acceptance":
-        from w3xtool.acceptance_cli import run_acceptance_cli
+        from gametool.acceptance_cli import run_acceptance_cli
 
         raise SystemExit(run_acceptance_cli(tuple(sys.argv[2:])))
     if len(sys.argv) >= 2 and sys.argv[1] == "casc":
-        from w3xtool.casc_cli import run_casc_cli
+        from gametool.casc_cli import run_casc_cli
 
         raise SystemExit(run_casc_cli(tuple(sys.argv[2:])))
     if len(sys.argv) >= 2 and sys.argv[1] == "save":
-        from w3xtool.real_save_cli import run_real_save_cli
+        from gametool.real_save_cli import run_real_save_cli
 
         raise SystemExit(run_real_save_cli(tuple(sys.argv[2:])))
     if len(sys.argv) >= 2 and sys.argv[1] == "savecodes":
-        from w3xtool.save_code_cli import run_save_code_cli
+        from gametool.save_code_cli import run_save_code_cli
 
         raise SystemExit(run_save_code_cli(tuple(sys.argv[2:])))
     if len(sys.argv) >= 2 and sys.argv[1] == "current":
-        from w3xtool.current_map_cli import (
+        from gametool.current_map_cli import (
             CurrentMapCliOptionError,
             parse_current_map_cli_options,
             run_current_map_cli,
@@ -68,7 +68,7 @@ def main() -> None:
             raise SystemExit(2) from None
         raise SystemExit(run_current_map_cli(options))
     if len(sys.argv) >= 3 and sys.argv[1] in {"wgc", "gameconfig"}:
-        from w3xtool.gameconfig import read_game_configuration_file
+        from gametool.gameconfig import read_game_configuration_file
 
         try:
             config = read_game_configuration_file(sys.argv[2])
@@ -79,7 +79,7 @@ def main() -> None:
             print(line)
         return
     if len(sys.argv) >= 2 and sys.argv[1] == "guide":
-        from w3xtool.guide_cli import (
+        from gametool.guide_cli import (
             GuideCliOptionError,
             parse_guide_cli_options,
             run_guide_cli,
@@ -92,7 +92,7 @@ def main() -> None:
             raise SystemExit(2) from None
         raise SystemExit(run_guide_cli(options))
     if len(sys.argv) >= 2 and sys.argv[1] == "live":
-        from w3xtool.live_cli import (
+        from gametool.live_cli import (
             LiveCliOptionError,
             parse_live_cli_options,
             run_live_cli,
@@ -105,7 +105,7 @@ def main() -> None:
             raise SystemExit(2) from None
         raise SystemExit(run_live_cli(options))
     if len(sys.argv) >= 2 and sys.argv[1] == "pack-query":
-        from w3xtool.pack_query_cli import (
+        from gametool.pack_query_cli import (
             PackQueryCliOptionError,
             parse_pack_query_cli_options,
             run_pack_query_cli,
@@ -124,10 +124,10 @@ def main() -> None:
             print(f"CLI 参数错误：{exc}", file=sys.stderr)
             raise SystemExit(2) from None
         raise SystemExit(run_cli(options))
-    from w3xtool.single_instance import ensure_single_instance
+    from gametool.single_instance import ensure_single_instance
 
     ensure_single_instance()
-    from w3xtool.gui import main as gui_main
+    from gametool.gui import main as gui_main
 
     gui_main()
 

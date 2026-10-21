@@ -3,8 +3,8 @@
 import unittest
 from types import SimpleNamespace
 
-from w3xtool.api import MapData
-from w3xtool.compat import CompatSeverity, build_compat_report
+from gametool.api import MapData
+from gametool.compat import CompatSeverity, build_compat_report
 
 
 def _w3i(version=25, script_type="JASS", large_map=False):

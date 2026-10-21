@@ -28,8 +28,8 @@
 ### Task 1: Read-only layered classic MPQ game-data source
 
 **Files:**
-- Create: `w3xtool/classic_mpq_source.py`
-- Modify: `w3xtool/game_data_source.py`
+- Create: `gametool/classic_mpq_source.py`
+- Modify: `gametool/game_data_source.py`
 - Test: `tests/test_classic_mpq_source.py`
 - Test: `tests/test_game_data_source.py`
 
@@ -82,7 +82,7 @@ def test_game_data_probe_prefers_classic_mpqs_over_generic_files(
 
 Run: `uv run python -m pytest -q tests/test_classic_mpq_source.py tests/test_game_data_source.py`
 
-Expected: FAIL because `w3xtool.classic_mpq_source` does not exist and classic directories are currently reported as `extracted_dir`.
+Expected: FAIL because `gametool.classic_mpq_source` does not exist and classic directories are currently reported as `extracted_dir`.
 
 - [ ] **Step 3: Implement the layered source and integrate probe/open ordering**
 
@@ -141,25 +141,25 @@ Run: `uv run python -m pytest -q tests/test_classic_mpq_source.py tests/test_gam
 
 Expected: PASS.
 
-Run: `uv run --with ruff ruff check w3xtool/classic_mpq_source.py w3xtool/game_data_source.py tests/test_classic_mpq_source.py tests/test_game_data_source.py`
+Run: `uv run --with ruff ruff check gametool/classic_mpq_source.py gametool/game_data_source.py tests/test_classic_mpq_source.py tests/test_game_data_source.py`
 
 Expected: no errors.
 
-Run: `uv run --with basedpyright basedpyright --level error w3xtool/classic_mpq_source.py w3xtool/game_data_source.py`
+Run: `uv run --with basedpyright basedpyright --level error gametool/classic_mpq_source.py gametool/game_data_source.py`
 
 Expected: 0 errors.
 
 - [ ] **Step 5: Commit the classic data-source slice**
 
 ```bash
-git add w3xtool/classic_mpq_source.py w3xtool/game_data_source.py tests/test_classic_mpq_source.py tests/test_game_data_source.py
+git add gametool/classic_mpq_source.py gametool/game_data_source.py tests/test_classic_mpq_source.py tests/test_game_data_source.py
 git commit -m "feat: read classic Warcraft MPQ data"
 ```
 
 ### Task 2: Source-aware description field selection
 
 **Files:**
-- Create: `w3xtool/batch_descriptions.py`
+- Create: `gametool/batch_descriptions.py`
 - Create: `tests/test_batch_descriptions.py`
 
 **Interfaces:**
@@ -226,7 +226,7 @@ def test_audit_marks_inherited_client_text_without_fabricating_missing_text() ->
 
 Run: `uv run python -m pytest -q tests/test_batch_descriptions.py`
 
-Expected: FAIL because `w3xtool.batch_descriptions` does not exist.
+Expected: FAIL because `gametool.batch_descriptions` does not exist.
 
 - [ ] **Step 3: Implement typed records and category-specific field selection**
 
@@ -270,21 +270,21 @@ Run: `uv run python -m pytest -q tests/test_batch_descriptions.py tests/test_obj
 
 Expected: PASS.
 
-Run: `uv run --with ruff ruff check w3xtool/batch_descriptions.py tests/test_batch_descriptions.py && uv run --with basedpyright basedpyright --level error w3xtool/batch_descriptions.py`
+Run: `uv run --with ruff ruff check gametool/batch_descriptions.py tests/test_batch_descriptions.py && uv run --with basedpyright basedpyright --level error gametool/batch_descriptions.py`
 
 Expected: no errors and 0 type errors.
 
 - [ ] **Step 5: Commit the description audit slice**
 
 ```bash
-git add w3xtool/batch_descriptions.py tests/test_batch_descriptions.py
+git add gametool/batch_descriptions.py tests/test_batch_descriptions.py
 git commit -m "feat: audit object description sources"
 ```
 
 ### Task 3: Named and anonymous icon resource discovery
 
 **Files:**
-- Create: `w3xtool/icon_resources.py`
+- Create: `gametool/icon_resources.py`
 - Create: `tests/test_icon_resources.py`
 
 **Interfaces:**
@@ -342,7 +342,7 @@ def test_anonymous_blp_name_uses_block_and_payload_digest() -> None:
 
 Run: `uv run python -m pytest -q tests/test_icon_resources.py`
 
-Expected: FAIL because `w3xtool.icon_resources` does not exist.
+Expected: FAIL because `gametool.icon_resources` does not exist.
 
 - [ ] **Step 3: Implement streaming resource collection without PIL caching**
 
@@ -378,21 +378,21 @@ Run: `uv run python -m pytest -q tests/test_icon_resources.py tests/test_icons.p
 
 Expected: PASS.
 
-Run: `uv run --with ruff ruff check w3xtool/icon_resources.py tests/test_icon_resources.py && uv run --with basedpyright basedpyright --level error w3xtool/icon_resources.py`
+Run: `uv run --with ruff ruff check gametool/icon_resources.py tests/test_icon_resources.py && uv run --with basedpyright basedpyright --level error gametool/icon_resources.py`
 
 Expected: no errors and 0 type errors.
 
 - [ ] **Step 5: Commit the icon discovery slice**
 
 ```bash
-git add w3xtool/icon_resources.py tests/test_icon_resources.py
+git add gametool/icon_resources.py tests/test_icon_resources.py
 git commit -m "feat: discover named and anonymous icons"
 ```
 
 ### Task 4: Safe BLP and PNG publication
 
 **Files:**
-- Create: `w3xtool/batch_icon_export.py`
+- Create: `gametool/batch_icon_export.py`
 - Create: `tests/test_batch_icon_export.py`
 
 **Interfaces:**
@@ -436,7 +436,7 @@ def test_named_export_cannot_escape_the_output_root(tmp_path: Path) -> None:
 
 Run: `uv run python -m pytest -q tests/test_batch_icon_export.py`
 
-Expected: FAIL because `w3xtool.batch_icon_export` does not exist.
+Expected: FAIL because `gametool.batch_icon_export` does not exist.
 
 - [ ] **Step 3: Implement original-first safe writes and bounded PNG encoding**
 
@@ -461,22 +461,22 @@ Run: `uv run python -m pytest -q tests/test_batch_icon_export.py tests/test_arch
 
 Expected: PASS.
 
-Run: `uv run --with ruff ruff check w3xtool/batch_icon_export.py tests/test_batch_icon_export.py && uv run --with basedpyright basedpyright --level error w3xtool/batch_icon_export.py`
+Run: `uv run --with ruff ruff check gametool/batch_icon_export.py tests/test_batch_icon_export.py && uv run --with basedpyright basedpyright --level error gametool/batch_icon_export.py`
 
 Expected: no errors and 0 type errors.
 
 - [ ] **Step 5: Commit the publication slice**
 
 ```bash
-git add w3xtool/batch_icon_export.py tests/test_batch_icon_export.py
+git add gametool/batch_icon_export.py tests/test_batch_icon_export.py
 git commit -m "feat: export original and png icons safely"
 ```
 
 ### Task 5: Deterministic per-map and global reports
 
 **Files:**
-- Create: `w3xtool/batch_models.py`
-- Create: `w3xtool/batch_reports.py`
+- Create: `gametool/batch_models.py`
+- Create: `gametool/batch_reports.py`
 - Create: `tests/test_batch_reports.py`
 
 **Interfaces:**
@@ -564,22 +564,22 @@ Run: `uv run python -m pytest -q tests/test_batch_reports.py tests/test_extracti
 
 Expected: PASS.
 
-Run: `uv run --with ruff ruff check w3xtool/batch_models.py w3xtool/batch_reports.py tests/test_batch_reports.py && uv run --with basedpyright basedpyright --level error w3xtool/batch_models.py w3xtool/batch_reports.py`
+Run: `uv run --with ruff ruff check gametool/batch_models.py gametool/batch_reports.py tests/test_batch_reports.py && uv run --with basedpyright basedpyright --level error gametool/batch_models.py gametool/batch_reports.py`
 
 Expected: no errors and 0 type errors.
 
 - [ ] **Step 5: Commit report and state types**
 
 ```bash
-git add w3xtool/batch_models.py w3xtool/batch_reports.py tests/test_batch_reports.py
+git add gametool/batch_models.py gametool/batch_reports.py tests/test_batch_reports.py
 git commit -m "feat: format extraction completeness reports"
 ```
 
 ### Task 6: Sequential resumable batch runner
 
 **Files:**
-- Modify: `w3xtool/map_directory.py`
-- Create: `w3xtool/batch_runner.py`
+- Modify: `gametool/map_directory.py`
+- Create: `gametool/batch_runner.py`
 - Create: `tests/test_batch_runner.py`
 
 **Interfaces:**
@@ -703,21 +703,21 @@ Run: `uv run python -m pytest -q tests/test_batch_runner.py tests/test_map_data_
 
 Expected: PASS.
 
-Run: `uv run --with ruff ruff check w3xtool/map_directory.py w3xtool/batch_runner.py tests/test_batch_runner.py && uv run --with basedpyright basedpyright --level error w3xtool/map_directory.py w3xtool/batch_runner.py`
+Run: `uv run --with ruff ruff check gametool/map_directory.py gametool/batch_runner.py tests/test_batch_runner.py && uv run --with basedpyright basedpyright --level error gametool/map_directory.py gametool/batch_runner.py`
 
 Expected: no errors and 0 type errors.
 
 - [ ] **Step 5: Commit the runner slice**
 
 ```bash
-git add w3xtool/map_directory.py w3xtool/batch_runner.py tests/test_batch_runner.py
+git add gametool/map_directory.py gametool/batch_runner.py tests/test_batch_runner.py
 git commit -m "feat: run resumable sequential map extraction"
 ```
 
 ### Task 7: Batch CLI and observable end-to-end scenarios
 
 **Files:**
-- Create: `w3xtool/batch_cli.py`
+- Create: `gametool/batch_cli.py`
 - Modify: `main.py`
 - Create: `tests/test_batch_cli.py`
 - Create: `tests/test_batch_e2e.py`
@@ -792,14 +792,14 @@ Run: `uv run python -m pytest -q tests/test_batch_cli.py tests/test_batch_e2e.py
 
 Expected: PASS.
 
-Run: `uv run --with ruff ruff check main.py w3xtool/batch_cli.py tests/test_batch_cli.py tests/test_batch_e2e.py && uv run --with basedpyright basedpyright --level error main.py w3xtool/batch_cli.py`
+Run: `uv run --with ruff ruff check main.py gametool/batch_cli.py tests/test_batch_cli.py tests/test_batch_e2e.py && uv run --with basedpyright basedpyright --level error main.py gametool/batch_cli.py`
 
 Expected: no errors and 0 type errors.
 
 - [ ] **Step 5: Commit the CLI and E2E slice**
 
 ```bash
-git add main.py w3xtool/batch_cli.py tests/test_batch_cli.py tests/test_batch_e2e.py
+git add main.py gametool/batch_cli.py tests/test_batch_cli.py tests/test_batch_e2e.py
 git commit -m "feat: add batch icon extraction command"
 ```
 
@@ -835,19 +835,19 @@ Expected: PASS with no skipped feature scenarios.
 
 - [ ] **Step 2: Run the complete repository gate**
 
-Run: `uv run w3xray-test`
+Run: `uv run gamexray-test`
 
 Expected: PASS.
 
-Run: `uv run --with ruff ruff check main.py w3xtool tests`
+Run: `uv run --with ruff ruff check main.py gametool tests`
 
 Expected: no errors.
 
-Run: `uv run --with ruff ruff format --check main.py w3xtool tests`
+Run: `uv run --with ruff ruff format --check main.py gametool tests`
 
 Expected: no formatting changes required.
 
-Run: `uv run --with basedpyright basedpyright --level error main.py w3xtool`
+Run: `uv run --with basedpyright basedpyright --level error main.py gametool`
 
 Expected: 0 errors.
 
@@ -858,10 +858,10 @@ Run:
 ```bash
 find '/Volumes/zhongerbing/Program Files (x86)/Warcraft III/Warcraft III Frozen Throne/Maps' \
   -type f \( -iname '*.w3x' -o -iname '*.w3m' -o -iname '*.w3n' \) -print0 \
-  | sort -z | xargs -0 stat -f '%N\t%z\t%m' > /tmp/w3xray-map-stat-before.tsv
+  | sort -z | xargs -0 stat -f '%N\t%z\t%m' > /tmp/gamexray-map-stat-before.tsv
 find '/Volumes/zhongerbing/Program Files (x86)/Warcraft III/Warcraft III Frozen Throne/Maps' \
   -type f \( -iname '*.w3x' -o -iname '*.w3m' -o -iname '*.w3n' \) -print0 \
-  | sort -z | xargs -0 shasum -a 256 > /tmp/w3xray-map-sha-before.tsv
+  | sort -z | xargs -0 shasum -a 256 > /tmp/gamexray-map-sha-before.tsv
 ```
 
 Run the command first against a temporary directory containing only the smallest source, then another containing only the largest source, using symlinks as read-only inputs and separate output roots. Expected: smallest run resolves all known named icons and client-filled descriptions; largest run exports thousands of anonymous BLPs without retaining PIL images and reports unresolved/decode-failed evidence as partial rather than failed.
@@ -879,11 +879,11 @@ uv run main.py batch \
 
 Expected: 37 top-level results in `批量提取汇总.tsv`; every result has a SHA-addressed per-map directory or a stable failed row; every anonymous original filename matches `block_[0-9]{6}_[0-9a-f]{8}.blp`.
 
-Regenerate `/tmp/w3xray-map-stat-after.tsv` and `/tmp/w3xray-map-sha-after.tsv` with the Step 3 commands, then run:
+Regenerate `/tmp/gamexray-map-stat-after.tsv` and `/tmp/gamexray-map-sha-after.tsv` with the Step 3 commands, then run:
 
 ```bash
-diff -u /tmp/w3xray-map-stat-before.tsv /tmp/w3xray-map-stat-after.tsv
-diff -u /tmp/w3xray-map-sha-before.tsv /tmp/w3xray-map-sha-after.tsv
+diff -u /tmp/gamexray-map-stat-before.tsv /tmp/gamexray-map-stat-after.tsv
+diff -u /tmp/gamexray-map-sha-before.tsv /tmp/gamexray-map-sha-after.tsv
 ```
 
 Expected: both diffs are empty.

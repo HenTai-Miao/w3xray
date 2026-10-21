@@ -7,11 +7,11 @@ import threading
 
 import pytest
 
-import w3xtool.gui_external_data as external_data
-from w3xtool.api import MapData
-from w3xtool.gui_external_data import ExternalDataToolsMixin
-from w3xtool.gui_worker_host import GuiWorkerHostMixin
-from w3xtool.real_save_files import RealSaveReport
+import gametool.gui_external_data as external_data
+from gametool.api import MapData
+from gametool.gui_external_data import ExternalDataToolsMixin
+from gametool.gui_worker_host import GuiWorkerHostMixin
+from gametool.real_save_files import RealSaveReport
 
 
 class _Status:

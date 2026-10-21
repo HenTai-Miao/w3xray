@@ -15,19 +15,19 @@ from tests.batch_publication_fixture import (
 )
 from tests.symlink_capability import skip_if_symlinks_unsupported
 from tests.trusted_description_cache_fixture import published_cache
-import w3xtool.batch_runner as batch_runner
-import w3xtool.batch_map_attempt as batch_map_attempt
-from w3xtool.batch_configuration import BatchConfigurationError
-from w3xtool.batch_models import MapBatchResult, SourceFingerprint
-from w3xtool.batch_resume import load_previous_state
-from w3xtool.batch_runner import BatchOptions, run_batch
-from w3xtool.batch_status import (
+import gametool.batch_runner as batch_runner
+import gametool.batch_map_attempt as batch_map_attempt
+from gametool.batch_configuration import BatchConfigurationError
+from gametool.batch_models import MapBatchResult, SourceFingerprint
+from gametool.batch_resume import load_previous_state
+from gametool.batch_runner import BatchOptions, run_batch
+from gametool.batch_status import (
     PublicationResult,
     derive_batch_axes,
     derive_legacy_map_state,
 )
-from w3xtool.load_context import MapLoadContext
-from w3xtool.trusted_description_cache import load_trusted_description_cache
+from gametool.load_context import MapLoadContext
+from gametool.trusted_description_cache import load_trusted_description_cache
 
 
 type InvalidCacheKind = Literal["missing", "unowned", "symlink"]

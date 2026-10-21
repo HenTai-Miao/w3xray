@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from w3xtool.textobj import parse_text_objects
+from gametool.textobj import parse_text_objects
 
 
 def test_text_object_rhs_preserves_leading_trailing_spaces_tabs_and_empty_value() -> (

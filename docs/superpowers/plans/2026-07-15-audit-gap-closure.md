@@ -22,11 +22,11 @@
 ### Task 1: Exact object identity and field evidence
 
 **Files:**
-- Modify: `w3xtool/map_data.py`
-- Modify: `w3xtool/object_candidates.py`
-- Modify: `w3xtool/object_materialization.py`
-- Modify: `w3xtool/object_pipeline.py`
-- Modify: `w3xtool/map_components.py`
+- Modify: `gametool/map_data.py`
+- Modify: `gametool/object_candidates.py`
+- Modify: `gametool/object_materialization.py`
+- Modify: `gametool/object_pipeline.py`
+- Modify: `gametool/map_components.py`
 - Test: `tests/test_object_pipeline.py`
 - Test: `tests/test_object_pipeline_priority.py`
 
@@ -77,11 +77,11 @@ Run: `uv run python -m pytest -q tests/test_object_pipeline.py tests/test_object
 ### Task 2: Metadata text fallback and mixed Buff classification
 
 **Files:**
-- Modify: `w3xtool/object_text_roles.py`
-- Modify: `w3xtool/object_text_evidence.py`
-- Modify: `w3xtool/object_candidate_values.py`
-- Modify: `w3xtool/object_text_sources.py`
-- Modify: `w3xtool/textobj.py`
+- Modify: `gametool/object_text_roles.py`
+- Modify: `gametool/object_text_evidence.py`
+- Modify: `gametool/object_candidate_values.py`
+- Modify: `gametool/object_text_sources.py`
+- Modify: `gametool/textobj.py`
 - Test: `tests/test_object_text_roles.py`
 - Test: `tests/test_object_text_sources.py`
 - Test: `tests/test_object_text_index.py`
@@ -125,9 +125,9 @@ Run: `uv run python -m pytest -q tests/test_object_text_roles.py tests/test_obje
 ### Task 3: Category-safe relation endpoints and conflict rows
 
 **Files:**
-- Modify: `w3xtool/item_relation_endpoints.py`
-- Modify: `w3xtool/item_relation_fields.py`
-- Modify: `w3xtool/item_relation_builder.py`
+- Modify: `gametool/item_relation_endpoints.py`
+- Modify: `gametool/item_relation_fields.py`
+- Modify: `gametool/item_relation_builder.py`
 - Test: `tests/test_item_relations.py`
 - Test: `tests/test_item_relation_exports.py`
 
@@ -170,10 +170,10 @@ Run: `uv run python -m pytest -q tests/test_item_relations.py tests/test_item_re
 ### Task 4: Placement partial-state propagation and relation-channel isolation
 
 **Files:**
-- Modify: `w3xtool/item_relation_endpoints.py`
-- Modify: `w3xtool/item_relation_builder.py`
-- Modify: `w3xtool/item_relation_fields.py`
-- Modify: `w3xtool/item_relation_scripts.py`
+- Modify: `gametool/item_relation_endpoints.py`
+- Modify: `gametool/item_relation_builder.py`
+- Modify: `gametool/item_relation_fields.py`
+- Modify: `gametool/item_relation_scripts.py`
 - Test: `tests/test_item_relations.py`
 - Test: `tests/test_component_parse_diagnostics.py`
 - Test: `tests/test_map_relation_loading.py`
@@ -215,8 +215,8 @@ Run: `uv run python -m pytest -q tests/test_item_relations.py tests/test_compone
 ### Task 5: Equipment-skill GUI target navigation
 
 **Files:**
-- Modify: `w3xtool/gui_item_relations.py`
-- Modify: `w3xtool/gui_item_relation_layout.py`
+- Modify: `gametool/gui_item_relations.py`
+- Modify: `gametool/gui_item_relation_layout.py`
 - Test: `tests/test_gui_item_relations.py`
 
 **Interfaces:**
@@ -249,8 +249,8 @@ Run: `uv run python -m pytest -q tests/test_gui_item_relations.py tests/test_gui
 ### Task 6: Schema, documentation, and workflow migration
 
 **Files:**
-- Modify: `w3xtool/batch_models.py`
-- Modify: `w3xtool/__init__.py`
+- Modify: `gametool/batch_models.py`
+- Modify: `gametool/__init__.py`
 - Modify: `pyproject.toml`
 - Modify: `.github/workflows/windows-real-war3.yml`
 - Modify: `.github/workflows/posix-package.yml`
@@ -277,7 +277,7 @@ Run: `uv run python -m pytest -q tests/test_batch_state_reports.py tests/test_wi
 **Files:**
 - No repository source edits during acceptance.
 - Output: `/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v4`
-- Temporary evidence: `/tmp/w3xray-schema4-acceptance`
+- Temporary evidence: `/tmp/gamexray-schema4-acceptance`
 
 **Interfaces:**
 - Consumes: schema-4 application and trusted classic icon cache.
@@ -286,17 +286,17 @@ Run: `uv run python -m pytest -q tests/test_batch_state_reports.py tests/test_wi
 - [ ] **Step 1: Run focused and static gates**
 
 ```bash
-uv run w3xray-quality
+uv run gamexray-quality
 uv run python -m pytest -q tests/test_object_text_roles.py tests/test_object_text_sources.py tests/test_object_text_index.py tests/test_item_relations.py tests/test_item_relation_exports.py tests/test_gui_item_relations.py
 ```
 
 - [ ] **Step 2: Run the complete repository suite**
 
-Run: `uv run w3xray-test`
+Run: `uv run gamexray-test`
 
 - [ ] **Step 3: Record source hashes and run portable acceptance with GUI when available**
 
-Run: `uv run main.py acceptance --map tests/fixtures/maps/war3net-map-script-builder.w3x --campaign tests/fixtures/reference/stormlib-campaign.w3n --output /tmp/w3xray-schema4-acceptance/output --report /tmp/w3xray-schema4-acceptance/acceptance.json --repeat 5`
+Run: `uv run main.py acceptance --map tests/fixtures/maps/war3net-map-script-builder.w3x --campaign tests/fixtures/reference/stormlib-campaign.w3n --output /tmp/gamexray-schema4-acceptance/output --report /tmp/gamexray-schema4-acceptance/acceptance.json --repeat 5`
 
 - [ ] **Step 4: Run all 39 maps into the new owned root**
 
@@ -308,7 +308,7 @@ uv run main.py batch /Users/zhongerbing/Desktop/Maps \
 
 - [ ] **Step 5: Run real-map acceptance and compare source hashes**
 
-Set `W3XRAY_MAPS_ROOT`, `W3XRAY_OLD_OUTPUT`, and `W3XRAY_NEW_OUTPUT` and run `tests/test_real_map_item_relation_acceptance.py`; require 39 results, schema 4, parseable TSV files, reconciled counts, and identical before/after source hashes.
+Set `GAMEXRAY_MAPS_ROOT`, `GAMEXRAY_OLD_OUTPUT`, and `GAMEXRAY_NEW_OUTPUT` and run `tests/test_real_map_item_relation_acceptance.py`; require 39 results, schema 4, parseable TSV files, reconciled counts, and identical before/after source hashes.
 
 - [ ] **Step 6: Review the final diff and commit implementation/documentation**
 

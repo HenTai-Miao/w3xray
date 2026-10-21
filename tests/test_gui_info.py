@@ -3,17 +3,17 @@
 import unittest
 
 from tests.gui_base import GuiTestCase
-from w3xtool.api import MapData
-from w3xtool.gameconfig import (
+from gametool.api import MapData
+from gametool.gameconfig import (
     GameConfiguration,
     GameConfigPlayer,
     NamedGameConfiguration,
 )
-from w3xtool.imp import ImportEntry, ImportSummary
-from w3xtool.mmp import PreviewIcon, PreviewIconSummary
-from w3xtool.w3i import W3iInfo, Player, Force
-from w3xtool.w3world import Camera, Region, Sound
-from w3xtool.wtg import (
+from gametool.imp import ImportEntry, ImportSummary
+from gametool.mmp import PreviewIcon, PreviewIconSummary
+from gametool.w3i import W3iInfo, Player, Force
+from gametool.w3world import Camera, Region, Sound
+from gametool.wtg import (
     TriggerCategory,
     TriggerHeader,
     TriggerParseFailure,

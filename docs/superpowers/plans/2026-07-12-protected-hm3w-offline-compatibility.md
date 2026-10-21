@@ -22,12 +22,12 @@
 
 ## File Structure
 
-- Modify `w3xtool/mpq_constants.py`: Warcraft map magic and 32-bit arithmetic constants only.
-- Modify `w3xtool/mpq_layout.py`: shared classic-header normalization, paired-wrap validation, layout discovery, and table parsing.
-- Modify `w3xtool/archive_diagnostics.py`: bounded header diagnosis using the same layout policy.
-- Create `w3xtool/archive_layout_probe.py`: pure candidate-layout evidence and shared table-budget diagnosis.
-- Create `w3xtool/mpq_storage.py`: sole owner of source handles, mmap objects, and fallback temporary copies.
-- Modify `w3xtool/mpq.py`: facade delegates opening/closing to `MPQBackingStore` and closes it when construction fails.
+- Modify `gametool/mpq_constants.py`: Warcraft map magic and 32-bit arithmetic constants only.
+- Modify `gametool/mpq_layout.py`: shared classic-header normalization, paired-wrap validation, layout discovery, and table parsing.
+- Modify `gametool/archive_diagnostics.py`: bounded header diagnosis using the same layout policy.
+- Create `gametool/archive_layout_probe.py`: pure candidate-layout evidence and shared table-budget diagnosis.
+- Create `gametool/mpq_storage.py`: sole owner of source handles, mmap objects, and fallback temporary copies.
+- Modify `gametool/mpq.py`: facade delegates opening/closing to `MPQBackingStore` and closes it when construction fails.
 - Modify `tests/test_mpq_protected_layout.py`: protected-layout positive and negative integration tests.
 - Create `tests/test_mpq_storage.py`: deterministic resource-lifecycle tests.
 - Modify `tests/test_mpq_robust.py` only if an existing lifecycle assertion belongs there; do not duplicate storage tests.
@@ -37,8 +37,8 @@
 ### Task 1: Complete the protected classic-layout contract
 
 **Files:**
-- Modify: `w3xtool/mpq_constants.py`
-- Modify: `w3xtool/mpq_layout.py`
+- Modify: `gametool/mpq_constants.py`
+- Modify: `gametool/mpq_layout.py`
 - Modify: `tests/test_mpq_protected_layout.py`
 
 **Interfaces:**
@@ -200,8 +200,8 @@ Run:
 
 ```bash
 git diff --check -- \
-  w3xtool/mpq_constants.py \
-  w3xtool/mpq_layout.py \
+  gametool/mpq_constants.py \
+  gametool/mpq_layout.py \
   tests/test_mpq_protected_layout.py
 ```
 
@@ -212,7 +212,7 @@ Expected: no output and exit 0. Do not commit.
 ### Task 2: Make bounded diagnostics use the same policy
 
 **Files:**
-- Modify: `w3xtool/archive_diagnostics.py`
+- Modify: `gametool/archive_diagnostics.py`
 - Modify: `tests/test_mpq_protected_layout.py`
 - Test: `tests/test_archive_diagnostics.py`
 
@@ -328,9 +328,9 @@ Expected: 2 passed.
 ### Task 3: Extract backing-store ownership and close failed construction
 
 **Files:**
-- Create: `w3xtool/mpq_storage.py`
+- Create: `gametool/mpq_storage.py`
 - Create: `tests/test_mpq_storage.py`
-- Modify: `w3xtool/mpq.py`
+- Modify: `gametool/mpq.py`
 - Test: `tests/test_mpq_robust.py`
 
 **Interfaces:**
@@ -398,9 +398,9 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.mpq import MPQArchive
-from w3xtool.mpq_layout import MPQLayoutError
-from w3xtool.mpq_storage import MPQBackingStore, open_mpq_backing
+from gametool.mpq import MPQArchive
+from gametool.mpq_layout import MPQLayoutError
+from gametool.mpq_storage import MPQBackingStore, open_mpq_backing
 
 
 def test_backing_store_close_releases_real_mmap_and_handle(tmp_path: Path) -> None:
@@ -446,7 +446,7 @@ def test_archive_constructor_closes_backing_when_layout_fails(
     store = open_mpq_backing(str(path))
     mapped = store.data
     source_handle = store.handle
-    monkeypatch.setattr("w3xtool.mpq.open_mpq_backing", lambda _path: store)
+    monkeypatch.setattr("gametool.mpq.open_mpq_backing", lambda _path: store)
     with pytest.raises(MPQLayoutError):
         MPQArchive(str(path))
     assert isinstance(mapped, mmap.mmap) and mapped.closed
@@ -464,7 +464,7 @@ def test_archive_constructor_removes_fallback_copy_when_layout_fails(
         handle=None,
         temporary_path=str(temporary),
     )
-    monkeypatch.setattr("w3xtool.mpq.open_mpq_backing", lambda _path: store)
+    monkeypatch.setattr("gametool.mpq.open_mpq_backing", lambda _path: store)
     with pytest.raises(MPQLayoutError):
         MPQArchive("source.w3x")
     assert not temporary.exists()
@@ -475,7 +475,7 @@ def test_fallback_copy_is_removed_when_second_open_raises_value_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import os
-    from w3xtool import mpq_storage
+    from gametool import mpq_storage
 
     source = tmp_path / "source.w3x"
     source.write_bytes(b"source")
@@ -509,11 +509,11 @@ Run:
 .venv/bin/python -m pytest -q tests/test_mpq_storage.py
 ```
 
-Expected before the module exists: collection fails with `ModuleNotFoundError: w3xtool.mpq_storage`.
+Expected before the module exists: collection fails with `ModuleNotFoundError: gametool.mpq_storage`.
 
 - [x] **Step 5: Implement `MPQBackingStore`**
 
-Create `w3xtool/mpq_storage.py` with this complete ownership surface:
+Create `gametool/mpq_storage.py` with this complete ownership surface:
 
 ```python
 """Owned byte storage for MPQ archives."""
@@ -669,17 +669,17 @@ Run:
 
 ```bash
 for file in \
-  w3xtool/mpq.py \
-  w3xtool/mpq_storage.py \
-  w3xtool/mpq_layout.py \
-  w3xtool/archive_diagnostics.py; do
+  gametool/mpq.py \
+  gametool/mpq_storage.py \
+  gametool/mpq_layout.py \
+  gametool/archive_diagnostics.py; do
   count=$(awk '!/^[[:space:]]*$/ && !/^[[:space:]]*#/' "$file" | wc -l)
   echo "$count $file"
   test "$count" -le 250
 done
 git diff --check
-! rg -n '[[:blank:]]+$' w3xtool/mpq_storage.py tests/test_mpq_storage.py
-git diff --no-index -- /dev/null w3xtool/mpq_storage.py || test "$?" = 1
+! rg -n '[[:blank:]]+$' gametool/mpq_storage.py tests/test_mpq_storage.py
+git diff --no-index -- /dev/null gametool/mpq_storage.py || test "$?" = 1
 git diff --no-index -- /dev/null tests/test_mpq_storage.py || test "$?" = 1
 ```
 
@@ -721,10 +721,10 @@ Expected: exit 0 with no failed/error tests.
 Run:
 
 ```bash
-.venv/bin/python -m compileall -q w3xtool tests
+.venv/bin/python -m compileall -q gametool tests
 git diff --check
 ! rg -n '[[:blank:]]+$' \
-  w3xtool/mpq_storage.py \
+  gametool/mpq_storage.py \
   tests/test_mpq_storage.py \
   tests/test_mpq_protected_layout.py \
   docs/superpowers/specs/2026-07-12-protected-hm3w-offline-compatibility-design.md \
@@ -751,15 +751,15 @@ Run:
 git status --short
 git diff --stat
 git diff -- \
-  w3xtool/mpq_constants.py \
-  w3xtool/mpq_layout.py \
-  w3xtool/archive_diagnostics.py \
-  w3xtool/mpq_storage.py \
-  w3xtool/mpq.py \
+  gametool/mpq_constants.py \
+  gametool/mpq_layout.py \
+  gametool/archive_diagnostics.py \
+  gametool/mpq_storage.py \
+  gametool/mpq.py \
   tests/test_mpq_protected_layout.py \
   tests/test_mpq_storage.py
 for new_file in \
-  w3xtool/mpq_storage.py \
+  gametool/mpq_storage.py \
   tests/test_mpq_storage.py \
   tests/test_mpq_protected_layout.py \
   docs/superpowers/specs/2026-07-12-protected-hm3w-offline-compatibility-design.md \
@@ -781,7 +781,7 @@ Expected: tracked and untracked changes are all displayed; only approved code, t
 - Temporary evidence: `/tmp/war3-xg-map-baseline-current.sha256`, `/tmp/war3-xg-map-baseline-27.sha256`, `/tmp/war3-xg-map-after-27.sha256`, `/tmp/war3-xg-map-audit-final/`
 
 **Interfaces:**
-- Consumes: public `main.py cli` and `w3xtool.api.load_map`.
+- Consumes: public `main.py cli` and `gametool.api.load_map`.
 - Produces: 27 exit-code logs, exact protected-map assertions, and byte-identity proof.
 
 - [x] **Step 1: Capture and verify the real-map baselines before loading**
@@ -862,8 +862,8 @@ Run:
 export A801="$MAP_ROOT/dz/rpg/A80167E5296276AD606B310D4B54F61F.w3x"
 export A8E="$MAP_ROOT/dz/rpg/A8E238ED8C50ECB52657B7265B01D4BA.w3x"
 .venv/bin/python -c '
-from w3xtool.api import load_map
-from w3xtool.mpq import MPQArchive
+from gametool.api import load_map
+from gametool.mpq import MPQArchive
 import os
 a801 = load_map(os.environ["A801"])
 a8e = load_map(os.environ["A8E"])

@@ -1,7 +1,7 @@
 """官方秘籍/调试口令残留检测。"""
 
-from w3xtool.api import MapData
-from w3xtool.cheats import build_cheat_report
+from gametool.api import MapData
+from gametool.cheats import build_cheat_report
 
 
 def test_detects_registered_official_cheat_chat_command():

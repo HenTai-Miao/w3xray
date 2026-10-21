@@ -5,13 +5,13 @@ from __future__ import annotations
 import csv
 import io
 
-from w3xtool.batch_tsv import decode_tsv_cell
-from w3xtool.item_relation_exports import (
+from gametool.batch_tsv import decode_tsv_cell
+from gametool.item_relation_exports import (
     format_equipment_skills_tsv,
     format_item_acquisition_tsv,
     format_relation_completeness,
 )
-from w3xtool.item_relation_models import (
+from gametool.item_relation_models import (
     ItemRelation,
     ItemRelationIndex,
     ItemRelationKind,
@@ -21,11 +21,11 @@ from w3xtool.item_relation_models import (
     RelationIngredient,
     RelationObject,
 )
-from w3xtool.object_text_exports import (
+from gametool.object_text_exports import (
     format_object_text_completeness,
     format_object_text_tsv,
 )
-from w3xtool.object_text_models import (
+from gametool.object_text_models import (
     ObjectTextIndex,
     ObjectTextRecord,
     ObjectTextState,

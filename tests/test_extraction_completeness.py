@@ -5,14 +5,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from unittest.mock import patch
 
-from w3xtool.api import MapData
-from w3xtool.archive_diagnostics import ArchiveDiagnosisKind
-from w3xtool.extraction_completeness import (
+from gametool.api import MapData
+from gametool.archive_diagnostics import ArchiveDiagnosisKind
+from gametool.extraction_completeness import (
     build_extraction_completeness_from_archive,
     build_extraction_completeness_report,
     format_extraction_completeness_report,
 )
-from w3xtool.mpq import FLAG_COMPRESS, FLAG_ENCRYPTED, FLAG_EXISTS
+from gametool.mpq import FLAG_COMPRESS, FLAG_ENCRYPTED, FLAG_EXISTS
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,7 +123,7 @@ class ExtractionCompletenessTest(unittest.TestCase):
 
         # When: completeness diagnoses the unavailable source.
         with patch(
-            "w3xtool.extraction_completeness.open_map_source",
+            "gametool.extraction_completeness.open_map_source",
             side_effect=AssertionError("must not open absent source"),
         ) as source_opener:
             report = build_extraction_completeness_report(md)

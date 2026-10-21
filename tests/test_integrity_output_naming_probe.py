@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool import integrity_output_naming as naming_api
+from gametool import integrity_output_naming as naming_api
 
 
 def test_probe_setup_collision_never_removes_unowned_directory(
@@ -15,7 +15,7 @@ def test_probe_setup_collision_never_removes_unowned_directory(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     token = "a" * 32
-    collision = tmp_path / f".w3xray-name-probe-{token}.tmp"
+    collision = tmp_path / f".gamexray-name-probe-{token}.tmp"
     collision.mkdir(mode=0o700)
     monkeypatch.setattr(naming_api.secrets, "token_hex", lambda _size: token)
     parent_descriptor = os.open(tmp_path, os.O_RDONLY)
@@ -48,12 +48,12 @@ def test_probe_cleanup_failure_reports_proved_nested_residue(
     try:
         with pytest.raises(
             naming_api.IntegrityNamingProbeError,
-            match=r"probe residue retained at \.w3xray-name-probe-.+/(?:Case|\u00e9)-",
+            match=r"probe residue retained at \.gamexray-name-probe-.+/(?:Case|\u00e9)-",
         ):
             _ = naming_api.probe_filesystem_naming(parent_descriptor)
     finally:
         os.close(parent_descriptor)
 
-    residues = tuple(tmp_path.glob(".w3xray-name-probe-*.tmp"))
+    residues = tuple(tmp_path.glob(".gamexray-name-probe-*.tmp"))
     assert len(residues) == 1
     assert any(item.is_file() for item in residues[0].iterdir())

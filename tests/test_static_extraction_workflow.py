@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from w3xtool.api import load_map
-from w3xtool.external_listfile import read_external_listfile
-from w3xtool.knowledge_pack import write_knowledge_pack_report
-from w3xtool.knowledge_results import KnowledgeWriteStatus
-from w3xtool.load_context import build_map_load_context
+from gametool.api import load_map
+from gametool.external_listfile import read_external_listfile
+from gametool.knowledge_pack import write_knowledge_pack_report
+from gametool.knowledge_results import KnowledgeWriteStatus
+from gametool.load_context import build_map_load_context
 
 FIXTURES = Path(__file__).with_name("fixtures")
 MAP_FIXTURE = FIXTURES / "maps" / "war3net-map-script-builder.w3x"

@@ -12,19 +12,19 @@ from tests.description_cache_publication_fixture import (
     assert_live_retained_records,
     open_parent,
 )
-from w3xtool import description_cache_publication_named_leaf as named_leaf
-from w3xtool.description_cache_publication_errors import (
+from gametool import description_cache_publication_named_leaf as named_leaf
+from gametool.description_cache_publication_errors import (
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_models import (
+from gametool.description_cache_publication_models import (
     PublicationTransientRecord,
     RetainedCacheRole,
 )
-from w3xtool.description_cache_publication_recovery_state import (
+from gametool.description_cache_publication_recovery_state import (
     normalize_recovery_failure,
 )
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
-from w3xtool.description_cache_publication_rollback_selection import (
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool.description_cache_publication_rollback_selection import (
     select_live_identity_path,
 )
 

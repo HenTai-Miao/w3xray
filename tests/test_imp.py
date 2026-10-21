@@ -11,7 +11,7 @@ import struct
 import unittest
 from unittest.mock import patch
 
-from w3xtool.imp import ImportEntry, parse_imp, parse_import_table
+from gametool.imp import ImportEntry, parse_imp, parse_import_table
 
 FIX = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -62,7 +62,7 @@ class TestParseImp(unittest.TestCase):
 
         # When: Windows ACP is cp950.
         with patch(
-            "w3xtool.war3_encoding.default_legacy_codecs", return_value=("cp950", "gbk")
+            "gametool.war3_encoding.default_legacy_codecs", return_value=("cp950", "gbk")
         ):
             table = parse_import_table(data)
 
@@ -119,7 +119,7 @@ class _FakeArchive:
 
 class TestImportedNamesForExport(unittest.TestCase):
     def test_imp_names_feed_export_discovery(self):
-        from w3xtool.api import _imported_names
+        from gametool.api import _imported_names
 
         imp = _build(1, [(5, "war3mapImported\\model.mdx"), (5, "icon.blp")])
         arch = _FakeArchive(
@@ -135,7 +135,7 @@ class TestImportedNamesForExport(unittest.TestCase):
         self.assertIn("war3mapImported\\icon.blp", names)
 
     def test_campaign_imp_names_feed_export_discovery(self):
-        from w3xtool.api import _imported_names
+        from gametool.api import _imported_names
 
         imp = _build(1, [(13, "UI\\CampaignIcon.blp")])
         arch = _FakeArchive({"war3campaign.imp": imp})
@@ -145,7 +145,7 @@ class TestImportedNamesForExport(unittest.TestCase):
         self.assertIn("UI\\CampaignIcon.blp", names)
 
     def test_import_flags_shape_export_candidates(self):
-        from w3xtool.api import _imported_names
+        from gametool.api import _imported_names
 
         imp = _build(1, [(8, "icon.blp"), (13, "ReplaceableTextures\\custom.blp")])
         arch = _FakeArchive({"war3map.imp": imp})
@@ -158,13 +158,13 @@ class TestImportedNamesForExport(unittest.TestCase):
         self.assertNotIn("war3mapImported\\ReplaceableTextures\\custom.blp", names)
 
     def test_no_imp_returns_empty(self):
-        from w3xtool.api import _imported_names
+        from gametool.api import _imported_names
 
         self.assertEqual(_imported_names(_FakeArchive({})), [])
 
     def test_add_import_summary_reports_missing_resources(self):
-        from w3xtool.api import MapData
-        from w3xtool.map_extras import add_import_summary
+        from gametool.api import MapData
+        from gametool.map_extras import add_import_summary
 
         imp = _build(1, [(8, "icon.blp"), (13, "ReplaceableTextures\\custom.blp")])
         arch = _FakeArchive(
@@ -188,8 +188,8 @@ class TestImportedNamesForExport(unittest.TestCase):
         )
 
     def test_add_import_summary_reads_campaign_import_table(self):
-        from w3xtool.api import MapData
-        from w3xtool.map_extras import add_import_summary
+        from gametool.api import MapData
+        from gametool.map_extras import add_import_summary
 
         imp = _build(1, [(13, "UI\\CampaignIcon.blp")])
         arch = _FakeArchive(

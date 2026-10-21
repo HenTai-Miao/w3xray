@@ -6,7 +6,7 @@
 import unittest
 
 from tests.gui_base import GuiTestCase
-from w3xtool.api import MapData
+from gametool.api import MapData
 
 
 class TestModeAndLeftList(GuiTestCase):

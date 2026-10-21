@@ -10,7 +10,7 @@ import stat
 
 import pytest
 
-from w3xtool.current_map_snapshot import (
+from gametool.current_map_snapshot import (
     CurrentMapSnapshot,
     CurrentMapSnapshotError,
     cleanup_current_map_snapshot,
@@ -25,7 +25,7 @@ def _isolated_snapshot_root(
     root = tmp_path / "snapshots"
     root.mkdir()
     monkeypatch.setattr(
-        "w3xtool.current_map_snapshot.tempfile.gettempdir",
+        "gametool.current_map_snapshot.tempfile.gettempdir",
         lambda: str(root),
     )
     return root
@@ -200,7 +200,7 @@ def test_snapshot_nonblocking_open_rejects_fifo_swap(
                 pytest.fail("source open omitted O_NONBLOCK and would hang on the FIFO")
         return real_open(path, flags, mode)
 
-    monkeypatch.setattr("w3xtool.current_map_snapshot.os.open", swapping_open)
+    monkeypatch.setattr("gametool.current_map_snapshot.os.open", swapping_open)
 
     # When/Then: opening never blocks and fstat rejects the swapped object.
     with pytest.raises(CurrentMapSnapshotError, match="changed"):
@@ -233,7 +233,7 @@ def test_snapshot_rejects_source_changed_during_copy(
         real_fsync(descriptor)
 
     monkeypatch.setattr(
-        "w3xtool.current_map_snapshot.os.fsync", fsync_after_source_change
+        "gametool.current_map_snapshot.os.fsync", fsync_after_source_change
     )
 
     # When/Then: the inconsistent snapshot is rejected and its directory is removed.

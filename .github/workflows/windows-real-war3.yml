@@ -16,8 +16,8 @@ on:
 
 jobs:
   real-install:
-    runs-on: [self-hosted, Windows, X64, w3xray-war3]
-    environment: w3xray-real-war3
+    runs-on: [self-hosted, Windows, X64, gamexray-war3]
+    environment: gamexray-real-war3
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -31,8 +31,8 @@ jobs:
         shell: powershell
         env:
           SOURCE_SHA_INPUT: ${{ inputs.source_sha }}
-          W3XRAY_ACCEPTANCE_WAR3_DIR: ${{ inputs.war3_dir }}
-          W3XRAY_ACCEPTANCE_EVIDENCE_DIR: ${{ github.workspace }}\artifacts\windows-real-war3
+          GAMEXRAY_ACCEPTANCE_WAR3_DIR: ${{ inputs.war3_dir }}
+          GAMEXRAY_ACCEPTANCE_EVIDENCE_DIR: ${{ github.workspace }}\artifacts\windows-real-war3
         run: |
           $expectedSha = $env:SOURCE_SHA_INPUT.Trim()
           if ($expectedSha -notmatch '^[0-9a-fA-F]{40}$') {
@@ -48,11 +48,11 @@ jobs:
           }
           Write-Output "SOURCE_SHA=$actualSha"
           powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
-            -War3Dir $env:W3XRAY_ACCEPTANCE_WAR3_DIR `
-            -EvidenceDir $env:W3XRAY_ACCEPTANCE_EVIDENCE_DIR
+            -War3Dir $env:GAMEXRAY_ACCEPTANCE_WAR3_DIR `
+            -EvidenceDir $env:GAMEXRAY_ACCEPTANCE_EVIDENCE_DIR
       - name: Upload real-install evidence
         uses: actions/upload-artifact@v4
         with:
-          name: w3xray-real-war3-evidence
+          name: gamexray-real-war3-evidence
           path: artifacts/windows-real-war3/
           if-no-files-found: error

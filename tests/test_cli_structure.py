@@ -3,8 +3,8 @@
 from unittest.mock import patch
 
 from main import iter_cli_summary_lines
-from w3xtool.api import MapData
-from w3xtool.mapmeta import MapStructureReport, PathingSummary, ShadowSummary
+from gametool.api import MapData
+from gametool.mapmeta import MapStructureReport, PathingSummary, ShadowSummary
 
 
 def test_cli_summary_includes_shadow_map_block():
@@ -19,7 +19,7 @@ def test_cli_summary_includes_shadow_map_block():
 
     # When: CLI summary lines are rendered.
     with patch(
-        "w3xtool.mapmeta.map_structure_report_from_map_path", return_value=report
+        "gametool.mapmeta.map_structure_report_from_map_path", return_value=report
     ):
         lines = list(iter_cli_summary_lines(md))
 

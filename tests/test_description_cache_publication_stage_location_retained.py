@@ -12,21 +12,21 @@ from tests.description_cache_publication_fixture import (
     assert_live_retained_records,
     rename_in_parent,
 )
-from w3xtool.description_cache_publication_descriptor_close import (
+from gametool.description_cache_publication_descriptor_close import (
     DescriptorCloseLedger,
 )
-from w3xtool.description_cache_publication_errors import (
+from gametool.description_cache_publication_errors import (
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_models import (
+from gametool.description_cache_publication_models import (
     RetainedCacheRecord,
     RetainedCacheRole,
 )
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
-from w3xtool.description_cache_publication_stage import BoundDescriptionCacheStage
-from w3xtool import description_cache_publication_stage_location as stage_location
-from w3xtool import description_cache_publication_stage_location_scan as location_scan
-from w3xtool.description_cache_publication_stage_retention import retain_stage
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool.description_cache_publication_stage import BoundDescriptionCacheStage
+from gametool import description_cache_publication_stage_location as stage_location
+from gametool import description_cache_publication_stage_location_scan as location_scan
+from gametool.description_cache_publication_stage_retention import retain_stage
 
 
 _DIRECTORY_FLAGS: Final = (
@@ -47,7 +47,7 @@ def test_known_retained_stage_still_scans_concurrent_output(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Given: the exact held stage already has a durable failed-stage record.
-    stage = tmp_path / ".w3xray-description-cache-stage-a"
+    stage = tmp_path / ".gamexray-description-cache-stage-a"
     output = tmp_path / "trusted"
     stage.mkdir()
     parent_descriptor = os.open(tmp_path, _DIRECTORY_FLAGS)

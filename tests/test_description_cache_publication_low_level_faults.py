@@ -13,15 +13,15 @@ from tests.description_cache_publication_fixture import (
     open_parent,
     rename_in_parent,
 )
-from w3xtool import description_cache_publication_parent_identity as parent_identity
-from w3xtool import description_cache_publication_stage as publication_stage
-from w3xtool import description_cache_publication_stage_io as stage_io
-from w3xtool.description_cache_owned_schema import TRUSTED_DESCRIPTION_CACHE_MARKER
-from w3xtool.description_cache_publication_errors import (
+from gametool import description_cache_publication_parent_identity as parent_identity
+from gametool import description_cache_publication_stage as publication_stage
+from gametool import description_cache_publication_stage_io as stage_io
+from gametool.description_cache_owned_schema import TRUSTED_DESCRIPTION_CACHE_MARKER
+from gametool.description_cache_publication_errors import (
     DescriptionCachePublicationError,
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
 
 
 type CreationFaultSite = Literal["fstat", "public-stat"]

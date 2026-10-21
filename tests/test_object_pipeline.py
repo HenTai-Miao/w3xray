@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import struct
 
-from w3xtool.map_data import GameObject, MapData
-from w3xtool.object_pipeline import (
+from gametool.map_data import GameObject, MapData
+from gametool.object_pipeline import (
     build_object_identity_index,
     load_object_pipeline,
 )
@@ -113,8 +113,8 @@ def test_binary_and_slk_coexist_in_pipeline_without_duplicate_codes() -> None:
 
 def test_load_map_impl_merges_map_and_campaign_candidates_once() -> None:
     # Given: text, binary, SLK, and campaign sources have distinct WTS scopes.
-    from w3xtool import api
-    from w3xtool.load_context import MapLoadContext
+    from gametool import api
+    from gametool.load_context import MapLoadContext
 
     archive = FakeArchive(
         {

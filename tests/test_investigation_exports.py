@@ -2,9 +2,9 @@
 
 import unittest
 
-from w3xtool.api import GameObject, MapData
-from w3xtool.doo import Doodad, Unit
-from w3xtool.investigation_exports import format_map_object_id_index
+from gametool.api import GameObject, MapData
+from gametool.doo import Doodad, Unit
+from gametool.investigation_exports import format_map_object_id_index
 
 
 class InvestigationExportsTest(unittest.TestCase):

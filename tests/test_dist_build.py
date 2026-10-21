@@ -13,8 +13,10 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.casclib_dist import CascLibDistError, validate_casclib_dist_assets
-from w3xtool.dist_build import (
+from gametool.casclib_api import default_dll_path
+
+from gametool.casclib_dist import CascLibDistError, validate_casclib_dist_assets
+from gametool.dist_build import (
     APP_NAME,
     BUILD_MODE_ENV,
     DistBuildConfig,
@@ -98,8 +100,11 @@ def test_default_format_remains_onedir(tmp_path: Path) -> None:
 
 
 def test_dist_build_module_dry_run_prints_pyinstaller_command() -> None:
+    # 本机未编译 CascLib.dll 时跳过 (Windows dry-run 门会拒绝; 打包机/CI 必有)
+    if not default_dll_path().is_file():
+        pytest.skip("CascLib.dll 未编译 (tools/build_casclib.ps1)")
     # Given: the project module is executed in dry-run mode.
-    command = [sys.executable, "-m", "w3xtool.dist_build", "--dry-run"]
+    command = [sys.executable, "-m", "gametool.dist_build", "--dry-run"]
 
     # When: the command runs through the same Python used by pytest.
     result = subprocess.run(
@@ -112,7 +117,7 @@ def test_dist_build_module_dry_run_prints_pyinstaller_command() -> None:
 
     # Then: it prints the PyInstaller invocation without creating a build.
     assert "PyInstaller" in result.stdout
-    assert "魔兽地图提取器.spec" in result.stdout
+    assert "GameXRay 游戏档案透视器.spec" in result.stdout
     assert "dry-run" in result.stdout
 
 
@@ -195,6 +200,9 @@ def test_windows_dry_run_executes_native_asset_gate(
     monkeypatch: pytest.MonkeyPatch,
     dist_format: DistFormat,
 ) -> None:
+    # 本机未编译 CascLib.dll 时跳过 (generated local artifact; 打包机/CI 必有)
+    if not default_dll_path().is_file():
+        pytest.skip("CascLib.dll 未编译 (tools/build_casclib.ps1)")
     # Given: a Windows dist configuration with a spec but no CascLib artifacts.
     spec_path = tmp_path / f"{APP_NAME}.spec"
     spec_path.write_text("", encoding="utf-8")
@@ -206,7 +214,7 @@ def test_windows_dry_run_executes_native_asset_gate(
         clean=True,
         format=dist_format,
     )
-    monkeypatch.setattr("w3xtool.casclib_dist.platform.system", lambda: "Windows")
+    monkeypatch.setattr("gametool.casclib_dist.platform.system", lambda: "Windows")
 
     # When/Then: even dry-run refuses an unverifiable Windows bundle.
     with pytest.raises(CascLibDistError, match="CascLib.dll"):
@@ -243,9 +251,9 @@ def test_run_dist_build_passes_selected_mode_to_spec(
         captured.update(env)
         return subprocess.CompletedProcess(command, 0)
 
-    monkeypatch.setattr("w3xtool.dist_build.subprocess.run", run)
+    monkeypatch.setattr("gametool.dist_build.subprocess.run", run)
     monkeypatch.setattr(
-        "w3xtool.dist_build.validate_casclib_dist_assets",
+        "gametool.dist_build.validate_casclib_dist_assets",
         lambda _project_root: None,
     )
 
@@ -295,7 +303,7 @@ def test_spec_supports_onedir_and_onefile_from_one_analysis() -> None:
     )
 
     # When/Then: both output topologies share one dependency analysis.
-    assert "W3XRAY_PYINSTALLER_MODE" in spec
+    assert "GAMEXRAY_PYINSTALLER_MODE" in spec
     assert "build_mode == 'onefile'" in spec
     assert "a.binaries" in spec
     assert "a.datas" in spec

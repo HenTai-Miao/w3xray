@@ -9,9 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.game_data_source import open_game_data_source, probe_game_data_path
-from w3xtool.icon_resources import TrustedIconEvidenceSource
-from w3xtool.trusted_icon_cache import (
+from gametool.game_data_source import open_game_data_source, probe_game_data_path
+from gametool.icon_resources import TrustedIconEvidenceSource
+from gametool.trusted_icon_cache import (
     TrustedIconCacheDataSource,
     TrustedIconCacheError,
 )
@@ -100,7 +100,7 @@ def test_trusted_icon_cache_rejects_conflicting_normalized_payloads(
         return real_isfile(path)
 
     monkeypatch.setattr(
-        "w3xtool.trusted_icon_cache.os.path.isfile",
+        "gametool.trusted_icon_cache.os.path.isfile",
         case_sensitive_is_file,
     )
 
@@ -175,7 +175,7 @@ def _write_cache(
     icon = cache / "Icons" / "BTNHero.blp"
     icon.parent.mkdir(parents=True)
     icon.write_bytes(_ICON_PAYLOAD)
-    (cache / ".w3xray-trusted-icon-cache").write_text(
+    (cache / ".gamexray-trusted-icon-cache").write_text(
         "schema=2\n",
         encoding="ascii",
     )

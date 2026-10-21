@@ -6,21 +6,21 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.extraction_ledger import build_extraction_ledger
-from w3xtool.game_data_source import DirectoryDataSource
-from w3xtool.icon_evidence_builder import (
+from gametool.extraction_ledger import build_extraction_ledger
+from gametool.game_data_source import DirectoryDataSource
+from gametool.icon_evidence_builder import (
     IconEvidenceBuildError,
     build_icon_evidence_index,
 )
-from w3xtool.icon_evidence_index import merge_icon_evidence_indexes
-from w3xtool.icon_evidence_models import (
+from gametool.icon_evidence_index import merge_icon_evidence_indexes
+from gametool.icon_evidence_models import (
     IconArchiveLayer,
     IconDiagnosticFlag,
     IconGapReason,
     IconResolutionLayer,
 )
-from w3xtool.icon_resources import IconObjectReference
-from w3xtool.map_data import GameObject, GameObjectFieldEvidence, MapData
+from gametool.icon_resources import IconObjectReference
+from gametool.map_data import GameObject, GameObjectFieldEvidence, MapData
 
 _DIGEST = "a" * 64
 _PATH = r"ReplaceableTextures\CommandButtons\BTNHero.blp"

@@ -12,8 +12,8 @@ import customtkinter as ctk
 
 from tests.gui_base import GuiTestCase
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool.gui import App
-from w3xtool.trusted_description_cache import load_trusted_description_cache
+from gametool.gui import App
+from gametool.trusted_description_cache import load_trusted_description_cache
 
 _CANONICAL_TEMP_ROOT = Path(gettempdir()).resolve()
 
@@ -29,11 +29,11 @@ class DescriptionCacheGuiTest(GuiTestCase):
         # When
         with (
             patch(
-                "w3xtool.gui_external_data.filedialog.askdirectory",
+                "gametool.gui_external_data.filedialog.askdirectory",
                 return_value=str(cache_root),
             ),
             patch(
-                "w3xtool.gui_external_data.filedialog.askopenfilename",
+                "gametool.gui_external_data.filedialog.askopenfilename",
                 return_value="",
             ),
             patch.object(self.app, "_config_path", return_value=str(config_path)),
@@ -63,14 +63,14 @@ class DescriptionCacheGuiTest(GuiTestCase):
         # When
         with (
             patch(
-                "w3xtool.gui_external_data.filedialog.askdirectory",
+                "gametool.gui_external_data.filedialog.askdirectory",
                 return_value=str(invalid),
             ),
             patch(
-                "w3xtool.gui_external_data.filedialog.askopenfilename",
+                "gametool.gui_external_data.filedialog.askopenfilename",
                 return_value="",
             ),
-            patch("w3xtool.gui_external_data.messagebox.showerror") as show_error,
+            patch("gametool.gui_external_data.messagebox.showerror") as show_error,
             patch.object(self.app, "_save_config") as save_config,
             patch.object(self.app, "_reload_active_source") as reload_source,
         ):
@@ -91,11 +91,11 @@ class DescriptionCacheGuiTest(GuiTestCase):
         # When
         with (
             patch(
-                "w3xtool.gui_external_data.filedialog.askdirectory",
+                "gametool.gui_external_data.filedialog.askdirectory",
                 return_value="",
             ),
             patch(
-                "w3xtool.gui_external_data.filedialog.askopenfilename",
+                "gametool.gui_external_data.filedialog.askopenfilename",
                 return_value="",
             ),
             patch.object(self.app, "_save_config") as save_config,

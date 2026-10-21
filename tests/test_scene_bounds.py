@@ -1,9 +1,9 @@
 """Preplaced widget bounds checks."""
 
-from w3xtool.api import MapData
-from w3xtool.doo import Doodad, Unit
-from w3xtool.scene_bounds import BoundsIssue, build_scene_bounds_report
-from w3xtool.terrain import TerrainBounds, TerrainInfo
+from gametool.api import MapData
+from gametool.doo import Doodad, Unit
+from gametool.scene_bounds import BoundsIssue, build_scene_bounds_report
+from gametool.terrain import TerrainBounds, TerrainInfo
 
 
 def test_build_scene_bounds_report_finds_out_of_bounds_widgets():

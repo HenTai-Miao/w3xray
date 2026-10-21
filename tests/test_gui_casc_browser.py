@@ -6,10 +6,10 @@ from unittest.mock import patch
 
 from tests.gui_base import GuiTestCase
 from tests.gui_worker_fakes import InlineGuiThread
-from w3xtool.casclib_enumeration import CascEntry, CascNameType
-from w3xtool.game_data_inventory import GameDataInventoryView
-from w3xtool.game_data_source import GameDataProbe
-from w3xtool.gui_worker_registry import GuiWorkerRegistry
+from gametool.casclib_enumeration import CascEntry, CascNameType
+from gametool.game_data_inventory import GameDataInventoryView
+from gametool.game_data_source import GameDataProbe
+from gametool.gui_worker_registry import GuiWorkerRegistry
 
 
 class _InventorySource:
@@ -54,9 +54,9 @@ class CascBrowserEntryTest(GuiTestCase):
         source.inventory_view = GameDataInventoryView.FULL_ROOT
 
         # When: source controls refresh after selection.
-        with patch("w3xtool.gui_lifecycle.probe_game_data_path", return_value=probe):
+        with patch("gametool.gui_lifecycle.probe_game_data_path", return_value=probe):
             with patch(
-                "w3xtool.gui_lifecycle.open_game_data_source", return_value=source
+                "gametool.gui_lifecycle.open_game_data_source", return_value=source
             ):
                 self.app._refresh_external_source_labels()
 
@@ -73,9 +73,9 @@ class CascBrowserEntryTest(GuiTestCase):
         source = _InventorySource()
 
         # When: source controls refresh after selection.
-        with patch("w3xtool.gui_lifecycle.probe_game_data_path", return_value=probe):
+        with patch("gametool.gui_lifecycle.probe_game_data_path", return_value=probe):
             with patch(
-                "w3xtool.gui_lifecycle.open_game_data_source",
+                "gametool.gui_lifecycle.open_game_data_source",
                 return_value=source,
                 create=True,
             ):
@@ -95,12 +95,12 @@ class CascBrowserEntryTest(GuiTestCase):
 
         # When: the browser action opens in its worker.
         with patch(
-            "w3xtool.gui_casc_browser.open_game_data_source",
+            "gametool.gui_casc_browser.open_game_data_source",
             return_value=source,
             create=True,
         ):
             with patch(
-                "w3xtool.gui_casc_browser.CascLibDataSource",
+                "gametool.gui_casc_browser.CascLibDataSource",
                 side_effect=AssertionError("native constructor bypass"),
                 create=True,
             ):

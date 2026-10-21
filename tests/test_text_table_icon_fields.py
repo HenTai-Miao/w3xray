@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from w3xtool.object_candidates import (
+from gametool.object_candidates import (
     ObjectCandidate,
     ObjectFieldValue,
     ObjectSourceKind,
 )
-from w3xtool.object_pipeline import merge_object_candidates
+from gametool.object_pipeline import merge_object_candidates
 
 
 @pytest.mark.parametrize("category", ("单位", "物品", "科技"))

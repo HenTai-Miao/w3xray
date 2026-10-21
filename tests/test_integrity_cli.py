@@ -8,9 +8,9 @@ import sys
 import pytest
 
 import main as entrypoint
-from w3xtool import integrity_cli as cli
-from w3xtool import single_instance
-from w3xtool.integrity_cli import run_integrity_cli
+from gametool import integrity_cli as cli
+from gametool import single_instance
+from gametool.integrity_cli import run_integrity_cli
 
 
 def test_integrity_cli_snapshots_then_verifies_exact_roots(

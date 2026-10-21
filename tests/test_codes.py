@@ -6,7 +6,7 @@
 
 import unittest
 
-from w3xtool.script_scan import _codes_in, scan_object_refs
+from gametool.script_scan import _codes_in, scan_object_refs
 
 
 class TestCodeExtraction(unittest.TestCase):

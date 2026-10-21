@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import assert_never
 
-from w3xtool.batch_models import MapBatchResult, MapBatchState, SourceFingerprint
-from w3xtool.batch_status import PublicationResult, derive_batch_axes
+from gametool.batch_models import MapBatchResult, MapBatchState, SourceFingerprint
+from gametool.batch_status import PublicationResult, derive_batch_axes
 
 
 def batch_cli_result(state: MapBatchState) -> MapBatchResult:

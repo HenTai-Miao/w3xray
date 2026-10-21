@@ -8,14 +8,14 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool import integrity_report_publication as publication_api
-from w3xtool import integrity_report_replacement as replacement_api
-from w3xtool.atomic_rename import rename_exchange as real_rename_exchange
-from w3xtool.integrity_cli import run_integrity_cli
-from w3xtool.integrity_report_history_directory import BoundIntegrityHistoryStage
+from gametool import integrity_report_publication as publication_api
+from gametool import integrity_report_replacement as replacement_api
+from gametool.atomic_rename import rename_exchange as real_rename_exchange
+from gametool.integrity_cli import run_integrity_cli
+from gametool.integrity_report_history_directory import BoundIntegrityHistoryStage
 
 
-_HISTORY_ROOT = ".w3xray-integrity-history"
+_HISTORY_ROOT = ".gamexray-integrity-history"
 _MANIFEST_NAME = "历史清单.json"
 _REPORT_NAME = "report.json"
 
@@ -55,7 +55,7 @@ def test_untrusted_history_root_stops_overwrite_without_losing_public_report(
     assert code == 2
     assert output.read_bytes() == previous_payload
     assert tuple(outside.iterdir()) == ()
-    assert not tuple(tmp_path.glob(".w3xray-stage-*.tmp"))
+    assert not tuple(tmp_path.glob(".gamexray-stage-*.tmp"))
 
 
 def test_history_root_replacement_before_exchange_preserves_public_report(
@@ -100,7 +100,7 @@ def test_history_root_replacement_before_exchange_preserves_public_report(
     assert code == 2
     assert output.read_bytes() == previous_payload
     assert tuple(outside.iterdir()) == ()
-    assert not tuple(tmp_path.glob(".w3xray-stage-*.tmp"))
+    assert not tuple(tmp_path.glob(".gamexray-stage-*.tmp"))
 
 
 def test_history_root_replacement_at_exchange_reports_retained_evidence(

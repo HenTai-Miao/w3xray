@@ -2,8 +2,8 @@
 
 import unittest
 
-from w3xtool.api import GameObject, MapData
-from w3xtool.object_filter import filter_objects_by_query
+from gametool.api import GameObject, MapData
+from gametool.object_filter import filter_objects_by_query
 
 
 class TestObjectFilter(unittest.TestCase):

@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.batch_descriptions import DescriptionState
-from w3xtool.batch_models import (
+from gametool.batch_descriptions import DescriptionState
+from gametool.batch_models import (
     BATCH_SCHEMA_VERSION,
     BatchState,
     BatchStateFormatError,
@@ -17,13 +17,13 @@ from w3xtool.batch_models import (
     MapBatchState,
     SourceFingerprint,
 )
-from w3xtool.batch_reports import (
+from gametool.batch_reports import (
     format_batch_state_json,
     format_batch_summary_tsv,
     format_retry_tsv,
     parse_batch_state_json,
 )
-from w3xtool.batch_status import (
+from gametool.batch_status import (
     PublicationResult,
     derive_batch_axes,
     derive_legacy_map_state,

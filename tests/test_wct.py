@@ -7,7 +7,7 @@
 import struct
 import unittest
 
-from w3xtool.wct import WctDiagnostic, parse_wct
+from gametool.wct import WctDiagnostic, parse_wct
 
 
 def _block(code):
@@ -136,7 +136,7 @@ class _FakeArchive:
 
 class TestWctIntegration(unittest.TestCase):
     def test_decoded_wct_added_to_scripts(self):
-        from w3xtool.api import _add_wct, MapData
+        from gametool.api import _add_wct, MapData
 
         wct = _wct("", "globals\n integer g\nendglobals", ["call Foo()", ""])
         md = MapData(path="x", name="x")
@@ -151,7 +151,7 @@ class TestWctIntegration(unittest.TestCase):
         self.assertIn("call Foo()", text)
 
     def test_no_wct_is_noop(self):
-        from w3xtool.api import _add_wct, MapData
+        from gametool.api import _add_wct, MapData
 
         md = MapData(path="x", name="x")
         _add_wct(md, _FakeArchive({}))

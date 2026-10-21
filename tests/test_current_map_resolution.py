@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from w3xtool.current_map_models import (
+from gametool.current_map_models import (
     CurrentMapResolution,
     EvidenceKind,
     GameProcess,

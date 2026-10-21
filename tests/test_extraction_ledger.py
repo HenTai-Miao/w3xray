@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from w3xtool.extraction_ledger import (
+from gametool.extraction_ledger import (
     BlockSource,
     BlockState,
     ExtractionEntry,
@@ -14,7 +14,7 @@ from w3xtool.extraction_ledger import (
     ExtractionStatus,
     build_extraction_ledger,
 )
-from w3xtool.extraction_ledger_format import (
+from gametool.extraction_ledger_format import (
     format_extraction_json,
     format_extraction_tsv,
 )

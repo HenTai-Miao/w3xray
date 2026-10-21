@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-import w3xtool.batch_global_evidence as global_evidence
+import gametool.batch_global_evidence as global_evidence
 from tests.batch_global_evidence_fixture import (
     GAP_PATH,
     NAMED_PATH,
@@ -15,15 +15,15 @@ from tests.batch_global_evidence_fixture import (
 )
 from tests.batch_publication_fixture import empty_result, publish_empty_result
 from tests.real_map_text_acceptance import read_tsv_text
-from w3xtool.batch_global_evidence import GlobalEvidenceError, collect_global_evidence
-from w3xtool.batch_manifest_models import CONTENT_MANIFEST_NAME, OWNERSHIP_MARKER_NAME
-from w3xtool.batch_map_manifest import finalize_map_manifest
-from w3xtool.batch_models import BATCH_SCHEMA_VERSION, BatchState, MapBatchResult
-from w3xtool.batch_models import SourceFingerprint
-from w3xtool.batch_tsv import format_tsv_rows
-from w3xtool.description_cache import format_description_cache_tsv
-from w3xtool.description_cache_models import EMPTY_DESCRIPTION_CACHE
-from w3xtool.icon_evidence_models import IconGapReason
+from gametool.batch_global_evidence import GlobalEvidenceError, collect_global_evidence
+from gametool.batch_manifest_models import CONTENT_MANIFEST_NAME, OWNERSHIP_MARKER_NAME
+from gametool.batch_map_manifest import finalize_map_manifest
+from gametool.batch_models import BATCH_SCHEMA_VERSION, BatchState, MapBatchResult
+from gametool.batch_models import SourceFingerprint
+from gametool.batch_tsv import format_tsv_rows
+from gametool.description_cache import format_description_cache_tsv
+from gametool.description_cache_models import EMPTY_DESCRIPTION_CACHE
+from gametool.icon_evidence_models import IconGapReason
 
 
 def test_axis_status_exposes_source_coverage_gap_count() -> None:
@@ -33,7 +33,7 @@ def test_axis_status_exposes_source_coverage_gap_count() -> None:
     state = BatchState(BATCH_SCHEMA_VERSION, (result,))
 
     # When
-    from w3xtool.batch_global_evidence_reports import format_axis_status_tsv
+    from gametool.batch_global_evidence_reports import format_axis_status_tsv
 
     table = read_tsv_text(format_axis_status_tsv(state))
 
@@ -114,7 +114,7 @@ def test_global_evidence_round_trips_an_invalid_reference_without_a_path(
     state = BatchState(BATCH_SCHEMA_VERSION, (result,))
 
     # When: verified map evidence is aggregated and serialized globally.
-    from w3xtool.batch_global_evidence_reports import (
+    from gametool.batch_global_evidence_reports import (
         format_global_icon_gaps_tsv,
         parse_global_icon_gaps_tsv,
     )
@@ -209,11 +209,11 @@ def test_global_gap_rows_reconcile_paths_references_and_axes(
     tmp_path: Path,
 ) -> None:
     # Given
-    from w3xtool.batch_global_evidence_reports import (
+    from gametool.batch_global_evidence_reports import (
         format_axis_status_tsv,
         parse_global_icon_gaps_tsv,
     )
-    from w3xtool.batch_global_payloads import build_global_payloads
+    from gametool.batch_global_payloads import build_global_payloads
 
     state, _first, _second = _publish_two_empty_maps(tmp_path)
     cache_text = format_description_cache_tsv(EMPTY_DESCRIPTION_CACHE)

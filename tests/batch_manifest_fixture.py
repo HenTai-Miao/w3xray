@@ -6,9 +6,9 @@ from pathlib import Path
 from typing import Final
 
 from tests.batch_publication_fixture import empty_result, write_empty_publication
-from w3xtool.batch_manifest_models import CONTENT_MANIFEST_NAME, OWNERSHIP_MARKER_NAME
-from w3xtool.batch_map_manifest import finalize_map_manifest
-from w3xtool.batch_models import MapBatchResult, SourceFingerprint
+from gametool.batch_manifest_models import CONTENT_MANIFEST_NAME, OWNERSHIP_MARKER_NAME
+from gametool.batch_map_manifest import finalize_map_manifest
+from gametool.batch_models import MapBatchResult, SourceFingerprint
 
 
 MANIFEST_TRANSACTION_ID: Final = "1" * 32

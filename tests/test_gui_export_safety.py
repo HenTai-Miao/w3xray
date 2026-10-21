@@ -10,8 +10,8 @@ from unittest.mock import patch
 
 from tests.gui_base import GuiTestCase
 from tests.gui_worker_fakes import InlineGuiThread
-from w3xtool.api import GameObject, MapData
-from w3xtool.gui_worker_registry import GuiWorkerRegistry
+from gametool.api import GameObject, MapData
+from gametool.gui_worker_registry import GuiWorkerRegistry
 
 
 class GuiExportSafetyTest(GuiTestCase):
@@ -25,7 +25,7 @@ class GuiExportSafetyTest(GuiTestCase):
         self.app.map_data = md
 
         with patch(
-            "w3xtool.gui_export_actions.tmp_extract_dir", return_value=str(output)
+            "gametool.gui_export_actions.tmp_extract_dir", return_value=str(output)
         ):
             with patch.object(
                 self.app,
@@ -33,11 +33,11 @@ class GuiExportSafetyTest(GuiTestCase):
                 GuiWorkerRegistry(thread_factory=InlineGuiThread),
             ):
                 with patch(
-                    "w3xtool.gui_export_actions.write_script_exports",
+                    "gametool.gui_export_actions.write_script_exports",
                     side_effect=OSError(errno.EACCES, "denied", str(secret)),
                 ):
                     with patch(
-                        "w3xtool.gui_export_actions.messagebox.showerror"
+                        "gametool.gui_export_actions.messagebox.showerror"
                     ) as show_error:
                         self.app.on_export_scripts()
                         self.pump_events_until(lambda: show_error.called)
@@ -60,7 +60,7 @@ class GuiExportSafetyTest(GuiTestCase):
         self.app.map_data = md
 
         with patch(
-            "w3xtool.gui_export_actions.tmp_extract_dir", return_value=str(output)
+            "gametool.gui_export_actions.tmp_extract_dir", return_value=str(output)
         ):
             with patch.object(
                 self.app,
@@ -68,7 +68,7 @@ class GuiExportSafetyTest(GuiTestCase):
                 GuiWorkerRegistry(thread_factory=InlineGuiThread),
             ):
                 with patch(
-                    "w3xtool.gui_export_actions.messagebox.showinfo"
+                    "gametool.gui_export_actions.messagebox.showinfo"
                 ) as show_info:
                     self.app.on_export_scripts()
                     self.pump_events_until(lambda: show_info.called)
@@ -88,7 +88,7 @@ class GuiExportSafetyTest(GuiTestCase):
         self.app.map_data = md
 
         with patch(
-            "w3xtool.gui_export_actions.tmp_extract_dir", return_value=str(output)
+            "gametool.gui_export_actions.tmp_extract_dir", return_value=str(output)
         ):
             with patch.object(
                 self.app,
@@ -96,7 +96,7 @@ class GuiExportSafetyTest(GuiTestCase):
                 GuiWorkerRegistry(thread_factory=InlineGuiThread),
             ):
                 with patch(
-                    "w3xtool.gui_export_actions.messagebox.showinfo"
+                    "gametool.gui_export_actions.messagebox.showinfo"
                 ) as show_info:
                     self.app.on_export_ids()
                     self.pump_events_until(lambda: show_info.called)
@@ -104,7 +104,7 @@ class GuiExportSafetyTest(GuiTestCase):
         self.assertEqual(outside.read_text(encoding="utf-8"), "before")
 
     def create_temp_dir(self) -> str:
-        directory = tempfile.mkdtemp(prefix="w3xray-gui-export-")
+        directory = tempfile.mkdtemp(prefix="gamexray-gui-export-")
         self.addCleanup(self._remove_tree, directory)
         return directory
 

@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 
 from tests.retained_integrity_fixture import active_cache, retained
-from w3xtool import integrity_output as output_api
-from w3xtool.integrity_cli import run_integrity_cli
+from gametool import integrity_output as output_api
+from gametool.integrity_cli import run_integrity_cli
 
 
 def _require_same_directory(actual: Path, alias: Path, reason: str) -> None:
@@ -177,7 +177,7 @@ def test_retained_cache_accepts_case_variant_reserved_leaf_when_distinct(
         alternate,
         "filesystem is not case-sensitive",
     )
-    output = active.parent / ".W3XRAY-DESCRIPTION-CACHE-RETAINED-distinct.tmp"
+    output = active.parent / ".GAMEXRAY-DESCRIPTION-CACHE-RETAINED-distinct.tmp"
 
     code = run_integrity_cli(_retained_argv(active, output))
 

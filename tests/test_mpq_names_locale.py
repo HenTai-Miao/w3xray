@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.mpq import (
+from gametool.mpq import (
     FLAG_ENCRYPTED,
     FLAG_EXISTS,
     FLAG_SINGLE_UNIT,
@@ -17,8 +17,8 @@ from w3xtool.mpq import (
     HASH_TABLE_OFFSET,
     MPQArchive,
 )
-from w3xtool.mpq_crypto import CRYPT_TABLE, hash_name_bytes
-from w3xtool.mpq_names import HashEntry, encoded_name_candidates, select_hash_entry
+from gametool.mpq_crypto import CRYPT_TABLE, hash_name_bytes
+from gametool.mpq_names import HashEntry, encoded_name_candidates, select_hash_entry
 
 
 STORMLIB_GBK_NAME_A = 0x24B9C622

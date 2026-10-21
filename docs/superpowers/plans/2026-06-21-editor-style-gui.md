@@ -4,7 +4,7 @@
 
 **Goal:** Redesign the GUI into an editor-style Warcraft III map workbench with a map overview and unified analysis report.
 
-**Architecture:** Add a pure `w3xtool.gui_reports` module that formats overview/report blocks from `MapData`. Keep GUI construction in `App`, but only add thin widgets and refresh calls there so new behavior does not deepen the already oversized GUI file.
+**Architecture:** Add a pure `gametool.gui_reports` module that formats overview/report blocks from `MapData`. Keep GUI construction in `App`, but only add thin widgets and refresh calls there so new behavior does not deepen the already oversized GUI file.
 
 **Tech Stack:** Python 3.14, CustomTkinter, tkinter ttk, pytest.
 
@@ -13,7 +13,7 @@
 ### Task 1: Report Model
 
 **Files:**
-- Create: `w3xtool/gui_reports.py`
+- Create: `gametool/gui_reports.py`
 - Test: `tests/test_gui_reports.py`
 
 - [ ] Write failing tests for overview/report blocks.
@@ -23,7 +23,7 @@
 ### Task 2: Editor-Style Tabs
 
 **Files:**
-- Modify: `w3xtool/gui.py`
+- Modify: `gametool/gui.py`
 - Modify: `tests/gui_base.py`
 - Test: `tests/test_gui_layout.py`
 

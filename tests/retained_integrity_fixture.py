@@ -11,9 +11,9 @@ import pytest
 from tests.trusted_description_cache_fixture import published_cache
 
 
-_RETAINED: Final = ".w3xray-description-cache-retained-"
-_STAGE: Final = ".w3xray-description-cache-stage-"
-_BACKUP: Final = ".w3xray-description-cache-backup-"
+_RETAINED: Final = ".gamexray-description-cache-retained-"
+_STAGE: Final = ".gamexray-description-cache-stage-"
+_BACKUP: Final = ".gamexray-description-cache-backup-"
 
 
 def retained(active: Path, digit: str, role: str) -> Path:

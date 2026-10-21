@@ -1,4 +1,4 @@
-"""离线生成 w3xtool/field_meta.py —— 对象字段 4 字符码 → 中文标签 + 字段类型 + 适用性/值域/常量。
+"""离线生成 gametool/field_meta.py —— 对象字段 4 字符码 → 中文标签 + 字段类型 + 适用性/值域/常量。
 
 数据源：魔兽对象编辑器的 MetaData.slk 系列（每个字段码 → displayName(WESTRING_*) + type
 + useSpecific/notSpecific + minVal/maxVal），WESTRING_* 经本项目已内置的 westrings.py
@@ -26,10 +26,10 @@ import os
 import re
 import sys
 
-from w3xtool.slk import parse_slk
+from gametool.slk import parse_slk
 
 try:
-    from w3xtool import westrings as _west_module
+    from gametool import westrings as _west_module
 except Exception:
     _west_module = None
 
@@ -96,7 +96,7 @@ def build(meta_dir: str, common_j_path: str | None = None):
     labels/types 先载入现有 field_meta.py 再补缺；applicability/bounds/constants
     每次全量重建。
     """
-    from w3xtool.field_meta import FIELD_TYPES, GENERATED_FIELD_LABELS
+    from gametool.field_meta import FIELD_TYPES, GENERATED_FIELD_LABELS
 
     labels: dict[str, str] = dict(GENERATED_FIELD_LABELS)
     types: dict[str, str] = dict(FIELD_TYPES)
@@ -191,7 +191,7 @@ def main():
         default=None,
         help="Reforged 版 jass common.j 路径（可选；用于生成码→常量名表）",
     )
-    ap.add_argument("--out", default=os.path.join("w3xtool", "field_meta.py"))
+    ap.add_argument("--out", default=os.path.join("gametool", "field_meta.py"))
     args = ap.parse_args()
     labels, types, applicability, bounds, constants, found, unresolved = build(
         args.meta_dir, args.common_j

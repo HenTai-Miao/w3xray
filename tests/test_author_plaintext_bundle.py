@@ -8,15 +8,15 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.api import load_map
-from w3xtool.load_context import MapLoadContext
+from gametool.api import load_map
+from gametool.load_context import MapLoadContext
 
 
 def _write_bundle(root: Path, source: Path, files: dict[str, bytes]) -> None:
     payload_root = root / "files"
     payload_root.mkdir(parents=True)
     lines = [
-        "W3XRAY-AUTHOR-BUNDLE\t1",
+        "GAMEXRAY-AUTHOR-BUNDLE\t1",
         f"source_sha256\t{hashlib.sha256(source.read_bytes()).hexdigest()}",
     ]
     for name, payload in files.items():
@@ -24,7 +24,7 @@ def _write_bundle(root: Path, source: Path, files: dict[str, bytes]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(payload)
         lines.append(f"file\t{name}\t{hashlib.sha256(payload).hexdigest()}")
-    (root / "w3xray-author-bundle.tsv").write_text(
+    (root / "gamexray-author-bundle.tsv").write_text(
         "\n".join(lines) + "\n", encoding="utf-8"
     )
 
@@ -86,7 +86,7 @@ def test_bundle_rejects_source_hash_mismatch(tmp_path: Path) -> None:
     bundle_root = tmp_path / "bundle"
     _write_bundle(bundle_root, source, {"war3map.j": b"script"})
     source.write_bytes(b"different")
-    bundle_module = importlib.import_module("w3xtool.author_plaintext_bundle")
+    bundle_module = importlib.import_module("gametool.author_plaintext_bundle")
 
     # When/Then: the bundle cannot be applied to a different map.
     with pytest.raises(bundle_module.AuthorBundleError, match="source SHA256"):
@@ -100,10 +100,10 @@ def test_bundle_rejects_unsafe_internal_path(tmp_path: Path) -> None:
     bundle_root = tmp_path / "bundle"
     bundle_root.mkdir()
     source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
-    (bundle_root / "w3xray-author-bundle.tsv").write_text(
+    (bundle_root / "gamexray-author-bundle.tsv").write_text(
         "\n".join(
             (
-                "W3XRAY-AUTHOR-BUNDLE\t1",
+                "GAMEXRAY-AUTHOR-BUNDLE\t1",
                 f"source_sha256\t{source_hash}",
                 f"file\t../evil.j\t{hashlib.sha256(b'evil').hexdigest()}",
             )
@@ -111,7 +111,7 @@ def test_bundle_rejects_unsafe_internal_path(tmp_path: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
-    bundle_module = importlib.import_module("w3xtool.author_plaintext_bundle")
+    bundle_module = importlib.import_module("gametool.author_plaintext_bundle")
 
     # When/Then: traversal is rejected before any file read.
     with pytest.raises(bundle_module.AuthorBundleError, match="unsafe internal path"):
@@ -133,10 +133,10 @@ def test_bundle_rejects_symlinked_payload_root(tmp_path: Path) -> None:
     except OSError as exc:
         pytest.skip(f"symlink unavailable: {exc}")
     source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
-    (bundle_root / "w3xray-author-bundle.tsv").write_text(
+    (bundle_root / "gamexray-author-bundle.tsv").write_text(
         "\n".join(
             (
-                "W3XRAY-AUTHOR-BUNDLE\t1",
+                "GAMEXRAY-AUTHOR-BUNDLE\t1",
                 f"source_sha256\t{source_hash}",
                 f"file\twar3map.j\t{hashlib.sha256(payload).hexdigest()}",
             )
@@ -144,7 +144,7 @@ def test_bundle_rejects_symlinked_payload_root(tmp_path: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
-    bundle_module = importlib.import_module("w3xtool.author_plaintext_bundle")
+    bundle_module = importlib.import_module("gametool.author_plaintext_bundle")
 
     # When/Then: a redirected trust root is rejected before hashing payloads.
     with pytest.raises(bundle_module.AuthorBundleError, match="symlink"):
@@ -160,7 +160,7 @@ def test_bundle_rejects_payload_replaced_by_symlink_after_validation(
     bundle_root = tmp_path / "bundle"
     payload = b"trusted-script"
     _write_bundle(bundle_root, source, {"war3map.j": payload})
-    bundle_module = importlib.import_module("w3xtool.author_plaintext_bundle")
+    bundle_module = importlib.import_module("gametool.author_plaintext_bundle")
     bundle = bundle_module.load_author_plaintext_bundle(bundle_root, source)
     external = tmp_path / "external.j"
     external.write_bytes(payload)

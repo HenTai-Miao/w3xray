@@ -8,13 +8,13 @@ from unittest.mock import patch
 
 import pytest
 
-from w3xtool import archive_export
-from w3xtool.api import MapData, export_all_files, load_map
-from w3xtool.extraction_completeness import build_extraction_completeness_report
-from w3xtool.knowledge_assets import export_resource_bodies
-from w3xtool.knowledge_terrain_exports import build_terrain_export_data
-from w3xtool.knowledge_unknown_exports import write_unknown_files
-from w3xtool.map_identity import build_map_identity
+from gametool import archive_export
+from gametool.api import MapData, export_all_files, load_map
+from gametool.extraction_completeness import build_extraction_completeness_report
+from gametool.knowledge_assets import export_resource_bodies
+from gametool.knowledge_terrain_exports import build_terrain_export_data
+from gametool.knowledge_unknown_exports import write_unknown_files
+from gametool.map_identity import build_map_identity
 
 _CAMPAIGN = Path(__file__).parent / "fixtures" / "reference" / "stormlib-campaign.w3n"
 _CAMPAIGN_SHA256 = "617ccc0239e9c919edd4f6cce20b56e15e490ba466b661a9edba60623b68e317"
@@ -137,7 +137,7 @@ def test_campaign_child_completeness_and_unknown_exports_reopen_owned_archive(
 
 def test_campaign_child_loading_does_not_reenter_path_loader() -> None:
     # Given: the outer campaign is opened through the public path loader.
-    from w3xtool import map_loader
+    from gametool import map_loader
 
     load_from_path = map_loader.load_map
 

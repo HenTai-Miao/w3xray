@@ -8,9 +8,9 @@ import struct
 
 import pytest
 
-from w3xtool import live_handle_chain as lh
-from w3xtool import live_inventory as li
-from w3xtool.live_inventory import append_live_journal
+from gametool import live_handle_chain as lh
+from gametool import live_inventory as li
+from gametool.live_inventory import append_live_journal
 
 BASE = 0x10000000
 
@@ -212,7 +212,7 @@ class TestProfileVerification:
 
     def test_log_live_exception_lands_traceback(self, tmp_path, monkeypatch):
         """诊断日志三件套: 栈+阶段+pid 落盘, notes 拿到路径, fail-open。"""
-        monkeypatch.setenv("W3XRAY_CACHE_DIR", str(tmp_path))
+        monkeypatch.setenv("GAMEXRAY_CACHE_DIR", str(tmp_path))
         li._active_pid["pid"] = 4242
         try:
             try:
@@ -231,12 +231,12 @@ class TestProfileVerification:
 
     def test_log_live_exception_fail_open(self, tmp_path, monkeypatch):
         """日志写失败不抛出, 返回空后缀 (fail-open 不影响探测)。"""
-        import w3xtool.cache_root as cr
+        import gametool.cache_root as cr
 
         def boom():
             raise OSError("cache root unavailable")
 
-        monkeypatch.setattr(cr, "w3xray_cache_root", boom)
+        monkeypatch.setattr(cr, "gamexray_cache_root", boom)
         try:
             raise ValueError("x")
         except ValueError as ex:
@@ -244,7 +244,7 @@ class TestProfileVerification:
 
     def test_verify_opened_process_branches(self, monkeypatch):
         """身份复核四分支: 相同(大小写不敏感)/已变/无法判定不虚报。"""
-        import w3xtool.live_inventory as inv
+        import gametool.live_inventory as inv
 
         h = object()
         monkeypatch.setattr(inv, "_process_identity", lambda handle: None)
@@ -259,7 +259,7 @@ class TestProfileVerification:
 
     def test_detect_version_modules_seen_on_miss(self, monkeypatch, tmp_path):
         """Game.dll 未命中时 modules_seen 列出实际模块; 命中时不出现。"""
-        import w3xtool.live_inventory as inv
+        import gametool.live_inventory as inv
 
         monkeypatch.setattr(
             inv, "enum_modules", lambda h: [("C:/x/notepad.exe", 0x400000, 0x10000)]
@@ -288,7 +288,7 @@ class TestProfileVerification:
         """derive 多解: 多个候选过严格校验 → source 带歧义标注 + 地址序首个。"""
         import struct as _struct
 
-        import w3xtool.live_handle_chain as hc
+        import gametool.live_handle_chain as hc
 
         base = 0x20000000
         buf = bytearray(0x1000)
@@ -383,7 +383,7 @@ class TestProfileVerification:
     def test_read_pe_fingerprint_on_real_pe(self):
         import sys
 
-        from w3xtool.live_inventory import read_pe_fingerprint
+        from gametool.live_inventory import read_pe_fingerprint
 
         fp = read_pe_fingerprint(sys.executable)
         assert fp is not None
@@ -393,7 +393,7 @@ class TestProfileVerification:
     def test_read_pe_fingerprint_garbage(self):
         import tempfile
 
-        from w3xtool.live_inventory import read_pe_fingerprint
+        from gametool.live_inventory import read_pe_fingerprint
 
         with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as f:
             f.write(b"not a pe" * 32)
@@ -403,7 +403,7 @@ class TestProfileVerification:
 
 class TestDeriveStages:
     def test_stage_table_shape(self):
-        from w3xtool.live_handle_chain import DERIVE_STAGES
+        from gametool.live_handle_chain import DERIVE_STAGES
 
         order = [
             "candidates",
@@ -416,7 +416,7 @@ class TestDeriveStages:
         assert all(s.message for s in DERIVE_STAGES.values())
 
     def test_success_reaches_complete_without_loose(self):
-        from w3xtool.live_handle_chain import derive_offsets
+        from gametool.live_handle_chain import derive_offsets
 
         blob = bytearray(0x40000)
         struct.pack_into("<I", blob, 0x100, 0xFFFFFFFE)
@@ -431,7 +431,7 @@ class TestDeriveStages:
         assert names[0] == "candidates"
 
     def test_stage_messages_are_progress_worthy(self):
-        from w3xtool.live_handle_chain import DERIVE_STAGES
+        from gametool.live_handle_chain import DERIVE_STAGES
 
         for s in DERIVE_STAGES.values():
             assert s.name and s.message
@@ -440,18 +440,18 @@ class TestDeriveStages:
 
 class TestTokenIntegrity:
     def test_bad_handle_returns_none(self):
-        from w3xtool.live_inventory import _token_integrity_level
+        from gametool.live_inventory import _token_integrity_level
 
         assert _token_integrity_level(0) is None
 
     def test_self_process_returns_name_or_none(self):
-        from w3xtool.live_inventory import _token_integrity_level
+        from gametool.live_inventory import _token_integrity_level
 
         lvl = _token_integrity_level(None)
         assert lvl is None or isinstance(lvl, str)
 
     def test_level_names_complete(self):
-        from w3xtool.live_inventory import _INTEGRITY_NAMES
+        from gametool.live_inventory import _INTEGRITY_NAMES
 
         assert _INTEGRITY_NAMES[0x2000] == "中"
         assert _INTEGRITY_NAMES[0x2100] == "中高"
@@ -459,12 +459,12 @@ class TestTokenIntegrity:
         assert _INTEGRITY_NAMES[0x4000] == "系统"
 
     def test_bad_handle_rid_none(self):
-        from w3xtool.live_inventory import _integrity_rid
+        from gametool.live_inventory import _integrity_rid
 
         assert _integrity_rid(0) is None
 
     def test_directional_preflight_semantics(self):
-        from w3xtool.live_inventory import _INTEGRITY_NAMES
+        from gametool.live_inventory import _INTEGRITY_NAMES
 
         def flag(game, self_):
             return bool(game and self_ and self_ < game)
@@ -503,7 +503,7 @@ class TestResourceAnchorCache:
 
 class TestAppendLiveJournal:
     def test_writes_jsonl(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("W3XRAY_CACHE_DIR", str(tmp_path))
+        monkeypatch.setenv("GAMEXRAY_CACHE_DIR", str(tmp_path))
         rep = {
             "version": {"version": "1.27.0.52240", "engine": "classic"},
             "strategy_used": "handle",
@@ -526,7 +526,7 @@ class TestAppendLiveJournal:
         assert entry["profile_note"] and "已验证" in entry["profile_note"]
 
     def test_appends_lines(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("W3XRAY_CACHE_DIR", str(tmp_path))
+        monkeypatch.setenv("GAMEXRAY_CACHE_DIR", str(tmp_path))
         append_live_journal({"units": []})
         append_live_journal({"units": []})
         lines = (
@@ -539,5 +539,5 @@ class TestAppendLiveJournal:
     def test_fail_open(self, tmp_path, monkeypatch):
         blocker = tmp_path / "not-a-dir"
         blocker.write_text("x", encoding="utf-8")
-        monkeypatch.setenv("W3XRAY_CACHE_DIR", str(blocker))
+        monkeypatch.setenv("GAMEXRAY_CACHE_DIR", str(blocker))
         append_live_journal({})  # 目录被文件占位: 静默失败, 不抛出

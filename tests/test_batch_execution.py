@@ -7,23 +7,23 @@ import os
 from pathlib import Path
 import threading
 
-from w3xtool.batch_configuration import BatchOptions
-from w3xtool.batch_execution import (
+from gametool.batch_configuration import BatchOptions
+from gametool.batch_execution import (
     MapExecutionCancelled,
     MapExecutionFailure,
     MapExecutionSuccess,
     execute_map_isolated,
 )
-from w3xtool.batch_execution_messages import (
+from gametool.batch_execution_messages import (
     ChildSuccess,
     decode_child_message,
     encode_child_success,
 )
-from w3xtool.batch_execution_request import build_execution_request
-from w3xtool.batch_models import MapBatchResult, MapBatchState, SourceFingerprint
-from w3xtool.batch_status import PublicationResult, derive_batch_axes
-from w3xtool.description_cache_models import DescriptionCache, DescriptionCacheEntry
-from w3xtool.load_context import MapLoadContext
+from gametool.batch_execution_request import build_execution_request
+from gametool.batch_models import MapBatchResult, MapBatchState, SourceFingerprint
+from gametool.batch_status import PublicationResult, derive_batch_axes
+from gametool.description_cache_models import DescriptionCache, DescriptionCacheEntry
+from gametool.load_context import MapLoadContext
 
 
 def test_success_returns_child_result_and_reaps_process(tmp_path: Path) -> None:

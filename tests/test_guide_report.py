@@ -2,11 +2,11 @@
 
 import pytest
 
-from w3xtool.base_names import BASE_CATEGORIES, BASE_NAMES
-from w3xtool.doo import Unit
-from w3xtool.guide_cli import GuideCliOptionError, parse_guide_cli_options
-from w3xtool.guide_report import format_guide_report
-from w3xtool.item_relation_models import (
+from gametool.base_names import BASE_CATEGORIES, BASE_NAMES
+from gametool.doo import Unit
+from gametool.guide_cli import GuideCliOptionError, parse_guide_cli_options
+from gametool.guide_report import format_guide_report
+from gametool.item_relation_models import (
     ItemRelation,
     ItemRelationIndex,
     ItemRelationKind,
@@ -16,8 +16,8 @@ from w3xtool.item_relation_models import (
     RelationIngredient,
     RelationObject,
 )
-from w3xtool.map_data import GameObject, MapData
-from w3xtool.w3i import Player, W3iInfo
+from gametool.map_data import GameObject, MapData
+from gametool.w3i import Player, W3iInfo
 
 _SCRIPT = """
 function Trig_huicheng_Actions takes nothing returns nothing
@@ -320,7 +320,7 @@ def test_campaign_container_report_has_submap_hint(
     assert section_text.startswith("- 战役容器")
     assert "pack-query <战役包>" in section_text
     # CLI 的 --section 是切片路径, 空段同样给指引 (缓存/首次两条路径共用)
-    from w3xtool.guide_cli import _print_report_lines
+    from gametool.guide_cli import _print_report_lines
 
     _print_report_lines("【基本信息】\n- 地图名：x\n", "drops", "x.w3n")
     out = capsys.readouterr().out
@@ -328,7 +328,7 @@ def test_campaign_container_report_has_submap_hint(
     _print_report_lines("【基本信息】\n- 地图名：x\n", "drops", "x.w3x")
     assert capsys.readouterr().out == ""
     # 战役容器小地图失败时给专用指引 (容器没有单张小地图)
-    from w3xtool.guide_cli import _minimap_error_hint
+    from gametool.guide_cli import _minimap_error_hint
 
     assert "战役容器不含任务关小地图" in _minimap_error_hint("x.w3n")
     assert _minimap_error_hint("x.w3x") == ""

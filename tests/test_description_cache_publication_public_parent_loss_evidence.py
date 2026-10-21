@@ -12,25 +12,25 @@ from tests.description_cache_publication_fixture import (
     open_parent,
 )
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool import description_cache_publication_evidence as publication_evidence
-from w3xtool.description_cache_publication_errors import (
+from gametool import description_cache_publication_evidence as publication_evidence
+from gametool.description_cache_publication_errors import (
     DescriptionCachePublicationError,
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_models import (
+from gametool.description_cache_publication_models import (
     DescriptionCachePublicationProof,
     DescriptionCachePublicationResult,
     RetainedCacheExpectation,
     RetainedCacheRecord,
     RetainedCacheRole,
 )
-from w3xtool.description_cache_publication_named_leaf import (
+from gametool.description_cache_publication_named_leaf import (
     capture_named_transient,
 )
-from w3xtool.description_cache_publication_result_evidence import (
+from gametool.description_cache_publication_result_evidence import (
     require_live_result_evidence,
 )
-from w3xtool.trusted_description_cache import load_trusted_description_cache
+from gametool.trusted_description_cache import load_trusted_description_cache
 
 
 def _identity(path: Path) -> tuple[int, int]:

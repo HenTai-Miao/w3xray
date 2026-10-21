@@ -8,13 +8,13 @@ from dataclasses import dataclass
 
 import pytest
 
-from w3xtool.extraction_ledger import (
+from gametool.extraction_ledger import (
     BlockSource,
     BlockState,
     ExtractionEntry,
     build_extraction_ledger,
 )
-from w3xtool.icon_resources import (
+from gametool.icon_resources import (
     AnonymousIconBlock,
     HistoricalIconEvidenceSet,
     HistoricalIconEvidenceSetError,
@@ -23,7 +23,7 @@ from w3xtool.icon_resources import (
     iter_anonymous_blps,
     resolve_named_icon,
 )
-from w3xtool.map_data import GameObject
+from gametool.map_data import GameObject
 
 
 def _game_object(

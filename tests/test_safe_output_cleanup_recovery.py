@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool import safe_output_cleanup as cleanup_api
-from w3xtool import safe_output_cleanup_recovery as recovery_api
-from w3xtool.safe_output_publication_states import (
+from gametool import safe_output_cleanup as cleanup_api
+from gametool import safe_output_cleanup_recovery as recovery_api
+from gametool.safe_output_publication_states import (
     CleanupRetained,
     DisplacedAtBackup,
 )
@@ -24,7 +24,7 @@ def test_nested_recovery_path_requires_current_outer_and_inner_identity(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    backup = tmp_path / ".w3xray-backup-test.tmp"
+    backup = tmp_path / ".gamexray-backup-test.tmp"
     backup.write_bytes(b"previous")
     previous = _identity(backup)
     original_unlink = cleanup_api.os.unlink
@@ -34,7 +34,7 @@ def test_nested_recovery_path_requires_current_outer_and_inner_identity(
         *,
         dir_fd: int | None = None,
     ) -> None:
-        if "w3xray-cleanup-owned" in name:
+        if "gamexray-cleanup-owned" in name:
             raise PermissionError("synthetic cleanup denial")
         original_unlink(name, dir_fd=dir_fd)
 

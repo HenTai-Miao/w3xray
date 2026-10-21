@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from tests.gui_base import GuiTestCase
-from w3xtool.api import GameObject, MapData
-from w3xtool.object_text_models import (
+from gametool.api import GameObject, MapData
+from gametool.object_text_models import (
     ObjectTextIndex,
     ObjectTextRecord,
     ObjectTextState,
     TextSelectionReason,
 )
-from w3xtool.object_text_presentation import (
+from gametool.object_text_presentation import (
     ObjectTextView,
     format_complete_text_section,
 )

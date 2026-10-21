@@ -10,8 +10,8 @@
 
 ## Global Constraints
 
-- Default `uv run w3xray-dist` behavior remains onedir.
-- `uv run w3xray-dist --onefile` is the only new build selector.
+- Default `uv run gamexray-dist` behavior remains onedir.
+- `uv run gamexray-dist --onefile` is the only new build selector.
 - Both formats use the same Analysis, hidden imports, CustomTkinter resources, CascLib DLL, license, and pinned source identity.
 - UPX remains disabled for both formats.
 - Both packaged executables must run the full acceptance command before publication.
@@ -26,16 +26,16 @@
 
 ## File Map
 
-- Modify `w3xtool/dist_build.py`: typed format selection, spec environment, artifact paths, CLI help.
+- Modify `gametool/dist_build.py`: typed format selection, spec environment, artifact paths, CLI help.
 - Modify `tests/test_dist_build.py`: red/green contracts for onedir and onefile build selection.
 - Modify `魔兽地图提取器.spec`: conditional EXE/COLLECT topology while keeping one Analysis.
-- Modify `w3xtool/acceptance_runner.py`: packaged CascLib load lane.
+- Modify `gametool/acceptance_runner.py`: packaged CascLib load lane.
 - Modify `tests/test_acceptance_runner.py`: portable skip and Windows DLL-load behavior.
 - Modify `.github/workflows/windows-package.yml`: build, accept, and upload both formats.
 - Modify `tools/run_windows_acceptance.ps1`: real-machine acceptance of both formats.
 - Modify `tests/test_windows_acceptance_assets.py`: exact dual-build workflow/script gates.
 - Modify `pyproject.toml` and `uv.lock`: bump package version to `0.1.1`.
-- Modify `w3xtool/__init__.py`: keep the runtime `__version__` aligned at `0.1.1`.
+- Modify `gametool/__init__.py`: keep the runtime `__version__` aligned at `0.1.1`.
 - Modify `README.md`: explain ZIP versus single EXE and SmartScreen/startup trade-offs.
 
 ---
@@ -47,11 +47,11 @@
 
 **Files:**
 - Modify: `tests/test_dist_build.py`
-- Modify: `w3xtool/dist_build.py`
+- Modify: `gametool/dist_build.py`
 
 **Interfaces:**
 - Produces: `DistFormat(StrEnum)` with `ONEDIR = "onedir"` and `ONEFILE = "onefile"`.
-- Produces: `BUILD_MODE_ENV: Final = "W3XRAY_PYINSTALLER_MODE"`.
+- Produces: `BUILD_MODE_ENV: Final = "GAMEXRAY_PYINSTALLER_MODE"`.
 - Produces: `DistBuildConfig.format: DistFormat` and `DistCliOptions.format: DistFormat`.
 - Preserves: `build_pyinstaller_command(config) -> tuple[str, ...]` and default onedir behavior.
 
@@ -63,7 +63,7 @@ Add imports and tests to `tests/test_dist_build.py`:
 from collections.abc import Sequence
 from dataclasses import replace
 
-from w3xtool.dist_build import (
+from gametool.dist_build import (
     APP_NAME,
     BUILD_MODE_ENV,
     DistBuildConfig,
@@ -111,13 +111,13 @@ Expected: collection fails because `DistFormat` and `BUILD_MODE_ENV` do not exis
 
 - [ ] **Step 3: Implement the typed build format and CLI selector**
 
-Update `w3xtool/dist_build.py` with:
+Update `gametool/dist_build.py` with:
 
 ```python
 import os
 from enum import StrEnum
 
-BUILD_MODE_ENV: Final = "W3XRAY_PYINSTALLER_MODE"
+BUILD_MODE_ENV: Final = "GAMEXRAY_PYINSTALLER_MODE"
 
 
 class DistFormat(StrEnum):
@@ -206,7 +206,7 @@ def test_run_dist_build_passes_onefile_mode_to_spec(
         captured.update(env)
         return subprocess.CompletedProcess(command, 0)
 
-    monkeypatch.setattr("w3xtool.dist_build.subprocess.run", run)
+    monkeypatch.setattr("gametool.dist_build.subprocess.run", run)
 
     assert run_dist_build(config) == 0
     assert captured[BUILD_MODE_ENV] == "onefile"
@@ -233,7 +233,7 @@ Expected: the selector remains an uncommitted implementation detail until the sp
 - Modify: `魔兽地图提取器.spec`
 
 **Interfaces:**
-- Consumes: `W3XRAY_PYINSTALLER_MODE=onedir|onefile`.
+- Consumes: `GAMEXRAY_PYINSTALLER_MODE=onedir|onefile`.
 - Produces: onedir `COLLECT` or direct onefile `EXE`, never both in one invocation.
 - Preserves: one shared `Analysis`, `PYZ`, data list, binary list, and hidden import list.
 
@@ -247,7 +247,7 @@ def test_spec_supports_onedir_and_onefile_from_one_analysis() -> None:
         encoding="utf-8",
     )
 
-    assert "W3XRAY_PYINSTALLER_MODE" in spec
+    assert "GAMEXRAY_PYINSTALLER_MODE" in spec
     assert "build_mode == 'onefile'" in spec
     assert "a.binaries" in spec
     assert "a.datas" in spec
@@ -278,9 +278,9 @@ Import `os`, parse and validate the mode before `Analysis`:
 ```python
 import os
 
-build_mode = os.environ.get("W3XRAY_PYINSTALLER_MODE", "onedir")
+build_mode = os.environ.get("GAMEXRAY_PYINSTALLER_MODE", "onedir")
 if build_mode not in {"onedir", "onefile"}:
-    raise ValueError(f"unsupported W3XRAY_PYINSTALLER_MODE: {build_mode}")
+    raise ValueError(f"unsupported GAMEXRAY_PYINSTALLER_MODE: {build_mode}")
 ```
 
 Keep the existing `Analysis` and `PYZ` unchanged. Replace the existing EXE/COLLECT tail with:
@@ -337,8 +337,8 @@ Run:
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_dist_build.py -q -p no:cacheprovider
-uv run w3xray-dist --dry-run
-uv run w3xray-dist --dry-run --onefile
+uv run gamexray-dist --dry-run
+uv run gamexray-dist --dry-run --onefile
 ```
 
 Expected: tests prove the default output path is under the app directory and onefile output is directly under
@@ -347,7 +347,7 @@ Expected: tests prove the default output path is under the app directory and one
 - [ ] **Step 5: Commit the spec topology**
 
 ```bash
-git add w3xtool/dist_build.py 魔兽地图提取器.spec tests/test_dist_build.py
+git add gametool/dist_build.py 魔兽地图提取器.spec tests/test_dist_build.py
 git commit -m "feat: build onedir and onefile packages"
 ```
 
@@ -357,7 +357,7 @@ git commit -m "feat: build onedir and onefile packages"
 
 **Files:**
 - Modify: `tests/test_acceptance_runner.py`
-- Modify: `w3xtool/acceptance_runner.py`
+- Modify: `gametool/acceptance_runner.py`
 
 **Interfaces:**
 - Produces acceptance check `bundled_casclib`.
@@ -370,7 +370,7 @@ Add to `tests/test_acceptance_runner.py`:
 
 ```python
 def test_portable_acceptance_skips_bundled_casclib(tmp_path: Path) -> None:
-    module = importlib.import_module("w3xtool.acceptance_runner")
+    module = importlib.import_module("gametool.acceptance_runner")
     config = module.AcceptanceConfig(
         map_path=_MAP,
         campaign_path=None,
@@ -389,7 +389,7 @@ def test_windows_acceptance_loads_bundled_casclib(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    module = importlib.import_module("w3xtool.acceptance_runner")
+    module = importlib.import_module("gametool.acceptance_runner")
     dll = tmp_path / "CascLib.dll"
     dll.write_bytes(b"MZfixture")
     loaded: list[Path] = []
@@ -463,7 +463,7 @@ Expected: all acceptance tests pass and portable runs report `bundled_casclib=sk
 - [ ] **Step 5: Commit the packaged DLL gate**
 
 ```bash
-git add w3xtool/acceptance_runner.py tests/test_acceptance_runner.py
+git add gametool/acceptance_runner.py tests/test_acceptance_runner.py
 git commit -m "test: verify bundled CascLib at runtime"
 ```
 
@@ -477,10 +477,10 @@ git commit -m "test: verify bundled CascLib at runtime"
 - Modify: `tools/run_windows_acceptance.ps1`
 
 **Interfaces:**
-- Consumes: `uv run w3xray-dist` and `uv run w3xray-dist --onefile`.
+- Consumes: `uv run gamexray-dist` and `uv run gamexray-dist --onefile`.
 - Triggers formal push builds from `main` (with pull requests and manual dispatch preserved).
 - Produces: `artifacts/windows-onedir/acceptance.json` and `artifacts/windows-onefile/acceptance.json`.
-- Produces release-ready `artifacts/windows-release/w3xray-v0.1.1-windows-x64.zip` and `.exe`.
+- Produces release-ready `artifacts/windows-release/gamexray-v0.1.1-windows-x64.zip` and `.exe`.
 
 - [ ] **Step 1: Strengthen workflow/script tests before changing assets**
 
@@ -489,13 +489,13 @@ Update `test_hosted_windows_workflow_packages_and_executes_artifact()` to requir
 ```python
 for required in (
     "branches: [main]",
-    "uv run w3xray-dist",
-    "uv run w3xray-dist --onefile",
+    "uv run gamexray-dist",
+    "uv run gamexray-dist --onefile",
     "artifacts/windows-onedir",
     "artifacts/windows-onefile",
     "Compress-Archive",
-    "w3xray-v$Version-windows-x64.zip",
-    "w3xray-v$Version-windows-x64.exe",
+    "gamexray-v$Version-windows-x64.zip",
+    "gamexray-v$Version-windows-x64.exe",
     "actions/upload-artifact@v4",
 ):
     assert required in workflow
@@ -519,7 +519,7 @@ Change `push.branches` from `local` to `main`. Keep the source block ASCII-only.
 
 ```yaml
 - name: Build onedir executable
-  run: uv run w3xray-dist
+  run: uv run gamexray-dist
 - name: Execute packaged onedir acceptance
   shell: powershell
   run: |
@@ -533,7 +533,7 @@ Change `push.branches` from `local` to `main`. Keep the source block ASCII-only.
       --repeat 5 --require-windows
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 - name: Build onefile executable
-  run: uv run w3xray-dist --onefile
+  run: uv run gamexray-dist --onefile
 - name: Execute packaged onefile acceptance
   shell: powershell
   run: |
@@ -558,18 +558,18 @@ $Onedir = @(Get-ChildItem -LiteralPath ".\dist" -Directory)
 if ($Onedir.Count -ne 1) { throw "Expected one onedir directory" }
 $DirectExe = @(Get-ChildItem -LiteralPath ".\dist" -Filter "*.exe" -File)
 if ($DirectExe.Count -ne 1) { throw "Expected one direct executable" }
-Compress-Archive -LiteralPath $Onedir[0].FullName -DestinationPath "$ReleaseDir\w3xray-v$Version-windows-x64.zip"
-Copy-Item -LiteralPath $DirectExe[0].FullName -Destination "$ReleaseDir\w3xray-v$Version-windows-x64.exe"
+Compress-Archive -LiteralPath $Onedir[0].FullName -DestinationPath "$ReleaseDir\gamexray-v$Version-windows-x64.zip"
+Copy-Item -LiteralPath $DirectExe[0].FullName -Destination "$ReleaseDir\gamexray-v$Version-windows-x64.exe"
 Copy-Item -LiteralPath ".\artifacts\windows-onedir\acceptance.json" -Destination "$ReleaseDir\windows-onedir-acceptance.json"
 Copy-Item -LiteralPath ".\artifacts\windows-onefile\acceptance.json" -Destination "$ReleaseDir\windows-onefile-acceptance.json"
 ```
 
-Upload `artifacts/windows-release/*` as artifact `w3xray-windows-release-assets` with
+Upload `artifacts/windows-release/*` as artifact `gamexray-windows-release-assets` with
 `actions/upload-artifact@v4`.
 
 - [ ] **Step 4: Update the real-machine script to accept both formats**
 
-In `tools/run_windows_acceptance.ps1`, preserve ASCII-only source and perform the same sequence. Use distinct output/report directories and include `--war3-dir $env:W3XRAY_WAR3_DIR` in both invocations. Do not discover both executables with one recursive count after onefile is built.
+In `tools/run_windows_acceptance.ps1`, preserve ASCII-only source and perform the same sequence. Use distinct output/report directories and include `--war3-dir $env:GAMEXRAY_WAR3_DIR` in both invocations. Do not discover both executables with one recursive count after onefile is built.
 
 - [ ] **Step 5: Run workflow asset and full local tests**
 
@@ -596,12 +596,12 @@ git commit -m "ci: build and accept both Windows packages"
 **Files:**
 - Modify: `pyproject.toml`
 - Modify: `uv.lock`
-- Modify: `w3xtool/__init__.py`
+- Modify: `gametool/__init__.py`
 - Modify: `README.md`
 
 **Interfaces:**
 - Produces project version `0.1.1`.
-- Produces runtime `w3xtool.__version__ == "0.1.1"`.
+- Produces runtime `gametool.__version__ == "0.1.1"`.
 - Documents direct EXE and ZIP behavior without claiming code signing.
 
 - [ ] **Step 1: Update README packaging expectations**
@@ -611,14 +611,14 @@ Change the direct-use section to state:
 ```markdown
 Windows Release 同时提供：
 
-- `w3xray-v0.1.1-windows-x64.zip`：完整解压后运行，启动更快，适合长期使用。
-- `w3xray-v0.1.1-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，可能出现 SmartScreen 提示。
+- `gamexray-v0.1.1-windows-x64.zip`：完整解压后运行，启动更快，适合长期使用。
+- `gamexray-v0.1.1-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，可能出现 SmartScreen 提示。
 
 两者功能相同；遇到杀软误报或启动问题时优先使用 ZIP 版。
 ```
 
-Document both developer build commands: default `uv run w3xray-dist` for onedir and
-`uv run w3xray-dist --onefile` for the direct executable.
+Document both developer build commands: default `uv run gamexray-dist` for onedir and
+`uv run gamexray-dist --onefile` for the direct executable.
 
 - [ ] **Step 2: Bump the project and lockfile version**
 
@@ -628,7 +628,7 @@ Set:
 version = "0.1.1"
 ```
 
-Also set `w3xtool.__version__` to `"0.1.1"`, then run:
+Also set `gametool.__version__` to `"0.1.1"`, then run:
 
 Then run:
 
@@ -636,7 +636,7 @@ Then run:
 uv lock
 ```
 
-Confirm `pyproject.toml`, `w3xtool/__init__.py`, and the editable `w3xray` package entry in
+Confirm `pyproject.toml`, `gametool/__init__.py`, and the editable `gamexray` package entry in
 `uv.lock` report `0.1.1`.
 
 - [ ] **Step 3: Verify documentation and metadata**
@@ -644,7 +644,7 @@ Confirm `pyproject.toml`, `w3xtool/__init__.py`, and the editable `w3xray` packa
 Run:
 
 ```bash
-rg -n '0\.1\.1|windows-x64\.zip|windows-x64\.exe|SmartScreen|--onefile' pyproject.toml uv.lock w3xtool/__init__.py README.md
+rg -n '0\.1\.1|windows-x64\.zip|windows-x64\.exe|SmartScreen|--onefile' pyproject.toml uv.lock gametool/__init__.py README.md
 git diff --check
 ```
 
@@ -653,7 +653,7 @@ Expected: version and both user assets are documented with no whitespace errors.
 - [ ] **Step 4: Commit version and documentation**
 
 ```bash
-git add pyproject.toml uv.lock w3xtool/__init__.py README.md
+git add pyproject.toml uv.lock gametool/__init__.py README.md
 git commit -m "docs: prepare dual-package release"
 ```
 
@@ -674,9 +674,9 @@ git commit -m "docs: prepare dual-package release"
 Run:
 
 ```bash
-TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/codex-w3xray-v0.1.1.XXXXXX")
+TEMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/codex-gamexray-v0.1.1.XXXXXX")
 PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest -q -rs -p no:cacheprovider
-PYTHONPYCACHEPREFIX="$TEMP_DIR/pycache" uv run python -m compileall -q main.py w3xtool
+PYTHONPYCACHEPREFIX="$TEMP_DIR/pycache" uv run python -m compileall -q main.py gametool
 git diff --check
 git status --short --branch
 ```
@@ -704,11 +704,11 @@ Use:
 
 ```bash
 PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest -q -rs -p no:cacheprovider
-PYTHONPYCACHEPREFIX="$TEMP_DIR/pycache-main" uv run python -m compileall -q main.py w3xtool
+PYTHONPYCACHEPREFIX="$TEMP_DIR/pycache-main" uv run python -m compileall -q main.py gametool
 git diff --check
 MAIN_SHA=$(git rev-parse HEAD)
 git push origin main
-RUN_ID=$(gh run list --repo HenTai-Miao/w3xray \
+RUN_ID=$(gh run list --repo HenTai-Miao/gamexray \
   --workflow "Windows package acceptance" \
   --branch main \
   --commit "$MAIN_SHA" \
@@ -716,8 +716,8 @@ RUN_ID=$(gh run list --repo HenTai-Miao/w3xray \
   --json databaseId \
   --jq '.[0].databaseId')
 test -n "$RUN_ID"
-gh run watch "$RUN_ID" --repo HenTai-Miao/w3xray --exit-status
-gh run view "$RUN_ID" --repo HenTai-Miao/w3xray --json headSha,status,conclusion,jobs,url
+gh run watch "$RUN_ID" --repo HenTai-Miao/gamexray --exit-status
+gh run view "$RUN_ID" --repo HenTai-Miao/gamexray --json headSha,status,conclusion,jobs,url
 ```
 
 Expected: `headSha` equals `MAIN_SHA`; onedir build/acceptance, onefile build/acceptance, asset preparation, and upload all conclude `success`.
@@ -728,8 +728,8 @@ Download the exact artifact:
 
 ```bash
 gh run download "$RUN_ID" \
-  --repo HenTai-Miao/w3xray \
-  --name w3xray-windows-release-assets \
+  --repo HenTai-Miao/gamexray \
+  --name gamexray-windows-release-assets \
   --dir "$TEMP_DIR"
 ```
 
@@ -737,10 +737,10 @@ Verify:
 
 ```bash
 find "$TEMP_DIR" -maxdepth 2 -type f -print
-unzip -tq "$TEMP_DIR/w3xray-v0.1.1-windows-x64.zip"
-file "$TEMP_DIR/w3xray-v0.1.1-windows-x64.exe"
-ZIP_SHA=$(shasum -a 256 "$TEMP_DIR/w3xray-v0.1.1-windows-x64.zip" | awk '{print $1}')
-EXE_SHA=$(shasum -a 256 "$TEMP_DIR/w3xray-v0.1.1-windows-x64.exe" | awk '{print $1}')
+unzip -tq "$TEMP_DIR/gamexray-v0.1.1-windows-x64.zip"
+file "$TEMP_DIR/gamexray-v0.1.1-windows-x64.exe"
+ZIP_SHA=$(shasum -a 256 "$TEMP_DIR/gamexray-v0.1.1-windows-x64.zip" | awk '{print $1}')
+EXE_SHA=$(shasum -a 256 "$TEMP_DIR/gamexray-v0.1.1-windows-x64.exe" | awk '{print $1}')
 test -n "$ZIP_SHA"
 test -n "$EXE_SHA"
 ```
@@ -753,7 +753,7 @@ Confirm neither the remote tag nor Release exists, then run:
 
 ```bash
 test -z "$(git ls-remote --tags origin refs/tags/v0.1.1)"
-if gh release view v0.1.1 --repo HenTai-Miao/w3xray >/dev/null 2>&1; then
+if gh release view v0.1.1 --repo HenTai-Miao/gamexray >/dev/null 2>&1; then
   exit 1
 fi
 ```
@@ -762,13 +762,13 @@ Then run:
 
 ```bash
 gh release create v0.1.1 \
-  "$TEMP_DIR/w3xray-v0.1.1-windows-x64.zip" \
-  "$TEMP_DIR/w3xray-v0.1.1-windows-x64.exe" \
+  "$TEMP_DIR/gamexray-v0.1.1-windows-x64.zip" \
+  "$TEMP_DIR/gamexray-v0.1.1-windows-x64.exe" \
   "$TEMP_DIR/windows-onedir-acceptance.json" \
   "$TEMP_DIR/windows-onefile-acceptance.json" \
-  --repo HenTai-Miao/w3xray \
+  --repo HenTai-Miao/gamexray \
   --target "$MAIN_SHA" \
-  --title "w3xray v0.1.1" \
+  --title "gamexray v0.1.1" \
   --notes "Windows ZIP and direct EXE, both accepted from main commit $MAIN_SHA. ZIP SHA-256: $ZIP_SHA. EXE SHA-256: $EXE_SHA. The direct EXE is unsigned and may show a SmartScreen warning; use the ZIP build if startup or antivirus compatibility is better there." \
   --latest
 ```
@@ -778,7 +778,7 @@ gh release create v0.1.1 \
 Run:
 
 ```bash
-gh api repos/HenTai-Miao/w3xray/releases/latest
+gh api repos/HenTai-Miao/gamexray/releases/latest
 git ls-remote origin refs/tags/v0.1.1
 git status --short --branch
 rm -rf -- "$TEMP_DIR"

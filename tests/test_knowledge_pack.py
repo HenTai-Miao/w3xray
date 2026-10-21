@@ -6,10 +6,10 @@ import tempfile
 import unittest
 import zlib
 
-from w3xtool.api import GameObject, MapData
-from w3xtool.imp import ImportEntry, ImportSummary
-from w3xtool.knowledge_pack import write_knowledge_pack
-from w3xtool.wtg import (
+from gametool.api import GameObject, MapData
+from gametool.imp import ImportEntry, ImportSummary
+from gametool.knowledge_pack import write_knowledge_pack
+from gametool.wtg import (
     TriggerCategory,
     TriggerHeader,
     TriggerTreeSummary,

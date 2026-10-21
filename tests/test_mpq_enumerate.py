@@ -8,7 +8,7 @@ import struct
 import unittest
 from unittest.mock import patch
 
-from w3xtool.mpq import MPQArchive
+from gametool.mpq import MPQArchive
 
 
 def _make(present, listfile=None, imp=None, campaign_imp=None):
@@ -90,7 +90,7 @@ class TestListFilesUnion(unittest.TestCase):
 
         # When: the archive enumerates names from (listfile).
         with patch(
-            "w3xtool.war3_encoding.default_legacy_codecs",
+            "gametool.war3_encoding.default_legacy_codecs",
             return_value=("cp950", "gbk"),
         ):
             names = arch.list_files()

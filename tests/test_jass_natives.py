@@ -5,8 +5,8 @@
 
 import unittest
 
-from w3xtool import script_scan
-from w3xtool.script_scan import (
+from gametool import script_scan
+from gametool.script_scan import (
     scan_object_refs,
     scan_script_features,
     scan_all_referenced_codes,

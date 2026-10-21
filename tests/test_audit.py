@@ -3,8 +3,8 @@
 import unittest
 from types import SimpleNamespace
 
-from w3xtool.api import GameObject, MapData
-from w3xtool.audit import AuditSeverity, build_audit_report
+from gametool.api import GameObject, MapData
+from gametool.audit import AuditSeverity, build_audit_report
 
 
 def _obj(category, obj_id, *, custom=True):

@@ -4,9 +4,9 @@ import os
 import tempfile
 import unittest
 
-from w3xtool.api import MapData
-from w3xtool.knowledge_pack import write_knowledge_pack
-from w3xtool.w3world import Camera, Region, Sound
+from gametool.api import MapData
+from gametool.knowledge_pack import write_knowledge_pack
+from gametool.w3world import Camera, Region, Sound
 
 
 class KnowledgePackWorldTest(unittest.TestCase):

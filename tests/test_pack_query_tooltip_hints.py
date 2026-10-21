@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from w3xtool.pack_query_cli import (
+from gametool.pack_query_cli import (
     _script_encrypted,
     _tooltip_source_hints,
     parse_pack_query_cli_options,

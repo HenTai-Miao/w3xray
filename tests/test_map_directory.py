@@ -10,7 +10,7 @@ from unittest.mock import patch
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from w3xtool.map_directory import scan_battle_maps
+from gametool.map_directory import scan_battle_maps
 
 
 class TestMapDirectory(unittest.TestCase):

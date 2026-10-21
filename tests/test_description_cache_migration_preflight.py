@@ -15,9 +15,9 @@ from tests.description_cache_migration_fixture import (
     write_legacy_inputs,
 )
 from tests.source_parent_swap_fixture import swapping_open
-from w3xtool import description_cache_migration as migration
-from w3xtool.bounded_file import FileIdentity
-from w3xtool.description_cache_migration import (
+from gametool import description_cache_migration as migration
+from gametool.bounded_file import FileIdentity
+from gametool.description_cache_migration import (
     DescriptionCacheMigrationError,
     DescriptionCacheMigrationOptions,
     migrate_description_cache,

@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool.mpq import MPQArchive
-from w3xtool.mpq_layout import MPQLayoutError, locate_mpq_layout
+from gametool.mpq import MPQArchive
+from gametool.mpq_layout import MPQLayoutError, locate_mpq_layout
 
 
 def _write_mpq(hdr_bytes, total_size):

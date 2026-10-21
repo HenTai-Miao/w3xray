@@ -9,15 +9,15 @@ from typing import Final
 import pytest
 
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool import anchored_source
-from w3xtool import trusted_description_cache_io as anchored_io
-from w3xtool.trusted_description_cache import (
+from gametool import anchored_source
+from gametool import trusted_description_cache_io as anchored_io
+from gametool.trusted_description_cache import (
     TrustedDescriptionCacheError,
     load_trusted_description_cache,
     load_trusted_description_cache_from_descriptor,
     load_trusted_description_cache_from_parent,
 )
-from w3xtool.trusted_description_cache_generation_io import (
+from gametool.trusted_description_cache_generation_io import (
     read_trusted_cache_from_descriptor,
 )
 
@@ -136,7 +136,7 @@ def test_anchored_loader_rejects_owned_name_identity_change(
 ) -> None:
     # Given: the first owned file's name is replaced after its held-fd first read.
     root = published_cache(tmp_path)
-    target = root / ".w3xray-trusted-description-cache"
+    target = root / ".gamexray-trusted-description-cache"
     displaced = tmp_path / "marker.original"
     replacement = tmp_path / "marker.replacement"
     replacement.write_bytes(target.read_bytes())

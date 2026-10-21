@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from w3xtool.game_data_source import DirectoryDataSource
-from w3xtool.knowledge_assets import export_resource_bodies
-from w3xtool.knowledge_pack import write_knowledge_pack
-from w3xtool.map_data import GameObject, MapData
+from gametool.game_data_source import DirectoryDataSource
+from gametool.knowledge_assets import export_resource_bodies
+from gametool.knowledge_pack import write_knowledge_pack
+from gametool.map_data import GameObject, MapData
 
 _ICON = "ReplaceableTextures\\CommandButtons\\BTNClient.blp"
 _CUSTOM_ICON = "UI\\CustomIcon.blp"

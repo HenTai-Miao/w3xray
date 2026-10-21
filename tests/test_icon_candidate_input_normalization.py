@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import pytest
 
-from w3xtool.batch_global_evidence_models import (
+from gametool.batch_global_evidence_models import (
     GlobalEvidenceIndex,
     GlobalIconGap,
     GlobalResolvedIcon,
 )
-from w3xtool.icon_candidate_bindings import build_icon_candidate_bindings
-from w3xtool.icon_evidence_models import IconGapReason, IconResolutionLayer
-from w3xtool.icon_resources import IconObjectReference
+from gametool.icon_candidate_bindings import build_icon_candidate_bindings
+from gametool.icon_evidence_models import IconGapReason, IconResolutionLayer
+from gametool.icon_resources import IconObjectReference
 
 
 @pytest.mark.parametrize(

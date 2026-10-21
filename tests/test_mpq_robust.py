@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from w3xtool import mpq_storage
-from w3xtool.mpq import (
+from gametool import mpq_storage
+from gametool.mpq import (
     FLAG_COMPRESS,
     FLAG_ENCRYPTED,
     MPQArchive,

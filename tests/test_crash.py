@@ -1,7 +1,7 @@
 """地图崩溃风险静态检测。"""
 
-from w3xtool.api import GameObject, MapData
-from w3xtool.crash import build_crash_report
+from gametool.api import GameObject, MapData
+from gametool.crash import build_crash_report
 
 
 def test_detects_chain_lightning_negative_full_decay():

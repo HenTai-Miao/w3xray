@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make `w3xray` match the reference program's reliable four-category object extraction while closing the static MPQ, script, campaign, CASC, diagnostic, and publication gaps that currently lose readable data.
+**Goal:** Make `gamexray` match the reference program's reliable four-category object extraction while closing the static MPQ, script, campaign, CASC, diagnostic, and publication gaps that currently lose readable data.
 
-**Architecture:** Keep `w3xtool.api` as a compatibility facade, move map models and extraction responsibilities into focused modules, and normalize every object source into immutable candidates before one deterministic merge. Split MPQ layout, name/hash, compression, and block reading responsibilities while preserving the public `MPQArchive` API; route all later archive reads through a persistent `ArchiveSource` and all export writes through structured results.
+**Architecture:** Keep `gametool.api` as a compatibility facade, move map models and extraction responsibilities into focused modules, and normalize every object source into immutable candidates before one deterministic merge. Split MPQ layout, name/hash, compression, and block reading responsibilities while preserving the public `MPQArchive` API; route all later archive reads through a persistent `ArchiveSource` and all export writes through structured results.
 
 **Tech Stack:** Python 3.14, `uv`, `pytest`, standard-library `lzma`, CustomTkinter/Tkinter, existing pure-Python MPQ/Huffman/PKWARE implementations, StormLib 9.25 fixtures matching the reference DLL, Ghidra 12.1.2 with Oracle JDK 26.0.1 for reference verification.
 
@@ -12,7 +12,7 @@
 
 - Keep every operation read-only with respect to maps, campaigns, game data, and saves.
 - Do not execute map scripts or loaders, call platform APIs, inspect process memory, disable protections, or bypass anti-cheat.
-- Preserve imports and calls through `w3xtool.api.GameObject`, `w3xtool.api.MapData`, and `w3xtool.api.load_map`.
+- Preserve imports and calls through `gametool.api.GameObject`, `gametool.api.MapData`, and `gametool.api.load_map`.
 - Preserve `write_knowledge_pack(md, out_dir) -> int`; add a detailed result API without breaking the integer facade.
 - Keep every new or expanded Python module at or below 250 pure LOC; split `api.py` and `mpq.py` before adding behavior.
 - Use `decode_warcraft_string` for Warcraft text and byte-based MPQ hashing for archive names.
@@ -26,15 +26,15 @@
 ### Task 1: Map Models, Archive Sources, and Component Diagnostics
 
 **Files:**
-- Create: `w3xtool/map_data.py`
-- Create: `w3xtool/archive_source.py`
-- Create: `w3xtool/extraction_diagnostics.py`
-- Modify: `w3xtool/api.py:1-114`
+- Create: `gametool/map_data.py`
+- Create: `gametool/archive_source.py`
+- Create: `gametool/extraction_diagnostics.py`
+- Modify: `gametool/api.py:1-114`
 - Create: `tests/test_map_data_compat.py`
 - Create: `tests/test_extraction_diagnostics.py`
 
 **Interfaces:**
-- Produces: `GameObject`, `MapData`, and `MapData.category_counts()` in `w3xtool.map_data`; `w3xtool.api` re-exports both names.
+- Produces: `GameObject`, `MapData`, and `MapData.category_counts()` in `gametool.map_data`; `gametool.api` re-exports both names.
 - Produces: `ArchiveSource.open() -> ContextManager[MapArchiveReader]`, `PathArchiveSource`, and `BytesArchiveSource`.
 - Produces: `DiagnosticSeverity`, `ExtractionDiagnostic`, and `record_diagnostic(md, diagnostic) -> None`.
 - Adds compatibly: `MapData.archive_source`, `MapData.diagnostics`, `MapData.ui_strings`, and `MapData.close()`.
@@ -43,8 +43,8 @@
 
 ```python
 def test_api_reexports_map_models() -> None:
-    from w3xtool.api import GameObject as ApiObject, MapData as ApiMap
-    from w3xtool.map_data import GameObject, MapData
+    from gametool.api import GameObject as ApiObject, MapData as ApiMap
+    from gametool.map_data import GameObject, MapData
 
     assert ApiObject is GameObject
     assert ApiMap is MapData
@@ -67,7 +67,7 @@ def test_bytes_archive_source_reopens_and_closes() -> None:
 
 Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest tests/test_map_data_compat.py tests/test_extraction_diagnostics.py -q -p no:cacheprovider`
 
-Expected: FAIL with `ModuleNotFoundError` for `w3xtool.map_data` or `w3xtool.archive_source`.
+Expected: FAIL with `ModuleNotFoundError` for `gametool.map_data` or `gametool.archive_source`.
 
 - [x] **Step 3: Move the public models and add typed extension fields**
 
@@ -137,16 +137,16 @@ Expected: PASS.
 - [x] **Step 6: Commit the foundation**
 
 ```bash
-git add w3xtool/map_data.py w3xtool/archive_source.py w3xtool/extraction_diagnostics.py w3xtool/api.py tests/test_map_data_compat.py tests/test_extraction_diagnostics.py
+git add gametool/map_data.py gametool/archive_source.py gametool/extraction_diagnostics.py gametool/api.py tests/test_map_data_compat.py tests/test_extraction_diagnostics.py
 git commit -m "refactor: split extraction models and sources"
 ```
 
 ### Task 2: Trusted and Anonymous Text Object Sources
 
 **Files:**
-- Create: `w3xtool/object_text_sources.py`
-- Modify: `w3xtool/textobj.py`
-- Modify: `w3xtool/map_archive_reader.py`
+- Create: `gametool/object_text_sources.py`
+- Modify: `gametool/textobj.py`
+- Modify: `gametool/map_archive_reader.py`
 - Create: `tests/test_object_text_sources.py`
 
 **Interfaces:**
@@ -253,18 +253,18 @@ Expected: PASS.
 - [x] **Step 6: Commit text-source discovery**
 
 ```bash
-git add w3xtool/object_text_sources.py w3xtool/textobj.py w3xtool/map_archive_reader.py tests/test_object_text_sources.py
+git add gametool/object_text_sources.py gametool/textobj.py gametool/map_archive_reader.py tests/test_object_text_sources.py
 git commit -m "fix: recover Warcraft text object sources"
 ```
 
 ### Task 3: Deterministic Object Candidate Merge Pipeline
 
 **Files:**
-- Create: `w3xtool/object_pipeline.py`
-- Create: `w3xtool/object_candidates.py`
-- Modify: `w3xtool/api.py:116-420`
-- Modify: `w3xtool/slk_objects.py`
-- Modify: `w3xtool/references.py`
+- Create: `gametool/object_pipeline.py`
+- Create: `gametool/object_candidates.py`
+- Modify: `gametool/api.py:116-420`
+- Modify: `gametool/slk_objects.py`
+- Modify: `gametool/references.py`
 - Create: `tests/test_object_pipeline.py`
 - Modify: `tests/test_slk_objects.py`
 - Modify: `tests/test_base_objects.py`
@@ -382,15 +382,15 @@ Expected: PASS with no duplicate object codes.
 - [x] **Step 7: Commit the unified object pipeline**
 
 ```bash
-git add w3xtool/object_candidates.py w3xtool/object_pipeline.py w3xtool/api.py w3xtool/slk_objects.py w3xtool/references.py tests/test_object_pipeline.py tests/test_slk_objects.py tests/test_base_objects.py
+git add gametool/object_candidates.py gametool/object_pipeline.py gametool/api.py gametool/slk_objects.py gametool/references.py tests/test_object_pipeline.py tests/test_slk_objects.py tests/test_base_objects.py
 git commit -m "fix: merge every object data source"
 ```
 
 ### Task 4: Reference-Compatible Sorted ID Reports
 
 **Files:**
-- Modify: `w3xtool/knowledge_object_exports.py`
-- Modify: `w3xtool/gui_export_actions.py`
+- Modify: `gametool/knowledge_object_exports.py`
+- Modify: `gametool/gui_export_actions.py`
 - Create: `tests/test_reference_id_reports.py`
 - Modify: `tests/test_knowledge_pack.py`
 
@@ -457,18 +457,18 @@ Expected: PASS.
 - [x] **Step 5: Commit report parity**
 
 ```bash
-git add w3xtool/knowledge_object_exports.py w3xtool/gui_export_actions.py tests/test_reference_id_reports.py tests/test_knowledge_pack.py
+git add gametool/knowledge_object_exports.py gametool/gui_export_actions.py tests/test_reference_id_reports.py tests/test_knowledge_pack.py
 git commit -m "fix: match reference object ID reports"
 ```
 
 ### Task 5: MPQ Layout, Filename Bytes, and Locale Selection
 
 **Files:**
-- Create: `w3xtool/mpq_constants.py`
-- Create: `w3xtool/mpq_crypto.py`
-- Create: `w3xtool/mpq_layout.py`
-- Create: `w3xtool/mpq_names.py`
-- Modify: `w3xtool/mpq.py`
+- Create: `gametool/mpq_constants.py`
+- Create: `gametool/mpq_crypto.py`
+- Create: `gametool/mpq_layout.py`
+- Create: `gametool/mpq_names.py`
+- Modify: `gametool/mpq.py`
 - Create: `tests/test_mpq_user_data.py`
 - Create: `tests/test_mpq_names_locale.py`
 - Modify: `tests/test_mpq_header.py`
@@ -476,7 +476,7 @@ git commit -m "fix: match reference object ID reports"
 **Interfaces:**
 - Produces: `MPQLayout`, `locate_mpq_layout(data) -> MPQLayout`, `hash_name_bytes(name, hash_type) -> int`, and `encoded_name_candidates(name, legacy_codecs=None) -> tuple[bytes, ...]`.
 - Changes compatibly: `MPQArchive(path, *, locale_id=0, legacy_codecs=None)`.
-- Re-exports existing constants and `_hash` from `w3xtool.mpq` for compatibility.
+- Re-exports existing constants and `_hash` from `gametool.mpq` for compatibility.
 
 - [x] **Step 1: Write user-data, non-ASCII hash, and locale fallback tests**
 
@@ -559,17 +559,17 @@ Expected: PASS.
 - [x] **Step 6: Commit layout/name compatibility**
 
 ```bash
-git add w3xtool/mpq_constants.py w3xtool/mpq_crypto.py w3xtool/mpq_layout.py w3xtool/mpq_names.py w3xtool/mpq.py tests/test_mpq_user_data.py tests/test_mpq_names_locale.py tests/test_mpq_header.py
+git add gametool/mpq_constants.py gametool/mpq_crypto.py gametool/mpq_layout.py gametool/mpq_names.py gametool/mpq.py tests/test_mpq_user_data.py tests/test_mpq_names_locale.py tests/test_mpq_header.py
 git commit -m "fix: match StormLib MPQ lookup behavior"
 ```
 
 ### Task 6: StormLib-Compatible Compression Dispatch
 
 **Files:**
-- Create: `w3xtool/mpq_compression.py`
-- Create: `w3xtool/mpq_adpcm.py`
-- Create: `w3xtool/mpq_block_reader.py`
-- Modify: `w3xtool/mpq.py`
+- Create: `gametool/mpq_compression.py`
+- Create: `gametool/mpq_adpcm.py`
+- Create: `gametool/mpq_block_reader.py`
+- Modify: `gametool/mpq.py`
 - Create: `tests/test_mpq_compression_chain.py`
 - Create: `tests/test_mpq_adpcm.py`
 - Create: `tests/test_mpq_lzma.py`
@@ -580,7 +580,7 @@ git commit -m "fix: match StormLib MPQ lookup behavior"
 - Produces: `decompress_mpq_sector(data: bytes, output_size: int) -> bytes`.
 - Produces: `decompress_adpcm(data: bytes, channels: Literal[1, 2], output_size: int) -> bytes`.
 - Produces: `read_mpq_block(storage, block, name_bytes, key) -> bytes`.
-- Re-exports `_decompress_sector = decompress_mpq_sector` through `w3xtool.mpq`.
+- Re-exports `_decompress_sector = decompress_mpq_sector` through `gametool.mpq`.
 
 - [x] **Step 1: Vendor or generate pinned StormLib fixtures and write red tests**
 
@@ -663,20 +663,20 @@ Expected: PASS.
 - [x] **Step 7: Commit compression parity**
 
 ```bash
-git add w3xtool/mpq_compression.py w3xtool/mpq_adpcm.py w3xtool/mpq_block_reader.py w3xtool/mpq.py tests/test_mpq_compression_chain.py tests/test_mpq_adpcm.py tests/test_mpq_lzma.py tests/fixtures/reference
+git add gametool/mpq_compression.py gametool/mpq_adpcm.py gametool/mpq_block_reader.py gametool/mpq.py tests/test_mpq_compression_chain.py tests/test_mpq_adpcm.py tests/test_mpq_lzma.py tests/fixtures/reference
 git commit -m "feat: decode StormLib MPQ compression chains"
 ```
 
 ### Task 7: Readable Script Sources and Complete ECA Semantics
 
 **Files:**
-- Create: `w3xtool/script_sources.py`
-- Modify: `w3xtool/api.py`
-- Modify: `w3xtool/wct.py`
-- Modify: `w3xtool/script_text_export.py`
-- Modify: `w3xtool/trigger_exports.py`
-- Modify: `w3xtool/gui_trigger_eca.py`
-- Modify: `w3xtool/knowledge_pack.py`
+- Create: `gametool/script_sources.py`
+- Modify: `gametool/api.py`
+- Modify: `gametool/wct.py`
+- Modify: `gametool/script_text_export.py`
+- Modify: `gametool/trigger_exports.py`
+- Modify: `gametool/gui_trigger_eca.py`
+- Modify: `gametool/knowledge_pack.py`
 - Create: `tests/test_script_sources.py`
 - Modify: `tests/test_wct.py`
 - Modify: `tests/test_wtg_eca_exports.py`
@@ -755,20 +755,20 @@ Expected: PASS.
 - [x] **Step 6: Commit script/ECA publication fixes**
 
 ```bash
-git add w3xtool/script_sources.py w3xtool/api.py w3xtool/wct.py w3xtool/script_text_export.py w3xtool/trigger_exports.py w3xtool/gui_trigger_eca.py w3xtool/knowledge_pack.py tests/test_script_sources.py tests/test_wct.py tests/test_wtg_eca_exports.py tests/test_triggerdata_semantics.py
+git add gametool/script_sources.py gametool/api.py gametool/wct.py gametool/script_text_export.py gametool/trigger_exports.py gametool/gui_trigger_eca.py gametool/knowledge_pack.py tests/test_script_sources.py tests/test_wct.py tests/test_wtg_eca_exports.py tests/test_triggerdata_semantics.py
 git commit -m "fix: publish every readable script and ECA value"
 ```
 
 ### Task 8: Persistent Campaign Child Sources and W3F Map Order
 
 **Files:**
-- Create: `w3xtool/campaign_sources.py`
-- Modify: `w3xtool/api.py`
-- Modify: `w3xtool/w3i.py`
-- Modify: `w3xtool/knowledge_assets.py`
-- Modify: `w3xtool/knowledge_terrain_exports.py`
-- Modify: `w3xtool/map_identity.py`
-- Modify: `w3xtool/gui_export_actions.py`
+- Create: `gametool/campaign_sources.py`
+- Modify: `gametool/api.py`
+- Modify: `gametool/w3i.py`
+- Modify: `gametool/knowledge_assets.py`
+- Modify: `gametool/knowledge_terrain_exports.py`
+- Modify: `gametool/map_identity.py`
+- Modify: `gametool/gui_export_actions.py`
 - Create: `tests/test_campaign_sources.py`
 - Modify: `tests/test_campaign.py`
 - Modify: `tests/test_w3i.py`
@@ -828,22 +828,22 @@ Expected: PASS.
 - [x] **Step 6: Commit campaign source fixes**
 
 ```bash
-git add w3xtool/campaign_sources.py w3xtool/api.py w3xtool/w3i.py w3xtool/knowledge_assets.py w3xtool/knowledge_terrain_exports.py w3xtool/map_identity.py w3xtool/gui_export_actions.py tests/test_campaign_sources.py tests/test_campaign.py tests/test_w3i.py
+git add gametool/campaign_sources.py gametool/api.py gametool/w3i.py gametool/knowledge_assets.py gametool/knowledge_terrain_exports.py gametool/map_identity.py gametool/gui_export_actions.py tests/test_campaign_sources.py tests/test_campaign.py tests/test_w3i.py
 git commit -m "fix: keep campaign child archives readable"
 ```
 
 ### Task 9: Unified CASC Inventory and Client Data Enrichment
 
 **Files:**
-- Create: `w3xtool/game_data_inventory.py`
-- Modify: `w3xtool/game_data_source.py`
-- Modify: `w3xtool/casc_source.py`
-- Modify: `w3xtool/casc_cli.py`
-- Modify: `w3xtool/gui_lifecycle.py`
-- Modify: `w3xtool/gui_casc_browser.py`
-- Modify: `w3xtool/object_pipeline.py`
-- Modify: `w3xtool/knowledge_assets.py`
-- Modify: `w3xtool/knowledge_resource_exports.py`
+- Create: `gametool/game_data_inventory.py`
+- Modify: `gametool/game_data_source.py`
+- Modify: `gametool/casc_source.py`
+- Modify: `gametool/casc_cli.py`
+- Modify: `gametool/gui_lifecycle.py`
+- Modify: `gametool/gui_casc_browser.py`
+- Modify: `gametool/object_pipeline.py`
+- Modify: `gametool/knowledge_assets.py`
+- Modify: `gametool/knowledge_resource_exports.py`
 - Create: `tests/test_game_data_inventory.py`
 - Modify: `tests/test_casc_source.py`
 - Modify: `tests/test_game_data_source.py`
@@ -913,22 +913,22 @@ Expected: PASS; Windows-only native tests remain conditionally skipped on macOS.
 - [x] **Step 6: Commit data-source consistency**
 
 ```bash
-git add w3xtool/game_data_inventory.py w3xtool/game_data_source.py w3xtool/casc_source.py w3xtool/casc_cli.py w3xtool/gui_lifecycle.py w3xtool/gui_casc_browser.py w3xtool/object_pipeline.py w3xtool/knowledge_assets.py w3xtool/knowledge_resource_exports.py tests/test_game_data_inventory.py tests/test_casc_source.py tests/test_game_data_source.py tests/test_gui_casc_browser.py
+git add gametool/game_data_inventory.py gametool/game_data_source.py gametool/casc_source.py gametool/casc_cli.py gametool/gui_lifecycle.py gametool/gui_casc_browser.py gametool/object_pipeline.py gametool/knowledge_assets.py gametool/knowledge_resource_exports.py tests/test_game_data_inventory.py tests/test_casc_source.py tests/test_game_data_source.py tests/test_gui_casc_browser.py
 git commit -m "feat: unify Warcraft client data sources"
 ```
 
 ### Task 10: Structured Publication Results, End-to-End Parity, and Documentation
 
 **Files:**
-- Create: `w3xtool/knowledge_results.py`
-- Modify: `w3xtool/knowledge_io.py`
-- Modify: `w3xtool/knowledge_pack.py`
-- Modify: `w3xtool/knowledge_manifest.py`
-- Modify: `w3xtool/knowledge_requirements.py`
-- Modify: `w3xtool/map_extras.py`
-- Create: `w3xtool/knowledge_diagnostics.py`
-- Modify: `w3xtool/gui_export_actions.py`
-- Modify: `w3xtool/cli_output.py`
+- Create: `gametool/knowledge_results.py`
+- Modify: `gametool/knowledge_io.py`
+- Modify: `gametool/knowledge_pack.py`
+- Modify: `gametool/knowledge_manifest.py`
+- Modify: `gametool/knowledge_requirements.py`
+- Modify: `gametool/map_extras.py`
+- Create: `gametool/knowledge_diagnostics.py`
+- Modify: `gametool/gui_export_actions.py`
+- Modify: `gametool/cli_output.py`
 - Modify: `README.md`
 - Modify: `docs/KKWE借鉴清单.md`
 - Create: `tests/test_knowledge_results.py`
@@ -949,7 +949,7 @@ def test_pack_reports_partial_success_instead_of_counting_failed_file(
     monkeypatch, tmp_path
 ) -> None:
     monkeypatch.setattr(
-        "w3xtool.knowledge_io.write_text_safely", fail_only("对象ID/单位.tsv")
+        "gametool.knowledge_io.write_text_safely", fail_only("对象ID/单位.tsv")
     )
 
     report = write_knowledge_pack_report(minimal_map_data(), str(tmp_path))
@@ -1054,7 +1054,7 @@ Run: `PYTHONDONTWRITEBYTECODE=1 uv run python -m pytest -q -p no:cacheprovider`
 
 Expected: PASS with zero failures; platform-dependent Windows tests may report explicit skips.
 
-Run: `uv run python -m compileall -q w3xtool main.py`
+Run: `uv run python -m compileall -q gametool main.py`
 
 Expected: exit 0.
 
@@ -1062,7 +1062,7 @@ Run: `uv run main.py cli tests/fixtures/reference/stormlib-slk-map.w3x`
 
 Expected: exit 0 with non-zero object counts and no traceback.
 
-Run: `uv run main.py cli tests/fixtures/reference/stormlib-campaign.w3n --pack "${TMPDIR:-/tmp}/w3xray-parity-pack"`
+Run: `uv run main.py cli tests/fixtures/reference/stormlib-campaign.w3n --pack "${TMPDIR:-/tmp}/gamexray-parity-pack"`
 
 Expected: exit 0, a complete or explicitly partial report, and readable child terrain/resource outputs.
 
@@ -1074,7 +1074,7 @@ Local acceptance evidence (2026-07-11): the complete suite returned
 `1002 passed, 4 skipped, 1 subtests passed`; source acceptance passed map load,
 campaign switching, an 87-file knowledge pack, five repeat loads, and all nine GUI
 tabs. Hosted Windows run
-[`29143635239`](https://github.com/HenTai-Miao/w3xray/actions/runs/29143635239)
+[`29143635239`](https://github.com/HenTai-Miao/gamexray/actions/runs/29143635239)
 then passed `995` tests with `11` explicit skips, built the onedir EXE, passed the
 Windows runtime, map, campaign, 66-file pack, five-repeat-load, and nine-tab packaged
 GUI lanes, and uploaded the executable plus `acceptance.json`. `real_windows_casc`
@@ -1084,12 +1084,12 @@ remains explicit SKIP because no real Warcraft installation was supplied.
 
 Run: `git diff --check && git status --short`
 
-Expected: no whitespace errors; only intended source, tests, fixtures, and docs remain. Remove `${TMPDIR:-/tmp}/codex-w3xray-reference-audit-20260710`, `.debug-journal.md`, and the local exclude entry after extracting any required non-sensitive evidence into committed tests/docs.
+Expected: no whitespace errors; only intended source, tests, fixtures, and docs remain. Remove `${TMPDIR:-/tmp}/codex-gamexray-reference-audit-20260710`, `.debug-journal.md`, and the local exclude entry after extracting any required non-sensitive evidence into committed tests/docs.
 
 - [x] **Step 9: Commit final integration and push**
 
 ```bash
-git add w3xtool tests README.md docs/KKWE借鉴清单.md
+git add gametool tests README.md docs/KKWE借鉴清单.md
 git commit -m "feat: complete reference extraction parity"
 git push origin local
 ```

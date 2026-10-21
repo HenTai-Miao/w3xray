@@ -10,14 +10,14 @@ from tests.description_cache_publication_fixture import (
     bound_stage,
     rename_in_parent,
 )
-from w3xtool import description_cache_publication_stage_location as stage_location
-from w3xtool import description_cache_publication_stage_location_scan as location_scan
-from w3xtool.description_cache_publication_errors import (
+from gametool import description_cache_publication_stage_location as stage_location
+from gametool import description_cache_publication_stage_location_scan as location_scan
+from gametool.description_cache_publication_errors import (
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
-from w3xtool.description_cache_publication_stage import BoundDescriptionCacheStage
-from w3xtool.description_cache_publication_stage_retention import retain_stage
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool.description_cache_publication_stage import BoundDescriptionCacheStage
+from gametool.description_cache_publication_stage_retention import retain_stage
 
 
 def _identity(path: Path) -> tuple[int, int]:

@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import struct
 
-from w3xtool.item_relation_fields import object_field_relations
-from w3xtool.item_relation_models import ItemRelationKind
-from w3xtool.map_data import GameObject, MapData
-from w3xtool.object_candidates import (
+from gametool.item_relation_fields import object_field_relations
+from gametool.item_relation_models import ItemRelationKind
+from gametool.map_data import GameObject, MapData
+from gametool.object_candidates import (
     ObjectCandidate,
     ObjectSourceKind,
     collect_object_candidates,
 )
-from w3xtool.object_pipeline import (
+from gametool.object_pipeline import (
     build_object_index,
     load_object_pipeline,
     merge_object_candidates,

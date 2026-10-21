@@ -1,14 +1,14 @@
 """Icon-gap projections stay exact and non-adopting."""
 
-from w3xtool.icon_evidence_query import (
+from gametool.icon_evidence_query import (
     IconGapFilter,
     IconGapViewRow,
     filter_icon_gap_rows,
     global_icon_gap_rows,
 )
-from w3xtool.batch_global_evidence_models import GlobalEvidenceIndex, GlobalIconGap
-from w3xtool.icon_evidence_models import IconGapReason
-from w3xtool.icon_resources import IconObjectReference
+from gametool.batch_global_evidence_models import GlobalEvidenceIndex, GlobalIconGap
+from gametool.icon_evidence_models import IconGapReason
+from gametool.icon_resources import IconObjectReference
 
 
 def test_icon_gap_filter_matches_reason_category_rawcode_and_path() -> None:

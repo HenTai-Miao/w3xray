@@ -7,14 +7,14 @@ from threading import Event, Thread
 import pytest
 
 from tests.gui_base import GuiTestCase
-from w3xtool import gui_current_map as current_gui
-from w3xtool.gui_current_map import CurrentMapGuiMixin
-from w3xtool.gui_current_map_presenter import SnapshotReady
-from w3xtool.current_map_models import CurrentMapResolution, ResolutionStatus
-from w3xtool.current_map_snapshot import CurrentMapSnapshot
-from w3xtool.gui_lifecycle import GuiLifecycleMixin
-from w3xtool.gui_worker_host import GuiWorkerHostMixin
-from w3xtool.gui_worker_registry import GuiWorkerRegistry
+from gametool import gui_current_map as current_gui
+from gametool.gui_current_map import CurrentMapGuiMixin
+from gametool.gui_current_map_presenter import SnapshotReady
+from gametool.current_map_models import CurrentMapResolution, ResolutionStatus
+from gametool.current_map_snapshot import CurrentMapSnapshot
+from gametool.gui_lifecycle import GuiLifecycleMixin
+from gametool.gui_worker_host import GuiWorkerHostMixin
+from gametool.gui_worker_registry import GuiWorkerRegistry
 
 
 class _Widget:

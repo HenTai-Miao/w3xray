@@ -8,18 +8,18 @@ from pathlib import Path
 import pytest
 
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool import description_cache_publication_replacement as replacement
-from w3xtool import description_cache_publication_rollback_handoff as rollback_handoff
-from w3xtool.description_cache_publication_errors import (
+from gametool import description_cache_publication_replacement as replacement
+from gametool import description_cache_publication_rollback_handoff as rollback_handoff
+from gametool.description_cache_publication_errors import (
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_models import (
+from gametool.description_cache_publication_models import (
     DescriptionCachePublicationProof,
     RetainedCacheRecord,
     RetainedCacheRole,
 )
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
-from w3xtool.trusted_description_cache import (
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool.trusted_description_cache import (
     VerifiedDescriptionCache,
     load_trusted_description_cache,
 )

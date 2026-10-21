@@ -7,10 +7,10 @@ import threading
 
 import pytest
 
-import w3xtool.gui_export_actions as export_actions
-from w3xtool.api import MapData
-from w3xtool.gui_export_actions import ExportActionsMixin
-from w3xtool.gui_worker_host import GuiWorkerHostMixin
+import gametool.gui_export_actions as export_actions
+from gametool.api import MapData
+from gametool.gui_export_actions import ExportActionsMixin
+from gametool.gui_worker_host import GuiWorkerHostMixin
 
 
 class _Status:

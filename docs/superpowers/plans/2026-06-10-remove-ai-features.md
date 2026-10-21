@@ -4,7 +4,7 @@
 
 **Goal:** 把「魔兽地图提取器」回退成纯提取/浏览工具，删除所有 AI 调用层与只为喂 AI 而存在的本地诊断层。
 
-**Architecture:** AI 与诊断是上层附加物，只有 `w3xtool/gui.py` 引用它们；底层提取链路（mpq/api/w3obj/...）零依赖。删除 = 整删独立模块/测试/提示词 + 在 `gui.py` 摘掉两段连续方法块和若干 UI 钩子 + 清理 README 与打包 spec。
+**Architecture:** AI 与诊断是上层附加物，只有 `gametool/gui.py` 引用它们；底层提取链路（mpq/api/w3obj/...）零依赖。删除 = 整删独立模块/测试/提示词 + 在 `gui.py` 摘掉两段连续方法块和若干 UI 钩子 + 清理 README 与打包 spec。
 
 **Tech Stack:** Python 3.14、customtkinter、pytest、PyInstaller、uv。
 
@@ -15,8 +15,8 @@
 ### Task 1: 删除 AI 调用层、诊断层、提示词、相关测试与 AI 设计文档（整文件删除）
 
 **Files:**
-- Delete: `w3xtool/aicli/__init__.py` `w3xtool/aicli/autopt.py` `w3xtool/aicli/config.py` `w3xtool/aicli/improve.py` `w3xtool/aicli/runner.py`
-- Delete: `w3xtool/audit.py` `tools_audit.py`
+- Delete: `gametool/aicli/__init__.py` `gametool/aicli/autopt.py` `gametool/aicli/config.py` `gametool/aicli/improve.py` `gametool/aicli/runner.py`
+- Delete: `gametool/audit.py` `tools_audit.py`
 - Delete: `prompts/annotate.md` `prompts/attribution.md` `prompts/autopt.md`
 - Delete: `tests/test_aicli_autopt.py` `tests/test_aicli_config.py` `tests/test_aicli_improve.py` `tests/test_aicli_runner.py` `tests/test_gui_ai.py` `tests/test_audit.py`
 - Delete: `docs/superpowers/specs/2026-06-10-ai-cli-self-improvement-design.md`
@@ -24,8 +24,8 @@
 - [ ] **Step 1: 用 git rm 删除所有上述文件（含整目录）**
 
 ```bash
-git rm -r w3xtool/aicli prompts \
-  w3xtool/audit.py tools_audit.py \
+git rm -r gametool/aicli prompts \
+  gametool/audit.py tools_audit.py \
   tests/test_aicli_autopt.py tests/test_aicli_config.py tests/test_aicli_improve.py tests/test_aicli_runner.py \
   tests/test_gui_ai.py tests/test_audit.py \
   docs/superpowers/specs/2026-06-10-ai-cli-self-improvement-design.md
@@ -34,16 +34,16 @@ git rm -r w3xtool/aicli prompts \
 - [ ] **Step 2: 确认这些路径已不在版本控制中**
 
 Run: `git status --short`
-Expected: 上述文件均显示为 `D`（deleted），`w3xtool/aicli/` 与 `prompts/` 目录下无残留。
+Expected: 上述文件均显示为 `D`（deleted），`gametool/aicli/` 与 `prompts/` 目录下无残留。
 
 - [ ] **Step 3: 暂不提交**（gui.py 仍 import 这些模块，整体导入会失败；与 Task 2 一起提交，保持每次提交可运行）
 
 ---
 
-### Task 2: 从 `w3xtool/gui.py` 摘除全部 AI/诊断引用
+### Task 2: 从 `gametool/gui.py` 摘除全部 AI/诊断引用
 
 **Files:**
-- Modify: `w3xtool/gui.py`
+- Modify: `gametool/gui.py`
 
 > 注：行号为当前快照参考，编辑请用唯一字符串锚定（前一处编辑会使后续行号上移）。
 
@@ -163,12 +163,12 @@ except Exception:
 
 - [ ] **Step 10: 校验 `gui.py` 无 AI 残留**
 
-Run: `git grep -niE "aicli|audit|annotate|attribut|autopt|_ai_|质检|run_ai|AIProfile|AIConfig|_settings_win|_open_settings|auto_audit" -- w3xtool/gui.py`
+Run: `git grep -niE "aicli|audit|annotate|attribut|autopt|_ai_|质检|run_ai|AIProfile|AIConfig|_settings_win|_open_settings|auto_audit" -- gametool/gui.py`
 Expected: 无任何输出。
 
 - [ ] **Step 11: 校验模块可导入**
 
-Run: `uv run python -c "import w3xtool.gui; print('ok')"`
+Run: `uv run python -c "import gametool.gui; print('ok')"`
 Expected: 打印 `ok`，无 ImportError / SyntaxError。
 
 - [ ] **Step 12: 跑全套测试**
@@ -182,7 +182,7 @@ Expected: 全绿（被删的 AI/诊断测试已不存在；其余测试不依赖
 git add -A
 git commit -m "refactor: 删除全部 AI 调用层与本地诊断功能
 
-- 删 w3xtool/aicli/、w3xtool/audit.py、tools_audit.py、prompts/
+- 删 gametool/aicli/、gametool/audit.py、tools_audit.py、prompts/
 - gui.py 摘除 AI 设置/质检/自动优化 UI 与所有相关方法、标签页、钩子
 - 删对应测试与 AI 自改进设计文档"
 ```

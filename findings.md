@@ -72,7 +72,7 @@
   - **#14 WTS 注释行 { 加固**（wts._OPEN 独占行锚定）：STRING 头与正文间注释行（如 `// 备注 {x}`）里的 { 不再被当成正文起点；找不到独占行 { 时退回首个 { 不回归。62 张真图新旧解析**完全一致**（零回归）。**编码改动（mbcs）评估后不做**：简中系统 mbcs≡gbk 无收益，非简中系统会把 GBK 老图错解成乱码（净风险）。
 
 ## 重制版 .doo 皮肤字段（会话 15，实测 Reforged 2.0.4 安装目录）
-- **当时现象**：用户重制版安装目录 `C:\Program Files (x86)\Warcraft III` 是 **CASC 存储**（`.build.info`+`Data/data/*.idx`+`data.###`），无散装地图；该轮尚未接入游戏本体数据源，当前能力以本节末尾“CASC 游戏本体数据（更新）”为准。用户下载的地图（Documents\Warcraft III\Maps）仍是 MPQ，w3xray 能提（实测 `Darkborne RPG v23` 70MB 保护图：591 单位/383 物品/620 技能等全出）。
+- **当时现象**：用户重制版安装目录 `C:\Program Files (x86)\Warcraft III` 是 **CASC 存储**（`.build.info`+`Data/data/*.idx`+`data.###`），无散装地图；该轮尚未接入游戏本体数据源，当前能力以本节末尾“CASC 游戏本体数据（更新）”为准。用户下载的地图（Documents\Warcraft III\Maps）仍是 MPQ，gamexray 能提（实测 `Darkborne RPG v23` 70MB 保护图：591 单位/383 物品/620 技能等全出）。
 - **重制版 doo 格式差异**：实测重制版地图的 war3map.doo 与 war3mapUnits.doo **每条记录在 scale 后多一个 4 字节皮肤(skin)码**，但 version/sub 仍是 8/11，**无法靠版本号区分**经典/重制。
   - 证据：Darkborne 的 war3map.doo（33944 装饰物）按经典布局第 0 条 ndrops 即 -1（错位）；加 skin 后 1833000/1833000 字节恰好到 EOF。Amazonia 的 units.doo（98 单位）同理：skin 后 11670/11670 到 EOF。
   - 解法：parse_doodads/parse_units 改**两种布局都试、取能完整读完所有 count 的那个**（经典 skin=False 先试，完整即返回；否则试 skin=True）。各 count 字段加 _CAP=256 上限，错位布局快速触发换试。经典图永远先命中 skin=False，无回归。
@@ -101,7 +101,7 @@
 - 锚定实现的关键边界可直接复用：`open_staged_file()` 创建 no-follow/O_EXCL stage，`publish_staged_file()` 对既有目标建立私有硬链接备份并在越界时恢复，`remove_owned_staged_file()` 只按 inode 清理自己的 stage。新增分块入口只应替换“向 stage 写完整 bytes”这一段，发布协议保持不变。
 - 新增流式输出四个核心模块的 basedpyright 结果为 **0 errors, 0 warnings**。扩大到非 GUI 新核心模块为 **0 errors, 55 warnings**；剩余告警主要来自 ctypes 动态 `_fields_`、旧 `MapData` 未参数化容器以及兼容 MPQ 内部 `_data`，不是运行错误。对 GUI mixin 文件单独执行 strict 检查会暴露大量既有组合式继承属性告警，不能据此宣称新增 GUI 运行失败。
 - 仓库中 `typing.Generator` 的三个遗留导入（CASC 浏览器、CascLib source、对应测试）已全部改为 `collections.abc.Generator`；CASC 浏览器自身状态字段补了显式类型。
-- Windows 资产初检：hosted workflow 使用 `windows-latest` 完成依赖、固定 CascLib、全测、onedir 打包、打包 EXE acceptance 和 artifact 上传；真实客户端 workflow 明确绑定 `[self-hosted, Windows, X64, w3xray-war3]`，调用 `run_windows_acceptance.ps1` 并要求 `.build.info`。脚本中的默认地图与战役 fixture 路径都已指向仓库内文件。
+- Windows 资产初检：hosted workflow 使用 `windows-latest` 完成依赖、固定 CascLib、全测、onedir 打包、打包 EXE acceptance 和 artifact 上传；真实客户端 workflow 明确绑定 `[self-hosted, Windows, X64, gamexray-war3]`，调用 `run_windows_acceptance.ps1` 并要求 `.build.info`。脚本中的默认地图与战役 fixture 路径都已指向仓库内文件。
 - `actionlint` 对自托管自定义标签会按预期报“未知 runner label”；忽略这一个仓库外部标签后，两个 workflow 语义检查为零问题。`war3_dir` 和 evidence 路径已改经 step `env` 传入 PowerShell，不再把 dispatch 输入直接插入 `run` 源码。
 - “无借口样本检查”直接指定仓库内真实格式 fixture：StormLib `.w3n`、StormLib Huffman MPQ、wc3libs 旧 SLK 共 **19 passed, 0 skipped**。因此这三类不再依赖私有 Windows 文件或测试跳过。
 - review-work 安全审查确认三项需修阻断边界：真实存档在 `stat` 后按路径重开存在换包竞态；作者明文 `files/` symlink 会被 `.resolve()` 当成可信根且验证后 `read_bytes()` 无界；MPQ 内成员在声明大小/聚合预算检查前已解压。self-hosted workflow 还需固定 `local` ref、最小权限、environment 审批和禁用 checkout 凭据持久化。

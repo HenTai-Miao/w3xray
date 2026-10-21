@@ -3,9 +3,9 @@
 from unittest.mock import patch
 
 from main import iter_cli_summary_lines
-from w3xtool.api import MapData
-from w3xtool.doo import Doodad, Unit
-from w3xtool.terrain import TerrainBounds, TerrainInfo, TerrainPointSummary
+from gametool.api import MapData
+from gametool.doo import Doodad, Unit
+from gametool.terrain import TerrainBounds, TerrainInfo, TerrainPointSummary
 
 
 def test_cli_summary_includes_terrain_point_statistics():
@@ -40,7 +40,7 @@ def test_cli_summary_includes_terrain_point_statistics():
     )
 
     # When: CLI summary lines are rendered.
-    with patch("w3xtool.terrain.terrain_info_from_map_path", return_value=info):
+    with patch("gametool.terrain.terrain_info_from_map_path", return_value=info):
         lines = list(iter_cli_summary_lines(md))
 
     # Then: terrain point statistics are visible.

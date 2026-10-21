@@ -7,11 +7,11 @@ import threading
 
 import pytest
 
-import w3xtool.gui_casc_browser as casc_gui
-from w3xtool.casclib_enumeration import CascEntry
-from w3xtool.game_data_inventory import GameDataInventoryView
-from w3xtool.gui_casc_browser import CascBrowserMixin
-from w3xtool.gui_worker_host import GuiWorkerHostMixin
+import gametool.gui_casc_browser as casc_gui
+from gametool.casclib_enumeration import CascEntry
+from gametool.game_data_inventory import GameDataInventoryView
+from gametool.gui_casc_browser import CascBrowserMixin
+from gametool.gui_worker_host import GuiWorkerHostMixin
 
 
 class _Status:

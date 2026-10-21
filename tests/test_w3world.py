@@ -3,7 +3,7 @@
 import struct
 import unittest
 
-from w3xtool.w3world import parse_cameras, parse_regions, parse_sounds
+from gametool.w3world import parse_cameras, parse_regions, parse_sounds
 
 
 def _i(v):
@@ -167,8 +167,8 @@ class _FakeArchive:
 
 class TestWorldMetadataIntegration(unittest.TestCase):
     def test_add_world_metadata_fills_mapdata(self):
-        from w3xtool.api import MapData
-        from w3xtool.map_extras import add_world_metadata
+        from gametool.api import MapData
+        from gametool.map_extras import add_world_metadata
 
         md = MapData(path="x", name="x")
         arch = _FakeArchive(

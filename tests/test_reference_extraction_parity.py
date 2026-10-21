@@ -8,9 +8,9 @@ import re
 import subprocess
 import sys
 
-from w3xtool.api import load_map
-from w3xtool.knowledge_pack import write_knowledge_pack_report
-from w3xtool.knowledge_results import KnowledgeWriteStatus
+from gametool.api import load_map
+from gametool.knowledge_pack import write_knowledge_pack_report
+from gametool.knowledge_results import KnowledgeWriteStatus
 
 _FIXTURE_DIR = Path(__file__).parent / "fixtures" / "reference"
 _MAP = _FIXTURE_DIR / "stormlib-reference-parity-map.w3x"

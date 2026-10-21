@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from w3xtool.batch_descriptions import DescriptionState, audit_object_descriptions
-from w3xtool.map_data import GameObject
+from gametool.batch_descriptions import DescriptionState, audit_object_descriptions
+from gametool.map_data import GameObject
 
 
 def _game_object(

@@ -8,17 +8,17 @@ from typing import Literal, assert_never
 import pytest
 
 from tests.description_cache_publication_fixture import assert_live_retained_records
-from w3xtool import description_cache_publication_named_leaf as named_leaf
-from w3xtool.description_cache_publication_models import (
+from gametool import description_cache_publication_named_leaf as named_leaf
+from gametool.description_cache_publication_models import (
     PublicationTransientRecord,
     RetainedCacheRecord,
     RetainedCacheRole,
 )
-from w3xtool.description_cache_publication_named_leaf import (
+from gametool.description_cache_publication_named_leaf import (
     reprove_retained,
     reprove_transient,
 )
-from w3xtool.description_cache_publication_stage_normalization import (
+from gametool.description_cache_publication_stage_normalization import (
     capture_transient_record,
 )
 

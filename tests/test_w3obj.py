@@ -8,7 +8,7 @@ import struct
 import unittest
 from unittest.mock import patch
 
-from w3xtool.w3obj import parse_object_data
+from gametool.w3obj import parse_object_data
 
 
 def _tag(s):
@@ -155,7 +155,7 @@ class TestParseObjectData(unittest.TestCase):
 
         # When: the active Windows ACP is cp950.
         with patch(
-            "w3xtool.war3_encoding.default_legacy_codecs", return_value=("cp950", "gbk")
+            "gametool.war3_encoding.default_legacy_codecs", return_value=("cp950", "gbk")
         ):
             objs = parse_object_data(_build([obj], []), "w3u")
 
@@ -210,7 +210,7 @@ class _FakeArchive:
 
 class TestBuildObjectsRobust(unittest.TestCase):
     def test_malformed_object_file_returns_empty_not_crash(self):
-        from w3xtool.api import _build_objects
+        from gametool.api import _build_objects
 
         # 截断/畸形的 w3u：声明 1 个对象但数据不够 → 解析中途出错
         bad = struct.pack("<ii", 2, 1) + b"shor"  # version, count=1, 残缺
@@ -218,7 +218,7 @@ class TestBuildObjectsRobust(unittest.TestCase):
         self.assertEqual(_build_objects(arch, "w3u", {}), [])  # 优雅返回空，不抛
 
     def test_missing_file_returns_empty(self):
-        from w3xtool.api import _build_objects
+        from gametool.api import _build_objects
 
         arch = _FakeArchive("war3map.w3t", b"")
         self.assertEqual(_build_objects(arch, "w3u", {}), [])

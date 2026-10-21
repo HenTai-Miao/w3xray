@@ -13,23 +13,23 @@ import pytest
 
 from tests.description_cache_publication_fixture import replacement_inputs
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool import description_cache_publication as publication
-from w3xtool import description_cache_publication_stage as publication_stage
-from w3xtool.atomic_rename import AtomicRenameUnavailableError
-from w3xtool.description_cache_migration import (
+from gametool import description_cache_publication as publication
+from gametool import description_cache_publication_stage as publication_stage
+from gametool.atomic_rename import AtomicRenameUnavailableError
+from gametool.description_cache_migration import (
     DescriptionCacheMigrationOptions,
     migrate_description_cache,
 )
-from w3xtool.description_cache_migration_models import (
+from gametool.description_cache_migration_models import (
     DescriptionCacheRejection,
     ProvenDescriptionCandidate,
 )
-from w3xtool.description_cache_publication import DescriptionCachePublicationError
-from w3xtool.trusted_description_cache import (
+from gametool.description_cache_publication import DescriptionCachePublicationError
+from gametool.trusted_description_cache import (
     VerifiedDescriptionCache,
     load_trusted_description_cache,
 )
-from w3xtool.trusted_description_cache_models import TrustedCacheLeafProof
+from gametool.trusted_description_cache_models import TrustedCacheLeafProof
 
 
 def _identity(path: Path) -> tuple[int, int]:
@@ -41,15 +41,15 @@ def _transient_paths(output: Path) -> tuple[Path, ...]:
     return tuple(
         path
         for pattern in (
-            ".w3xray-description-cache-stage-*",
-            ".w3xray-description-cache-backup-*",
+            ".gamexray-description-cache-stage-*",
+            ".gamexray-description-cache-backup-*",
         )
         for path in output.parent.glob(pattern)
     )
 
 
 def _retained_paths(output: Path) -> tuple[Path, ...]:
-    return tuple(output.parent.glob(".w3xray-description-cache-retained-*-*"))
+    return tuple(output.parent.glob(".gamexray-description-cache-retained-*-*"))
 
 
 def _instrument_preflight_effects(
@@ -216,7 +216,7 @@ def test_stage_io_unsupported_fails_before_any_publication_effect(
 ) -> None:
     legacy_output, legacy_cache = replacement_inputs(tmp_path, "first")
     output = tmp_path / "trusted"
-    stage_io = importlib.import_module("w3xtool.description_cache_publication_stage_io")
+    stage_io = importlib.import_module("gametool.description_cache_publication_stage_io")
     calls = _instrument_preflight_effects(monkeypatch)
     monkeypatch.setattr(stage_io, "_STAGE_IO_AVAILABLE", False)
 

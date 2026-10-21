@@ -11,19 +11,19 @@ from tests.description_cache_publication_fixture import (
     bound_stage,
     rename_in_parent,
 )
-from w3xtool.description_cache_publication_errors import (
+from gametool.description_cache_publication_errors import (
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_models import (
+from gametool.description_cache_publication_models import (
     PublicationTransientRecord,
     RetainedCacheRecord,
     RetainedCacheRole,
 )
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
-from w3xtool.description_cache_publication_stage_location import (
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool.description_cache_publication_stage_location import (
     locate_consumed_stage,
 )
-from w3xtool.description_cache_publication_stage_retention import retain_stage
+from gametool.description_cache_publication_stage_retention import retain_stage
 
 
 def _identity(path: Path) -> tuple[int, int]:
@@ -35,7 +35,7 @@ def test_clean_locator_accepts_held_output_with_known_previous(
     tmp_path: Path,
 ) -> None:
     # Given: the held new generation is active beside a known old generation.
-    stage = tmp_path / ".w3xray-description-cache-stage-a"
+    stage = tmp_path / ".gamexray-description-cache-stage-a"
     output = tmp_path / "trusted"
     previous_source = tmp_path / "old"
     stage.mkdir()
@@ -69,7 +69,7 @@ def test_clean_locator_returns_exact_record_when_held_stage_is_at_previous(
     tmp_path: Path,
 ) -> None:
     # Given: an abnormal transaction leaves the held stage at the previous role.
-    stage = tmp_path / ".w3xray-description-cache-stage-b"
+    stage = tmp_path / ".gamexray-description-cache-stage-b"
     output = tmp_path / "trusted"
     stage.mkdir()
     names = RetainedCacheNames(tmp_path, "2" * 32)
@@ -94,8 +94,8 @@ def test_known_held_record_surfaces_private_and_retained_foreign_evidence(
     tmp_path: Path,
 ) -> None:
     # Given: a held failed-stage record plus a known backup and foreign recovery.
-    stage = tmp_path / ".w3xray-description-cache-stage-c"
-    backup = tmp_path / ".w3xray-description-cache-backup-c"
+    stage = tmp_path / ".gamexray-description-cache-stage-c"
+    backup = tmp_path / ".gamexray-description-cache-backup-c"
     output = tmp_path / "trusted"
     stage.mkdir()
     backup.mkdir()
@@ -142,7 +142,7 @@ def test_forced_locator_error_keeps_known_previous_separate_from_held_output(
     tmp_path: Path,
 ) -> None:
     # Given: a known old generation and the held generation at output.
-    stage = tmp_path / ".w3xray-description-cache-stage-d"
+    stage = tmp_path / ".gamexray-description-cache-stage-d"
     output = tmp_path / "trusted"
     old = tmp_path / "old"
     stage.mkdir()

@@ -8,22 +8,22 @@ from typing import Literal, Never, assert_never
 import pytest
 
 from tests.description_cache_publication_fixture import bound_stage, open_parent
-from w3xtool import (
+from gametool import (
     description_cache_publication_backup_finalization as backup_finalization,
 )
-from w3xtool import description_cache_publication_evidence as publication_evidence
-from w3xtool import description_cache_publication_named_leaf as named_leaf
-from w3xtool import description_cache_publication_recovery_state as recovery_state
-from w3xtool import description_cache_publication_stage as publication_stage
-from w3xtool import description_cache_publication_stage_normalization as normalization
-from w3xtool.description_cache_publication_errors import PublicationCommitContextError
-from w3xtool.description_cache_publication_models import (
+from gametool import description_cache_publication_evidence as publication_evidence
+from gametool import description_cache_publication_named_leaf as named_leaf
+from gametool import description_cache_publication_recovery_state as recovery_state
+from gametool import description_cache_publication_stage as publication_stage
+from gametool import description_cache_publication_stage_normalization as normalization
+from gametool.description_cache_publication_errors import PublicationCommitContextError
+from gametool.description_cache_publication_models import (
     NamedLeafProof,
     RetainedCacheRecord,
     RetainedCacheRole,
 )
-from w3xtool.description_cache_publication_retention_durability import retain_durably
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool.description_cache_publication_retention_durability import retain_durably
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
 
 
 type FinalizerSite = Literal[

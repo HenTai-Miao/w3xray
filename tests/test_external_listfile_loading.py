@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from w3xtool.api import MapData, _campaign_inner_maps, load_map
-from w3xtool.external_listfile import (
+from gametool.api import MapData, _campaign_inner_maps, load_map
+from gametool.external_listfile import (
     ExternalListfileReport,
     read_external_listfile,
     validate_external_names,
 )
-from w3xtool.gui_loader import LoadedMap, load_path_payload
-from w3xtool.client_object_data import ClientBaseObject
-from w3xtool.knowledge_pack import write_knowledge_pack
-from w3xtool.load_context import MapLoadContext
+from gametool.gui_loader import LoadedMap, load_path_payload
+from gametool.client_object_data import ClientBaseObject
+from gametool.knowledge_pack import write_knowledge_pack
+from gametool.load_context import MapLoadContext
 
 
 class _Archive:
@@ -66,7 +66,7 @@ def test_load_map_confirms_external_names_before_listing(monkeypatch) -> None:
             "HIDDEN/CONFIG.JSON",
         ),
     )
-    monkeypatch.setattr("w3xtool.api.MPQArchive", lambda _path: archive)
+    monkeypatch.setattr("gametool.api.MPQArchive", lambda _path: archive)
 
     # When: the map is loaded through the normal API.
     md = load_map("fixture.w3x", load_context=context)
@@ -130,7 +130,7 @@ def test_gui_loader_preserves_context_with_only_client_base_objects(
     )
     captured: list[MapLoadContext | None] = []
     monkeypatch.setattr(
-        "w3xtool.gui_loader.build_map_load_context", lambda **_kwargs: context
+        "gametool.gui_loader.build_map_load_context", lambda **_kwargs: context
     )
 
     def load(path: str, *, load_context: MapLoadContext | None = None) -> MapData:

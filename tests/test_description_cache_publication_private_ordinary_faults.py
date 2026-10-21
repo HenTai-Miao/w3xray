@@ -14,16 +14,16 @@ from tests.description_cache_publication_fixture import (
     bound_stage,
     rename_in_parent,
 )
-from w3xtool import description_cache_publication_stage_finalization as finalization
-from w3xtool.description_cache_publication_errors import PublicationCommitContextError
-from w3xtool.description_cache_publication_models import (
+from gametool import description_cache_publication_stage_finalization as finalization
+from gametool.description_cache_publication_errors import PublicationCommitContextError
+from gametool.description_cache_publication_models import (
     PublicationTransientRecord,
     RetainedCacheRecord,
     RetainedCacheRole,
 )
-from w3xtool.description_cache_publication_private_attempt import PrivateAttempt
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
-from w3xtool.description_cache_publication_stage import BoundDescriptionCacheStage
+from gametool.description_cache_publication_private_attempt import PrivateAttempt
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool.description_cache_publication_stage import BoundDescriptionCacheStage
 
 
 type FaultType = type[ValueError] | type[RuntimeError]

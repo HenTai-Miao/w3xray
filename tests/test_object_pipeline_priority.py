@@ -8,14 +8,14 @@ import subprocess
 import sys
 import textwrap
 
-from w3xtool.fields import label_for
-from w3xtool.object_candidates import (
+from gametool.fields import label_for
+from gametool.object_candidates import (
     ObjectCandidate,
     ObjectFieldValue,
     ObjectSourceKind,
 )
-from w3xtool.object_pipeline import merge_object_candidates
-from w3xtool.slk_objects import slk_col_label
+from gametool.object_pipeline import merge_object_candidates
+from gametool.slk_objects import slk_col_label
 
 
 def _candidate(
@@ -176,8 +176,8 @@ def test_field_evidence_order_covers_every_equality_field_across_hash_seeds() ->
     # Given: three tied pairs differ only by type, raw value, or WTS source.
     script = textwrap.dedent(
         """\
-        from w3xtool.object_candidates import ObjectCandidate, ObjectFieldValue, ObjectSourceKind
-        from w3xtool.object_pipeline import merge_object_candidates
+        from gametool.object_candidates import ObjectCandidate, ObjectFieldValue, ObjectSourceKind
+        from gametool.object_pipeline import merge_object_candidates
 
         def field(value, value_type, raw_value, value_source):
             return ObjectFieldValue(

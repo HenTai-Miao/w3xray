@@ -2,8 +2,8 @@
 
 import unittest
 
-from w3xtool.api import GameObject, MapData
-from w3xtool.resources import build_resource_report
+from gametool.api import GameObject, MapData
+from gametool.resources import build_resource_report
 
 
 def _obj(obj_id, fields=None, icon=""):

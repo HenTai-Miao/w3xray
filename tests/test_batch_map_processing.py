@@ -11,22 +11,22 @@ import pytest
 
 from tests.batch_map_processing_fixture import loaded_map
 from tests.real_map_text_acceptance import read_tsv
-import w3xtool.batch_map_processing as batch_map_processing
-from w3xtool.batch_map_processing import process_one_map
-from w3xtool.batch_models import MapBatchState
-from w3xtool.batch_runner import BatchOptions, fingerprint_source
-from w3xtool.batch_status import (
+import gametool.batch_map_processing as batch_map_processing
+from gametool.batch_map_processing import process_one_map
+from gametool.batch_models import MapBatchState
+from gametool.batch_runner import BatchOptions, fingerprint_source
+from gametool.batch_status import (
     ArchiveIntegrity,
     KnowledgeEvidence,
     KnowledgeGapReason,
     PublicationResult,
 )
-from w3xtool.icon_resources import (
+from gametool.icon_resources import (
     HistoricalIconEvidenceSet,
     IconObjectReference,
     NamedIconResource,
 )
-from w3xtool.load_context import MapLoadContext
+from gametool.load_context import MapLoadContext
 
 
 def test_process_one_map_publishes_named_anonymous_and_description_artifacts(

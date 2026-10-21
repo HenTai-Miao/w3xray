@@ -8,10 +8,10 @@ from tests.object_text_priority_fixture import (
     index_with_name_sources,
     text_field,
 )
-from w3xtool.client_object_data import ClientBaseObject
-from w3xtool.description_cache import DescriptionCache, DescriptionCacheEntry
-from w3xtool.object_candidates import ObjectSourceKind
-from w3xtool.object_text_models import (
+from gametool.client_object_data import ClientBaseObject
+from gametool.description_cache import DescriptionCache, DescriptionCacheEntry
+from gametool.object_candidates import ObjectSourceKind
+from gametool.object_text_models import (
     ObjectTextState,
     TextSelectionReason,
     TextSourcePriority,

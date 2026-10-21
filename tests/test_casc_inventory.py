@@ -10,7 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from w3xtool.casclib_enumeration import CascEntry, CascNameType
+from gametool.casclib_enumeration import CascEntry, CascNameType
 
 
 def _entry(name: str, name_type: CascNameType) -> CascEntry:
@@ -51,7 +51,7 @@ class StreamingProbeSource:
     ) -> Generator[CascEntry, None, None]:
         del mask, listfile
         yield _entry("A" * 100_000, CascNameType.FULL)
-        staged = tuple(self.output_dir.glob(".w3xray-stage-*.tmp"))
+        staged = tuple(self.output_dir.glob(".gamexray-stage-*.tmp"))
         assert staged
         assert max(path.stat().st_size for path in staged) > 100_000
         yield _entry("UI\\TriggerData.txt", CascNameType.FULL)
@@ -61,7 +61,7 @@ def test_inventory_writes_bounded_chunks_while_root_is_still_enumerating(
     tmp_path: Path,
 ) -> None:
     # Given: a source that checks the staged output before yielding its last row.
-    module = importlib.import_module("w3xtool.casc_inventory")
+    module = importlib.import_module("gametool.casc_inventory")
     output = tmp_path / "streamed.tsv"
 
     # When: the full Root inventory is exported.
@@ -70,7 +70,7 @@ def test_inventory_writes_bounded_chunks_while_root_is_still_enumerating(
     # Then: rows were written before enumeration ended and only the final file remains.
     assert summary.total == 2
     assert output.stat().st_size > 100_000
-    assert not tuple(tmp_path.glob(".w3xray-stage-*.tmp"))
+    assert not tuple(tmp_path.glob(".gamexray-stage-*.tmp"))
 
 
 def test_inventory_tsv_preserves_resolved_paths_ids_and_content_keys(
@@ -81,7 +81,7 @@ def test_inventory_tsv_preserves_resolved_paths_ids_and_content_keys(
         _entry("UI\\TriggerData.txt", CascNameType.FULL),
         _entry("File00000077", CascNameType.FILE_DATA_ID),
     )
-    module = importlib.import_module("w3xtool.casc_inventory")
+    module = importlib.import_module("gametool.casc_inventory")
     output = tmp_path / "casc-root.tsv"
 
     # When: the entire streaming root is exported.
@@ -104,7 +104,7 @@ def test_inventory_limit_is_explicitly_reported_not_silently_complete(
     entries = tuple(
         _entry(f"File{index:08d}", CascNameType.FILE_DATA_ID) for index in range(3)
     )
-    module = importlib.import_module("w3xtool.casc_inventory")
+    module = importlib.import_module("gametool.casc_inventory")
 
     # When: inventory is intentionally limited to two rows.
     summary = module.write_casc_inventory(

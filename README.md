@@ -1,4 +1,4 @@
-# w3xray — 魔兽地图提取器
+# gamexray — GameXRay 游戏档案透视器
 
 > **X-ray your Warcraft III maps.**
 
@@ -15,19 +15,19 @@ GUI触发器、场景放置、触发指令、合成配方、孤立对象、分�
 
 Windows x64 同时提供：
 
-- `w3xray-v0.1.4-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
-- `w3xray-v0.1.4-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
+- `gamexray-v0.1.4-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
+- `gamexray-v0.1.4-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
 
 两者功能相同；遇到杀软误报或启动问题时优先使用 ZIP 版。
 
 macOS 提供两个未签名、未公证的 onedir ZIP，请按 Mac 处理器选择并完整解压：
 
-- `w3xray-v0.1.4-macos-arm64.zip`：Apple Silicon（M1/M2/M3/M4/M5）。
-- `w3xray-v0.1.4-macos-x64.zip`：Intel Mac。
+- `gamexray-v0.1.4-macos-arm64.zip`：Apple Silicon（M1/M2/M3/M4/M5）。
+- `gamexray-v0.1.4-macos-x64.zip`：Intel Mac。
 
 Linux 提供：
 
-- `w3xray-v0.1.4-linux-x64.tar.gz`：Linux x86-64，解压后运行 `./魔兽地图提取器/魔兽地图提取器`。
+- `gamexray-v0.1.4-linux-x64.tar.gz`：Linux x86-64，解压后运行 `./GameXRay 游戏档案透视器/GameXRay 游戏档案透视器`。
 
 macOS/Linux 包支持地图与战役的静态提取；Windows 专用的 CascLib 游戏客户端原生后端不包含在这两类包中。macOS 首次运行可能出现 Gatekeeper 未验证开发者提示。
 
@@ -41,7 +41,7 @@ uv run main.py casc --help      # CASC Root 全量清单 / 单文件导出
 uv run main.py save --help      # 真实存档文件只读证据分析
 uv run main.py acceptance --help # 源码或打包 EXE 验收并生成 JSON
 uv run main.py batch <地图目录> --output <新输出目录> --game-data <客户端证据目录>
-uv run w3xray-test             # 运行测试（Windows 下避开 pytest.exe trampoline）
+uv run gamexray-test             # 运行测试（Windows 下避开 pytest.exe trampoline）
 ```
 
 ## Schema 5 批量证据与完整性命令
@@ -72,7 +72,7 @@ uv run main.py integrity retained-cache --active-root <owned-cache-root> --outpu
 不会把保留对象自动加载为描述来源，也不会删除、修复或重命名任何对象。
 
 重复使用同一 `--output` 写入完整性快照或保留缓存报告时，新报告保持原路径；旧报告的
-原 inode 移入输出父目录下的 `.w3xray-integrity-history/<输出文件名 SHA-256>/`
+原 inode 移入输出父目录下的 `.gamexray-integrity-history/<输出文件名 SHA-256>/`
 不可变历史代。每代只包含 `report.json` 和 `历史清单.json`，清单绑定原输出文件名、
 字节数和 SHA-256；既有历史代永不自动删除或覆盖。普通地图/资源写出仍只使用通用原子
 替换语义，不会自动创建这个历史目录。完整性报告不能使用历史根名称或目标文件系统中
@@ -116,20 +116,20 @@ World Editor、Battle.net、启动器和下载客户端不算游戏进程；“�
 此功能只使用操作系统可见的进程列表、命令行、打开文件路径和磁盘元数据：**不读取游戏内存，不打开 `Game.dll`，不注入 DLL，不执行地图/平台代码，不提权，也不做数据级运行时解密**。如果自定义加密只在游戏内存中解密，本工具无法恢复明文；快照只保留磁盘上已有的字节，并交给现有静态兼容解析器。
 
 Windows 上如果 `uv run pytest -q` 报 `uv trampoline failed to canonicalize script path`，
-用 `uv run w3xray-test` 或 `uv run python -m pytest -q`；这两种方式直接走 Python 模块入口，
+用 `uv run gamexray-test` 或 `uv run python -m pytest -q`；这两种方式直接走 Python 模块入口，
 不经过 pytest 的 console-script 启动器。
 
 ## 重新打包 exe
 Windows 包必须先从固定源码构建 x64 CascLib；脚本会验证源码 SHA256，并生成 DLL 及其哈希。默认命令构建 onedir（exe + 同目录 `_internal/` 依赖）；加 `--onefile` 构建可直接分发的单文件 exe：
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools/build_casclib.ps1
-uv run w3xray-dist
-uv run w3xray-dist --onefile
+uv run gamexray-dist
+uv run gamexray-dist --onefile
 ```
 DLL 和生成的哈希是本地构建产物，不提交到 Git。Windows 打包会在 PyInstaller 启动前校验 DLL 存在、SHA256 匹配且为 x64 PE；直接运行 spec 也不能绕过这道校验。
 只检查将要执行的 PyInstaller 命令，不真正打包：
 ```bash
-uv run w3xray-dist --dry-run
+uv run gamexray-dist --dry-run
 ```
 说明：PyInstaller 不是跨平台编译器；在 macOS/Linux 上运行同一命令会生成当前平台的可执行文件，不会生成 Windows `.exe`。
 
@@ -139,19 +139,19 @@ uv run w3xray-dist --dry-run
 powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
   -War3Dir "C:\Program Files (x86)\Warcraft III"
 ```
-默认结果写入系统临时目录的时间戳证据目录 `w3xray-acceptance-YYYYMMDD-HHMMSS/`，两份报告的相对路径分别为：
+默认结果写入系统临时目录的时间戳证据目录 `gamexray-acceptance-YYYYMMDD-HHMMSS/`，两份报告的相对路径分别为：
 
 - `windows-onedir/acceptance.json`
 - `windows-onefile/acceptance.json`
 
 仓库还包含
 `.github/workflows/windows-package.yml`（hosted Windows 打包验收）和
-`windows-real-war3.yml`（带 `w3xray-war3` 标签的 self-hosted 真安装验收）。
+`windows-real-war3.yml`（带 `gamexray-war3` 标签的 self-hosted 真安装验收）。
 真安装工作流只接受 `source_sha` 输入的完整 40 位提交 SHA，检出后再次核对实际 `HEAD`，并
-继续受 `w3xray-real-war3` 受保护环境审批约束。
+继续受 `gamexray-real-war3` 受保护环境审批约束。
 
 ## 刷新原版数据（base_names / base_objects / westrings）
-`w3xtool/base_names.py` 等三份内置数据由 `build_base_names.py` 从**游戏本体**一次性生成，运行时不读游戏。换语言/升级后想刷新：
+`gametool/base_names.py` 等三份内置数据由 `build_base_names.py` 从**游戏本体**一次性生成，运行时不读游戏。换语言/升级后想刷新：
 
 - **经典版（≤1.29，MPQ）**：
   ```bash
@@ -164,7 +164,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
   uv run build_base_names.py --merge-from-casc "C:/Program Files (x86)/Warcraft III"  # 只补缺失对象，现有条目逐字保留
   ```
 - **配套生成器**：`build_base_catalog.py --objectdata-dir <war3-objectdata 快照>` 并入英文名/细类表（`BASE_NAMES_EN`/`BASE_CATEGORIES`），也可 `--casc-root <安装根目录>` 用本机 CASC 的 SLK 补细类（preserve-and-fill，现有条目一律保留）；`build_field_labels.py --meta-dir <MetaData 目录> [--common-j <Reforged common.j>]` 重建字段适用性/值域/常量表（标签为保留式合并）。英文名覆盖有已知上限：中文区客户端只安装 zhCN 语言包（enUS 条目在 Root 清单存在但内容未下载），而 war3-objectdata 快照（无论锁定版还是 master）都不含物品技能变体码（`AA12` 一类）的英文——这类码有中文名和细类、暂无英文名，属数据源硬限制。
-- **重制版（1.30+，CASC，散文件回退）**：游戏数据改为 CASC。Windows 发行包已接入 CascLib 后端，可按已知路径读取，也可流式枚举 Root 的全部条目；无原路径的条目以 FileDataID/CKey/EKey 保留。无 CascLib 时可回退到带 `w3xray-casc-paths.tsv` 的 idx/data 非加密 BLTE 读取；所有平台也可读取 CascView/casc-extract 导出的散文件目录（zhCN 语言包的冒号命名空间会按嵌套文件夹布局解析）。本次 macOS 环境不能代替真实 Windows 魔兽安装验收，刷新内置数据仍可用散文件目录：
+- **重制版（1.30+，CASC，散文件回退）**：游戏数据改为 CASC。Windows 发行包已接入 CascLib 后端，可按已知路径读取，也可流式枚举 Root 的全部条目；无原路径的条目以 FileDataID/CKey/EKey 保留。无 CascLib 时可回退到带 `gamexray-casc-paths.tsv` 的 idx/data 非加密 BLTE 读取；所有平台也可读取 CascView/casc-extract 导出的散文件目录（zhCN 语言包的冒号命名空间会按嵌套文件夹布局解析）。本次 macOS 环境不能代替真实 Windows 魔兽安装验收，刷新内置数据仍可用散文件目录：
   1. 用 [CascView](http://www.zezula.net/en/casc/main.html)（GUI）或 `wc3tools/casc-extract`（CLI，如 `casc-extract war3.w3mod:units/*` ）把游戏 `units/` 下的 `*Strings.txt`/`*Func.txt`/`*Data.slk` 与 `ui/WorldEdit*Strings.txt` 导到一个文件夹。
   2. `uv run build_base_names.py --from-dir <该文件夹>`，按打印的「找到/未找到」清单确认覆盖。
 
@@ -172,7 +172,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
 - **WTG 头和目录**：不需要游戏数据即可读取分类、变量、触发器头和启用状态。
 - **WTG ECA 函数体**：需要与地图版本匹配的 `TriggerData.txt` 才能按函数签名安全展开；缺 schema 时保留头部并报告未展开入口，不猜参数字节。
 - **ECA 本地化语义**：在 `TriggerData.txt` 基础上还需要 `TriggerStrings.txt`；缺少它时仍保留函数名和参数原值。
-- **原生 CASC**：Windows 已实现固定版本 CascLib 的已知路径读取和完整 Root 枚举。Root 没保存原路径时，浏览器保留 CascLib 返回的 `FileDataID/CKey/EKey` 稳定标识，仍可读取/导出，不伪造路径。散文件目录和显式 path-map 是跨平台回退。仓库包含需 `W3XRAY_WAR3_DIR` 的 Windows 真机验收；本次 macOS 验证仍不冒充真实安装通过。
+- **原生 CASC**：Windows 已实现固定版本 CascLib 的已知路径读取和完整 Root 枚举。Root 没保存原路径时，浏览器保留 CascLib 返回的 `FileDataID/CKey/EKey` 稳定标识，仍可读取/导出，不伪造路径。散文件目录和显式 path-map 是跨平台回退。仓库包含需 `GAMEXRAY_WAR3_DIR` 的 Windows 真机验收；本次 macOS 验证仍不冒充真实安装通过。
 - **保护/加密地图**：只做有界开档诊断、可恢复静态块提取和 `UnknownRaw` 原始负载保留；不执行内嵌 loader，不做运行时内存 dump、调试器或平台保护绕过。作者可提供带源地图 SHA256 和逐文件 SHA256 的明文补充包，让完全不可开的容器继续分析作者给出的 `war3map.j/lua/w3*` 文件。
 - **真实存档文件**：可对用户指定的文件/目录做只读清单、格式识别、SHA256、Preload/JASS/JSON/INI/MPQ 可读文本、存档键和对象 ID 交叉分析；不调用平台 API，不解密不透明平台数据，不修改源文件。
 - **资源边界**：单个 MPQ 成员最多解压 256 MiB；单个战役最多加载 256 张子图且累计保留不超过 512 MiB；命名文件、匿名块和恢复文件分别受累计导出预算限制；listfile 最多采用 100000 个、每个不超过 1024 字符的名称；SLK 坐标、行列和单元格数均有上限。超限来源会跳过或进入诊断，不会继续无界分配。
@@ -187,7 +187,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
 - **获取当前地图**：GUI 顶栏按钮或 CLI `main.py current` 根据游戏进程与磁盘证据定位 `.w3x/.w3m/.w3n`，通过置信度门槛后只解析私有临时快照，不改源地图。
 - **解包**：把地图(MPQ 压缩包)内部文件全部解出；文件名发现采用**三层并集**((listfile) + 内置固定名单 + war3map.imp 导入清单)，GUI 也可选择外部 listfile 补充被删掉的文件名；无文件名的匿名 block 会逐块尝试恢复加密 key、按内容猜扩展名导出到 `Unknown/`，若从 MDX/脚本等内容反推出真实资源路径则按原路径补导出并写 `RecoveredNames/manifest.tsv`，极端损坏或无法解码的原始 payload 会保留到 `UnknownRaw/manifest.tsv`；提取完整性报告会标出疑似数据级加密/运行时解密保护，不做运行时内存 dump 或绕过。
 - **CASC 客户端浏览**：选择可读的 Windows 原生游戏数据后，「数据工具」可分页浏览整个 Root（每页 200 条）、按 mask 重扫并导出所选；CLI `casc inventory` 输出含路径类型、FileDataID、CKey、EKey、大小和本地可用状态的 TSV，`casc extract` 按任一稳定标识导出单文件。
-- **作者明文补充包**：`cli <地图> --author-bundle <目录>` 或 GUI「数据工具」接入。补充包必须包含 `w3xray-author-bundle.tsv`，首行是 `W3XRAY-AUTHOR-BUNDLE<TAB>1`，第二行绑定源地图 SHA256，后续每行绑定内部路径和文件 SHA256；文件放在包内 `files/`，路径穿越、重复名、哈希不符和容量超限都会拒绝。
+- **作者明文补充包**：`cli <地图> --author-bundle <目录>` 或 GUI「数据工具」接入。补充包必须包含 `gamexray-author-bundle.tsv`，首行是 `GAMEXRAY-AUTHOR-BUNDLE<TAB>1`，第二行绑定源地图 SHA256，后续每行绑定内部路径和文件 SHA256；文件放在包内 `files/`，路径穿越、重复名、哈希不符和容量超限都会拒绝。
 - **真实存档只读分析**：GUI「数据工具」可选存档文件或目录；CLI 用 `main.py save --map <地图> --save <文件或目录> --output <报告.tsv>`。输出把真实文件证据与地图脚本声明的存档键、对象 ID/名称关联，不执行任何平台代码。
 - **对象信息**：解析对象编辑器数据，名称经 war3map.wts 还原为中文；字段标签全量化（1444 个字段码经 MetaData.slk + westrings 离线生成中文名，界面几乎不再出现裸 4 字符码）；多值字段（技能/单位/科技列表等）把逗号分隔的码逐项还原成「名字(码)」。详情面板显示**英文名与细类**（如 `Crown of Kings +5`/`神器`，自定义对象按其原版基底回填），「完整证据」模式的技能字段行附**值域**（`范围 ≥0，≤99999`）、**common.j 常量名**与**适用性提示**（该字段未被基础技能列出时标注）。对象数据三种载体都读：**二进制** `.w3u/.w3a/…`、**INI 文本档**（`*UnitFunc/Strings.txt`）、**内嵌 SLK**（`AbilityData.slk` 等，SLK 优化图的产物）；三者按对象码自动合并（如优化图里技能名来自 txt、字段与引用来自 SLK，合成一条完整记录）。SLK 字段做了可读化：等级后缀列（`Cast2`→「施法间隔(等级2)」、`BuffID1`→「buff效果(等级1)」），并按 `[AlwaysEmpty]` 隐藏 `comments/version/sort/code` 等编辑器噪声列
 - **地图信息**：独立标签页展示 war3map.w3i —— 真实地图名/作者/描述/推荐人数/尺寸/脚本语言(JASS/Lua)/各玩家(类型·种族·名字)/队伍(同盟·共享)；地图名优先取 w3i（比 HM3W 头权威，自动还原 TRIGSTR）。战役 `.w3n` 另解析 war3campaign.w3f 显示战役名/作者/难度/描述；同时解析 `war3map.w3r/.w3c/.w3s`，列出世界编辑器里的区域、镜头、声音数量与名称摘要；若包内或单独打开 `.wgc`，会显示 AI 测试/对局配置里的地图路径、游戏速度、关闭战争迷雾/胜负条件、玩家/电脑/观察者槽位和自定义 AI 脚本路径；若存在 `war3map.wtg`，会显示触发器树版本、分类、变量、触发器头和开局运行/禁用/自定义脚本等状态；若存在 `war3map.mmp`，会显示小地图上的玩家出生点、金矿、中立建筑标记数量和坐标摘要；若存在 `war3map.imp`，会显示导入资源数量、标准/自定义路径、扩展名分布和疑似缺失导入文件
@@ -204,7 +204,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
   - **细类过滤**：对象编辑器和装备关系工作区各有「细类」下拉（神器 / 充能物品 / 英雄技能 / 物品技能 / 建筑 / 英雄…），值随当前地图动态出现，只看某一类是一步操作
 - **脚本**：提取 war3map.j / war3map.lua / wts 等
 - **战役**：打开 `.w3n` 后顶部出现「子地图▾」下拉，可切换浏览**战役共享对象**和**每张子图**的对象/指令/配方
-- **导出**：全部文件 / 脚本 / 各分类 ID 列表 / 资料包 —— **统一导到系统临时目录**(`%TEMP%/w3xtool提取/`)并自动打开（提取物都是临时文件）；战役会递归导出每张子图内部文件，CLI `--pack` 会自动生成 `子地图/001_名称/`，父包与全部子包的合并结果共同决定退出状态；外部 listfile 会参与“导出全部”和“资料包”的内部文件清单/资源扫描。资料包写入会区分完整、部分和失败，`组件诊断.tsv` 保留来源/阶段/异常类型，`资料包写入结果.tsv` 包含自身并保留每个相对路径的最终状态；GUI/CLI 不再把部分成功显示成完整成功。
+- **导出**：全部文件 / 脚本 / 各分类 ID 列表 / 资料包 —— **统一导到系统临时目录**(`%TEMP%/gametool提取/`)并自动打开（提取物都是临时文件）；战役会递归导出每张子图内部文件，CLI `--pack` 会自动生成 `子地图/001_名称/`，父包与全部子包的合并结果共同决定退出状态；外部 listfile 会参与“导出全部”和“资料包”的内部文件清单/资源扫描。资料包写入会区分完整、部分和失败，`组件诊断.tsv` 保留来源/阶段/异常类型，`资料包写入结果.tsv` 包含自身并保留每个相对路径的最终状态；GUI/CLI 不再把部分成功显示成完整成功。
 - **隐藏指令 / 合成配方**：扫描脚本里的聊天指令与物品合成配方
 - **完整对象文本**：普通、扩展、学习、关闭、Buff、复活/唤醒和编辑器说明按全部等级保留原文与去色可读文本；来源、字段、状态和同级冲突均可追溯，不截断正文。
 - **掉落 / 获取 / 装备技能**：统一索引怪物与可破坏物掉落、商店出售/制造、合成、地面与背包预放置、脚本/WTG 奖励、装备技能和共享冷却技能；保留概率、掉落组、实例、坐标及文件/行号/偏移证据。
@@ -230,7 +230,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
 - **编辑器式 GUI 工作台**：顶部保留打开/导出工具栏，对战图/战役图保持独立导航；主标签为「总览 / 对象编辑器 / 地图信息 / GUI触发器 / 场景放置 / 触发指令 / 合成配方 / 孤立对象 / 分析报告」。总览集中显示对象、脚本、场景与风险快照；分析报告把 CLI 已有的审计、兼容、资源、命令、崩溃、秘籍等只读检测汇总到 GUI。
 - **单实例**：只允许开一个。再次启动时会先关掉上一个实例再接管，不会多开（靠临时目录锁文件记录 pid+映像，并对 pid 复用做校验，绝不误杀同 pid 的他程序）
 
-## 代码结构（w3xtool/）
+## 代码结构（gametool/）
 | 文件 | 作用 |
 |------|------|
 | `mpq.py` | MPQ 压缩包读取：头部定位、表解密、扇区解压、匿名加密 block 恢复 |

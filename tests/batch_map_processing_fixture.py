@@ -8,14 +8,14 @@ from collections.abc import Iterable
 from contextlib import nullcontext
 from typing import ContextManager
 
-from w3xtool.extraction_ledger import (
+from gametool.extraction_ledger import (
     BlockSource,
     BlockState,
     ExtractionEntry,
     build_extraction_ledger,
 )
-from w3xtool.icon_resources import AnonymousIconBlock
-from w3xtool.item_relation_models import (
+from gametool.icon_resources import AnonymousIconBlock
+from gametool.item_relation_models import (
     ItemRelation,
     ItemRelationIndex,
     ItemRelationKind,
@@ -24,9 +24,9 @@ from w3xtool.item_relation_models import (
     RelationEvidence,
     RelationObject,
 )
-from w3xtool.map_archive_reader import MapArchiveReader
-from w3xtool.map_data import GameObject, GameObjectFieldEvidence, MapData
-from w3xtool.object_text_models import (
+from gametool.map_archive_reader import MapArchiveReader
+from gametool.map_data import GameObject, GameObjectFieldEvidence, MapData
+from gametool.object_text_models import (
     ObjectTextIndex,
     ObjectTextRecord,
     ObjectTextState,

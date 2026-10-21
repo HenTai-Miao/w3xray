@@ -12,7 +12,7 @@ from tests.batch_icon_report_fixture import (
     validate_icon_publication,
     validate_missing_gap_publication,
 )
-from w3xtool.icon_evidence_models import IconGapReason
+from gametool.icon_evidence_models import IconGapReason
 
 
 class _ReferencePayload(TypedDict):

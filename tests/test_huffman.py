@@ -9,8 +9,8 @@ from pathlib import Path
 import random
 import unittest
 
-from w3xtool.huffman import huff_decompress
-from w3xtool.mpq import MPQArchive
+from gametool.huffman import huff_decompress
+from gametool.mpq import MPQArchive
 
 MAP_PATH = Path(__file__).parent / "fixtures" / "reference" / "stormlib-huffman-map.w3x"
 MAP_SHA256 = "c6b04fce2ecdb7c7a5701c26bb3e91c3f1c5b911974654ae4514775e48c43a29"
@@ -46,7 +46,7 @@ def _decode_to_end(data):
     reason='END'（命中 0x100 结束符）且 bytes_left<=1（输入恰好读完）——
     自适应树一旦与编码器失步(如新符号重复加权)就不可能在大量真实流上对齐。
     """
-    from w3xtool.huffman import _InputStream, _HuffmannTree
+    from gametool.huffman import _InputStream, _HuffmannTree
 
     is_ = _InputStream(data)
     tree = _HuffmannTree()
@@ -88,8 +88,8 @@ class TestHuffmanRealStormLibStreams(unittest.TestCase):
     """
 
     def test_real_huffman_sectors_decode_in_sync(self):
-        import w3xtool.mpq as M
-        from w3xtool.mpq import MPQArchive
+        import gametool.mpq as M
+        from gametool.mpq import MPQArchive
 
         captured = []
         orig = M.huff_decompress

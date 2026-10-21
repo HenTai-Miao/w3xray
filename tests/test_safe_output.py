@@ -13,15 +13,15 @@ from typing import BinaryIO
 import pytest
 
 from tests.symlink_capability import skip_if_symlinks_unsupported
-from w3xtool import safe_output
-from w3xtool.safe_output import (
+from gametool import safe_output
+from gametool.safe_output import (
     SafeWriteStatus,
     safe_destination,
     safe_relative_path,
     write_bytes_safely,
     write_text_safely,
 )
-from w3xtool.safe_output_anchored import ANCHORED_WRITES_AVAILABLE
+from gametool.safe_output_anchored import ANCHORED_WRITES_AVAILABLE
 
 
 def _track_opened_descriptors(monkeypatch: pytest.MonkeyPatch) -> list[int]:
@@ -307,7 +307,7 @@ def test_chunk_writer_fallback_publishes_only_after_all_chunks(
     assert result.status is SafeWriteStatus.WRITTEN
     assert result.size == len(b"new-data")
     assert output.read_bytes() == b"new-data"
-    assert not tuple(tmp_path.glob(".w3xray-stage-*.tmp"))
+    assert not tuple(tmp_path.glob(".gamexray-stage-*.tmp"))
 
 
 def test_chunk_writer_fallback_preserves_target_when_source_raises(
@@ -344,7 +344,7 @@ def test_chunk_writer_fallback_rejects_replaced_staged_file(
 
     def replacing_writer(descriptor: int, chunks: Iterator[bytes]) -> int:
         size = original_writer(descriptor, chunks)
-        staged = next(tmp_path.glob(".w3xray-stage-*.tmp"))
+        staged = next(tmp_path.glob(".gamexray-stage-*.tmp"))
         staged.unlink()
         _ = staged.write_bytes(b"attacker-data")
         return size
@@ -362,7 +362,7 @@ def test_chunk_writer_fallback_rejects_replaced_staged_file(
 
 def test_staged_path_identity_detects_replacement_after_close(tmp_path: Path) -> None:
     # Given: a closed stage is replaced while retaining the same path.
-    staged = tmp_path / ".w3xray-stage-test.tmp"
+    staged = tmp_path / ".gamexray-stage-test.tmp"
     staged.write_bytes(b"trusted")
     details = staged.stat()
     identity = details.st_dev, details.st_ino

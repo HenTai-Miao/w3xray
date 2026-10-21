@@ -1,6 +1,6 @@
 """save_codes 提取逻辑测试 (正则/载体/转义/假阳性)。"""
 
-from w3xtool.save_codes import extract_save_codes, extract_script_save_codes
+from gametool.save_codes import extract_save_codes, extract_script_save_codes
 
 
 def test_preload_literal_extraction():
@@ -41,7 +41,7 @@ class TestScanBudget:
     def test_timeout_flag(self):
         import time
 
-        from w3xtool.live_handle_chain import ScanBudget
+        from gametool.live_handle_chain import ScanBudget
 
         b = ScanBudget(deadline_s=0.01)
         assert b.check()
@@ -50,21 +50,21 @@ class TestScanBudget:
         assert b.timed_out
 
     def test_cancelled(self):
-        from w3xtool.live_handle_chain import ScanBudget
+        from gametool.live_handle_chain import ScanBudget
 
         b = ScanBudget(cancelled=True)
         assert not b.check()
         assert not b.timed_out
 
     def test_no_deadline_never_times_out(self):
-        from w3xtool.live_handle_chain import ScanBudget
+        from gametool.live_handle_chain import ScanBudget
 
         b = ScanBudget()
         assert b.check()
         assert not b.timed_out
 
     def test_unit_field_layout_complete(self):
-        from w3xtool.live_handle_chain import UNIT_FIELD_LAYOUT
+        from gametool.live_handle_chain import UNIT_FIELD_LAYOUT
 
         assert UNIT_FIELD_LAYOUT["inventory"][0] == 0x1F8
         assert UNIT_FIELD_LAYOUT["owner_slot"][0] == 0x58

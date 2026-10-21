@@ -5,12 +5,12 @@
 && 且、|| 或、() 分组，&& 优先于 ||；相邻词默认 &&；
 引号内与 \\ 转义后的 % & | ( ) 均为字面量；裸词无 % 时按 %词% 处理。
 
-纯函数 fuzzy_score(query, text) 已从 GUI 抽到 w3xtool.search，可独立测试。
+纯函数 fuzzy_score(query, text) 已从 GUI 抽到 gametool.search，可独立测试。
 """
 
 import unittest
 
-from w3xtool.search import compile_query, fuzzy_score
+from gametool.search import compile_query, fuzzy_score
 
 
 class TestEmptyAndBasic(unittest.TestCase):

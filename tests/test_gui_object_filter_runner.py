@@ -8,11 +8,11 @@ from typing import assert_never
 
 import pytest
 
-import w3xtool.gui_object_filter_runner as filter_runner
-from w3xtool.api import MapData
-from w3xtool.gui_object_filter_runner import ObjectFilterError, ObjectFilterRunnerMixin
-from w3xtool.gui_worker_host import GuiWorkerHostMixin
-from w3xtool.object_filter import ObjectFilterResult
+import gametool.gui_object_filter_runner as filter_runner
+from gametool.api import MapData
+from gametool.gui_object_filter_runner import ObjectFilterError, ObjectFilterRunnerMixin
+from gametool.gui_worker_host import GuiWorkerHostMixin
+from gametool.object_filter import ObjectFilterResult
 
 
 class _Search:
@@ -168,8 +168,8 @@ def test_replaced_filter_only_delivers_current_result(
 
 def test_filter_objects_by_fine_category_narrows_categories() -> None:
     # Given: a hero, an artifact item, and a hero-ability custom object.
-    from w3xtool.api import GameObject
-    from w3xtool.object_filter import filter_objects_by_query
+    from gametool.api import GameObject
+    from gametool.object_filter import filter_objects_by_query
 
     md = MapData(path="x.w3x", name="细类图")
     md.objects = {
@@ -195,7 +195,7 @@ def test_filter_objects_by_fine_category_narrows_categories() -> None:
 
 def test_refresh_list_syncs_fine_choices_and_resets_stale_pick() -> None:
     # Given: a map whose objects carry only the hero fine category.
-    from w3xtool.api import GameObject
+    from gametool.api import GameObject
 
     md = MapData(path="x.w3x", name="同步图")
     md.objects = {

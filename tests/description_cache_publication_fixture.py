@@ -13,16 +13,16 @@ from tests.description_cache_migration_fixture import (
     legacy_client_fill,
     write_legacy_inputs,
 )
-from w3xtool import atomic_rename
-from w3xtool.atomic_rename import rename_noreplace
-from w3xtool.description_cache_publication_models import RetainedCacheRecord
-from w3xtool.description_cache_publication_descriptor_close import (
+from gametool import atomic_rename
+from gametool.atomic_rename import rename_noreplace
+from gametool.description_cache_publication_models import RetainedCacheRecord
+from gametool.description_cache_publication_descriptor_close import (
     DescriptorCloseLedger,
 )
-from w3xtool.description_cache_publication_errors import (
+from gametool.description_cache_publication_errors import (
     DescriptionCachePublicationError,
 )
-from w3xtool.description_cache_publication_stage import BoundDescriptionCacheStage
+from gametool.description_cache_publication_stage import BoundDescriptionCacheStage
 
 
 _DIRECTORY_FLAGS: Final = (
@@ -124,15 +124,15 @@ def exchange_in_parent(
 def transient_publication_paths(output: Path) -> tuple[Path, ...]:
     """Return transaction-private stage and backup paths."""
     patterns = (
-        ".w3xray-description-cache-stage-*",
-        ".w3xray-description-cache-backup-*",
+        ".gamexray-description-cache-stage-*",
+        ".gamexray-description-cache-backup-*",
     )
     return tuple(path for pattern in patterns for path in output.parent.glob(pattern))
 
 
 def retained_publication_paths(output: Path) -> tuple[Path, ...]:
     """Return retained-generation sibling paths adjacent to one output."""
-    return tuple(output.parent.glob(".w3xray-description-cache-retained-*-*"))
+    return tuple(output.parent.glob(".gamexray-description-cache-retained-*-*"))
 
 
 def assert_live_retained_records(

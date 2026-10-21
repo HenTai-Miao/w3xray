@@ -13,17 +13,17 @@ from tests.description_cache_publication_fixture import (
     open_parent,
     rename_in_parent,
 )
-from w3xtool import description_cache_publication_named_leaf as named_leaf
-from w3xtool.description_cache_publication_errors import (
+from gametool import description_cache_publication_named_leaf as named_leaf
+from gametool.description_cache_publication_errors import (
     PublicationCommitContextError,
 )
-from w3xtool.description_cache_publication_models import (
+from gametool.description_cache_publication_models import (
     PublicationTransientRecord,
     RetainedCacheRole,
 )
-from w3xtool.description_cache_publication_named_leaf import read_named_leaf
-from w3xtool.description_cache_publication_retention import retain_object
-from w3xtool.description_cache_publication_retention_names import RetainedCacheNames
+from gametool.description_cache_publication_named_leaf import read_named_leaf
+from gametool.description_cache_publication_retention import retain_object
+from gametool.description_cache_publication_retention_names import RetainedCacheNames
 
 
 type RetentionSide = Literal["source", "target"]

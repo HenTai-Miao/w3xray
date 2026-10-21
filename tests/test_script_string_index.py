@@ -2,8 +2,8 @@
 
 import unittest
 
-from w3xtool.api import MapData
-from w3xtool.script_string_index import (
+from gametool.api import MapData
+from gametool.script_string_index import (
     build_script_string_index,
     format_script_string_index_tsv,
 )

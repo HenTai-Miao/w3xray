@@ -6,25 +6,25 @@ from dataclasses import dataclass
 
 import pytest
 
-from w3xtool.extraction_diagnostics import DiagnosticSeverity, read_component
-from w3xtool.cli_summary import iter_cli_summary_lines
-from w3xtool.gui_extraction_reports import build_extraction_completeness_block
-from w3xtool.knowledge_diagnostics import format_component_diagnostics_tsv
-from w3xtool.knowledge_pack import write_knowledge_pack_report
-from w3xtool.load_context import MapLoadContext
-from w3xtool.map_loader import _load_map_impl
-from w3xtool.object_candidates import collect_object_candidates
-from w3xtool.map_components import _add_preplaced, _add_w3f, _add_w3i
-from w3xtool.map_data import MapData
-from w3xtool.map_extras import (
+from gametool.extraction_diagnostics import DiagnosticSeverity, read_component
+from gametool.cli_summary import iter_cli_summary_lines
+from gametool.gui_extraction_reports import build_extraction_completeness_block
+from gametool.knowledge_diagnostics import format_component_diagnostics_tsv
+from gametool.knowledge_pack import write_knowledge_pack_report
+from gametool.load_context import MapLoadContext
+from gametool.map_loader import _load_map_impl
+from gametool.object_candidates import collect_object_candidates
+from gametool.map_components import _add_preplaced, _add_w3f, _add_w3i
+from gametool.map_data import MapData
+from gametool.map_extras import (
     add_game_configs,
     add_import_summary,
     add_preview_icons,
     add_trigger_summary,
     add_world_metadata,
 )
-from w3xtool.script_sources import collect_readable_scripts
-from w3xtool.slk_objects import parse_category_objects
+from gametool.script_sources import collect_readable_scripts
+from gametool.slk_objects import parse_category_objects
 
 
 @dataclass(frozen=True, slots=True)
@@ -293,7 +293,7 @@ def test_reference_graph_failure_is_recorded_as_component_diagnostic(
 ) -> None:
     # Given: optional reference analysis raises after all primary extraction completed.
     monkeypatch.setattr(
-        "w3xtool.map_loader.build_reference_graph",
+        "gametool.map_loader.build_reference_graph",
         lambda _md: _raise_runtime_error("graph failed"),
     )
 

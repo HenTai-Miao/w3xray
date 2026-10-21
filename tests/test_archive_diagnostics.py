@@ -11,8 +11,8 @@ from unittest.mock import patch
 
 import pytest
 
-from w3xtool import archive_diagnostics
-from w3xtool.archive_diagnostics import (
+from gametool import archive_diagnostics
+from gametool.archive_diagnostics import (
     ArchiveDiagnosisKind,
     diagnose_archive_open,
 )
@@ -262,7 +262,7 @@ def test_fifo_diagnosis_returns_without_waiting_for_writer(tmp_path: Path) -> No
     script = "\n".join(
         (
             "import sys",
-            "from w3xtool.archive_diagnostics import (",
+            "from gametool.archive_diagnostics import (",
             "    ArchiveDiagnosisKind, diagnose_archive_open,",
             ")",
             "result = diagnose_archive_open(sys.argv[1])",

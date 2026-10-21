@@ -12,19 +12,19 @@ import pytest
 
 from tests.description_cache_publication_fixture import replacement_inputs
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool import description_cache_publication as publication
-from w3xtool.description_cache_migration import (
+from gametool import description_cache_publication as publication
+from gametool.description_cache_migration import (
     DescriptionCacheMigrationOptions,
     migrate_description_cache,
 )
-from w3xtool.description_cache_migration_models import (
+from gametool.description_cache_migration_models import (
     DescriptionCacheRejection,
     ProvenDescriptionCandidate,
 )
-from w3xtool.description_cache_publication_errors import (
+from gametool.description_cache_publication_errors import (
     DescriptionCachePublicationError,
 )
-from w3xtool.trusted_description_cache_models import (
+from gametool.trusted_description_cache_models import (
     TrustedCacheLeafProof,
     VerifiedDescriptionCacheGeneration,
 )
@@ -41,7 +41,7 @@ _DIRECTORY_FLAGS = (
 def test_stage_io_support_preflight_rejects_incomplete_host_without_transaction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    stage_io = importlib.import_module("w3xtool.description_cache_publication_stage_io")
+    stage_io = importlib.import_module("gametool.description_cache_publication_stage_io")
     calls = {"uuid4": 0, "rename_noreplace": 0, "rename_exchange": 0}
 
     def forbidden_uuid4() -> Never:
@@ -81,7 +81,7 @@ def test_writer_return_leaf_replacement_is_rejected(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    stage_io = importlib.import_module("w3xtool.description_cache_publication_stage_io")
+    stage_io = importlib.import_module("gametool.description_cache_publication_stage_io")
     stage = tmp_path / "stage"
     stage.mkdir()
     descriptor = os.open(stage, _DIRECTORY_FLAGS)
@@ -181,7 +181,7 @@ def test_generation_snapshot_rejects_early_same_size_in_place_mutation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     generation_io = importlib.import_module(
-        "w3xtool.trusted_description_cache_generation_io"
+        "gametool.trusted_description_cache_generation_io"
     )
     root = published_cache(tmp_path / "cache", raw="first")
     descriptor = os.open(root, _DIRECTORY_FLAGS)
@@ -251,6 +251,6 @@ def test_stage_leaf_takeover_after_capture_never_receives_writer_bytes(
             DescriptionCacheMigrationOptions(legacy_output, legacy_cache, output)
         )
 
-    sentinels = tuple(output.parent.glob(".w3xray-description-cache-*/sentinel"))
+    sentinels = tuple(output.parent.glob(".gamexray-description-cache-*/sentinel"))
     assert len(sentinels) == 1 and sentinels[0].read_bytes() == foreign_bytes
     assert {path.name for path in sentinels[0].parent.iterdir()} == {"sentinel"}

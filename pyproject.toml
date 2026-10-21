@@ -1,5 +1,5 @@
 [project]
-name = "w3xray"
+name = "gamexray"
 version = "0.1.4"
 description = "X-ray your Warcraft III maps — extract units, items, abilities, tech, scripts, hidden chat commands and recipes from .w3x/.w3m/.w3n (pure Python, no StormLib)."
 readme = "README.md"
@@ -12,16 +12,16 @@ dependencies = [
 ]
 
 [project.scripts]
-w3xray-dist = "w3xtool.dist_build:main"
-w3xray-quality = "w3xtool.quality_gate:main"
-w3xray-test = "w3xtool.dev_test:main"
+gamexray-dist = "gametool.dist_build:main"
+gamexray-quality = "gametool.quality_gate:main"
+gamexray-test = "gametool.dev_test:main"
 
 [build-system]
 requires = ["hatchling>=1.28.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["w3xtool"]
+packages = ["gametool"]
 
 [dependency-groups]
 dev = [
@@ -43,12 +43,14 @@ ignore = [
     "tests/test_gui_casc_worker.py",
     "tests/test_gui_export_worker.py",
     "tests/test_gui_object_filter_runner.py",
-    "w3xtool/gui.py",
-    "w3xtool/gui_casc_browser.py",
-    "w3xtool/gui_export_actions.py",
-    "w3xtool/gui_external_data.py",
-    "w3xtool/gui_lifecycle.py",
-    "w3xtool/gui_source_browser.py",
+    "gametool/gui.py",
+    "gametool/gui_casc_browser.py",
+    "gametool/gui_export_actions.py",
+    "gametool/gui_external_data.py",
+    "gametool/gui_lifecycle.py",
+    "gametool/gui_profile_settings.py",
+    "gametool/gui_source_browser.py",
+    "gametool/gui_topbar.py",
 ]
 
 [tool.ruff]

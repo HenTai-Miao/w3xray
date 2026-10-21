@@ -10,13 +10,13 @@ Make batch extraction and GUI background work recoverable, verifiable, bounded, 
 - Existing `/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output-v2` is not modified during development or acceptance.
 - No map script, historical executable, or DLL payload is executed.
 - Existing report filenames remain available at the batch root and inside each map directory.
-- Per-map files remain below `地图/`; global transactional data remains below `.w3xray-global/`.
+- Per-map files remain below `地图/`; global transactional data remains below `.gamexray-global/`.
 - No new runtime dependency is added. Python 3.14, the standard library, pytest, Ruff, and basedpyright are sufficient.
 - New and substantively changed Python modules stay below 250 pure lines. `batch_runner.py` and `gui_loader_runner.py` are already in the 200–250 warning band, so new responsibilities move to focused modules.
 
 ## Per-map immutable content manifest
 
-Every successfully built map stage contains `内容清单.json` and `.w3xray-batch-owned`.
+Every successfully built map stage contains `内容清单.json` and `.gamexray-batch-owned`.
 
 `内容清单.json` is deterministic UTF-8 JSON with:
 
@@ -66,7 +66,7 @@ Rename, `fsync`, ENOSPC, cleanup, and process-interruption fault tests cover eve
 
 ## Transactional global generations
 
-The authoritative global snapshot lives at `.w3xray-global/generations/<generation-id>/` and contains:
+The authoritative global snapshot lives at `.gamexray-global/generations/<generation-id>/` and contains:
 
 - `批量提取汇总.tsv`;
 - `批量提取状态.json`;
@@ -75,7 +75,7 @@ The authoritative global snapshot lives at `.w3xray-global/generations/<generati
 - `批量诊断.jsonl`;
 - `全局清单.json` with size and SHA-256 for the five files.
 
-A generation is staged, synchronized, renamed into `generations/`, validated, and then selected through one atomically replaced and synchronized `.w3xray-global/current.json` pointer. Resume and automatic cache loading use only the validated pointed generation. Root-level report files remain compatibility mirrors written after the authoritative commit; a crash between mirrors cannot corrupt resume state.
+A generation is staged, synchronized, renamed into `generations/`, validated, and then selected through one atomically replaced and synchronized `.gamexray-global/current.json` pointer. Resume and automatic cache loading use only the validated pointed generation. Root-level report files remain compatibility mirrors written after the authoritative commit; a crash between mirrors cannot corrupt resume state.
 
 ## Strict state, dependency fingerprint, and safe reuse
 
@@ -138,7 +138,7 @@ No GUI close path waits indefinitely. Loader, filter, current-map, source scan, 
 
 ## Quality gates and cross-platform acceptance
 
-`pyproject.toml` adds pinned development ranges for Ruff and basedpyright plus explicit project configuration. A cross-platform `w3xray-quality` entry point runs:
+`pyproject.toml` adds pinned development ranges for Ruff and basedpyright plus explicit project configuration. A cross-platform `gamexray-quality` entry point runs:
 
 - `ruff check` on the maintained strict path set;
 - `ruff format --check` on the same set;
@@ -154,6 +154,6 @@ Unit/integration coverage includes manifest tampering, state corruption, depende
 
 - The new state/manifest schema intentionally invalidates legacy resumability. Existing files are never deleted merely because they are legacy.
 - A new run may replace only a destination proven owned by the same source digest; otherwise it chooses the content-addressed destination or fails safely.
-- Root-level reports remain readable by existing users, but `.w3xray-global/current.json` is the sole authoritative resume pointer.
+- Root-level reports remain readable by existing users, but `.gamexray-global/current.json` is the sole authoritative resume pointer.
 - Public `MapData`, object, relation, description, and report data contracts are unchanged.
 - The source map inventory and its SHA-256 values must be identical before and after every real-map acceptance.

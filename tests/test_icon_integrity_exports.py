@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-from w3xtool.batch_icon_export import IconExportRecord, IconExportState, IconKind
-from w3xtool.extraction_ledger import BlockSource, BlockState
-from w3xtool.icon_evidence_exports import format_icon_integrity
-from w3xtool.icon_evidence_index import IconEvidenceIndex
-from w3xtool.icon_evidence_models import (
+from gametool.batch_icon_export import IconExportRecord, IconExportState, IconKind
+from gametool.extraction_ledger import BlockSource, BlockState
+from gametool.icon_evidence_exports import format_icon_integrity
+from gametool.icon_evidence_index import IconEvidenceIndex
+from gametool.icon_evidence_models import (
     FilteredIconEvidence,
     IconGapReason,
     IconResolutionLayer,
     ResolvedIconEvidence,
     UnresolvedIconEvidence,
 )
-from w3xtool.icon_resources import AnonymousIconResource, IconObjectReference
+from gametool.icon_resources import AnonymousIconResource, IconObjectReference
 
 
 def test_icon_integrity_splits_every_counter_without_calling_gaps_write_failures() -> (

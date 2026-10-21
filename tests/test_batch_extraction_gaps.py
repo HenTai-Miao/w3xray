@@ -8,13 +8,13 @@ import tempfile
 import unittest
 from dataclasses import dataclass
 
-from w3xtool.api import MapData
-from w3xtool.knowledge_resource_exports import write_resources
-from w3xtool.knowledge_terrain_exports import write_terrain_exports
-from w3xtool.knowledge_unknown_exports import write_unknown_files_from_archive
-from w3xtool.mpq import FLAG_ENCRYPTED, FLAG_EXISTS
-from w3xtool.mpq_files import list_archive_files
-from w3xtool.resource_content_refs import build_resource_content_references
+from gametool.api import MapData
+from gametool.knowledge_resource_exports import write_resources
+from gametool.knowledge_terrain_exports import write_terrain_exports
+from gametool.knowledge_unknown_exports import write_unknown_files_from_archive
+from gametool.mpq import FLAG_ENCRYPTED, FLAG_EXISTS
+from gametool.mpq_files import list_archive_files
+from gametool.resource_content_refs import build_resource_content_references
 
 
 @dataclass(frozen=True, slots=True)

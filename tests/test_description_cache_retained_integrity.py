@@ -17,9 +17,9 @@ from tests.retained_integrity_fixture import (
     stage,
 )
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool import description_cache_retained_integrity as snapshot_api
-from w3xtool import trusted_description_cache as trusted_api
-from w3xtool.trusted_description_cache import load_trusted_description_cache
+from gametool import description_cache_retained_integrity as snapshot_api
+from gametool import trusted_description_cache as trusted_api
+from gametool.trusted_description_cache import load_trusted_description_cache
 
 
 def test_retained_integrity_separates_valid_partial_and_transient_objects(
@@ -103,9 +103,9 @@ def test_transient_and_malformed_reasons_are_closed(tmp_path: Path) -> None:
     active = active_cache(tmp_path)
     stage(active, "2").mkdir()
     backup(active, "3").write_bytes(b"backup")
-    (active.parent / ".w3xray-description-cache-stage-bad").mkdir()
-    (active.parent / ".w3xray-description-cache-backup-bad").mkdir()
-    (active.parent / ".w3xray-description-cache-retained-bad").mkdir()
+    (active.parent / ".gamexray-description-cache-stage-bad").mkdir()
+    (active.parent / ".gamexray-description-cache-backup-bad").mkdir()
+    (active.parent / ".gamexray-description-cache-retained-bad").mkdir()
 
     report = inspect(active)
 

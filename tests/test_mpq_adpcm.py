@@ -4,8 +4,8 @@ import struct
 
 import pytest
 
-from w3xtool.mpq_adpcm import MPQADPCMError, decompress_adpcm
-from w3xtool.mpq_compression import MPQCompressionError, decompress_mpq_sector
+from gametool.mpq_adpcm import MPQADPCMError, decompress_adpcm
+from gametool.mpq_compression import MPQCompressionError, decompress_mpq_sector
 
 
 def _samples(data: bytes) -> tuple[int, ...]:

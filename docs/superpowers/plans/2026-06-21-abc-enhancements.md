@@ -13,7 +13,7 @@
 ### Task 1: Resource Dependency Core
 
 **Files:**
-- Create: `w3xtool/resources.py`
+- Create: `gametool/resources.py`
 - Test: `tests/test_resources.py`
 
 - [x] **Step 1: Write failing tests**
@@ -24,7 +24,7 @@ Cover:
 - Archive asset files that are never referenced are reported as unreferenced.
 
 Run: `uv run pytest tests/test_resources.py -q`
-Expected: FAIL because `w3xtool.resources` does not exist.
+Expected: FAIL because `gametool.resources` does not exist.
 
 - [x] **Step 2: Implement minimal resource graph**
 
@@ -43,7 +43,7 @@ Expected: PASS.
 ### Task 2: Version Compatibility Core
 
 **Files:**
-- Create: `w3xtool/compat.py`
+- Create: `gametool/compat.py`
 - Test: `tests/test_compat.py`
 
 - [x] **Step 1: Write failing tests**
@@ -56,7 +56,7 @@ Cover:
 - Plain version 25 JASS map reports compatible.
 
 Run: `uv run pytest tests/test_compat.py -q`
-Expected: FAIL because `w3xtool.compat` does not exist.
+Expected: FAIL because `gametool.compat` does not exist.
 
 - [x] **Step 2: Implement compatibility report**
 
@@ -77,7 +77,7 @@ Expected: PASS.
 
 **Files:**
 - Modify: `main.py`
-- Modify: `w3xtool/audit.py`
+- Modify: `gametool/audit.py`
 - Modify: `README.md`
 - Test: `tests/test_cli_audit.py`
 - Test: `tests/test_audit.py`
@@ -107,7 +107,7 @@ Run:
 ### Task 4: Terrain/W3E Summary
 
 **Files:**
-- Create: `w3xtool/terrain.py`
+- Create: `gametool/terrain.py`
 - Modify: `main.py`
 - Modify: `README.md`
 - Test: `tests/test_terrain.py`
@@ -137,9 +137,9 @@ Run:
 ### Task 5: Map Structure, Gameplay Constants, and Numeric Orders
 
 **Files:**
-- Create: `w3xtool/mapmeta.py`
-- Create: `w3xtool/gameplay.py`
-- Modify: `w3xtool/orders.py`
+- Create: `gametool/mapmeta.py`
+- Create: `gametool/gameplay.py`
+- Modify: `gametool/orders.py`
 - Modify: `main.py`
 - Modify: `README.md`
 - Test: `tests/test_mapmeta.py`

@@ -11,15 +11,15 @@ from tests.description_cache_publication_fixture import (
     replacement_inputs,
 )
 from tests.trusted_description_cache_fixture import published_cache
-from w3xtool import description_cache_publication as publication
-from w3xtool.description_cache_migration import (
+from gametool import description_cache_publication as publication
+from gametool.description_cache_migration import (
     DescriptionCacheMigrationOptions,
     migrate_description_cache,
 )
-from w3xtool.description_cache_publication_errors import (
+from gametool.description_cache_publication_errors import (
     DescriptionCachePublicationError,
 )
-from w3xtool.trusted_description_cache import (
+from gametool.trusted_description_cache import (
     VerifiedDescriptionCache,
     load_trusted_description_cache,
 )
@@ -33,7 +33,7 @@ def _identity(path: Path) -> tuple[int, int]:
 def _failed_stage(output: Path) -> tuple[Path, ...]:
     return tuple(
         path
-        for path in output.parent.glob(".w3xray-description-cache-retained-*-*")
+        for path in output.parent.glob(".gamexray-description-cache-retained-*-*")
         if path.name.endswith("-failed-stage")
     )
 

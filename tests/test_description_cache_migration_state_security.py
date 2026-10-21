@@ -10,7 +10,7 @@ import pytest
 
 from tests.description_cache_conflict_fixture import write_conflicting_inputs
 from tests.description_cache_migration_fixture import write_legacy_inputs
-from w3xtool.description_cache_migration import (
+from gametool.description_cache_migration import (
     DescriptionCacheMigrationError,
     DescriptionCacheMigrationOptions,
     migrate_description_cache,

@@ -13,8 +13,8 @@
 ### Task 1: Immutable extraction evidence and status aggregation
 
 **Files:**
-- Create: `w3xtool/extraction_ledger.py`
-- Create: `w3xtool/extraction_ledger_format.py`
+- Create: `gametool/extraction_ledger.py`
+- Create: `gametool/extraction_ledger_format.py`
 - Test: `tests/test_extraction_ledger.py`
 
 - [ ] **Step 1: Write failing model and aggregation tests**
@@ -43,8 +43,8 @@ def test_damage_precedes_partial_and_encryption() -> None:
 ### Task 2: Compatibility-bundle parser and normalized supplemental evidence
 
 **Files:**
-- Create: `w3xtool/supplemental_evidence.py`
-- Create: `w3xtool/compat_bundle.py`
+- Create: `gametool/supplemental_evidence.py`
+- Create: `gametool/compat_bundle.py`
 - Test: `tests/test_compat_bundle.py`
 - Test: `tests/test_supplemental_conflicts.py`
 
@@ -67,9 +67,9 @@ def test_compat_bundle_accepts_bound_name_file_and_key(tmp_path: Path) -> None:
 ### Task 3: Explicit MPQ-key reads and supplemented archive wrapper
 
 **Files:**
-- Modify: `w3xtool/mpq.py`
-- Create: `w3xtool/supplemented_archive.py`
-- Create: `w3xtool/supplemented_source.py`
+- Modify: `gametool/mpq.py`
+- Create: `gametool/supplemented_archive.py`
+- Create: `gametool/supplemented_source.py`
 - Test: `tests/test_mpq_explicit_keys.py`
 - Test: `tests/test_supplemented_archive.py`
 
@@ -83,11 +83,11 @@ def test_compat_bundle_accepts_bound_name_file_and_key(tmp_path: Path) -> None:
 ### Task 4: Archive ledger inventory and map lifecycle integration
 
 **Files:**
-- Create: `w3xtool/archive_inventory.py`
-- Create: `w3xtool/map_archive_open.py`
-- Modify: `w3xtool/load_context.py`
-- Modify: `w3xtool/map_data.py`
-- Modify: `w3xtool/map_loader.py`
+- Create: `gametool/archive_inventory.py`
+- Create: `gametool/map_archive_open.py`
+- Modify: `gametool/load_context.py`
+- Modify: `gametool/map_data.py`
+- Modify: `gametool/map_loader.py`
 - Test: `tests/test_archive_inventory.py`
 - Test: `tests/test_author_plaintext_bundle.py`
 - Test: `tests/test_map_data_compat.py`
@@ -102,8 +102,8 @@ def test_compat_bundle_accepts_bound_name_file_and_key(tmp_path: Path) -> None:
 ### Task 5: Compatibility bundle builder and CLI
 
 **Files:**
-- Create: `w3xtool/compat_bundle_builder.py`
-- Create: `w3xtool/compat_cli.py`
+- Create: `gametool/compat_bundle_builder.py`
+- Create: `gametool/compat_cli.py`
 - Modify: `main.py`
 - Test: `tests/test_compat_bundle_builder.py`
 - Test: `tests/test_compat_cli.py`
@@ -118,17 +118,17 @@ def test_compat_bundle_accepts_bound_name_file_and_key(tmp_path: Path) -> None:
 ### Task 6: Shared ledger reports and single-map/current-map/GUI options
 
 **Files:**
-- Create: `w3xtool/knowledge_extraction_exports.py`
-- Modify: `w3xtool/knowledge_pack_contents.py`
-- Modify: `w3xtool/knowledge_manifest.py`
-- Modify: `w3xtool/cli_options.py`
-- Modify: `w3xtool/current_map_cli.py`
-- Modify: `w3xtool/gui_loader.py`
-- Modify: `w3xtool/gui_loader_runner.py`
-- Modify: `w3xtool/gui_external_data.py`
-- Modify: `w3xtool/gui_lifecycle.py`
-- Modify: `w3xtool/gui_topbar.py`
-- Modify: `w3xtool/gui.py`
+- Create: `gametool/knowledge_extraction_exports.py`
+- Modify: `gametool/knowledge_pack_contents.py`
+- Modify: `gametool/knowledge_manifest.py`
+- Modify: `gametool/cli_options.py`
+- Modify: `gametool/current_map_cli.py`
+- Modify: `gametool/gui_loader.py`
+- Modify: `gametool/gui_loader_runner.py`
+- Modify: `gametool/gui_external_data.py`
+- Modify: `gametool/gui_lifecycle.py`
+- Modify: `gametool/gui_topbar.py`
+- Modify: `gametool/gui.py`
 - Test: `tests/test_extraction_ledger_reports.py`
 - Test: `tests/test_cli_options.py`
 - Test: `tests/test_current_map_cli.py`
@@ -145,11 +145,11 @@ def test_compat_bundle_accepts_bound_name_file_and_key(tmp_path: Path) -> None:
 ### Task 7: Deterministic batch scanner, publisher, reports, and CLI
 
 **Files:**
-- Create: `w3xtool/batch_models.py`
-- Create: `w3xtool/batch_scan.py`
-- Create: `w3xtool/batch_runner.py`
-- Create: `w3xtool/batch_reports.py`
-- Create: `w3xtool/batch_cli.py`
+- Create: `gametool/batch_models.py`
+- Create: `gametool/batch_scan.py`
+- Create: `gametool/batch_runner.py`
+- Create: `gametool/batch_reports.py`
+- Create: `gametool/batch_cli.py`
 - Modify: `main.py`
 - Test: `tests/test_batch_scan.py`
 - Test: `tests/test_batch_runner.py`
@@ -178,7 +178,7 @@ def test_compat_bundle_accepts_bound_name_file_and_key(tmp_path: Path) -> None:
 - [ ] **Step 1: Add packaged acceptance assertions for `batch --help`, `compat build --help`, a fixture batch, and generated extraction result reports**
 - [ ] **Step 2: Verify acceptance tests fail before workflow/code updates**
 - [ ] **Step 3: Bump the feature release to `0.2.0`, update the lockfile, CLI documentation, and workflow acceptance commands**
-- [ ] **Step 4: Run focused release tests, then `uv run w3xray-test`**
+- [ ] **Step 4: Run focused release tests, then `uv run gamexray-test`**
 - [ ] **Step 5: Run `uv run --with ruff ruff check` and `ruff format --check` on changed Python, `uv run --with basedpyright basedpyright --level error` on changed Python, `compileall`, no-excuse checks, and `git diff --check`**
 - [ ] **Step 6: Build the local distributable and run source/packaged fixture acceptance without executing historical binaries, DLLs, or map payloads**
 

@@ -8,18 +8,18 @@ from pathlib import Path
 import pytest
 
 from tests.retained_integrity_fixture import active_cache, backup, retained, stage
-from w3xtool import description_cache_retained_file_proof as file_api
-from w3xtool import description_cache_retained_integrity as snapshot_api
-from w3xtool import description_cache_retained_set_scan as set_api
-from w3xtool import description_cache_retained_siblings as sibling_api
-from w3xtool.description_cache_publication_models import RetainedCacheRole
-from w3xtool.description_cache_retained_binding import BoundActiveCache
-from w3xtool.description_cache_retained_file_proof import RetainedFileRead
-from w3xtool.description_cache_retained_integrity_models import (
+from gametool import description_cache_retained_file_proof as file_api
+from gametool import description_cache_retained_integrity as snapshot_api
+from gametool import description_cache_retained_set_scan as set_api
+from gametool import description_cache_retained_siblings as sibling_api
+from gametool.description_cache_publication_models import RetainedCacheRole
+from gametool.description_cache_retained_binding import BoundActiveCache
+from gametool.description_cache_retained_file_proof import RetainedFileRead
+from gametool.description_cache_retained_integrity_models import (
     RetainedDescriptionCacheArtifact,
     SiblingState,
 )
-from w3xtool.description_cache_retained_tree_snapshot import RetainedScanBounds
+from gametool.description_cache_retained_tree_snapshot import RetainedScanBounds
 
 
 def test_active_root_symlink_is_a_command_boundary(tmp_path: Path) -> None:
@@ -172,7 +172,7 @@ def test_relevant_sibling_mutation_is_a_command_boundary(
             if operation == "insert-stage":
                 stage(active, "4").mkdir()
             elif operation == "insert-malformed":
-                (active.parent / ".w3xray-description-cache-retained-bad").mkdir()
+                (active.parent / ".gamexray-description-cache-retained-bad").mkdir()
             elif operation == "remove-backup":
                 old_backup.rmdir()
             else:

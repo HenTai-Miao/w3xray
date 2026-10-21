@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from w3xtool.gui_export_actions import build_pack_export_presentation
-from w3xtool.knowledge_results import KnowledgeWriteItem, KnowledgeWriteReport
+from gametool.gui_export_actions import build_pack_export_presentation
+from gametool.knowledge_results import KnowledgeWriteItem, KnowledgeWriteReport
 
 
 def test_partial_pack_presentation_names_counts_and_first_failure() -> None:

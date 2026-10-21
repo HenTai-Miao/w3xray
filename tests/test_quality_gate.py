@@ -9,7 +9,7 @@ import tomllib
 import pytest
 
 from tests.quality_audit_gap_paths import AUDIT_GAP_REQUIRED_PATHS
-from w3xtool import quality_gate
+from gametool import quality_gate
 
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -25,10 +25,10 @@ def test_quality_gate_builds_all_three_cross_platform_commands() -> None:
         "ruff-format",
         "basedpyright",
     ]
-    assert all("w3xtool/batch_manifest_io.py" in command.argv for command in commands)
-    assert all("w3xtool/quality_gate.py" in command.argv for command in commands)
-    assert all("w3xtool/quality_test_paths.py" in command.argv for command in commands)
-    assert all("w3xtool/quality_tool_paths.py" in command.argv for command in commands)
+    assert all("gametool/batch_manifest_io.py" in command.argv for command in commands)
+    assert all("gametool/quality_gate.py" in command.argv for command in commands)
+    assert all("gametool/quality_test_paths.py" in command.argv for command in commands)
+    assert all("gametool/quality_tool_paths.py" in command.argv for command in commands)
     assert all("tests/test_batch_soak.py" in command.argv for command in commands)
     assert all(
         "tests/test_batch_execution_windows_pipe.py" in command.argv
@@ -85,8 +85,8 @@ def test_quality_gate_paths_are_one_unique_immutable_set() -> None:
     assert isinstance(paths, tuple)
     assert len(paths) == len(set(paths))
     assert paths == tuple(sorted(paths))
-    assert "w3xtool/batch_description_cache.py" not in paths
-    assert "w3xtool/description_cache_batch.py" not in paths
+    assert "gametool/batch_description_cache.py" not in paths
+    assert "gametool/description_cache_batch.py" not in paths
 
 
 def test_quality_gate_covers_audit_gap_core_modules() -> None:
@@ -111,36 +111,36 @@ def test_quality_gate_covers_audit_gap_core_modules() -> None:
         "tests/test_windows_acceptance_assets.py",
         "tests/test_windows_acceptance_support.py",
         "tests/test_windows_real_install_workflow.py",
-        "w3xtool/__init__.py",
-        "w3xtool/gui_item_relation_layout.py",
-        "w3xtool/gui_item_relations.py",
-        "w3xtool/item_relation_builder.py",
-        "w3xtool/item_relation_endpoints.py",
-        "w3xtool/item_relation_fields.py",
-        "w3xtool/item_relation_field_variants.py",
-        "w3xtool/item_relation_models.py",
-        "w3xtool/item_relation_presentation.py",
-        "w3xtool/item_relation_scripts.py",
-        "w3xtool/map_components.py",
-        "w3xtool/map_data.py",
-        "w3xtool/object_candidate_values.py",
-        "w3xtool/object_candidates.py",
-        "w3xtool/object_candidate_models.py",
-        "w3xtool/object_candidate_text_tables.py",
-        "w3xtool/object_field_selection.py",
-        "w3xtool/object_materialization.py",
-        "w3xtool/object_pipeline.py",
-        "w3xtool/object_text_categories.py",
-        "w3xtool/object_text_evidence.py",
-        "w3xtool/object_text_index.py",
-        "w3xtool/object_text_roles.py",
-        "w3xtool/object_text_sources.py",
-        "w3xtool/object_text_records.py",
-        "w3xtool/batch_map_retirement.py",
-        "w3xtool/batch_output_lock.py",
-        "w3xtool/batch_retirement_quarantine.py",
-        "w3xtool/campaign_child_loader.py",
-        "w3xtool/map_loader.py",
+        "gametool/__init__.py",
+        "gametool/gui_item_relation_layout.py",
+        "gametool/gui_item_relations.py",
+        "gametool/item_relation_builder.py",
+        "gametool/item_relation_endpoints.py",
+        "gametool/item_relation_fields.py",
+        "gametool/item_relation_field_variants.py",
+        "gametool/item_relation_models.py",
+        "gametool/item_relation_presentation.py",
+        "gametool/item_relation_scripts.py",
+        "gametool/map_components.py",
+        "gametool/map_data.py",
+        "gametool/object_candidate_values.py",
+        "gametool/object_candidates.py",
+        "gametool/object_candidate_models.py",
+        "gametool/object_candidate_text_tables.py",
+        "gametool/object_field_selection.py",
+        "gametool/object_materialization.py",
+        "gametool/object_pipeline.py",
+        "gametool/object_text_categories.py",
+        "gametool/object_text_evidence.py",
+        "gametool/object_text_index.py",
+        "gametool/object_text_roles.py",
+        "gametool/object_text_sources.py",
+        "gametool/object_text_records.py",
+        "gametool/batch_map_retirement.py",
+        "gametool/batch_output_lock.py",
+        "gametool/batch_retirement_quarantine.py",
+        "gametool/campaign_child_loader.py",
+        "gametool/map_loader.py",
     }
 
     # When
@@ -153,8 +153,8 @@ def test_quality_gate_covers_audit_gap_core_modules() -> None:
 def test_both_quality_authorities_cover_safe_output_callers_and_races() -> None:
     required = {
         "tests/test_safe_output_races.py",
-        "w3xtool/safe_output_anchored.py",
-        "w3xtool/safe_output_staging.py",
+        "gametool/safe_output_anchored.py",
+        "gametool/safe_output_staging.py",
     }
 
     assert required.issubset(AUDIT_GAP_REQUIRED_PATHS)
@@ -197,8 +197,8 @@ def test_project_registers_quality_script_and_development_tools() -> None:
         project = tomllib.load(stream)
 
     # Then
-    assert project["project"]["scripts"]["w3xray-quality"] == (
-        "w3xtool.quality_gate:main"
+    assert project["project"]["scripts"]["gamexray-quality"] == (
+        "gametool.quality_gate:main"
     )
     dev = tuple(project["dependency-groups"]["dev"])
     assert any(item.startswith("ruff>=") for item in dev)
@@ -217,6 +217,6 @@ def test_all_packaging_lanes_run_quality_after_sync_and_before_tests() -> None:
     for path in paths:
         text = path.read_text(encoding="utf-8")
         sync_at = text.index("uv sync --dev")
-        quality_at = text.index("uv run w3xray-quality")
-        tests_at = text.index("uv run w3xray-test")
+        quality_at = text.index("uv run gamexray-quality")
+        tests_at = text.index("uv run gamexray-test")
         assert sync_at < quality_at < tests_at, path

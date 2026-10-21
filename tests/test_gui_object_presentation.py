@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 from tests.gui_base import GuiTestCase
-from w3xtool.api import GameObject, MapData
-from w3xtool.doo_models import Unit
-from w3xtool.gui_reports import build_analysis_blocks, format_blocks
-from w3xtool.object_detail_presentation import back_reference_note
-from w3xtool.object_text_presentation import ObjectTextView
-from w3xtool.icon_evidence_index import IconEvidenceIndex
-from w3xtool.icon_evidence_models import IconGapReason, UnresolvedIconEvidence
-from w3xtool.icon_resources import IconObjectReference
-from w3xtool.item_relation_models import (
+from gametool.api import GameObject, MapData
+from gametool.doo_models import Unit
+from gametool.gui_reports import build_analysis_blocks, format_blocks
+from gametool.object_detail_presentation import back_reference_note
+from gametool.object_text_presentation import ObjectTextView
+from gametool.icon_evidence_index import IconEvidenceIndex
+from gametool.icon_evidence_models import IconGapReason, UnresolvedIconEvidence
+from gametool.icon_resources import IconObjectReference
+from gametool.item_relation_models import (
     ItemRelation,
     ItemRelationIndex,
     ItemRelationKind,
@@ -20,14 +20,14 @@ from w3xtool.item_relation_models import (
     RelationEvidence,
     RelationObject,
 )
-from w3xtool.object_text_models import (
+from gametool.object_text_models import (
     ObjectTextIndex,
     ObjectTextRecord,
     ObjectTextState,
     TextSelectionReason,
     TextSourcePriority,
 )
-from w3xtool.wtg_models import TriggerHeader, TriggerTreeSummary
+from gametool.wtg_models import TriggerHeader, TriggerTreeSummary
 
 
 class ObjectPresentationTest(GuiTestCase):

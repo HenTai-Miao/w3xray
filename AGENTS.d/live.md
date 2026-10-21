@@ -184,7 +184,7 @@ uv run --with numpy --with pillow python -X utf8 main.py live <地图路径> --e
   (时间/游戏版本/策略/规模/档案诊断行; fail-open)。玩家问「刚才那次读的什么
   版本/为什么坏读数」时用它追溯——但现状永远必须现取, journal 不是现状。
 
-## 原理 (`w3xtool/live_handle_chain.py`)
+## 原理 (`gametool/live_handle_chain.py`)
 全部偏移经 Game.dll 静态反汇编 (capstone) 验证, 纯 ReadProcessMemory 只读:
 
 1. 句柄系统: `[dll+0xBE40A8]`=句柄管理器, 双表 (bit31 选表), 8 字节条目

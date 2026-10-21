@@ -61,8 +61,8 @@
 
 1. 新增回归测试先失败后通过；
 2. 所有相关聚焦测试；
-3. `uv run w3xray-quality`；
-4. `uv run w3xray-test`；
+3. `uv run gamexray-quality`；
+4. `uv run gamexray-test`；
 5. 源码 acceptance（含 GUI 可用时的 GUI 通道）；
 6. 39 张地图全部产生 schema 4 状态和必需报告；
 7. TSV 标准解析、计数对账、关系冲突/部分状态抽查；
