@@ -107,3 +107,16 @@
 - review-work 安全审查确认三项需修阻断边界：真实存档在 `stat` 后按路径重开存在换包竞态；作者明文 `files/` symlink 会被 `.resolve()` 当成可信根且验证后 `read_bytes()` 无界；MPQ 内成员在声明大小/聚合预算检查前已解压。self-hosted workflow 还需固定 `local` ref、最小权限、environment 审批和禁用 checkout 凭据持久化。
 - 对固定 CascLib commit `4971d...` 的源码核对证实：`CascLib.h` 明确写明 `CASC_FIND_DATA.szFileName` 的 Full/DataId/CKey/EKey 四种名字都可用 `CASC_OPEN_BY_NAME(0)` 直接交给 `CascOpenFile`。FileDataID 实际伪名格式是大写十六进制 `FILE%08X.dat`；测试已改用真实格式，Windows integration/acceptance 会重开一个未知条目并核对大小。
 - 旧“仅已知 CASC 路径/不做全 Root”句子已在 `findings.md`、`progress.md` 与 `docs/KKWE借鉴清单.md` 统一更新；当前结论是“全 Root 代码与跨平台代理测试已完成，真 Windows 证据待 workflow”。
+
+## 2026 提取上限清理 (七轮) 与性能实测 (第八/九轮)
+
+- 七轮限制清理全部落地：输出截断 15+ 处删除、说谎「另有N个」横幅 18 处删除、
+  文件门 256MB 级→1–8GB 级、MPQ 表项 2^18→2^21、SLK 100 万行、BLP 16384px、
+  外部列表 512MB/1000 万行、GUI 候选/详情全量列出。反炸弹语义保留（界值贴合真实大文件）。
+- 性能实测（4F47 大图 8371 对象）：load 27s + pack 82s，8279 文件零失败，
+  二次导出 73s。CLI/GUI/batch 三入口自动并行物化 min(8, cores)。
+- MPQ 双缓存逐出式改造：载荷缓存超预算 FIFO 逐出（修「大文件毒化缓存」缺陷）、
+  名字解析缓存 26万→200 万条满时按 1/4 逐出。
+- 真图验证：653D (CAME 壳) 静态层不可解析是壳本身损坏（会话早期已知），
+  必须走 live 内存层；4F47/B2E8 静态可解析，e2e 用 glob 排序取第一张可解析图。
+- pack-query 全命令 + guide + cli 真图输出零「另有/未显示/……」标记。
