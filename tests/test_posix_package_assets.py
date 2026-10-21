@@ -50,7 +50,7 @@ def test_posix_workflow_tests_accepts_and_archives_onedir_package() -> None:
         "hook-PIL.ImageTk.py",
         'hiddenimports = ["PIL._tkinter_finder"]',
         "uv run gamexray-dist",
-        'Executable="dist/魔兽地图提取器/魔兽地图提取器"',
+        'Executable="dist/GameXRay 游戏档案透视器/GameXRay 游戏档案透视器"',
         "AcceptanceArgs=(acceptance",
         '"$Executable" "${AcceptanceArgs[@]}"',
         'xvfb-run -a "$Executable" "${AcceptanceArgs[@]}"',

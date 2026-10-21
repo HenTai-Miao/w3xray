@@ -145,7 +145,7 @@ jobs:
           TARGET_PLATFORM: ${{ matrix.platform }}
         run: |
           set -euo pipefail
-          Executable="dist/魔兽地图提取器/魔兽地图提取器"
+          Executable="dist/GameXRay 游戏档案透视器/GameXRay 游戏档案透视器"
           EvidenceDir="artifacts/${{ matrix.platform }}-${{ matrix.arch }}-acceptance"
           Report="$EvidenceDir/acceptance.json"
           test -x "$Executable"
@@ -168,7 +168,7 @@ jobs:
         run: |
           set -euo pipefail
           Version="$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")"
-          AppDir="dist/魔兽地图提取器"
+          AppDir="dist/GameXRay 游戏档案透视器"
           ReleaseDir="artifacts/${{ matrix.platform }}-${{ matrix.arch }}-release"
           Report="artifacts/${{ matrix.platform }}-${{ matrix.arch }}-acceptance/acceptance.json"
           rm -rf "$ReleaseDir"
@@ -180,7 +180,7 @@ jobs:
           else
             tar -C dist -czf \
               "$ReleaseDir/gamexray-v$Version-linux-${{ matrix.arch }}.tar.gz" \
-              "魔兽地图提取器"
+              "GameXRay 游戏档案透视器"
           fi
           cp "$Report" "$ReleaseDir/${{ matrix.platform }}-${{ matrix.arch }}-acceptance.json"
       - name: Validate release asset
@@ -209,7 +209,7 @@ jobs:
             tar -xzf "$Package" -C "$ExtractDir"
             ExpectedArchitecture='x86-64'
           fi
-          ArchivedExecutable="$ExtractDir/魔兽地图提取器/魔兽地图提取器"
+          ArchivedExecutable="$ExtractDir/GameXRay 游戏档案透视器/GameXRay 游戏档案透视器"
           test -x "$ArchivedExecutable"
           file "$ArchivedExecutable" | tee "$ExtractDir/executable-file.txt"
           grep -Fq "$ExpectedArchitecture" "$ExtractDir/executable-file.txt"
