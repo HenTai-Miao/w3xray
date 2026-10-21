@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import tkinter as tk
 from typing import TYPE_CHECKING
 
 import customtkinter as ctk
@@ -11,6 +12,11 @@ from .theme import BG, CARD, FONT, SUBTLE, TEXT, TITLE_FONT
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+
+
+_LAST_KEYWORD = ""
+_LAST_MODE = "doc"
+_LAST_RESULT = ""
 
 
 def open_pack_query_dialog(
@@ -60,12 +66,13 @@ class _PackQueryWindow(ctk.CTkToplevel):
         row = ctk.CTkFrame(self, fg_color="transparent")
         row.pack(fill="x", padx=14)
         self._keyword = ctk.CTkEntry(row, placeholder_text="四码或名称…", width=280)
+        self._keyword.insert(0, _LAST_KEYWORD)
         self._keyword.pack(side="left", padx=(0, 8))
         self._keyword.bind("<Return>", lambda _e: self._run("doc"))
         self._mode = ctk.CTkSegmentedButton(
             row, values=["doc", "search", "list", "buffs"], width=200
         )
-        self._mode.set("doc")
+        self._mode.set(_LAST_MODE)
         self._mode.pack(side="left", padx=(0, 8))
         ctk.CTkButton(row, text="查询", width=84, command=self._run_clicked).pack(
             side="left"
@@ -73,11 +80,20 @@ class _PackQueryWindow(ctk.CTkToplevel):
 
         self._output = ctk.CTkTextbox(self, font=("Consolas", 12), wrap="none")
         self._output.pack(fill="both", expand=True, padx=14, pady=10)
+        if _LAST_RESULT:
+            self._output.insert("1.0", _LAST_RESULT)
+
+        menu = tk.Menu(self, tearoff=0)
+        menu.add_command(label="复制全部", command=self._copy_all)
+        self._output.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
 
     def _run_clicked(self) -> None:
         self._run(self._mode.get())
 
     def _run(self, command: str) -> None:
+        global _LAST_KEYWORD, _LAST_MODE
+        _LAST_KEYWORD = self._keyword.get().strip()
+        _LAST_MODE = command
         keyword = self._keyword.get().strip()
         if command == "doc" and not keyword:
             self._output.delete("1.0", "end")
@@ -112,7 +128,13 @@ class _PackQueryWindow(ctk.CTkToplevel):
             output = buffer.getvalue() or f"(退出码 {exc.code})"
             self._finish(output)
 
+    def _copy_all(self) -> None:
+        self.clipboard_clear()
+        self.clipboard_append(self._output.get("1.0", "end"))
+
     def _finish(self, text: str) -> None:
+        global _LAST_RESULT
+        _LAST_RESULT = text
         self.configure(cursor="")
         self._output.delete("1.0", "end")
         self._output.insert("1.0", text)
