@@ -62,6 +62,7 @@ _COMMANDS = (
     "list",
     "doc",
     "buffs",
+    "heroes",
 )
 _COLOR_RE = re.compile(r"\|c[0-9A-Fa-f]{8}|\|r")
 
@@ -538,7 +539,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
     command = rest[1] if len(rest) > 1 else ""
     if command == "near" and len(rest) in (4, 5):
         rest = rest[:2] + [" ".join(rest[2:])]
-    if command in ("affixes", "registered", "diff", "list", "buffs") and len(rest) == 2:
+    if command in ("affixes", "registered", "diff", "list", "buffs", "heroes") and len(rest) == 2:
         # 这些子命令查询词可省 (全量列出)
         rest = rest + [""]
     if len(rest) != 3:
@@ -558,7 +559,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         raise PackQueryCliOptionError(
             "未知子命令: " + command + " (可选: " + ",".join(_COMMANDS) + ")"
         )
-    if not query.strip() and command not in ("affixes", "registered", "diff", "list", "buffs"):
+    if not query.strip() and command not in ("affixes", "registered", "diff", "list", "buffs", "heroes"):
         raise PackQueryCliOptionError("查询词不能为空")
     return PackQueryCliOptions(
         pack_dir=pack_dir,
@@ -2536,6 +2537,8 @@ def _query_search(pack: Path, query: str, limit: int) -> list[str]:
         "英雄",
         "增益",
         "科技",
+        "装饰物",
+        "可破坏物",
     )
     sample_cap = limit if limit > 0 else 5
     out: list[str] = []
@@ -2627,6 +2630,8 @@ def _query_list(pack: Path, query: str, limit: int) -> list[str]:
         "英雄",
         "增益",
         "科技",
+        "装饰物",
+        "可破坏物",
     )
     want = query.strip()
     out: list[str] = []
@@ -2698,6 +2703,27 @@ def _query_buffs(pack: Path, query: str, limit: int) -> list[str]:
     if not out:
         return ["未找到: " + query]
     return out
+
+
+def _query_heroes(pack: Path, query: str, limit: int) -> list[str]:
+    """heroes 英雄表清单/查询: 英雄专属排查 (英雄.tsv 缺失时提示走 单位 查询)。
+    query 空 = 全量; 有词 = 名称/ID 子串过滤。"""
+    rows = _read_rows(pack, "对象ID/英雄.tsv")
+    if len(rows) <= 1:
+        return ["本包无 英雄.tsv (英雄类单位通常并入 单位 表 — 用 search 查)"]
+    needle = _clean(query).casefold()
+    out: list[str] = []
+    for r in rows[1:]:
+        if len(r) < 5:
+            continue
+        code, name, custom = r[1], _clean(r[4]), r[5].strip()
+        if needle and needle not in code.casefold() and needle not in name.casefold():
+            continue
+        origin = "自定义" if custom == "是" else "继承基础"
+        out.append(f"[{code}] {name} ({origin})")
+    if not out:
+        return ["未找到: " + query]
+    return out
 _QUERIES = {
     "item": _query_item,
     "recipe": _query_recipe,
@@ -2719,6 +2745,7 @@ _QUERIES = {
     "list": _query_list,
     "doc": _query_doc,
     "buffs": _query_buffs,
+    "heroes": _query_heroes,
 }
 
 

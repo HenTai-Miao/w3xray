@@ -1289,3 +1289,10 @@ def test_query_buffs_lists_and_filters(tmp_path, pack, capsys) -> None:
     text = buffer.getvalue()
     assert "月蚀" in text
     assert "护甲削弱" not in text
+
+
+def test_query_heroes_missing_table_points_to_search(tmp_path, pack, capsys) -> None:
+    run_pack_query_cli(parse_pack_query_cli_options((str(tmp_path), "heroes")))
+    text = capsys.readouterr().out.strip()
+    assert "本包无 英雄.tsv" in text
+    assert "search" in text

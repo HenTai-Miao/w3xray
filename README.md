@@ -196,6 +196,8 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
   （物品/单位/技能/英雄/增益/科技），供脚本或 AI 直接消费，无截断。
 - **单对象全景**：`pack-query <包> doc <四码或名称>`——一次聚合 item/price/where/drop/refs
 - **增益排查**：`pack-query <包> buffs [关键词]`——增益表全量清单或按名称/ID/效果过滤，
+- **英雄清单**：`pack-query <包> heroes [关键词]`——英雄表清单（部分图英雄并入单位表，
+  此时提示改用 search）。search/list 的表覆盖已扩到装饰物与可破坏物。
   每条带游戏内效果描述（说明列），标明自定义/继承来源。
   五个维度，问"这个装备什么效果、怎么获得"一个命令出全。
   （物品/单位/技能/英雄四表，按 ID 主键对比），升级补丁内容一目了然。
