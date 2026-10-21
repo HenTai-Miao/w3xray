@@ -210,11 +210,12 @@ def build_detail_panel(host: ObjectPanelHost, paned: tk.PanedWindow) -> None:
 def _pack_query_selected(host) -> None:
     obj = getattr(host, "_selected_detail_object", None)
     from .gui_pack_query import open_pack_query_dialog  # noqa: PLC0415
+    from .gui_export_actions import load_last_pack_dir  # noqa: PLC0415
 
     prefill = obj.obj_id if obj is not None else ""
     open_pack_query_dialog(
         host,
-        lambda: getattr(host, "_last_pack_dir", None),
+        lambda: getattr(host, "_last_pack_dir", None) or load_last_pack_dir(),
         host.on_export_pack,
         prefill=prefill,
     )

@@ -21,6 +21,7 @@ from .theme import (
 
 
 from .gui_pack_query import open_pack_query_dialog
+from .gui_export_actions import load_last_pack_dir
 from .gui_profile_settings import open_extraction_profile_dialog  # 提取开关设置对话框
 
 
@@ -133,7 +134,7 @@ def build_topbar(app) -> None:
         font=(FONT, 11),
         command=lambda: open_pack_query_dialog(
             app,
-            lambda: getattr(app, "_last_pack_dir", None),
+            lambda: getattr(app, "_last_pack_dir", None) or load_last_pack_dir(),
             app.on_export_pack,
         ),
         **secondary_button_style(),

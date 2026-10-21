@@ -212,6 +212,7 @@ class ExportActionsMixin:
                     profile=load_profile(),
                 )
                 self._last_pack_dir = out
+                save_last_pack_dir(out)
                 _ = self._post_gui_worker(
                     ticket,
                     lambda: self._show_pack_result(out, report),
@@ -228,3 +229,36 @@ class ExportActionsMixin:
                 )
 
         _ = self._start_gui_worker("export-pack", work, replace=True)
+
+
+def _last_pack_memo_path() -> str:
+    try:
+        from .cache_root import gamexray_cache_root  # noqa: PLC0415
+
+        return str(gamexray_cache_root() / "gui-last-pack.txt")
+    except OSError:
+        return ""
+
+
+def load_last_pack_dir() -> str:
+    """读取最近一次导出的资料包目录 (GUI 重启后包查询仍可用)。fail-open。"""
+    path = _last_pack_memo_path()
+    if not path:
+        return ""
+    try:
+        return open(path, encoding="utf-8").read().strip()
+    except OSError:
+        return ""
+
+
+def save_last_pack_dir(out: str) -> None:
+    path = _last_pack_memo_path()
+    if not path:
+        return
+    try:
+        from pathlib import Path  # noqa: PLC0415
+
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        Path(path).write_text(out, encoding="utf-8")
+    except OSError:
+        pass  # fail-open: 记忆失败不影响导出
