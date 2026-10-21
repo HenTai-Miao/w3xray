@@ -27,8 +27,6 @@ def iter_game_config_summary_lines(
     )
     for player in config.players:
         yield "    - " + _format_game_config_player(player)
-    if len(config.players) > 12:
-        yield f"    …… 另有 {len(config.players) - 12} 个玩家槽"
 
 
 def iter_embedded_game_config_summary_lines(md: MapData) -> Iterator[str]:
@@ -53,10 +51,6 @@ def iter_embedded_game_config_summary_lines(md: MapData) -> Iterator[str]:
         ]
         for player in ai_players:
             yield f"      自定义AI: P{player.slot_id + 1} {player.custom_ai_path}"
-        if len(ai_players) > 3:
-            yield f"      …… 另有 {len(ai_players) - 3} 个自定义AI"
-    if len(configs) > 4:
-        yield f"    …… 另有 {len(configs) - 4} 个配置"
 
 
 def _game_config_rule_tags(config: GameConfiguration) -> list[str]:

@@ -98,8 +98,6 @@ def _reference_summary_lines(md: MapData) -> Iterator[str]:
         yield f"  孤立自定义对象: {len(orphans)}{suffix}"
     for orphan in orphans:
         yield f"    - [{orphan.category}] {orphan.name}({orphan.obj_id})"
-    if len(orphans) > 10:
-        yield f"    …… 另有 {len(orphans) - 10} 个"
 
 
 def _import_summary_lines(md: MapData) -> Iterator[str]:
@@ -120,8 +118,6 @@ def _import_summary_lines(md: MapData) -> Iterator[str]:
         yield f"    类型: {extension_text}"
     for path in summary.missing_paths:
         yield f"    - 疑似缺失: {path}"
-    if len(summary.missing_paths) > 5:
-        yield f"    …… 另有 {len(summary.missing_paths) - 5} 个疑似缺失资源"
 
 
 def _trigger_tree_summary_lines(md: MapData) -> Iterator[str]:
@@ -146,8 +142,6 @@ def _trigger_tree_summary_lines(md: MapData) -> Iterator[str]:
         tags = _trigger_tags(trigger)
         suffix = f"  ·  {'/'.join(tags)}" if tags else ""
         yield f"    - {trigger.name or '(未命名触发器)'}{suffix}"
-    if len(summary.triggers) > 6:
-        yield f"    …… 另有 {len(summary.triggers) - 6} 个已解析触发器头"
     for diagnostic in format_summary_diagnostics(summary):
         yield f"    {diagnostic}"
 
@@ -163,8 +157,6 @@ def _preview_icon_summary_lines(md: MapData) -> Iterator[str]:
     )
     for icon in summary.icons:
         yield f"    - {icon.type_label} ({icon.x}, {icon.y})  RGB{icon.color_rgb}"
-    if len(summary.icons) > 8:
-        yield f"    …… 另有 {len(summary.icons) - 8} 个标记"
 
 
 def _trigger_tags(trigger: TriggerHeader) -> list[str]:
@@ -184,6 +176,4 @@ def _trigger_tags(trigger: TriggerHeader) -> list[str]:
 
 def _format_summary_list(items: tuple[str, ...]) -> str:
     shown = "、".join(items)
-    if len(items) <= 5:
-        return shown
-    return f"{shown} …… 另有 {len(items) - 5} 个"
+    return shown

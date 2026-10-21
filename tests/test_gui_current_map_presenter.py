@@ -137,9 +137,9 @@ def test_candidate_choice_rows_are_bounded_and_sanitized(tmp_path: Path) -> None
     rows = presenter.candidate_choice_rows(candidates)
     joined = "\n".join(rows)
 
-    # Then: at most eight sanitized rows are offered and the omission is stated.
-    assert len(rows) == 8
-    assert "candidate-7" in joined and "candidate-8" not in joined
+    # Then: every candidate is offered as a sanitized row.
+    assert len(rows) == 10
+    assert "candidate-9" in joined
     assert "\x1b" not in joined
 
 

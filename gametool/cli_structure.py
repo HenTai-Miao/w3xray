@@ -62,6 +62,4 @@ def _shadow_line(shadow: mapmeta.ShadowSummary) -> str:
 
 def _format_summary_list(items: tuple[str, ...]) -> str:
     shown = "、".join(items)
-    if len(items) <= 5:
-        return shown
-    return f"{shown} …… 另有 {len(items) - 5} 个"
+    return shown

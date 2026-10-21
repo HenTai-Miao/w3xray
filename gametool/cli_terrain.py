@@ -60,8 +60,6 @@ def iter_terrain_summary_lines(md: "MapData") -> Iterator[str]:
         )
         for issue in report.issues:
             yield f"    - 越界{issue.kind}: {issue.type_id} ({_fmt(issue.x)}, {_fmt(issue.y)})"
-        if len(report.issues) > 5:
-            yield f"    …… 另有 {len(report.issues) - 5} 个越界放置物"
 
 
 def _point_height_line(summary: terrain.TerrainPointSummary) -> str:

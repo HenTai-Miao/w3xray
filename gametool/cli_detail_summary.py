@@ -22,8 +22,6 @@ def iter_resource_summary_lines(md: MapData) -> Iterator[str]:
     )
     for path in report.unreferenced_assets:
         yield f"    - 未引用素材: {path}"
-    if len(report.unreferenced_assets) > 5:
-        yield f"    …… 另有 {len(report.unreferenced_assets) - 5} 个"
 
 
 def iter_slk_summary_lines(md: MapData) -> Iterator[str]:
@@ -36,8 +34,6 @@ def iter_slk_summary_lines(md: MapData) -> Iterator[str]:
     yield f"    表文件: {len(report.files)}"
     for item in report.files:
         yield f"    - {item.path}: {item.rows} 行 · {item.columns} 列"
-    if len(report.files) > 6:
-        yield f"    …… 另有 {len(report.files) - 6} 个"
 
 
 def iter_gameplay_constant_summary_lines(md: MapData) -> Iterator[str]:
@@ -51,8 +47,6 @@ def iter_gameplay_constant_summary_lines(md: MapData) -> Iterator[str]:
     for item in constants:
         prefix = f"{item.section}." if item.section else ""
         yield f"    - {prefix}{item.key}={item.value}"
-    if len(constants) > 6:
-        yield f"    …… 另有 {len(constants) - 6} 项"
 
 
 def iter_order_summary_lines(md: MapData) -> Iterator[str]:
@@ -66,14 +60,10 @@ def iter_order_summary_lines(md: MapData) -> Iterator[str]:
     for collision in report.collisions:
         sources = "、".join(use.source for use in collision.uses)
         yield f"    - 冲突 {collision.order}: {sources}"
-    if len(report.collisions) > 5:
-        yield f"    …… 另有 {len(report.collisions) - 5} 个"
     by_order = report.by_order
     for order, uses in list(by_order.items()):
         sources = "、".join(use.source for use in uses)
         yield f"    - {order}: {sources}"
-    if len(by_order) > 5:
-        yield f"    …… 另有 {len(by_order) - 5} 种命令"
 
 
 def iter_script_diagnostic_lines(md: MapData) -> Iterator[str]:
@@ -97,8 +87,6 @@ def iter_crash_risk_lines(md: MapData) -> Iterator[str]:
     for item in report.items:
         location = item.source or f"{item.object_name}({item.object_id})"
         yield f"    [警告] {item.title}: {location} · {item.detail}"
-    if len(report.items) > 6:
-        yield f"    …… 另有 {len(report.items) - 6} 个"
 
 
 def iter_cheat_residue_lines(md: MapData) -> Iterator[str]:
@@ -110,8 +98,6 @@ def iter_cheat_residue_lines(md: MapData) -> Iterator[str]:
     yield "  秘籍/调试口令:"
     for item in report.items:  # 全部
         yield f"    [警告] {item.phrase}: {item.source} · {item.script}"
-    if len(report.items) > 6:
-        yield f"    …… 另有 {len(report.items) - 6} 个"
 
 
 def iter_compat_summary_lines(md: MapData) -> Iterator[str]:

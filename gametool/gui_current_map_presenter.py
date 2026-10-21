@@ -13,14 +13,12 @@ from .current_map_snapshot import CurrentMapSnapshot
 from .presentation_safety import single_line_text
 
 
-MAX_CANDIDATES: Final = 8
 WORKER_ERROR_TITLE: Final = "获取当前地图失败"
 WORKER_ERROR_MESSAGE: Final = "获取当前地图失败，请稍后重试。"
 NOT_FOUND_MESSAGE: Final = "未找到正在使用的 Warcraft III 地图。"
 UNAVAILABLE_MESSAGE: Final = "当前平台无法可靠探测正在使用的 Warcraft III 地图。"
 CANDIDATE_CHOICE_TITLE: Final = "选择当前地图"
 CANDIDATE_CHOICE_HEADER: Final = "发现多个候选，请选择正在使用的地图："
-CANDIDATE_CHOICE_OMITTED: Final = "另有 {omitted} 个候选未显示。"
 CANCELLED_STATUS: Final = "已取消获取当前地图"
 
 
@@ -75,8 +73,8 @@ type CandidateChooser = Callable[[tuple[MapCandidate, ...]], Path | None]
 
 
 def candidate_choice_rows(candidates: tuple[MapCandidate, ...]) -> tuple[str, ...]:
-    """Return sanitized chooser rows capped at the bounded candidate count."""
-    return tuple(candidate_text(item) for item in candidates[:MAX_CANDIDATES])
+    """Return sanitized chooser rows for every candidate."""
+    return tuple(candidate_text(item) for item in candidates)
 
 
 def _tk_choose_candidate(candidates: tuple[MapCandidate, ...]) -> Path | None:
@@ -114,16 +112,6 @@ def _tk_choose_candidate(candidates: tuple[MapCandidate, ...]) -> Path | None:
     body.columnconfigure(0, weight=1)
     body.rowconfigure(0, weight=1)
     body.pack(fill="both", expand=True, padx=12)
-    if len(candidates) > MAX_CANDIDATES:
-        omitted = tk.Label(
-            dialog,
-            text=CANDIDATE_CHOICE_OMITTED.format(
-                omitted=len(candidates) - MAX_CANDIDATES
-            ),
-            anchor="w",
-            justify="left",
-        )
-        omitted.pack(fill="x", padx=12)
 
     def confirm(_event: object | None = None) -> None:
         picked = listbox.curselection()
