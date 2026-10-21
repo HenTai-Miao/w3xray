@@ -64,6 +64,7 @@ _COMMANDS = (
     "doc",
     "buffs",
     "export",
+    "stats",
     "heroes",
 )
 _COLOR_RE = re.compile(r"\|c[0-9A-Fa-f]{8}|\|r")
@@ -541,7 +542,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
     command = rest[1] if len(rest) > 1 else ""
     if command == "near" and len(rest) in (4, 5):
         rest = rest[:2] + [" ".join(rest[2:])]
-    if command in ("affixes", "registered", "diff", "list", "buffs", "heroes") and len(rest) == 2:
+    if command in ("affixes", "registered", "diff", "list", "buffs", "heroes", "stats") and len(rest) == 2:
         # 这些子命令查询词可省 (全量列出)
         rest = rest + [""]
     if len(rest) != 3:
@@ -561,7 +562,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         raise PackQueryCliOptionError(
             "未知子命令: " + command + " (可选: " + ",".join(_COMMANDS) + ")"
         )
-    if not query.strip() and command not in ("affixes", "registered", "diff", "list", "buffs", "heroes"):
+    if not query.strip() and command not in ("affixes", "registered", "diff", "list", "buffs", "heroes", "stats"):
         raise PackQueryCliOptionError("查询词不能为空")
     return PackQueryCliOptions(
         pack_dir=pack_dir,
@@ -2728,6 +2729,33 @@ def _query_heroes(pack: Path, query: str, limit: int) -> list[str]:
     return out
 
 
+def _query_stats(pack: Path, query: str, limit: int) -> list[str]:
+    """stats 包总览: 地图信息摘要 + 每张对象表的行数与自定义行数。"""
+    out: list[str] = []
+    info = pack / "地图信息.txt"
+    if info.exists():
+        for line in info.read_text(encoding="utf-8", errors="replace").splitlines()[:12]:
+            if line.strip():
+                out.append(line)
+    out.append("")
+    out.append("==== 对象表总览 ====")
+    obj_dir = pack / "对象ID"
+    if not obj_dir.is_dir():
+        out.append("本包无对象表")
+        return out
+    for tsv in sorted(obj_dir.glob("*.tsv")):
+        rows = _read_rows(pack, "对象ID/" + tsv.name)
+        if len(rows) <= 1:
+            continue
+        custom_idx = rows[0].index("自定义") if "自定义" in rows[0] else -1
+        total = len(rows) - 1
+        if custom_idx >= 0:
+            custom = sum(1 for r in rows[1:] if len(r) > custom_idx and r[custom_idx].strip() == "是")
+            out.append(f"{tsv.stem}: {total} 行 (自定义 {custom})")
+        else:
+            out.append(f"{tsv.stem}: {total} 行")
+    return out
+
 def _query_export(pack: Path, query: str, limit: int) -> list[str]:
     """export 单对象全景落盘: doc 报告写临时目录并打印文件路径。
     给 AI/文档喂上下文时复制文件比复制终端输出方便。query 是四码或名称。"""
@@ -2765,6 +2793,7 @@ _QUERIES = {
     "doc": _query_doc,
     "buffs": _query_buffs,
     "export": _query_export,
+    "stats": _query_stats,
     "heroes": _query_heroes,
 }
 

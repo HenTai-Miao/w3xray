@@ -1310,3 +1310,10 @@ def test_query_export_writes_markdown(tmp_path, pack, capsys) -> None:
     content = open(export_path, encoding="utf-8").read()
     assert "I0AA" in content
     assert "冰晶" in content
+
+
+def test_query_stats_overview(tmp_path, pack, capsys) -> None:
+    run_pack_query_cli(parse_pack_query_cli_options((str(tmp_path), "stats")))
+    text = capsys.readouterr().out
+    assert "对象表总览" in text
+    assert "物品" in text

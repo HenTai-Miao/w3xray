@@ -85,6 +85,9 @@ class _PackQueryWindow(ctk.CTkToplevel):
             self._output.insert("1.0", _LAST_RESULT)
         if prefill:
             self.after(120, lambda: self._run("doc"))
+        elif not _LAST_RESULT:
+            self.after(120, lambda: self._run("stats"))
+            self.after(120, lambda: self._run("doc"))
 
         menu = tk.Menu(self, tearoff=0)
         menu.add_command(label="复制全部", command=self._copy_all)
