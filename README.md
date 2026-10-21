@@ -16,19 +16,19 @@ GUI触发器、场景放置、触发指令、合成配方、孤立对象、分�
 
 Windows x64 同时提供：
 
-- `gamexray-v0.1.4-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
-- `gamexray-v0.1.4-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
+- `gamexray-v0.2.0-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
+- `gamexray-v0.2.0-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
 
 两者功能相同；遇到杀软误报或启动问题时优先使用 ZIP 版。
 
 macOS 提供两个未签名、未公证的 onedir ZIP，请按 Mac 处理器选择并完整解压：
 
-- `gamexray-v0.1.4-macos-arm64.zip`：Apple Silicon（M1/M2/M3/M4/M5）。
-- `gamexray-v0.1.4-macos-x64.zip`：Intel Mac。
+- `gamexray-v0.2.0-macos-arm64.zip`：Apple Silicon（M1/M2/M3/M4/M5）。
+- `gamexray-v0.2.0-macos-x64.zip`：Intel Mac。
 
 Linux 提供：
 
-- `gamexray-v0.1.4-linux-x64.tar.gz`：Linux x86-64，解压后运行 `./GameXRay 游戏档案透视器/GameXRay 游戏档案透视器`。
+- `gamexray-v0.2.0-linux-x64.tar.gz`：Linux x86-64，解压后运行 `./GameXRay 游戏档案透视器/GameXRay 游戏档案透视器`。
 
 macOS/Linux 包支持地图与战役的静态提取；Windows 专用的 CascLib 游戏客户端原生后端不包含在这两类包中。macOS 首次运行可能出现 Gatekeeper 未验证开发者提示。
 
@@ -178,7 +178,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
 - **原生 CASC**：Windows 已实现固定版本 CascLib 的已知路径读取和完整 Root 枚举。Root 没保存原路径时，浏览器保留 CascLib 返回的 `FileDataID/CKey/EKey` 稳定标识，仍可读取/导出，不伪造路径。散文件目录和显式 path-map 是跨平台回退。仓库包含需 `GAMEXRAY_WAR3_DIR` 的 Windows 真机验收；本次 macOS 验证仍不冒充真实安装通过。
 - **保护/加密地图**：只做有界开档诊断、可恢复静态块提取和 `UnknownRaw` 原始负载保留；不执行内嵌 loader，不做运行时内存 dump、调试器或平台保护绕过。作者可提供带源地图 SHA256 和逐文件 SHA256 的明文补充包，让完全不可开的容器继续分析作者给出的 `war3map.j/lua/w3*` 文件。
 - **真实存档文件**：可对用户指定的文件/目录做只读清单、格式识别、SHA256、Preload/JASS/JSON/INI/MPQ 可读文本、存档键和对象 ID 交叉分析；不调用平台 API，不解密不透明平台数据，不修改源文件。
-- **资源边界**：单个 MPQ 成员最多解压 256 MiB；单个战役最多加载 256 张子图且累计保留不超过 512 MiB；命名文件、匿名块和恢复文件分别受累计导出预算限制；listfile 最多采用 100000 个、每个不超过 1024 字符的名称；SLK 坐标、行列和单元格数均有上限。超限来源会跳过或进入诊断，不会继续无界分配。
+- **资源边界**：单个 MPQ 成员最多解压 1 GiB；单个战役最多加载 4096 张子图且累计保留/读取各 4 GiB；命名文件与匿名块单文件导出各 4 GiB、恢复扫描 1 GiB/候选 100 万；listfile 最多 1000 万个名称（单文件 512 MiB、单行 64 KiB）；SLK 100 万行 × 16384 列；BLP 单边 16384px。这些是防声明值炸弹的安全门（界值对齐真实大文件规模），只拦构造出来的注水声明，不拦真实数据。
 
 ## 能力状态
 - **完整（有自动化证据）**：单张 `.w3x/.w3m` 和战役 `.w3n` 的静态 MPQ 提取；二进制对象、GBK Func/Strings、SLK 按 rawcode 合并；JASS/Lua/WCT、WTG/W3F、世界数据、资源和四类 ID 报告；逐组件诊断与逐文件写入结果。独立 StormLib fixture 同时覆盖四类对象、WTS、JASS+Lua、WTG/WCT 和 W3F 声明子图，战役 CLI 会自动发布每张已加载子图的独立资料包。
@@ -224,7 +224,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
 - **资源依赖分析**（CLI/核心模块）：从对象字段、图标路径、脚本文本和内部文件清单提取模型/贴图/音频/字体引用，统计引用素材、内部素材和未引用素材；同时读取 `war3map.imp` 的导入类型标志，区分标准 `war3mapImported\` 路径和自定义路径，辅助排查冗余导入、缺失资源或错误导入路径。
 - **版本兼容报告**（CLI/核心模块）：默认按 1.24E 经典环境做静态检查，提示 Lua 脚本、1.31+ w3i 格式、大地图标志、DDS 贴图、1.20E 常见 `H2I`/`I2U` return bug 句柄转换等兼容风险；不做自动转换。
 - **地形摘要**（CLI/核心模块）：读取 `war3map.w3e` 头部与完整 tilepoint 载荷，展示地形网格尺寸、W3E 世界坐标范围、基础地形集、自定义地形集标志、地表/悬崖纹理 ID，并把可识别地表纹理补全为编辑器中文名与 `TerrainArt\...\*.blp` 贴图路径；若 tilepoint 数据完整，会统计地面高度范围、水位范围、水域、坡道、荒芜地、边界/边缘格数量、实际使用的地表/悬崖纹理索引和悬崖层级分布，方便和预放置单位/装饰物坐标对照，也方便排查异常地形、水域、不可用边界或声明但未使用的地形纹理。
-- **场景边界检查**（CLI/核心模块）：复用 W3E 世界坐标范围与 `.doo` 预放置坐标，统计落在地形范围外的单位、装饰物/可破坏物，并列出前几条越界实例；只做提示，不自动移动对象。
+- **场景边界检查**（CLI/核心模块）：复用 W3E 世界坐标范围与 `.doo` 预放置坐标，统计落在地形范围外的单位、装饰物/可破坏物并**全量列出**每条越界实例；只做提示，不自动移动对象。
 - **地图结构摘要**（CLI/核心模块）：读取 `war3map.w3r/.w3c/.w3s/.wpm/.shd`，展示区域、镜头、声音数量、路径图尺寸，并统计路径图里的禁止行走/飞行/建造、荒芜地、禁水和未知 pathing flag；若存在 `war3map.shd`，会结合路径图尺寸校验阴影图单元数量，并统计阴影/透明/未知格；同时从结构文件中提取可读的区域名、镜头名、声音路径等零结尾字符串，补齐常用内部文件说明里的静态排查信息。
 - **SLK 清单摘要**（CLI/核心模块）：枚举地图内嵌 `.slk` 表，解析行数与有效列数，快速判断 SLK 优化图携带了哪些对象数据表。
 - **游戏常数明细**（CLI/核心模块）：解析 `war3mapMisc.txt` 的节名、键和值，直接列出被覆盖的游戏平衡性常数。
