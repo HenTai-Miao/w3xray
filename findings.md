@@ -120,3 +120,10 @@
 - 真图验证：653D (CAME 壳) 静态层不可解析是壳本身损坏（会话早期已知），
   必须走 live 内存层；4F47/B2E8 静态可解析，e2e 用 glob 排序取第一张可解析图。
 - pack-query 全命令 + guide + cli 真图输出零「另有/未显示/……」标记。
+
+- GUI 热路径实测：对象树 8371 行 Treeview 插入仅 0.03s（withdraw 态），过滤已在
+  后台 worker 线程，_autosize_tree 逐行 measure 也只毫秒级——删除 OBJECT_TREE_LIMIT
+  后无卡顿回归。live/CLI 输出为常规缓冲 print，无强制 flush 拖累。
+- 物化并行度 min(8, cores) 钳制删除（cli/guide/GUI 导出/batch worker 四入口
+  改 os.cpu_count() 吃满全部核）；物品关系过滤 filter_item_relations 源码注释
+  明写 without a display limit，满量确认。
