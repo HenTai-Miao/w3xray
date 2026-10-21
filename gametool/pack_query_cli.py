@@ -1972,6 +1972,7 @@ _SCOPE_ADD_ACTION_RE = re.compile(
 
 
 _SCOPE_CACHE: dict[str, tuple[list[int], list[str]]] = {}
+_REGISTRATION_CACHE: dict[str, tuple[dict, dict]] = {}
 
 
 def _script_function_spans(script: str) -> tuple[list[int], list[str]]:
@@ -2012,12 +2013,16 @@ def _registration_maps(
     偏移是关键: 初始化函数里同一变量 t 会被反复 CreateTrigger 复用
     (CreateNeutralHostile 41 处 TriggerAddAction 都写 t), 只按
     (作用域, 变量) 配对必然张冠李戴。"""
+    cached = _REGISTRATION_CACHE.get(script)
+    if cached is not None:
+        return cached
     conds: dict[str, tuple[str, int]] = {}
     acts: dict[str, tuple[str, int]] = {}
     for m in _SCOPE_ADD_COND_RE.finditer(script):
         conds.setdefault(m.group(2), (m.group(1), m.start()))
     for m in _SCOPE_ADD_ACTION_RE.finditer(script):
         acts.setdefault(m.group(2), (m.group(1), m.start()))
+    _REGISTRATION_CACHE[script] = (conds, acts)
     return conds, acts
 
 
