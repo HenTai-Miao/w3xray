@@ -61,6 +61,7 @@ _COMMANDS = (
     "diff",
     "list",
     "doc",
+    "buffs",
 )
 _COLOR_RE = re.compile(r"\|c[0-9A-Fa-f]{8}|\|r")
 
@@ -537,7 +538,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
     command = rest[1] if len(rest) > 1 else ""
     if command == "near" and len(rest) in (4, 5):
         rest = rest[:2] + [" ".join(rest[2:])]
-    if command in ("affixes", "registered", "diff", "list") and len(rest) == 2:
+    if command in ("affixes", "registered", "diff", "list", "buffs") and len(rest) == 2:
         # 这些子命令查询词可省 (全量列出)
         rest = rest + [""]
     if len(rest) != 3:
@@ -548,7 +549,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
             + ("  (near 用法: near <x> <y> [radius])" if command == "near" else "")
             + (
                 "  (affixes/registered/list 查询词可省 = 全量列出; diff 用法: diff <旧包目录>)"
-                if command in ("affixes", "registered", "diff", "list")
+                if command in ("affixes", "registered", "diff", "list", "buffs")
                 else ""
             )
         )
@@ -557,7 +558,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         raise PackQueryCliOptionError(
             "未知子命令: " + command + " (可选: " + ",".join(_COMMANDS) + ")"
         )
-    if not query.strip() and command not in ("affixes", "registered", "diff", "list"):
+    if not query.strip() and command not in ("affixes", "registered", "diff", "list", "buffs"):
         raise PackQueryCliOptionError("查询词不能为空")
     return PackQueryCliOptions(
         pack_dir=pack_dir,
@@ -2673,6 +2674,30 @@ def _query_doc(pack: Path, query: str, limit: int) -> list[str]:
     return out
 
 
+
+
+def _query_buffs(pack: Path, query: str, limit: int) -> list[str]:
+    """buffs 增益表清单/查询: buff 效果排查专用 (说明列=游戏内效果描述)。
+    query 空 = 全量列出; 有词 = 名称/ID/说明子串过滤。"""
+    rows = _read_rows(pack, "对象ID/增益.tsv")
+    if len(rows) <= 1:
+        return ["本包无 增益.tsv (地图未自定义增益)"]
+    needle = _clean(query).casefold()
+    out: list[str] = []
+    for r in rows[1:]:
+        if len(r) < 7:
+            continue
+        code, name, custom, note = r[1], _clean(r[4]), r[5].strip(), _clean(r[6])
+        if needle and needle not in code.casefold() and needle not in name.casefold() and needle not in note.casefold():
+            continue
+        origin = "自定义" if custom == "是" else "继承基础"
+        line = f"[{code}] {name} ({origin})"
+        if note:
+            line += f" — {note}"
+        out.append(line)
+    if not out:
+        return ["未找到: " + query]
+    return out
 _QUERIES = {
     "item": _query_item,
     "recipe": _query_recipe,
@@ -2693,6 +2718,7 @@ _QUERIES = {
     "search": _query_search,
     "list": _query_list,
     "doc": _query_doc,
+    "buffs": _query_buffs,
 }
 
 

@@ -195,6 +195,8 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
 - **资产清单**：`pack-query <包> list [表名]`——按表列出全部对象 ID+名称的纯清单
   （物品/单位/技能/英雄/增益/科技），供脚本或 AI 直接消费，无截断。
 - **单对象全景**：`pack-query <包> doc <四码或名称>`——一次聚合 item/price/where/drop/refs
+- **增益排查**：`pack-query <包> buffs [关键词]`——增益表全量清单或按名称/ID/效果过滤，
+  每条带游戏内效果描述（说明列），标明自定义/继承来源。
   五个维度，问"这个装备什么效果、怎么获得"一个命令出全。
   （物品/单位/技能/英雄四表，按 ID 主键对比），升级补丁内容一目了然。
 - **运行时只读透视**：`main.py live` 从运行中的游戏进程只读提取地图与对象信息（`ReadProcessMemory`，绝不写入），加密壳图静态解析失败时经内存层导出完整知识包：`live --dump-objects <目录>` 产出对象表/字段/注册数据/词缀表 TSV，供 `pack-query` 查询。

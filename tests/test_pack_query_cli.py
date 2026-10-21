@@ -1263,3 +1263,29 @@ def test_query_diff_identical_packs_report_no_difference(tmp_path, pack, capsys)
         parse_pack_query_cli_options((str(tmp_path), "diff", str(old)))
     )
     assert capsys.readouterr().out.strip() == "两包对象表无差异"
+
+
+def test_query_buffs_lists_and_filters(tmp_path, pack, capsys) -> None:
+    # Given: the pack fixture has no 增益.tsv.
+    run_pack_query_cli(parse_pack_query_cli_options((str(tmp_path), "buffs")))
+    assert (
+        capsys.readouterr().out.strip() == "本包无 增益.tsv (地图未自定义增益)"
+    )
+
+    # When: a buff table exists and a keyword filters it.
+    obj = tmp_path / "对象ID"
+    (obj / "增益.tsv").write_text(
+        "分类\tID\t10进制\t基础ID\t名称\t自定义\t说明\n"
+        "增益\tB001\t1\tB001\t护甲削弱\t是\t护甲被降低了。\n"
+        "增益\tB002\t2\tB002\t月蚀\t是\t夜晚移速提高。\n",
+        encoding="utf-8",
+    )
+    import io
+    import contextlib
+
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        run_pack_query_cli(parse_pack_query_cli_options((str(tmp_path), "buffs", "月蚀")))
+    text = buffer.getvalue()
+    assert "月蚀" in text
+    assert "护甲削弱" not in text
