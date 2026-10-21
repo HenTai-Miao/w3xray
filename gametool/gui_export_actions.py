@@ -200,7 +200,8 @@ class ExportActionsMixin:
         os.environ.setdefault("GAMEXRAY_MATERIALIZE_WORKERS", str(os.cpu_count() or 1))
         out = tmp_extract_dir(self.map_data.name, "资料包", clean=True)
         md = self.map_data
-        self.status.configure(text="正在整理地图资料包 …")
+        profile_summary = load_profile().summary()
+        self.status.configure(text=f"正在整理地图资料包 …（{profile_summary}）")
 
         def work(ticket: GuiWorkerTicket) -> None:
             try:

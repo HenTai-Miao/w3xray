@@ -127,6 +127,11 @@ def run_cli(options: CliOptions) -> int:
         print(single_line_text(line))
     if options.pack_dir is None:
         return 0
+    if options.profile_text:
+        print(
+            single_line_text(f"提取开关: {parse_profile_arg(options.profile_text).summary()}"),
+            file=sys.stderr,
+        )
     try:
         report = _write_cli_packs(map_data, options, external_names)
     except (
