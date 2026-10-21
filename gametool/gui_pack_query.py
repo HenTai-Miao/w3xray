@@ -23,6 +23,7 @@ def open_pack_query_dialog(
     master,
     pack_dir_provider: Callable[[], str | None],
     ensure_pack: Callable[[], str | None],
+    prefill: str = "",
 ) -> None:
     """打开包查询窗口。
 
@@ -66,7 +67,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         row = ctk.CTkFrame(self, fg_color="transparent")
         row.pack(fill="x", padx=14)
         self._keyword = ctk.CTkEntry(row, placeholder_text="四码或名称…", width=280)
-        self._keyword.insert(0, _LAST_KEYWORD)
+        self._keyword.insert(0, prefill or _LAST_KEYWORD)
         self._keyword.pack(side="left", padx=(0, 8))
         self._keyword.bind("<Return>", lambda _e: self._run("doc"))
         self._mode = ctk.CTkSegmentedButton(
@@ -82,6 +83,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self._output.pack(fill="both", expand=True, padx=14, pady=10)
         if _LAST_RESULT:
             self._output.insert("1.0", _LAST_RESULT)
+        if prefill:
+            self.after(120, lambda: self._run("doc"))
 
         menu = tk.Menu(self, tearoff=0)
         menu.add_command(label="复制全部", command=self._copy_all)

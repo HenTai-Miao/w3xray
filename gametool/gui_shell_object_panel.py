@@ -48,6 +48,7 @@ class ObjectPanelHost(Protocol):
     detail_icon_image: ctk.CTkImage
     detail_icon: ctk.CTkLabel
     detail_title: ctk.CTkLabel
+    pack_query_detail_button: ctk.CTkButton
     detail_sub: ctk.CTkLabel
     detail: ctk.CTkTextbox
 
@@ -179,6 +180,16 @@ def build_detail_panel(host: ObjectPanelHost, paned: tk.PanedWindow) -> None:
         wraplength=460,
         justify="left",
     )
+    host.pack_query_detail_button = ctk.CTkButton(
+        detail_head,
+        text="包查询",
+        width=64,
+        height=26,
+        font=(FONT, 11),
+        command=lambda: _pack_query_selected(host),
+    )
+    host.pack_query_detail_button.pack(side="right")
+
     host.detail_sub.pack(fill="x", padx=12)
     host._build_object_text_controls(rightp)
     host.detail = ctk.CTkTextbox(
@@ -194,3 +205,16 @@ def build_detail_panel(host: ObjectPanelHost, paned: tk.PanedWindow) -> None:
     host.detail.configure(state="disabled")
     host._attach_ctx_menu(host.detail, copy_all=True)
     add_deferred_pane(paned, rightp, minsize=300, stretch="never")
+
+
+def _pack_query_selected(host) -> None:
+    obj = getattr(host, "_selected_detail_object", None)
+    from .gui_pack_query import open_pack_query_dialog  # noqa: PLC0415
+
+    prefill = obj.obj_id if obj is not None else ""
+    open_pack_query_dialog(
+        host,
+        lambda: getattr(host, "_last_pack_dir", None),
+        host.on_export_pack,
+        prefill=prefill,
+    )
