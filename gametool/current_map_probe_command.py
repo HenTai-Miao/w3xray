@@ -19,10 +19,10 @@ from .current_map_models import EvidenceKind, GameProcess, MapEvidence
 
 
 COMMAND_TIMEOUT_SECONDS: Final = 2.0
-COMMAND_OUTPUT_LIMIT: Final = 1024 * 1024
-MAX_PROBE_PIDS: Final = 8
-MAX_PROCESS_RECORDS: Final = 128
-MAX_OPEN_PATHS: Final = 256
+COMMAND_OUTPUT_LIMIT: Final = 16 * 1024 * 1024
+MAX_PROBE_PIDS: Final = 128
+MAX_PROCESS_RECORDS: Final = 2048
+MAX_OPEN_PATHS: Final = 4096
 MAX_PATH_CHARS: Final = 4096
 MAX_COMMAND_CHARS: Final = 32768
 MAP_SUFFIXES: Final = frozenset({".w3x", ".w3m", ".w3n"})

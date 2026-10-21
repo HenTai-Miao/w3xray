@@ -56,12 +56,11 @@ type PresentedResolution = AcceptedSuggestion | TerminalStatus
 
 
 def candidate_text(candidate: MapCandidate) -> str:
-    """Return one bounded, single-line candidate description."""
-    path = single_line_text(str(candidate.path), max_chars=512)
+    """Return one single-line candidate description with the full path."""
+    path = single_line_text(str(candidate.path))
     sources = "、".join(dict.fromkeys(item.kind.value for item in candidate.evidence))
     return single_line_text(
-        f"{path}（来源：{sources or '未提供'}）",
-        max_chars=768,
+        f"{path}（来源：{sources or '未提供'}）"
     )
 
 

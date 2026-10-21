@@ -40,10 +40,10 @@ _POWERSHELL_SCRIPT: Final = (
     "Get-CimInstance Win32_Process|Select-Object ProcessId,Name,CommandLine|"
     "ConvertTo-Csv -NoTypeInformation"
 )
-_MAX_FDS_PER_PID: Final = 512
-_MAX_ROOTS: Final = 8
-_MAX_ARGUMENT_OCCURRENCES: Final = 64
-_MAX_EXPLICIT_TOKENS: Final = 256
+_MAX_FDS_PER_PID: Final = 8192
+_MAX_ROOTS: Final = 64
+_MAX_ARGUMENT_OCCURRENCES: Final = 1024
+_MAX_EXPLICIT_TOKENS: Final = 4096
 _LOADFILE_FLAGS: Final = frozenset({"-loadfile", "--loadfile"})
 
 

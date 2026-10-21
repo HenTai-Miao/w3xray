@@ -82,7 +82,6 @@ _TILE_PATH_DATA: Final = (
     "Ztil=TerrainArt\\Ruins\\Ruins_RoundTiles.blp;Zgrs=TerrainArt\\Ruins\\Ruins_Grass.blp;"
     "Zvin=TerrainArt\\Ruins\\Ruins_GrassDark.blp;"
 )
-_SUMMARY_TILE_LIMIT: Final = 6
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,9 +126,6 @@ def format_terrain_tile(tile_id: str) -> str:
 
 def format_terrain_tile_list(tile_ids: tuple[str, ...]) -> str:
     """Format a bounded terrain tile list for CLI output."""
-    shown = "、".join(
-        format_terrain_tile(tile_id) for tile_id in tile_ids[:_SUMMARY_TILE_LIMIT]
+    return "、".join(
+        format_terrain_tile(tile_id) for tile_id in tile_ids
     )
-    if len(tile_ids) <= _SUMMARY_TILE_LIMIT:
-        return shown
-    return f"{shown} …… 另有 {len(tile_ids) - _SUMMARY_TILE_LIMIT} 个"

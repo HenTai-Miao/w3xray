@@ -41,9 +41,9 @@ from .script_sources import analysis_script_texts, collect_readable_scripts
 from .supplemented_source import SupplementedPathArchiveSource
 from .wts import parse_wts, validate_wts_component
 
-_MAX_CAMPAIGN_CHILDREN: Final = 256
-_MAX_CAMPAIGN_CHILD_BYTES: Final = 512 * 1024 * 1024
-_MAX_CAMPAIGN_READ_BYTES: Final = 512 * 1024 * 1024
+_MAX_CAMPAIGN_CHILDREN: Final = 4096
+_MAX_CAMPAIGN_CHILD_BYTES: Final = 2 * 1024 * 1024 * 1024
+_MAX_CAMPAIGN_READ_BYTES: Final = 2 * 1024 * 1024 * 1024
 
 
 def load_map(

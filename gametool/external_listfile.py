@@ -12,9 +12,9 @@ from typing import Final, Protocol
 from .war3_encoding import decode_warcraft_string
 
 
-MAX_EXTERNAL_LISTFILE_BYTES: Final = 8 * 1024 * 1024
-MAX_EXTERNAL_LISTFILE_ENTRIES: Final = 100_000
-MAX_EXTERNAL_LISTFILE_LINE_CHARS: Final = 4096
+MAX_EXTERNAL_LISTFILE_BYTES: Final = 512 * 1024 * 1024
+MAX_EXTERNAL_LISTFILE_ENTRIES: Final = 10_000_000
+MAX_EXTERNAL_LISTFILE_LINE_CHARS: Final = 65_536
 
 
 class ExternalNameArchive(Protocol):

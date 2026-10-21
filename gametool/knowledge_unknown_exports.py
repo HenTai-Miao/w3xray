@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from .api import MapData
 
 _MAX_UNKNOWN_EXPORT_BYTES: Final = 512 * 1024 * 1024
-_MAX_UNKNOWN_MANIFEST_ROWS: Final = 100_000
+_MAX_UNKNOWN_MANIFEST_ROWS: Final = 5_000_000
 
 
 class UnknownBlock(Protocol):

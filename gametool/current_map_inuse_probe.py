@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Final
 
 
-MAX_PROBED_PATHS: Final = 32
+MAX_PROBED_PATHS: Final = 512
 GENERIC_READ: Final = 0x80000000
 GENERIC_WRITE: Final = 0x40000000
 OPEN_EXISTING: Final = 3

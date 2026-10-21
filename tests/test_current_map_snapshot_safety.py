@@ -23,7 +23,7 @@ _SNAPSHOT_DIR_PREFIX: Final = "gamexray-current-map-"
 _OWNER_MARKER_NAME: Final = ".gamexray-current-map-owner"
 _OWNER_MARKER_CONTENT: Final = b"GAMEXRAY_CURRENT_MAP_SNAPSHOT_V1\n"
 _STALE_AFTER_NS: Final = 24 * 60 * 60 * 1_000_000_000
-_MAX_STALE_REMOVALS: Final = 8
+_MAX_STALE_REMOVALS: Final = 512
 
 
 class _CountingScandir:
@@ -249,9 +249,9 @@ def test_stale_scan_does_not_fetch_entry_beyond_limit(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Given: 65 unrelated temp entries and an iterator that records each fetch.
+    # Given: 1025 unrelated temp entries and an iterator that records each fetch.
     root = _isolated_snapshot_root(tmp_path, monkeypatch)
-    for index in range(65):
+    for index in range(1025):
         (root / f"unrelated-{index:02d}").mkdir()
     real_scandir = os.scandir
     fetched: list[str] = []
@@ -269,7 +269,7 @@ def test_stale_scan_does_not_fetch_entry_beyond_limit(
     snapshot_module.cleanup_stale_current_map_snapshots()
 
     # Then: the 65th entry was never pulled from the iterator.
-    assert len(fetched) == 64
+    assert len(fetched) == 1024
 
 
 def test_chmod_failure_removes_just_created_empty_directory(

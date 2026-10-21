@@ -16,8 +16,8 @@ SNAPSHOT_DIR_PREFIX: Final = "gamexray-current-map-"
 _OWNER_MARKER_NAME: Final = ".gamexray-current-map-owner"
 _OWNER_MARKER_CONTENT: Final = b"GAMEXRAY_CURRENT_MAP_SNAPSHOT_V1\n"
 _STALE_AFTER_NS: Final = 24 * 60 * 60 * 1_000_000_000
-_MAX_STALE_SCAN_ENTRIES: Final = 64
-_MAX_STALE_REMOVALS: Final = 8
+_MAX_STALE_SCAN_ENTRIES: Final = 1024
+_MAX_STALE_REMOVALS: Final = 512
 _FILE_OPEN_FLAGS: Final = (
     getattr(os, "O_BINARY", 0)
     | getattr(os, "O_CLOEXEC", 0)

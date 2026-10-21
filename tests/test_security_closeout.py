@@ -9,6 +9,8 @@ import pytest
 
 from gametool import archive_export, knowledge_unknown_exports, map_loader
 from gametool.cli_options import CliOptions, _write_cli_packs
+from gametool.external_listfile import MAX_EXTERNAL_LISTFILE_BYTES
+
 from gametool.load_context import MapLoadContext
 from gametool.map_data import MapData
 from gametool.mpq_files import list_archive_files
@@ -53,7 +55,7 @@ class _OversizedListfileArchive:
         return name == "(listfile)"
 
     def declared_file_size(self, _name: str) -> int:
-        return 8 * 1024 * 1024 + 1
+        return MAX_EXTERNAL_LISTFILE_BYTES + 1
 
     def read_file(self, _name: str) -> bytes:
         self.read_calls += 1

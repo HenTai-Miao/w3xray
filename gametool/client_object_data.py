@@ -321,7 +321,7 @@ def merge_client_base_objects(
     return merged
 
 
-_MERGED_CACHE_LIMIT: Final = 4
+_MERGED_CACHE_LIMIT: Final = 64
 _MERGED_TABLE_CACHE: dict[
     int,
     dict[

@@ -18,7 +18,6 @@ from .textobj import clean_text
 _SKILL_KINDS: Final = frozenset(
     (ItemRelationKind.ITEM_ABILITY, ItemRelationKind.COOLDOWN_ABILITY)
 )
-_COMPACT_RAW_LIMIT: Final = 100
 
 
 def format_object_relation_sections(
@@ -219,7 +218,7 @@ def _compact_evidence(relation: ItemRelation) -> str:
     raw = evidence.raw
     if not raw:
         return line
-    if "\n" in raw or len(raw) > _COMPACT_RAW_LIMIT:
+    if "\n" in raw:
         return line + "\n  原始证据：\n" + indent(raw, "    ")
     return line + f"｜原文 {raw}"
 

@@ -26,9 +26,6 @@ _ROOT_OPTION: Final = "--root"
 _FORWARDED_OPTIONS: Final = frozenset(
     {"--listfile", "--game-data", "--author-bundle", "--pack"}
 )
-_MAX_CANDIDATE_LINES: Final = 8
-_MAX_CANDIDATE_PATH_CHARS: Final = 512
-_MAX_DIAGNOSTIC_LINE_CHARS: Final = 768
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,7 +151,6 @@ def _run_candidate(
     print(
         single_line_text(
             f"{selection_message}：{_candidate_text(candidate)}",
-            max_chars=_MAX_DIAGNOSTIC_LINE_CHARS,
         ),
         file=sys.stderr,
     )
@@ -173,17 +169,13 @@ def _run_candidate(
 
 def _print_candidates(header: str, candidates: tuple[MapCandidate, ...]) -> None:
     print(single_line_text(header), file=sys.stderr)
-    for candidate in candidates[:_MAX_CANDIDATE_LINES]:
+    for candidate in candidates:
         print(f"- {_candidate_text(candidate)}", file=sys.stderr)
-    omitted = len(candidates) - _MAX_CANDIDATE_LINES
-    if omitted > 0:
-        print(f"- 另有 {omitted} 个候选未显示。", file=sys.stderr)
 
 
 def _candidate_text(candidate: MapCandidate) -> str:
     path = single_line_text(
         os.fspath(candidate.path),
-        max_chars=_MAX_CANDIDATE_PATH_CHARS,
     )
     labels: list[str] = []
     for evidence in candidate.evidence:
@@ -193,7 +185,6 @@ def _candidate_text(candidate: MapCandidate) -> str:
     sources = "、".join(labels) if labels else "未提供"
     return single_line_text(
         f"{path}（来源：{sources}）",
-        max_chars=_MAX_DIAGNOSTIC_LINE_CHARS,
     )
 
 

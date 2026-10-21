@@ -118,11 +118,11 @@ def _wgc(map_path: str) -> bytes:
     )
 
 
-def test_default_roots_dedupe_existing_directories_before_eight_root_cap(
+def test_default_roots_dedupe_existing_directories_before_root_cap(
     tmp_path: Path,
 ) -> None:
-    # Given: duplicates, a missing path, and ten existing user roots.
-    roots = tuple(tmp_path / f"root-{index}" for index in range(10))
+    # Given: duplicates, a missing path, and 70 existing user roots.
+    roots = tuple(tmp_path / f"root-{index}" for index in range(70))
     for root in roots:
         root.mkdir()
     extras = (roots[0], roots[0] / ".", tmp_path / "missing", *roots[1:])
@@ -130,8 +130,8 @@ def test_default_roots_dedupe_existing_directories_before_eight_root_cap(
     # When: roots are normalized for bounded discovery.
     discovered = discover_default_map_roots(extras)
 
-    # Then: only the first eight unique existing directories remain.
-    assert discovered == tuple(root.resolve() for root in roots[:8])
+    # Then: only the first 64 unique existing directories remain.
+    assert discovered == tuple(root.resolve() for root in roots[:64])
 
 
 @pytest.mark.skipif(os.name != "posix", reason="requires POSIX /Volumes semantics")
@@ -204,31 +204,31 @@ def test_known_roots_include_windows_classic_install_directories(
     assert expected.issubset(roots)
 
 
-def test_hint_scan_stops_after_five_nested_directories(tmp_path: Path) -> None:
-    # Given: recent maps at the fifth and sixth nested directory levels.
+def test_hint_scan_stops_after_bounded_nested_directories(tmp_path: Path) -> None:
+    # Given: recent maps at the 16th and 17th nested directory levels.
     root = tmp_path / "maps"
     directory = root
-    for index in range(5):
+    for index in range(16):
         directory /= f"level-{index}"
     inside = directory / "inside.w3x"
-    beyond = directory / "level-5" / "beyond.w3x"
+    beyond = directory / "level-16" / "beyond.w3x"
     _write_at(inside, b"inside", _NOW_NS)
     _write_at(beyond, b"beyond", _NOW_NS)
 
     # When: hint discovery traverses the bounded root.
     resolution = _locate(root)
 
-    # Then: depth five is visible and depth six is never scanned.
+    # Then: depth 16 is visible and depth 17 is never scanned.
     assert tuple(item.path for item in resolution.candidates) == (inside.resolve(),)
 
 
-def test_hint_scan_stops_at_five_thousand_directory_entries(
+def test_hint_scan_stops_at_directory_entry_budget(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Given: one root containing 5,001 recent regular map entries.
+    # Given: one root containing 100,001 recent regular map entries.
     root = tmp_path / "many"
     root.mkdir()
-    for index in range(5_001):
+    for index in range(100_001):
         (root / f"map-{index:04}.w3x").touch()
     now_ns = time.time_ns()
     real_scandir = os.scandir
@@ -247,9 +247,9 @@ def test_hint_scan_stops_at_five_thousand_directory_entries(
 
     # Then: the underlying iterator itself is never advanced past the budget.
     assert resolution.status is ResolutionStatus.SUGGESTED
-    assert len(resolution.candidates) == 5_000
+    assert len(resolution.candidates) == 100_000
     assert len(scans) == 1
-    assert scans[0].next_calls == 5_000
+    assert scans[0].next_calls == 100_000
 
 
 def test_hint_scan_accepts_only_regular_map_files(tmp_path: Path) -> None:
@@ -403,9 +403,9 @@ def test_stale_wgc_reference_does_not_participate(tmp_path: Path) -> None:
 def test_oversized_wgc_is_not_passed_to_the_parser(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Given: a recent .wgc exceeds the bounded one-megabyte read limit.
+    # Given: a recent .wgc exceeds the bounded read limit.
     root = tmp_path / "oversized"
-    _write_at(root / "large.wgc", b"x" * (1_048_576 + 1), _NOW_NS)
+    _write_at(root / "large.wgc", b"x" * (64 * 1024 * 1024 + 1), _NOW_NS)
 
     def unexpected_parse(_payload: bytes) -> Never:
         raise AssertionError("oversized .wgc must not be parsed")
@@ -537,10 +537,11 @@ def test_in_use_probe_batches_root_candidates_within_provider_cap(
     assert sum(sizes) == 70
 
 
-def test_in_use_probe_covers_at_most_512_root_map_candidates(
-    tmp_path: Path,
+def test_in_use_probe_covers_root_map_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Given: 600 stale root maps, more than the root-map probe budget.
+    # Given: 600 stale root maps and a deliberately tiny probe budget.
+    monkeypatch.setattr(discovery, "_MAX_PROBED_ROOT_MAPS", 512)
     root = tmp_path / "capped"
     root.mkdir()
     for index in range(600):

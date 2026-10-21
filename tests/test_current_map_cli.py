@@ -254,13 +254,11 @@ def test_multiple_candidates_return_three_with_bounded_sanitized_paths(
     # When: the caller even opts in to a non-unique suggestion set.
     code = cli.run_current_map_cli(cli.CurrentMapCliOptions(accept_suggestion=True))
 
-    # Then: output is bounded to eight inert paths and reports the omitted count.
+    # Then: every candidate is listed as an inert sanitized path.
     diagnostic = capsys.readouterr().err
     assert code == 3
     assert "candidate-0" in diagnostic
-    assert "candidate-7" in diagnostic
-    assert "candidate-8" not in diagnostic
-    assert "另有 2 个" in diagnostic
+    assert "candidate-9" in diagnostic
     assert "\x1b" not in diagnostic
 
 

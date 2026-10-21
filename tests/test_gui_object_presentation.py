@@ -292,7 +292,7 @@ class ObjectPresentationTest(GuiTestCase):
         )
         many = ((0, 1.5, 2.5), (1, 3.0, 4.0), (2, 5.0, 6.0), (3, 7.0, 8.0))
         assert back_reference_note("单位", many) == (
-            "预放置 4 处：玩家0 (1.5, 2.5)、玩家1 (3, 4)、玩家2 (5, 6) 等4处"
+            "预放置 4 处：玩家0 (1.5, 2.5)、玩家1 (3, 4)、玩家2 (5, 6)、玩家3 (7, 8)"
         )
 
     def test_back_references_show_unit_spots_or_script_origin(self) -> None:

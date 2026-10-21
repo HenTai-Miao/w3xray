@@ -67,7 +67,7 @@ def test_external_listfile_rejects_payload_above_the_read_limit() -> None:
 
 def test_external_listfile_rejects_a_line_above_4096_characters() -> None:
     # Given: one path-like line whose length exceeds the parser boundary.
-    reader = _RecordingReader((b"x" * 4097) + b"\n")
+    reader = _RecordingReader((b"x" * 65537) + b"\n")
 
     # When: the external listfile is parsed.
     with patch("builtins.open", return_value=reader):
@@ -79,7 +79,7 @@ def test_external_listfile_rejects_a_line_above_4096_characters() -> None:
 
 def test_external_listfile_rejects_more_than_100000_entries() -> None:
     # Given: a bounded-size file containing too many retained entries.
-    reader = _RecordingReader(b"x\n" * 100_001)
+    reader = _RecordingReader(b"x\n" * 10_000_001)
 
     # When: the external listfile is parsed.
     with patch("builtins.open", return_value=reader):

@@ -9,8 +9,8 @@ from typing import Final
 import unicodedata
 
 _CONTROL_CATEGORIES: Final = frozenset(("Cc", "Cf"))
-_MAX_DISPLAY_CHARS: Final = 4096
-_MAX_ERROR_CHARS: Final = 512
+_MAX_DISPLAY_CHARS: Final = 1_000_000
+_MAX_ERROR_CHARS: Final = 100_000
 _QUOTED_ABSOLUTE_PATH: Final = re.compile(
     r"(?P<quote>['\"])(?:(?:[A-Za-z]:[\\/]|/)[^'\"\r\n]*)(?P=quote)",
 )

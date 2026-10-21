@@ -23,15 +23,15 @@ from gametool.current_map_process import (
 )
 
 
-def test_public_process_report_caps_game_processes_at_eight() -> None:
+def test_public_process_report_exposes_every_game_process() -> None:
     # Given: valid ps output contains nine actual game processes.
     payload = "\n".join(f"{pid} war3" for pid in range(601, 610)).encode()
 
     # When: the POSIX boundary constructs its public process report.
     report = posix_process_report(payload)
 
-    # Then: only the first eight bounded PID records are exposed.
-    assert tuple(item.pid for item in report.processes) == tuple(range(601, 609))
+    # Then: every PID record is exposed (probe bound is 128).
+    assert tuple(item.pid for item in report.processes) == tuple(range(601, 610))
 
 
 @pytest.mark.parametrize(
@@ -289,14 +289,14 @@ def test_explicit_argument_probe_caps_nonexistent_path_checks(
         )
         for process_index in range(2)
     )
-    roots = tuple(tmp_path / f"root-{item}" for item in range(8))
+    roots = tuple(tmp_path / f"root-{item}" for item in range(70))
 
     # When: explicit arguments are checked against all bounded roots.
     evidence = explicit_argument_evidence(processes, roots)
 
-    # Then: only 64 occurrences reach at most 8 filesystem checks each.
+    # Then: every occurrence reaches at most 64 filesystem checks (roots bound).
     assert evidence == ()
-    assert calls == 64 * 8
+    assert calls == 80 * 64
 
 
 @pytest.mark.skipif(

@@ -19,20 +19,20 @@ from .current_map_inuse_probe import MAX_PROBED_PATHS, probe_in_use_files
 from .current_map_process import OpenMapProbeReport, ProcessProbeReport
 from .gameconfig import parse_game_configuration
 
-_MAX_ROOTS: Final = 8
-_MAX_DEPTH: Final = 5
-_MAX_DIRECTORY_ENTRIES: Final = 5_000
-_MAX_WGC_BYTES: Final = 1_048_576
-_MAX_WGC_FILES: Final = 64
-_MAX_WGC_BASES: Final = 24
-_MAX_ANCESTORS_PER_ROOT: Final = 8
+_MAX_ROOTS: Final = 64
+_MAX_DEPTH: Final = 16
+_MAX_DIRECTORY_ENTRIES: Final = 100_000
+_MAX_WGC_BYTES: Final = 64 * 1024 * 1024
+_MAX_WGC_FILES: Final = 2048
+_MAX_WGC_BASES: Final = 512
+_MAX_ANCESTORS_PER_ROOT: Final = 64
 _HINT_WINDOW_NS: Final = 4 * 60 * 60 * 1_000_000_000
 _LOG_WINDOW_NS: Final = 15 * 60 * 1_000_000_000
 _LOG_RELPATH: Final = ("Documents", "Warcraft III", "Logs", "War3Log.txt")
-_MAX_LOG_BYTES: Final = 1_048_576
+_MAX_LOG_BYTES: Final = 64 * 1024 * 1024
 _OPENING_MAP_MARKER: Final = re.compile(r"opening map - ", re.IGNORECASE)
 _MAP_SUFFIXES: Final = frozenset({".w3x", ".w3m", ".w3n"})
-_MAX_PROBED_ROOT_MAPS: Final = 512
+_MAX_PROBED_ROOT_MAPS: Final = 50_000
 _HINT_EVIDENCE_KINDS: Final = frozenset(
     {
         models.EvidenceKind.RECENT_CACHE,

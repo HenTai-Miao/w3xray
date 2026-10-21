@@ -17,8 +17,6 @@ _COMPONENT_ERRORS = (
     IndexError,
     struct.error,
 )
-_MAX_DIAGNOSTICS: Final = 256
-_MAX_DIAGNOSTIC_TEXT: Final = 512
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,7 +66,7 @@ def record_diagnostic(md: DiagnosticTarget, diagnostic: ExtractionDiagnostic) ->
         recoverable=diagnostic.recoverable,
         exception_type=_clean_text(diagnostic.exception_type),
     )
-    if normalized in md.diagnostic_keys or len(md.diagnostics) >= _MAX_DIAGNOSTICS:
+    if normalized in md.diagnostic_keys:
         return
     md.diagnostic_keys.add(normalized)
     md.diagnostics.append(normalized)
@@ -156,4 +154,4 @@ def require_component_result(value: _T | None, source: str) -> _T:
 
 def _clean_text(value: str) -> str:
     cleaned = "".join(char if ord(char) >= 0x20 else " " for char in value)
-    return cleaned[:_MAX_DIAGNOSTIC_TEXT]
+    return cleaned

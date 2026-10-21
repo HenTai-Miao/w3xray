@@ -86,7 +86,6 @@ _TEXT_WORDS: Final = (
     "description",
 )
 _DEFAULT_VALUES: Final = frozenset(("-", "_"))
-_PLACEMENT_SHOWN_LIMIT: Final = 3
 
 
 def back_reference_note(
@@ -103,10 +102,8 @@ def back_reference_note(
         return ""
     if not placements:
         return "未预放置，游戏内由脚本/触发创建（位置由触发逻辑决定）"
-    shown = placements[:_PLACEMENT_SHOWN_LIMIT]
-    parts = [f"玩家{player} ({x:g}, {y:g})" for player, x, y in shown]
-    tail = f" 等{len(placements)}处" if len(placements) > len(shown) else ""
-    return f"预放置 {len(placements)} 处：{'、'.join(parts)}{tail}"
+    parts = [f"玩家{player} ({x:g}, {y:g})" for player, x, y in placements]
+    return f"预放置 {len(placements)} 处：{'、'.join(parts)}"
 
 
 def object_detail_title(obj: GameObject) -> str:
