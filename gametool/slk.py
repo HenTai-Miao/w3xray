@@ -12,9 +12,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final, override
 
-_MAX_COLUMNS: Final = 4096
-_MAX_ROWS: Final = 65536
-_MAX_CELLS: Final = 1_000_000
+_MAX_COLUMNS: Final = 16_384
+_MAX_ROWS: Final = 1_000_000
+_MAX_CELLS: Final = 64_000_000
 
 
 @dataclass(frozen=True, slots=True)

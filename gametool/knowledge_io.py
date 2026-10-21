@@ -140,4 +140,4 @@ def _clean_write_error(error: str, root: str) -> str:
     cleaned = error.replace(os.path.realpath(root), "<output>").replace(
         root, "<output>"
     )
-    return redact_user_text(cleaned)[:512]
+    return redact_user_text(cleaned)

@@ -18,7 +18,7 @@ from typing import Final, override
 from .current_map_models import EvidenceKind, GameProcess, MapEvidence
 
 
-COMMAND_TIMEOUT_SECONDS: Final = 2.0
+COMMAND_TIMEOUT_SECONDS: Final = 10.0
 COMMAND_OUTPUT_LIMIT: Final = 16 * 1024 * 1024
 MAX_PROBE_PIDS: Final = 128
 MAX_PROCESS_RECORDS: Final = 2048

@@ -89,7 +89,7 @@ def test_path_fallback_preserves_existing_file_on_write_failure(
 
 def test_sparse_slk_coordinate_is_rejected_before_range_expansion() -> None:
     # Given: one tiny SLK record declares a far-away column.
-    text = 'ID;P\nC;X5000;Y1;K"name"\nE\n'
+    text = 'ID;P\nC;X20000;Y1;K"name"\nE\n'
 
     # When/Then: bounds are enforced before any rectangular iteration.
     with pytest.raises(ValueError, match="SLK"):
