@@ -63,8 +63,8 @@ def _write_sparse_mpq(
     return path
 
 
-def test_main_header_discovery_stops_at_sixteen_mib_budget(tmp_path: Path) -> None:
-    header_offset = 16 * 1024 * 1024 + 512
+def test_main_header_discovery_stops_at_scan_budget(tmp_path: Path) -> None:
+    header_offset = 64 * 1024 * 1024 + 512
     path = _write_sparse_mpq(
         tmp_path / "late-header.w3x",
         _hdr(4, 1, hash_pos=32, block_pos=96),
@@ -84,7 +84,7 @@ def test_main_header_discovery_stops_at_sixteen_mib_budget(tmp_path: Path) -> No
 
 
 def test_hash_table_entry_budget_rejects_sparse_archive(tmp_path: Path) -> None:
-    hash_count = 1 << 19
+    hash_count = 1 << 22
     block_position = 32 + hash_count * 16
     path = _write_sparse_mpq(
         tmp_path / "large-hash-table.w3x",
@@ -104,7 +104,7 @@ def test_hash_table_entry_budget_rejects_sparse_archive(tmp_path: Path) -> None:
 
 
 def test_block_table_entry_budget_rejects_sparse_archive(tmp_path: Path) -> None:
-    block_count = (1 << 18) + 1
+    block_count = (1 << 22) + 1
     block_position = 96
     path = _write_sparse_mpq(
         tmp_path / "large-block-table.w3x",

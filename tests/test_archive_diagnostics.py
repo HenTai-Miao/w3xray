@@ -237,9 +237,9 @@ def test_probe_uses_only_bounded_header_reads(tmp_path: Path) -> None:
     assert sum(read_sizes) <= 32 * ((2 * 1024 * 1024) // 512 + 1)
 
 
-def test_header_beyond_sixteen_mib_scan_window_is_ignored(tmp_path: Path) -> None:
-    # Given: a sparse file whose only MPQ header begins at the 16 MiB boundary.
-    scan_limit = 16 * 1024 * 1024
+def test_header_beyond_scan_window_is_ignored(tmp_path: Path) -> None:
+    # Given: a sparse file whose only MPQ header begins beyond the scan window.
+    scan_limit = 64 * 1024 * 1024
     path = _write_chunks(
         tmp_path / "late-header.w3x",
         ((scan_limit, _header()),),

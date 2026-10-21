@@ -29,10 +29,10 @@ from .description_cache_retained_tree_snapshot import RetainedScanBounds
 
 
 MAX_RETAINED_FILE_BYTES: Final = 1024 * 1024 * 1024
-MAX_RETAINED_TREE_BYTES: Final = 512 * 1024 * 1024
-MAX_RETAINED_FILE_COUNT: Final = 100_000
-MAX_RETAINED_ENTRY_COUNT: Final = 125_000
-MAX_RETAINED_DEPTH: Final = 64
+MAX_RETAINED_TREE_BYTES: Final = 8 * 1024 * 1024 * 1024
+MAX_RETAINED_FILE_COUNT: Final = 1_000_000
+MAX_RETAINED_ENTRY_COUNT: Final = 1_250_000
+MAX_RETAINED_DEPTH: Final = 256
 
 
 @dataclass(frozen=True, slots=True)

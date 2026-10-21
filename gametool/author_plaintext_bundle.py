@@ -21,8 +21,8 @@ from .safe_output import safe_relative_path
 MANIFEST_NAME: Final = "gamexray-author-bundle.tsv"
 MAX_BUNDLE_FILE_SIZE: Final = 2 * 1024 * 1024 * 1024
 MAX_BUNDLE_TOTAL_SIZE: Final = 8 * 1024 * 1024 * 1024
-MAX_BUNDLE_FILES: Final = 10_000
-MAX_MANIFEST_SIZE: Final = 2 * 1024 * 1024
+MAX_BUNDLE_FILES: Final = 100_000
+MAX_MANIFEST_SIZE: Final = 64 * 1024 * 1024
 _SHA256_RE: Final = re.compile(r"[0-9a-f]{64}")
 
 

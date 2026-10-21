@@ -21,7 +21,7 @@ from .bounded_file import read_bounded_regular_file
 from .safe_output import safe_relative_path
 
 
-_MAX_GLOBAL_PAYLOAD_BYTES: Final = 512 * 1024 * 1024
+_MAX_GLOBAL_PAYLOAD_BYTES: Final = 4 * 1024 * 1024 * 1024
 
 
 class BatchAcceptanceError(RuntimeError):

@@ -50,8 +50,8 @@ class MPQLayoutError(ValueError):
 
 type ArchiveBytes = bytes | mmap.mmap
 
-_HEADER_SCAN_LIMIT: Final = 16 * 1024 * 1024
-_MAX_TABLE_ENTRIES: Final = 1 << 18
+_HEADER_SCAN_LIMIT: Final = 64 * 1024 * 1024
+_MAX_TABLE_ENTRIES: Final = 1 << 21
 
 
 def normalize_classic_header_size(

@@ -38,8 +38,8 @@ from .description_cache import (
 )
 
 
-_MAX_MANIFEST_BYTES: Final = 4 * 1024 * 1024
-_MAX_PAYLOAD_BYTES: Final = 512 * 1024 * 1024
+_MAX_MANIFEST_BYTES: Final = 256 * 1024 * 1024
+_MAX_PAYLOAD_BYTES: Final = 4 * 1024 * 1024 * 1024
 _SUMMARY_NAME: Final = "批量提取汇总.tsv"
 _STATE_NAME: Final = "批量提取状态.json"
 _RETRY_NAME: Final = "失败与重试.tsv"

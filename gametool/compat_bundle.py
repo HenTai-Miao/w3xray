@@ -25,12 +25,12 @@ from .supplemental_evidence import (
 
 CompatBundleError = SupplementalEvidenceError
 COMPAT_MANIFEST_NAME: Final = "gamexray-compat-bundle.tsv"
-MAX_COMPAT_MANIFEST_SIZE: Final = 2 * 1024 * 1024
-MAX_COMPAT_NAMES: Final = 100_000
-MAX_COMPAT_FILES: Final = 10_000
-MAX_COMPAT_KEYS: Final = 262_144
+MAX_COMPAT_MANIFEST_SIZE: Final = 64 * 1024 * 1024
+MAX_COMPAT_NAMES: Final = 1_000_000
+MAX_COMPAT_FILES: Final = 200_000
+MAX_COMPAT_KEYS: Final = 4_000_000
 MAX_COMPAT_FILE_SIZE: Final = 1024 * 1024 * 1024
-MAX_COMPAT_TOTAL_SIZE: Final = 512 * 1024 * 1024
+MAX_COMPAT_TOTAL_SIZE: Final = 8 * 1024 * 1024 * 1024
 _SHA256_RE: Final = re.compile(r"[0-9a-f]{64}")
 _KEY_RE: Final = re.compile(r"[0-9A-Fa-f]{8}")
 

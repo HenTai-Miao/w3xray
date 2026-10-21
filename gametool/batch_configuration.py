@@ -11,7 +11,7 @@ from typing import Final, override
 DEFAULT_BATCH_OUTPUT: Final = (
     "/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output"
 )
-DEFAULT_MAP_TIMEOUT_SECONDS: Final = 900.0
+DEFAULT_MAP_TIMEOUT_SECONDS: Final = 3600.0
 DEFAULT_MINIMUM_FREE_BYTES: Final = 512 * 1024 * 1024
 
 

@@ -14,7 +14,7 @@ from .mpq_storage import open_regular_binary
 
 _MAGIC: Final = b"MPQ\x1a"
 _ALIGNMENT: Final = 512
-_SCAN_LIMIT: Final = 16 * 1024 * 1024
+_SCAN_LIMIT: Final = 64 * 1024 * 1024
 
 
 class ArchiveDiagnosisKind(StrEnum):

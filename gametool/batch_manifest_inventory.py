@@ -20,8 +20,8 @@ from .bounded_file import read_bounded_regular_file, sha256_regular_file
 from .safe_output import safe_relative_path
 
 
-_MAX_REPORT_BYTES: Final = 512 * 1024 * 1024
-_MAX_TOTAL_REPORT_BYTES: Final = 512 * 1024 * 1024
+_MAX_REPORT_BYTES: Final = 4 * 1024 * 1024 * 1024
+_MAX_TOTAL_REPORT_BYTES: Final = 8 * 1024 * 1024 * 1024
 _METADATA_NAMES: Final = frozenset((CONTENT_MANIFEST_NAME, OWNERSHIP_MARKER_NAME))
 _REPORT_NAMES: Final = frozenset(REQUIRED_MAP_REPORTS)
 
