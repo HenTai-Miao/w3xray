@@ -1,8 +1,9 @@
 # gamexray — GameXRay 游戏档案透视器
 
-> **X-ray your Warcraft III maps.**
+> **X-ray game archives.** 当前支持 Warcraft III 地图/战役；通过 `gametool/games/` 适配层可插拔扩展更多游戏。
 
-从零实现的魔兽争霸 III 地图/战役提取工具；地图 MPQ 解析为纯 Python，并包含基于 CascLib 3.0 的 Windows 原生 CASC 后端。
+从零实现的**游戏档案透视工具**；Warcraft III 地图 MPQ 解析为纯 Python，并包含基于 CascLib 3.0 的 Windows 原生 CASC 后端。
+核心管线只认通用提取类目（对象/单位/技能/触发器/关系/世界/预放置/脚本/资源/基础），游戏专属规则全部隔离在适配层——**新增游戏 = 新增一个适配器模块，不改核心代码**。
 带图形界面，可对地图里的 **单位 / 物品 / 技能 / 科技 / 可破坏物 / 装饰物 / 增益**
 做模糊搜索、查看详细字段，并提取脚本、隐藏聊天指令、合成配方，导出文件。
 支持战役 `.w3n`（多关卡子地图 + 战役级共享对象）。
@@ -35,6 +36,8 @@ macOS/Linux 包支持地图与战役的静态提取；Windows 专用的 CascLib 
 ```bash
 uv run main.py                 # 启动图形界面
 uv run main.py cli <地图路径>   # 命令行快速查看分类统计
+uv run main.py cli <地图路径> --pack <输出目录> --profile "-triggers,-world"  # 按类目开关导出知识包
+uv run main.py live <地图路径> --dump-objects <输出目录>  # 运行中游戏内存只读导出对象表
 uv run main.py current         # 获取游戏进程正在使用的地图并解析只读快照
 uv run main.py cli <配置.wgc>   # 命令行查看 World Editor AI 测试配置
 uv run main.py casc --help      # CASC Root 全量清单 / 单文件导出
@@ -184,6 +187,9 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
 - **外部验收 SKIP**：本次开发环境不是带真实 Warcraft III 安装的 Windows 主机。Windows 打包与真安装工作流已经存在，但只有 hosted/self-hosted 产生的验收 JSON 才能记为 PASS；本地 macOS 测试不替代该证据。
 
 ## 功能
+- **提取开关**：GUI 顶栏「提取设置」或 CLI `--profile "objects,units,-triggers"`（`-` 前缀=关闭，`all`=全开），按 10 个通用类目自由开关导出内容——不需要的类目完全不产出，大幅提速；全开时与历史全量导出逐文件一致。开关持久化保存，GUI/CLI 共享。
+- **多游戏适配层**：`gametool/games/` 把游戏专属规则（导出文件分组、四码分类等）从核心管线隔离；新增游戏支持 = 新增一个模块并 `@register_adapter`，核心代码零改动。未注册游戏回退魔兽通用适配。
+- **运行时只读透视**：`main.py live` 从运行中的游戏进程只读提取地图与对象信息（`ReadProcessMemory`，绝不写入），加密壳图静态解析失败时经内存层导出完整知识包：`live --dump-objects <目录>` 产出对象表/字段/注册数据/词缀表 TSV，供 `pack-query` 查询。
 - **获取当前地图**：GUI 顶栏按钮或 CLI `main.py current` 根据游戏进程与磁盘证据定位 `.w3x/.w3m/.w3n`，通过置信度门槛后只解析私有临时快照，不改源地图。
 - **解包**：把地图(MPQ 压缩包)内部文件全部解出；文件名发现采用**三层并集**((listfile) + 内置固定名单 + war3map.imp 导入清单)，GUI 也可选择外部 listfile 补充被删掉的文件名；无文件名的匿名 block 会逐块尝试恢复加密 key、按内容猜扩展名导出到 `Unknown/`，若从 MDX/脚本等内容反推出真实资源路径则按原路径补导出并写 `RecoveredNames/manifest.tsv`，极端损坏或无法解码的原始 payload 会保留到 `UnknownRaw/manifest.tsv`；提取完整性报告会标出疑似数据级加密/运行时解密保护，不做运行时内存 dump 或绕过。
 - **CASC 客户端浏览**：选择可读的 Windows 原生游戏数据后，「数据工具」可分页浏览整个 Root（每页 200 条）、按 mask 重扫并导出所选；CLI `casc inventory` 输出含路径类型、FileDataID、CKey、EKey、大小和本地可用状态的 TSV，`casc extract` 按任一稳定标识导出单文件。
