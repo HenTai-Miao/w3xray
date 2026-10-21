@@ -77,9 +77,7 @@ def process_one_map(
     started = monotonic_ns()
     # 父进程已对整图算过一次 sha256（fingerprint_source），台账直接复用。
     # 首次分析大图时物化是主要开销；默认吃满可用核（用户可显式覆盖）。
-    os.environ.setdefault(
-        "GAMEXRAY_MATERIALIZE_WORKERS", str(min(8, os.cpu_count() or 1))
-    )
+    os.environ.setdefault("GAMEXRAY_MATERIALIZE_WORKERS", str(os.cpu_count() or 1))
     root = load_map(
         fingerprint.path,
         load_context=context,

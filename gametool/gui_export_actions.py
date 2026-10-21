@@ -197,9 +197,7 @@ class ExportActionsMixin:
         if not self._need_map():
             return
         # 首次导出大图时物化是主要开销；默认吃满可用核（用户可显式覆盖）。
-        os.environ.setdefault(
-            "GAMEXRAY_MATERIALIZE_WORKERS", str(min(8, os.cpu_count() or 1))
-        )
+        os.environ.setdefault("GAMEXRAY_MATERIALIZE_WORKERS", str(os.cpu_count() or 1))
         out = tmp_extract_dir(self.map_data.name, "资料包", clean=True)
         md = self.map_data
         self.status.configure(text="正在整理地图资料包 …")

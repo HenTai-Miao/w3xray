@@ -100,9 +100,7 @@ def run_cli(options: CliOptions) -> int:
     """Load one map, print its summary, and optionally write a knowledge pack."""
     configure_cli_output()
     # 首次分析一张大图时物化是主要开销；默认吃满可用核（用户可显式覆盖）。
-    os.environ.setdefault(
-        "GAMEXRAY_MATERIALIZE_WORKERS", str(min(8, os.cpu_count() or 1))
-    )
+    os.environ.setdefault("GAMEXRAY_MATERIALIZE_WORKERS", str(os.cpu_count() or 1))
     if options.map_path.lower().endswith(".wgc"):
         return _run_game_config(options.map_path)
     external_names = read_external_listfile(options.listfile_path)

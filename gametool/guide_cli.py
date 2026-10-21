@@ -115,9 +115,7 @@ def run_guide_cli(options: GuideCliOptions) -> int:
     """加载地图并打印攻略速查；缓存命中时跳过解析；失败返回 2。"""
     configure_cli_output()
     # 首次分析一张大图时物化是主要开销；默认吃满可用核（用户可显式覆盖）。
-    os.environ.setdefault(
-        "GAMEXRAY_MATERIALIZE_WORKERS", str(min(8, os.cpu_count() or 1))
-    )
+    os.environ.setdefault("GAMEXRAY_MATERIALIZE_WORKERS", str(os.cpu_count() or 1))
     cache_path = report_cache_path(options.map_path)
     # --minimap-marks 需要完整 MapData (底图/对象表/w3i), 有它就不走缓存早退。
     if not options.refresh and options.minimap_marks is None:
