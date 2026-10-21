@@ -8,11 +8,10 @@ from pathlib import Path
 from typing import Final, override
 
 
-DEFAULT_BATCH_OUTPUT: Final = (
-    "/Users/zhongerbing/Documents/xm/war3_xg/map-extract-output"
-)
+DEFAULT_BATCH_OUTPUT: Final = "gamexray-batch-output"
+# 历史机器路径已禁用为默认值；默认落在当前目录 gamexray-batch-output，绝不指向历史根。
 DEFAULT_MAP_TIMEOUT_SECONDS: Final = 3600.0
-DEFAULT_MINIMUM_FREE_BYTES: Final = 512 * 1024 * 1024
+DEFAULT_MINIMUM_FREE_BYTES: Final = 2 * 1024 * 1024 * 1024
 
 
 @dataclass(frozen=True, slots=True)

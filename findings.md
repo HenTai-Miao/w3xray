@@ -127,3 +127,8 @@
 - 物化并行度 min(8, cores) 钳制删除（cli/guide/GUI 导出/batch worker 四入口
   改 os.cpu_count() 吃满全部核）；物品关系过滤 filter_item_relations 源码注释
   明写 without a display limit，满量确认。
+
+- 第十三/十四轮补充：batch 的 `DEFAULT_BATCH_OUTPUT` 原是历史机器绝对路径
+  （`/Users/zhongerbing/...`），跨机器会经盘符相对解析落进幽灵目录（AGENTS 早有记载）。
+  现改为当前目录相对名 `gamexray-batch-output`；磁盘余量预检 512MB→2GB（大图批量输出
+  8279 文件轻松超 512MB，会在有 1GB 余量的盘上误拒）。
