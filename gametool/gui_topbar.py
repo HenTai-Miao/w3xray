@@ -341,7 +341,9 @@ def _open_guide_window(app, text: str, force: bool = False) -> None:
     import customtkinter as ctk  # noqa: PLC0415
 
     win = ctk.CTkToplevel(app)
-    win.title("攻略速查")
+    md = getattr(app, "map_data", None)
+    map_name = getattr(md, "name", "") if md else ""
+    win.title(f"攻略速查 — {map_name}" if map_name else "攻略速查")
     from .gui_pack_query import _WINDOW_GEOMETRY, _remember_geometry  # noqa: PLC0415
 
     win.geometry(_WINDOW_GEOMETRY.get("guide") or "860x640")

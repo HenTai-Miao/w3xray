@@ -106,7 +106,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
     def __init__(self, master, pack_dir: str) -> None:
         super().__init__(master)
         _load_memo()
-        self.title("资料包查询")
+        pack_label = os.path.basename(self._pack_dir.rstrip("\/")) or "资料包查询"
+        self.title(f"资料包查询 — {pack_label}")
         remembered = _WINDOW_GEOMETRY.get("pack-query")
         self.geometry(remembered or "760x560")
         self.bind("<Destroy>", lambda _e: _remember_geometry(self, "pack-query"))
