@@ -185,10 +185,11 @@ LIVE_PACK_CACHE_VERSION = "live-pack-v2"
 
 
 def live_pack_cache_dir(map_path: str) -> Path:
-    """按版本+地图绝对路径+大小+mtime 推导缓存包目录。"""
+    """按版本+地图绝对路径+大小+mtime(纳秒) 推导缓存包目录。"""
     stat = os.stat(map_path)
     # v2: 满量纪律后的导出语义 (无摘要截断/全文索引)。代码修复救不了旧缓存,
     # 版本入键让旧包立刻退役, 下次 live 运行自动用新代码重导。
+    # mtime 纳秒粒度: 同秒改写地图不吃旧包 (对齐 _ROWS_CACHE 指纹纪律)。
     key_material = f"{LIVE_PACK_CACHE_VERSION}|{os.path.abspath(map_path)}|{stat.st_size}|{stat.st_mtime_ns}"
     key = hashlib.sha1(key_material.encode("utf-8")).hexdigest()[:16]
     return gamexray_cache_root() / "live-pack" / key
