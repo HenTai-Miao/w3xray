@@ -2054,7 +2054,12 @@ def _query_text(pack: Path, query: str, limit: int) -> list[str]:
             continue
         if limit and len(lines) >= limit:
             break
-    return lines or ["未找到文本: " + query]
+    if lines:
+        return lines
+    return [
+        "未找到文本: " + query + " (扫全部 *.tsv 索引行)",
+        "  （可换更短关键词重试; 对象名/效果排查用 search <词> 更专——它按八表结构化匹配）",
+    ]
 
 
 _CHAT_REG_RE = re.compile(
