@@ -2863,6 +2863,16 @@ def _query_diff(pack: Path, query: str, limit: int, pack_b: str = "") -> list[st
             out.append(f"      新: {new_synths[k]}")
     if not out:
         return ["两包对象表无差异"]
+    # 头部插入统计摘要: 一眼看更新规模 (X 段 / Y 处变化)
+    sections = sum(1 for line in out if line.startswith("== "))
+    total_changes = sum(
+        int(part)
+        for line in out
+        if line.startswith("== ")
+        for part in line.replace("=", " ").split()
+        if part.isdigit()
+    )
+    out.insert(0, f"共 {sections} 个差异段, 合计 {total_changes} 项变化")
     return out
 
 
