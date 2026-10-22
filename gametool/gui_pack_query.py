@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 _LAST_KEYWORD = ""
 _LAST_MODE = "doc"
 _LAST_RESULT = ""
+_HISTORY: list[tuple[str, str]] = []  # (模式, 关键词) 最近 10 条
 _PINNED: list[tuple[str, str]] = []  # (标题, 内容)
 
 
@@ -67,6 +68,15 @@ class _PackQueryWindow(ctk.CTkToplevel):
         ).pack(fill="x", padx=12, pady=(0, 8))
 
         row = ctk.CTkFrame(self, fg_color="transparent")
+        _HISTORY_VALUES = [f"{c} {k}".strip() for c, k in _HISTORY] or ["(无历史)"]
+        self._history = ctk.CTkOptionMenu(
+            row,
+            values=_HISTORY_VALUES,
+            width=120,
+            command=self._on_history_pick,
+        )
+        self._history.set(_HISTORY_VALUES[0] if _HISTORY else "(历史)")
+        self._history.pack(side="right")
         row.pack(fill="x", padx=14)
         self._keyword = ctk.CTkEntry(
             row, placeholder_text="四码或名称…  Ctrl+1..8 切模式  回车查", width=340
@@ -163,6 +173,15 @@ class _PackQueryWindow(ctk.CTkToplevel):
         )
         self._output.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
 
+    def _on_history_pick(self, value: str) -> None:
+        for cmd, kw in _HISTORY:
+            if f"{cmd} {kw}".strip() == value:
+                self._mode.set(cmd)
+                self._keyword.delete(0, "end")
+                self._keyword.insert(0, kw)
+                self._run(cmd)
+                return
+
     def _switch_mode(self, command: str) -> None:
         self._mode.set(command)
         self._keyword.focus_set()
@@ -175,6 +194,20 @@ class _PackQueryWindow(ctk.CTkToplevel):
         _LAST_KEYWORD = self._keyword.get().strip()
         _LAST_MODE = command
         keyword = self._keyword.get().strip()
+        if keyword or command in (
+            "stats",
+            "list",
+            "buffs",
+            "skills",
+            "units",
+            "heroes",
+            "synth",
+        ):
+            entry = (command, keyword)
+            if entry in _HISTORY:
+                _HISTORY.remove(entry)
+            _HISTORY.insert(0, entry)
+            del _HISTORY[10:]
         if command in ("doc", "export", "search", "diff") and not keyword:
             self._output.delete("1.0", "end")
             self._output.insert("1.0", f"{command} 需要四码或名称")
