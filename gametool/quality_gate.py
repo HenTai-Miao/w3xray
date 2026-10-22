@@ -30,7 +30,7 @@ def build_quality_commands(
     *,
     python_executable: str = sys.executable,
 ) -> tuple[QualityCommand, ...]:
-    """Build the three commands from one immutable path authority."""
+    """Build the four commands (风格/格式/类型/转义扫描) from one path authority."""
     return (
         QualityCommand(
             "ruff-check",
