@@ -45,7 +45,7 @@ def build_topbar(app) -> None:
     ctk.CTkLabel(
         brand, text="Warcraft III map workbench", font=(FONT, 11), text_color=SUBTLE
     ).pack(anchor="w")
-    ctk.CTkButton(
+    app.open_map_button = ctk.CTkButton(
         bar,
         text="打开地图 / 战役",
         font=(FONT, 13, "bold"),
@@ -53,7 +53,9 @@ def build_topbar(app) -> None:
         height=36,
         command=app.on_open,
         **primary_button_style(),
-    ).pack(side="left", padx=(0, 12))
+    )
+    _attach_tooltip(app.open_map_button, "打开本地地图或战役文件 (首次建议从这里开始)")
+    app.open_map_button.pack(side="left", padx=(0, 12))
     app.current_map_button = ctk.CTkButton(
         bar,
         text="获取当前地图",
@@ -63,6 +65,7 @@ def build_topbar(app) -> None:
         command=lambda: app.on_open_current_map(),
         **secondary_button_style(),
     )
+    _attach_tooltip(app.current_map_button, "探测运行中的游戏正在玩哪张图 (只读)")
     app.current_map_button.pack(side="left", padx=(0, 12))
     app.map_label = ctk.CTkLabel(
         bar,
@@ -136,6 +139,9 @@ def build_topbar(app) -> None:
         command=lambda: open_extraction_profile_dialog(app),
         **secondary_button_style(),
     )
+    _attach_tooltip(
+        app.profile_settings_button, "提取类目开关: 按组跳过资料包产物以提速"
+    )
     app.profile_settings_button.pack(side="left", padx=(0, 4))
     app.pack_query_button = ctk.CTkButton(
         source_tools,
@@ -154,6 +160,10 @@ def build_topbar(app) -> None:
         app.pack_query_button,
         "九模式查询: doc/search/list/buffs/export/synth/skills/units/locate (Ctrl+1..9)",
     )
+    _attach_tooltip(
+        app.pack_query_button,
+        "九模式查询: doc/search/list/buffs/export/synth/skills/units/locate (Ctrl+1..9)",
+    )
     app.pack_query_button.pack(side="left", padx=(0, 4))
     app.minimap_button = ctk.CTkButton(
         source_tools,
@@ -165,6 +175,7 @@ def build_topbar(app) -> None:
         **secondary_button_style(),
     )
     _attach_tooltip(app.minimap_button, "按当前地图生成小地图标注 PNG (商店/掉落点位)")
+    _attach_tooltip(app.minimap_button, "按当前地图生成小地图标注 PNG (商店/掉落点位)")
     app.minimap_button.pack(side="left", padx=(0, 4))
     app.guide_button = ctk.CTkButton(
         source_tools,
@@ -175,6 +186,7 @@ def build_topbar(app) -> None:
         command=lambda: _show_guide(app),
         **secondary_button_style(),
     )
+    _attach_tooltip(app.guide_button, "一键玩家攻略: 指令/任务/配方/商店/掉落/线索速查")
     _attach_tooltip(app.guide_button, "一键玩家攻略: 指令/任务/配方/商店/掉落/线索速查")
     app.guide_button.pack(side="left", padx=(0, 4))
     # 未加载地图前禁用地图相关按钮 (加载成功后 lifecycle 统一启用)
@@ -188,6 +200,9 @@ def build_topbar(app) -> None:
         font=(FONT, 11),
         command=lambda: _popup_data_tools(app),
         **secondary_button_style(),
+    )
+    _attach_tooltip(
+        app.data_tools_button, "导出/存档分析/运行时对象/最近资料包/键盘速查"
     )
     app.data_tools_button.pack(side="left", padx=(0, 4))
     actions = ctk.CTkFrame(bar, fg_color="transparent")
@@ -493,7 +508,6 @@ def _open_last_pack(app) -> None:
     os.startfile(target)  # noqa: S606 - Windows 资源管理器打开
 
 
-
 def _attach_tooltip(widget, text: str) -> None:
     """CTk 控件 hover 提示: Enter 显示 / Leave 销毁 (轻量 Toplevel)。"""
     import tkinter as tk  # noqa: PLC0415
@@ -509,10 +523,14 @@ def _attach_tooltip(widget, text: str) -> None:
         tip.wm_overrideredirect(True)
         tip.wm_geometry(f"+{x}+{y}")
         label = tk.Label(
-            tip, text=text, justify="left",
-            bg="#2a2a2a", fg="#ffffff",
+            tip,
+            text=text,
+            justify="left",
+            bg="#2a2a2a",
+            fg="#ffffff",
             font=("Microsoft YaHei UI", 9),
-            padx=8, pady=4,
+            padx=8,
+            pady=4,
         )
         label.pack()
         state["tip"] = tip
@@ -525,6 +543,8 @@ def _attach_tooltip(widget, text: str) -> None:
     widget.bind("<Enter>", _show, add="+")
     widget.bind("<Leave>", _hide, add="+")
     widget.bind("<ButtonPress>", _hide, add="+")
+
+
 def _show_hotkeys(app) -> None:
     """键盘流速查弹窗 (与 README 速查表同源)。"""
     import tkinter as tk  # noqa: PLC0415
