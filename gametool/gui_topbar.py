@@ -382,15 +382,30 @@ def _open_guide_window(app, text: str, force: bool = False) -> None:
     search_entry.bind("<Return>", lambda _e: _find_next())
     bar = ctk.CTkFrame(win, fg_color="transparent")
     bar.pack(fill="x", padx=8, pady=(8, 0))
+    section_buttons: dict[str, ctk.CTkButton] = {}
+
+    def _mark_active(active_title: str) -> None:
+        for t, btn in section_buttons.items():
+            active = t == active_title
+            btn.configure(
+                fg_color=ACCENT if active else "transparent",
+                text_color="#ffffff" if active else TEXT,
+                border_width=0 if active else 1,
+            )
+
     for key, title in GUIDE_SECTION_TITLES.items():
-        ctk.CTkButton(
+        btn = ctk.CTkButton(
             bar,
             text=title,
             width=72,
             height=24,
             font=(FONT, 11),
-            command=lambda t=title, b=box: _jump_to_section(b, t),
-        ).pack(side="left", padx=(0, 4))
+            fg_color="transparent",
+            border_width=1,
+            command=lambda t=title, b=box: (_jump_to_section(b, t), _mark_active(t)),
+        )
+        btn.pack(side="left", padx=(0, 4))
+        section_buttons[title] = btn
     box = ctk.CTkTextbox(win, font=("Consolas", 12), wrap="none")
     box.pack(fill="both", expand=True, padx=8, pady=8)
     box.insert("1.0", text)
