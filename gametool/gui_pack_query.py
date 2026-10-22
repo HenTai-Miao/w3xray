@@ -271,6 +271,13 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 end = f"{pos}+{len(needle)}c"
                 self._output.tag_add("sel", pos, end)
                 self._find_state["start"] = end
+            elif _PINNED:
+                # 结果区无命中 → 收藏区续找 (定位双通道覆盖收藏对比内容)
+                ppos = self._pinned_box.search(needle, "1.0", stopindex="end", nocase=True)
+                if ppos:
+                    self._pinned_box.see(ppos)
+                    pend = f"{ppos}+{len(needle)}c"
+                    self._pinned_box.tag_add("sel", ppos, pend)
 
         find_entry.bind("<Return>", lambda _e: _find_next())
         self.bind_all("<Control-f>", lambda _e: find_entry.focus_set() or "break")
