@@ -32,7 +32,8 @@ class TestParseWts(unittest.TestCase):
         body = "測試".encode("cp950")
         data = b"STRING 8\n{\n" + body + b"\n}\n"
         with patch(
-            "gametool.war3_encoding.default_legacy_codecs", return_value=("cp950", "gbk")
+            "gametool.war3_encoding.default_legacy_codecs",
+            return_value=("cp950", "gbk"),
         ):
             self.assertEqual(parse_wts(data)[8], "測試")
 

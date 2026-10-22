@@ -175,9 +175,7 @@ def test_known_roots_include_windows_classic_install_directories(
     tft = Path("C:\\Program Files (x86)\\Warcraft III\\Warcraft III Frozen Throne")
     classic_tft = tft / "Maps"
     campaign_tft = tft / "Campaigns"
-    campaign_classic = Path(
-        "C:\\Program Files (x86)\\Warcraft III\\Campaigns"
-    )
+    campaign_classic = Path("C:\\Program Files (x86)\\Warcraft III\\Campaigns")
 
     def fake_home() -> Path:
         return home

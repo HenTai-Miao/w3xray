@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
 import struct
-from typing import Final, Protocol, TypeVar, override
+from typing import Protocol, TypeVar, override
 
 _T = TypeVar("_T")
 _COMPONENT_ERRORS = (

@@ -41,7 +41,9 @@ _DIRECTORY_FLAGS = (
 def test_stage_io_support_preflight_rejects_incomplete_host_without_transaction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    stage_io = importlib.import_module("gametool.description_cache_publication_stage_io")
+    stage_io = importlib.import_module(
+        "gametool.description_cache_publication_stage_io"
+    )
     calls = {"uuid4": 0, "rename_noreplace": 0, "rename_exchange": 0}
 
     def forbidden_uuid4() -> Never:
@@ -81,7 +83,9 @@ def test_writer_return_leaf_replacement_is_rejected(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    stage_io = importlib.import_module("gametool.description_cache_publication_stage_io")
+    stage_io = importlib.import_module(
+        "gametool.description_cache_publication_stage_io"
+    )
     stage = tmp_path / "stage"
     stage.mkdir()
     descriptor = os.open(stage, _DIRECTORY_FLAGS)

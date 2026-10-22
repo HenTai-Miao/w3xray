@@ -163,7 +163,9 @@ def test_public_open_probe_falls_back_to_lsof_after_proc_denial(
         return True
 
     monkeypatch.setattr(Path, "is_dir", proc_exists)
-    monkeypatch.setattr("gametool.current_map_process.probe_proc_open_maps", denied_proc)
+    monkeypatch.setattr(
+        "gametool.current_map_process.probe_proc_open_maps", denied_proc
+    )
     monkeypatch.setattr("gametool.current_map_process._find_absolute_tool", fixed_lsof)
     monkeypatch.setattr("gametool.current_map_process.run_bounded_command", lsof_result)
 

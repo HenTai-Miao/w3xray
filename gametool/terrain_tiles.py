@@ -126,6 +126,4 @@ def format_terrain_tile(tile_id: str) -> str:
 
 def format_terrain_tile_list(tile_ids: tuple[str, ...]) -> str:
     """Format a bounded terrain tile list for CLI output."""
-    return "、".join(
-        format_terrain_tile(tile_id) for tile_id in tile_ids
-    )
+    return "、".join(format_terrain_tile(tile_id) for tile_id in tile_ids)

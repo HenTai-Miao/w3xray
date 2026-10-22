@@ -1243,7 +1243,9 @@ def test_query_diff_reports_added_and_removed(tmp_path, pack, capsys) -> None:
     src = (tmp_path / "对象ID" / "物品.tsv").read_text(encoding="utf-8")
     lines_src = src.splitlines(keepends=True)
     removed_id = "I0EE"
-    kept = [l for l in lines_src if not l.startswith(f"物品	{removed_id}	")]
+    kept = [
+        line for line in lines_src if not line.startswith(f"物品	{removed_id}	")
+    ]
     assert len(kept) < len(lines_src)
     (old / "对象ID" / "物品.tsv").write_text("".join(kept), encoding="utf-8")
 
@@ -1617,7 +1619,7 @@ def test_query_diff_synth_recipe_changes(tmp_path) -> None:
     import io
 
     # Given: two packs where a recipe's materials changed.
-    rel_header = t = chr(9)
+    t = chr(9)
     header = t.join(
         [
             "关系ID",

@@ -191,7 +191,9 @@ def test_native_probe_falls_back_to_path_map_with_casclib_reason(
 ) -> None:
     # Given: CascLib cannot load but the legacy path map is present.
     _native_install(str(tmp_path))
-    (tmp_path / "gamexray-casc-paths.tsv").write_text("UI/Test.txt\t001122334455667788\n")
+    (tmp_path / "gamexray-casc-paths.tsv").write_text(
+        "UI/Test.txt\t001122334455667788\n"
+    )
     monkeypatch.setattr(
         "gametool.game_data_source.probe_casclib",
         lambda _root: CascLibProbe(

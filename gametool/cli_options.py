@@ -129,7 +129,9 @@ def run_cli(options: CliOptions) -> int:
         return 0
     if options.profile_text:
         print(
-            single_line_text(f"提取开关: {parse_profile_arg(options.profile_text).summary()}"),
+            single_line_text(
+                f"提取开关: {parse_profile_arg(options.profile_text).summary()}"
+            ),
             file=sys.stderr,
         )
     try:

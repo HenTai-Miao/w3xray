@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import os
+
+import gametool.gui_export_actions as actions
+
 from gametool import gui_pack_query
 
 
@@ -11,11 +15,16 @@ def test_bind_geometry_memory_ignores_child_destroy(monkeypatch) -> None:
     # <Destroy> 因子控件冒泡触发时不得把子控件 geometry 记成窗口尺寸。
     calls: list[tuple[str, str]] = []
     monkeypatch.setattr(
-        gui_pack_query, "_remember_geometry",
-        lambda win, name: calls.append((name, win.geometry()))
+        gui_pack_query,
+        "_remember_geometry",
+        lambda win, name: calls.append((name, win.geometry())),
     )
     saved: list[dict[str, str]] = []
-    monkeypatch.setattr(gui_pack_query, "_save_memo", lambda: saved.append(dict(gui_pack_query._WINDOW_GEOMETRY)))
+    monkeypatch.setattr(
+        gui_pack_query,
+        "_save_memo",
+        lambda: saved.append(dict(gui_pack_query._WINDOW_GEOMETRY)),
+    )
     handlers: dict[str, object] = {}
     win = SimpleNamespace(
         geometry=lambda _a=None: "520x360",
@@ -29,11 +38,6 @@ def test_bind_geometry_memory_ignores_child_destroy(monkeypatch) -> None:
     handler(SimpleNamespace(widget=win))  # 顶层自身销毁才记
     assert calls == [("gui-test", "520x360")]
     assert len(saved) == 1
-
-
-import os
-
-import gametool.gui_export_actions as actions
 
 
 def test_last_pack_memo_roundtrip(tmp_path, monkeypatch) -> None:

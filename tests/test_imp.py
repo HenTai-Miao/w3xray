@@ -62,7 +62,8 @@ class TestParseImp(unittest.TestCase):
 
         # When: Windows ACP is cp950.
         with patch(
-            "gametool.war3_encoding.default_legacy_codecs", return_value=("cp950", "gbk")
+            "gametool.war3_encoding.default_legacy_codecs",
+            return_value=("cp950", "gbk"),
         ):
             table = parse_import_table(data)
 

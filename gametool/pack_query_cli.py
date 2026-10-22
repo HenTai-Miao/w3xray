@@ -648,7 +648,9 @@ def _query_locate(pack: Path, query: str, limit: int) -> list[str]:
         return ["用法: locate <码1;码2;...> (特征码交集, 全部码都出现才算命中)"]
     rows = _read_rows(pack, "脚本对象码出现索引.tsv")
     if not rows:
-        return ["未找到 脚本对象码出现索引.tsv（资料包未导出脚本索引——用 cli <地图> --pack 重导一次即有）"]
+        return [
+            "未找到 脚本对象码出现索引.tsv（资料包未导出脚本索引——用 cli <地图> --pack 重导一次即有）"
+        ]
     counts: dict[str, int] = {c.lower(): 0 for c in codes}
     for r in rows:
         if len(r) < 4:
@@ -1027,7 +1029,9 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
         hint = _code_home_hint(pack, query)
         if hint:
             lines.append(hint)
-        lines.append("  （若有预放置坐标/脚本位置，可用 near <x> <y> 按坐标反查周边掉落与单位）")
+        lines.append(
+            "  （若有预放置坐标/脚本位置，可用 near <x> <y> 按坐标反查周边掉落与单位）"
+        )
     return lines
 
 
@@ -1988,12 +1992,16 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
             ]
             if hint:
                 miss.append(hint)
-            miss.append("  （若有预放置坐标/脚本位置，可用 near <x> <y> 按坐标反查周边掉落与单位）")
+            miss.append(
+                "  （若有预放置坐标/脚本位置，可用 near <x> <y> 按坐标反查周边掉落与单位）"
+            )
             return miss
         miss = ["未找到获取途径: " + query]
         if hint:
             miss.append(hint)
-        miss.append("  （若有预放置坐标/脚本位置，可用 near <x> <y> 按坐标反查周边掉落与单位）")
+        miss.append(
+            "  （若有预放置坐标/脚本位置，可用 near <x> <y> 按坐标反查周边掉落与单位）"
+        )
         return miss
     if not any("掉落" in k for k in kinds):
         scan_code = (
@@ -2301,9 +2309,9 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
     parts = query.split()
     if len(parts) not in (2, 3):
         return [
-        "用法: near <x> <y> [radius=3000]",
-        "  （坐标来源: live 探针输出尾部 JSON 的 x/y, 或地图编辑器; 查脚底有什么/附近谁在掉什么）",
-    ]
+            "用法: near <x> <y> [radius=3000]",
+            "  （坐标来源: live 探针输出尾部 JSON 的 x/y, 或地图编辑器; 查脚底有什么/附近谁在掉什么）",
+        ]
     try:
         px, py = float(parts[0]), float(parts[1])
         radius = float(parts[2]) if len(parts) == 3 else 3000.0
@@ -2550,7 +2558,9 @@ def _ref_kind(mech: str, digest: str) -> str:
 def _query_refs(pack: Path, query: str, limit: int) -> list[str]:
     rows = _read_rows(pack, "脚本对象码出现索引.tsv")
     if not rows:
-        return ["未找到 脚本对象码出现索引.tsv（资料包未导出脚本索引——用 cli <地图> --pack 重导一次即有）"]
+        return [
+            "未找到 脚本对象码出现索引.tsv（资料包未导出脚本索引——用 cli <地图> --pack 重导一次即有）"
+        ]
     q = query.lower()
     give: list[tuple[str, str, str]] = []
     consume: list[tuple[str, str, str]] = []
@@ -3242,7 +3252,11 @@ def _run_query_inner(options: PackQueryCliOptions) -> int:
         lines = _query_diff(pack, options.query, options.limit, other)
         for line in lines:
             print(line)
-        return 0 if not lines or not lines[0].startswith(("未找到", "diff 需要", "第二个包")) else 2
+        return (
+            0
+            if not lines or not lines[0].startswith(("未找到", "diff 需要", "第二个包"))
+            else 2
+        )
     subs = _campaign_subpacks(pack)
     if subs:
         printed = False
@@ -3264,7 +3278,9 @@ def _run_query_inner(options: PackQueryCliOptions) -> int:
             printed = True
         if not printed:
             print("子地图均无结果: " + options.query)
-            print("  （容器级与全部子地图均未命中——商店/科技类数据虽可能在容器级, 本次已含容器级查询; 可换单位/物品名或四码再查）")
+            print(
+                "  （容器级与全部子地图均未命中——商店/科技类数据虽可能在容器级, 本次已含容器级查询; 可换单位/物品名或四码再查）"
+            )
             return 2
         return 0
     lines = _QUERIES[options.command](pack, options.query, options.limit)

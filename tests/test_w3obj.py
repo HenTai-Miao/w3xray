@@ -155,7 +155,8 @@ class TestParseObjectData(unittest.TestCase):
 
         # When: the active Windows ACP is cp950.
         with patch(
-            "gametool.war3_encoding.default_legacy_codecs", return_value=("cp950", "gbk")
+            "gametool.war3_encoding.default_legacy_codecs",
+            return_value=("cp950", "gbk"),
         ):
             objs = parse_object_data(_build([obj], []), "w3u")
 

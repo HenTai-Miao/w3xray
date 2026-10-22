@@ -216,7 +216,9 @@ def test_stage_io_unsupported_fails_before_any_publication_effect(
 ) -> None:
     legacy_output, legacy_cache = replacement_inputs(tmp_path, "first")
     output = tmp_path / "trusted"
-    stage_io = importlib.import_module("gametool.description_cache_publication_stage_io")
+    stage_io = importlib.import_module(
+        "gametool.description_cache_publication_stage_io"
+    )
     calls = _instrument_preflight_effects(monkeypatch)
     monkeypatch.setattr(stage_io, "_STAGE_IO_AVAILABLE", False)
 
