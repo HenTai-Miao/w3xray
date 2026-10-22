@@ -77,7 +77,7 @@ class BatchExtractionGapsTest(unittest.TestCase):
 
         # When: anonymous blocks are exported for the knowledge pack.
         with tempfile.TemporaryDirectory() as out:
-            count = write_unknown_files_from_archive(Archive(), out)
+            count = write_unknown_files_from_archive(Archive(), out)  # pyright: ignore[reportArgumentType]
 
             # Then: recoverable data and raw payloads are both preserved with one manifest.
             self.assertEqual(count, 3)

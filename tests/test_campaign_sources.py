@@ -55,7 +55,7 @@ def test_loader_campaign_discovery_accepts_w3f_declared_order() -> None:
     )
 
     # When: the compatibility wrapper discovers campaign children.
-    names = _campaign_inner_maps(Archive(), (), w3f)
+    names = _campaign_inner_maps(Archive(), (), w3f)  # pyright: ignore[reportArgumentType]
 
     # Then: the parsed W3F order wins without changing archive path spelling.
     assert names == ["Maps\\B.w3x", "Maps\\A.w3x"]
@@ -73,7 +73,7 @@ def test_loader_probes_w3f_child_missing_from_archive_enumeration() -> None:
     w3f = W3fInfo(maps=[CampaignMapEntry("Maps\\Hidden.w3x", "Hidden", "", True)])
 
     # When: the loader discovers campaign children.
-    names = _campaign_inner_maps(Archive(), (), w3f)
+    names = _campaign_inner_maps(Archive(), (), w3f)  # pyright: ignore[reportArgumentType]
 
     # Then: the declared path is probed directly and retained in W3F order.
     assert names == ["Maps\\Hidden.w3x"]
@@ -91,7 +91,7 @@ def test_loader_attempts_missing_w3f_child_for_diagnostics() -> None:
     w3f = W3fInfo(maps=[CampaignMapEntry("Maps\\Missing.w3x", "Missing", "", True)])
 
     # When: campaign candidates are assembled for the loader's diagnostic loop.
-    names = _campaign_inner_maps(Archive(), (), w3f)
+    names = _campaign_inner_maps(Archive(), (), w3f)  # pyright: ignore[reportArgumentType]
 
     # Then: the declared member is attempted instead of disappearing before diagnostics.
     assert names == ["Maps\\Missing.w3x"]
@@ -108,7 +108,7 @@ def test_open_map_source_prefers_attached_archive_source() -> None:
         def close(self) -> None:
             return None
 
-    md = MapData("missing-on-disk.w3x", "Attached", archive_source=Source())
+    md = MapData("missing-on-disk.w3x", "Attached", archive_source=Source())  # pyright: ignore[reportArgumentType]
 
     # When: a consumer asks for its archive context.
     with open_map_source(md) as opened:

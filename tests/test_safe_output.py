@@ -260,7 +260,7 @@ def test_parent_move_outside_after_write_removes_output(
         closefd: bool = True,
     ) -> Iterator[BinaryIO]:
         with original_fdopen(descriptor, mode, closefd=closefd) as handle:
-            yield handle
+            yield handle  # pyright: ignore[reportReturnType]
         parent.rename(moved_parent)
         parent.symlink_to(redirected_parent, target_is_directory=True)
 

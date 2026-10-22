@@ -4,18 +4,25 @@ from __future__ import annotations
 
 import tkinter as tk
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+import customtkinter as ctk
+from tkinter import ttk
+from typing import Protocol
 
 from .api import GameObject
-
-if TYPE_CHECKING:
-    from .object_gallery import ObjectGallery
 
 ICON_SIZE = 24
 ICON_BATCH_SIZE = 64
 
 
-def cancel_icon_job(gallery: ObjectGallery) -> None:
+class GalleryLike(Protocol):
+    cards: ttk.Treeview
+    container: ctk.CTkFrame
+    icon_images: list[tk.PhotoImage]
+    icon_job: str | None
+    render_token: int
+
+
+def cancel_icon_job(gallery: GalleryLike) -> None:
     if gallery.icon_job is None:
         return
     try:
@@ -26,7 +33,7 @@ def cancel_icon_job(gallery: ObjectGallery) -> None:
 
 
 def queue_icon_loading(
-    gallery: ObjectGallery,
+    gallery: GalleryLike,
     results: list[GameObject],
     token: int,
     get_icon: Callable[[str, int], tk.PhotoImage | None] | None,
@@ -41,7 +48,7 @@ def queue_icon_loading(
 
 
 def _load_icon_batch(
-    gallery: ObjectGallery,
+    gallery: GalleryLike,
     results: list[GameObject],
     token: int,
     get_icon: Callable[[str, int], tk.PhotoImage | None],

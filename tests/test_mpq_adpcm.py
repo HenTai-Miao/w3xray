@@ -31,7 +31,7 @@ def test_stereo_channel_rotation_matches_stormlib() -> None:
 @pytest.mark.parametrize("channels", (0, 3))
 def test_invalid_channel_count_is_rejected(channels: int) -> None:
     with pytest.raises(MPQADPCMError, match="channels"):
-        decompress_adpcm(b"\x00\x00\x00\x00", channels=channels, output_size=16)
+        decompress_adpcm(b"\x00\x00\x00\x00", channels=channels, output_size=16)  # pyright: ignore[reportArgumentType]
 
 
 @pytest.mark.parametrize("encoded", (b"", b"\x00", b"\x00\x00", b"\x00\x00\x01"))

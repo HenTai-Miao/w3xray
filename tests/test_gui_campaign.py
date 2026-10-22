@@ -26,7 +26,7 @@ class TestModeAndLeftList(GuiTestCase):
     # ---- 战役图：树形 ----
     def test_campaign_tree_lists_campaigns_as_roots(self):
         self.app.mode = "campaign"
-        self.app._dir_campaigns = [
+        self.app._dir_campaigns = [  # pyright: ignore[reportAttributeAccessIssue]
             {"path": "a.w3n", "name": "战役A", "loaded": False, "views": None},
             {"path": "b.w3n", "name": "战役B", "loaded": False, "views": None},
         ]
@@ -61,7 +61,7 @@ class TestModeAndLeftList(GuiTestCase):
 
     def test_picking_battle_dir_keeps_campaign_list(self):
         self.app._dir_campaigns = [
-            {"path": "a.w3n", "name": "战役A", "loaded": False, "views": None}
+            {"path": "a.w3n", "name": "战役A", "loaded": False, "views": None}  # pyright: ignore[reportAttributeAccessIssue]
         ]
         self.app._fill_battle([("p.w3x", "地图甲")])
         self.assertEqual(len(self.app._dir_campaigns), 1)  # 战役列表没被清

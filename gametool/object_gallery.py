@@ -10,7 +10,6 @@ from tkinter import ttk
 import customtkinter as ctk
 
 from .api import GameObject
-from .object_gallery_icons import cancel_icon_job, queue_icon_loading
 from .theme import (
     ACCENT_DARK,
     BORDER,
@@ -129,6 +128,8 @@ def render_object_gallery(
     show_detail: Callable[[GameObject], None],
     get_icon: Callable[[str, int], tk.PhotoImage | None] | None = None,
 ) -> None:
+    from .object_gallery_icons import cancel_icon_job  # noqa: PLC0415
+
     cancel_icon_job(gallery)
     category = active_category if active_category in PARALLEL_CATS else PARALLEL_CATS[0]
     results = results_by_category.get(category, [])
@@ -154,6 +155,8 @@ def render_object_gallery(
             iid=str(index),
             text=obj.name or obj.obj_id,
         )
+    from .object_gallery_icons import queue_icon_loading  # noqa: PLC0415
+
     queue_icon_loading(gallery, gallery.active_objects, token, get_icon)
 
 

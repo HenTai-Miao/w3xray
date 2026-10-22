@@ -59,11 +59,11 @@ class PreviewIconParseTest(unittest.TestCase):
         archive = _FakeArchive({"war3map.mmp": _mmp()})
 
         # When: optional metadata loading runs.
-        add_preview_icons(md, archive)
+        add_preview_icons(md, archive)  # pyright: ignore[reportArgumentType]
 
         # Then: parsed minimap icon metadata is attached to MapData.
         self.assertIsNotNone(md.preview_icons)
-        self.assertEqual(md.preview_icons.icon_count, 3)
+        self.assertEqual(md.preview_icons.icon_count, 3)  # pyright: ignore[reportOptionalMemberAccess]
 
 
 class _FakeArchive:

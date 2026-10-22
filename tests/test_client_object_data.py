@@ -59,7 +59,7 @@ def test_pipeline_inherits_client_base_name_health_and_icon() -> None:
     md = MapData(path=archive.path, name="fixture")
 
     # When: the selected client data participates in object construction.
-    load_object_pipeline(md, archive, {}, base_objects={}, game_data_source=source)
+    load_object_pipeline(md, archive, {}, base_objects={}, game_data_source=source)  # pyright: ignore[reportArgumentType]
 
     # Then: the custom map unit inherits all client display and data fields.
     inherited = md.obj_index["H001"]
@@ -110,7 +110,7 @@ def test_client_snapshot_retains_all_text_evidence_after_source_close() -> None:
     )
 
     # When: client evidence is snapshotted and the native source is closed.
-    snapshot = snapshot_client_base_objects(source)
+    snapshot = snapshot_client_base_objects(source)  # pyright: ignore[reportArgumentType]
     source.close()
 
     # Then: availability and both source-bearing variants survive independently.
@@ -150,7 +150,7 @@ def test_client_snapshot_prefers_zhcn_locale_strings() -> None:
     )
 
     # When: the client snapshot is built.
-    snapshot = snapshot_client_base_objects(source)
+    snapshot = snapshot_client_base_objects(source)  # pyright: ignore[reportArgumentType]
 
     # Then: the localized name is read while evidence keeps neutral path names.
     assert snapshot.text_available is True

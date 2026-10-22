@@ -148,7 +148,7 @@ def _read_trigger_functions(
     trigger: TriggerHeader,
     schema: TriggerSchema | None,
     version: int,
-    eca_functions: list,
+    eca_functions: list[object],
     missing: list[UnknownTriggerFunction],
     failures: list[TriggerParseFailure],
 ) -> bool:

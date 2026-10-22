@@ -85,7 +85,7 @@ def test_non_unique_candidates_offer_a_bounded_choice_that_never_guesses(
 
     def chooser(choice_candidates: tuple[object, ...]) -> object:
         offered.append(choice_candidates)
-        return choice_candidates[7].path  # type: ignore[attr-defined]
+        return choice_candidates[7].path  # type: ignore[attr-defined]  # pyright: ignore[reportAttributeAccessIssue]
 
     monkeypatch.setattr(presenter, "_candidate_chooser", chooser)
 

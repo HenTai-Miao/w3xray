@@ -17,13 +17,13 @@ from gametool.gui import App
 from gametool.load_options import default_load_options
 from gametool.object_text_presentation import ObjectTextView
 
-_APP = None
+_APP: App | None = None
 
 
 def _get_app() -> App:
     global _APP
     if _APP is None:
-        _APP = App()
+        _APP = App()  # pyright: ignore[reportConstantRedefinition]
         _APP.withdraw()  # 测试期间不弹窗
         atexit.register(_teardown)
     return _APP
@@ -36,11 +36,11 @@ def _teardown():
             _APP.destroy()
         except Exception:
             pass
-        _APP = None
+        _APP = None  # pyright: ignore[reportConstantRedefinition]
 
 
 class GuiTestCase(unittest.TestCase):
-    app: App
+    app: App  # pyright: ignore[reportUninitializedInstanceVariable]
 
     @classmethod
     def setUpClass(cls):

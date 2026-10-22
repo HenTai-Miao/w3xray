@@ -102,4 +102,4 @@ def test_mpq_declared_output_size_is_bounded_before_reading() -> None:
 
     # When/Then: the declared size is rejected before allocation or decompression.
     with pytest.raises(MPQBlockError, match="size"):
-        read_mpq_block(_Storage(), block, b"payload", None)
+        read_mpq_block(_Storage(), block, b"payload", None)  # pyright: ignore[reportArgumentType]

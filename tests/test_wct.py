@@ -140,13 +140,13 @@ class TestWctIntegration(unittest.TestCase):
 
         wct = _wct("", "globals\n integer g\nendglobals", ["call Foo()", ""])
         md = MapData(path="x", name="x")
-        _add_wct(md, _FakeArchive({"war3map.wct": wct}))
+        _add_wct(md, _FakeArchive({"war3map.wct": wct}))  # pyright: ignore[reportArgumentType]
         # 解码后的可读代码作为一个脚本条目加入，供"导出脚本"/查看
         key = next(
             (k for k in md.scripts if k.endswith(".txt") and "wct" in k.lower()), None
         )
         self.assertIsNotNone(key)
-        text = md.scripts[key]
+        text = md.scripts[key]  # pyright: ignore[reportArgumentType]
         self.assertIn("endglobals", text)
         self.assertIn("call Foo()", text)
 
@@ -154,7 +154,7 @@ class TestWctIntegration(unittest.TestCase):
         from gametool.api import _add_wct, MapData
 
         md = MapData(path="x", name="x")
-        _add_wct(md, _FakeArchive({}))
+        _add_wct(md, _FakeArchive({}))  # pyright: ignore[reportArgumentType]
         self.assertEqual(md.scripts, {})
 
 

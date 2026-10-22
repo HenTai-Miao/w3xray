@@ -58,7 +58,7 @@ class ScriptProtectionTest(unittest.TestCase):
 
         # When: anonymous blocks are exported into a knowledge pack dir.
         with tempfile.TemporaryDirectory() as out:
-            write_unknown_files_from_archive(Archive(), out)
+            write_unknown_files_from_archive(Archive(), out)  # pyright: ignore[reportArgumentType]
 
             # Then: an encrypted-script evidence report lands next to the manifest.
             report_path = os.path.join(out, "加密脚本检测.txt")
@@ -93,7 +93,7 @@ class ScriptProtectionTest(unittest.TestCase):
 
         # Then: no encrypted-script report is written.
         with tempfile.TemporaryDirectory() as out:
-            write_unknown_files_from_archive(Archive(), out)
+            write_unknown_files_from_archive(Archive(), out)  # pyright: ignore[reportArgumentType]
             self.assertFalse(os.path.exists(os.path.join(out, "加密脚本检测.txt")))
 
     def test_audit_warns_on_stub_primary_script(self) -> None:

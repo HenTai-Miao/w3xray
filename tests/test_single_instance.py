@@ -84,7 +84,7 @@ class TestTerminateImageGuard(unittest.TestCase):
                     break
                 time.sleep(0.02)
             self.assertIsNotNone(img)
-            _terminate(p.pid, img)
+            _terminate(p.pid, img)  # pyright: ignore[reportArgumentType]
             self.assertFalse(_pid_alive(p.pid))  # 映像匹配 → 被终止
         finally:
             try:

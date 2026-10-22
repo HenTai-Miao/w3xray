@@ -9,7 +9,7 @@ from functools import lru_cache
 try:
     from .jass_natives import BJ_CODE_CONSTANTS, BJ_FEATURES, BJ_FUNC_CODES
 except ImportError:
-    BJ_CODE_CONSTANTS, BJ_FEATURES, BJ_FUNC_CODES = {}, {}, {}
+    BJ_CODE_CONSTANTS, BJ_FEATURES, BJ_FUNC_CODES = {}, {}, {}  # pyright: ignore[reportConstantRedefinition]
 
 # 单遍提取全部 ASCII 标识符；环视保证与 \bname\b 的 Unicode 词边界语义一致。
 _IDENTIFIER_TOKEN_RE = re.compile(r"(?<!\w)([A-Za-z_][A-Za-z0-9_]*)(?!\w)")
@@ -92,7 +92,7 @@ def merge_implicit_object_refs(out: dict[str, set[str]], script: str) -> None:
     try:
         from .base_objects import BASE_OBJECTS
     except ImportError:
-        BASE_OBJECTS = {}
+        BASE_OBJECTS = {}  # pyright: ignore[reportConstantRedefinition]
     for code in implicit:
         entry = BASE_OBJECTS.get(code)
         if entry is None:

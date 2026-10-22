@@ -11,6 +11,7 @@ w3i 是地图的"信息卡"：真实地图名/作者/描述、推荐人数、尺
 from __future__ import annotations
 
 import struct
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 from .war3_encoding import decode_warcraft_string
@@ -50,7 +51,7 @@ class Force:
     allied_victory: bool = False
     share_vision: bool = False
     share_control: bool = False
-    players: list = field(default_factory=list)  # 玩家序号(1基) 列表
+    players: list[int] = field(default_factory=list)  # 玩家序号(1基) 列表
 
 
 @dataclass  # noqa: MUTABLE_OK  # noqa: SLOTS_OK - mutable extraction builder compatibility model.
@@ -72,8 +73,8 @@ class W3iInfo:
     custom_techtree: bool = False
     custom_ability: bool = False
     custom_upgrade: bool = False
-    players: list = field(default_factory=list)
-    forces: list = field(default_factory=list)
+    players: list[Player] = field(default_factory=list)
+    forces: list[Force] = field(default_factory=list)
     parse_issue: str = ""
     camera_bounds: tuple[
         float, ...
@@ -115,7 +116,7 @@ class _Reader:
         return decode_warcraft_string(b)
 
 
-def parse_w3i(data: bytes, wts: dict | None = None) -> "W3iInfo | None":
+def parse_w3i(data: bytes, wts: Mapping[int, str] | None = None) -> "W3iInfo | None":
     wts = wts or {}
     if len(data) < 8:
         return None

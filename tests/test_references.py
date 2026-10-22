@@ -215,7 +215,10 @@ class BuildGraphTest(unittest.TestCase):
         _lab, resolved = md.references["A001"][0]
         rcode, rname = resolved[0]
         self.assertEqual(rcode, code)
-        self.assertEqual(rname, base_names.BASE_NAMES[code])  # 回退到原版名
+        self.assertEqual(
+            rname,
+            base_names.BASE_NAMES[code],  # pyright: ignore[reportArgumentType]
+        )  # 回退到原版名
 
     def test_slk_column_label_translated(self):
         # SLK/文本对象的引用字段是列名(UnitID1)，标签应经 slk_col_label 中文化

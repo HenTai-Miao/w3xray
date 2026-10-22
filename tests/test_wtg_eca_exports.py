@@ -129,7 +129,8 @@ class WtgEcaExportTest(unittest.TestCase):
             [param.value for param in action.parameters], ["1", "H001", "比较"]
         )
         self.assertEqual(
-            action.parameters[2].nested_function.name, "OperatorCompareInteger"
+            action.parameters[2].nested_function.name,  # pyright: ignore[reportOptionalMemberAccess]
+            "OperatorCompareInteger",  # pyright: ignore[reportOptionalMemberAccess]
         )
         self.assertEqual(action.children[0].name, "DisplayTextToForce")
         self.assertFalse(action.children[0].is_enabled)

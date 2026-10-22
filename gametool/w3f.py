@@ -52,7 +52,8 @@ class W3fInfo:
     fog_start_z: float = 0.0
     fog_end_z: float = 0.0
     fog_density: float = 0.0
-    fog_color: tuple[int, int, int, int] = (0, 0, 0, 0)
+    fog_color: tuple[int, ...] = (0, 0, 0, 0)
+    # 定长4通道, reader.bytes(4) 动态长元组
     race: int = 0
     background_version: int | None = None
     maps: list[CampaignMapEntry] = field(default_factory=list)

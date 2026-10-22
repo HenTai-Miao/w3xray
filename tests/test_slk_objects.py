@@ -174,7 +174,7 @@ class ReferenceSlkMapTest(unittest.TestCase):
         # AHwe(召唤水元素) 原本只有名字；SLK 解析后应有大量字段 + UnitID1 引用
         o = self.md.obj_index.get("AHwe")
         self.assertIsNotNone(o)
-        self.assertGreater(len(o.fields), 10)
+        self.assertGreater(len(o.fields), 10)  # pyright: ignore[reportOptionalMemberAccess]
         refs = self.md.references.get("AHwe") or []
         targets = {c for _lab, resolved in refs for c, _n in resolved}
         self.assertIn("hwat", targets)  # 召唤的水元素
@@ -187,7 +187,7 @@ class ReferenceSlkMapTest(unittest.TestCase):
         # AHbz：编辑器噪声列(code/comments/version)应被隐藏；等级后缀列应是中文带等级
         o = self.md.obj_index.get("AHbz")
         self.assertIsNotNone(o)
-        labels = [lab for lab, _ in o.fields]
+        labels = [lab for lab, _ in o.fields]  # pyright: ignore[reportOptionalMemberAccess]
         for noise in ("code", "comments", "version", "sort", "InBeta"):
             self.assertNotIn(noise, labels)
         self.assertTrue(any("(等级" in lab for lab in labels))  # 如 施法间隔 (等级2)

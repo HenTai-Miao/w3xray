@@ -6,7 +6,7 @@ import os
 import struct
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from typing import cast, TYPE_CHECKING, Protocol
 
 from .archive_diagnostics import diagnose_archive_open
 from .campaign_sources import open_map_source
@@ -79,7 +79,10 @@ def build_extraction_completeness_report(
         )
     try:
         with open_map_source(md) as archive:
-            return build_extraction_completeness_from_archive(md, archive)
+            # 运行时为 MPQArchive (MPQ 源); 级联/CASC 源无块表, 由下方 except 兜底
+            return build_extraction_completeness_from_archive(
+                md, cast(ExtractionArchive, cast(object, archive))
+            )
     except (OSError, ValueError, struct.error) as err:
         diagnosis = diagnose_archive_open(md.path, err)
         return _fallback_report(

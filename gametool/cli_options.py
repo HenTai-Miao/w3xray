@@ -83,8 +83,8 @@ def parse_cli_options(argv: Sequence[str]) -> CliOptions:
                 author_bundle_path = value
             case "--profile":
                 profile_text = value
-            case unreachable:
-                assert_never(unreachable)
+            case _:
+                raise CliOptionError(f"不支持的参数：{option}")
         index += 2
     return CliOptions(
         map_path,

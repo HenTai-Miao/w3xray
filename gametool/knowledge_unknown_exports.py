@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import struct
 from collections.abc import Iterable, Sequence
-from typing import TYPE_CHECKING, Final, Protocol
+from typing import cast, TYPE_CHECKING, Final, Protocol
 
 from .campaign_sources import open_map_source
 from .knowledge_io import record_safe_write, write_bytes, write_text
@@ -52,8 +52,10 @@ def write_unknown_files(
     """Write anonymous blocks from a readable MPQ source into ``out_dir``."""
     try:
         with open_map_source(md) as archive:
+            # 运行时为 MPQArchive (MPQ 源); 级联/CASC 源无块表, 由下方 except 兜底为 0
+            mpq_archive = cast(UnknownArchive, cast(object, archive))
             return write_unknown_files_from_archive(
-                archive,
+                mpq_archive,
                 out_dir,
                 tuple(getattr(md, "all_files", ()) or ()) + tuple(known_names),
             )

@@ -26,9 +26,9 @@ class TestTreeCopy(GuiTestCase):
 
     def test_copy_object_name_row(self):
         tv = self.app.col_trees["物品"]
-        tv.insert("", "end", iid="0", text=" 治疗药水")
-        tv.selection_set("0")
-        self.app._copy_tree_row(tv)
+        tv.insert("", "end", iid="0", text=" 治疗药水")  # pyright: ignore[reportCallIssue]
+        tv.selection_set("0")  # pyright: ignore[reportAttributeAccessIssue]
+        self.app._copy_tree_row(tv)  # pyright: ignore[reportArgumentType]
         self.assertIn("治疗药水", self.app.clipboard_get())
 
 

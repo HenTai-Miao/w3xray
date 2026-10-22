@@ -6,7 +6,7 @@ from .api import MapData
 from .component_diagnostic_summary import format_component_diagnostic
 from .extraction_diagnostics import DiagnosticSeverity
 from .extraction_completeness import build_extraction_completeness_report
-from .gui_reports import GuiReportBlock
+from .gui_report_types import GuiReportBlock
 
 
 def build_extraction_completeness_block(md: MapData) -> GuiReportBlock:

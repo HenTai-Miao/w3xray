@@ -184,11 +184,11 @@ class WtgParseTest(unittest.TestCase):
         archive = _FakeArchive({"war3map.wtg": _classic_wtg()})
 
         # When: trigger summary loading runs.
-        add_trigger_summary(md, archive)
+        add_trigger_summary(md, archive)  # pyright: ignore[reportArgumentType]
 
         # Then: parsed trigger metadata is attached to MapData.
         self.assertIsNotNone(md.trigger_summary)
-        self.assertEqual(md.trigger_summary.trigger_count, 2)
+        self.assertEqual(md.trigger_summary.trigger_count, 2)  # pyright: ignore[reportOptionalMemberAccess]
 
 
 class _FakeArchive:

@@ -48,7 +48,7 @@ def _flatten_controls(value: str) -> str:
     return value.translate(_FLATTEN_TABLE)
 
 
-class _ControlTranslateTable(dict):
+class _ControlTranslateTable(dict[int, str]):
     """str.translate 映射：未见过的码点按 Unicode 类别惰性判定并记忆。
 
     逐字符的 unicodedata.category 生成器在资料包导出中要跑上千万次；

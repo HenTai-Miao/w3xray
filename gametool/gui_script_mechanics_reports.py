@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .api import MapData
-from .gui_reports import GuiReportBlock
+from .gui_report_types import GuiReportBlock
 from .script_mechanics import scan_script_features, scan_script_need_marks
 from .script_sources import analysis_script_texts
 

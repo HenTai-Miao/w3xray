@@ -30,7 +30,7 @@ class TestHScrollExists(GuiTestCase):
 
     def test_object_columns_have_hscroll(self):
         for cat, tv in self.app.col_trees.items():
-            self.assertTrue(tv.cget("xscrollcommand"), f"{cat} 列缺少横向滚动条")
+            self.assertTrue(tv.cget("xscrollcommand"), f"{cat} 列缺少横向滚动条")  # pyright: ignore[reportAttributeAccessIssue]
 
     def test_cmd_tree_has_hscroll(self):
         self.assertTrue(
@@ -41,7 +41,7 @@ class TestHScrollExists(GuiTestCase):
 class TestColumnAutosize(GuiTestCase):
     def test_object_column_grows_for_long_name(self):
         tv = self.app.col_trees["物品"]
-        base = int(tv.column("#0", "width"))
+        base = int(tv.column("#0", "width"))  # pyright: ignore[reportAttributeAccessIssue]
         long_name = "超级无敌究极霸天虎传说之剑·永恒星辰·限定版×" * 3
         self.app.map_data = MapData(
             path="x", name="x", objects={"物品": [_obj(long_name)]}
@@ -50,7 +50,9 @@ class TestColumnAutosize(GuiTestCase):
         self.app._refresh_list()
         self.pump_events_until(lambda: len(tv.get_children()) == 1)
         self.assertGreater(
-            int(tv.column("#0", "width")), base, "物品列宽未随长名字增长"
+            int(tv.column("#0", "width")),  # pyright: ignore[reportAttributeAccessIssue]
+            base,
+            "物品列宽未随长名字增长",  # pyright: ignore[reportAttributeAccessIssue]
         )
 
     def test_cmd_hint_column_grows_for_long_hint(self):
@@ -86,7 +88,7 @@ class _FakeResolver:
 class TestResolverClosedOnSwitch(GuiTestCase):
     def test_old_resolver_closed_when_new_map_rendered(self):
         old = _FakeResolver()
-        self.app.icons = old
+        self.app.icons = old  # pyright: ignore[reportAttributeAccessIssue]
         md = MapData(path="y", name="y")
         self.app._render_map(md, [], [], _FakeResolver())
         self.assertTrue(old.closed, "切换地图时未释放上一个图标解析器")

@@ -49,7 +49,7 @@ class PreviewIconSummary:
         return self.count_by_type.get(1, 0)
 
     @property
-    def count_by_type(self) -> Counter:
+    def count_by_type(self) -> Counter[int]:
         return Counter(icon.icon_type for icon in self.icons)
 
 

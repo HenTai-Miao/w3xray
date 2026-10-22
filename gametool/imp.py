@@ -146,7 +146,7 @@ def import_table_parse_issue(data: bytes, table: ImportTable) -> str | None:
     return None
 
 
-def parse_imp(data: bytes) -> list:
+def parse_imp(data: bytes) -> list[str]:
     """解析导入表，返回导入文件路径列表（保持原顺序、去空）。"""
     return [entry.path for entry in parse_import_entries(data)]
 

@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, ContextManager
+from typing import TYPE_CHECKING, ContextManager, Protocol
 
 from .archive_source import PathArchiveSource
 
 if TYPE_CHECKING:
+    from .archive_source import ArchiveSource
     from .map_archive_reader import MapArchiveReader
-    from .map_data import MapData
     from .w3f import W3fInfo
 
 
@@ -37,7 +37,13 @@ def campaign_inner_maps(
     return tuple(ordered)
 
 
-def open_map_source(md: MapData) -> ContextManager[MapArchiveReader]:
+class MapSourceLike(Protocol):
+    path: str
+
+    archive_source: "ArchiveSource | None"
+
+
+def open_map_source(md: MapSourceLike) -> ContextManager[MapArchiveReader]:
     """Open a map's retained archive source, or its on-disk path as fallback."""
     if md.archive_source is not None:
         return md.archive_source.open()

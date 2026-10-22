@@ -137,7 +137,7 @@ class TestWriteObjectPack:
         assert len(row.split("\t")) == 7
 
 
-def _cloud_msg(name: str, params: list) -> bytes:
+def _cloud_msg(name: str, params: list) -> bytes:  # pyright: ignore[reportMissingTypeArgument]
     """构造真实内存形态的云消息字节 (info 为嵌套 JSON 字符串)。"""
     import json
 
@@ -219,7 +219,7 @@ class TestDumpWritesLuaLayer:
         )
 
         reg = {"MsgA": {"records": [[1, {"k": "v"}], [2, {"k": "w"}]]}}
-        assert _write_registered_data_tsv(reg, out) == 1
+        assert _write_registered_data_tsv(reg, out) == 1  # pyright: ignore[reportArgumentType]
         rows = (
             open(os.path.join(out, "注册数据.tsv"), encoding="utf-8")
             .read()

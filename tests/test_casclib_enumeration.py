@@ -15,7 +15,7 @@ from gametool.casclib_enumeration import CascFindData, CascNameType
 class FakeEnumerationApi:  # noqa: MUTABLE_OK - records native resource ownership in tests.
     """In-memory CascLib API fake with explicit search-handle tracking."""
 
-    entries: tuple
+    entries: tuple  # pyright: ignore[reportMissingTypeArgument]
     closed_searches: list[int]
     next_index: int = 0
 
@@ -82,7 +82,7 @@ def test_full_root_enumeration_keeps_unknown_entries_and_closes_search() -> None
     api = FakeEnumerationApi(entries=entries, closed_searches=[])
 
     # When: the caller stops after consuming the full streaming inventory.
-    with casclib_source.CascLibDataSource("C:/Warcraft III", api=api) as source:
+    with casclib_source.CascLibDataSource("C:/Warcraft III", api=api) as source:  # pyright: ignore[reportArgumentType]
         result = tuple(source.iter_entries())
 
     # Then: unknown paths remain addressable and the native search handle is closed.
@@ -121,7 +121,7 @@ def test_ctypes_enumeration_converts_unknown_file_data_id_entry() -> None:
         return 303
 
     dll.CascFindFirstFile = NativeFunction(find_first)
-    api = CtypesCascLibApi(library=dll)
+    api = CtypesCascLibApi(library=dll)  # pyright: ignore[reportArgumentType]
 
     # When: the Python ABI boundary starts full-root enumeration.
     result = api.find_first(101, "*", "C:/listfile.csv")

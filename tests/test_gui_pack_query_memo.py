@@ -33,9 +33,11 @@ def test_bind_geometry_memory_ignores_child_destroy(monkeypatch) -> None:
     child = SimpleNamespace()
     gui_pack_query.bind_geometry_memory(win, "gui-test", "520x360")
     handler = handlers["<Destroy>"]
-    handler(SimpleNamespace(widget=child))
+    handler(SimpleNamespace(widget=child))  # pyright: ignore[reportCallIssue]
     assert calls == []  # 子控件销毁不记
-    handler(SimpleNamespace(widget=win))  # 顶层自身销毁才记
+    handler(
+        SimpleNamespace(widget=win)
+    )  # 顶层自身销毁才记  # pyright: ignore[reportCallIssue]
     assert calls == [("gui-test", "520x360")]
     assert len(saved) == 1
 

@@ -503,7 +503,8 @@ class TestPreplacedIntegration(unittest.TestCase):
         )
         md = MapData(path="x", name="x")
         _add_preplaced(
-            md, _PreplacedArchive({"war3map.doo": doo, "war3mapUnits.doo": udoo})
+            md,
+            _PreplacedArchive({"war3map.doo": doo, "war3mapUnits.doo": udoo}),  # pyright: ignore[reportArgumentType]
         )
         self.assertEqual(len(md.doodads), 1)
         self.assertEqual(len(md.units), 1)
@@ -513,7 +514,7 @@ class TestPreplacedIntegration(unittest.TestCase):
         from gametool.api import _add_preplaced, MapData
 
         md = MapData(path="x", name="x")
-        _add_preplaced(md, _PreplacedArchive({}))
+        _add_preplaced(md, _PreplacedArchive({}))  # pyright: ignore[reportArgumentType]
         self.assertEqual(md.doodads, [])
         self.assertEqual(md.units, [])
 

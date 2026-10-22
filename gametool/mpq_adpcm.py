@@ -203,7 +203,7 @@ def decompress_adpcm(data: bytes, channels: Literal[1, 2], output_size: int) -> 
     bit_shift = data[1]
     next_table = _NEXT_INDEX_TABLE
     difference_table = _difference_table(bit_shift)
-    out: array = array("h")
+    out: array[int] = array("h")
     append = out.append
     max_samples = output_size // 2
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from typing import Final, Protocol
 
 from .mpq import HASH_NAME_A, HASH_NAME_B, _hash, guess_extension
@@ -23,15 +24,20 @@ _MAX_RECOVERY_EXPORT_BYTES: Final = 1024 * 1024 * 1024
 _MAX_RECOVERY_CANDIDATES: Final = 1_000_000
 
 
+class _RecoveryBlock(Protocol):
+    file_size: int
+    flags: int
+
+
 class RecoveryArchive(Protocol):
-    block_table: list
-    hash_table: list
+    block_table: list[_RecoveryBlock]
+    hash_table: list[object]
 
     def list_files(self) -> list[str]: ...
 
     def read_file(self, name: str) -> bytes: ...
 
-    def iter_blocks(self): ...
+    def iter_blocks(self) -> Iterable[tuple[int, _RecoveryBlock]]: ...
 
     def read_block_anon(self, block) -> bytes | None: ...
 
@@ -43,7 +49,7 @@ def _export_recovered_named_files(
 ) -> int:
     """Recover names for anonymous blocks from paths embedded in resources."""
     candidates = set()
-    for name in archive.list_files():
+    for name in archive.list_files() or []:
         candidates.update(_resource_name_variants(name))
     scanned_bytes = 0
     for _idx, block in archive.iter_blocks():

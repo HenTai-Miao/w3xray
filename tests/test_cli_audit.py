@@ -55,7 +55,7 @@ class CliAuditTest(unittest.TestCase):
     def test_cli_summary_keeps_existing_category_counts(self):
         # Given: a map with normal metadata and one category count.
         md = MapData(path="x.w3x", name="测试图")
-        md.w3i = SimpleNamespace(
+        md.w3i = SimpleNamespace(  # pyright: ignore[reportAttributeAccessIssue]
             author="作者",
             script_type="JASS",
             players=[],
@@ -78,7 +78,7 @@ class CliAuditTest(unittest.TestCase):
     def test_cli_summary_includes_resource_and_compat_blocks(self):
         # Given: a map with one referenced model and one newer Lua compatibility risk.
         md = MapData(path="x.w3x", name="测试图")
-        md.w3i = SimpleNamespace(
+        md.w3i = SimpleNamespace(  # pyright: ignore[reportAttributeAccessIssue]
             author="作者",
             script_type="Lua",
             players=[],
@@ -263,7 +263,7 @@ class CliAuditTest(unittest.TestCase):
     def test_cli_summary_includes_return_bug_compat_warning(self):
         # Given: a map script using old 1.20E return-bug handle casting.
         md = MapData(path="x.w3x", name="测试图")
-        md.w3i = SimpleNamespace(
+        md.w3i = SimpleNamespace(  # pyright: ignore[reportAttributeAccessIssue]
             author="作者",
             script_type="JASS",
             players=[],

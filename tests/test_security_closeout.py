@@ -192,7 +192,7 @@ def test_internal_listfile_size_is_checked_before_read() -> None:
     archive = _OversizedListfileArchive()
 
     # When: known archive names are enumerated.
-    _ = list_archive_files(archive)
+    _ = list_archive_files(archive)  # pyright: ignore[reportArgumentType]
 
     # Then: the oversized body is never decompressed or decoded.
     assert archive.read_calls == 0
@@ -206,7 +206,7 @@ def test_campaign_child_size_is_checked_before_read(
     monkeypatch.setattr(map_loader, "_MAX_CAMPAIGN_CHILD_BYTES", 1)
 
     # When: campaign extraction reaches that declared child.
-    md = map_loader._load_map_impl(archive, archive.path, 0, None, MapLoadContext())
+    md = map_loader._load_map_impl(archive, archive.path, 0, None, MapLoadContext())  # pyright: ignore[reportArgumentType]
 
     # Then: it is diagnosed without reading its body.
     assert archive.read_calls == []
@@ -222,7 +222,7 @@ def test_unknown_block_uses_remaining_budget_before_read(
     monkeypatch.setattr(knowledge_unknown_exports, "_MAX_UNKNOWN_EXPORT_BYTES", 1)
 
     # When: anonymous blocks are published.
-    knowledge_unknown_exports.write_unknown_files_from_archive(archive, str(tmp_path))
+    knowledge_unknown_exports.write_unknown_files_from_archive(archive, str(tmp_path))  # pyright: ignore[reportArgumentType]
 
     # Then: the second block is rejected before decompression.
     assert archive.read_indexes == [0]
@@ -243,7 +243,7 @@ def test_unknown_manifest_row_count_is_bounded(
     )
 
     # When: the manifest is generated.
-    knowledge_unknown_exports.write_unknown_files_from_archive(archive, str(tmp_path))
+    knowledge_unknown_exports.write_unknown_files_from_archive(archive, str(tmp_path))  # pyright: ignore[reportArgumentType]
 
     # Then: at most the configured number of data rows is retained.
     lines = (tmp_path / "Unknown_manifest.tsv").read_text(encoding="utf-8").splitlines()

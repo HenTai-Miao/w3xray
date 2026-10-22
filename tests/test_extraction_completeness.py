@@ -83,7 +83,7 @@ class ExtractionCompletenessTest(unittest.TestCase):
         archive = FakeArchive()
 
         # When: extraction completeness is summarized from the archive tables.
-        report = build_extraction_completeness_from_archive(md, archive)
+        report = build_extraction_completeness_from_archive(md, archive)  # pyright: ignore[reportArgumentType]
         text = format_extraction_completeness_report(report)
 
         # Then: the report explains the real extraction surface instead of only listing filenames.
@@ -161,7 +161,7 @@ class ExtractionCompletenessTest(unittest.TestCase):
         archive = ProtectedArchive()
 
         # When: extraction completeness is summarized.
-        report = build_extraction_completeness_from_archive(md, archive)
+        report = build_extraction_completeness_from_archive(md, archive)  # pyright: ignore[reportArgumentType]
         text = format_extraction_completeness_report(report)
 
         # Then: the report explains the protection boundary instead of implying a parser bug.

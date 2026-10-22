@@ -118,7 +118,7 @@ class GameConfigurationIntegrationTest(unittest.TestCase):
         archive = _FakeArchive({"configs\\fast.wgc": _config((_player(flags=0x01),))})
 
         # When: game configs are added to MapData.
-        add_game_configs(md, archive)
+        add_game_configs(md, archive)  # pyright: ignore[reportArgumentType]
 
         # Then: the parsed config is attached with its source name.
         self.assertEqual(len(md.game_configs), 1)

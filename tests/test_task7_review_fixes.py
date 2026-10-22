@@ -158,7 +158,7 @@ def test_crash_cheat_order_and_compat_analyzers_exclude_forbidden_sources() -> N
         )
     )
     md = _map_with_forbidden_sources(payload)
-    md.w3i = SimpleNamespace(version=25, script_type="JASS", large_map=False)
+    md.w3i = SimpleNamespace(version=25, script_type="JASS", large_map=False)  # pyright: ignore[reportAttributeAccessIssue]
 
     # When / Then: forbidden sources cannot create analyzer findings.
     assert build_crash_report(md).items == ()

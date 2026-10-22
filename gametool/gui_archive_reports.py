@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .api import MapData
-from .gui_reports import GuiReportBlock
+from .gui_report_types import GuiReportBlock
 
 
 def build_archive_blocks(md: MapData) -> tuple[GuiReportBlock, ...]:

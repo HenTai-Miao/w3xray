@@ -194,7 +194,7 @@ def test_add_trigger_summary_uses_load_context_trigger_schema() -> None:
     context = MapLoadContext(trigger_schema=_load_fixture_schema())
 
     # When: optional map extras load the WTG summary.
-    add_trigger_summary(md, archive, context)
+    add_trigger_summary(md, archive, context)  # pyright: ignore[reportArgumentType]
 
     # Then: the summary contains expanded ECA functions, not header-only diagnostics.
     assert md.trigger_summary is not None

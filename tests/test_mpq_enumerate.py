@@ -21,8 +21,8 @@ def _make(present, listfile=None, imp=None, campaign_imp=None):
         files["war3map.imp"] = imp
     if campaign_imp is not None:
         files["war3campaign.imp"] = campaign_imp
-    obj.has_file = lambda n: n in files
-    obj.read_file = lambda n: files[n]
+    obj.has_file = lambda n: n in files  # pyright: ignore[reportAttributeAccessIssue]
+    obj.read_file = lambda n: files[n]  # pyright: ignore[reportAttributeAccessIssue]
     return obj
 
 

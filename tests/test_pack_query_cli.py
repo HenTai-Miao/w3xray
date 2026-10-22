@@ -458,7 +458,8 @@ def test_unit_death_random_dist_drops(pack):
     )
 
     handlers = {
-        fn: regs for _code, fn, regs in _unit_death_random_drops(load_script(pack))
+        fn: regs
+        for _code, fn, regs in _unit_death_random_drops(load_script(pack))  # pyright: ignore[reportArgumentType]
     }
     assert handlers["Unit_ydweDropItems"] == [("I0YD", 70), ("I0YE", 30)]
     unit_text = "\n".join(_query_drop(pack, "nctm", 30))
@@ -470,7 +471,7 @@ def test_unit_death_random_dist_drops(pack):
     # guide drops 段与 pack-query 同源: 第三形态同样进入玩家报告
     from gametool.pack_query_cli import script_death_drop_lines
 
-    guide_text = "\n".join(script_death_drop_lines(load_script(pack), lambda c: c))
+    guide_text = "\n".join(script_death_drop_lines(load_script(pack), lambda c: c))  # pyright: ignore[reportArgumentType]
     assert "Unit_ydweDropItems" in guide_text
     assert "权重70/100" in guide_text
     # where 与 drop 同源: 物品获取途径同样能看到第三形态
@@ -485,7 +486,7 @@ def test_item_trigger_blocks_scope_local_vars(pack):
     # 否则 I0LV 的使用触发器会配到 decoy 的动作体 (假证据)
     from gametool.pack_query_cli import _item_trigger_blocks, load_script
 
-    blocks = _item_trigger_blocks(load_script(pack))
+    blocks = _item_trigger_blocks(load_script(pack))  # pyright: ignore[reportArgumentType]
     hit = [b for b in blocks if "I0LV" in b[1]]
     assert hit, "I0LV 使用触发器未进入块列表"
     body = hit[0][2]
@@ -902,7 +903,7 @@ def test_item_trigger_blocks_pair_by_position_in_giant_init(pack):
     # 事件取各自注册窗口——旧实现按 (作用域,变量) 会把末个 action 配给所有条件
     from gametool.pack_query_cli import _item_trigger_blocks, load_script
 
-    blocks = {b[1][0]: b for b in _item_trigger_blocks(load_script(pack))}
+    blocks = {b[1][0]: b for b in _item_trigger_blocks(load_script(pack))}  # pyright: ignore[reportArgumentType]
     a = blocks["I0MA"]
     assert "I0MA" in a[2] and "I0MB" not in a[2]
     assert "EVENT_PLAYER_UNIT_USE_ITEM" in a[3]

@@ -35,7 +35,7 @@ class AuditReportTest(unittest.TestCase):
     def test_warns_when_reference_coverage_is_low(self):
         # Given: the reference graph already detected low coverage.
         md = MapData(path="x.w3x", name="x")
-        md.w3i = SimpleNamespace(version=25)
+        md.w3i = SimpleNamespace(version=25)  # pyright: ignore[reportAttributeAccessIssue]
         md.ref_low_coverage = True
 
         # When: the audit report is built.
@@ -50,7 +50,7 @@ class AuditReportTest(unittest.TestCase):
         # Given: most custom abilities are unreferenced.
         objs = [_obj("技能", f"A{i:03d}") for i in range(12)]
         md = MapData(path="x.w3x", name="x")
-        md.w3i = SimpleNamespace(version=25)
+        md.w3i = SimpleNamespace(version=25)  # pyright: ignore[reportAttributeAccessIssue]
         md.objects = {"技能": objs}
         md.orphans = objs[:9]
 
@@ -65,7 +65,7 @@ class AuditReportTest(unittest.TestCase):
     def test_reports_inventory_when_map_has_data(self):
         # Given: a map with metadata, objects, script, and file names.
         md = MapData(path="x.w3x", name="x")
-        md.w3i = SimpleNamespace(version=25)
+        md.w3i = SimpleNamespace(version=25)  # pyright: ignore[reportAttributeAccessIssue]
         md.objects = {
             "单位": [_obj("单位", "H001"), _obj("单位", "hpea", custom=False)],
             "技能": [_obj("技能", "A001")],
@@ -86,7 +86,7 @@ class AuditReportTest(unittest.TestCase):
     def test_summarizes_resource_and_compat_risks(self):
         # Given: a map with an unreferenced asset and Lua/newer-format risks.
         md = MapData(path="x.w3x", name="x")
-        md.w3i = SimpleNamespace(version=28, script_type="Lua", large_map=False)
+        md.w3i = SimpleNamespace(version=28, script_type="Lua", large_map=False)  # pyright: ignore[reportAttributeAccessIssue]
         md.scripts = {"war3map.lua": "print('x')"}
         md.all_files = ["war3mapImported\\unused.blp"]
 

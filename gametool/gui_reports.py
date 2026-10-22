@@ -2,17 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 
 from .api import MapData
+from .gui_report_types import GuiReportBlock
 from .wtg_diagnostics import format_summary_diagnostics
 
-
-@dataclass(frozen=True, slots=True)
-class GuiReportBlock:
-    title: str
-    lines: tuple[str, ...]
-    warning_count: int = 0
+__all__ = ("GuiReportBlock", "build_overview_blocks")
 
 
 def build_overview_blocks(

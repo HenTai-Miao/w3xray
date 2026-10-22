@@ -82,7 +82,7 @@ class TestPaneState(GuiTestCase):
         try:
             # Given: a saved object editor layout and a different current position.
             saved_position, other_position = self._show_object_editor_with_sash_room()
-            self.app._load_config = lambda: {
+            self.app._load_config = lambda: {  # pyright: ignore[reportAttributeAccessIssue]
                 "layout": LAYOUT_VERSION,
                 "pane_sashes": {"object_editor": [saved_position]},
             }
