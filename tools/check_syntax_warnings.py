@@ -19,9 +19,7 @@ def scan(paths: list[str]) -> int:
     failures: list[tuple[str, str]] = []
     for raw in paths:
         path = Path(raw)
-        targets = (
-            [path] if path.is_file() else sorted(path.rglob("*.py"))
-        )
+        targets = [path] if path.is_file() else sorted(path.rglob("*.py"))
         for py in targets:
             if not py.is_file():
                 continue
