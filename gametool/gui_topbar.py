@@ -150,6 +150,16 @@ def build_topbar(app) -> None:
         **secondary_button_style(),
     )
     app.minimap_button.pack(side="left", padx=(0, 4))
+    app.guide_button = ctk.CTkButton(
+        source_tools,
+        text="攻略速查",
+        width=76,
+        height=26,
+        font=(FONT, 11),
+        command=lambda: _show_guide(app),
+        **secondary_button_style(),
+    )
+    app.guide_button.pack(side="left", padx=(0, 4))
     app.data_tools_button = ctk.CTkButton(
         source_tools,
         text="数据工具",
@@ -254,3 +264,76 @@ def _render_minimap(app) -> None:
         _ = app._post_gui_worker(ticket, finish)
 
     _ = app._start_gui_worker("render-minimap", work, replace=True)
+
+
+def _show_guide(app) -> None:
+    """弹窗展示当前地图的攻略速查报告 (指令/任务/配方/商店/掉落)。"""
+    md = getattr(app, "map_data", None)
+    if not md or not getattr(md, "path", ""):
+        messagebox.showinfo("攻略速查", "请先打开地图")
+        return
+    map_path = md.path
+    app.status.configure(text="正在整理攻略速查 …")
+    app.guide_button.configure(state="disabled")
+
+    from .gui_worker_registry import GuiWorkerTicket  # noqa: PLC0415
+
+    def work(ticket: GuiWorkerTicket) -> None:
+        import contextlib
+        import io
+
+        from .guide_cli import GuideCliOptions, run_guide_cli  # noqa: PLC0415
+
+        buffer = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+                rc = run_guide_cli(
+                    GuideCliOptions(
+                        map_path=map_path,
+                        section=None,
+                        refresh=False,
+                        minimap_marks=None,
+                    )
+                )
+        except Exception as exc:  # BROAD_EXCEPT_OK - GUI worker boundary.
+            from .presentation_safety import format_user_exception  # noqa: PLC0415
+
+            rc, log = 2, format_user_exception(exc, paths=(map_path,))
+        else:
+            log = buffer.getvalue()
+
+        def finish():
+            app.guide_button.configure(state="normal")
+            if rc == 0 and log.strip():
+                app.status.configure(text="攻略速查已就绪")
+                _open_guide_window(app, log)
+            else:
+                app.status.configure(text="攻略速查失败")
+                messagebox.showerror("攻略速查", log[-2000:] or "生成失败")
+
+        _ = app._post_gui_worker(ticket, finish)
+
+    _ = app._start_gui_worker("show-guide", work, replace=True)
+
+
+def _open_guide_window(app, text: str) -> None:
+    import tkinter as tk  # noqa: PLC0415
+
+    import customtkinter as ctk  # noqa: PLC0415
+
+    win = ctk.CTkToplevel(app)
+    win.title("攻略速查")
+    win.geometry("860x640")
+    win.transient(app)
+    box = ctk.CTkTextbox(win, font=("Consolas", 12), wrap="none")
+    box.pack(fill="both", expand=True, padx=8, pady=8)
+    box.insert("1.0", text)
+    menu = tk.Menu(win, tearoff=0)
+    menu.add_command(
+        label="复制全部",
+        command=lambda: (
+            box.clipboard_clear(),
+            box.clipboard_append(box.get("1.0", "end")),
+        ),
+    )
+    box.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
