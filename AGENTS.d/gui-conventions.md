@@ -64,3 +64,10 @@
 - [ ] Esc 关闭 + grab_set 模态
 - [ ] 长任务走 `_start_gui_worker`（后台不冻 UI，完成 `_post_gui_worker` 回主线程）
 - [ ] stderr 耗时行展示（分隔线包裹）
+
+## 通用接入点（八九至九一轮新增）
+
+- **`bind_geometry_memory(win, name, fallback)`**（gui_pack_query.py）：尺寸记忆一行接入——还原记忆尺寸 + 关闭落盘一体化，新弹窗不再各写一遍。
+- **`_bind_textbox_search(win, box)`**（gui_topbar.py）：CTkTextbox 内搜一行接入——Ctrl+F 聚焦 + 回车逐处跳 + 黄底高亮，到尾自动回卷。
+- **键盘速查窗**（gui_topbar.py `_show_hotkeys`）：新弹窗 checklist 的活样板——六件套全齐（Esc+grab_set/尺寸记忆/内搜/右键复制+导出 .md/等宽对齐/速查表数据源与 README 同步）。
+
