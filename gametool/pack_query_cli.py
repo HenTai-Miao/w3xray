@@ -137,6 +137,8 @@ def load_item_gold_overrides(pack_dir: Path) -> dict[str, str]:
     """
     out: dict[str, str] = {}
     for r in _read_rows(pack_dir, "对象字段.tsv"):
+        if len(r) <= 5:
+            continue
         if (
             len(r) > 5
             and r[0] == "物品"
@@ -162,6 +164,8 @@ def load_shop_stocks(pack_dir: Path) -> list[tuple[str, str, list[str]]]:
     inherited: list[tuple[str, str, list[str]]] = []
     custom_units: set[str] = set()
     for r in _read_rows(pack_dir, "对象字段.tsv"):
+        if len(r) <= 5:
+            continue
         if len(r) > 5 and r[3].removeprefix("base:") not in ("usei", "Sellitems"):
             continue
         codes = []
@@ -193,6 +197,8 @@ def load_item_tooltips(pack_dir: Path) -> dict[str, str]:
     """
     best: dict[str, tuple[int, str]] = {}
     for r in _read_rows(pack_dir, "对象字段.tsv"):
+        if len(r) <= 5:
+            continue
         if (
             len(r) > 5
             and r[0] == "物品"
@@ -231,6 +237,8 @@ def load_item_equipped_effects(pack_dir: Path) -> dict[str, list[str]]:
     equipped: dict[str, list[str]] = {}
     stat_rows: dict[str, dict[str, str]] = {}
     for r in _read_rows(pack_dir, "对象字段.tsv"):
+        if len(r) <= 5:
+            continue
         if len(r) < 7 or len(r[1]) != 4:
             continue
         if r[0] == "物品" and r[3] == "iabi":
@@ -307,6 +315,8 @@ def load_tech_fields(pack_dir: Path) -> dict[str, dict[str, str]]:
     """科技四码 -> {自定义字段键: 值}（不含 base: 继承行；gub1:N/greq:N 原样保留）。"""
     out: dict[str, dict[str, str]] = {}
     for r in _read_rows(pack_dir, "对象字段.tsv"):
+        if len(r) <= 5:
+            continue
         if (
             len(r) > 5
             and r[0] == "科技"
@@ -2178,6 +2188,15 @@ def _source_drop_map(pack: Path) -> dict[str, str]:
     return {code: "、".join(entries) for code, entries in drops.items()}
 
 
+def _source_shop_map(pack: Path) -> dict[str, str]:
+    """商店四码 -> 货架清单 (near 的 卖: 注解 。"""
+    shops: dict[str, str] = {}
+    for code, _name, stocks in load_shop_stocks(pack):
+        if stocks:
+            shops[code] = "、".join(stocks)
+    return shops
+
+
 def _query_near(pack: Path, query: str, limit: int) -> list[str]:
     """坐标反查: near <x> <y> [radius=3000] —— 脚底/附近内容物。
 
@@ -2193,6 +2212,7 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
     radius = max(50.0, min(radius, 20000.0))
     lines = [f"== 坐标 ({px:g}, {py:g}) 半径 {radius:g} =="]
     drop_map = _source_drop_map(pack)
+    shop_map = _source_shop_map(pack)
 
     def dist(x: float, y: float) -> float:
         return math.hypot(x - px, y - py)
@@ -2228,8 +2248,9 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
                 cx = sum(p[0] for p in xs) / len(xs)
                 cy = sum(p[1] for p in xs) / len(xs)
                 drop = f"  掉: {drop_map[code]}" if code in drop_map else ""
+                sell = f"  卖: {shop_map[code]}" if code in shop_map else ""
                 lines.append(
-                    f"  {kind}: {name} [{code}] ×{len(xs)} @({cx:g},{cy:g}) 距{dist(cx, cy):.0f}{drop}"
+                    f"  {kind}: {name} [{code}] ×{len(xs)} @({cx:g},{cy:g}) 距{dist(cx, cy):.0f}{drop}{sell}"
                 )
         else:
             clusters: list[tuple[float, str, int, float, float]] = []

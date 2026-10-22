@@ -1383,3 +1383,37 @@ def test_query_diff_shows_field_level_changes(tmp_path) -> None:
     # Then: the field-level change is explicit.
     assert "变更 1" in text
     assert "igol: 3000 -> 5000" in text
+
+
+def test_query_near_annotates_shop_stocks(tmp_path) -> None:
+    import contextlib
+    import io
+
+    t = chr(9)
+    e = chr(10)
+    # Given: a preplaced shop unit with a usei stock.
+    (tmp_path / "掉落与获取关系.tsv").write_text(
+        e + t.join(["关系ID", "地图子图", "关系类型", "装备ID", "装备名称", "来源分类", "来源ID", "来源名称", "实例序号", "玩家", "X", "Y", "Z", "掉落组", "组内序号", "概率", "槽位", "合成材料ID", "合成材料名称与数量", "证据文件"]) + e,
+        encoding="utf-8",
+    )
+    (tmp_path / "对象字段.tsv").write_text(
+        e + t.join(["分类", "ID", "名称", "字段键", "字段名", "值", "来源"]) + e
+        + e + t.join(["单位", "nmer", "merchant", "usei", "出售物品", "冰晶(I0AA), 银锭(I008)", "map"]) + e,
+        encoding="utf-8",
+    )
+    (tmp_path / "预放置单位.tsv").write_text(
+        e + t.join(["序号", "类型ID", "名称", "玩家", "X", "Y", "Z", "角度"]) + e
+        + e + t.join(["1", "nmer", "商人", "0", "100", "200", "0", "270"]) + e,
+        encoding="utf-8",
+    )
+
+    # When: querying near the shop's coordinates.
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        run_pack_query_cli(
+            parse_pack_query_cli_options([str(tmp_path), "near", "100", "200", "500"])
+        )
+    text = buffer.getvalue()
+
+    # Then: the shop annotation lists the stock.
+    assert "卖: I0AA、I008" in text
