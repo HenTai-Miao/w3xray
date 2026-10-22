@@ -339,6 +339,35 @@ def _open_guide_window(app, text: str, force: bool = False) -> None:
     win.title("攻略速查")
     win.geometry("860x640")
     win.transient(app)
+    win.bind("<Control-f>", lambda _e: search_entry.focus_set() or "break")
+    search_row = ctk.CTkFrame(win, fg_color="transparent")
+    search_row.pack(fill="x", padx=8, pady=(8, 0))
+    search_var = ctk.StringVar()
+    search_entry = ctk.CTkEntry(
+        search_row,
+        textvariable=search_var,
+        placeholder_text="报告内搜索 (回车跳下一处)…",
+        width=320,
+    )
+    search_entry.pack(side="left")
+    state = {"start": "1.0"}
+
+    def _find_next():
+        needle = search_var.get().strip()
+        if not needle:
+            return
+        pos = box.search(needle, state["start"], stopindex="end", nocase=True)
+        if not pos:
+            state["start"] = "1.0"
+            pos = box.search(needle, "1.0", stopindex="end", nocase=True)
+        if pos:
+            box.see(pos)
+            box.mark_set("insert", pos)
+            end = f"{pos}+{len(needle)}c"
+            box.tag_add("sel", pos, end)
+            state["start"] = end
+
+    search_entry.bind("<Return>", lambda _e: _find_next())
     bar = ctk.CTkFrame(win, fg_color="transparent")
     bar.pack(fill="x", padx=8, pady=(8, 0))
     for key, title in GUIDE_SECTION_TITLES.items():
