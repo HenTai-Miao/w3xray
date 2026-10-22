@@ -220,6 +220,7 @@ def _popup_data_tools(app) -> None:
 
 
 _GUIDE_CACHE: dict[str, str] = {}  # map_path -> 全量报告文本 (进程级, 秒开重开窗口)
+_GUIDE_SCROLL: dict[str, str] = {}  # map_path -> 关闭时滚动位置
 
 
 def _render_minimap(app) -> None:
@@ -385,6 +386,22 @@ def _open_guide_window(app, text: str, force: bool = False) -> None:
     box = ctk.CTkTextbox(win, font=("Consolas", 12), wrap="none")
     box.pack(fill="both", expand=True, padx=8, pady=8)
     box.insert("1.0", text)
+    saved = _GUIDE_SCROLL.get(md.path if (md := getattr(app, "map_data", None)) else "")
+    if saved:
+        box.mark_set("insert", saved)
+        box.see(saved)
+    win.bind(
+        "<Destroy>",
+        lambda _e: _GUIDE_SCROLL.update(
+            {
+                (
+                    getattr(app, "map_data", None).path
+                    if getattr(app, "map_data", None)
+                    else ""
+                ): box.index("insert")
+            }
+        ),
+    )
     guide_menu = tk.Menu(win, tearoff=0)
     guide_menu.add_command(
         label="复制全部",

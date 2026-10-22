@@ -85,9 +85,12 @@ def _read_rows(pack_dir: Path, rel: str) -> list[list[str]]:
     if not path.exists():
         return []
     stat = path.stat()
+    # Windows mtime 粒度可能 ~15ms: 同秒内改写会让 (mtime,size) 不变 — 加内容指纹免疫
+    with path.open("rb") as handle:
+        fingerprint = (stat.st_mtime_ns, stat.st_size, hash(handle.read(4096)))
     cache_key = (str(pack_dir), rel)
     cached = _ROWS_CACHE.get(cache_key)
-    if cached is not None and cached[0] == (stat.st_mtime_ns, stat.st_size):
+    if cached is not None and cached[0] == fingerprint:
         return cached[1]
     # 内存对象表导出的长富文本字段 (UR 物品全文效果) 可超 csv 默认 131072;
     # 与 batch_report_reader 同纪律: 拉满上限读满, 不截断不报错。
@@ -101,7 +104,7 @@ def _read_rows(pack_dir: Path, rel: str) -> list[list[str]]:
             rows = list(csv.reader(f, delimiter="\t"))
     finally:
         csv.field_size_limit(previous_limit)
-    _ROWS_CACHE[cache_key] = ((stat.st_mtime_ns, stat.st_size), rows)
+    _ROWS_CACHE[cache_key] = (fingerprint, rows)
     return rows
 
 
