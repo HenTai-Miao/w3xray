@@ -227,6 +227,16 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
   双击卡片默认全景——浏览列表时悬停哪行查哪行。
 - **增益/技能/单位清单**：`buffs` / `skills` / `units` [关键词]——三张效果表专属清单，
   名称/ID/效果三路过滤，说明自动剥色码（8 张对象表全部有专属清单入口）。
+- **键盘流速查**：
+
+  | 按键 | 作用 | 窗口 |
+  |---|---|---|
+  | `Ctrl+1..8` | 直切 doc/search/list/buffs/export/synth/skills/units 模式 | 包查询 |
+  | `回车` | 执行当前模式查询 / 跳下一处搜索命中 | 两弹窗 |
+  | `Ctrl+F` | 聚焦内搜框（报告/结果内搜） | 两弹窗 |
+  | `Esc` | 关闭弹窗 | 两弹窗 |
+  | `双击卡片` | 对象全景查询 | 对象列表 |
+  | `右键卡片/结果/收藏` | 三键直达 / 复制 / 导出 .md | 全局 |
 - **运行时只读透视**：`main.py live` 从运行中的游戏进程只读提取地图与对象信息（`ReadProcessMemory`，绝不写入），加密壳图静态解析失败时经内存层导出完整知识包：`live --dump-objects <目录>` 产出对象表/字段/注册数据/词缀表 TSV，供 `pack-query` 查询。
 - **获取当前地图**：GUI 顶栏按钮或 CLI `main.py current` 根据游戏进程与磁盘证据定位 `.w3x/.w3m/.w3n`，通过置信度门槛后只解析私有临时快照，不改源地图。
 - **局内定位反查**：`live` 输出尾部的探针 JSON 带当前坐标，复制进
