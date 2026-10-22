@@ -2366,6 +2366,19 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
             for d, label in nearest:  # 半径外最近全部列出
                 lines.append(f"  (半径外最近{kind}: {label} 距{d:.0f})")
 
+    script_items = [
+        (code, x, y)
+        for code, x, y, kind in load_placements(pack)
+        if kind == "item" and dist(x, y) <= radius
+    ]
+    if script_items:
+        item_names = load_items(pack)
+        grouped: dict[str, int] = {}
+        for code, _x, _y in script_items:
+            grouped[code] = grouped.get(code, 0) + 1
+        for code, n in sorted(grouped.items(), key=lambda kv: (-kv[1], kv[0])):
+            nm = item_names.get(code, (code, ""))[0]
+            lines.append(f"  脚本物品: {nm} [{code}] ×{n} (脚本 CreateItem 放置)")
     script = load_script(pack)
     if script:
         in_rect: list[str] = []

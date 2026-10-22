@@ -205,7 +205,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
   | 这东西哪来的 | `where <名或码>` |
   | 打谁掉（含掷骰/奖池） | `drop <名或码>` |
   | 商店货架与价格 | `shop` / `price` |
-  | 站标点问脚下（掉落+商店+脚本放置单位注解） | `near <x> <y> [radius]` |
+  | 站标点问脚下（掉落+商店+脚本放置单位/物品） | `near <x> <y> [radius]` |
   | 战役这关是哪关 | `locate <码1;码2>` |
   | 物品表清单（供脚本/AI） | `list [表名]` |
   | 增益/技能/英雄效果排查 | `buffs` / `skills` / `heroes` |
@@ -214,7 +214,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
   | 引用与消耗关系 | `refs` |
   | 词缀与注册数据 | `affixes` / `registered` |
   | 包总览（规模+作者魔改深度） | `stats` |
-  | 地图更新改了什么（字段级） | `diff <旧包>` |
+  | 地图更新改了什么（字段级+合成配方） | `diff <旧包>` |
   | 单对象报告落盘 .md | `export <名或码>` |
 
   战役容器包（`.w3n`）自动逐关聚合分段；GUI 顶栏「包查询」窗口与对象详情

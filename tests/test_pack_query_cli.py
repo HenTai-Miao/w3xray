@@ -1699,3 +1699,70 @@ def test_query_diff_synth_recipe_changes(tmp_path) -> None:
     assert "== 合成:" in text
     assert "旧: 水晶×3" in text
     assert "新: 水晶×5" in text
+
+
+def test_query_near_includes_script_placed_items(tmp_path) -> None:
+    import contextlib
+    import io
+
+    # Given: an item placed by script CreateItem.
+    t = chr(9)
+    e = chr(10)
+    (tmp_path / "掉落与获取关系.tsv").write_text(
+        e
+        + t.join(
+            [
+                "关系ID",
+                "地图子图",
+                "关系类型",
+                "装备ID",
+                "装备名称",
+                "来源分类",
+                "来源ID",
+                "来源名称",
+                "实例序号",
+                "玩家",
+                "X",
+                "Y",
+                "Z",
+                "掉落组",
+                "组内序号",
+                "概率",
+                "槽位",
+                "合成材料ID",
+                "合成材料名称与数量",
+                "证据文件",
+            ]
+        )
+        + e,
+        encoding="utf-8",
+    )
+    (tmp_path / "脚本调用参数索引.tsv").write_text(
+        "call CreateItem('I077', 100, 200, 0)" + e,
+        encoding="utf-8",
+    )
+    obj = tmp_path / "对象ID"
+    obj.mkdir()
+    (obj / "物品.tsv").write_text(
+        t.join(["分类", "ID", "10进制", "基础ID", "名称", "自定义", "说明"])
+        + e
+        + t.join(["物品", "I077", "1", "I077", "脚本宝箱", "是", ""])
+        + e,
+        encoding="utf-8",
+    )
+    (tmp_path / "预放置单位.tsv").write_text(
+        e + t.join(["序号", "类型ID", "名称", "玩家", "X", "Y", "Z", "角度"]) + e,
+        encoding="utf-8",
+    )
+
+    # When: querying near that spot.
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        run_pack_query_cli(
+            parse_pack_query_cli_options([str(tmp_path), "near", "100", "200", "300"])
+        )
+    text = buffer.getvalue()
+
+    # Then: the script item shows up.
+    assert "脚本物品" in text
+    assert "I077" in text
