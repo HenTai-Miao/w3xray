@@ -2737,9 +2737,13 @@ def _query_stats(pack: Path, query: str, limit: int) -> list[str]:
         for line in info.read_text(encoding="utf-8", errors="replace").splitlines()[:12]:
             if line.strip():
                 out.append(line)
-    out.append("")
-    out.append("==== 对象表总览 ====")
     obj_dir = pack / "对象ID"
+    if not info.exists() and not obj_dir.is_dir():
+        # 无地图信息也无对象表 = 战役容器级空壳, 返回未找到让分段逻辑跳过
+        return ["未找到"]
+    if out:
+        out.append("")
+    out.append("==== 对象表总览 ====")
     if not obj_dir.is_dir():
         out.append("本包无对象表")
         return out

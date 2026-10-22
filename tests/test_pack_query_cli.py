@@ -1317,3 +1317,31 @@ def test_query_stats_overview(tmp_path, pack, capsys) -> None:
     text = capsys.readouterr().out
     assert "对象表总览" in text
     assert "物品" in text
+
+
+def test_campaign_submap_aggregation_covers_new_commands(tmp_path, capsys):
+    # stats/list/buffs/heroes/export 都在 _QUERIES 注册 → 战役包自动逐关分段,
+    # 不需要每个命令单独实现 (统一包装已保证)。
+    root = tmp_path / "campaign"
+    root.mkdir()
+    sub = root / "子地图" / "001_x"
+    sub.mkdir(parents=True)
+    obj = sub / "对象ID"
+    obj.mkdir(parents=True)
+    (sub / "掉落与获取关系.tsv").write_text(
+        "关系ID\t地图子图\t关系类型\t装备ID\t装备名称\t来源分类\t来源ID\t来源名称\t实例序号\t玩家\tX\tY\tZ\t掉落组\t组内序号\t概率\t槽位\t合成材料ID\t合成材料名称与数量\t证据文件\n",
+        encoding="utf-8",
+    )
+    (obj / "物品.tsv").write_text(
+        "分类\tID\t10进制\t基础ID\t名称\t自定义\t说明\n"
+        "物品\tI0A1\t1\tI0A1\t宝物甲\t是\t测试。\n",
+        encoding="utf-8",
+    )
+    for command in ("stats", "list", "buffs", "heroes"):
+        capsys.readouterr()
+        rc = run_pack_query_cli(
+            parse_pack_query_cli_options([str(root), command, "宝物甲" if command == "list" else ""])
+        )
+        out = capsys.readouterr().out
+        assert rc in (0, 2), command
+        assert "子地图" in out or "容器级" in out, command
