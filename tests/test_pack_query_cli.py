@@ -1231,7 +1231,9 @@ def test_query_search_no_hit_reports_miss(tmp_path, pack, capsys) -> None:
     run_pack_query_cli(
         parse_pack_query_cli_options((str(tmp_path), "search", "不存在的词"))
     )
-    assert capsys.readouterr().out.strip() == "未找到: 不存在的词"
+    out = capsys.readouterr().out.strip()
+    assert out.startswith("未找到: 不存在的词")
+    assert "recipe" in out  # 否定带改道出路
 
 
 def test_query_diff_reports_added_and_removed(tmp_path, pack, capsys) -> None:

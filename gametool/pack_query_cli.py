@@ -2689,7 +2689,7 @@ def _query_search(pack: Path, query: str, limit: int) -> list[str]:
         "装饰物",
         "可破坏物",
     )
-    sample_cap = limit if limit > 0 else 5
+    sample_cap = limit  # 0 = 全量 (默认); --limit N 显式首屏缩减
     out: list[str] = []
     for table in tables:
         rows = _read_rows(pack, f"对象ID/{table}.tsv")
@@ -2705,11 +2705,14 @@ def _query_search(pack: Path, query: str, limit: int) -> list[str]:
         if not hits:
             continue
         out.append(f"== {table} ({len(hits)} 个)==")
-        out.extend(hits[:sample_cap])
-        if len(hits) > sample_cap:
+        out.extend(hits[:sample_cap] if sample_cap > 0 else hits)
+        if sample_cap > 0 and len(hits) > sample_cap:
             out.append(f"  …… 其余 {len(hits) - sample_cap} 条加大 limit 查看")
     if not out:
-        return ["未找到: " + query]
+        return [
+            "未找到: " + query,
+            "  （search 只扫对象八表的名称/ID 列——合成查 recipe、获取途径查 where、聊天指令查 cmd）",
+        ]
     return out
 
 
