@@ -1446,3 +1446,21 @@ def test_query_skills_lists_and_strips_colors(tmp_path, pack, capsys) -> None:
     assert "蛮横锤击" in text
     assert "|cffff0000" not in text
     assert "自定义" in text
+
+
+def test_where_and_drop_hint_specialized_commands(tmp_path, pack, capsys) -> None:
+    # Given: the queried code belongs to the skill table.
+    obj = tmp_path / "对象ID"
+    obj.mkdir(exist_ok=True)
+    (obj / "技能.tsv").write_text(
+        "分类\tID\t10进制\t基础ID\t名称\t自定义\t说明\n"
+        "技能\tA000\t1\tA000\t锤击\t是\t击晕。\n",
+        encoding="utf-8",
+    )
+
+    # When: where misses.
+    run_pack_query_cli(parse_pack_query_cli_options((str(tmp_path), "where", "A000")))
+    text = capsys.readouterr().out
+
+    # Then: the hint points to the specialized command.
+    assert "skills A000" in text

@@ -218,6 +218,15 @@ def _pack_query_selected(host, command: str = "doc") -> None:
     from .gui_pack_query import open_pack_query_dialog  # noqa: PLC0415
     from .gui_export_actions import load_last_pack_dir  # noqa: PLC0415
 
+    # 按对象类型智能路由: where/drop 语义只对物品/单位成立,
+    # 技能/增益/科技/装饰物点上会得到「未找到」— 改路由到专属命令。
+    if command in ("where", "drop") and obj is not None:
+        category = getattr(obj, "category", "")
+        if category == "技能":
+            command = "skills"
+        elif category in ("增益", "科技", "装饰物", "可破坏物"):
+            command = "buffs" if category == "增益" else "doc"
+
     prefill = obj.obj_id if obj is not None else ""
     open_pack_query_dialog(
         host,

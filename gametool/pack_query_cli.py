@@ -985,7 +985,13 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
                 + "; 未脚本验证):"
             )
             return [head] + ["  " + h for h in _bounded(hints, limit)]
-    return lines or ["未找到放置记录: " + query]
+    if not lines:
+        lines = ["未找到放置记录: " + query]
+        hint = _code_home_hint(pack, query)
+        if hint:
+            lines.append(hint)
+    return lines
+
 
 
 _DEATH_COND_BLOCK_RE = re.compile(
@@ -1937,12 +1943,19 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
             return [head] + ["  " + h for h in _bounded(hints, limit)]
         items_n = len(load_items(pack))
         units_n = len(load_units(pack))
+        hint = _code_home_hint(pack, query)
         if items_n or units_n:
-            return [
+            miss = [
                 "未找到获取途径: " + query,
                 f"  （本图物品表 {items_n} 件 / 单位表 {units_n} 种; 可换四码或关键词再查）",
             ]
-        return ["未找到获取途径: " + query]
+            if hint:
+                miss.append(hint)
+            return miss
+        miss = ["未找到获取途径: " + query]
+        if hint:
+            miss.append(hint)
+        return miss
     if not any("掉落" in k for k in kinds):
         scan_code = (
             query
@@ -2845,6 +2858,16 @@ def _query_heroes(pack: Path, query: str, limit: int) -> list[str]:
     if not out:
         return ["未找到: " + query]
     return out
+
+
+def _code_home_hint(pack: Path, query: str) -> str:
+    """码在技能/增益表中时给出专属命令提示, 否则返回空串。"""
+    code = query.strip()
+    for table, cmd in (("技能", "skills"), ("增益", "buffs"), ("英雄", "heroes")):
+        for r in _read_rows(pack, "对象ID/" + table + ".tsv")[1:]:
+            if len(r) > 4 and (r[1] == code or _clean(r[4]) == code):
+                return f"(该码属 {table} — 用 {cmd} {code} 查)"
+    return ""
 
 
 def _query_skills(pack: Path, query: str, limit: int) -> list[str]:
