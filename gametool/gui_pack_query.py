@@ -21,6 +21,55 @@ _HISTORY: list[tuple[str, str]] = []  # (模式, 关键词) 最近 10 条
 _WINDOW_GEOMETRY: dict[str, str] = {}  # 窗口名 -> "WxH" (进程级)
 
 
+def _memo_dir() -> str:
+    try:
+        from .cache_root import gamexray_cache_root  # noqa: PLC0415
+
+        return str(gamexray_cache_root() / "gui-query-memo")
+    except OSError:
+        return ""
+
+
+def _save_memo() -> None:
+    """收藏+历史落盘 (fail-open): 重启程序不丢。"""
+    import json  # noqa: PLC0415
+
+    from pathlib import Path  # noqa: PLC0415
+
+    base = _memo_dir()
+    if not base:
+        return
+    try:
+        base_path = Path(base)
+        base_path.mkdir(parents=True, exist_ok=True)
+        (base_path / "history.json").write_text(
+            json.dumps(_HISTORY, ensure_ascii=False), encoding="utf-8"
+        )
+        (base_path / "pinned.json").write_text(
+            json.dumps(_PINNED, ensure_ascii=False), encoding="utf-8"
+        )
+    except OSError:
+        pass  # fail-open: 记忆失败不影响查询
+
+
+def _load_memo() -> None:
+    import json  # noqa: PLC0415
+
+    from pathlib import Path  # noqa: PLC0415
+
+    base = _memo_dir()
+    if not base:
+        return
+    try:
+        base_path = Path(base)
+        history = json.loads((base_path / "history.json").read_text(encoding="utf-8"))
+        _HISTORY[:] = [tuple(x) for x in history]
+        pinned = json.loads((base_path / "pinned.json").read_text(encoding="utf-8"))
+        _PINNED[:] = [tuple(x) for x in pinned]
+    except OSError, ValueError:
+        pass  # fail-open: 缺文件/坏格式当空白
+
+
 def _remember_geometry(win, name: str) -> None:
     """窗口关闭时把尺寸写进进程级记忆。"""
     _WINDOW_GEOMETRY[name] = win.geometry()
@@ -51,6 +100,7 @@ def open_pack_query_dialog(
 class _PackQueryWindow(ctk.CTkToplevel):
     def __init__(self, master, pack_dir: str) -> None:
         super().__init__(master)
+        _load_memo()
         self.title("资料包查询")
         remembered = _WINDOW_GEOMETRY.get("pack-query")
         self.geometry(remembered or "760x560")
@@ -249,6 +299,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 _HISTORY.remove(entry)
             _HISTORY.insert(0, entry)
             del _HISTORY[10:]
+        _save_memo()
         if command in ("doc", "export", "search", "diff") and not keyword:
             self._output.delete("1.0", "end")
             self._find_state["start"] = "1.0"
@@ -290,10 +341,12 @@ class _PackQueryWindow(ctk.CTkToplevel):
             return
         title = f"{self._mode.get()} {self._keyword.get().strip()}"
         _PINNED.append((title, text))
+        _save_memo()
         self._render_pinned()
 
     def _clear_pinned(self) -> None:
         _PINNED.clear()
+        _save_memo()
         self._pinned_box.delete("1.0", "end")
 
     def _export_md(self, source_box, label: str = "查询结果") -> None:
