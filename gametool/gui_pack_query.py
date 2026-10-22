@@ -86,8 +86,16 @@ def apply_saved_geometry(win, name: str, fallback: str) -> None:
 
 def bind_geometry_memory(win, name: str, fallback: str) -> None:
     """还原 + 关闭落盘一体化: 弹窗记忆惯例的最小接入点。"""
+
+    def _on_destroy(event) -> None:
+        # <Destroy> 会因子控件销毁冒泡触发, 只有顶层自身销毁才记 geometry
+        if event.widget is not win:
+            return
+        _remember_geometry(win, name)
+        _save_geometry()
+
     apply_saved_geometry(win, name, fallback)
-    win.bind("<Destroy>", lambda _e: (_remember_geometry(win, name), _save_geometry()))
+    win.bind("<Destroy>", _on_destroy)
 
 
 _PINNED: list[tuple[str, str]] = []  # (标题, 内容)
