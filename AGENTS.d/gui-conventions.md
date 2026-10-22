@@ -34,7 +34,7 @@
 
 ## 5. 键盘流
 
-- Ctrl+1..8 切模式 + 动态 placeholder：`gui_pack_query.py` `_switch_mode/_PLACEHOLDERS`
+- Ctrl+1..9 切模式（第九位 locate 战役定位）+ 动态 placeholder：`gui_pack_query.py` `_switch_mode/_PLACEHOLDERS`
 - 回车执行当前模式（非固定 doc）：`_run` 绑定处
 - Ctrl+F 内搜（回车循环跳转+选区高亮+尾部回卷）：
   `gui_pack_query.py` `_find_next`、`gui_topbar.py` `_find_next`（攻略速查）

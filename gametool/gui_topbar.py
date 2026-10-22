@@ -497,7 +497,7 @@ def _show_hotkeys(app) -> None:
     win.grab_set()
     win.bind("<Escape>", lambda _e: win.destroy())
     rows = (
-        ("Ctrl+1..8", "直切 doc/search/list/buffs/export/synth/skills/units 模式"),
+        ("Ctrl+1..9", "直切 doc/search/list/buffs/export/synth/skills/units/locate 模式"),
         ("回车", "执行当前模式查询 / 跳下一处搜索命中"),
         ("Ctrl+F", "聚焦内搜框 (报告/结果内搜)"),
         ("Esc", "关闭弹窗"),

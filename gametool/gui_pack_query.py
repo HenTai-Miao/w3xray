@@ -189,6 +189,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "synth",
             "skills",
             "units",
+            "locate",
         ]
         for _i, _cmd in enumerate(self._mode_commands, start=1):
             self.bind_all(
@@ -206,6 +207,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 "synth",
                 "skills",
                 "units",
+                "locate",
             ],
             width=200,
         )
@@ -323,6 +325,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         "synth": "全图配方…  (回车查)",
         "skills": "关键词可空=全量…  (回车查)",
         "units": "关键词可空=全量…  (回车查)",
+        "locate": "特征码分号分隔: 码1;码2;…  (战役定位)",
     }
 
     def _switch_mode(self, command: str) -> None:
@@ -353,7 +356,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             _HISTORY.insert(0, entry)
             del _HISTORY[10:]
         _save_memo()
-        if command in ("doc", "export", "search", "diff") and not keyword:
+        if command in ("doc", "export", "search", "diff", "locate") and not keyword:
             self._output.delete("1.0", "end")
             self._find_state["start"] = "1.0"
             self._output.insert("1.0", f"{command} 需要四码或名称")
