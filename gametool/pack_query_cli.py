@@ -658,7 +658,14 @@ def _query_locate(pack: Path, query: str, limit: int) -> list[str]:
             counts[key] += 1
     missing = [c for c in codes if counts[c.lower()] == 0]
     if missing:
-        return ["未找到: 缺少 " + "、".join(missing) + "（特征码未全部出现）"]
+        lines = ["未找到: 缺少 " + "、".join(missing) + "（特征码未全部出现）"]
+        # 部分命中仍有定位价值: 列出已出现码的引用数, 缩小候选范围
+        for c in codes:
+            if c not in missing:
+                lines.append(
+                    "  已命中 " + c + ": " + str(counts[c.lower()]) + " 处引用"
+                )
+        return lines
     lines = ["命中全部 " + str(len(codes)) + " 个特征码: " + "、".join(codes)]
     for c in codes:
         lines.append("  " + c + ": " + str(counts[c.lower()]) + " 处引用")
