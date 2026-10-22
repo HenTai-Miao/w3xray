@@ -3141,7 +3141,10 @@ def run_pack_query_cli(options: PackQueryCliOptions) -> int:
     started = time.perf_counter()
     code = _run_query_inner(options)
     elapsed_ms = (time.perf_counter() - started) * 1000
-    print(f"[耗时 {elapsed_ms:.0f}ms]", file=sys.stderr)
+    if elapsed_ms > 500:
+        print(f"[耗时 {elapsed_ms:.0f}ms — 同包再查走热缓存会快很多]", file=sys.stderr)
+    else:
+        print(f"[耗时 {elapsed_ms:.0f}ms]", file=sys.stderr)
     return code
 
 
