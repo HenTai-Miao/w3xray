@@ -2989,7 +2989,10 @@ def _query_buffs(pack: Path, query: str, limit: int) -> list[str]:
             line += f" — {note}"
         out.append(line)
     if not out:
-        return ["未找到: " + query]
+        return [
+            "未找到: " + query + " (名称/ID/效果三路过滤)",
+            "  （可换单词/四码重试; 或用 search <词> 跨八表找）",
+        ]
     return out
 
 
@@ -3010,7 +3013,10 @@ def _query_heroes(pack: Path, query: str, limit: int) -> list[str]:
         origin = "自定义" if custom == "是" else "继承基础"
         out.append(f"[{code}] {name} ({origin})")
     if not out:
-        return ["未找到: " + query]
+        return [
+            "未找到: " + query + " (名称/ID/效果三路过滤)",
+            "  （可换单词/四码重试; 或用 search <词> 跨八表找）",
+        ]
     return out
 
 
@@ -3051,7 +3057,10 @@ def _query_units(pack: Path, query: str, limit: int) -> list[str]:
             line += f" — {head}"
         out.append(line)
     if not out:
-        return ["未找到: " + query]
+        return [
+            "未找到: " + query + " (名称/ID/效果三路过滤)",
+            "  （可换单词/四码重试; 或用 search <词> 跨八表找）",
+        ]
     return out
 
 
@@ -3082,7 +3091,10 @@ def _query_skills(pack: Path, query: str, limit: int) -> list[str]:
             line += f" — {head}"
         out.append(line)
     if not out:
-        return ["未找到: " + query]
+        return [
+            "未找到: " + query + " (名称/ID/效果三路过滤)",
+            "  （可换单词/四码重试; 或用 search <词> 跨八表找）",
+        ]
     return out
 
 
