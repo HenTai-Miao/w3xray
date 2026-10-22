@@ -504,6 +504,7 @@ def _show_hotkeys(app) -> None:
         ("双击卡片", "对象全景查询"),
         ("右键卡片", "哪来/谁掉/全景 三键直达"),
         ("右键结果区", "复制全部 / 导出 .md"),
+        ("右键收藏", "复制收藏 / 清空 / 导出收藏 .md"),
     )
     box = ctk.CTkTextbox(win, font=("Consolas", 13), wrap="word")
     box.pack(fill="both", expand=True, padx=10, pady=10)
