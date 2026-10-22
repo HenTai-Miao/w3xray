@@ -3135,6 +3135,17 @@ def _campaign_subpacks(pack: Path) -> list[Path]:
 
 
 def run_pack_query_cli(options: PackQueryCliOptions) -> int:
+    """执行查询并计时；耗时行走 stderr (不污染 stdout 结果)。"""
+    import time  # noqa: PLC0415
+
+    started = time.perf_counter()
+    code = _run_query_inner(options)
+    elapsed_ms = (time.perf_counter() - started) * 1000
+    print(f"[耗时 {elapsed_ms:.0f}ms]", file=sys.stderr)
+    return code
+
+
+def _run_query_inner(options: PackQueryCliOptions) -> int:
     """执行查询并打印结果；返回 0（有结果）或 2（无结果）。
 
     战役容器包 (子地图/*/) 自动逐关查询并以「== 子地图 名 ==」分段——

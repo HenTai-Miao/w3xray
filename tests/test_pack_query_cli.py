@@ -1766,3 +1766,15 @@ def test_query_near_includes_script_placed_items(tmp_path) -> None:
     # Then: the script item shows up.
     assert "脚本物品" in text
     assert "I077" in text
+
+
+def test_query_reports_elapsed_to_stderr(tmp_path, pack, capsys) -> None:
+    import contextlib
+    import io
+
+    buffer_out = io.StringIO()
+    with contextlib.redirect_stdout(buffer_out):
+        run_pack_query_cli(parse_pack_query_cli_options((str(tmp_path), "doc", "冰晶")))
+    captured = capsys.readouterr()
+    assert "[耗时 " in captured.err and "ms]" in captured.err
+    assert "[耗时" not in captured.out  # stdout 结果不被污染
