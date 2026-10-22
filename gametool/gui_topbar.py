@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import tkinter as tk
+from tkinter import messagebox
 
 import customtkinter as ctk
 
@@ -423,7 +425,7 @@ def _open_guide_window(app, text: str, force: bool = False) -> None:
             font=(FONT, 11),
             fg_color="transparent",
             border_width=1,
-            command=lambda t=title, b=box: (_jump_to_section(b, t), _mark_active(t)),
+            command=lambda t=title, b=box: (_jump_to_section(b, t), _mark_active(t)),  # noqa: F821 - 闭包晚绑定, box 在下方创建
         )
         btn.pack(side="left", padx=(0, 4))
         section_buttons[title] = btn
@@ -541,8 +543,6 @@ def _attach_tooltip(widget, text: str) -> None:
 
 def _show_hotkeys(app) -> None:
     """键盘流速查弹窗 (与 README 速查表同源)。"""
-    import tkinter as tk  # noqa: PLC0415
-
     import customtkinter as ctk  # noqa: PLC0415
 
     win = ctk.CTkToplevel(app)
@@ -571,10 +571,22 @@ def _show_hotkeys(app) -> None:
     for key, desc in rows:
         box.insert("end", f"{key:<12} {desc}\n")
     box.configure(state="disabled")
-    _bind_textbox_search(win, box)
+
+    def _export_hotkeys_md(content: str) -> None:
+        from .archive_export import tmp_extract_dir  # noqa: PLC0415
+
+        out_dir = tmp_extract_dir("hotkeys-export")
+        out_path = os.path.join(out_dir, "键盘速查.md")
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(content)
+        win.clipboard_clear()
+        win.clipboard_append(out_path)
+        messagebox.showinfo("已导出", out_path)
+
+    _bind_textbox_search(win, box, exporter=_export_hotkeys_md)
 
 
-def _bind_textbox_search(win, box) -> None:
+def _bind_textbox_search(win, box, exporter=None) -> None:
     """CTkTextbox 内搜: Ctrl+F 聚焦, 回车逐处跳并高亮 (定位双通道惯例)。"""
     import tkinter as tk  # noqa: PLC0415
 
@@ -610,10 +622,11 @@ def _bind_textbox_search(win, box) -> None:
             win.clipboard_append(box.get("1.0", "end")),
         ),
     )
-    menu.add_command(
-        label="导出 (.md)",
-        command=lambda: _export_guide(app, box.get("1.0", "end")),
-    )
+    if exporter is not None:
+        menu.add_command(
+            label="导出 (.md)",
+            command=lambda: exporter(box.get("1.0", "end")),
+        )
     box.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
     entry.bind("<Return>", _find)
     entry.bind(

@@ -79,6 +79,7 @@ def _remember_geometry(win, name: str) -> None:
     """窗口关闭时把尺寸写进进程级记忆。"""
     _WINDOW_GEOMETRY[name] = win.geometry()
 
+
 def apply_saved_geometry(win, name: str, fallback: str) -> None:
     """按记忆尺寸/位置还原窗口, 无记忆用 fallback (跨弹窗复用)。"""
     win.geometry(_WINDOW_GEOMETRY.get(name, fallback))
@@ -117,14 +118,16 @@ def open_pack_query_dialog(
     if not pack_dir or not os.path.isdir(pack_dir):
         ensure_pack()
         return
-    _PackQueryWindow(master, pack_dir)
+    _PackQueryWindow(master, pack_dir, prefill, prefill_command)
 
 
 class _PackQueryWindow(ctk.CTkToplevel):
-    def __init__(self, master, pack_dir: str) -> None:
+    def __init__(
+        self, master, pack_dir: str, prefill: str = "", prefill_command: str = ""
+    ) -> None:
         super().__init__(master)
         _load_memo()
-        pack_label = os.path.basename(self._pack_dir.rstrip("\/")) or "资料包查询"
+        pack_label = os.path.basename(self._pack_dir.rstrip("/")) or "资料包查询"
         self.title(f"资料包查询 — {pack_label}")
         remembered = _WINDOW_GEOMETRY.get("pack-query")
         self.geometry(remembered or "760x560")
@@ -273,7 +276,9 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 self._find_state["start"] = end
             elif _PINNED:
                 # 结果区无命中 → 收藏区续找 (定位双通道覆盖收藏对比内容)
-                ppos = self._pinned_box.search(needle, "1.0", stopindex="end", nocase=True)
+                ppos = self._pinned_box.search(
+                    needle, "1.0", stopindex="end", nocase=True
+                )
                 if ppos:
                     self._pinned_box.see(ppos)
                     pend = f"{ppos}+{len(needle)}c"
@@ -352,8 +357,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
 
     def _run(self, command: str) -> None:
         global _LAST_KEYWORD, _LAST_MODE
-        _LAST_KEYWORD = self._keyword.get().strip()
-        _LAST_MODE = command
+        _LAST_KEYWORD = self._keyword.get().strip()  # pyright: ignore[reportConstantRedefinition]
+        _LAST_MODE = command  # pyright: ignore[reportConstantRedefinition]
         keyword = self._keyword.get().strip()
         # 免词清单 = 本窗九模式中可空词执行的 (affixes/registered 仅 CLI 有, 不在此窗)
         if keyword or command in (
@@ -412,7 +417,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 exported = output.split("[已导出: ", 1)[1].split("]", 1)[0]
                 self.clipboard_clear()
                 self.clipboard_append(exported)
-                output += f"\n(路径已复制到剪贴板)"
+                output += "\n(路径已复制到剪贴板)"
             if elapsed:
                 output += f"\n──────────  {elapsed}  ──────────\n"
             self._finish(output)
@@ -463,6 +468,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         return f"⊕ 收藏本次结果 (对比用) [{n} 项]" if n else "⊕ 收藏本次结果 (对比用)"
 
     def _refresh_pin_button(self) -> None:
+        assert self._pin_button is not None
         self._pin_button.configure(text=self._pin_button_text())
 
     def _render_pinned(self) -> None:
@@ -493,7 +499,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
 
     def _finish(self, text: str) -> None:
         global _LAST_RESULT
-        _LAST_RESULT = text
+        _LAST_RESULT = text  # pyright: ignore[reportConstantRedefinition]
         self.configure(cursor="")
         self._output.delete("1.0", "end")
         self._find_state["start"] = "1.0"

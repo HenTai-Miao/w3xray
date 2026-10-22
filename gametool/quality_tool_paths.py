@@ -99,6 +99,9 @@ gametool/gui_casc_browser.py
 gametool/gui_current_map.py
 gametool/gui_current_map_worker.py
 gametool/gui_export_actions.py
+gametool/gui_pack_query.py
+gametool/gui_profile_settings.py
+gametool/gui_topbar.py
 gametool/gui_external_data.py
 gametool/gui_icon_evidence_loader.py
 gametool/gui_icon_gap_layout.py
@@ -117,7 +120,6 @@ gametool/gui_shell.py
 gametool/gui_shell_object_panel.py
 gametool/gui_shell_source_panel.py
 gametool/gui_source_browser.py
-gametool/gui_profile_settings.py
 gametool/gui_worker_host.py
 gametool/gui_worker_registry.py
 gametool/historical_icon_bindings.py
