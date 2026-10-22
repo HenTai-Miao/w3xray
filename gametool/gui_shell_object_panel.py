@@ -224,6 +224,9 @@ def _pack_query_selected(host, command: str = "doc") -> None:
         category = getattr(obj, "category", "")
         if category == "技能":
             command = "skills"
+        elif category == "单位" and command == "where":
+            # 单位的「哪来」语义 = 这单位掉/卖什么 → drop 反查
+            command = "drop"
         elif category in ("增益", "科技", "装饰物", "可破坏物"):
             command = "buffs" if category == "增益" else "doc"
 
