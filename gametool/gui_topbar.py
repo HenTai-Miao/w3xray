@@ -328,7 +328,7 @@ def _show_guide(app) -> None:
     _ = app._start_gui_worker("show-guide", work, replace=True)
 
 
-def _open_guide_window(app, text: str) -> None:
+def _open_guide_window(app, text: str, force: bool = False) -> None:
     import tkinter as tk  # noqa: PLC0415
 
     from .guide_report import GUIDE_SECTION_TITLES  # noqa: PLC0415
@@ -353,15 +353,19 @@ def _open_guide_window(app, text: str) -> None:
     box = ctk.CTkTextbox(win, font=("Consolas", 12), wrap="none")
     box.pack(fill="both", expand=True, padx=8, pady=8)
     box.insert("1.0", text)
-    menu = tk.Menu(win, tearoff=0)
-    menu.add_command(
+    guide_menu = tk.Menu(win, tearoff=0)
+    guide_menu.add_command(
         label="复制全部",
         command=lambda: (
             box.clipboard_clear(),
             box.clipboard_append(box.get("1.0", "end")),
         ),
     )
-    box.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
+    guide_menu.add_command(
+        label="强制重算 (清缓存刷新报告)",
+        command=lambda: (_GUIDE_CACHE.clear(), _show_guide(app)),
+    )
+    box.bind("<Button-3>", lambda e: guide_menu.tk_popup(e.x_root, e.y_root))
 
 
 def _jump_to_section(box, title: str) -> None:
