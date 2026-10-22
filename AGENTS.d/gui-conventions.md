@@ -68,6 +68,6 @@
 ## 通用接入点（八九至九一轮新增）
 
 - **`bind_geometry_memory(win, name, fallback)`**（gui_pack_query.py）：尺寸记忆一行接入——还原记忆尺寸 + 关闭落盘一体化，新弹窗不再各写一遍。
-- **`_bind_textbox_search(win, box)`**（gui_topbar.py）：CTkTextbox 内搜一行接入——Ctrl+F 聚焦 + 回车逐处跳 + 黄底高亮，到尾自动回卷。
+- **`_bind_textbox_search(win, box)`**（gui_topbar.py）：CTkTextbox 内搜一行接入——Ctrl+F 聚焦 + 回车逐处跳 + 黄底高亮，到尾自动回卷。四态实证背书（九十六至九十九轮真窗验证）：事件派发（handler 直调 + `when="now"`）/ 单命中回卷同位 / 双命中 1→2→1 循环 / 换词 pos 残留兜底 / 空词回车=清除搜索。冒烟注意：CTk 双层绑定在窗口未 realize 时不派发事件，`event_generate` 需 `update_idletasks()+update()+when="now"` 三件套，盲跑 0 命中是脚本问题不是实现问题。
 - **键盘速查窗**（gui_topbar.py `_show_hotkeys`）：新弹窗 checklist 的活样板——六件套全齐（Esc+grab_set/尺寸记忆/内搜/右键复制+导出 .md/等宽对齐/速查表数据源与 README 同步）。
 
