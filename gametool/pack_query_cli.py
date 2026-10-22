@@ -2631,6 +2631,7 @@ def _query_affix(pack: Path, query: str, limit: int) -> list[str]:
         return [
             "本包无 词缀表.tsv (非内存导出包, 或该图未捕获到词缀定义)。",
             "重新导出: uv run python -X utf8 main.py live --dump-objects <目录>",
+            "  （GUI 用户: 数据工具菜单 →「导出运行时对象包 (词缀/注册)」）",
         ]
     lines: list[str] = []
     for name, (mult, stat) in sorted(affixes.items()):
@@ -2657,6 +2658,7 @@ def _query_registered(pack: Path, query: str, limit: int) -> list[str]:
         return [
             "本包无 注册数据.tsv (非内存导出包, 或该图未捕获到云消息)。",
             "重新导出: uv run python -X utf8 main.py live --dump-objects <目录>",
+            "  （GUI 用户: 数据工具菜单 →「导出运行时对象包 (词缀/注册)」）",
         ]
     counts: dict[str, int] = {}
     matched: list[tuple[str, str]] = []
