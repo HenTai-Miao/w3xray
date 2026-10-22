@@ -1464,3 +1464,23 @@ def test_where_and_drop_hint_specialized_commands(tmp_path, pack, capsys) -> Non
 
     # Then: the hint points to the specialized command.
     assert "skills A000" in text
+
+
+def test_query_units_lists_and_strips_colors(tmp_path, pack, capsys) -> None:
+    # Given: a unit table with color codes in the description.
+    obj = tmp_path / "对象ID"
+    obj.mkdir(exist_ok=True)
+    (obj / "单位.tsv").write_text(
+        "分类\tID\t10进制\t基础ID\t名称\t自定义\t说明\n"
+        "单位\tH001\t1\tH001\t"
+        "|cffffcc00火元|r\t是\t|cffff0000灼热的元素。|r|n|cff55f4f4能攻击地面。\n",
+        encoding="utf-8",
+    )
+
+    # When: querying by keyword.
+    run_pack_query_cli(parse_pack_query_cli_options((str(tmp_path), "units", "火元")))
+    text = capsys.readouterr().out
+
+    # Then: output is color-stripped.
+    assert "火元" in text
+    assert "|cffff0000" not in text

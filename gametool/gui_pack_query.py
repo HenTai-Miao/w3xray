@@ -73,7 +73,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self._keyword.pack(side="left", padx=(0, 8))
         self._keyword.bind("<Return>", lambda _e: self._run(self._mode.get()))
         self._mode = ctk.CTkSegmentedButton(
-            row, values=["doc", "search", "list", "buffs", "export", "synth", "skills"], width=200
+            row, values=["doc", "search", "list", "buffs", "export", "synth", "skills", "units"], width=200
         )
         self._mode.set(prefill_command or _LAST_MODE)
         self._mode.pack(side="left", padx=(0, 8))

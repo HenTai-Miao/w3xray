@@ -67,6 +67,7 @@ _COMMANDS = (
     "stats",
     "synth",
     "skills",
+    "units",
     "heroes",
 )
 _COLOR_RE = re.compile(r"\|c[0-9A-Fa-f]{8}|\|r")
@@ -554,7 +555,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
     command = rest[1] if len(rest) > 1 else ""
     if command == "near" and len(rest) in (4, 5):
         rest = rest[:2] + [" ".join(rest[2:])]
-    if command in ("affixes", "registered", "diff", "list", "buffs", "heroes", "stats", "synth", "skills") and len(rest) == 2:
+    if command in ("affixes", "registered", "diff", "list", "buffs", "heroes", "stats", "synth", "skills", "units") and len(rest) == 2:
         # 这些子命令查询词可省 (全量列出)
         rest = rest + [""]
     if len(rest) != 3:
@@ -564,7 +565,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
             + "> <查询词>"
             + ("  (near 用法: near <x> <y> [radius])" if command == "near" else "")
             + (
-                "  (affixes/registered/list/buffs/heroes/stats/synth/skills 查询词可省 = 全量列出; diff 用法: diff <旧包目录>)"
+                "  (affixes/registered/list/buffs/heroes/stats/synth/skills/units 查询词可省 = 全量列出; diff 用法: diff <旧包目录>)"
                 if command in ("affixes", "registered", "diff", "list", "buffs")
                 else ""
             )
@@ -574,7 +575,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         raise PackQueryCliOptionError(
             "未知子命令: " + command + " (可选: " + ",".join(_COMMANDS) + ")"
         )
-    if not query.strip() and command not in ("affixes", "registered", "diff", "list", "buffs", "heroes", "stats", "synth", "skills"):
+    if not query.strip() and command not in ("affixes", "registered", "diff", "list", "buffs", "heroes", "stats", "synth", "skills", "units"):
         raise PackQueryCliOptionError("查询词不能为空")
     return PackQueryCliOptions(
         pack_dir=pack_dir,
@@ -2870,6 +2871,32 @@ def _code_home_hint(pack: Path, query: str) -> str:
     return ""
 
 
+def _query_units(pack: Path, query: str, limit: int) -> list[str]:
+    """units 单位表清单/查询: 名称/ID/说明三路过滤, 说明剥色码。"""
+    del limit  # 满量纪律
+    rows = _read_rows(pack, "对象ID/单位.tsv")
+    if len(rows) <= 1:
+        return ["本包无 单位.tsv"]
+    needle = _clean(query).casefold()
+    out: list[str] = []
+    for r in rows[1:]:
+        if len(r) < 7:
+            continue
+        code, name, custom = r[1], _clean(r[4]), r[5].strip()
+        note = _clean(r[6])
+        if needle and needle not in code.casefold() and needle not in name.casefold() and needle not in note.casefold():
+            continue
+        origin = "自定义" if custom == "是" else "继承基础"
+        line = f"[{code}] {name} ({origin})"
+        if note:
+            head = note.split("|n")[0][:160]
+            line += f" — {head}"
+        out.append(line)
+    if not out:
+        return ["未找到: " + query]
+    return out
+
+
 def _query_skills(pack: Path, query: str, limit: int) -> list[str]:
     """skills 技能表清单/查询: 技能效果排查专用 (说明列剥色码取首段。"""
     del limit  # 满量纪律: 有多少收多少
@@ -2967,6 +2994,7 @@ _QUERIES = {
     "stats": _query_stats,
     "synth": _query_synth,
     "skills": _query_skills,
+    "units": _query_units,
     "heroes": _query_heroes,
 }
 
