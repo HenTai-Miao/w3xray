@@ -34,6 +34,10 @@ class ObjectDetailMixin:
             show_detail=self._show_detail,
             get_icon=self._get_tree_photo,
         )
+        self.object_gallery.cards.bind(
+            "<Double-1>",
+            lambda _event: self._pack_query_selected_object(),
+        )
 
     def _on_col_select(self, category: str) -> None:
         tree = self.col_trees[category]
@@ -45,6 +49,14 @@ class ObjectDetailMixin:
         if index >= len(results):
             return
         self._show_detail(results[index])
+
+    def _pack_query_selected_object(self) -> None:
+        obj = getattr(self, "_selected_detail_object", None)
+        if obj is None:
+            return
+        from .gui_shell_object_panel import _pack_query_selected  # noqa: PLC0415
+
+        _pack_query_selected(self, "doc")
 
     def _show_detail(self, obj) -> None:
         self._selected_detail_object = obj
