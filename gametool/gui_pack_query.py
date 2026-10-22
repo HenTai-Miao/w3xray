@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 _LAST_KEYWORD = ""
 _LAST_MODE = "doc"
 _LAST_RESULT = ""
+_PINNED: list[tuple[str, str]] = []  # (标题, 内容)
 
 
 def open_pack_query_dialog(
@@ -80,6 +81,32 @@ class _PackQueryWindow(ctk.CTkToplevel):
             side="left"
         )
 
+        pin_row = ctk.CTkFrame(self, fg_color="transparent")
+        pin_row.pack(fill="x", padx=14, pady=(10, 0))
+        ctk.CTkButton(
+            pin_row,
+            text="⊕ 收藏本次结果 (对比用)",
+            width=150,
+            height=24,
+            font=(FONT, 11),
+            command=self._pin_current,
+        ).pack(side="left")
+        ctk.CTkButton(
+            pin_row,
+            text="清空收藏",
+            width=90,
+            height=24,
+            font=(FONT, 11),
+            fg_color="transparent",
+            border_width=1,
+            command=self._clear_pinned,
+        ).pack(side="left", padx=(6, 0))
+        self._pinned_box = ctk.CTkTextbox(
+            self, font=("Consolas", 11), wrap="none", height=120
+        )
+        if _PINNED:
+            self._render_pinned()
+
         self._output = ctk.CTkTextbox(self, font=("Consolas", 12), wrap="none")
         self._output.pack(fill="both", expand=True, padx=14, pady=10)
         if _LAST_RESULT:
@@ -134,6 +161,24 @@ class _PackQueryWindow(ctk.CTkToplevel):
         except SystemExit as exc:  # run_pack_query_cli 返回码路径不打异常
             output = buffer.getvalue() or f"(退出码 {exc.code})"
             self._finish(output)
+
+    def _pin_current(self) -> None:
+        text = self._output.get("1.0", "end").strip()
+        if not text or text.startswith(("查询中", "doc 需要")):
+            return
+        title = f"{self._mode.get()} {self._keyword.get().strip()}"
+        _PINNED.append((title, text))
+        self._render_pinned()
+
+    def _clear_pinned(self) -> None:
+        _PINNED.clear()
+        self._pinned_box.delete("1.0", "end")
+
+    def _render_pinned(self) -> None:
+        self._pinned_box.delete("1.0", "end")
+        for title, text in _PINNED:
+            self._pinned_box.insert("end", f"==== 收藏: {title} ====" + "\n")
+            self._pinned_box.insert("end", text + "\n\n")
 
     def _copy_all(self) -> None:
         self.clipboard_clear()
