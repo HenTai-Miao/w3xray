@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import pathlib
 
 import pytest
 
@@ -37,21 +38,21 @@ def pack(tmp_path):
         "物品\tI0EE\t5\tI0EE\t力量戒指SLK\t是\t材料\n"
         "物品\tI0P1\t6\tI0P1\t奖池甲\t是\t测试奖池物1\n"
         "物品\tI0P2\t7\tI0P2\t奖池乙\t是\t测试奖池物2\n"
-"物品\tI01O\t8\tI01O\t钻石\t是\t直落\n"
-"物品\tI01P\t9\tI01P\t猎刃\t是\t直落\n"
-"物品\tI0G1\t10\tI0G1\t图腾石\t是\t直落\n"
-"物品\tI0CT\t11\tI0CT\t掉落石\t是\tCreateItem直落\n"
-"物品\tI0SH\t12\tI0SH\t上架货\t是\t上架商店\n"
-"物品\tI0OL\t13\tI0OL\t独行石\t是\t动作体自判\n"
-"物品\tI0CK\t14\tI0CK\t宝箱\t是\t使用触发\n"
-"物品\tI0A1\t15\tI0A1\t宝物甲\t是\t数组池\n"
-"物品\tI0A2\t16\tI0A2\t宝物乙\t是\t数组池\n"
-"物品\tI0TK\t17\tI0TK\t凭证\t是\t拾取触发\n"
-"物品\tI0PG\t18\tI0PG\t奖品\t是\t拾取产出\n"
-"物品\tI0YD\t19\tI0YD\t死亡随机甲\t是\tYDWE模板\n"
-"物品\tI0YE\t20\tI0YE\t死亡随机乙\t是\tYDWE模板\n"
-"物品\tI0MA\t21\tI0MA\t复用甲\t是\t同函数复用\n"
-"物品\tI0MB\t22\tI0MB\t复用乙\t是\t同函数复用\n",
+        "物品\tI01O\t8\tI01O\t钻石\t是\t直落\n"
+        "物品\tI01P\t9\tI01P\t猎刃\t是\t直落\n"
+        "物品\tI0G1\t10\tI0G1\t图腾石\t是\t直落\n"
+        "物品\tI0CT\t11\tI0CT\t掉落石\t是\tCreateItem直落\n"
+        "物品\tI0SH\t12\tI0SH\t上架货\t是\t上架商店\n"
+        "物品\tI0OL\t13\tI0OL\t独行石\t是\t动作体自判\n"
+        "物品\tI0CK\t14\tI0CK\t宝箱\t是\t使用触发\n"
+        "物品\tI0A1\t15\tI0A1\t宝物甲\t是\t数组池\n"
+        "物品\tI0A2\t16\tI0A2\t宝物乙\t是\t数组池\n"
+        "物品\tI0TK\t17\tI0TK\t凭证\t是\t拾取触发\n"
+        "物品\tI0PG\t18\tI0PG\t奖品\t是\t拾取产出\n"
+        "物品\tI0YD\t19\tI0YD\t死亡随机甲\t是\tYDWE模板\n"
+        "物品\tI0YE\t20\tI0YE\t死亡随机乙\t是\tYDWE模板\n"
+        "物品\tI0MA\t21\tI0MA\t复用甲\t是\t同函数复用\n"
+        "物品\tI0MB\t22\tI0MB\t复用乙\t是\t同函数复用\n",
         encoding="utf-8",
     )
     (obj / "单位.tsv").write_text(
@@ -59,13 +60,13 @@ def pack(tmp_path):
         "单位\tu0AA\t1\tu0AA\t雪妖\n"
         "单位\th0AA\t2\th0AA\t老伯基蓝\n"
         "单位\tnbos\t3\tnbos\t奖池怪\n"
-"单位\tn018\t4\tn018\t炎石守卫\n"
-"单位\tu00B\t5\tu00B\t样本怪\n"
-"单位\tnen0\t6\tnen0\t样本图腾\n"
-"单位\tnstk\t7\tnstk\t补货兽\n"
-"单位\tnctm\t8\tnctm\t坐标怪\n"
-"单位\tnshp\t9\tnshp\t上架怪\n"
-"单位\tnonl\t10\tnonl\t独行怪\n",
+        "单位\tn018\t4\tn018\t炎石守卫\n"
+        "单位\tu00B\t5\tu00B\t样本怪\n"
+        "单位\tnen0\t6\tnen0\t样本图腾\n"
+        "单位\tnstk\t7\tnstk\t补货兽\n"
+        "单位\tnctm\t8\tnctm\t坐标怪\n"
+        "单位\tnshp\t9\tnshp\t上架怪\n"
+        "单位\tnonl\t10\tnonl\t独行怪\n",
         encoding="utf-8",
     )
     (tmp_path / "脚本调用参数索引.tsv").write_text(
@@ -455,8 +456,7 @@ def test_unit_death_random_dist_drops(pack):
     )
 
     handlers = {
-        fn: regs
-        for _code, fn, regs in _unit_death_random_drops(load_script(pack))
+        fn: regs for _code, fn, regs in _unit_death_random_drops(load_script(pack))
     }
     assert handlers["Unit_ydweDropItems"] == [("I0YD", 70), ("I0YE", 30)]
     unit_text = "\n".join(_query_drop(pack, "nctm", 30))
@@ -468,9 +468,7 @@ def test_unit_death_random_dist_drops(pack):
     # guide drops 段与 pack-query 同源: 第三形态同样进入玩家报告
     from gametool.pack_query_cli import script_death_drop_lines
 
-    guide_text = "\n".join(
-        script_death_drop_lines(load_script(pack), lambda c: c)
-    )
+    guide_text = "\n".join(script_death_drop_lines(load_script(pack), lambda c: c))
     assert "Unit_ydweDropItems" in guide_text
     assert "权重70/100" in guide_text
     # where 与 drop 同源: 物品获取途径同样能看到第三形态
@@ -609,8 +607,7 @@ def test_query_drop_script_direct_death_drop(pack):
     # I0P3: 死亡位置直落, 本语句之前无掷骰; 动作体内层 if 判定死亡单位 nbld
     unit_tsv = pack / "对象ID" / "单位.tsv"
     unit_tsv.write_text(
-        unit_tsv.read_text(encoding="utf-8")
-        + "单位\tnbld\t4\tnbld\t炎石小怪\n",
+        unit_tsv.read_text(encoding="utf-8") + "单位\tnbld\t4\tnbld\t炎石小怪\n",
         encoding="utf-8",
     )
     text = "\n".join(_query_drop(pack, "I0P3", 10))
@@ -621,12 +618,17 @@ def test_query_drop_script_direct_death_drop(pack):
     )
     assert "死亡单位判定: 炎石小怪 [nbld]" in text
     assert "同函数掷骰: 无(本语句之前)" in text
-    assert "死亡条件 Trig_bossConditions: return((GetOwningPlayer(GetDyingUnit())==Player(10)))" in text
+    assert (
+        "死亡条件 Trig_bossConditions: return((GetOwningPlayer(GetDyingUnit())==Player(10)))"
+        in text
+    )
     # I0P4: 同函数掷骰门槛如实列出, 不写保底配方
     gate = "\n".join(_query_drop(pack, "I0P4", 10))
     assert "运势木剑 [I0P4]  ⚠ 脚本死亡位置直落" in gate
     assert "CreateItemLoc('I0P4',udg_WPP[4])" in gate
-    assert "同函数掷骰: GetRandomReal(1.00,1.70) (门槛是否套用本物品以函数体为准)" in gate
+    assert (
+        "同函数掷骰: GetRandomReal(1.00,1.70) (门槛是否套用本物品以函数体为准)" in gate
+    )
 
 
 def test_query_drop_relation_row_without_drop_kind_gets_script_evidence(pack):
@@ -718,8 +720,7 @@ def test_query_drop_unit_name_reverse_lists_direct_drops(pack):
 
     unit_tsv = pack / "对象ID" / "单位.tsv"
     unit_tsv.write_text(
-        unit_tsv.read_text(encoding="utf-8")
-        + "单位\tnbld\t4\tnbld\t炎石小怪\n",
+        unit_tsv.read_text(encoding="utf-8") + "单位\tnbld\t4\tnbld\t炎石小怪\n",
         encoding="utf-8",
     )
     item_tsv = pack / "对象ID" / "物品.tsv"
@@ -731,7 +732,10 @@ def test_query_drop_unit_name_reverse_lists_direct_drops(pack):
     )
     text = "\n".join(_query_drop(pack, "炎石小怪", 10))
     assert "炎石小怪 [nbld]  ⚠ 按单位反查死亡直落 (该单位死亡触发创建的物品):" in text
-    assert "死亡条件 Trig_bossConditions: return((GetOwningPlayer(GetDyingUnit())==Player(10)))" in text
+    assert (
+        "死亡条件 Trig_bossConditions: return((GetOwningPlayer(GetDyingUnit())==Player(10)))"
+        in text
+    )
     assert "直落: 直落木剑 [I0P3]" in text
     assert "直落: 运势木剑 [I0P4]" in text
     assert "同函数掷骰: 无(本语句之前)" in text
@@ -750,8 +754,7 @@ def test_query_fallbacks_route_unit_queries(pack):
 
     unit_tsv = pack / "对象ID" / "单位.tsv"
     unit_tsv.write_text(
-        unit_tsv.read_text(encoding="utf-8")
-        + "单位\tnrte\t4\tnrte\t路由怪\n",
+        unit_tsv.read_text(encoding="utf-8") + "单位\tnrte\t4\tnrte\t路由怪\n",
         encoding="utf-8",
     )
     where_text = "\n".join(_query_where(pack, "路由怪", 10))
@@ -965,7 +968,9 @@ def test_run_cli_campaign_submap_aggregation(tmp_path, capsys):
         "h1\t测试图\t脚本/触发奖励\tI0A1\t宝物甲\t单位\tu0AA\t雪妖\t\t\t\t\t\t\t\t\t\t\t\tw3x\n",
         encoding="utf-8",
     )
-    rc = run_pack_query_cli(parse_pack_query_cli_options([str(root), "where", "宝物甲"]))
+    rc = run_pack_query_cli(
+        parse_pack_query_cli_options([str(root), "where", "宝物甲"])
+    )
     out = capsys.readouterr().out
     assert rc == 0
     assert "== 子地图 001_x ==" in out
@@ -1239,9 +1244,7 @@ def test_query_diff_reports_added_and_removed(tmp_path, pack, capsys) -> None:
     (old / "对象ID" / "物品.tsv").write_text("".join(kept), encoding="utf-8")
 
     # When: diff compares the new pack against the old one.
-    run_pack_query_cli(
-        parse_pack_query_cli_options((str(tmp_path), "diff", str(old)))
-    )
+    run_pack_query_cli(parse_pack_query_cli_options((str(tmp_path), "diff", str(old))))
     text = capsys.readouterr().out
 
     # Then: the item missing from the old pack is reported as an addition.
@@ -1249,7 +1252,9 @@ def test_query_diff_reports_added_and_removed(tmp_path, pack, capsys) -> None:
     assert "新增 1" in text
 
 
-def test_query_diff_identical_packs_report_no_difference(tmp_path, pack, capsys) -> None:
+def test_query_diff_identical_packs_report_no_difference(
+    tmp_path, pack, capsys
+) -> None:
     old = tmp_path / "same-pack"
     (old / "对象ID").mkdir(parents=True)
     shutil.copy(
@@ -1260,18 +1265,19 @@ def test_query_diff_identical_packs_report_no_difference(tmp_path, pack, capsys)
         tmp_path / "对象ID" / "单位.tsv",
         old / "对象ID" / "单位.tsv",
     )
-    run_pack_query_cli(
-        parse_pack_query_cli_options((str(tmp_path), "diff", str(old)))
-    )
+    if (tmp_path / "掉落与获取关系.tsv").exists():
+        shutil.copy(
+            tmp_path / "掉落与获取关系.tsv",
+            old / "掉落与获取关系.tsv",
+        )
+    run_pack_query_cli(parse_pack_query_cli_options((str(tmp_path), "diff", str(old))))
     assert capsys.readouterr().out.strip() == "两包对象表无差异"
 
 
 def test_query_buffs_lists_and_filters(tmp_path, pack, capsys) -> None:
     # Given: the pack fixture has no 增益.tsv.
     run_pack_query_cli(parse_pack_query_cli_options((str(tmp_path), "buffs")))
-    assert (
-        capsys.readouterr().out.strip() == "本包无 增益.tsv (地图未自定义增益)"
-    )
+    assert capsys.readouterr().out.strip() == "本包无 增益.tsv (地图未自定义增益)"
 
     # When: a buff table exists and a keyword filters it.
     obj = tmp_path / "对象ID"
@@ -1286,7 +1292,9 @@ def test_query_buffs_lists_and_filters(tmp_path, pack, capsys) -> None:
 
     buffer = io.StringIO()
     with contextlib.redirect_stdout(buffer):
-        run_pack_query_cli(parse_pack_query_cli_options((str(tmp_path), "buffs", "月蚀")))
+        run_pack_query_cli(
+            parse_pack_query_cli_options((str(tmp_path), "buffs", "月蚀"))
+        )
     text = buffer.getvalue()
     assert "月蚀" in text
     assert "护甲削弱" not in text
@@ -1300,9 +1308,7 @@ def test_query_heroes_missing_table_points_to_search(tmp_path, pack, capsys) -> 
 
 
 def test_query_export_writes_markdown(tmp_path, pack, capsys) -> None:
-    run_pack_query_cli(
-        parse_pack_query_cli_options((str(tmp_path), "export", "冰晶"))
-    )
+    run_pack_query_cli(parse_pack_query_cli_options((str(tmp_path), "export", "冰晶")))
     out = capsys.readouterr().out
     assert "已导出: " in out
     export_path = out.splitlines()[0].split("已导出: ", 1)[1]
@@ -1340,7 +1346,9 @@ def test_campaign_submap_aggregation_covers_new_commands(tmp_path, capsys):
     for command in ("stats", "list", "buffs", "heroes"):
         capsys.readouterr()
         rc = run_pack_query_cli(
-            parse_pack_query_cli_options([str(root), command, "宝物甲" if command == "list" else ""])
+            parse_pack_query_cli_options(
+                [str(root), command, "宝物甲" if command == "list" else ""]
+            )
         )
         out = capsys.readouterr().out
         assert rc in (0, 2), command
@@ -1368,7 +1376,9 @@ def test_query_diff_shows_field_level_changes(tmp_path) -> None:
 
     # When: diffing the packs.
     run_pack_query_cli(
-        parse_pack_query_cli_options([str(tmp_path / "new"), "diff", str(tmp_path / "old")])
+        parse_pack_query_cli_options(
+            [str(tmp_path / "new"), "diff", str(tmp_path / "old")]
+        )
     )
     import contextlib
     import io
@@ -1376,7 +1386,9 @@ def test_query_diff_shows_field_level_changes(tmp_path) -> None:
     buffer = io.StringIO()
     with contextlib.redirect_stdout(buffer):
         run_pack_query_cli(
-            parse_pack_query_cli_options([str(tmp_path / "new"), "diff", str(tmp_path / "old")])
+            parse_pack_query_cli_options(
+                [str(tmp_path / "new"), "diff", str(tmp_path / "old")]
+            )
         )
     text = buffer.getvalue()
 
@@ -1393,17 +1405,60 @@ def test_query_near_annotates_shop_stocks(tmp_path) -> None:
     e = chr(10)
     # Given: a preplaced shop unit with a usei stock.
     (tmp_path / "掉落与获取关系.tsv").write_text(
-        e + t.join(["关系ID", "地图子图", "关系类型", "装备ID", "装备名称", "来源分类", "来源ID", "来源名称", "实例序号", "玩家", "X", "Y", "Z", "掉落组", "组内序号", "概率", "槽位", "合成材料ID", "合成材料名称与数量", "证据文件"]) + e,
+        e
+        + t.join(
+            [
+                "关系ID",
+                "地图子图",
+                "关系类型",
+                "装备ID",
+                "装备名称",
+                "来源分类",
+                "来源ID",
+                "来源名称",
+                "实例序号",
+                "玩家",
+                "X",
+                "Y",
+                "Z",
+                "掉落组",
+                "组内序号",
+                "概率",
+                "槽位",
+                "合成材料ID",
+                "合成材料名称与数量",
+                "证据文件",
+            ]
+        )
+        + e,
         encoding="utf-8",
     )
     (tmp_path / "对象字段.tsv").write_text(
-        e + t.join(["分类", "ID", "名称", "字段键", "字段名", "值", "来源"]) + e
-        + e + t.join(["单位", "nmer", "merchant", "usei", "出售物品", "冰晶(I0AA), 银锭(I008)", "map"]) + e,
+        e
+        + t.join(["分类", "ID", "名称", "字段键", "字段名", "值", "来源"])
+        + e
+        + e
+        + t.join(
+            [
+                "单位",
+                "nmer",
+                "merchant",
+                "usei",
+                "出售物品",
+                "冰晶(I0AA), 银锭(I008)",
+                "map",
+            ]
+        )
+        + e,
         encoding="utf-8",
     )
     (tmp_path / "预放置单位.tsv").write_text(
-        e + t.join(["序号", "类型ID", "名称", "玩家", "X", "Y", "Z", "角度"]) + e
-        + e + t.join(["1", "nmer", "商人", "0", "100", "200", "0", "270"]) + e,
+        e
+        + t.join(["序号", "类型ID", "名称", "玩家", "X", "Y", "Z", "角度"])
+        + e
+        + e
+        + t.join(["1", "nmer", "商人", "0", "100", "200", "0", "270"])
+        + e,
         encoding="utf-8",
     )
 
@@ -1494,11 +1549,32 @@ def test_query_near_includes_script_placed_units(tmp_path) -> None:
     t = chr(9)
     e = chr(10)
     (tmp_path / "掉落与获取关系.tsv").write_text(
-        e + t.join([
-            "关系ID", "地图子图", "关系类型", "装备ID", "装备名称", "来源分类",
-            "来源ID", "来源名称", "实例序号", "玩家", "X", "Y", "Z", "掉落组",
-            "组内序号", "概率", "槽位", "合成材料ID", "合成材料名称与数量", "证据文件",
-        ]) + e,
+        e
+        + t.join(
+            [
+                "关系ID",
+                "地图子图",
+                "关系类型",
+                "装备ID",
+                "装备名称",
+                "来源分类",
+                "来源ID",
+                "来源名称",
+                "实例序号",
+                "玩家",
+                "X",
+                "Y",
+                "Z",
+                "掉落组",
+                "组内序号",
+                "概率",
+                "槽位",
+                "合成材料ID",
+                "合成材料名称与数量",
+                "证据文件",
+            ]
+        )
+        + e,
         encoding="utf-8",
     )
     (tmp_path / "脚本调用参数索引.tsv").write_text(
@@ -1507,8 +1583,12 @@ def test_query_near_includes_script_placed_units(tmp_path) -> None:
     )
     (tmp_path / "对象ID").mkdir()
     (tmp_path / "对象ID" / "单位.tsv").write_text(
-        e + t.join(["分类", "ID", "10进制", "基础ID", "名称", "自定义", "说明"]) + e
-        + e + t.join(["单位", "n01A", "1", "n01A", "脚本商人", "是", ""]) + e,
+        e
+        + t.join(["分类", "ID", "10进制", "基础ID", "名称", "自定义", "说明"])
+        + e
+        + e
+        + t.join(["单位", "n01A", "1", "n01A", "脚本商人", "是", ""])
+        + e,
         encoding="utf-8",
     )
     (tmp_path / "预放置单位.tsv").write_text(
@@ -1526,3 +1606,96 @@ def test_query_near_includes_script_placed_units(tmp_path) -> None:
 
     # Then: the script-placed unit appears.
     assert "脚本商人" in text or "n01A" in text
+
+
+def test_query_diff_synth_recipe_changes(tmp_path) -> None:
+    import contextlib
+    import io
+
+    # Given: two packs where a recipe's materials changed.
+    rel_header = t = chr(9)
+    header = t.join(
+        [
+            "关系ID",
+            "地图子图",
+            "关系类型",
+            "装备ID",
+            "装备名称",
+            "来源分类",
+            "来源ID",
+            "来源名称",
+            "实例序号",
+            "玩家",
+            "X",
+            "Y",
+            "Z",
+            "掉落组",
+            "组内序号",
+            "概率",
+            "槽位",
+            "合成材料ID",
+            "合成材料名称与数量",
+            "证据文件",
+        ]
+    )
+    e = chr(10)
+
+    def make(root: pathlib.Path, mats: str) -> None:
+        root.mkdir(parents=True)
+        (root / "掉落与获取关系.tsv").write_text(
+            header
+            + e
+            + t.join(
+                [
+                    "h1",
+                    "图",
+                    "合成",
+                    "I0A1",
+                    "宝物",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "",
+                    "I0XX",
+                    mats,
+                    "w3x",
+                ]
+            )
+            + e,
+            encoding="utf-8",
+        )
+        obj = root / "对象ID"
+        obj.mkdir(parents=True)
+        (obj / "物品.tsv").write_text(
+            t.join(["分类", "ID", "10进制", "基础ID", "名称", "自定义", "说明"])
+            + e
+            + t.join(["物品", "I0A1", "1", "I0A1", "宝物", "是", ""])
+            + e,
+            encoding="utf-8",
+        )
+
+    make(tmp_path / "new", "水晶×5")
+    make(tmp_path / "old", "水晶×3")
+
+    # When: diffing.
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        run_pack_query_cli(
+            parse_pack_query_cli_options(
+                [str(tmp_path / "new"), "diff", str(tmp_path / "old")]
+            )
+        )
+    text = buffer.getvalue()
+
+    # Then: the recipe change is explicit.
+    assert "== 合成:" in text
+    assert "旧: 水晶×3" in text
+    assert "新: 水晶×5" in text

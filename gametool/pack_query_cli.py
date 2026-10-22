@@ -555,7 +555,22 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
     command = rest[1] if len(rest) > 1 else ""
     if command == "near" and len(rest) in (4, 5):
         rest = rest[:2] + [" ".join(rest[2:])]
-    if command in ("affixes", "registered", "diff", "list", "buffs", "heroes", "stats", "synth", "skills", "units") and len(rest) == 2:
+    if (
+        command
+        in (
+            "affixes",
+            "registered",
+            "diff",
+            "list",
+            "buffs",
+            "heroes",
+            "stats",
+            "synth",
+            "skills",
+            "units",
+        )
+        and len(rest) == 2
+    ):
         # 这些子命令查询词可省 (全量列出)
         rest = rest + [""]
     if len(rest) != 3:
@@ -575,7 +590,18 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         raise PackQueryCliOptionError(
             "未知子命令: " + command + " (可选: " + ",".join(_COMMANDS) + ")"
         )
-    if not query.strip() and command not in ("affixes", "registered", "diff", "list", "buffs", "heroes", "stats", "synth", "skills", "units"):
+    if not query.strip() and command not in (
+        "affixes",
+        "registered",
+        "diff",
+        "list",
+        "buffs",
+        "heroes",
+        "stats",
+        "synth",
+        "skills",
+        "units",
+    ):
         raise PackQueryCliOptionError("查询词不能为空")
     return PackQueryCliOptions(
         pack_dir=pack_dir,
@@ -992,7 +1018,6 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
         if hint:
             lines.append(hint)
     return lines
-
 
 
 _DEATH_COND_BLOCK_RE = re.compile(
@@ -2656,6 +2681,7 @@ def _diff_field_changes(
     if not ids:
         return result
     wanted = set(ids)
+
     def collect(pack: Path) -> dict[str, dict[str, str]]:
         rows = _read_rows(pack, "对象ID/对象字段.tsv")
         if len(rows) <= 1:
@@ -2733,7 +2759,12 @@ def _query_diff(pack: Path, query: str, limit: int, pack_b: str = "") -> list[st
             i for i in new_by_id if i in old_by_id and new_by_id[i] != old_by_id[i]
         ]
         # 字段级变化也算变更 (物品.tsv 行相同但对象字段.tsv 值不同)
-        field_changes = _diff_field_changes(old_pack, pack, table, [i for i in new_by_id if i in old_by_id and i not in changed])
+        field_changes = _diff_field_changes(
+            old_pack,
+            pack,
+            table,
+            [i for i in new_by_id if i in old_by_id and i not in changed],
+        )
         for i, lines in field_changes.items():
             if lines and i not in changed:
                 changed.append(i)
@@ -2751,7 +2782,11 @@ def _query_diff(pack: Path, query: str, limit: int, pack_b: str = "") -> list[st
             out.append(f"  - [{i}] {name}")
         shown = 0
         cap = limit if limit > 0 else 20
-        field_changes.update(_diff_field_changes(old_pack, pack, table, [i for i in changed if i not in field_changes]))
+        field_changes.update(
+            _diff_field_changes(
+                old_pack, pack, table, [i for i in changed if i not in field_changes]
+            )
+        )
         for i in changed:
             if shown >= cap:
                 out.append(f"  …… 其余 {len(changed) - shown} 条变更加大 limit 查看")
@@ -2763,6 +2798,40 @@ def _query_diff(pack: Path, query: str, limit: int, pack_b: str = "") -> list[st
             if i not in field_changes:
                 out.append("      (名称/行内容有变化, 字段明细请翻两包 对象字段.tsv)")
             shown += 1
+
+    # 合成配方对比 (改材料/增删配方是 RPG 更新高频项)
+    def synth_map(p: Path) -> dict[str, str]:
+        result: dict[str, str] = {}
+        for r in _read_rows(p, "掉落与获取关系.tsv"):
+            if len(r) < 19 or r[2] != "合成":
+                continue
+            if _clean(r[18]):
+                result.setdefault(r[3], _clean(r[18]))
+        return result
+
+    old_synths = synth_map(old_pack)
+    new_synths = synth_map(pack)
+    synth_added = [k for k in new_synths if k not in old_synths]
+    synth_removed = [k for k in old_synths if k not in new_synths]
+    synth_changed = [
+        k for k in new_synths if k in old_synths and new_synths[k] != old_synths[k]
+    ]
+    if synth_added or synth_removed or synth_changed:
+        out.append(
+            f"== 合成: 新增 {len(synth_added)} / 删除 {len(synth_removed)} / 变更 {len(synth_changed)} =="
+        )
+        names = load_items(pack)
+        for k in synth_added:
+            nm = names.get(k, (k, ""))[0]
+            out.append(f"  + [{k}] {nm}  <-  {new_synths[k]}")
+        for k in synth_removed:
+            nm = names.get(k, (k, ""))[0]
+            out.append(f"  - [{k}] {nm}  <-  {old_synths[k]}")
+        for k in synth_changed:
+            nm = names.get(k, (k, ""))[0]
+            out.append(f"  ~ [{k}] {nm}")
+            out.append(f"      旧: {old_synths[k]}")
+            out.append(f"      新: {new_synths[k]}")
     if not out:
         return ["两包对象表无差异"]
     return out
@@ -2827,8 +2896,6 @@ def _query_doc(pack: Path, query: str, limit: int) -> list[str]:
     return out
 
 
-
-
 def _query_buffs(pack: Path, query: str, limit: int) -> list[str]:
     """buffs 增益表清单/查询: buff 效果排查专用 (说明列=游戏内效果描述)。
     query 空 = 全量列出; 有词 = 名称/ID/说明子串过滤。"""
@@ -2841,7 +2908,12 @@ def _query_buffs(pack: Path, query: str, limit: int) -> list[str]:
         if len(r) < 7:
             continue
         code, name, custom, note = r[1], _clean(r[4]), r[5].strip(), _clean(r[6])
-        if needle and needle not in code.casefold() and needle not in name.casefold() and needle not in note.casefold():
+        if (
+            needle
+            and needle not in code.casefold()
+            and needle not in name.casefold()
+            and needle not in note.casefold()
+        ):
             continue
         origin = "自定义" if custom == "是" else "继承基础"
         line = f"[{code}] {name} ({origin})"
@@ -2897,7 +2969,12 @@ def _query_units(pack: Path, query: str, limit: int) -> list[str]:
             continue
         code, name, custom = r[1], _clean(r[4]), r[5].strip()
         note = _clean(r[6])
-        if needle and needle not in code.casefold() and needle not in name.casefold() and needle not in note.casefold():
+        if (
+            needle
+            and needle not in code.casefold()
+            and needle not in name.casefold()
+            and needle not in note.casefold()
+        ):
             continue
         origin = "自定义" if custom == "是" else "继承基础"
         line = f"[{code}] {name} ({origin})"
@@ -2923,7 +3000,12 @@ def _query_skills(pack: Path, query: str, limit: int) -> list[str]:
             continue
         code, name, custom = r[1], _clean(r[4]), r[5].strip()
         note = _clean(r[6])
-        if needle and needle not in code.casefold() and needle not in name.casefold() and needle not in note.casefold():
+        if (
+            needle
+            and needle not in code.casefold()
+            and needle not in name.casefold()
+            and needle not in note.casefold()
+        ):
             continue
         origin = "自定义" if custom == "是" else "继承基础"
         line = f"[{code}] {name} ({origin})"
@@ -2941,7 +3023,9 @@ def _query_stats(pack: Path, query: str, limit: int) -> list[str]:
     out: list[str] = []
     info = pack / "地图信息.txt"
     if info.exists():
-        for line in info.read_text(encoding="utf-8", errors="replace").splitlines()[:12]:
+        for line in info.read_text(encoding="utf-8", errors="replace").splitlines()[
+            :12
+        ]:
             if line.strip():
                 out.append(line)
     obj_dir = pack / "对象ID"
@@ -2961,11 +3045,16 @@ def _query_stats(pack: Path, query: str, limit: int) -> list[str]:
         custom_idx = rows[0].index("自定义") if "自定义" in rows[0] else -1
         total = len(rows) - 1
         if custom_idx >= 0:
-            custom = sum(1 for r in rows[1:] if len(r) > custom_idx and r[custom_idx].strip() == "是")
+            custom = sum(
+                1
+                for r in rows[1:]
+                if len(r) > custom_idx and r[custom_idx].strip() == "是"
+            )
             out.append(f"{tsv.stem}: {total} 行 (自定义 {custom})")
         else:
             out.append(f"{tsv.stem}: {total} 行")
     return out
+
 
 def _query_export(pack: Path, query: str, limit: int) -> list[str]:
     """export 单对象全景落盘: doc 报告写临时目录并打印文件路径。
@@ -2974,14 +3063,18 @@ def _query_export(pack: Path, query: str, limit: int) -> list[str]:
     if lines[0].startswith("未找到"):
         return lines
     from .archive_export import tmp_extract_dir
-    safe = "".join(
-        char if char not in '\\/:*?"<>|' else "_" for char in query
-    ).strip() or "object"
+
+    safe = (
+        "".join(char if char not in '\\/:*?"<>|' else "_" for char in query).strip()
+        or "object"
+    )
     out_dir = tmp_extract_dir("pack-query-export")
     out_path = os.path.join(out_dir, safe + ".md")
     with open(out_path, "w", encoding="utf-8") as handle:
         handle.write("\n".join(lines))
     return [f"已导出: {out_path}"] + lines
+
+
 _QUERIES = {
     "item": _query_item,
     "recipe": _query_recipe,
