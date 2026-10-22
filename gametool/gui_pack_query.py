@@ -142,6 +142,17 @@ class _PackQueryWindow(ctk.CTkToplevel):
         )
         self._history.set(_HISTORY_VALUES[0] if _HISTORY else "(历史)")
         self._history.pack(side="right")
+        self._history_clear = ctk.CTkButton(
+            row,
+            text="清历史",
+            width=60,
+            height=26,
+            font=(FONT, 11),
+            fg_color="transparent",
+            border_width=1,
+            command=self._clear_history,
+        )
+        self._history_clear.pack(side="right", padx=(0, 4))
         row.pack(fill="x", padx=14)
         self._keyword = ctk.CTkEntry(
             row, placeholder_text="四码或名称…  Ctrl+1..8 切模式  回车查", width=340
@@ -268,6 +279,11 @@ class _PackQueryWindow(ctk.CTkToplevel):
             label="导出为 .md", command=lambda: self._export_md(self._output)
         )
         self._output.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
+
+    def _clear_history(self) -> None:
+        _HISTORY.clear()
+        _save_memo()
+        self._history.set("(历史)")
 
     def _on_history_pick(self, value: str) -> None:
         for cmd, kw in _HISTORY:
