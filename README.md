@@ -218,6 +218,8 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
   | 包总览（规模+作者魔改深度） | `stats` |
   | 地图更新改了什么（字段级+合成配方） | `diff <旧包>` |
   | 单对象报告落盘 .md | `export <名或码>` |
+  导出三入口行为一致（CLI `export` / GUI export 模式 / GUI 右键导出）：
+  报告落盘临时目录 .md，路径自动复制进剪贴板。
 
   战役容器包（`.w3n`）自动逐关聚合分段；GUI 顶栏「包查询」窗口与对象详情
   「哪来/谁掉/全景」三键提供同一能力的图形入口（含收藏对比）。
