@@ -418,6 +418,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
         if not text or text.startswith("查询中") or "需要四码或名称" in text:
             return
         title = f"{self._mode.get()} {self._keyword.get().strip()}"
+        # 同题收藏覆盖旧藏 (对比场景同一查询只需最新一份, 且地图改动后重查值得更新)
+        _PINNED[:] = [p for p in _PINNED if p[0] != title]
         _PINNED.append((title, text))
         _save_memo()
         self._render_pinned()
