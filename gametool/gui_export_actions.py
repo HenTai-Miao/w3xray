@@ -230,6 +230,41 @@ class ExportActionsMixin:
 
         _ = self._start_gui_worker("export-pack", work, replace=True)
 
+    def on_dump_runtime_objects(self):
+        """live --dump-objects: 从运行中游戏读词缀/注册数据到内存导出包。"""
+        pack_dir = self._last_pack_dir or load_last_pack_dir()
+        if not pack_dir or not os.path.isdir(pack_dir):
+            messagebox.showinfo(
+                "需要资料包",
+                "先「导出资料包」拿到知识包目录，再导出运行时对象。",
+            )
+            return
+        out = tmp_extract_dir("runtime-objects", "运行时对象包", clean=True)
+        self.status.configure(text="正在从运行中游戏读取词缀/注册数据 …")
+
+        def work(ticket: GuiWorkerTicket) -> None:
+            try:
+                from .live_object_dump import dump_live_objects
+
+                dump_live_objects(out)
+                _ = self._post_gui_worker(
+                    ticket,
+                    lambda out_dir=out: messagebox.showinfo(
+                        "导出完成",
+                        f"运行时对象包: {out_dir}（affixes/registered 可查）",
+                    ),
+                )
+            except Exception as exc:  # BROAD_EXCEPT_OK - GUI worker boundary.
+                error_text = format_user_exception(exc, paths=(out,))
+                _ = self._post_gui_worker(
+                    ticket,
+                    lambda message=error_text: messagebox.showerror(
+                        "导出失败", message
+                    ),
+                )
+
+        _ = self._start_gui_worker("dump-runtime", work, replace=True)
+
 
 def _last_pack_memo_path() -> str:
     try:

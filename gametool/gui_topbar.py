@@ -118,6 +118,10 @@ def build_topbar(app) -> None:
         label="打开最近资料包目录", command=lambda: _open_last_pack(app)
     )
     app.data_tools_menu.add_command(
+        label="导出运行时对象包 (词缀/注册)",
+        command=app.on_dump_runtime_objects,
+    )
+    app.data_tools_menu.add_command(
         label="键盘速查", command=lambda: _show_hotkeys(app)
     )
     app.data_tools_menu.add_command(
@@ -482,6 +486,7 @@ def _open_last_pack(app) -> None:
         return
     os.startfile(target)  # noqa: S606 - Windows 资源管理器打开
 
+
 def _show_hotkeys(app) -> None:
     """键盘流速查弹窗 (与 README 速查表同源)。"""
     import tkinter as tk  # noqa: PLC0415
@@ -492,11 +497,15 @@ def _show_hotkeys(app) -> None:
     win.title("键盘速查")
     win.transient(app)
     from gametool.gui_pack_query import bind_geometry_memory  # noqa: PLC0415
+
     bind_geometry_memory(win, "gui-hotkeys", "520x360")
     win.grab_set()
     win.bind("<Escape>", lambda _e: win.destroy())
     rows = (
-        ("Ctrl+1..9", "直切 doc/search/list/buffs/export/synth/skills/units/locate 模式"),
+        (
+            "Ctrl+1..9",
+            "直切 doc/search/list/buffs/export/synth/skills/units/locate 模式",
+        ),
         ("回车", "执行当前模式查询 / 跳下一处搜索命中"),
         ("Ctrl+F", "聚焦内搜框 (报告/结果内搜)"),
         ("Esc", "关闭弹窗"),
@@ -511,6 +520,7 @@ def _show_hotkeys(app) -> None:
         box.insert("end", f"{key:<12} {desc}\n")
     box.configure(state="disabled")
     _bind_textbox_search(win, box)
+
 
 def _bind_textbox_search(win, box) -> None:
     """CTkTextbox 内搜: Ctrl+F 聚焦, 回车逐处跳并高亮 (定位双通道惯例)。"""
@@ -554,5 +564,7 @@ def _bind_textbox_search(win, box) -> None:
     )
     box.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
     entry.bind("<Return>", _find)
-    entry.bind("<Escape>", lambda _e: (box.tag_remove("hit", "1.0", "end"), win.focus_set()))
+    entry.bind(
+        "<Escape>", lambda _e: (box.tag_remove("hit", "1.0", "end"), win.focus_set())
+    )
     win.bind("<Control-f>", lambda _e: entry.focus_set() or None)
