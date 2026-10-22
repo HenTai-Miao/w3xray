@@ -2032,7 +2032,14 @@ def _query_quest(pack: Path, query: str, limit: int) -> list[str]:
                 lines.append(_clean(line.rstrip("\n")))  # 整行, 不开窗
                 if limit and len(lines) >= limit:
                     break
-    return lines or ["未找到任务文本: " + query]
+    if lines:
+        return lines
+    if query:
+        return ["未找到任务文本: " + query]
+    return [
+        "本图未捕获到任务文本 (无 CreateQuestBJ/DisplayTimedTextToForce 调用)。",
+        "  （脚本加密图的任务文本不可读; 或该图确实无任务系统——可用 text <词> 全文本索引兜底）",
+    ]
 
 
 def _query_text(pack: Path, query: str, limit: int) -> list[str]:
