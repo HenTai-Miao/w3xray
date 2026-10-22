@@ -125,6 +125,10 @@ class _PackQueryWindow(ctk.CTkToplevel):
         pin_menu = tk.Menu(self, tearoff=0)
         pin_menu.add_command(label="复制收藏全部", command=self._copy_pinned)
         pin_menu.add_command(label="清空收藏", command=self._clear_pinned)
+        pin_menu.add_command(
+            label="导出收藏为 .md",
+            command=lambda: self._export_md(self._pinned_box, "收藏对比"),
+        )
         self._pinned_box.bind(
             "<Button-3>", lambda e: pin_menu.tk_popup(e.x_root, e.y_root)
         )
@@ -137,6 +141,9 @@ class _PackQueryWindow(ctk.CTkToplevel):
 
         menu = tk.Menu(self, tearoff=0)
         menu.add_command(label="复制全部", command=self._copy_all)
+        menu.add_command(
+            label="导出为 .md", command=lambda: self._export_md(self._output)
+        )
         self._output.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
 
     def _run_clicked(self) -> None:
@@ -191,6 +198,21 @@ class _PackQueryWindow(ctk.CTkToplevel):
     def _clear_pinned(self) -> None:
         _PINNED.clear()
         self._pinned_box.delete("1.0", "end")
+
+    def _export_md(self, source_box, label: str = "查询结果") -> None:
+        text = source_box.get("1.0", "end").strip()
+        if not text:
+            return
+        from .archive_export import tmp_extract_dir  # noqa: PLC0415
+
+        out_dir = tmp_extract_dir("pack-query-export")
+        safe = "".join(ch if ch not in '\\/:*?"<>|' else "_" for ch in label)
+        out_path = os.path.join(out_dir, safe + ".md")
+        with open(out_path, "w", encoding="utf-8") as handle:
+            handle.write(text + "\n")
+        self._output.insert("end", f"\n[已导出: {out_path}]\n")
+        self.clipboard_clear()
+        self.clipboard_append(out_path)
 
     def _copy_pinned(self) -> None:
         self.clipboard_clear()
