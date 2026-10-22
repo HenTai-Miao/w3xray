@@ -236,7 +236,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
   |---|---|---|
   | `Ctrl+1..9` | 直切 doc/search/list/buffs/export/synth/skills/units/locate 模式 | 包查询 |
   | `回车` | 执行当前模式查询 / 跳下一处搜索命中 | 两弹窗 |
-  | `Ctrl+F` | 聚焦内搜框（报告/结果内搜） | 两弹窗 |
+  | `Ctrl+F` | 聚焦内搜框（结果区找完自动续搜收藏框） | 两弹窗 |
   | `Esc` | 关闭弹窗 | 两弹窗 |
   | `双击卡片` | 对象全景查询 | 对象列表 |
   | `右键卡片/结果/收藏` | 三键直达 / 复制 / 导出 .md | 全局 |
