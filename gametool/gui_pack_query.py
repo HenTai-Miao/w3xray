@@ -48,6 +48,9 @@ def _save_memo() -> None:
         (base_path / "pinned.json").write_text(
             json.dumps(_PINNED, ensure_ascii=False), encoding="utf-8"
         )
+        (base_path / "geometry.json").write_text(
+            json.dumps(_WINDOW_GEOMETRY, ensure_ascii=False), encoding="utf-8"
+        )
     except OSError:
         pass  # fail-open: 记忆失败不影响查询
 
@@ -66,6 +69,8 @@ def _load_memo() -> None:
         _HISTORY[:] = [tuple(x) for x in history]
         pinned = json.loads((base_path / "pinned.json").read_text(encoding="utf-8"))
         _PINNED[:] = [tuple(x) for x in pinned]
+        geo = json.loads((base_path / "geometry.json").read_text(encoding="utf-8"))
+        _WINDOW_GEOMETRY.update(geo)
     except OSError, ValueError:
         pass  # fail-open: 缺文件/坏格式当空白
 
