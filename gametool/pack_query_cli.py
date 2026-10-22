@@ -3118,6 +3118,12 @@ def _query_stats(pack: Path, query: str, limit: int) -> list[str]:
         out.append("")
     if not info.exists() and not obj_dir.is_dir():
         # 无地图信息也无对象表 = 战役容器级空壳, 返回未找到让分段逻辑跳过
+        # (战役场景由分段协议消费; 普通目录则由外层 fallback 给指引)
+        if not (pack / "子地图").is_dir():
+            return [
+                "未找到地图信息 (空包或非资料包目录)。",
+                "  （stats 需要 cli <地图> --pack 导出的资料包——先导出再查）",
+            ]
         return ["未找到"]
     if out:
         out.append("")
