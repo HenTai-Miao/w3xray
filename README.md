@@ -215,7 +215,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
   | 科技等级与费用 | `tech` |
   | 聊天指令全链 | `cmd` / `quest` / `text` |
   | 引用与消耗关系 | `refs` |
-  | 词缀与注册数据 | `affixes` / `registered` |
+  | 词缀与注册数据（数据源: live --dump-objects 或 GUI 数据工具菜单「导出运行时对象包」） | `affixes` / `registered` |
   | 包总览（规模+魔改深度+导出时间） | `stats` |
   | 地图更新改了什么（字段级+合成配方） | `diff <旧包>` |
   | 单对象报告落盘 .md | `export <名或码>` |
