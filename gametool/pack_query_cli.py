@@ -2917,7 +2917,10 @@ def _query_list(pack: Path, query: str, limit: int) -> list[str]:
                 continue
             out.append(f"[{r[1]}] {_clean(r[4])}")
     if not out:
-        return ["未找到对象表: " + (want or "全表")]
+        return [
+            "未找到对象表: " + (want or "全表"),
+            "  （可用表名: 物品/单位/技能/英雄/增益/科技/装饰物/可破坏物）",
+        ]
     return out
 
 
