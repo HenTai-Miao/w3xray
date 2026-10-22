@@ -145,6 +145,37 @@ class _PackQueryWindow(ctk.CTkToplevel):
         if _PINNED:
             self._render_pinned()
 
+        find_row = ctk.CTkFrame(self, fg_color="transparent")
+        find_row.pack(fill="x", padx=14)
+        self._find_var = ctk.StringVar()
+        find_entry = ctk.CTkEntry(
+            find_row,
+            textvariable=self._find_var,
+            placeholder_text="结果内搜索 (回车跳下一处)…",
+            width=280,
+            height=26,
+        )
+        find_entry.pack(side="left")
+        self._find_state = {"start": "1.0"}
+
+        def _find_next():
+            needle = self._find_var.get().strip()
+            if not needle:
+                return
+            start = self._find_state["start"]
+            pos = self._output.search(needle, start, stopindex="end", nocase=True)
+            if not pos:
+                self._find_state["start"] = "1.0"
+                pos = self._output.search(needle, "1.0", stopindex="end", nocase=True)
+            if pos:
+                self._output.see(pos)
+                self._output.mark_set("insert", pos)
+                end = f"{pos}+{len(needle)}c"
+                self._output.tag_add("sel", pos, end)
+                self._find_state["start"] = end
+
+        find_entry.bind("<Return>", lambda _e: _find_next())
+        self.bind_all("<Control-f>", lambda _e: find_entry.focus_set() or "break")
         self._output = ctk.CTkTextbox(self, font=("Consolas", 12), wrap="none")
         self._output.pack(fill="both", expand=True, padx=14, pady=10)
         if _LAST_RESULT:
@@ -210,9 +241,11 @@ class _PackQueryWindow(ctk.CTkToplevel):
             del _HISTORY[10:]
         if command in ("doc", "export", "search", "diff") and not keyword:
             self._output.delete("1.0", "end")
+            self._find_state["start"] = "1.0"
             self._output.insert("1.0", f"{command} 需要四码或名称")
             return
         self._output.delete("1.0", "end")
+        self._find_state["start"] = "1.0"
         self._output.insert("1.0", "查询中 …")
         self.configure(cursor="watch")
         self.after(50, lambda: self._run_blocking(command, keyword))
@@ -287,4 +320,5 @@ class _PackQueryWindow(ctk.CTkToplevel):
         _LAST_RESULT = text
         self.configure(cursor="")
         self._output.delete("1.0", "end")
+        self._find_state["start"] = "1.0"
         self._output.insert("1.0", text)
