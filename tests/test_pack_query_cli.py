@@ -1484,3 +1484,45 @@ def test_query_units_lists_and_strips_colors(tmp_path, pack, capsys) -> None:
     # Then: output is color-stripped.
     assert "火元" in text
     assert "|cffff0000" not in text
+
+
+def test_query_near_includes_script_placed_units(tmp_path) -> None:
+    import contextlib
+    import io
+
+    # Given: a unit placed by script CreateUnit (not in the placement table).
+    t = chr(9)
+    e = chr(10)
+    (tmp_path / "掉落与获取关系.tsv").write_text(
+        e + t.join([
+            "关系ID", "地图子图", "关系类型", "装备ID", "装备名称", "来源分类",
+            "来源ID", "来源名称", "实例序号", "玩家", "X", "Y", "Z", "掉落组",
+            "组内序号", "概率", "槽位", "合成材料ID", "合成材料名称与数量", "证据文件",
+        ]) + e,
+        encoding="utf-8",
+    )
+    (tmp_path / "脚本调用参数索引.tsv").write_text(
+        "set u=CreateUnit(p, 'n01A', 500, 600, 270)" + e,
+        encoding="utf-8",
+    )
+    (tmp_path / "对象ID").mkdir()
+    (tmp_path / "对象ID" / "单位.tsv").write_text(
+        e + t.join(["分类", "ID", "10进制", "基础ID", "名称", "自定义", "说明"]) + e
+        + e + t.join(["单位", "n01A", "1", "n01A", "脚本商人", "是", ""]) + e,
+        encoding="utf-8",
+    )
+    (tmp_path / "预放置单位.tsv").write_text(
+        e + t.join(["序号", "类型ID", "名称", "玩家", "X", "Y", "Z", "角度"]) + e,
+        encoding="utf-8",
+    )
+
+    # When: querying near the script placement coordinates.
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        run_pack_query_cli(
+            parse_pack_query_cli_options([str(tmp_path), "near", "500", "600", "400"])
+        )
+    text = buffer.getvalue()
+
+    # Then: the script-placed unit appears.
+    assert "脚本商人" in text or "n01A" in text

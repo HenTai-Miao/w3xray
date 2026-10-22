@@ -2266,6 +2266,19 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
 
     for rel, kind in (("预放置单位.tsv", "单位"), ("预放置装饰物.tsv", "装饰")):
         rows = _read_rows(pack, rel)
+        if kind == "单位" and rows:
+            # 脚本 CreateUnit 放置 (yuekong 全部商店即此法) 合入坐标反查
+            width = max(len(rows[0]), 8)
+            for code, sx, sy, _kind in load_placements(pack):
+                if _kind != "unit":
+                    continue
+                row = [""] * width
+                row[1] = code
+                row[2] = code
+                row[4] = f"{sx:g}"
+                row[5] = f"{sy:g}"
+                rows.append(row)
+        rows = [r for r in rows if r]
         if not rows:
             continue
         cx_i, cy_i = _coord_columns(rows[0])
