@@ -65,6 +65,7 @@ _COMMANDS = (
     "buffs",
     "export",
     "stats",
+    "synth",
     "heroes",
 )
 _COLOR_RE = re.compile(r"\|c[0-9A-Fa-f]{8}|\|r")
@@ -552,7 +553,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
     command = rest[1] if len(rest) > 1 else ""
     if command == "near" and len(rest) in (4, 5):
         rest = rest[:2] + [" ".join(rest[2:])]
-    if command in ("affixes", "registered", "diff", "list", "buffs", "heroes", "stats") and len(rest) == 2:
+    if command in ("affixes", "registered", "diff", "list", "buffs", "heroes", "stats", "synth") and len(rest) == 2:
         # 这些子命令查询词可省 (全量列出)
         rest = rest + [""]
     if len(rest) != 3:
@@ -562,7 +563,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
             + "> <查询词>"
             + ("  (near 用法: near <x> <y> [radius])" if command == "near" else "")
             + (
-                "  (affixes/registered/list 查询词可省 = 全量列出; diff 用法: diff <旧包目录>)"
+                "  (affixes/registered/list/buffs/heroes/stats/synth 查询词可省 = 全量列出; diff 用法: diff <旧包目录>)"
                 if command in ("affixes", "registered", "diff", "list", "buffs")
                 else ""
             )
@@ -572,7 +573,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         raise PackQueryCliOptionError(
             "未知子命令: " + command + " (可选: " + ",".join(_COMMANDS) + ")"
         )
-    if not query.strip() and command not in ("affixes", "registered", "diff", "list", "buffs", "heroes", "stats"):
+    if not query.strip() and command not in ("affixes", "registered", "diff", "list", "buffs", "heroes", "stats", "synth"):
         raise PackQueryCliOptionError("查询词不能为空")
     return PackQueryCliOptions(
         pack_dir=pack_dir,
@@ -797,6 +798,37 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
             "  （本图商店: " + "、".join(known) + "）",
         ]
     return ["未找到商店: " + query]
+
+
+def _query_synth(pack: Path, query: str, limit: int) -> list[str]:
+    """synth 全图合成总览: 所有配料一屏列完 (成品 <- 材料)。"""
+    del query  # synth 无视过滤, 单配方查询走 recipe
+    out: list[str] = []
+    seen: set[tuple[str, str]] = set()
+    items = load_items(pack)
+    for r in _read_rows(pack, "掉落与获取关系.tsv"):
+        if len(r) < 19 or r[2] != "合成":
+            continue
+        prod, pname, mats = r[3], _clean(r[4]), _clean(r[18])
+        if not mats or (prod, mats) in seen:
+            continue
+        seen.add((prod, mats))
+        out.append("[" + prod + "] " + pname + "  <-  " + mats)
+    for prod, pairs in load_formulas(pack):
+        key = (prod, ",".join(c for c, _k in pairs))
+        if key in seen:
+            continue
+        seen.add(key)
+        prod_name = items.get(prod, (prod, ""))[0]
+        mat_names = [items.get(c, (c, ""))[0] for c, _k in pairs]
+        need = " + ".join(
+            n + "x" + str(k) for (_c, k), n in zip(pairs, mat_names, strict=False)
+        )
+        out.append("[" + prod + "] " + prod_name + "  <-  " + need)
+    if not out:
+        return ["本包无合成配方"]
+    out.sort(key=str.casefold)
+    return out
 
 
 def _query_recipe(pack: Path, query: str, limit: int) -> list[str]:
@@ -2883,6 +2915,7 @@ _QUERIES = {
     "buffs": _query_buffs,
     "export": _query_export,
     "stats": _query_stats,
+    "synth": _query_synth,
     "heroes": _query_heroes,
 }
 

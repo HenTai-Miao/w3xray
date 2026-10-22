@@ -1417,3 +1417,10 @@ def test_query_near_annotates_shop_stocks(tmp_path) -> None:
 
     # Then: the shop annotation lists the stock.
     assert "卖: I0AA、I008" in text
+
+
+def test_query_synth_lists_all_recipes(tmp_path, pack, capsys) -> None:
+    run_pack_query_cli(parse_pack_query_cli_options((str(tmp_path), "synth")))
+    text = capsys.readouterr().out
+    assert "<-" in text
+    assert "图腾石" in text
