@@ -1,6 +1,6 @@
 [project]
 name = "gamexray"
-version = "0.3.0"
+version = "0.4.0"
 description = "GameXRay — X-ray game archives. Warcraft III maps/campaigns today (.w3x/.w3m/.w3n, pure Python, no StormLib); pluggable game adapters for more titles. Extraction category switches, live-process read-only inspection, knowledge packs."
 readme = "README.md"
 license = "MIT"
