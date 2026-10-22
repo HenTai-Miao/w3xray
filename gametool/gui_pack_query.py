@@ -414,7 +414,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
 
     def _pin_current(self) -> None:
         text = self._output.get("1.0", "end").strip()
-        if not text or text.startswith(("查询中", "doc 需要")):
+        if not text or text.startswith("查询中") or "需要四码或名称" in text:
             return
         title = f"{self._mode.get()} {self._keyword.get().strip()}"
         _PINNED.append((title, text))
