@@ -1,4 +1,10 @@
-"""Cross-platform static quality gate for the maintained changed-path set."""
+"""Cross-platform static quality gate for the maintained changed-path set.
+
+四步语义：风格（ruff check）→ 格式（ruff format）→ 类型（basedpyright）→
+转义字面量（syntax-warnings，AST 级扫描无效转义/heredoc 降级残留）。
+进程级缓存的失效键必须含内容指纹（见 pack_query_cli._ROWS_CACHE——仅
+(mtime, size) 在 Windows 15ms 粒度下会返回旧缓存，曾致测试偶发失败）。
+"""
 
 from __future__ import annotations
 
