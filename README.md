@@ -188,6 +188,8 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
 
 ## 功能
 - **提取开关**：GUI 顶栏「提取设置」或 CLI `--profile "objects,units,-triggers"`（`-` 前缀=关闭，`all`=全开），按 10 个通用类目自由开关导出内容——不需要的类目完全不产出，大幅提速；全开时与历史全量导出逐文件一致。开关持久化保存，GUI/CLI 共享。
+- **小地图标注图**：GUI 顶栏「小地图」一键渲染当前地图的标注 PNG（底图+商店货架位置，
+  `guide --minimap-marks` 同管线），生成后自动用系统图看器打开——写攻略指路直接配图。
 - **多游戏适配层**：`gametool/games/` 把游戏专属规则（导出文件分组、四码分类等）从核心管线隔离；新增游戏支持 = 新增一个模块并 `@register_adapter`，核心代码零改动。未注册游戏回退魔兽通用适配。
 - **知识包查询**：`pack-query <资料包目录> <子命令> [查询词]`，27 个子命令覆盖玩家问答全空间：
 
@@ -214,6 +216,10 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
 
   战役容器包（`.w3n`）自动逐关聚合分段；GUI 顶栏「包查询」窗口与对象详情
   「哪来/谁掉/全景」三键提供同一能力的图形入口（含收藏对比）。
+  三键按对象类型智能路由：选中技能点「哪来」自动改跑 skills，选中单位点「哪来」
+  自动反查 drop（这单位掉/卖什么）——永远得到有意义的输出。
+- **增益/技能/单位清单**：`buffs` / `skills` / `units` [关键词]——三张效果表专属清单，
+  名称/ID/效果三路过滤，说明自动剥色码（8 张对象表全部有专属清单入口）。
 - **运行时只读透视**：`main.py live` 从运行中的游戏进程只读提取地图与对象信息（`ReadProcessMemory`，绝不写入），加密壳图静态解析失败时经内存层导出完整知识包：`live --dump-objects <目录>` 产出对象表/字段/注册数据/词缀表 TSV，供 `pack-query` 查询。
 - **获取当前地图**：GUI 顶栏按钮或 CLI `main.py current` 根据游戏进程与磁盘证据定位 `.w3x/.w3m/.w3n`，通过置信度门槛后只解析私有临时快照，不改源地图。
 - **解包**：把地图(MPQ 压缩包)内部文件全部解出；文件名发现采用**三层并集**((listfile) + 内置固定名单 + war3map.imp 导入清单)，GUI 也可选择外部 listfile 补充被删掉的文件名；无文件名的匿名 block 会逐块尝试恢复加密 key、按内容猜扩展名导出到 `Unknown/`，若从 MDX/脚本等内容反推出真实资源路径则按原路径补导出并写 `RecoveredNames/manifest.tsv`，极端损坏或无法解码的原始 payload 会保留到 `UnknownRaw/manifest.tsv`；提取完整性报告会标出疑似数据级加密/运行时解密保护，不做运行时内存 dump 或绕过。
