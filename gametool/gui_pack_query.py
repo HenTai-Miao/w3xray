@@ -219,9 +219,9 @@ class _PackQueryWindow(ctk.CTkToplevel):
 
         pin_row = ctk.CTkFrame(self, fg_color="transparent")
         pin_row.pack(fill="x", padx=14, pady=(10, 0))
-        ctk.CTkButton(
+        self._pin_button = ctk.CTkButton(
             pin_row,
-            text="⊕ 收藏本次结果 (对比用)",
+            text=self._pin_button_text(),
             width=150,
             height=24,
             font=(FONT, 11),
@@ -421,11 +421,13 @@ class _PackQueryWindow(ctk.CTkToplevel):
         _PINNED.append((title, text))
         _save_memo()
         self._render_pinned()
+        self._refresh_pin_button()
 
     def _clear_pinned(self) -> None:
         _PINNED.clear()
         _save_memo()
         self._pinned_box.delete("1.0", "end")
+        self._refresh_pin_button()
 
     def _export_md(self, source_box, label: str = "查询结果") -> None:
         text = source_box.get("1.0", "end").strip()
@@ -447,6 +449,13 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self.clipboard_clear()
         self.clipboard_append(self._pinned_box.get("1.0", "end"))
 
+    def _pin_button_text(self) -> str:
+        n = len(_PINNED)
+        return f"⊕ 收藏本次结果 (对比用) [{n} 项]" if n else "⊕ 收藏本次结果 (对比用)"
+
+    def _refresh_pin_button(self) -> None:
+        self._pin_button.configure(text=self._pin_button_text())
+
     def _render_pinned(self) -> None:
         self._pinned_box.delete("1.0", "end")
         self._pinned_box.tag_config("del-mark", foreground="#d33", underline=True)
@@ -467,6 +476,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             del _PINNED[index]
             _save_memo()
             self._render_pinned()
+            self._refresh_pin_button()
 
     def _copy_all(self) -> None:
         self.clipboard_clear()
