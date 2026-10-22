@@ -296,8 +296,20 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 self._run(cmd)
                 return
 
+    _PLACEHOLDERS = {
+        "doc": "四码或名称…  (doc 必填)",
+        "search": "关键词…  (search 必填)",
+        "list": "表名可空=全表…  (回车查)",
+        "buffs": "关键词可空=全量…  (回车查)",
+        "export": "四码或名称…  (export 必填)",
+        "synth": "全图配方…  (回车查)",
+        "skills": "关键词可空=全量…  (回车查)",
+        "units": "关键词可空=全量…  (回车查)",
+    }
+
     def _switch_mode(self, command: str) -> None:
         self._mode.set(command)
+        self._keyword.configure(placeholder_text=self._PLACEHOLDERS.get(command, ""))
         self._keyword.focus_set()
 
     def _run_clicked(self) -> None:
