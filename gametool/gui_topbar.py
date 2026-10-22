@@ -540,6 +540,19 @@ def _bind_textbox_search(win, box) -> None:
         state["pos"] = end
 
     box.tag_config("hit", background="#8a6d00", foreground="white")
+    menu = tk.Menu(win, tearoff=0)
+    menu.add_command(
+        label="复制全部",
+        command=lambda: (
+            win.clipboard_clear(),
+            win.clipboard_append(box.get("1.0", "end")),
+        ),
+    )
+    menu.add_command(
+        label="导出 (.md)",
+        command=lambda: _export_guide(app, box.get("1.0", "end")),
+    )
+    box.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
     entry.bind("<Return>", _find)
     entry.bind("<Escape>", lambda _e: (box.tag_remove("hit", "1.0", "end"), win.focus_set()))
     win.bind("<Control-f>", lambda _e: entry.focus_set() or None)
