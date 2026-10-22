@@ -150,6 +150,10 @@ def build_topbar(app) -> None:
         ),
         **secondary_button_style(),
     )
+    _attach_tooltip(
+        app.pack_query_button,
+        "九模式查询: doc/search/list/buffs/export/synth/skills/units/locate (Ctrl+1..9)",
+    )
     app.pack_query_button.pack(side="left", padx=(0, 4))
     app.minimap_button = ctk.CTkButton(
         source_tools,
@@ -160,6 +164,7 @@ def build_topbar(app) -> None:
         command=lambda: _render_minimap(app),
         **secondary_button_style(),
     )
+    _attach_tooltip(app.minimap_button, "按当前地图生成小地图标注 PNG (商店/掉落点位)")
     app.minimap_button.pack(side="left", padx=(0, 4))
     app.guide_button = ctk.CTkButton(
         source_tools,
@@ -170,6 +175,7 @@ def build_topbar(app) -> None:
         command=lambda: _show_guide(app),
         **secondary_button_style(),
     )
+    _attach_tooltip(app.guide_button, "一键玩家攻略: 指令/任务/配方/商店/掉落/线索速查")
     app.guide_button.pack(side="left", padx=(0, 4))
     # 未加载地图前禁用地图相关按钮 (加载成功后 lifecycle 统一启用)
     for _btn in (app.minimap_button, app.guide_button, app.pack_query_button):
@@ -487,6 +493,38 @@ def _open_last_pack(app) -> None:
     os.startfile(target)  # noqa: S606 - Windows 资源管理器打开
 
 
+
+def _attach_tooltip(widget, text: str) -> None:
+    """CTk 控件 hover 提示: Enter 显示 / Leave 销毁 (轻量 Toplevel)。"""
+    import tkinter as tk  # noqa: PLC0415
+
+    state = {"tip": None}
+
+    def _show(_e=None) -> None:
+        if state["tip"] is not None:
+            return
+        x = widget.winfo_rootx() + 10
+        y = widget.winfo_rooty() + widget.winfo_height() + 4
+        tip = tk.Toplevel(widget)
+        tip.wm_overrideredirect(True)
+        tip.wm_geometry(f"+{x}+{y}")
+        label = tk.Label(
+            tip, text=text, justify="left",
+            bg="#2a2a2a", fg="#ffffff",
+            font=("Microsoft YaHei UI", 9),
+            padx=8, pady=4,
+        )
+        label.pack()
+        state["tip"] = tip
+
+    def _hide(_e=None) -> None:
+        if state["tip"] is not None:
+            state["tip"].destroy()
+            state["tip"] = None
+
+    widget.bind("<Enter>", _show, add="+")
+    widget.bind("<Leave>", _hide, add="+")
+    widget.bind("<ButtonPress>", _hide, add="+")
 def _show_hotkeys(app) -> None:
     """键盘流速查弹窗 (与 README 速查表同源)。"""
     import tkinter as tk  # noqa: PLC0415
