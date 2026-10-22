@@ -140,6 +140,16 @@ def build_topbar(app) -> None:
         **secondary_button_style(),
     )
     app.pack_query_button.pack(side="left", padx=(0, 4))
+    app.minimap_button = ctk.CTkButton(
+        source_tools,
+        text="小地图",
+        width=68,
+        height=26,
+        font=(FONT, 11),
+        command=lambda: _render_minimap(app),
+        **secondary_button_style(),
+    )
+    app.minimap_button.pack(side="left", padx=(0, 4))
     app.data_tools_button = ctk.CTkButton(
         source_tools,
         text="数据工具",
@@ -194,3 +204,53 @@ def _popup_data_tools(app) -> None:
     app.data_tools_menu.tk_popup(
         button.winfo_rootx(), button.winfo_rooty() + button.winfo_height()
     )
+
+
+def _render_minimap(app) -> None:
+    """生成当前地图的小地图标注 PNG (后台线程, 完成后打开文件)。"""
+    md = getattr(app, "map_data", None)
+    if not md or not getattr(md, "path", ""):
+        messagebox.showinfo("小地图", "请先打开地图")
+        return
+    map_path = md.path
+    app.status.configure(text="正在渲染小地图标注 …")
+    app.minimap_button.configure(state="disabled")
+
+    from .gui_worker_registry import GuiWorkerTicket  # noqa: PLC0415
+
+    def work(ticket: GuiWorkerTicket) -> None:
+        import contextlib
+        import io
+
+        from .guide_cli import GuideCliOptions, run_guide_cli  # noqa: PLC0415
+        from .presentation_safety import format_user_exception  # noqa: PLC0415
+
+        out = os.path.splitext(map_path)[0] + "-minimap.png"
+        buffer = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+                rc = run_guide_cli(
+                    GuideCliOptions(
+                        map_path=map_path,
+                        section=None,
+                        refresh=False,
+                        minimap_marks=out,
+                    )
+                )
+        except Exception as exc:  # BROAD_EXCEPT_OK - GUI worker boundary.
+            rc, log = 2, format_user_exception(exc, paths=(out, map_path))
+        else:
+            log = buffer.getvalue()
+
+        def finish():
+            app.minimap_button.configure(state="normal")
+            if rc == 0 and os.path.exists(out):
+                app.status.configure(text="小地图已生成: " + out)
+                os.startfile(out)  # noqa: S606 - Windows 默认图看器打开
+            else:
+                app.status.configure(text="小地图生成失败")
+                messagebox.showerror("小地图", log[-2000:] or "生成失败")
+
+        _ = app._post_gui_worker(ticket, finish)
+
+    _ = app._start_gui_worker("render-minimap", work, replace=True)
