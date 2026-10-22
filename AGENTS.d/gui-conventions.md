@@ -39,7 +39,7 @@
 - Ctrl+F 内搜（回车循环跳转+选区高亮+尾部回卷）：
   `gui_pack_query.py` `_find_next`、`gui_topbar.py` `_find_next`（攻略速查）
 - Esc 关闭：两弹窗 `bind("<Escape>", ... destroy)`
-- 空词防护：`_run` 开头按模式清单拦截（doc/export/search/diff 必填）。
+- 空词防护：`_run` 开头按模式清单拦截（doc/export/search/diff/locate 必填）。
 
 ## 6. 定位双通道
 
