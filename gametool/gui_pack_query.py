@@ -348,6 +348,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         _LAST_KEYWORD = self._keyword.get().strip()
         _LAST_MODE = command
         keyword = self._keyword.get().strip()
+        # 免词清单 = 本窗九模式中可空词执行的 (affixes/registered 仅 CLI 有, 不在此窗)
         if keyword or command in (
             "stats",
             "list",
