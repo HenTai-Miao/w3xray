@@ -3204,7 +3204,7 @@ def _run_query_inner(options: PackQueryCliOptions) -> int:
         lines = _query_diff(pack, options.query, options.limit, other)
         for line in lines:
             print(line)
-        return 0 if not lines[0].startswith(("未找到", "diff 需要", "第二个包")) else 2
+        return 0 if not lines or not lines[0].startswith(("未找到", "diff 需要", "第二个包")) else 2
     subs = _campaign_subpacks(pack)
     if subs:
         printed = False
@@ -3231,7 +3231,7 @@ def _run_query_inner(options: PackQueryCliOptions) -> int:
     lines = _QUERIES[options.command](pack, options.query, options.limit)
     for line in lines:
         print(line)
-    return 0 if not lines[0].startswith("未找到") else 2
+    return 0 if not lines or not lines[0].startswith("未找到") else 2
 
 
 if __name__ == "__main__":
