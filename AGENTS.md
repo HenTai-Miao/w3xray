@@ -68,6 +68,7 @@
 - `AGENTS.d/runtime.md`: schema-6 commands, protected roots, output semantics, required reports, and resume rules.
 - `AGENTS.d/trainer-parity.md`: War3ReforgedTrainer 读路径设计对照矩阵 (21 轮只读静态分析收口: 已落地/待条件/同构确认/有据不做 四类全景)。
 - `AGENTS.d/testing.md`: focused/full/static gates and schema-6 acceptance invariants.
+- `AGENTS.d/gui-conventions.md`: GUI 交互惯例详版——七条纪律逐条代码锚点（持久化/状态视觉/智能路由/否定出路口径/键盘流/定位双通道/记忆层级取舍）+ 新弹窗 7 项 checklist。
 - `AGENTS.d/map-evidence.md`: 玩家提问的证据闸门（闸门 0 玩家状态先行 / 掉落断言前置与交互形态 / 计数满量 / 同名不同码与分类证据 / 内存边界 / 否定断言与测量前提），含事故存档。
 - `AGENTS.d/chat-style.md`: 对玩家的聊天风格与口语解析（对当前图词表做宽松匹配解析口语输入、字面未命中先扩展再否定、回答形态按问题分级、用户质疑=重查信号、局内节奏）。
 
