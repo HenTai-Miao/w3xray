@@ -375,9 +375,24 @@ class _PackQueryWindow(ctk.CTkToplevel):
 
     def _render_pinned(self) -> None:
         self._pinned_box.delete("1.0", "end")
-        for title, text in _PINNED:
+        self._pinned_box.tag_config("del-mark", foreground="#d33", underline=True)
+        for index, (title, text) in enumerate(_PINNED):
+            mark = f"del-{index}"
+            self._pinned_box.tag_delete(mark)
+            self._pinned_box.insert("end", "[删] ", mark)
+            self._pinned_box.tag_bind(
+                mark,
+                "<Button-1>",
+                lambda _e, i=index: self._remove_pinned(i),
+            )
             self._pinned_box.insert("end", f"==== 收藏: {title} ====" + "\n")
             self._pinned_box.insert("end", text + "\n\n")
+
+    def _remove_pinned(self, index: int) -> None:
+        if 0 <= index < len(_PINNED):
+            del _PINNED[index]
+            _save_memo()
+            self._render_pinned()
 
     def _copy_all(self) -> None:
         self.clipboard_clear()
