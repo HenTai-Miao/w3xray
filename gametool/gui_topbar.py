@@ -510,4 +510,36 @@ def _show_hotkeys(app) -> None:
     for key, desc in rows:
         box.insert("end", f"{key:<12} {desc}\n")
     box.configure(state="disabled")
+    _bind_textbox_search(win, box)
 
+def _bind_textbox_search(win, box) -> None:
+    """CTkTextbox 内搜: Ctrl+F 聚焦, 回车逐处跳并高亮 (定位双通道惯例)。"""
+    import tkinter as tk  # noqa: PLC0415
+
+    bar = ctk.CTkFrame(win)
+    bar.pack(fill="x", padx=10, pady=(10, 0))
+    entry = ctk.CTkEntry(bar, placeholder_text="Ctrl+F 搜索… 回车跳下一处")
+    entry.pack(side="left", fill="x", expand=True)
+    state = {"pos": "1.0"}
+
+    def _find(_event=None) -> None:
+        kw = entry.get().strip()
+        box.tag_remove("hit", "1.0", "end")
+        if not kw:
+            state["pos"] = "1.0"
+            return
+        start = box.search(kw, state["pos"], stopindex="end", nocase=True)
+        if not start:
+            state["pos"] = "1.0"
+            start = box.search(kw, "1.0", stopindex="end", nocase=True)
+            if not start:
+                return
+        end = f"{start}+{len(kw)}c"
+        box.tag_add("hit", start, end)
+        box.see(start)
+        state["pos"] = end
+
+    box.tag_config("hit", background="#8a6d00", foreground="white")
+    entry.bind("<Return>", _find)
+    entry.bind("<Escape>", lambda _e: (box.tag_remove("hit", "1.0", "end"), win.focus_set()))
+    win.bind("<Control-f>", lambda _e: entry.focus_set() or None)
