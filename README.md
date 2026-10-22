@@ -215,7 +215,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
   | 聊天指令全链 | `cmd` / `quest` / `text` |
   | 引用与消耗关系 | `refs` |
   | 词缀与注册数据 | `affixes` / `registered` |
-  | 包总览（规模+作者魔改深度） | `stats` |
+  | 包总览（规模+魔改深度+导出时间） | `stats` |
   | 地图更新改了什么（字段级+合成配方） | `diff <旧包>` |
   | 单对象报告落盘 .md | `export <名或码>` |
   导出三入口行为一致（CLI `export` / GUI export 模式 / GUI 右键导出）：
