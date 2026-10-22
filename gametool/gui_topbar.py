@@ -219,6 +219,9 @@ def _popup_data_tools(app) -> None:
     )
 
 
+_GUIDE_CACHE: dict[str, str] = {}  # map_path -> 全量报告文本 (进程级, 秒开重开窗口)
+
+
 def _render_minimap(app) -> None:
     """生成当前地图的小地图标注 PNG (后台线程, 完成后打开文件)。"""
     md = getattr(app, "map_data", None)
@@ -276,6 +279,11 @@ def _show_guide(app) -> None:
         messagebox.showinfo("攻略速查", "请先打开地图")
         return
     map_path = md.path
+    cached = _GUIDE_CACHE.get(map_path)
+    if cached:
+        _open_guide_window(app, cached)
+        app.status.configure(text="攻略速查（缓存）已就绪")
+        return
     app.status.configure(text="正在整理攻略速查 …")
     app.guide_button.configure(state="disabled")
 
@@ -308,6 +316,7 @@ def _show_guide(app) -> None:
         def finish():
             app.guide_button.configure(state="normal")
             if rc == 0 and log.strip():
+                _GUIDE_CACHE[map_path] = log
                 app.status.configure(text="攻略速查已就绪")
                 _open_guide_window(app, log)
             else:
