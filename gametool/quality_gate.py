@@ -48,6 +48,16 @@ def build_quality_commands(
                 *STRICT_PATHS,
             ),
         ),
+        QualityCommand(
+            "syntax-warnings",
+            "tools.check_syntax_warnings",
+            (
+                python_executable,
+                "-m",
+                "tools.check_syntax_warnings",
+                *STRICT_PATHS,
+            ),
+        ),
     )
 
 

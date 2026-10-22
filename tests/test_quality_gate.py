@@ -24,6 +24,7 @@ def test_quality_gate_builds_all_three_cross_platform_commands() -> None:
         "ruff-check",
         "ruff-format",
         "basedpyright",
+        "syntax-warnings",
     ]
     assert all("gametool/batch_manifest_io.py" in command.argv for command in commands)
     assert all("gametool/quality_gate.py" in command.argv for command in commands)
