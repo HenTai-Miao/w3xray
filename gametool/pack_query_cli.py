@@ -648,7 +648,7 @@ def _query_locate(pack: Path, query: str, limit: int) -> list[str]:
         return ["用法: locate <码1;码2;...> (特征码交集, 全部码都出现才算命中)"]
     rows = _read_rows(pack, "脚本对象码出现索引.tsv")
     if not rows:
-        return ["未找到 脚本对象码出现索引.tsv（资料包未导出脚本索引）"]
+        return ["未找到 脚本对象码出现索引.tsv（资料包未导出脚本索引——用 cli <地图> --pack 重导一次即有）"]
     counts: dict[str, int] = {c.lower(): 0 for c in codes}
     for r in rows:
         if len(r) < 4:
@@ -2527,7 +2527,7 @@ def _ref_kind(mech: str, digest: str) -> str:
 def _query_refs(pack: Path, query: str, limit: int) -> list[str]:
     rows = _read_rows(pack, "脚本对象码出现索引.tsv")
     if not rows:
-        return ["未找到 脚本对象码出现索引.tsv（资料包未导出脚本索引）"]
+        return ["未找到 脚本对象码出现索引.tsv（资料包未导出脚本索引——用 cli <地图> --pack 重导一次即有）"]
     q = query.lower()
     give: list[tuple[str, str, str]] = []
     consume: list[tuple[str, str, str]] = []
