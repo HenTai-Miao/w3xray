@@ -2288,7 +2288,10 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
     表头驱动解析预放置表列位；Rect 负号带空格(- 5184.0)统一归一；装饰物聚类报告。"""
     parts = query.split()
     if len(parts) not in (2, 3):
-        return ["用法: near <x> <y> [radius=3000]"]
+        return [
+        "用法: near <x> <y> [radius=3000]",
+        "  （坐标来源: live 探针输出尾部 JSON 的 x/y, 或地图编辑器; 查脚底有什么/附近谁在掉什么）",
+    ]
     try:
         px, py = float(parts[0]), float(parts[1])
         radius = float(parts[2]) if len(parts) == 3 else 3000.0
