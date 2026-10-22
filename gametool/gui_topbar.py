@@ -160,6 +160,9 @@ def build_topbar(app) -> None:
         **secondary_button_style(),
     )
     app.guide_button.pack(side="left", padx=(0, 4))
+    # 未加载地图前禁用地图相关按钮 (加载成功后 lifecycle 统一启用)
+    for _btn in (app.minimap_button, app.guide_button, app.pack_query_button):
+        _btn.configure(state="disabled")
     app.data_tools_button = ctk.CTkButton(
         source_tools,
         text="数据工具",

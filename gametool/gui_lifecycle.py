@@ -195,6 +195,11 @@ class GuiLifecycleMixin:
         self._pil_icon_cache = {}
         self._photo_cache = {}
         self.map_label.configure(text=f"当前地图：{md.name}")
+        # 地图就绪后启用顶栏地图相关按钮 (无图时保持禁用, 视觉即状态)
+        for _btn_name in ("minimap_button", "guide_button", "pack_query_button"):
+            btn = getattr(self, _btn_name, None)
+            if btn is not None:
+                btn.configure(state="normal")
         self._reset_detail_panel()
         self._refresh_enabled_modules(cmds, recipes)
         self._refresh_trigger_eca()
