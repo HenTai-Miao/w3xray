@@ -160,10 +160,6 @@ def build_topbar(app) -> None:
         app.pack_query_button,
         "九模式查询: doc/search/list/buffs/export/synth/skills/units/locate (Ctrl+1..9)",
     )
-    _attach_tooltip(
-        app.pack_query_button,
-        "九模式查询: doc/search/list/buffs/export/synth/skills/units/locate (Ctrl+1..9)",
-    )
     app.pack_query_button.pack(side="left", padx=(0, 4))
     app.minimap_button = ctk.CTkButton(
         source_tools,
@@ -175,7 +171,6 @@ def build_topbar(app) -> None:
         **secondary_button_style(),
     )
     _attach_tooltip(app.minimap_button, "按当前地图生成小地图标注 PNG (商店/掉落点位)")
-    _attach_tooltip(app.minimap_button, "按当前地图生成小地图标注 PNG (商店/掉落点位)")
     app.minimap_button.pack(side="left", padx=(0, 4))
     app.guide_button = ctk.CTkButton(
         source_tools,
@@ -186,7 +181,6 @@ def build_topbar(app) -> None:
         command=lambda: _show_guide(app),
         **secondary_button_style(),
     )
-    _attach_tooltip(app.guide_button, "一键玩家攻略: 指令/任务/配方/商店/掉落/线索速查")
     _attach_tooltip(app.guide_button, "一键玩家攻略: 指令/任务/配方/商店/掉落/线索速查")
     app.guide_button.pack(side="left", padx=(0, 4))
     # 未加载地图前禁用地图相关按钮 (加载成功后 lifecycle 统一启用)
