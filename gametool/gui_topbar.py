@@ -118,6 +118,9 @@ def build_topbar(app) -> None:
         label="打开最近资料包目录", command=lambda: _open_last_pack(app)
     )
     app.data_tools_menu.add_command(
+        label="键盘速查", command=lambda: _show_hotkeys(app)
+    )
+    app.data_tools_menu.add_command(
         label="分析真实存档目录", command=app.on_analyze_real_save_directory
     )
     app.profile_settings_button = ctk.CTkButton(
@@ -479,3 +482,31 @@ def _open_last_pack(app) -> None:
         messagebox.showinfo("资料包目录", "尚未导出资料包——先点「包查询」触发一次导出")
         return
     os.startfile(target)  # noqa: S606 - Windows 资源管理器打开
+
+def _show_hotkeys(app) -> None:
+    """键盘流速查弹窗 (与 README 速查表同源)。"""
+    import tkinter as tk  # noqa: PLC0415
+
+    import customtkinter as ctk  # noqa: PLC0415
+
+    win = ctk.CTkToplevel(app)
+    win.title("键盘速查")
+    win.geometry("520x360")
+    win.transient(app)
+    win.grab_set()
+    win.bind("<Escape>", lambda _e: win.destroy())
+    rows = (
+        ("Ctrl+1..8", "直切 doc/search/list/buffs/export/synth/skills/units 模式"),
+        ("回车", "执行当前模式查询 / 跳下一处搜索命中"),
+        ("Ctrl+F", "聚焦内搜框 (报告/结果内搜)"),
+        ("Esc", "关闭弹窗"),
+        ("双击卡片", "对象全景查询"),
+        ("右键卡片", "哪来/谁掉/全景 三键直达"),
+        ("右键结果区", "复制全部 / 导出 .md"),
+    )
+    box = ctk.CTkTextbox(win, font=("Consolas", 13), wrap="word")
+    box.pack(fill="both", expand=True, padx=10, pady=10)
+    for key, desc in rows:
+        box.insert("end", f"{key:<12} {desc}\n")
+    box.configure(state="disabled")
+
