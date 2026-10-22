@@ -24,6 +24,7 @@ def open_pack_query_dialog(
     pack_dir_provider: Callable[[], str | None],
     ensure_pack: Callable[[], str | None],
     prefill: str = "",
+    prefill_command: str = "",
 ) -> None:
     """打开包查询窗口。
 
@@ -73,7 +74,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self._mode = ctk.CTkSegmentedButton(
             row, values=["doc", "search", "list", "buffs", "export"], width=200
         )
-        self._mode.set(_LAST_MODE)
+        self._mode.set(prefill_command or _LAST_MODE)
         self._mode.pack(side="left", padx=(0, 8))
         ctk.CTkButton(row, text="查询", width=84, command=self._run_clicked).pack(
             side="left"
@@ -84,7 +85,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         if _LAST_RESULT:
             self._output.insert("1.0", _LAST_RESULT)
         if prefill:
-            self.after(120, lambda: self._run("doc"))
+            self.after(120, lambda: self._run(prefill_command or "doc"))
         elif not _LAST_RESULT:
             self.after(120, lambda: self._run("stats"))
             self.after(120, lambda: self._run("doc"))

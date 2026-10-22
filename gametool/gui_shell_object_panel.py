@@ -180,15 +180,21 @@ def build_detail_panel(host: ObjectPanelHost, paned: tk.PanedWindow) -> None:
         wraplength=460,
         justify="left",
     )
-    host.pack_query_detail_button = ctk.CTkButton(
-        detail_head,
-        text="包查询",
-        width=64,
-        height=26,
-        font=(FONT, 11),
-        command=lambda: _pack_query_selected(host),
-    )
-    host.pack_query_detail_button.pack(side="right")
+    for _label, _cmd, _attr in (
+        ("哪来", "where", "pack_where_button"),
+        ("谁掉", "drop", "pack_drop_button"),
+        ("全景", "doc", "pack_query_detail_button"),
+    ):
+        button = ctk.CTkButton(
+            detail_head,
+            text=_label,
+            width=52,
+            height=26,
+            font=(FONT, 11),
+            command=lambda c=_cmd: _pack_query_selected(host, c),
+        )
+        button.pack(side="right", padx=(4, 0))
+        setattr(host, _attr, button)
 
     host.detail_sub.pack(fill="x", padx=12)
     host._build_object_text_controls(rightp)
@@ -207,7 +213,7 @@ def build_detail_panel(host: ObjectPanelHost, paned: tk.PanedWindow) -> None:
     add_deferred_pane(paned, rightp, minsize=300, stretch="never")
 
 
-def _pack_query_selected(host) -> None:
+def _pack_query_selected(host, command: str = "doc") -> None:
     obj = getattr(host, "_selected_detail_object", None)
     from .gui_pack_query import open_pack_query_dialog  # noqa: PLC0415
     from .gui_export_actions import load_last_pack_dir  # noqa: PLC0415
@@ -218,4 +224,5 @@ def _pack_query_selected(host) -> None:
         lambda: getattr(host, "_last_pack_dir", None) or load_last_pack_dir(),
         host.on_export_pack,
         prefill=prefill,
+        prefill_command=command,
     )
