@@ -3055,7 +3055,7 @@ def _query_units(pack: Path, query: str, limit: int) -> list[str]:
         origin = "自定义" if custom == "是" else "继承基础"
         line = f"[{code}] {name} ({origin})"
         if note:
-            head = note.split("|n")[0][:160]
+            head = note.split("|n")[0]  # 全文, 不截断
             line += f" — {head}"
         out.append(line)
     if not out:
@@ -3089,7 +3089,7 @@ def _query_skills(pack: Path, query: str, limit: int) -> list[str]:
         origin = "自定义" if custom == "是" else "继承基础"
         line = f"[{code}] {name} ({origin})"
         if note:
-            head = note.split("|n")[0][:160]
+            head = note.split("|n")[0]  # 全文, 不截断
             line += f" — {head}"
         out.append(line)
     if not out:
