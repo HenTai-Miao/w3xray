@@ -246,7 +246,17 @@ class ExportActionsMixin:
             try:
                 from .live_object_dump import dump_live_objects
 
-                dump_live_objects(out)
+                result = dump_live_objects(out)
+                if result.objects == 0:
+                    note = "；".join(result.notes) or "未捕获到对象"
+                    _ = self._post_gui_worker(
+                        ticket,
+                        lambda n=note: messagebox.showwarning(
+                            "未导出对象",
+                            f"{n}\n\n请确认 Warcraft III 正在运行且已进入对局，再试一次。",
+                        ),
+                    )
+                    return
                 _ = self._post_gui_worker(
                     ticket,
                     lambda out_dir=out: messagebox.showinfo(
