@@ -18,6 +18,14 @@ _LAST_KEYWORD = ""
 _LAST_MODE = "doc"
 _LAST_RESULT = ""
 _HISTORY: list[tuple[str, str]] = []  # (模式, 关键词) 最近 10 条
+_WINDOW_GEOMETRY: dict[str, str] = {}  # 窗口名 -> "WxH" (进程级)
+
+
+def _remember_geometry(win, name: str) -> None:
+    """窗口关闭时把尺寸写进进程级记忆。"""
+    _WINDOW_GEOMETRY[name] = win.geometry()
+
+
 _PINNED: list[tuple[str, str]] = []  # (标题, 内容)
 
 
@@ -44,7 +52,9 @@ class _PackQueryWindow(ctk.CTkToplevel):
     def __init__(self, master, pack_dir: str) -> None:
         super().__init__(master)
         self.title("资料包查询")
-        self.geometry("760x560")
+        remembered = _WINDOW_GEOMETRY.get("pack-query")
+        self.geometry(remembered or "760x560")
+        self.bind("<Destroy>", lambda _e: _remember_geometry(self, "pack-query"))
         self.configure(fg_color=BG)
         self.transient(master)
         self.grab_set()

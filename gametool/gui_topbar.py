@@ -337,7 +337,10 @@ def _open_guide_window(app, text: str, force: bool = False) -> None:
 
     win = ctk.CTkToplevel(app)
     win.title("攻略速查")
-    win.geometry("860x640")
+    from .gui_pack_query import _WINDOW_GEOMETRY, _remember_geometry  # noqa: PLC0415
+
+    win.geometry(_WINDOW_GEOMETRY.get("guide") or "860x640")
+    win.bind("<Destroy>", lambda _e: _remember_geometry(win, "guide"))
     win.transient(app)
     win.bind("<Control-f>", lambda _e: search_entry.focus_set() or "break")
     search_row = ctk.CTkFrame(win, fg_color="transparent")
