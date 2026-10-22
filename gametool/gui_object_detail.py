@@ -38,6 +38,10 @@ class ObjectDetailMixin:
             "<Double-1>",
             lambda _event: self._pack_query_selected_object(),
         )
+        self.object_gallery.cards.bind(
+            "<Button-3>",
+            self._on_card_right_click,
+        )
 
     def _on_col_select(self, category: str) -> None:
         tree = self.col_trees[category]
@@ -50,13 +54,39 @@ class ObjectDetailMixin:
             return
         self._show_detail(results[index])
 
-    def _pack_query_selected_object(self) -> None:
+    def _on_card_right_click(self, event) -> None:
+        import tkinter as tk  # noqa: PLC0415
+
+        tree = self.object_gallery.cards
+        iid = tree.identify_row(event.y)
+        if not iid:
+            return
+        tree.selection_set(iid)
+        tree.focus(iid)
+        index = int(iid)
+        objects = getattr(self.object_gallery, "active_objects", [])
+        if index >= len(objects):
+            return
+        self._show_detail(objects[index])
+        menu = tk.Menu(event.widget.winfo_toplevel(), tearoff=0)
+        for label, cmd in (
+            ("哪来 (where)", "where"),
+            ("谁掉 (drop)", "drop"),
+            ("全景 (doc)", "doc"),
+        ):
+            menu.add_command(
+                label=label,
+                command=lambda c=cmd: self._pack_query_selected_object(c),
+            )
+        menu.tk_popup(event.x_root, event.y_root)
+
+    def _pack_query_selected_object(self, command: str = "doc") -> None:
         obj = getattr(self, "_selected_detail_object", None)
         if obj is None:
             return
         from .gui_shell_object_panel import _pack_query_selected  # noqa: PLC0415
 
-        _pack_query_selected(self, "doc")
+        _pack_query_selected(self, command)
 
     def _show_detail(self, obj) -> None:
         self._selected_detail_object = obj
