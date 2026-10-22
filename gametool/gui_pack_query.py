@@ -278,6 +278,13 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self._output.pack(fill="both", expand=True, padx=14, pady=10)
         if _LAST_RESULT:
             self._output.insert("1.0", _LAST_RESULT)
+        else:
+            self._output.insert(
+                "1.0",
+                "模式速览 (Ctrl+1..9 直切): doc=全景 search=全包搜 list=表清单\n"
+                "buffs=增益 export=导出 synth=配方 skills=技能 units=单位 locate=战役定位\n"
+                "（有上会话结果时此处自动恢复; Ctrl+F 内搜本区）\n",
+            )
         pin_menu = tk.Menu(self, tearoff=0)
         pin_menu.add_command(label="复制收藏全部", command=self._copy_pinned)
         pin_menu.add_command(label="清空收藏", command=self._clear_pinned)
