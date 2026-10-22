@@ -371,6 +371,12 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 run_pack_query_cli(options)
             output = buffer.getvalue() or "(无输出)"
             elapsed = err_buffer.getvalue().strip()
+            # export 模式: CLI 输出含 [已导出: 路径], 自动复制路径进剪贴板
+            if "[已导出: " in output:
+                exported = output.split("[已导出: ", 1)[1].split("]", 1)[0]
+                self.clipboard_clear()
+                self.clipboard_append(exported)
+                output += f"\n(路径已复制到剪贴板)"
             if elapsed:
                 output += f"\n──────────  {elapsed}  ──────────\n"
             self._finish(output)
