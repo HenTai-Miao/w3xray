@@ -358,7 +358,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             output = buffer.getvalue() or "(无输出)"
             elapsed = err_buffer.getvalue().strip()
             if elapsed:
-                output += f"\n{elapsed}"
+                output += f"\n──────────  {elapsed}  ──────────\n"
             self._finish(output)
         except SystemExit as exc:  # run_pack_query_cli 返回码路径不打异常
             output = buffer.getvalue() or f"(退出码 {exc.code})"
