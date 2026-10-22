@@ -419,7 +419,7 @@ def _open_guide_window(app, text: str, force: bool = False) -> None:
         ),
     )
     guide_menu.add_command(
-        label="导出报告 (.txt)",
+        label="导出报告 (.md)",
         command=lambda: _export_guide(app, box.get("1.0", "end")),
     )
     guide_menu.add_command(
@@ -447,7 +447,7 @@ def _export_guide(app, text: str) -> None:
     if md and getattr(md, "name", ""):
         name = "".join(ch if ch not in '\\/:*?"<>|' else "_" for ch in md.name)
     out_dir = tmp_extract_dir("guide-export")
-    out_path = os.path.join(out_dir, name + "-guide.txt")
+    out_path = os.path.join(out_dir, name + "-guide.md")
     with open(out_path, "w", encoding="utf-8") as handle:
         handle.write(text)
     app.status.configure(text="报告已导出: " + out_path)
