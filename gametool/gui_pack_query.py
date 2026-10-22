@@ -68,10 +68,27 @@ class _PackQueryWindow(ctk.CTkToplevel):
 
         row = ctk.CTkFrame(self, fg_color="transparent")
         row.pack(fill="x", padx=14)
-        self._keyword = ctk.CTkEntry(row, placeholder_text="四码或名称…", width=280)
+        self._keyword = ctk.CTkEntry(
+            row, placeholder_text="四码或名称…  Ctrl+1..8 切模式  回车查", width=340
+        )
         self._keyword.insert(0, prefill or _LAST_KEYWORD)
         self._keyword.pack(side="left", padx=(0, 8))
         self._keyword.bind("<Return>", lambda _e: self._run(self._mode.get()))
+        self._mode_commands = [
+            "doc",
+            "search",
+            "list",
+            "buffs",
+            "export",
+            "synth",
+            "skills",
+            "units",
+        ]
+        for _i, _cmd in enumerate(self._mode_commands, start=1):
+            self.bind_all(
+                f"<Control-Key-{_i}>",
+                lambda _e, c=_cmd: self._switch_mode(c),
+            )
         self._mode = ctk.CTkSegmentedButton(
             row,
             values=[
@@ -145,6 +162,10 @@ class _PackQueryWindow(ctk.CTkToplevel):
             label="导出为 .md", command=lambda: self._export_md(self._output)
         )
         self._output.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
+
+    def _switch_mode(self, command: str) -> None:
+        self._mode.set(command)
+        self._keyword.focus_set()
 
     def _run_clicked(self) -> None:
         self._run(self._mode.get())
