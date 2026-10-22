@@ -3068,6 +3068,13 @@ def _query_stats(pack: Path, query: str, limit: int) -> list[str]:
             if line.strip():
                 out.append(line)
     obj_dir = pack / "对象ID"
+    # 导出时间 = 对象表目录 mtime (包重导时刷新), 用户可判断包新旧
+    if obj_dir.is_dir():
+        import datetime  # noqa: PLC0415
+
+        exported = datetime.datetime.fromtimestamp(obj_dir.stat().st_mtime)
+        out.append(f"导出时间: {exported:%Y-%m-%d %H:%M}")
+        out.append("")
     if not info.exists() and not obj_dir.is_dir():
         # 无地图信息也无对象表 = 战役容器级空壳, 返回未找到让分段逻辑跳过
         return ["未找到"]
