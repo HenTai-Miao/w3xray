@@ -438,7 +438,9 @@ def test_query_refs_chain_termination_and_classification(pack):
     assert "零消耗引用" not in live
     unit = "\n".join(_query_refs(pack, "假英雄", 10))
     assert "[u0ZZ] 假英雄  (单位)" in unit and "给予/创建: 1 处" in unit
-    assert _query_refs(pack, "不存在zz", 10) == ["未找到引用: 不存在zz"]
+    result = _query_refs(pack, "不存在zz", 10)
+    assert result[0] == "未找到引用: 不存在zz"
+    assert len(result) == 2  # 附孤立对象信号说明
 
 
 def test_parse_refs_command():

@@ -2473,7 +2473,10 @@ def _query_cmd(pack: Path, query: str, limit: int) -> list[str]:
                 f"  （本图另有 {empty} 处空串聊天事件——任意聊天都会触发,"
                 " 具体参数写在条件/动作里; 见 脚本触发注册索引「聊天事件」行）",
             ]
-        return ["未找到聊天指令: " + query]
+        return [
+            "未找到聊天指令: " + query,
+            "  （本图指令注册见 脚本触发注册索引.tsv 的「聊天事件」行; 空串监听=任意聊天触发）",
+        ]
     lines: list[str] = []
     for var, cmd, exact, act_name, cond_name, count, fn in sorted(
         hits.values(), key=lambda row: -row[5]
@@ -2548,7 +2551,10 @@ def _query_refs(pack: Path, query: str, limit: int) -> list[str]:
             give if bucket == "give" else consume if bucket == "consume" else other
         ).append(entry)
     if not (give or consume or other):
-        return ["未找到引用: " + query]
+        return [
+            "未找到引用: " + query,
+            "  （引用来自 对象字段.tsv 的单位/物品/技能列表与脚本 native 提码——对象若从未被引用, 此处即「孤立对象」信号）",
+        ]
     lines = [f"{label}  ({obj_kind})  共{len(give) + len(consume) + len(other)}处引用"]
     lines.append(f"  给予/创建: {len(give)} 处")
     lines.extend(f"    行{e[0]} {e[1]}  {e[2]}" for e in _bounded(give, limit))
