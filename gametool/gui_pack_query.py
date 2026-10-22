@@ -390,6 +390,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         with open(out_path, "w", encoding="utf-8") as handle:
             handle.write(text + "\n")
         self._output.insert("end", f"\n[已导出: {out_path}]\n")
+        self._find_state["start"] = "1.0"
         self.clipboard_clear()
         self.clipboard_append(out_path)
 
