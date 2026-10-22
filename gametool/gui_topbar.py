@@ -491,8 +491,9 @@ def _show_hotkeys(app) -> None:
 
     win = ctk.CTkToplevel(app)
     win.title("键盘速查")
-    win.geometry("520x360")
     win.transient(app)
+    from gametool.gui_pack_query import bind_geometry_memory  # noqa: PLC0415
+    bind_geometry_memory(win, "gui-hotkeys", "520x360")
     win.grab_set()
     win.bind("<Escape>", lambda _e: win.destroy())
     rows = (

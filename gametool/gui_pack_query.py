@@ -79,6 +79,16 @@ def _remember_geometry(win, name: str) -> None:
     """窗口关闭时把尺寸写进进程级记忆。"""
     _WINDOW_GEOMETRY[name] = win.geometry()
 
+def apply_saved_geometry(win, name: str, fallback: str) -> None:
+    """按记忆尺寸/位置还原窗口, 无记忆用 fallback (跨弹窗复用)。"""
+    win.geometry(_WINDOW_GEOMETRY.get(name, fallback))
+
+
+def bind_geometry_memory(win, name: str, fallback: str) -> None:
+    """还原 + 关闭落盘一体化: 弹窗记忆惯例的最小接入点。"""
+    apply_saved_geometry(win, name, fallback)
+    win.bind("<Destroy>", lambda _e: (_remember_geometry(win, name), _save_geometry()))
+
 
 _PINNED: list[tuple[str, str]] = []  # (标题, 内容)
 
