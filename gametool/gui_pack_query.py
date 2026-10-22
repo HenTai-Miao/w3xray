@@ -92,7 +92,7 @@ def bind_geometry_memory(win, name: str, fallback: str) -> None:
         if event.widget is not win:
             return
         _remember_geometry(win, name)
-        _save_geometry()
+        _save_memo()
 
     apply_saved_geometry(win, name, fallback)
     win.bind("<Destroy>", _on_destroy)

@@ -2,6 +2,35 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
+from gametool import gui_pack_query
+
+
+def test_bind_geometry_memory_ignores_child_destroy(monkeypatch) -> None:
+    # <Destroy> 因子控件冒泡触发时不得把子控件 geometry 记成窗口尺寸。
+    calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        gui_pack_query, "_remember_geometry",
+        lambda win, name: calls.append((name, win.geometry()))
+    )
+    saved: list[dict[str, str]] = []
+    monkeypatch.setattr(gui_pack_query, "_save_memo", lambda: saved.append(dict(gui_pack_query._WINDOW_GEOMETRY)))
+    handlers: dict[str, object] = {}
+    win = SimpleNamespace(
+        geometry=lambda _a=None: "520x360",
+        bind=lambda seq, fn: handlers.__setitem__(seq, fn),
+    )
+    child = SimpleNamespace()
+    gui_pack_query.bind_geometry_memory(win, "gui-test", "520x360")
+    handler = handlers["<Destroy>"]
+    handler(SimpleNamespace(widget=child))
+    assert calls == []  # 子控件销毁不记
+    handler(SimpleNamespace(widget=win))  # 顶层自身销毁才记
+    assert calls == [("gui-test", "520x360")]
+    assert len(saved) == 1
+
+
 import os
 
 import gametool.gui_export_actions as actions
