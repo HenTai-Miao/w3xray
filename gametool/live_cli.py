@@ -189,7 +189,7 @@ def live_pack_cache_dir(map_path: str) -> Path:
     stat = os.stat(map_path)
     # v2: 满量纪律后的导出语义 (无摘要截断/全文索引)。代码修复救不了旧缓存,
     # 版本入键让旧包立刻退役, 下次 live 运行自动用新代码重导。
-    key_material = f"{LIVE_PACK_CACHE_VERSION}|{os.path.abspath(map_path)}|{stat.st_size}|{int(stat.st_mtime)}"
+    key_material = f"{LIVE_PACK_CACHE_VERSION}|{os.path.abspath(map_path)}|{stat.st_size}|{stat.st_mtime_ns}"
     key = hashlib.sha1(key_material.encode("utf-8")).hexdigest()[:16]
     return gamexray_cache_root() / "live-pack" / key
 
