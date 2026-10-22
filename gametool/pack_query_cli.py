@@ -1027,6 +1027,7 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
         hint = _code_home_hint(pack, query)
         if hint:
             lines.append(hint)
+        lines.append("  （若有预放置坐标/脚本位置，可用 near <x> <y> 按坐标反查周边掉落与单位）")
     return lines
 
 
@@ -1987,10 +1988,12 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
             ]
             if hint:
                 miss.append(hint)
+            miss.append("  （若有预放置坐标/脚本位置，可用 near <x> <y> 按坐标反查周边掉落与单位）")
             return miss
         miss = ["未找到获取途径: " + query]
         if hint:
             miss.append(hint)
+        miss.append("  （若有预放置坐标/脚本位置，可用 near <x> <y> 按坐标反查周边掉落与单位）")
         return miss
     if not any("掉落" in k for k in kinds):
         scan_code = (
