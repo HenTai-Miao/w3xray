@@ -3226,6 +3226,7 @@ def _run_query_inner(options: PackQueryCliOptions) -> int:
             printed = True
         if not printed:
             print("子地图均无结果: " + options.query)
+            print("  （容器级与全部子地图均未命中——商店/科技类数据虽可能在容器级, 本次已含容器级查询; 可换单位/物品名或四码再查）")
             return 2
         return 0
     lines = _QUERIES[options.command](pack, options.query, options.limit)
