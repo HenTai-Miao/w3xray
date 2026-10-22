@@ -37,7 +37,7 @@ GUIDE_CACHE_VERSION = "guide-v9"  # v9: 英雄段补"预放置为0但对象表�
 
 
 def report_cache_path(map_path: str) -> Path | None:
-    """按地图文件身份（路径+大小+mtime）派生缓存文件路径。"""
+    """按地图文件身份（路径+大小+mtime纳秒）派生缓存文件路径。"""
     if os.environ.get("GAMEXRAY_GUIDE_CACHE", "1") != "1":
         return None
     try:
