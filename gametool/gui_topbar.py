@@ -113,6 +113,10 @@ def build_topbar(app) -> None:
     app.data_tools_menu.add_command(
         label="分析真实存档文件", command=app.on_analyze_real_save_file
     )
+    app.data_tools_menu.add_separator()
+    app.data_tools_menu.add_command(
+        label="打开最近资料包目录", command=lambda: _open_last_pack(app)
+    )
     app.data_tools_menu.add_command(
         label="分析真实存档目录", command=app.on_analyze_real_save_directory
     )
@@ -445,3 +449,14 @@ def _export_guide(app, text: str) -> None:
     app.status.configure(text="报告已导出: " + out_path)
     app.clipboard_clear()
     app.clipboard_append(out_path)
+
+
+def _open_last_pack(app) -> None:
+    """打开最近导出的资料包目录 (会话内或磁盘记忆)。"""
+    from .gui_export_actions import load_last_pack_dir  # noqa: PLC0415
+
+    target = getattr(app, "_last_pack_dir", None) or load_last_pack_dir()
+    if not target or not os.path.isdir(target):
+        messagebox.showinfo("资料包目录", "尚未导出资料包——先点「包查询」触发一次导出")
+        return
+    os.startfile(target)  # noqa: S606 - Windows 资源管理器打开
