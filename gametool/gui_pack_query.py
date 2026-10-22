@@ -114,6 +114,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self.configure(fg_color=BG)
         self.transient(master)
         self.grab_set()
+        self.bind("<Escape>", lambda _e: self.destroy())
         self._pack_dir = pack_dir
 
         header = ctk.CTkFrame(self, fg_color=CARD, corner_radius=12)

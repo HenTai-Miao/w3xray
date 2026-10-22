@@ -349,6 +349,8 @@ def _open_guide_window(app, text: str, force: bool = False) -> None:
     win.geometry(_WINDOW_GEOMETRY.get("guide") or "860x640")
     win.bind("<Destroy>", lambda _e: _remember_geometry(win, "guide"))
     win.transient(app)
+    win.grab_set()
+    win.bind("<Escape>", lambda _e: win.destroy())
     win.bind("<Control-f>", lambda _e: search_entry.focus_set() or "break")
     search_row = ctk.CTkFrame(win, fg_color="transparent")
     search_row.pack(fill="x", padx=8, pady=(8, 0))
