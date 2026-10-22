@@ -71,7 +71,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self._keyword = ctk.CTkEntry(row, placeholder_text="四码或名称…", width=280)
         self._keyword.insert(0, prefill or _LAST_KEYWORD)
         self._keyword.pack(side="left", padx=(0, 8))
-        self._keyword.bind("<Return>", lambda _e: self._run("doc"))
+        self._keyword.bind("<Return>", lambda _e: self._run(self._mode.get()))
         self._mode = ctk.CTkSegmentedButton(
             row, values=["doc", "search", "list", "buffs", "export", "synth", "skills"], width=200
         )
@@ -129,9 +129,9 @@ class _PackQueryWindow(ctk.CTkToplevel):
         _LAST_KEYWORD = self._keyword.get().strip()
         _LAST_MODE = command
         keyword = self._keyword.get().strip()
-        if command == "doc" and not keyword:
+        if command in ("doc", "export", "search", "diff") and not keyword:
             self._output.delete("1.0", "end")
-            self._output.insert("1.0", "doc 需要四码或名称")
+            self._output.insert("1.0", f"{command} 需要四码或名称")
             return
         self._output.delete("1.0", "end")
         self._output.insert("1.0", "查询中 …")
