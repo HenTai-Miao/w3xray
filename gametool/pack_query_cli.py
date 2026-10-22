@@ -2415,6 +2415,11 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
             name = load_units(pack).get(code, code)
             drop = f"  掉: {drop_map[code]}" if code in drop_map else ""
             lines.append(f"  脚本单位: {name} [{code}] @({x:g},{y:g}) 距{d:.0f}{drop}")
+    if not lines:
+        return [
+            f"坐标 ({px:g},{py:g}) 半径 {radius:g} 内无预放置/脚本内容。",
+            "  （多半在可玩区域外——核对坐标; 或加大半径: near <x> <y> 20000）",
+        ]
     return lines
 
 
