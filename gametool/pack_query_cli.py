@@ -2567,6 +2567,59 @@ def _query_search(pack: Path, query: str, limit: int) -> list[str]:
     return out
 
 
+def _diff_field_changes(
+    old_pack: Path, new_pack: Path, table: str, ids: list[str]
+) -> dict[str, list[str]]:
+    """对变更对象算字段级差异 (基于两包 对象字段.tsv 的 字段键/值 对比。"""
+    result: dict[str, list[str]] = {}
+    if not ids:
+        return result
+    wanted = set(ids)
+    def collect(pack: Path) -> dict[str, dict[str, str]]:
+        rows = _read_rows(pack, "对象ID/对象字段.tsv")
+        if len(rows) <= 1:
+            return {}
+        header = rows[0]
+        try:
+            cat_i = header.index("分类")
+            id_i = header.index("ID")
+            key_i = header.index("字段键")
+            val_i = header.index("值")
+        except ValueError:
+            return {}
+        fields: dict[str, dict[str, str]] = {}
+        for r in rows[1:]:
+            if len(r) <= max(val_i, key_i, id_i, cat_i):
+                continue
+            if r[cat_i] != table or r[id_i] not in wanted:
+                continue
+            fields.setdefault(r[id_i], {})[r[key_i]] = r[val_i]
+        return fields
+
+    old_fields = collect(old_pack)
+    new_fields = collect(new_pack)
+    for obj_id in ids:
+        o = old_fields.get(obj_id, {})
+        n = new_fields.get(obj_id, {})
+        if not o and not n:
+            continue
+        lines: list[str] = []
+        for key in sorted(set(o) | set(n)):
+            ov = o.get(key)
+            nv = n.get(key)
+            if ov == nv:
+                continue
+            if ov is None:
+                lines.append(f"{key}: (无) -> {nv}")
+            elif nv is None:
+                lines.append(f"{key}: {ov} -> (删)")
+            else:
+                lines.append(f"{key}: {ov} -> {nv}")
+        if lines:
+            result[obj_id] = lines
+    return result
+
+
 def _query_diff(pack: Path, query: str, limit: int, pack_b: str = "") -> list[str]:
     """diff 双包对比: 地图更新后新包 vs 旧包, 列出对象表新增/删除的物品与单位。
     比较维度: 对象ID/物品.tsv 与 对象ID/单位.tsv 的 ID 集合 (行内容以 ID 为主键)。
@@ -2598,6 +2651,12 @@ def _query_diff(pack: Path, query: str, limit: int, pack_b: str = "") -> list[st
         changed = [
             i for i in new_by_id if i in old_by_id and new_by_id[i] != old_by_id[i]
         ]
+        # 字段级变化也算变更 (物品.tsv 行相同但对象字段.tsv 值不同)
+        field_changes = _diff_field_changes(old_pack, pack, table, [i for i in new_by_id if i in old_by_id and i not in changed])
+        for i, lines in field_changes.items():
+            if lines and i not in changed:
+                changed.append(i)
+        changed.sort()
         if not added and not removed and not changed:
             continue
         out.append(
@@ -2611,12 +2670,17 @@ def _query_diff(pack: Path, query: str, limit: int, pack_b: str = "") -> list[st
             out.append(f"  - [{i}] {name}")
         shown = 0
         cap = limit if limit > 0 else 20
+        field_changes.update(_diff_field_changes(old_pack, pack, table, [i for i in changed if i not in field_changes]))
         for i in changed:
             if shown >= cap:
                 out.append(f"  …… 其余 {len(changed) - shown} 条变更加大 limit 查看")
                 break
             name = _clean(new_by_id[i][4]) if len(new_by_id[i]) > 4 else i
-            out.append(f"  ~ [{i}] {name} (字段有变化, 详见两包 对象字段.tsv)")
+            out.append(f"  ~ [{i}] {name}")
+            for line in field_changes.get(i, ()):
+                out.append("      " + line)
+            if i not in field_changes:
+                out.append("      (名称/行内容有变化, 字段明细请翻两包 对象字段.tsv)")
             shown += 1
     if not out:
         return ["两包对象表无差异"]

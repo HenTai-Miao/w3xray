@@ -1345,3 +1345,41 @@ def test_campaign_submap_aggregation_covers_new_commands(tmp_path, capsys):
         out = capsys.readouterr().out
         assert rc in (0, 2), command
         assert "子地图" in out or "容器级" in out, command
+
+
+def test_query_diff_shows_field_level_changes(tmp_path) -> None:
+    # Given: two packs where the item row is identical but a field value changed.
+    def make(root, price):
+        obj = root / "对象ID"
+        obj.mkdir(parents=True)
+        (obj / "物品.tsv").write_text(
+            "分类\tID\t10进制\t基础ID\t名称\t自定义\t说明\n"
+            "物品\tI0A1\t1\tI0A1\t宝物甲\t是\t\n",
+            encoding="utf-8",
+        )
+        (obj / "对象字段.tsv").write_text(
+            "分类\tID\t名称\t字段键\t字段名\t值\t来源\n"
+            f"物品\tI0A1\t宝物甲\tigol\t金币\t{price}\tmap\n",
+            encoding="utf-8",
+        )
+
+    make(tmp_path / "new", 5000)
+    make(tmp_path / "old", 3000)
+
+    # When: diffing the packs.
+    run_pack_query_cli(
+        parse_pack_query_cli_options([str(tmp_path / "new"), "diff", str(tmp_path / "old")])
+    )
+    import contextlib
+    import io
+
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer):
+        run_pack_query_cli(
+            parse_pack_query_cli_options([str(tmp_path / "new"), "diff", str(tmp_path / "old")])
+        )
+    text = buffer.getvalue()
+
+    # Then: the field-level change is explicit.
+    assert "变更 1" in text
+    assert "igol: 3000 -> 5000" in text
