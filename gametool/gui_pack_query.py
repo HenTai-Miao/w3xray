@@ -73,7 +73,18 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self._keyword.pack(side="left", padx=(0, 8))
         self._keyword.bind("<Return>", lambda _e: self._run(self._mode.get()))
         self._mode = ctk.CTkSegmentedButton(
-            row, values=["doc", "search", "list", "buffs", "export", "synth", "skills", "units"], width=200
+            row,
+            values=[
+                "doc",
+                "search",
+                "list",
+                "buffs",
+                "export",
+                "synth",
+                "skills",
+                "units",
+            ],
+            width=200,
         )
         self._mode.set(prefill_command or _LAST_MODE)
         self._mode.pack(side="left", padx=(0, 8))
@@ -111,6 +122,13 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self._output.pack(fill="both", expand=True, padx=14, pady=10)
         if _LAST_RESULT:
             self._output.insert("1.0", _LAST_RESULT)
+        pin_menu = tk.Menu(self, tearoff=0)
+        pin_menu.add_command(label="复制收藏全部", command=self._copy_pinned)
+        pin_menu.add_command(label="清空收藏", command=self._clear_pinned)
+        self._pinned_box.bind(
+            "<Button-3>", lambda e: pin_menu.tk_popup(e.x_root, e.y_root)
+        )
+
         if prefill:
             self.after(120, lambda: self._run(prefill_command or "doc"))
         elif not _LAST_RESULT:
@@ -173,6 +191,10 @@ class _PackQueryWindow(ctk.CTkToplevel):
     def _clear_pinned(self) -> None:
         _PINNED.clear()
         self._pinned_box.delete("1.0", "end")
+
+    def _copy_pinned(self) -> None:
+        self.clipboard_clear()
+        self.clipboard_append(self._pinned_box.get("1.0", "end"))
 
     def _render_pinned(self) -> None:
         self._pinned_box.delete("1.0", "end")
