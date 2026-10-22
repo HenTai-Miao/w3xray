@@ -322,12 +322,25 @@ def _show_guide(app) -> None:
 def _open_guide_window(app, text: str) -> None:
     import tkinter as tk  # noqa: PLC0415
 
+    from .guide_report import GUIDE_SECTION_TITLES  # noqa: PLC0415
+
     import customtkinter as ctk  # noqa: PLC0415
 
     win = ctk.CTkToplevel(app)
     win.title("攻略速查")
     win.geometry("860x640")
     win.transient(app)
+    bar = ctk.CTkFrame(win, fg_color="transparent")
+    bar.pack(fill="x", padx=8, pady=(8, 0))
+    for key, title in GUIDE_SECTION_TITLES.items():
+        ctk.CTkButton(
+            bar,
+            text=title,
+            width=72,
+            height=24,
+            font=(FONT, 11),
+            command=lambda t=title, b=box: _jump_to_section(b, t),
+        ).pack(side="left", padx=(0, 4))
     box = ctk.CTkTextbox(win, font=("Consolas", 12), wrap="none")
     box.pack(fill="both", expand=True, padx=8, pady=8)
     box.insert("1.0", text)
@@ -340,3 +353,12 @@ def _open_guide_window(app, text: str) -> None:
         ),
     )
     box.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
+
+
+def _jump_to_section(box, title: str) -> None:
+    """滚动到【标题】段首; 无该段时状态不变 (报告按证据省略段落)。"""
+    needle = f"【{title}】"
+    pos = box.search(needle, "1.0", stopindex="end")
+    if pos:
+        box.see(pos)
+        box.mark_set("insert", pos)
