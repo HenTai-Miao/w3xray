@@ -88,7 +88,7 @@ def require_live_result_evidence(
                 parent_identity,
                 output,
             ),
-        )
+        ) from evidence_error
     except Exception as exc:  # BROAD_EXCEPT_OK - result evidence boundary
         context_error = PublicationCommitContextError(
             "publication result revalidation raised an ordinary exception; "
@@ -109,7 +109,7 @@ def require_live_result_evidence(
             ),
         )
         finalized.replace_failures(merge_failures(finalized.failures, (exc,)))
-        raise finalized
+        raise finalized from exc
     return result
 
 

@@ -145,7 +145,7 @@ def publish_absent(
             publication_error.replace_failures(
                 merge_failures(publication_error.failures, (cause,))
             )
-        raise publication_error
+        raise publication_error from cause
     return DescriptionCachePublicationProof(
         DescriptionCachePublicationResult(stage_verified)
     )

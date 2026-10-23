@@ -77,7 +77,7 @@ def raise_normalized_stage_creation_failure(
                 output,
             ),
         )
-        raise finalized
+        raise finalized from parent_error
     current_proof = read_named_leaf(parent_descriptor, stage.name)
     if current_proof.identity is None:
         stage_evidence = capture_transient_record(
@@ -155,7 +155,7 @@ def raise_normalized_stage_creation_failure(
                 output,
             ),
         )
-        raise finalized
+        raise finalized from retention_error
     context_error = PublicationCommitContextError(
         "stage creation failed after evidence normalization; NEEDS_CONTEXT",
         (retained,),

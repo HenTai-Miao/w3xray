@@ -131,7 +131,7 @@ def normalize_recovery_failure(
                 earlier_retained=records,
                 earlier_transient=transient,
                 earlier_failures=failures,
-            )
+            ) from retention_error
         retained_proof = reprove_retained(
             parent_descriptor,
             parent,
@@ -165,7 +165,7 @@ def normalize_recovery_failure(
             parent_identity,
             context_error,
         )
-        raise finalized
+        raise finalized from sync_error
     try:
         live = require_live_retained_evidence(
             parent_descriptor,
@@ -181,7 +181,7 @@ def normalize_recovery_failure(
             evidence_error,
             earlier_transient=transient,
             earlier_failures=failures,
-        )
+        ) from evidence_error
     if transient:
         context_error = PublicationCommitContextError(
             "partial rollback needs exact operator context; NEEDS_CONTEXT",

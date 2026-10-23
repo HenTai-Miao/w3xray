@@ -103,7 +103,7 @@ class ParentBoundValidator:
                 context_error,
                 earlier_retained=(retained,),
             )
-            raise installed_context_error(retained, finalized)
+            raise installed_context_error(retained, finalized) from context_error
         return retained
 
 

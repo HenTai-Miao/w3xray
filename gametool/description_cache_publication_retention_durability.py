@@ -101,7 +101,7 @@ def retain_durably(
                 parent_identity,
                 context_error,
             )
-            raise finalized
+            raise finalized from sync_error
         raise finalize_error_evidence(
             parent_descriptor,
             parent,
@@ -113,7 +113,7 @@ def retain_durably(
                 parent_identity,
                 source,
             ),
-        )
+        ) from retention_cause
     try:
         sync_parent(parent_descriptor)
     except Exception as sync_error:  # BROAD_EXCEPT_OK - durability sync
@@ -135,7 +135,7 @@ def retain_durably(
             parent_identity,
             context_error,
         )
-        raise installed_context_error(retained, finalized)
+        raise installed_context_error(retained, finalized) from sync_error
     source_evidence = capture_named_transient(
         parent_descriptor,
         parent,
@@ -182,7 +182,7 @@ def retain_durably(
             parent_identity,
             evidence_error,
         )
-        raise installed_context_error(retained, finalized)
+        raise installed_context_error(retained, finalized) from evidence_cause
     return live[0]
 
 
@@ -216,7 +216,9 @@ def _synchronize_installed_error(
                 source,
             ),
         )
-        raise installed_context_error(installed_error.installed, finalized)
+        raise installed_context_error(
+            installed_error.installed, finalized
+        ) from sync_error
     finalized = finalize_error_evidence(
         parent_descriptor,
         parent,

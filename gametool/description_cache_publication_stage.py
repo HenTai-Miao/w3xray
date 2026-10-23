@@ -129,7 +129,7 @@ def create_stage_and_capture(
                     output,
                 ),
             )
-            raise finalized
+            raise finalized from exc
         created = True
         directory_expected = directory_identity(parent_descriptor, stage.name)
         stage_descriptor = os.open(
@@ -188,7 +188,7 @@ def create_stage_and_capture(
             finalized.replace_failures(
                 merge_failures(finalized.failures, (ordinary_error,))
             )
-            raise finalized
+            raise finalized from exc
         if parent_identity is None:
             match exc:
                 case DescriptionCachePublicationError():
@@ -224,7 +224,7 @@ def create_stage_and_capture(
                     output,
                 ),
             )
-            raise finalized
+            raise finalized from creation_error
         raise_normalized_stage_creation_failure(
             parent_descriptor,
             stage,
