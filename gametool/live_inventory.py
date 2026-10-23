@@ -1302,10 +1302,9 @@ def read_live(
             hero_chain = importlib.import_module("gametool.hero_chain")
             names = load_names(pack_dir)
             unit_names = load_names(pack_dir, "单位")
-            res = hero_chain.read_inventory(
+            return hero_chain.read_inventory(
                 regions, names, unit_names=unit_names, verbose=verbose
             )
-            return res
         except Exception as ex:
             report["notes"].append(f"结构链异常: {ex}")
             return []

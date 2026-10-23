@@ -65,7 +65,7 @@ def build_topbar(app) -> None:
         font=(FONT, 13, "bold"),
         width=116,
         height=36,
-        command=lambda: app.on_open_current_map(),
+        command=app.on_open_current_map,
         **secondary_button_style(),
     )
     _attach_tooltip(app.current_map_button, "探测运行中的游戏正在玩哪张图 (只读)")

@@ -153,5 +153,4 @@ def require_component_result(value: _T | None, source: str) -> _T:
 
 
 def _clean_text(value: str) -> str:
-    cleaned = "".join(char if ord(char) >= 0x20 else " " for char in value)
-    return cleaned
+    return "".join(char if ord(char) >= 0x20 else " " for char in value)

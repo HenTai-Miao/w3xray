@@ -153,7 +153,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
                 self._output.clipboard_append(self._output.get("1.0", "end").strip()),
             ),
         )
-        menu.add_command(label="导出为 .md", command=lambda: self._export_md())
+        menu.add_command(label="导出为 .md", command=self._export_md)
         menu.add_separator()
         menu.add_command(
             label="用选中/剪贴板码查包查询",

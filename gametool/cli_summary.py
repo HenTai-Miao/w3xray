@@ -175,5 +175,4 @@ def _trigger_tags(trigger: TriggerHeader) -> list[str]:
 
 
 def _format_summary_list(items: tuple[str, ...]) -> str:
-    shown = "、".join(items)
-    return shown
+    return "、".join(items)

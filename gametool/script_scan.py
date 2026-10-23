@@ -81,8 +81,7 @@ def _find_hint(script: str, trigger: str) -> str:
     body = fn.group(1)
     d = _DISPLAY.search(body)
     if d:
-        txt = d.group(1).strip()
-        return txt  # 全文
+        return d.group(1).strip()  # 全文
     return ""
 
 

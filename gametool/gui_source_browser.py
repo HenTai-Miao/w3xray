@@ -82,9 +82,7 @@ class SourceBrowserMixin:
                 files = glob.glob(
                     os.path.join(directory, "**", "*.w3n"), recursive=True
                 )
-                files = sorted(
-                    set(files), key=lambda path: os.path.getmtime(path), reverse=True
-                )
+                files = sorted(set(files), key=os.path.getmtime, reverse=True)
                 items = [
                     {
                         "path": path or "",
