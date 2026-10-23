@@ -61,6 +61,13 @@ class LiveProbeWindow(ctk.CTkToplevel):
             command=self._start,
         )
         self._probe_button.pack(side="left", padx=(12, 6), pady=8)
+        self._map_entry = ctk.CTkEntry(
+            bar,
+            placeholder_text="地图路径可空 (空=自动定位正在使用的图)…",
+            width=300,
+            font=("Microsoft YaHei UI", 10),
+        )
+        self._map_entry.pack(side="left", padx=(0, 8))
         self._var_players = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
             bar,
@@ -156,6 +163,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
         want_players = self._var_players.get()
         want_all = self._var_all_units.get()
         want_resources = self._var_resources.get()
+        map_path = self._map_entry.get().strip() or None
         done: list[str] = []
 
         def _worker() -> None:
@@ -167,6 +175,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
             buffer = io.StringIO()
             resources = ("reported", "reported") if want_resources else None
             options = LiveCliOptions(
+                map_path=map_path,
                 pack_dir=pack_dir,
                 players=want_players,
                 all_units=want_all,
