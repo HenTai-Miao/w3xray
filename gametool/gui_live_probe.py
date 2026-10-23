@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import os
+import pathlib
 import tkinter as tk
 import threading
 
@@ -72,6 +73,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
             font=("Microsoft YaHei UI", 10),
         )
         self._map_entry.pack(side="left", padx=(0, 8))
+        self._map_entry.insert(0, self._load_last_map_path())
         self._var_players = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
             bar,
@@ -153,6 +155,29 @@ class LiveProbeWindow(ctk.CTkToplevel):
 
         self.after(120, self._start)
 
+    def _last_map_path_file(self) -> pathlib.Path:
+        from .gui_pack_query import _memo_dir  # noqa: PLC0415
+
+        return pathlib.Path(_memo_dir()) / "live-probe-map.txt"
+
+    def _load_last_map_path(self) -> str:
+        try:
+            return (
+                pathlib.Path(self._last_map_path_file())
+                .read_text(encoding="utf-8")
+                .strip()
+            )
+        except OSError:
+            return ""
+
+    def _save_last_map_path(self, path: str | None) -> None:
+        if not path:
+            return
+        try:
+            pathlib.Path(self._last_map_path_file()).write_text(path, encoding="utf-8")
+        except OSError:
+            pass  # fail-open: 记忆失败不影响探针
+
     def _start(self) -> None:
         if self._probe_button.cget("state") == "disabled":
             return
@@ -168,6 +193,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
         want_all = self._var_all_units.get()
         want_resources = self._var_resources.get()
         map_path = self._map_entry.get().strip() or None
+        self._save_last_map_path(map_path)
         done: list[str] = []
 
         def _worker() -> None:
