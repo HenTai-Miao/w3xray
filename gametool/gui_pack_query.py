@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import pathlib
 import re
 import tkinter as tk
 from typing import TYPE_CHECKING
@@ -439,7 +440,16 @@ class _PackQueryWindow(ctk.CTkToplevel):
         as_json = self._var_json.get()
 
         def _worker() -> None:
-            done.append(self._run_query(command, keyword, as_json))
+            result, elapsed = self._run_query(command, keyword, as_json)
+            # CLI again 共享记忆: GUI 成功查询也落 memo (未找到/异常不写)
+            if command != "diff" and result and not result.startswith("未找到"):
+                try:
+                    from .pack_query_cli import _store_last_query  # noqa: PLC0415
+
+                    _store_last_query(pathlib.Path(self._pack_dir), command, keyword)
+                except Exception:
+                    pass
+            done.append((result, elapsed))
 
         threading.Thread(target=_worker, daemon=True).start()
 

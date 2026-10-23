@@ -49,7 +49,7 @@ def test_probe_window_reports_missing_game(_tk, tmp_path):
         assert _pump(_tk, 60, done), "探针 60s 未返回"
         text = done[0]
         assert text.startswith("2" + chr(0))
-        assert "war3 未运行" in text
+        assert ("war3 未运行" in text) or ("OpenProcess" in text)  # 环境相关: 无进程或权限差
         assert '"strategy_used": null' in text
     finally:
         LiveProbeWindow._finish = orig  # type: ignore[assignment, method-assign]

@@ -77,3 +77,14 @@ def test_json_toggle_outputs_json_line() -> None:
     assert "as_json = self._var_json.get()" in src  # 主线程读
     sig = inspect.signature(_PackQueryWindow._run_query)
     assert "as_json" in sig.parameters
+
+
+def test_gui_success_writes_cli_again_memo() -> None:
+    """GUI 查询成功后 _worker 落 CLI again memo (源码断言: 调用 _store_last_query 且未找到不写)。"""
+    import inspect
+
+    from gametool.gui_pack_query import _PackQueryWindow
+
+    src = inspect.getsource(_PackQueryWindow)
+    assert "_store_last_query" in src
+    assert 'not result.startswith("未找到")' in src
