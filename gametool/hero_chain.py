@@ -140,7 +140,7 @@ def _learn_def_layout(
             fc_pos[m.group()].append(base + m.start())
     dist = Counter()
     anchor_addr2code = {a: c for a, _, c in anchors}
-    for s, v in zip(srcs.tolist(), vals.tolist()):
+    for s, v in zip(srcs.tolist(), vals.tolist(), strict=True):
         code = anchor_addr2code.get(v)
         if not code:
             continue
@@ -156,7 +156,11 @@ def _learn_def_layout(
     # 再学 off_nameptr: 指向 def 头的指针落在名字指针字段(pivot)前 0x200 内
     pivots = np.array(
         sorted(
-            {s for s, v in zip(srcs.tolist(), vals.tolist()) if anchor_addr2code.get(v)}
+            {
+                s
+                for s, v in zip(srcs.tolist(), vals.tolist(), strict=True)
+                if anchor_addr2code.get(v)
+            }
         ),
         dtype=np.uint64,
     )
@@ -227,7 +231,7 @@ def read_inventory(regions, names, unit_names=None, verbose=False):
     if len(live_src) < 4:
         return []
     addr2code = {}
-    for s, v in zip(live_src, live_val):
+    for s, v in zip(live_src, live_val, strict=True):
         addr2code[s] = def_starts[v]
     # 槽位数组: 一次窗口扫描 + delta 直方图解 k
     centers = np.array(sorted(addr2code), dtype=np.uint64)

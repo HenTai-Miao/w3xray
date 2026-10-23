@@ -181,7 +181,11 @@ def _merge_parallel(
         with ProcessPoolExecutor(
             max_workers=workers, initializer=_init_worker, initargs=(base_objects,)
         ) as pool:
-            merged = list(pool.map(_materialize_job, *zip(*jobs), chunksize=chunksize))
+            merged = list(
+                pool.map(
+                    _materialize_job, *zip(*jobs, strict=False), chunksize=chunksize
+                )
+            )
     except Exception:  # noqa: BLE001 - 并行边界，失败回退串行。
         return None
     return tuple(replace(item) for item in merged)

@@ -52,7 +52,7 @@ def parse_sector_offsets(raw: bytes, count: int, key: int | None) -> list[int]:
     offsets = list(struct.unpack(f"<{count}I", table))
     if offsets[0] < need or offsets[0] > len(raw):
         raise MPQBlockError("扇区偏移表损坏：首偏移位于表内或越界")
-    for current, following in zip(offsets, offsets[1:]):
+    for current, following in zip(offsets, offsets[1:], strict=False):
         if current > following or following > len(raw):
             raise MPQBlockError("扇区偏移表损坏：偏移非单调或越界")
     return offsets
