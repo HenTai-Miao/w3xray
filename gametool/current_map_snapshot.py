@@ -152,8 +152,8 @@ def create_current_map_snapshot(path: str | Path) -> CurrentMapSnapshot:
 def cleanup_current_map_snapshot(snapshot: CurrentMapSnapshot) -> None:
     """Remove an owned snapshot directory; repeated calls are harmless."""
     directory_identity = (
-        getattr(snapshot, "_directory_device"),
-        getattr(snapshot, "_directory_inode"),
+        snapshot._directory_device,
+        snapshot._directory_inode,
     )
     remove_owned_directory(snapshot.path.parent, directory_identity)
 

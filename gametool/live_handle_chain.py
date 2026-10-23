@@ -1151,8 +1151,8 @@ def parse_nick_overrides(raw):
     if not raw:
         return {}
     out: dict[int, str] = {}
-    for part in str(raw).split(","):
-        part = part.strip()
+    for raw_part in str(raw).split(","):
+        part = raw_part.strip()
         if not part or "=" not in part:
             continue
         num, _, name = part.partition("=")

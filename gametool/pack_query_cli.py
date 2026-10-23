@@ -224,8 +224,8 @@ def load_shop_stocks(pack_dir: Path) -> list[tuple[str, str, list[str]]]:
         if len(r) > 5 and r[3].removeprefix("base:") not in ("usei", "Sellitems"):
             continue
         codes = []
-        for token in r[5].split(","):
-            token = token.strip()
+        for raw_token in r[5].split(","):
+            token = raw_token.strip()
             m = re.search(r"\(([A-Za-z0-9]{4})\)", token)
             if m:
                 codes.append(m.group(1))

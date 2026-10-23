@@ -134,8 +134,8 @@ def _call_groups(arguments: tuple[ScriptCallArgument, ...]) -> tuple[_CallGroup,
         key = (row.source, row.line, row.function, row.call, row.summary)
         grouped.setdefault(key, []).append(row)
     result: list[_CallGroup] = []
-    for key, rows in grouped.items():
-        rows = sorted(rows, key=lambda row: row.position)
+    for key, raw_rows in grouped.items():
+        rows = sorted(raw_rows, key=lambda row: row.position)
         # 同一物理行可能出现多个同名调用（压缩/单行脚本）：position 是
         # 调用内参数序号、每个调用都从 1 严格递增，position 回落（<= 前值）
         # 即新调用边界。此前遇到重叠位置会整组静默丢弃，压缩脚图的

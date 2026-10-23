@@ -52,11 +52,17 @@ def finalize_error_evidence(
     later_transient: tuple[PublicationTransientRecord, ...] = (),
     earlier_failures: tuple[Exception, ...] = (),
     later_failures: tuple[Exception, ...] = (),
-    earlier_evidence: RetainedEvidenceReproof = RetainedEvidenceReproof(),
-    later_evidence: RetainedEvidenceReproof = RetainedEvidenceReproof(),
-    parent_loss_evidence: RetainedEvidenceReproof = RetainedEvidenceReproof(),
+    earlier_evidence: RetainedEvidenceReproof | None = None,
+    later_evidence: RetainedEvidenceReproof | None = None,
+    parent_loss_evidence: RetainedEvidenceReproof | None = None,
 ) -> DescriptionCachePublicationError:
     """Return one error containing only currently caller-addressable evidence."""
+    if earlier_evidence is None:
+        earlier_evidence = RetainedEvidenceReproof()
+    if later_evidence is None:
+        later_evidence = RetainedEvidenceReproof()
+    if parent_loss_evidence is None:
+        parent_loss_evidence = RetainedEvidenceReproof()
     merged = merge_retained(
         merge_retained(earlier_retained, earlier_evidence.retained),
         merge_retained(
@@ -126,9 +132,11 @@ def require_live_retained_evidence(
     parent_identity: DirectoryIdentity,
     records: tuple[RetainedCacheRecord, ...],
     *,
-    parent_loss_evidence: RetainedEvidenceReproof = RetainedEvidenceReproof(),
+    parent_loss_evidence: RetainedEvidenceReproof | None = None,
 ) -> tuple[RetainedCacheRecord, ...]:
     """Require every record to remain exact and publicly addressable."""
+    if parent_loss_evidence is None:
+        parent_loss_evidence = RetainedEvidenceReproof()
     proof = reprove_retained(parent_descriptor, parent, parent_identity, records)
     try:
         require_parent_identity(parent_descriptor, parent, parent_identity)

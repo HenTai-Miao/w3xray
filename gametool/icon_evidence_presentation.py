@@ -50,7 +50,7 @@ def format_object_icon_evidence_section(md: MapData, obj: GameObject) -> str:
 
 
 def _format_icon_row(row: object) -> str:
-    reference = getattr(row, "reference")
+    reference = getattr(row, "reference")  # noqa: B009 - row 为鸭子类型 (object 形参)
     path = reference.normalized_path or reference.requested_path or "（未记录路径）"
     label, resolved_path = _row_label(row)
     extras: list[str] = []

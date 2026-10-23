@@ -131,8 +131,8 @@ def parse_profile_arg(text: str) -> ExtractionProfile:
     if not text or text.lower() == "all":
         return ExtractionProfile()
     enabled = all_categories_enabled()
-    for token in text.split(","):
-        token = token.strip()
+    for raw_token in text.split(","):
+        token = raw_token.strip()
         if not token:
             continue
         off = token.startswith("-")
