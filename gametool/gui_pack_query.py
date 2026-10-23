@@ -126,8 +126,9 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self, master, pack_dir: str, prefill: str = "", prefill_command: str = ""
     ) -> None:
         super().__init__(master)
+        self._pack_dir = pack_dir
         _load_memo()
-        pack_label = os.path.basename(self._pack_dir.rstrip("/")) or "资料包查询"
+        pack_label = os.path.basename(pack_dir.rstrip("/")) or "资料包查询"
         self.title(f"资料包查询 — {pack_label}")
         remembered = _WINDOW_GEOMETRY.get("pack-query")
         self.geometry(remembered or "760x560")
@@ -136,7 +137,6 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self.transient(master)
         self.grab_set()
         self.bind("<Escape>", lambda _e: self.destroy())
-        self._pack_dir = pack_dir
 
         header = ctk.CTkFrame(self, fg_color=CARD, corner_radius=12)
         header.pack(fill="x", padx=14, pady=(14, 8))
@@ -385,19 +385,38 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self._find_state["start"] = "1.0"
         self._output.insert("1.0", "查询中 …")
         self.configure(cursor="watch")
-        self.after(50, lambda: self._run_blocking(command, keyword))
+        # 后台线程跑查询, Tk 只在主线程碰 — 大包首查不再卡界面。
+        # 交付用主线程轮询 (跨线程 after/event_generate 在 Tk 下会死锁主循环)
+        import threading  # noqa: PLC0415
 
-    def _run_blocking(self, command: str, keyword: str) -> None:
+        done: list[tuple[str, str]] = []
+
+        def _worker() -> None:
+            done.append(self._run_query(command, keyword))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+        def _poll() -> None:
+            if done:
+                result, elapsed = done[0]
+                self._finish(result, elapsed)
+                return
+            if self.winfo_exists():
+                self.after(60, _poll)
+
+        self.after(60, _poll)
+
+    def _run_query(self, command: str, keyword: str) -> tuple[str, str]:
+        """线程内执行查询: 不碰任何 Tk 对象, 返回 (正文, 耗时行)。"""
         try:
             from gametool.pack_query_cli import (
                 PackQueryCliOptions,
                 run_pack_query_cli,
             )
         except ImportError as exc:  # pragma: no cover
-            self._finish(f"查询模块不可用: {exc}")
-            return
-        import contextlib
-        import io
+            return (f"查询模块不可用: {exc}", "")
+        import contextlib  # noqa: PLC0415
+        import io  # noqa: PLC0415
 
         options = PackQueryCliOptions(
             pack_dir=self._pack_dir, command=command, query=keyword, limit=0
@@ -410,20 +429,11 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 contextlib.redirect_stderr(err_buffer),
             ):
                 run_pack_query_cli(options)
-            output = buffer.getvalue() or "(无输出)"
-            elapsed = err_buffer.getvalue().strip()
-            # export 模式: CLI 输出含 [已导出: 路径], 自动复制路径进剪贴板
-            if "[已导出: " in output:
-                exported = output.split("[已导出: ", 1)[1].split("]", 1)[0]
-                self.clipboard_clear()
-                self.clipboard_append(exported)
-                output += "\n(路径已复制到剪贴板)"
-            if elapsed:
-                output += f"\n──────────  {elapsed}  ──────────\n"
-            self._finish(output)
         except SystemExit as exc:  # run_pack_query_cli 返回码路径不打异常
-            output = buffer.getvalue() or f"(退出码 {exc.code})"
-            self._finish(output)
+            return (buffer.getvalue() or f"(退出码 {exc.code})", "")
+        output = buffer.getvalue() or "(无输出)"
+        elapsed = err_buffer.getvalue().strip()
+        return (output, elapsed)
 
     def _pin_current(self) -> None:
         text = self._output.get("1.0", "end").strip()
@@ -497,8 +507,16 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self.clipboard_clear()
         self.clipboard_append(self._output.get("1.0", "end"))
 
-    def _finish(self, text: str) -> None:
+    def _finish(self, text: str, elapsed: str = "") -> None:
         global _LAST_RESULT
+        # export 模式: CLI 输出含 [已导出: 路径], 自动复制路径进剪贴板
+        if "[已导出: " in text:
+            exported = text.split("[已导出: ", 1)[1].split("]", 1)[0]
+            self.clipboard_clear()
+            self.clipboard_append(exported)
+            text += "\n(路径已复制到剪贴板)"
+        if elapsed:
+            text += f"\n──────────  {elapsed}  ──────────\n"
         _LAST_RESULT = text  # pyright: ignore[reportConstantRedefinition]
         self.configure(cursor="")
         self._output.delete("1.0", "end")
