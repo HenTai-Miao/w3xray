@@ -25,7 +25,7 @@ PLAYER_TYPES = {1: "用户", 2: "电脑", 3: "中立", 4: "可救援"}
 RACES = {0: "可选", 1: "人族", 2: "兽族", 3: "不死", 4: "暗夜", 5: "中立"}
 
 
-@dataclass  # noqa: MUTABLE_OK  # noqa: SLOTS_OK - legacy mutable compatibility model.
+@dataclass  # [OK: MUTABLE_OK]  # [OK: SLOTS_OK] - legacy mutable compatibility model.
 class Player:
     id: int
     type: int
@@ -44,7 +44,7 @@ class Player:
         return RACES.get(self.race, str(self.race))
 
 
-@dataclass  # noqa: MUTABLE_OK  # noqa: SLOTS_OK - legacy mutable compatibility model.
+@dataclass  # [OK: MUTABLE_OK]  # [OK: SLOTS_OK] - legacy mutable compatibility model.
 class Force:
     name: str
     allied: bool = False
@@ -54,7 +54,7 @@ class Force:
     players: list[int] = field(default_factory=list)  # 玩家序号(1基) 列表
 
 
-@dataclass  # noqa: MUTABLE_OK  # noqa: SLOTS_OK - mutable extraction builder compatibility model.
+@dataclass  # [OK: MUTABLE_OK]  # [OK: SLOTS_OK] - mutable extraction builder compatibility model.
 class W3iInfo:
     version: int = 0
     map_name: str = ""

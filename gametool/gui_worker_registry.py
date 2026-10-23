@@ -56,7 +56,7 @@ class _WorkerRecord:
     thread: GuiWorkerThread
 
 
-class GuiWorkerRegistry:  # noqa: MUTABLE_OK - lifecycle registry owns changing workers.
+class GuiWorkerRegistry:  # [OK: MUTABLE_OK] - lifecycle registry owns changing workers.
     """Track worker generations and bound application shutdown."""
 
     def __init__(

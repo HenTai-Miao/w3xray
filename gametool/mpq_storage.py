@@ -28,7 +28,7 @@ class MPQStorageError(OSError):
         return f"cannot read regular MPQ file {self.path}: {self.reason}"
 
 
-@dataclass(slots=True)  # noqa: MUTABLE_OK - this object owns closeable state.
+@dataclass(slots=True)  # [OK: MUTABLE_OK] - this object owns closeable state.
 class MPQBackingStore:
     """Own mutable archive bytes, an optional source handle, and a temp copy."""
 

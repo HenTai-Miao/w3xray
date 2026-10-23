@@ -121,7 +121,7 @@ def _publication_row(capabilities: ExtractionCapabilities) -> RequirementCoverag
 
 
 def _publication_status_label(status: KnowledgeWriteStatus) -> str:
-    match status:  # noqa: MATCH_OK - assert_never below proves exhaustiveness.
+    match status:  # [OK: MATCH_OK] - assert_never below proves exhaustiveness.
         case KnowledgeWriteStatus.COMPLETE:
             return "完整"
         case KnowledgeWriteStatus.PARTIAL:

@@ -43,7 +43,7 @@ class GameObjectFieldEvidence:
         return self.value if self.raw_value is None else self.raw_value
 
 
-@dataclass(slots=True)  # noqa: MUTABLE_OK
+@dataclass(slots=True)  # [OK: MUTABLE_OK]
 class GameObject:
     """Mutable object builder populated by the extraction pipeline."""
 
@@ -71,7 +71,7 @@ class GameObject:
         return int.from_bytes(value, "big")
 
 
-@dataclass(slots=True)  # noqa: MUTABLE_OK
+@dataclass(slots=True)  # [OK: MUTABLE_OK]
 class MapData:
     """Mutable map builder preserving the original public extraction fields.
 

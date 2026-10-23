@@ -81,7 +81,7 @@ def build_map_requirement_facts(
 
 def request_available(request: str, facts: MapRequirementFacts) -> bool | None:
     """Return whether one open-catalog requirement has matching map data."""
-    match request:  # noqa: MATCH_OK - requirement names are an open catalog.
+    match request:  # [OK: MATCH_OK] - requirement names are an open catalog.
         case "提取/整理 UI 文本":
             return bool(facts.scripts or facts.objects)
         case "提取/整理图标和资源":

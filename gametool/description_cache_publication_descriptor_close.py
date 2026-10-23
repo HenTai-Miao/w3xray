@@ -21,7 +21,7 @@ type CloseDescriptor = Callable[[int], None]
 type NamedDescriptor = tuple[str, int]
 
 
-@dataclass(slots=True)  # noqa: MUTABLE_OK - resource owner records final proof
+@dataclass(slots=True)  # [OK: MUTABLE_OK] - resource owner records final proof
 class DescriptorCloseLedger:
     """Last immutable evidence available if close fails after success."""
 

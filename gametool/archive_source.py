@@ -51,7 +51,7 @@ class PathArchiveSource:
         """Release no state because path-backed sources own no open archive."""
 
 
-@dataclass(slots=True)  # noqa: MUTABLE_OK - close intentionally releases owned bytes.
+@dataclass(slots=True)  # [OK: MUTABLE_OK] - close intentionally releases owned bytes.
 class BytesArchiveSource:
     """Own immutable payload bytes until close releases them permanently.
 

@@ -19,7 +19,7 @@ from gametool.casclib_api import (
 from gametool.casclib_source import CascLibDataSource, probe_casclib
 
 
-@dataclass(slots=True)  # noqa: MUTABLE_OK - fake tracks native handle lifecycle.
+@dataclass(slots=True)  # [OK: MUTABLE_OK] - fake tracks native handle lifecycle.
 class FakeCascLibApi:
     """In-memory CascLib API whose handles expose lifecycle mistakes."""
 

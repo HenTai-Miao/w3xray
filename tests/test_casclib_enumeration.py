@@ -12,7 +12,7 @@ from gametool.casclib_enumeration import CascFindData, CascNameType
 
 
 @dataclass
-class FakeEnumerationApi:  # noqa: MUTABLE_OK - records native resource ownership in tests.
+class FakeEnumerationApi:  # [OK: MUTABLE_OK] - records native resource ownership in tests.
     """In-memory CascLib API fake with explicit search-handle tracking."""
 
     entries: tuple  # pyright: ignore[reportMissingTypeArgument]

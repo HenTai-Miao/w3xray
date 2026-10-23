@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from .doo_drops import DropSet, flatten_drop_sets
 
 
-@dataclass(slots=True)  # noqa: RUF012  # noqa: MUTABLE_OK
+@dataclass(slots=True)  # noqa: RUF012  # [OK: MUTABLE_OK]
 class Doodad:
     """One mutable legacy doodad view with lossless nested drop evidence."""
 
@@ -26,7 +26,7 @@ class Doodad:
     source_offset: int = 0
 
 
-@dataclass(slots=True)  # noqa: RUF012  # noqa: MUTABLE_OK
+@dataclass(slots=True)  # noqa: RUF012  # [OK: MUTABLE_OK]
 class Unit:
     """One mutable legacy unit view with placement, inventory, and drop data."""
 

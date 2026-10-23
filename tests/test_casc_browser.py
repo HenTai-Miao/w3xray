@@ -24,7 +24,7 @@ def _entry(name: str, name_type: CascNameType) -> CascEntry:
     )
 
 
-@dataclass(slots=True)  # noqa: MUTABLE_OK - fake records read requests.
+@dataclass(slots=True)  # [OK: MUTABLE_OK] - fake records read requests.
 class FakeInventorySource:
     entries: tuple[CascEntry, ...]
     reads: list[str] = field(default_factory=list)

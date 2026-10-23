@@ -39,7 +39,7 @@ class CascInventoryWriteError(OSError):
         return f"cannot write CASC inventory {self.path}: {self.reason}"
 
 
-@dataclass(slots=True)  # noqa: MUTABLE_OK - streaming counters are updated per emitted row.
+@dataclass(slots=True)  # [OK: MUTABLE_OK] - counters update per row.
 class _InventoryState:
     """Mutable counters accumulated while chunks are streamed to disk."""
 

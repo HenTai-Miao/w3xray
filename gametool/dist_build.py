@@ -145,7 +145,7 @@ def expected_artifact_path(
         case unreachable:
             assert_never(unreachable)
     current_system = system or platform.system()
-    match current_system:  # noqa: MATCH_OK - platform names are an open string set.
+    match current_system:  # [OK: MATCH_OK] - platform names are an open string set.
         case "Windows":
             return app_dir / f"{APP_NAME}.exe"
         case "Darwin" | "Linux":
@@ -158,7 +158,7 @@ def parse_cli_options(argv: Sequence[str]) -> DistCliOptions:
     """Parse the tiny dist-builder CLI."""
     options = DistCliOptions()
     for argument in argv:
-        match argument:  # noqa: MATCH_OK - unknown CLI strings become DistArgumentError.
+        match argument:  # [OK: MATCH_OK] - unknown CLI strings become DistArgumentError.
             case "--dry-run":
                 options = replace(options, dry_run=True)
             case "--no-clean":
