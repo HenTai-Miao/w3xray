@@ -195,6 +195,7 @@ def _failure(
     retained: CleanupRetained | None,
     reason: str,
 ) -> CleanupOutcome:
+    del cleanup_descriptor  # 失败分支只需 parent; 签名随成功路径统一
     if retained is None:
         try:
             original_current = (

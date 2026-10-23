@@ -700,6 +700,7 @@ def _query_locate(pack: Path, query: str, limit: int) -> list[str]:
     战役工作流第④步的机械化: live 拿英雄/随从/物品四码, 用本命令扫
     脚本对象码出现索引.tsv, 「全部码都出现」的子图即候选任务关——
     容器包由 run_pack_query_cli 自动逐关分段 (== 子地图 名 ==)。"""
+    del limit  # locate 满量列出全部引用数, 截断不适用
     codes = [c.strip() for c in re.split(r"[;,，；\s]+", query) if c.strip()]
     if not codes:
         return ["用法: locate <码1;码2;...> (特征码交集, 全部码都出现才算命中)"]
@@ -899,7 +900,7 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
 
 def _query_synth(pack: Path, query: str, limit: int) -> list[str]:
     """synth 全图合成总览: 所有配料一屏列完 (成品 <- 材料)。"""
-    del query  # synth 无视过滤, 单配方查询走 recipe
+    del query, limit  # synth 无视过滤与截断, 单配方查询走 recipe
     out: list[str] = []
     seen: set[tuple[str, str]] = set()
     items = load_items(pack)
@@ -1634,6 +1635,7 @@ def _script_unit_random_drops(
     units: dict[str, str],
 ) -> list[str]:
     """单位维度: 该单位的 YDWE 死亡随机掉落模板内容 (权重满量)。"""
+    del units  # 签名与关系表单位维度统一; 匹配靠 unit_code
     want = unit_code.lower()
     out: list[str] = []
     for ucode, fn, regs in _unit_death_random_drops(script):
@@ -1654,6 +1656,7 @@ def _script_random_dist_item_drops(
     units: dict[str, str],
 ) -> list[str]:
     """物品维度: 该物品出现在哪些 YDWE 每单位死亡随机掉落模板里。"""
+    del items  # 签名与单位维度统一; 匹配靠 code, units 用于单位名展示
     want = code.lower()
     out: list[str] = []
     for ucode, fn, regs in _unit_death_random_drops(script):
@@ -2976,6 +2979,7 @@ def _query_diff(pack: Path, query: str, limit: int, pack_b: str = "") -> list[st
 def _query_list(pack: Path, query: str, limit: int) -> list[str]:
     """list 按表列出全部对象 ID+名称 (供脚本/AI 消费的纯清单)。
     query 可传表名过滤 (物品/单位/技能/英雄/增益/科技), 空 = 全部表。"""
+    del limit  # 满量清单不截断
     tables = (
         "物品",
         "单位",
@@ -3038,6 +3042,7 @@ def _query_doc(pack: Path, query: str, limit: int) -> list[str]:
 def _query_buffs(pack: Path, query: str, limit: int) -> list[str]:
     """buffs 增益表清单/查询: buff 效果排查专用 (说明列=游戏内效果描述)。
     query 空 = 全量列出; 有词 = 名称/ID/说明子串过滤。"""
+    del limit  # 满量清单不截断
     rows = _read_rows(pack, "对象ID/增益.tsv")
     if len(rows) <= 1:
         return ["本包无 增益.tsv (地图未自定义增益)"]
@@ -3070,6 +3075,7 @@ def _query_buffs(pack: Path, query: str, limit: int) -> list[str]:
 def _query_heroes(pack: Path, query: str, limit: int) -> list[str]:
     """heroes 英雄表清单/查询: 英雄专属排查 (英雄.tsv 缺失时提示走 单位 查询)。
     query 空 = 全量; 有词 = 名称/ID 子串过滤。"""
+    del limit  # 满量清单不截断
     rows = _read_rows(pack, "对象ID/英雄.tsv")
     if len(rows) <= 1:
         return ["本包无 英雄.tsv (英雄类单位通常并入 单位 表 — 用 search 查)"]
@@ -3171,6 +3177,7 @@ def _query_skills(pack: Path, query: str, limit: int) -> list[str]:
 
 def _query_stats(pack: Path, query: str, limit: int) -> list[str]:
     """stats 包总览: 地图信息摘要 + 每张对象表的行数与自定义行数。"""
+    del query, limit  # 总览无过滤/截断
     out: list[str] = []
     info = pack / "地图信息.txt"
     if info.exists():
@@ -3280,6 +3287,7 @@ def _store_last_query(pack: Path, command: str, query: str) -> None:
 
 def _query_again(pack: Path, query: str, limit: int) -> list[str]:
     """again: 重跑最近一次成功查询 (pack/command/query 均从 memo 取)。"""
+    del pack, query  # again 全从 memo 取, 入参仅作 dispatcher 签名统一
     last = _load_last_query()
     if last is None:
         return [

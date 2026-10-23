@@ -268,7 +268,7 @@ def _category_gate(adapter: GameAdapter, profile: ExtractionProfile) -> set[str]
     }
 
 
-def _allowed(gate: set[str] | None, adapter: GameAdapter, category: str) -> bool:
+def _allowed(gate: set[str] | None, adapter: GameAdapter, category: str) -> bool:  # noqa: ARG001
     """类目是否被当前开关允许; gate=None 恒真。"""
     if gate is None:
         return True

@@ -72,7 +72,7 @@ def _u32(data):
     return np.frombuffer(data, dtype="<u4").astype(np.uint64)
 
 
-def _sources_to(targets_arr, regions, window=0):
+def _sources_to(targets_arr, regions, window=0):  # noqa: ARG001 - 窗口扫描参数预留
     """全内存一遍: 返回 (src, val) 其中 val == targets_arr 中某值。"""
     srcs_all, vals_all = [], []
     for base, data in regions:

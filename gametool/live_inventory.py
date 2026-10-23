@@ -150,7 +150,7 @@ _INTEGRITY_NAMES = {
 }
 
 
-def log_live_exception(stage, ex):
+def log_live_exception(stage, ex):  # noqa: ARG001 - ex 经 format_exc() 上下文捕获
     """兜底异常带栈落盘 (fail-open) 并返回提示后缀。
 
     学自 trainer format_error 三件套 (reason/recovery/diagnostic_log

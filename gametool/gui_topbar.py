@@ -382,7 +382,7 @@ def _show_guide(app) -> None:
     _ = app._start_gui_worker("show-guide", work, replace=True)
 
 
-def _open_guide_window(app, text: str, force: bool = False) -> None:
+def _open_guide_window(app, text: str) -> None:
     import tkinter as tk  # noqa: PLC0415
 
     from .guide_report import GUIDE_SECTION_TITLES  # noqa: PLC0415

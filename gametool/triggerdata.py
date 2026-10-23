@@ -309,7 +309,7 @@ def _legacy_template_to_positional(template: str, arg_names: tuple[str, ...]) ->
         return converted
     placeholder_index = 0
 
-    def replace(match: re.Match[str]) -> str:
+    def replace(_match: re.Match[str]) -> str:  # noqa: ARG001 - re.sub 签名必需
         nonlocal placeholder_index
         placeholder_index += 1
         return f"%{placeholder_index}"
