@@ -26,6 +26,16 @@ from gametool.pack_query_cli import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _isolated_query_memo(tmp_path, monkeypatch):
+    """查询测试不写共享 again memo (真 memo 是用户资产, 只在非测试进程写)。"""
+    import gametool.pack_query_cli as pq
+
+    monkeypatch.setattr(
+        pq, "_memo_dir", lambda: __import__("pathlib").Path(str(tmp_path)) / "memo"
+    )
+
+
 @pytest.fixture()
 def pack(tmp_path):
     obj = tmp_path / "对象ID"
