@@ -26,7 +26,7 @@ def _object(
         name=name,
         is_custom=True,
         field_values=dict(values),
-        field_sources={key: f"objects/{object_id}.txt" for key in values},
+        field_sources=dict.fromkeys(values, f"objects/{object_id}.txt"),
         field_labels={key: key for key in values},
     )
 

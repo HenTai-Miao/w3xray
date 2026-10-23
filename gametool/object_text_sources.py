@@ -200,7 +200,7 @@ def _records_from_payload(
             category=category,
             obj_id=obj_id,
             fields=fields,
-            field_sources={field_name: source_name for field_name in fields},
+            field_sources=dict.fromkeys(fields, source_name),
             source_name=source_name,
             source_kind=source_kind,
         )

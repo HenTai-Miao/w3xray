@@ -159,7 +159,7 @@ def test_readable_but_malformed_core_and_world_members_are_diagnosed() -> None:
         "war3map.w3c",
         "war3map.w3s",
     }
-    archive = _MemoryArchive(names, payloads={name: b"broken" for name in names})
+    archive = _MemoryArchive(names, payloads=dict.fromkeys(names, b"broken"))
     md = MapData(archive.path, "fixture")
 
     # When: core and world parsers reject those readable bodies.

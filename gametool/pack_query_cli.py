@@ -351,7 +351,7 @@ def _tech_base_fields() -> dict[str, dict[str, str]]:
         for code, entry in BASE_OBJECTS.items():
             if entry[0] != "科技":
                 continue
-            out[code.lower()] = {k: v for k, v in entry[1]}
+            out[code.lower()] = dict(entry[1])
         _tech_base_fields_cache = out
     return _tech_base_fields_cache
 

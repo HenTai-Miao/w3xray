@@ -180,5 +180,5 @@ def _detail(
     if fields:
         parts.append(f"对象字段={';'.join(sorted(set(fields)))}")
     if placed:
-        parts.append(f"预放置={';'.join(sorted(set(use.detail for use in placed)))}")
+        parts.append(f"预放置={';'.join(sorted({use.detail for use in placed}))}")
     return "；".join(parts)

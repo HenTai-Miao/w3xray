@@ -203,7 +203,7 @@ def iter_anonymous_blps(
     ledger: ExtractionLedger,
 ) -> Iterator[AnonymousIconResource]:
     """Yield hash-verified anonymous BLP blocks once in ledger order."""
-    blocks = {index: block for index, block in archive.iter_blocks()}
+    blocks = dict(archive.iter_blocks())
     seen: set[int] = set()
     for entry in ledger.entries:
         block_index = entry.block_index

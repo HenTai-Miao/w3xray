@@ -140,7 +140,7 @@ def classify(codes: Iterable[str], field_keys: Iterable[str] | None = None) -> s
     物品文件多只有通用字段(Art/Name/Tip/Ubertip)，故作默认。
     """
     code_list = tuple(codes)
-    fk = set(k.lower() for k in (field_keys or []))
+    fk = {k.lower() for k in (field_keys or [])}
 
     def hits(markers: set[str]) -> int:
         return len(fk & markers)

@@ -22,44 +22,33 @@ _LEVEL_IN_LABEL: Final = re.compile(
 )
 _TRAILING_LEVEL_KEY: Final = re.compile(r"^(gtp|gub)(\d+)$", re.IGNORECASE)
 _SEMANTIC_FIELDS: Final = {
-    **{
-        key: ("名称", "name")
-        for key in (
-            "name",
-            "unam",
-            "anam",
-            "gnam",
-            "bnam",
-            "dnam",
-            "fnam",
-            "display:name",
-        )
-    },
-    **{
-        key: ("称谓", "propernames")
-        for key in ("propernames", "upro", "display:propernames")
-    },
-    **{
-        key: ("编辑器后缀", "editorsuffix")
-        for key in ("editorsuffix", "unsf", "ansf", "gnsf", "bnsf", "dnsf", "fnsf")
-    },
-    **{key: ("基础提示", "tip") for key in ("tip", "utip", "atp1", "display:tip")},
-    **{
-        key: ("扩展提示", "ubertip")
-        for key in ("ubertip", "utub", "aub1", "display:description")
-    },
-    **{key: ("学习提示", "researchtip") for key in ("researchtip", "aret")},
-    **{key: ("学习扩展提示", "researchubertip") for key in ("researchubertip", "arut")},
-    **{key: ("关闭提示", "untip") for key in ("untip", "aut1")},
-    **{key: ("关闭扩展提示", "unubertip") for key in ("unubertip", "auu1")},
+    **dict.fromkeys(
+        ("name", "unam", "anam", "gnam", "bnam", "dnam", "fnam", "display:name"),
+        ("名称", "name"),
+    ),
+    **dict.fromkeys(
+        ("propernames", "upro", "display:propernames"), ("称谓", "propernames")
+    ),
+    **dict.fromkeys(
+        ("editorsuffix", "unsf", "ansf", "gnsf", "bnsf", "dnsf", "fnsf"),
+        ("编辑器后缀", "editorsuffix"),
+    ),
+    **dict.fromkeys(("tip", "utip", "atp1", "display:tip"), ("基础提示", "tip")),
+    **dict.fromkeys(
+        ("ubertip", "utub", "aub1", "display:description"), ("扩展提示", "ubertip")
+    ),
+    **dict.fromkeys(("researchtip", "aret"), ("学习提示", "researchtip")),
+    **dict.fromkeys(("researchubertip", "arut"), ("学习扩展提示", "researchubertip")),
+    **dict.fromkeys(("untip", "aut1"), ("关闭提示", "untip")),
+    **dict.fromkeys(("unubertip", "auu1"), ("关闭扩展提示", "unubertip")),
     "revivetip": ("复活提示", "revivetip"),
     "reviveubertip": ("复活提示", "reviveubertip"),
     "awakentip": ("唤醒提示", "awakentip"),
     "awakenubertip": ("唤醒提示", "awakenubertip"),
-    **{
-        key: ("编辑器描述", "editordescription")
-        for key in ("ides", "description", "editordescription")
-    },
+    **dict.fromkeys(
+        ("ides", "description", "editordescription"),
+        ("编辑器描述", "editordescription"),
+    ),
 }
 _LABEL_FIELDS: Final = {
     "名称": ("名称", "name"),

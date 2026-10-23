@@ -71,7 +71,7 @@ class DescriptionCache:
             retained.append(candidates[0])
         ordered = tuple(sorted(retained, key=_entry_sort_key))
         by_key = MappingProxyType({entry.key: (entry,) for entry in ordered})
-        all_diagnostics = tuple((*sorted(set(diagnostics)), *conflicts))
+        all_diagnostics = (*sorted(set(diagnostics)), *conflicts)
         return cls(ordered, by_key, len(conflicts), all_diagnostics)
 
     def lookup(

@@ -86,7 +86,7 @@ class ExtractionProfile:
     """按类目的提取开关; 全 True = 与历史全量导出行为一致。"""
 
     enabled: dict[str, bool] = field(
-        default_factory=lambda: {key: True for key in ALL_CATEGORIES}
+        default_factory=lambda: dict.fromkeys(ALL_CATEGORIES, True)
     )
 
     def allows(self, category: str) -> bool:
@@ -104,7 +104,7 @@ class ExtractionProfile:
 
 
 def all_categories_enabled() -> dict[str, bool]:
-    return {key: True for key in ALL_CATEGORIES}
+    return dict.fromkeys(ALL_CATEGORIES, True)
 
 
 def normalize_profile(

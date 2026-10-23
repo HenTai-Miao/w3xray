@@ -116,7 +116,7 @@ class TestGuiLoader(unittest.TestCase):
         # Given
         md = MapData("map.w3x", "map")
         resolver = LifecycleResolver(close_fails=True)
-        options = {key: False for key in object_only_load_options()}
+        options = dict.fromkeys(object_only_load_options(), False)
 
         # When
         loaded = prepare_map_view(
