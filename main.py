@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import multiprocessing
 import sys
+from typing import NoReturn
 
 from gametool.cli_options import CliOptionError, parse_cli_options, run_cli
 from gametool.cli_output import configure_cli_output
@@ -11,6 +12,16 @@ from gametool.cli_summary import iter_cli_summary_lines
 from gametool.game_config_summary import iter_game_config_summary_lines
 
 __all__ = ("iter_cli_summary_lines", "iter_game_config_summary_lines", "main")
+
+
+def _cli_options_error(prefix: str, exc: Exception) -> NoReturn:
+    """参数错误: stderr 出 prefix+详情+--help 出路, 退出 2。"""
+    print(f"{prefix}：{exc}", file=sys.stderr)
+    print(
+        "（带 --help/-h 重跑同命令可看用法; main.py --help 查看全部模式）",
+        file=sys.stderr,
+    )
+    raise SystemExit(2) from None
 
 
 def main() -> None:
@@ -56,8 +67,7 @@ def main() -> None:
         try:
             options = parse_batch_cli_options(tuple(sys.argv[2:]))
         except BatchCliOptionError as exc:
-            print(f"批量参数错误：{exc}", file=sys.stderr)
-            raise SystemExit(2) from None
+            _cli_options_error("批量参数错误", exc)
         raise SystemExit(run_batch_cli(options))
     if len(sys.argv) >= 2 and sys.argv[1] == "acceptance":
         from gametool.acceptance_cli import run_acceptance_cli
@@ -85,8 +95,7 @@ def main() -> None:
         try:
             options = parse_current_map_cli_options(tuple(sys.argv[2:]))
         except CurrentMapCliOptionError as exc:
-            print(f"当前地图参数错误：{exc}", file=sys.stderr)
-            raise SystemExit(2) from None
+            _cli_options_error("当前地图参数错误", exc)
         raise SystemExit(run_current_map_cli(options))
     if len(sys.argv) >= 3 and sys.argv[1] in {"wgc", "gameconfig"}:
         from gametool.gameconfig import read_game_configuration_file
@@ -109,8 +118,7 @@ def main() -> None:
         try:
             options = parse_guide_cli_options(tuple(sys.argv[2:]))
         except GuideCliOptionError as exc:
-            print(f"攻略参数错误：{exc}", file=sys.stderr)
-            raise SystemExit(2) from None
+            _cli_options_error("攻略参数错误", exc)
         raise SystemExit(run_guide_cli(options))
     if len(sys.argv) >= 2 and sys.argv[1] == "live":
         from gametool.live_cli import (
@@ -122,8 +130,7 @@ def main() -> None:
         try:
             options = parse_live_cli_options(tuple(sys.argv[2:]))
         except LiveCliOptionError as exc:
-            print(f"实时读取参数错误：{exc}", file=sys.stderr)
-            raise SystemExit(2) from None
+            _cli_options_error("实时读取参数错误", exc)
         raise SystemExit(run_live_cli(options))
     if len(sys.argv) >= 2 and sys.argv[1] == "pack-query":
         from gametool.pack_query_cli import (
@@ -135,15 +142,13 @@ def main() -> None:
         try:
             options = parse_pack_query_cli_options(tuple(sys.argv[2:]))
         except PackQueryCliOptionError as exc:
-            print(f"资料包查询参数错误：{exc}", file=sys.stderr)
-            raise SystemExit(2) from None
+            _cli_options_error("资料包查询参数错误", exc)
         raise SystemExit(run_pack_query_cli(options))
     if len(sys.argv) >= 2 and sys.argv[1] == "cli":
         try:
             options = parse_cli_options(tuple(sys.argv[2:]))
         except CliOptionError as exc:
-            print(f"CLI 参数错误：{exc}", file=sys.stderr)
-            raise SystemExit(2) from None
+            _cli_options_error("CLI 参数错误", exc)
         raise SystemExit(run_cli(options))
     # 未知子命令: 不静默弹 GUI (脚本打错字会挂死在窗口上) — 给指引后退出 2
     if sys.argv[1:] and not sys.argv[1].startswith("-"):
