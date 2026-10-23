@@ -159,6 +159,10 @@ class LiveProbeWindow(ctk.CTkToplevel):
             label="用选中/剪贴板码查包查询",
             command=self._query_selected_code,
         )
+        menu.add_command(
+            label="用选中/剪贴板坐标 near 反查",
+            command=self._near_selected_coords,
+        )
         self._output.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
 
         self.after(120, self._start)
@@ -320,6 +324,26 @@ class LiveProbeWindow(ctk.CTkToplevel):
         self._output.delete("1.0", "end")
         self._output.insert("1.0", body if body.strip() else f"(退出码 {code_str})")
         self._output.configure(state="disabled")
+
+    def _near_selected_coords(self) -> None:
+        """取选中/剪贴板的 x/y, 交给包查询窗 near 模式反查。"""
+        try:
+            raw = self._output.get("sel first", "sel last").strip()
+        except tk.TclError:
+            raw = ""
+        if not raw:
+            try:
+                raw = self.clipboard_get().strip()
+            except Exception:
+                return
+        import re  # noqa: PLC0415
+
+        nums = re.findall(r"-?\d+(?:\.\d+)?", raw)
+        if len(nums) < 2:
+            return
+        x, y = nums[0], nums[1]
+        if self._query_callback is not None:
+            self._query_callback(f"near {x} {y}")
 
     def _query_selected_code(self) -> None:
         """取输出区选中文本 (退剪贴板) 的四码, 交给包查询窗 doc 模式。"""

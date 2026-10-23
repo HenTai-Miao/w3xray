@@ -178,7 +178,8 @@ def build_topbar(app) -> None:
                 lambda: getattr(app, "_last_pack_dir", None) or load_last_pack_dir(),
                 app.on_export_pack,
                 prefill=code,
-                prefill_command="doc",
+                # near 坐标直达 near 模式, 其余按四码走 doc
+                prefill_command=("near" if code.startswith("near ") else "doc"),
             ),
         ),
         **secondary_button_style(),
