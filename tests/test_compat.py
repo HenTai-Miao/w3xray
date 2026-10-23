@@ -17,7 +17,7 @@ class CompatReportTest(unittest.TestCase):
     def test_lua_map_warns_for_124e(self):
         # Given: a Lua map.
         md = MapData(path="x.w3x", name="x")
-        md.w3i = _w3i(version=28, script_type="Lua")
+        md.w3i = _w3i(version=28, script_type="Lua")  # pyright: ignore[reportAttributeAccessIssue]
         md.scripts = {"war3map.lua": "print('x')"}
 
         # When: compatibility report is built for 1.24E.
@@ -31,7 +31,7 @@ class CompatReportTest(unittest.TestCase):
     def test_reforged_w3i_version_warns_for_124e(self):
         # Given: a 1.31/1.32 style map info version.
         md = MapData(path="x.w3x", name="x")
-        md.w3i = _w3i(version=31, script_type="JASS")
+        md.w3i = _w3i(version=31, script_type="JASS")  # pyright: ignore[reportAttributeAccessIssue]
 
         # When: compatibility report is built.
         report = build_compat_report(md)
@@ -44,7 +44,7 @@ class CompatReportTest(unittest.TestCase):
     def test_large_map_flag_warns_for_classic_target(self):
         # Given: map info marks the map as large.
         md = MapData(path="x.w3x", name="x")
-        md.w3i = _w3i(version=25, script_type="JASS", large_map=True)
+        md.w3i = _w3i(version=25, script_type="JASS", large_map=True)  # pyright: ignore[reportAttributeAccessIssue]
 
         # When: compatibility report is built.
         report = build_compat_report(md)
@@ -55,7 +55,7 @@ class CompatReportTest(unittest.TestCase):
     def test_plain_v25_jass_reports_compatible(self):
         # Given: a normal TFT JASS map.
         md = MapData(path="x.w3x", name="x")
-        md.w3i = _w3i(version=25, script_type="JASS")
+        md.w3i = _w3i(version=25, script_type="JASS")  # pyright: ignore[reportAttributeAccessIssue]
         md.scripts = {
             "war3map.j": "function main takes nothing returns nothing\nendfunction"
         }
@@ -70,7 +70,7 @@ class CompatReportTest(unittest.TestCase):
     def test_return_bug_handle_to_integer_cast_warns_for_124e(self):
         # Given: an old 1.20-style H2I helper that relies on the JASS return bug.
         md = MapData(path="x.w3x", name="x")
-        md.w3i = _w3i(version=25, script_type="JASS")
+        md.w3i = _w3i(version=25, script_type="JASS")  # pyright: ignore[reportAttributeAccessIssue]
         md.scripts = {
             "war3map.j": (
                 "function H2I takes handle h returns integer\n"
@@ -91,7 +91,7 @@ class CompatReportTest(unittest.TestCase):
     def test_return_bug_integer_to_handle_cast_warns_for_124e(self):
         # Given: an old helper that casts integer back to a handle-derived type.
         md = MapData(path="x.w3x", name="x")
-        md.w3i = _w3i(version=25, script_type="JASS")
+        md.w3i = _w3i(version=25, script_type="JASS")  # pyright: ignore[reportAttributeAccessIssue]
         md.scripts = {
             "war3map.j": (
                 "function I2U takes integer i returns unit\n"

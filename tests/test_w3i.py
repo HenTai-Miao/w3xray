@@ -65,11 +65,13 @@ def _build_v25(
 class TestParseW3i(unittest.TestCase):
     def test_basic_header(self):
         info = parse_w3i(_build_v25(map_name="我的地图", author="张三", flags=0x4))
-        self.assertEqual(info.version, 25)
-        self.assertEqual(info.map_name, "我的地图")
-        self.assertEqual(info.author, "张三")
-        self.assertEqual(info.width, 64)
-        self.assertTrue(info.melee)  # flag bit2 = 对战图
+        self.assertEqual(info.version, 25)  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertEqual(info.map_name, "我的地图")  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertEqual(info.author, "张三")  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertEqual(info.width, 64)  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertTrue(
+            info.melee  # pyright: ignore[reportOptionalMemberAccess]
+        )  # flag bit2 = 对战图  # pyright: ignore[reportOptionalMemberAccess]
 
     def test_camera_bounds_and_margins_retained(self):
         info = parse_w3i(
@@ -89,16 +91,16 @@ class TestParseW3i(unittest.TestCase):
                 forces=[(0, 0xFFFFFFFF, "队伍甲")],
             )
         )
-        self.assertEqual(len(info.players), 2)
-        self.assertEqual(info.players[0].name, "玩家1")
-        self.assertEqual(info.players[0].type, 1)
-        self.assertEqual(info.players[1].race, 2)
-        self.assertEqual(len(info.forces), 1)
-        self.assertEqual(info.forces[0].name, "队伍甲")
+        self.assertEqual(len(info.players), 2)  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertEqual(info.players[0].name, "玩家1")  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertEqual(info.players[0].type, 1)  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertEqual(info.players[1].race, 2)  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertEqual(len(info.forces), 1)  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertEqual(info.forces[0].name, "队伍甲")  # pyright: ignore[reportOptionalMemberAccess]
 
     def test_trigstr_resolved_via_wts(self):
         info = parse_w3i(_build_v25(map_name="TRIGSTR_010"), wts={10: "还原后的地图名"})
-        self.assertEqual(info.map_name, "还原后的地图名")
+        self.assertEqual(info.map_name, "还原后的地图名")  # pyright: ignore[reportOptionalMemberAccess]
 
     def test_garbage_returns_none(self):
         self.assertIsNone(parse_w3i(b""))
@@ -107,15 +109,15 @@ class TestParseW3i(unittest.TestCase):
     def test_real_v25_fixture(self):
         data = open(os.path.join(FIX, "w3i_v25.w3i"), "rb").read()
         info = parse_w3i(data)
-        self.assertEqual(info.version, 25)
-        self.assertTrue(isinstance(info.map_name, str))
-        self.assertGreaterEqual(len(info.players), 1)
+        self.assertEqual(info.version, 25)  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertTrue(isinstance(info.map_name, str))  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertGreaterEqual(len(info.players), 1)  # pyright: ignore[reportOptionalMemberAccess]
 
     def test_real_v18_fixture(self):
         data = open(os.path.join(FIX, "w3i_v18.w3i"), "rb").read()
         info = parse_w3i(data)
-        self.assertEqual(info.version, 18)
-        self.assertGreaterEqual(len(info.players), 1)
+        self.assertEqual(info.version, 18)  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertGreaterEqual(len(info.players), 1)  # pyright: ignore[reportOptionalMemberAccess]
 
 
 def _build_w3f(name="战役名", difficulty="普通", author="作者C", desc="战役描述"):
@@ -151,15 +153,15 @@ class TestParseW3f(unittest.TestCase):
         from gametool.w3i import parse_w3f
 
         info = parse_w3f(_build_w3f(name="远古战役", author="老李"))
-        self.assertEqual(info.name, "远古战役")
-        self.assertEqual(info.author, "老李")
-        self.assertEqual(info.difficulty, "普通")
+        self.assertEqual(info.name, "远古战役")  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertEqual(info.author, "老李")  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertEqual(info.difficulty, "普通")  # pyright: ignore[reportOptionalMemberAccess]
 
     def test_trigstr_resolved(self):
         from gametool.w3i import parse_w3f
 
         info = parse_w3f(_build_w3f(name="TRIGSTR_003"), wts={3: "真战役名"})
-        self.assertEqual(info.name, "真战役名")
+        self.assertEqual(info.name, "真战役名")  # pyright: ignore[reportOptionalMemberAccess]
 
     def test_garbage_returns_none(self):
         from gametool.w3i import parse_w3f
@@ -178,13 +180,13 @@ class TestParseW3f(unittest.TestCase):
         )
 
         self.assertEqual(
-            [(entry.path, entry.display_name) for entry in info.maps],
+            [(entry.path, entry.display_name) for entry in info.maps],  # pyright: ignore[reportOptionalMemberAccess]
             [
                 ("maps/chapter1.w3x", "序章"),
             ],
         )
-        self.assertEqual(info.maps[0].chapter_name, "第一章")
-        self.assertTrue(info.maps[0].initially_visible)
+        self.assertEqual(info.maps[0].chapter_name, "第一章")  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertTrue(info.maps[0].initially_visible)  # pyright: ignore[reportOptionalMemberAccess]
 
     def test_v2_consumes_background_version_before_map_buttons(self):
         from gametool.w3i import parse_w3f
@@ -197,8 +199,8 @@ class TestParseW3f(unittest.TestCase):
             )
         )
 
-        self.assertEqual([entry.path for entry in info.maps], ["Maps\\Chapter2.w3x"])
-        self.assertFalse(info.maps[0].initially_visible)
+        self.assertEqual([entry.path for entry in info.maps], ["Maps\\Chapter2.w3x"])  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertFalse(info.maps[0].initially_visible)  # pyright: ignore[reportOptionalMemberAccess]
 
     def test_truncation_keeps_only_complete_map_buttons(self):
         from gametool.w3i import W3fDiagnostic, parse_w3f
@@ -210,8 +212,8 @@ class TestParseW3f(unittest.TestCase):
 
         info = parse_w3f(data)
 
-        self.assertEqual([entry.path for entry in info.maps], ["Maps\\One.w3x"])
-        self.assertEqual(info.diagnostic, W3fDiagnostic.TRUNCATED)
+        self.assertEqual([entry.path for entry in info.maps], ["Maps\\One.w3x"])  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertEqual(info.diagnostic, W3fDiagnostic.TRUNCATED)  # pyright: ignore[reportOptionalMemberAccess]
 
     def test_malicious_map_count_is_bounded(self):
         from gametool.w3i import W3fDiagnostic, parse_w3f
@@ -219,8 +221,8 @@ class TestParseW3f(unittest.TestCase):
         data = _build_w3f_tail()[:-4] + struct.pack("<i", 2_147_483_647)
         info = parse_w3f(data)
 
-        self.assertEqual(info.maps, [])
-        self.assertEqual(info.diagnostic, W3fDiagnostic.TRUNCATED)
+        self.assertEqual(info.maps, [])  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertEqual(info.diagnostic, W3fDiagnostic.TRUNCATED)  # pyright: ignore[reportOptionalMemberAccess]
 
     def test_truncated_header_returns_none(self):
         from gametool.w3i import parse_w3f
@@ -251,16 +253,16 @@ class TestW3iIntegration(unittest.TestCase):
 
         w3i = _build_v25(map_name="真实地图名", author="作者X")
         md = MapData(path="x", name="占位名")
-        _add_w3i(md, _FakeArchive({"war3map.w3i": w3i}), {})
+        _add_w3i(md, _FakeArchive({"war3map.w3i": w3i}), {})  # pyright: ignore[reportArgumentType]
         self.assertIsNotNone(md.w3i)
-        self.assertEqual(md.w3i.author, "作者X")
+        self.assertEqual(md.w3i.author, "作者X")  # pyright: ignore[reportOptionalMemberAccess]
         self.assertEqual(md.name, "真实地图名")  # 地图名优先取 w3i
 
     def test_add_w3i_keeps_name_if_w3i_absent(self):
         from gametool.api import _add_w3i, MapData
 
         md = MapData(path="x", name="占位名")
-        _add_w3i(md, _FakeArchive({}), {})
+        _add_w3i(md, _FakeArchive({}), {})  # pyright: ignore[reportArgumentType]
         self.assertIsNone(md.w3i)
         self.assertEqual(md.name, "占位名")
 

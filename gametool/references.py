@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import re
 
 from .script_sources import analysis_script_texts
@@ -104,7 +106,7 @@ REF_COLUMNS = {
 _NOT_A_CODE = {"self", "none", "true", "null", "dead", "tree", "both", "item"}
 
 
-def _split_codes(value) -> list:
+def _split_codes(value) -> list[str]:
     """把字段值拆成 4cc 码列表。单值(单 4cc)与逗号列表都走这里；过滤空/占位/非码。"""
     if not isinstance(value, str):
         return []
@@ -120,7 +122,7 @@ def _split_codes(value) -> list:
     return out
 
 
-def extract_refs_by_type(mods, field_type) -> list:
+def extract_refs_by_type(mods, field_type) -> list[tuple[str, list[str]]]:
     """二进制对象：遍历原始 mods，类型属于 REF_TYPES 的字段即引用字段。
 
     mods: 可迭代的 Modification(有 .field_id / .value)。
@@ -129,8 +131,8 @@ def extract_refs_by_type(mods, field_type) -> list:
     """
     # 按 field_id 聚合并去重：w3a/w3q 的引用字段会逐等级各出现一次(同 field_id 多条)，
     # 若不聚合，同一引用会重复成边(反向"被谁引用"里出现多条相同项)。这里按 field_id 合并去重。
-    agg: dict = {}
-    order = []
+    agg: dict[str, list[str]] = {}
+    order: list[str] = []
     for m in mods:
         if field_type(m.field_id) in REF_TYPES:
             for c in _split_codes(m.value):
@@ -143,7 +145,9 @@ def extract_refs_by_type(mods, field_type) -> list:
     return [(fid, agg[fid]) for fid in order]
 
 
-def extract_refs_by_column(fields: dict, category: str) -> list:
+def extract_refs_by_column(
+    fields: Mapping[str, object], category: str
+) -> list[tuple[str, list[str]]]:
     """文本对象：按 category 的引用列名表取引用列。
 
     fields: {列名: 值字符串}。category: 中文分类。
@@ -175,7 +179,7 @@ def build_reference_graph(md) -> None:
             BASE_NAMES,
         )  # 引用到的原版对象(如标准 buff)未作为对象加载时，回退取原版名
     except ImportError:
-        BASE_NAMES = {}
+        BASE_NAMES = {}  # pyright: ignore[reportConstantRedefinition] - 回退声明
 
     def _label(field_key):
         # 二进制对象字段是 4cc → label_for 直接译；SLK/文本对象字段是列名，
@@ -183,9 +187,11 @@ def build_reference_graph(md) -> None:
         lab = label_for(field_key)
         return lab if lab != field_key else slk_col_label(field_key)
 
-    references: dict = {}
-    referenced_by: dict = {}
-    seen_edges: set = set()  # (被引码, 引用者id, 标签) 去重，防重复边
+    references: dict[str, list[tuple[str, str, str]]] = {}
+    referenced_by: dict[str, list[tuple[str, str, str]]] = {}
+    seen_edges: set[tuple[str, str, str]] = (
+        set()
+    )  # (被引码, 引用者id, 标签) 去重，防重复边
     obj_index = md.obj_index
 
     all_objects = [o for objs in md.objects.values() for o in objs]

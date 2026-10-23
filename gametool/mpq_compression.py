@@ -84,10 +84,12 @@ def _decode_zlib(data: bytes, output_size: int, mask: int) -> bytes:
 
 
 def _decode_huffman(data: bytes, output_size: int, mask: int) -> bytes:
-    from . import mpq as mpq_facade
+    import importlib
 
+    # 经 mpq facade 动态取 huff_decompress: 断开静态 import 环, 且保留测试对其的 monkeypatch 点
+    huff = importlib.import_module("gametool.mpq").huff_decompress
     try:
-        result = mpq_facade.huff_decompress(data, output_size + 1)
+        result = huff(data, output_size + 1)
     except (IndexError, ValueError) as error:
         raise MPQCompressionError(mask, f"corrupt Huffman stream: {error}") from error
     return _bounded_result(mask, "Huffman", result, output_size)

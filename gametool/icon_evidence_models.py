@@ -4,15 +4,39 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING, Literal, assert_never, override
+from typing import Literal, Protocol, assert_never, override
 
 from .icon_field_evidence import IconFieldDisposition
 
-if TYPE_CHECKING:
-    from .icon_resources import (
-        IconObjectReference,
-        NamedIconArchive,
-    )
+
+class NamedIconArchiveSurface(Protocol):
+    """Named-member archive surface (structural twin of icon_resources.NamedIconArchive)."""
+
+    @property
+    def path(self) -> str: ...
+
+    def has_file(self, name: str) -> bool: ...
+
+    def read_file(self, name: str) -> bytes: ...
+
+
+class IconObjectReferenceSurface(Protocol):
+    """Structural twin of icon_resources.IconObjectReference."""
+
+    category: str
+    object_id: str
+    object_name: str
+    base_id: str
+    map_path: str
+    map_scope: str
+    map_sha256: str
+    field_key: str
+    field_label: str
+    field_type: str
+    field_source: str
+    wts_source: str
+    requested_path: str
+    normalized_path: str
 
 
 class IconGapReason(StrEnum):
@@ -65,7 +89,7 @@ class IconArchiveLayer:
     """One exact named archive and its logical provenance."""
 
     layer: IconResolutionLayer
-    archive: NamedIconArchive
+    archive: NamedIconArchiveSurface
     source_path: str
 
     def __post_init__(self) -> None:
@@ -98,7 +122,7 @@ class IconLookupAttempt:
 class ResolvedIconEvidence:
     """An eligible reference bound to hash-verified bytes."""
 
-    reference: IconObjectReference
+    reference: IconObjectReferenceSurface
     resolved_path: str
     source_path: str
     payload: bytes
@@ -111,7 +135,7 @@ class ResolvedIconEvidence:
 class UnresolvedIconEvidence:
     """An eligible reference with a stable primary gap reason."""
 
-    reference: IconObjectReference
+    reference: IconObjectReferenceSurface
     reason: IconGapReason
     diagnostics: tuple[IconDiagnosticFlag, ...]
     attempts: tuple[IconLookupAttempt, ...]
@@ -126,7 +150,7 @@ class UnresolvedIconEvidence:
 class FilteredIconEvidence:
     """An exact false-icon field excluded before path lookup."""
 
-    reference: IconObjectReference
+    reference: IconObjectReferenceSurface
     reason: IconFieldDisposition = IconFieldDisposition.FILTERED_NON_ICON
 
 

@@ -126,8 +126,8 @@ class TestParseCameras(unittest.TestCase):
         cameras = parse_cameras(_i(0) + _i(1) + _camera("新版镜头", local=True))
         self.assertEqual(len(cameras), 1)
         self.assertEqual(cameras[0].name, "新版镜头")
-        self.assertAlmostEqual(cameras[0].local_pitch, 1.0)
-        self.assertAlmostEqual(cameras[0].local_yaw, 2.0)
+        self.assertAlmostEqual(cameras[0].local_pitch, 1.0)  # pyright: ignore[reportArgumentType, reportCallIssue]
+        self.assertAlmostEqual(cameras[0].local_yaw, 2.0)  # pyright: ignore[reportArgumentType, reportCallIssue]
 
     def test_bad_camera_data_returns_empty(self):
         self.assertEqual(parse_cameras(b"bad"), [])
@@ -178,7 +178,7 @@ class TestWorldMetadataIntegration(unittest.TestCase):
                 "war3map.w3s": _i(1) + _i(1) + _sound_v1(),
             }
         )
-        add_world_metadata(md, arch, {})
+        add_world_metadata(md, arch, {})  # pyright: ignore[reportArgumentType]
         self.assertEqual(len(md.regions), 1)
         self.assertEqual(len(md.cameras), 1)
         self.assertEqual(len(md.sounds), 1)

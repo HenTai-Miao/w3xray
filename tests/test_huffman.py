@@ -68,8 +68,8 @@ def _decode_to_end(data):
             new_syms += 1
             ok, v = is_.get_8_bits()
             if not ok:
-                return "EOF", out, new_syms, 0
-            tree.insert_new_branch_and_rebalance(tree.head.pPrev.DecompressedValue, v)  # pyright: ignore[reportAttributeAccessIssue]
+                return "EOF", out, new_syms, 0  # pyright: ignore[reportAttributeAccessIssue, reportOptionalMemberAccess]
+            tree.insert_new_branch_and_rebalance(tree.head.pPrev.DecompressedValue, v)  # pyright: ignore[reportAttributeAccessIssue, reportOptionalMemberAccess]
             if not is_sparse:
                 tree.inc_weights_and_rebalance(tree.items_by_byte[v])
         out += 1

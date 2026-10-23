@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import struct
 from dataclasses import dataclass
 
@@ -114,7 +116,7 @@ class _Reader:
         return decode_warcraft_string(raw)
 
 
-def parse_regions(data: bytes, wts: dict | None = None) -> list[Region]:
+def parse_regions(data: bytes, wts: Mapping[int, str] | None = None) -> list[Region]:
     wts = wts or {}
     try:
         reader = _Reader(data)
@@ -183,7 +185,15 @@ def _parse_cameras_variant(
                 local_yaw = reader.f32()
                 local_roll = reader.f32()
             name = reader.cstr()
-            cameras.append(Camera(*values, name, local_pitch, local_yaw, local_roll))
+            cameras.append(
+                Camera(
+                    *values,  # pyright: ignore[reportCallIssue] - 固定 10 个 f32 由读取循环保证
+                    name,  # pyright: ignore[reportCallIssue]
+                    local_pitch,  # pyright: ignore[reportCallIssue]
+                    local_yaw,  # pyright: ignore[reportCallIssue]
+                    local_roll,  # pyright: ignore[reportCallIssue]
+                )
+            )
         return cameras if reader.p == len(data) else None
     except struct.error, IndexError:
         return None

@@ -27,9 +27,9 @@ class _Summary:
     category_count: int = 0
     comment_count: int = 0
     script_count: int = 0
-    categories: tuple = ()
-    variables: tuple = ()
-    triggers: tuple = ()
+    categories: tuple = ()  # pyright: ignore[reportMissingTypeArgument]
+    variables: tuple = ()  # pyright: ignore[reportMissingTypeArgument]
+    triggers: tuple = ()  # pyright: ignore[reportMissingTypeArgument]
 
 
 def _function(
@@ -236,7 +236,7 @@ class TriggerDataSemanticTest(unittest.TestCase):
         )
 
         # When: the ECA report is formatted with TriggerData.
-        text = format_trigger_eca_tsv(summary, trigger_data=trigger_data)
+        text = format_trigger_eca_tsv(summary, trigger_data=trigger_data)  # pyright: ignore[reportArgumentType]
 
         # Then: raw rows remain, with a semantic sentence attached to the function row.
         self.assertIn(
@@ -277,7 +277,7 @@ class TriggerDataSemanticTest(unittest.TestCase):
         # Given: a map with WTG ECA and a selected game-data directory containing
         # real-format TriggerData.txt and TriggerStrings.txt.
         md = MapData(path="/missing/map.w3x", name="触发器图")
-        md.trigger_summary = _Summary(
+        md.trigger_summary = _Summary(  # pyright: ignore[reportAttributeAccessIssue]
             (
                 _function(
                     "DisplayTextToForce",
@@ -323,7 +323,7 @@ class TriggerDataSemanticTest(unittest.TestCase):
     def test_knowledge_pack_ignores_a_malformed_optional_trigger_schema(self) -> None:
         # Given: a map with ECA data and an invalid optional TriggerData signature.
         md = MapData(path="/missing/map.w3x", name="触发器图")
-        md.trigger_summary = _Summary(
+        md.trigger_summary = _Summary(  # pyright: ignore[reportAttributeAccessIssue]
             (_function("DisplayTextToForce", (TriggerEcaParameter(0, "所有玩家"),)),)
         )
         with (

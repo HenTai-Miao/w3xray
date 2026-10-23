@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 # Typography: CJK UI first, with a monospaced face for dense data panes.
 FONT = "Microsoft YaHei UI"
 TITLE_FONT = "Bahnschrift"
@@ -45,7 +47,7 @@ CATEGORY_COLORS = {
 }
 
 
-def entry_style():
+def entry_style() -> dict[str, Any]:
     return {
         "fg_color": PANEL,
         "border_color": BORDER,
@@ -55,7 +57,7 @@ def entry_style():
     }
 
 
-def primary_button_style():
+def primary_button_style() -> dict[str, Any]:
     return {
         "fg_color": ACCENT_DARK,
         "hover_color": ACCENT_HOVER,
@@ -64,7 +66,7 @@ def primary_button_style():
     }
 
 
-def secondary_button_style():
+def secondary_button_style() -> dict[str, Any]:
     return {
         "fg_color": SECONDARY,
         "hover_color": SECONDARY_HOVER,
@@ -73,7 +75,7 @@ def secondary_button_style():
     }
 
 
-def card_style():
+def card_style() -> dict[str, Any]:
     return {
         "fg_color": CARD,
         "corner_radius": 14,

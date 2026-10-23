@@ -33,7 +33,7 @@ from gametool.mpq import (
 
 class TestSafeExportPath(unittest.TestCase):
     def setUp(self):
-        self.out = os.path.realpath(os.environ.get("TEMP", "."))
+        self.out = os.path.realpath(os.environ.get("TEMP", "."))  # pyright: ignore[reportUninitializedInstanceVariable]
 
     def test_normal_name_joins_under_out_dir(self):
         dest = _safe_export_path(self.out, "war3map.j")
@@ -86,7 +86,7 @@ class TestExportUnrecoverableBlocks(unittest.TestCase):
                 return None
 
         with tempfile.TemporaryDirectory() as out:
-            _export_all_impl(Archive(), out, 1)
+            _export_all_impl(Archive(), out, 1)  # pyright: ignore[reportArgumentType]
             raw_path = os.path.join(out, "UnknownRaw", "File000007.mpqraw")
             manifest_path = os.path.join(out, "UnknownRaw", "manifest.tsv")
 
@@ -127,7 +127,7 @@ class TestKnownWorldMetadataExport(unittest.TestCase):
                 return None
 
         with tempfile.TemporaryDirectory() as out:
-            _export_all_impl(Archive(), out, 1)
+            _export_all_impl(Archive(), out, 1)  # pyright: ignore[reportArgumentType]
             with open(os.path.join(out, "war3map.w3r"), "rb") as f:
                 self.assertEqual(f.read(), b"regions")
             with open(os.path.join(out, "war3map.w3c"), "rb") as f:
@@ -167,7 +167,7 @@ class TestRecoveredNamedExport(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as out:
             exported_blocks = set()
-            count = _export_recovered_named_files(Archive(), out, exported_blocks)
+            count = _export_recovered_named_files(Archive(), out, exported_blocks)  # pyright: ignore[reportArgumentType]
 
             self.assertEqual(count, 1)
             self.assertIn(1, exported_blocks)
@@ -253,7 +253,7 @@ class TestUnifiedSinkSafety(unittest.TestCase):
             outside.mkdir()
             self._symlink(output / "Unknown", outside, directory=True)
 
-            write_unknown_files_from_archive(Archive(), str(output))
+            write_unknown_files_from_archive(Archive(), str(output))  # pyright: ignore[reportArgumentType]
 
             self.assertFalse((outside / "block_000000.blp").exists())
 

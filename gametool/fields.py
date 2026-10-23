@@ -16,11 +16,11 @@ try:
         FIELD_TYPES,
     )
 except Exception:  # 生成数据缺失时退化为仅精选表
-    GENERATED_FIELD_LABELS = {}
-    FIELD_TYPES = {}
-    GENERATED_FIELD_APPLICABILITY = {}
-    GENERATED_FIELD_BOUNDS = {}
-    GENERATED_FIELD_CONSTANTS = {}
+    GENERATED_FIELD_LABELS = {}  # pyright: ignore[reportConstantRedefinition] - 回退声明
+    FIELD_TYPES = {}  # pyright: ignore[reportConstantRedefinition] - 回退声明
+    GENERATED_FIELD_APPLICABILITY = {}  # pyright: ignore[reportConstantRedefinition] - 回退声明
+    GENERATED_FIELD_BOUNDS = {}  # pyright: ignore[reportConstantRedefinition] - 回退声明
+    GENERATED_FIELD_CONSTANTS = {}  # pyright: ignore[reportConstantRedefinition] - 回退声明
 
 # 每类对象的"名称"字段码
 NAME_FIELD = {

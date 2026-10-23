@@ -142,6 +142,7 @@ tests/test_anchored_source.py
 tests/test_api_split.py
 tests/test_archive_diagnostics.py
 tests/test_archive_inventory.py
+tests/test_archive_output_safety.py
 tests/test_atomic_rename.py
 tests/test_audit.py
 tests/test_author_plaintext_bundle.py
@@ -157,6 +158,7 @@ tests/test_casc_browser.py
 tests/test_casc_cli_sources.py
 tests/test_casc_inventory.py
 tests/test_casc_source.py
+tests/test_casclib_api.py
 tests/test_casclib_enumeration.py
 tests/test_casclib_source.py
 tests/test_casclib_windows_integration.py
@@ -169,6 +171,7 @@ tests/test_cli_terrain.py
 tests/test_client_object_data.py
 tests/test_client_resource_assets.py
 tests/test_codes.py
+tests/test_compat.py
 tests/test_compat_bundle.py
 tests/test_component_diagnostics.py
 tests/test_component_parse_diagnostics.py
@@ -233,6 +236,7 @@ tests/test_diagnostics.py
 tests/test_doo.py
 tests/test_doo_random_flags.py
 tests/test_explode.py
+tests/test_export_safety.py
 tests/test_external_listfile_limits.py
 tests/test_external_listfile_loading.py
 tests/test_extraction_completeness.py
@@ -264,6 +268,7 @@ tests/test_icon_evidence_models.py
 tests/test_icon_integrity_exports.py
 tests/test_icon_resources.py
 tests/test_icons_cache.py
+tests/test_imp.py
 tests/test_investigation_exports.py
 tests/test_item_relation_exports.py
 tests/test_item_relation_scripts.py
@@ -351,6 +356,7 @@ tests/test_search.py
 tests/test_security_boundaries.py
 tests/test_security_closeout.py
 tests/test_security_output_safety.py
+tests/test_security_read_budgets.py
 tests/test_single_instance.py
 tests/test_slk.py
 tests/test_slk_objects.py
@@ -365,10 +371,14 @@ tests/test_terrain.py
 tests/test_textobj.py
 tests/test_textobj_lossless.py
 tests/test_trigger_schema.py
+tests/test_triggerdata_semantics.py
 tests/test_trusted_description_cache.py
 tests/test_trusted_description_cache_anchored.py
 tests/test_trusted_icon_cache.py
 tests/test_ui_text_report.py
+tests/test_w3i.py
+tests/test_w3obj.py
+tests/test_w3world.py
 tests/test_war3_encoding.py
 tests/test_wct.py
 tests/test_wtg.py

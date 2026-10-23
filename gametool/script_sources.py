@@ -5,15 +5,21 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Final
+from collections.abc import Sequence
+from typing import Final, Protocol
 
 from .map_archive_reader import MapArchiveReader
-from .extraction_diagnostics import read_component
+from .extraction_diagnostics import DiagnosticTarget, read_component
 from .war3_encoding import decode_warcraft_string
 from .wct import WctDiagnostic, WctScript, parse_wct
 
-if TYPE_CHECKING:
-    from .map_data import MapData
+
+class _ScriptHost(DiagnosticTarget, Protocol):
+    """Structural surface of MapData used here (breaks map_data import cycle)."""
+
+    @property
+    def scripts(self) -> dict[str, str]: ...
+
 
 _TEXT_MEMBERS: Final = ("war3map.j", "war3map.lua", "war3map.wts")
 _BINARY_MEMBERS: Final = ("war3map.wtg", "war3map.wct")
@@ -34,7 +40,7 @@ class ScriptCollection:
 def collect_readable_scripts(
     archive: MapArchiveReader,
     *,
-    md: MapData | None = None,
+    md: _ScriptHost | None = None,
 ) -> ScriptCollection:
     """Decode text members and publish WCT only through its readable virtual text."""
     texts: dict[str, str] = {}
@@ -70,7 +76,7 @@ def collect_readable_scripts(
 def _read_script_member(
     archive: MapArchiveReader,
     name: str,
-    md: MapData | None,
+    md: _ScriptHost | None,
 ) -> bytes | None:
     if md is not None:
         component = (
@@ -87,7 +93,7 @@ def _read_script_member(
         return None
 
 
-def _decode_script_member(raw: bytes, name: str, md: MapData | None) -> str | None:
+def _decode_script_member(raw: bytes, name: str, md: _ScriptHost | None) -> str | None:
     if md is not None:
         component = "wts" if name == "war3map.wts" else "script"
         return read_component(
@@ -96,7 +102,7 @@ def _decode_script_member(raw: bytes, name: str, md: MapData | None) -> str | No
     return decode_warcraft_string(raw)
 
 
-def analysis_script_texts(md: MapData) -> tuple[tuple[str, str], ...]:
+def analysis_script_texts(md: _ScriptHost) -> tuple[tuple[str, str], ...]:
     """Return sorted source-preserving texts accepted by script analyzers."""
     return tuple(
         (name, text)

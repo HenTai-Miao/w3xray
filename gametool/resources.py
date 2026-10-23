@@ -4,12 +4,33 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final, cast
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Final, Protocol, cast
 
 from .script_sources import analysis_script_texts
 
-if TYPE_CHECKING:
-    from .api import GameObject, MapData
+
+class _ResourceHost(Protocol):
+    """Structural surface of MapData used here (avoids api import cycle)."""
+
+    @property
+    def objects(self) -> Mapping[str, Sequence[_ResourceObject]]: ...
+    @property
+    def all_files(self) -> list[str]: ...
+    @property
+    def _resource_report_cache(self) -> object: ...
+
+
+class _ResourceObject(Protocol):
+    @property
+    def obj_id(self) -> str: ...
+
+    @property
+    def icon(self) -> str: ...
+
+    @property
+    def fields(self) -> Iterable[tuple[str, str]]: ...
+
 
 _IMAGE_EXTS: Final = {
     "blp",
@@ -91,7 +112,7 @@ class ResourceReport:
         return {node.path: node for node in self.nodes}
 
 
-def build_resource_report(md: MapData) -> ResourceReport:
+def build_resource_report(md: _ResourceHost) -> ResourceReport:
     """构建资源引用报告；仅使用 MapData 已解析内容。
 
     报告是加载完成后的纯派生数据；分析页、审计、资料包各自调用，
@@ -103,7 +124,7 @@ def build_resource_report(md: MapData) -> ResourceReport:
     refs: dict[str, list[ResourceRef]] = {}
     for obj in _all_objects(md):
         _collect_object_refs(refs, obj)
-    for script_name, text in analysis_script_texts(md):
+    for script_name, text in analysis_script_texts(md):  # pyright: ignore[reportArgumentType] - 结构兼容
         _collect_text_refs(refs, f"脚本 {script_name}", "字符串字面量", text)
 
     archive_assets = tuple(
@@ -123,7 +144,7 @@ def build_resource_report(md: MapData) -> ResourceReport:
     unreferenced = tuple(path for path in archive_assets if path not in referenced)
     report = ResourceReport(nodes, archive_assets, unreferenced)
     try:
-        md._resource_report_cache = report
+        setattr(md, "_resource_report_cache", report)
     except AttributeError:  # 测试替身可能不是带槽的 MapData
         pass
     return report
@@ -147,11 +168,13 @@ def resource_kind(path: str) -> str:
     return _kind_for(_normalize(path))
 
 
-def _all_objects(md: MapData) -> list[GameObject]:
+def _all_objects(md: _ResourceHost) -> list[_ResourceObject]:
     return [obj for group in md.objects.values() for obj in group]
 
 
-def _collect_object_refs(refs: dict[str, list[ResourceRef]], obj: GameObject) -> None:
+def _collect_object_refs(
+    refs: dict[str, list[ResourceRef]], obj: _ResourceObject
+) -> None:
     if obj.icon:
         _add_ref(refs, obj.icon, ResourceRef(f"对象 {obj.obj_id}", "图标"))
     for label, value in obj.fields:

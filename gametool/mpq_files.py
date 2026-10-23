@@ -4,20 +4,22 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from io import StringIO
-from typing import TYPE_CHECKING, Final, Protocol
+from typing import Final, Protocol
 
 from .external_listfile import (
     MAX_EXTERNAL_LISTFILE_BYTES,
     MAX_EXTERNAL_LISTFILE_ENTRIES,
     MAX_EXTERNAL_LISTFILE_LINE_CHARS,
 )
-from .extraction_diagnostics import read_component, record_component_parse_issue
+from .extraction_diagnostics import (
+    DiagnosticTarget,
+    read_component,
+    record_component_parse_issue,
+)
 from .imp import ImportTable, import_table_parse_issue, parse_import_table
 from .map_archive_reader import DeclaredSizeArchive
 from .war3_encoding import decode_warcraft_string
 
-if TYPE_CHECKING:
-    from .map_data import MapData
 
 _MAX_LISTFILE_BYTES: Final = MAX_EXTERNAL_LISTFILE_BYTES
 _MAX_LISTFILE_NAMES: Final = MAX_EXTERNAL_LISTFILE_ENTRIES
@@ -113,7 +115,7 @@ def list_archive_files(
 def import_tables_from_archive(
     archive: FileListingArchive,
     *,
-    md: MapData | None = None,
+    md: DiagnosticTarget | None = None,
 ) -> tuple[ImportTable, ...]:
     """Parse every known map/campaign import table available in an archive."""
     tables: list[ImportTable] = []

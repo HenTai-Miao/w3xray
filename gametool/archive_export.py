@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import os
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
+from typing import TYPE_CHECKING, cast
 from typing import Final, Protocol
 
 from .archive_export_paths import _safe_export_path
@@ -48,12 +49,21 @@ _MAX_NAMED_EXPORT_BYTES: Final = 4 * 1024 * 1024 * 1024
 _MAX_UNKNOWN_EXPORT_BYTES: Final = 4 * 1024 * 1024 * 1024
 
 
+if TYPE_CHECKING:
+    from .archive_export_recovery import RecoveryArchive
+
+
+class ExportBlock(Protocol):
+    file_size: int
+    flags: int
+
+
 class ExportArchive(Protocol):
     path: str
     archive_offset: int
     _data: bytes
-    block_table: list
-    hash_table: list
+    block_table: Sequence[object]
+    hash_table: Sequence[object]
 
     def list_files(self) -> list[str]: ...
 
@@ -63,7 +73,7 @@ class ExportArchive(Protocol):
 
     def block_index_of(self, name: str) -> int | None: ...
 
-    def iter_blocks(self): ...
+    def iter_blocks(self) -> Iterable[tuple[int, ExportBlock]]: ...
 
     def read_block_anon(self, block) -> bytes | None: ...
 
@@ -108,7 +118,13 @@ def export_all_files(
     archive = MPQArchive(path)
     try:
         names = tuple(external_names) + read_external_listfile(external_listfile_path)
-        return _export_all_impl(archive, out_dir, _depth, external_names=names)
+        # 运行时为 MPQArchive (MPQ 源); 结构性差异经 cast 桥接, 由 _export_all_impl 内部 except 兜底
+        return _export_all_impl(
+            cast(ExportArchive, cast(object, archive)),
+            out_dir,
+            _depth,
+            external_names=names,
+        )
     finally:
         archive.close()
 
@@ -124,7 +140,13 @@ def export_loaded_map_files(
     """Extract a loaded map through its retained archive source."""
     names = tuple(external_names) + read_external_listfile(external_listfile_path)
     with open_map_source(md) as archive:
-        return _export_all_impl(archive, out_dir, _depth, external_names=names)
+        # 级联/CASC 源无块表 — 运行时分支由 impl 内部防护
+        return _export_all_impl(
+            cast(ExportArchive, cast(object, archive)),
+            out_dir,
+            _depth,
+            external_names=names,
+        )
 
 
 def _export_all_impl(
@@ -154,7 +176,9 @@ def _export_all_impl(
             sub_maps,
             _MAX_NAMED_EXPORT_BYTES - named_bytes,
         )
-    _export_recovered_named_files(archive, out_dir, exported_blocks)
+    _export_recovered_named_files(
+        cast("RecoveryArchive", cast(object, archive)), out_dir, exported_blocks
+    )
     _export_unknown_blocks(
         archive,
         out_dir,

@@ -204,7 +204,7 @@ def test_failed_campaign_parse_still_consumes_read_budget(
     monkeypatch.setattr(map_loader, "_MAX_CAMPAIGN_READ_BYTES", 4, raising=False)
 
     # When: both declared children are considered.
-    md = map_loader._load_map_impl(archive, archive.path, 0, None, MapLoadContext())
+    md = map_loader._load_map_impl(archive, archive.path, 0, None, MapLoadContext())  # pyright: ignore[reportArgumentType]
 
     # Then: the first failed parse is charged and the second body is not read.
     assert archive.read_calls == [archive.child_names[0]]
@@ -219,7 +219,7 @@ def test_failed_campaign_read_still_consumes_declared_budget(
     monkeypatch.setattr(map_loader, "_MAX_CAMPAIGN_READ_BYTES", 4, raising=False)
 
     # When: campaign loading reaches two unreadable declared children.
-    md = map_loader._load_map_impl(archive, archive.path, 0, None, MapLoadContext())
+    md = map_loader._load_map_impl(archive, archive.path, 0, None, MapLoadContext())  # pyright: ignore[reportArgumentType]
 
     # Then: the first failed read remains charged and the second is not attempted.
     assert archive.read_calls == [archive.child_names[0]]
@@ -243,7 +243,7 @@ def test_refused_unknown_write_still_consumes_read_budget(
     monkeypatch.setattr(knowledge_unknown_exports, "_MAX_UNKNOWN_EXPORT_BYTES", 1)
 
     # When: anonymous publication refuses the first destination.
-    knowledge_unknown_exports.write_unknown_files_from_archive(archive, str(root))
+    knowledge_unknown_exports.write_unknown_files_from_archive(archive, str(root))  # pyright: ignore[reportArgumentType]
 
     # Then: the refused write cannot reset the decompression budget.
     assert archive.read_indexes == [0]
@@ -266,7 +266,7 @@ def test_refused_named_write_still_consumes_read_budget(
     monkeypatch.setattr(archive_export, "_MAX_NAMED_EXPORT_BYTES", 1)
 
     # When: full extraction refuses the first named destination.
-    archive_export._export_all_impl(archive, str(output), 1)
+    archive_export._export_all_impl(archive, str(output), 1)  # pyright: ignore[reportArgumentType]
 
     # Then: the refused write still prevents a second member read.
     assert archive.read_names == [archive.names[0]]
@@ -282,7 +282,7 @@ def test_failed_named_read_still_consumes_read_budget(
     monkeypatch.setattr(archive_export, "_MAX_NAMED_EXPORT_BYTES", 1)
 
     # When: complete extraction attempts the corrupt members.
-    archive_export._export_all_impl(archive, str(tmp_path), 1)
+    archive_export._export_all_impl(archive, str(tmp_path), 1)  # pyright: ignore[reportArgumentType]
 
     # Then: the failed first read consumes the budget before the second member.
     assert archive.read_names == [archive.names[0]]
@@ -294,7 +294,7 @@ def test_unknown_raw_fallback_charges_declared_attempt_size(tmp_path: Path) -> N
 
     # When: only one declared output byte is available to full extraction.
     archive_export._export_unknown_blocks(
-        archive,
+        archive,  # pyright: ignore[reportArgumentType]
         str(tmp_path),
         set(),
         [],
@@ -316,7 +316,7 @@ def test_recovered_name_budget_stops_reads_after_first_member(
 
     # When: recovered-name export reaches the aggregate byte budget.
     count = archive_export_recovery._export_recovered_named_files(
-        archive,
+        archive,  # pyright: ignore[reportArgumentType]
         str(tmp_path),
         set(),
     )
@@ -336,7 +336,7 @@ def test_recovered_name_declared_size_is_checked_before_read(
 
     # When: recovered-name export considers that hash-table entry.
     count = archive_export_recovery._export_recovered_named_files(
-        archive,
+        archive,  # pyright: ignore[reportArgumentType]
         str(tmp_path),
         set(),
     )
@@ -355,7 +355,7 @@ def test_recovery_scan_failed_read_still_consumes_budget(
     monkeypatch.setattr(archive_export_recovery, "_MAX_RECOVERY_SCAN_BYTES", 1)
 
     # When: name recovery scans blocks for embedded resource paths.
-    archive_export_recovery._export_recovered_named_files(archive, str(tmp_path), set())
+    archive_export_recovery._export_recovered_named_files(archive, str(tmp_path), set())  # pyright: ignore[reportArgumentType]
 
     # Then: a failed first attempt still prevents a second decompression attempt.
     assert archive.read_indexes == [0]
@@ -370,7 +370,7 @@ def test_oversized_unknown_read_still_consumes_budget(
     monkeypatch.setattr(knowledge_unknown_exports, "_MAX_UNKNOWN_EXPORT_BYTES", 1)
 
     # When: the first anonymous block exceeds the remaining budget after reading.
-    knowledge_unknown_exports.write_unknown_files_from_archive(archive, str(tmp_path))
+    knowledge_unknown_exports.write_unknown_files_from_archive(archive, str(tmp_path))  # pyright: ignore[reportArgumentType]
 
     # Then: the oversized result is charged and no second block is decompressed.
     assert archive.read_indexes == [0]

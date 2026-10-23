@@ -45,7 +45,7 @@ class _AnonymousArchive(_NamedArchive):
     def list_files(self) -> list[str]:
         return []
 
-    def has_file(self, _name: str) -> bool:
+    def has_file(self, _name: str) -> bool:  # pyright: ignore[reportIncompatibleMethodOverride]
         return False
 
     def iter_blocks(self) -> tuple[tuple[int, _Block], ...]:
@@ -68,7 +68,7 @@ def test_named_archive_file_does_not_follow_in_root_parent_symlink(
     actual.mkdir(parents=True)
     _symlink(output / "Assets", actual, directory=True)
 
-    _export_all_impl(_NamedArchive(), str(output), 1)
+    _export_all_impl(_NamedArchive(), str(output), 1)  # pyright: ignore[reportArgumentType]
 
     assert not (actual / "Panel.blp").exists()
 
@@ -82,7 +82,7 @@ def test_anonymous_archive_file_does_not_follow_directory_symlink(
     outside.mkdir()
     _symlink(output / "Unknown", outside, directory=True)
 
-    _export_all_impl(_AnonymousArchive(), str(output), 1)
+    _export_all_impl(_AnonymousArchive(), str(output), 1)  # pyright: ignore[reportArgumentType]
 
     assert not (outside / "File000000.blp").exists()
 
@@ -96,7 +96,7 @@ def test_raw_archive_file_and_manifest_do_not_follow_directory_symlink(
     outside.mkdir()
     _symlink(output / "UnknownRaw", outside, directory=True)
 
-    _export_all_impl(_RawArchive(), str(output), 1)
+    _export_all_impl(_RawArchive(), str(output), 1)  # pyright: ignore[reportArgumentType]
 
     assert not (outside / "File000000.mpqraw").exists()
     assert not (outside / "manifest.tsv").exists()
@@ -134,7 +134,7 @@ def test_recovered_name_does_not_follow_destination_symlink(tmp_path: Path) -> N
     target.write_bytes(b"before")
     _symlink(textures / "foo.blp", target)
 
-    count = _export_recovered_named_files(Archive(), str(output), set())
+    count = _export_recovered_named_files(Archive(), str(output), set())  # pyright: ignore[reportArgumentType]
 
     assert count == 0
     assert target.read_bytes() == b"before"
@@ -176,7 +176,7 @@ def test_recovered_unc_name_is_rejected_before_normalization(tmp_path: Path) -> 
 
     output = tmp_path / "out"
 
-    count = _export_recovered_named_files(Archive(), str(output), set())
+    count = _export_recovered_named_files(Archive(), str(output), set())  # pyright: ignore[reportArgumentType]
 
     assert count == 0
     assert not (output / "server" / "share" / "evil.blp").exists()

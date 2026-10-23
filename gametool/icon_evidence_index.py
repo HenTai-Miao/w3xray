@@ -16,7 +16,8 @@ from .icon_evidence_models import (
 )
 
 if TYPE_CHECKING:
-    from .icon_resources import AnonymousIconResource, IconObjectReference
+    from .icon_evidence_models import IconObjectReferenceSurface
+    from .icon_resources import AnonymousIconResource
 
 type IconEvidenceRow = (
     ResolvedIconEvidence | UnresolvedIconEvidence | FilteredIconEvidence
@@ -107,7 +108,7 @@ def merge_icon_evidence_indexes(
     )
 
 
-def _reference_key(reference: IconObjectReference) -> tuple[str, ...]:
+def _reference_key(reference: IconObjectReferenceSurface) -> tuple[str, ...]:
     ordered_text = (
         reference.map_path,
         reference.map_scope,

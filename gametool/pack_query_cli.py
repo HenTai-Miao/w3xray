@@ -77,7 +77,7 @@ def _clean(text: str) -> str:
     return _COLOR_RE.sub("", text).replace("|n", " ")
 
 
-_ROWS_CACHE: dict[tuple[str, str], list[list[str]]] = {}
+_ROWS_CACHE: dict[tuple[str, str], tuple[tuple[int, int, int], list[list[str]]]] = {}
 
 
 def _read_rows(pack_dir: Path, rel: str) -> list[list[str]]:
@@ -2093,7 +2093,9 @@ _SCOPE_ADD_ACTION_RE = re.compile(
 
 
 _SCOPE_CACHE: dict[str, tuple[list[int], list[str]]] = {}
-_REGISTRATION_CACHE: dict[str, tuple[dict, dict]] = {}
+_REGISTRATION_CACHE: dict[
+    str, tuple[dict[str, tuple[str, int]], dict[str, tuple[str, int]]]
+] = {}
 
 
 def _script_function_spans(script: str) -> tuple[list[int], list[str]]:
@@ -2464,10 +2466,10 @@ def _query_cmd(pack: Path, query: str, limit: int) -> list[str]:
     # 每条注册按「所在函数」配对处理器: 同名局部变量跨函数不再串台。
     # 精确命中优先于前缀命中 (cmd "-" 不应把 "-zs" 一并列出)。
     exact_hits: dict[
-        tuple[str, str, str, str, str], tuple[str, str, str, str, str, int, str]
+        tuple[str, str, str, str, str, str], tuple[str, str, str, str, str, int, str]
     ] = {}
     loose_hits: dict[
-        tuple[str, str, str, str, str], tuple[str, str, str, str, str, int, str]
+        tuple[str, str, str, str, str, str], tuple[str, str, str, str, str, int, str]
     ] = {}
     for m in _CHAT_REG_RE.finditer(script):
         var, cmd, exact = m.group(1), m.group(3), m.group(4)

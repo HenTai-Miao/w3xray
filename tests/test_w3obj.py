@@ -81,7 +81,7 @@ class TestParseObjectData(unittest.TestCase):
         m = objs[0].mods[0]
         self.assertEqual(m.field_id, "ahdu")
         self.assertEqual(m.level, 2)
-        self.assertAlmostEqual(m.value, 5.0, places=4)
+        self.assertAlmostEqual(m.value, 5.0, places=4)  # pyright: ignore[reportArgumentType, reportCallIssue]
 
     def test_unknown_var_type_stops_gracefully(self):
         # 未知字段类型(此后游标已错位)→ 该对象中断，保留之前成功的对象，
@@ -183,7 +183,7 @@ class TestParseObjectData(unittest.TestCase):
         ab = [_obj_v3("AHbz", "A000", [_mod("ahdu", 1, 5.0, level=2)])]
         objs = parse_object_data(_build(ab, [], version=3), "w3a")
         self.assertEqual(objs[0].mods[0].level, 2)
-        self.assertAlmostEqual(objs[0].mods[0].value, 5.0, places=4)
+        self.assertAlmostEqual(objs[0].mods[0].value, 5.0, places=4)  # pyright: ignore[reportArgumentType, reportCallIssue]
 
     def test_version3_multiple_sets(self):
         # 重制版 HD/SD 皮肤：一个对象可有多个修改 set，全部 mods 都要收进来
@@ -216,13 +216,16 @@ class TestBuildObjectsRobust(unittest.TestCase):
         # 截断/畸形的 w3u：声明 1 个对象但数据不够 → 解析中途出错
         bad = struct.pack("<ii", 2, 1) + b"shor"  # version, count=1, 残缺
         arch = _FakeArchive("war3map.w3u", bad)
-        self.assertEqual(_build_objects(arch, "w3u", {}), [])  # 优雅返回空，不抛
+        self.assertEqual(
+            _build_objects(arch, "w3u", {}),  # pyright: ignore[reportArgumentType]
+            [],
+        )  # 优雅返回空，不抛  # pyright: ignore[reportArgumentType]
 
     def test_missing_file_returns_empty(self):
         from gametool.api import _build_objects
 
         arch = _FakeArchive("war3map.w3t", b"")
-        self.assertEqual(_build_objects(arch, "w3u", {}), [])
+        self.assertEqual(_build_objects(arch, "w3u", {}), [])  # pyright: ignore[reportArgumentType]
 
 
 if __name__ == "__main__":

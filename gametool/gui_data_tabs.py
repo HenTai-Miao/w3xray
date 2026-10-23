@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import tkinter as tk
 from tkinter import ttk
 
@@ -25,6 +27,42 @@ from .theme import (
 
 class DataTabLayoutMixin:
     """Build the read-only data tabs below the editor workspace."""
+
+    if TYPE_CHECKING:
+        from collections.abc import Callable
+        import customtkinter as ctk
+        from tkinter import ttk
+
+        from .map_data import MapData
+        from .script_scan import ChatCommand, Recipe
+
+        _refresh_cmds: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _attach_ctx_menu: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _refresh_recipes: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _refresh_orphans: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _refresh_units: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _refresh_doodads: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _refresh_preplaced: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        commands: list[ChatCommand]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        recipes: list[Recipe]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        map_data: MapData | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        info_box: ctk.CTkTextbox  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        cmd_hint: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        cmd_search: ctk.StringVar  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        cmd_tree: ttk.Treeview  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        rec_hint: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        rec_search: ctk.StringVar  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        rec_tree: ttk.Treeview  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        pre_hint: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        pre_search: ctk.StringVar  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        pre_tree: ttk.Treeview  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        orphan_hint: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        orphan_search: ctk.StringVar  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        orphan_tree: ttk.Treeview  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        unit_title: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        unit_tree: ttk.Treeview  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        doodad_title: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        doodad_tree: ttk.Treeview  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
 
     def _build_cmd_tab(self, parent) -> None:
         top = ctk.CTkFrame(parent, fg_color=BG)
@@ -204,7 +242,7 @@ def _section_title(parent, text: str, color: str):
     return label
 
 
-def _build_tree_panel(owner, parent, *, columns, pady=8):
+def _build_tree_panel(owner, parent, *, columns, pady: int | tuple[int, int] = 8):
     wrap = ctk.CTkFrame(parent, **card_style())
     wrap.pack(fill="both", expand=True, padx=4, pady=pady)
     inner = tk.Frame(wrap, bg=CARD)

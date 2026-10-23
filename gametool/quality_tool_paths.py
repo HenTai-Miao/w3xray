@@ -15,7 +15,9 @@ gametool/acceptance_batch.py
 gametool/acceptance_cli.py
 gametool/acceptance_runner.py
 gametool/anchored_source.py
+gametool/api.py
 gametool/archive_diagnostics.py
+gametool/archive_export.py
 gametool/archive_export_paths.py
 gametool/archive_export_recovery.py
 gametool/archive_inventory.py
@@ -205,6 +207,7 @@ gametool/extraction_ledger.py
 gametool/extraction_ledger_format.py
 gametool/extraction_profile.py
 gametool/field_meta.py
+gametool/fields.py
 gametool/game_config_summary.py
 gametool/game_data_inventory.py
 gametool/game_data_source.py
@@ -218,18 +221,23 @@ gametool/gui_archive_reports.py
 gametool/gui_batch_status.py
 gametool/gui_batch_status_layout.py
 gametool/gui_casc_browser.py
+gametool/gui_clipboard.py
 gametool/gui_current_map.py
 gametool/gui_current_map_presenter.py
 gametool/gui_current_map_worker.py
+gametool/gui_data_refresh.py
+gametool/gui_data_tabs.py
 gametool/gui_export_actions.py
 gametool/gui_external_data.py
 gametool/gui_extraction_reports.py
+gametool/gui_icon_cache.py
 gametool/gui_icon_evidence_loader.py
 gametool/gui_icon_gap_layout.py
 gametool/gui_icon_gaps.py
 gametool/gui_item_relation_layout.py
 gametool/gui_item_relations.py
 gametool/gui_lifecycle.py
+gametool/gui_load_settings.py
 gametool/gui_loader.py
 gametool/gui_loader_host.py
 gametool/gui_loader_runner.py
@@ -238,6 +246,7 @@ gametool/gui_object_detail.py
 gametool/gui_object_filter_runner.py
 gametool/gui_object_text_controls.py
 gametool/gui_pack_query.py
+gametool/gui_pane_state.py
 gametool/gui_profile_settings.py
 gametool/gui_report_tabs.py
 gametool/gui_report_types.py
@@ -249,6 +258,7 @@ gametool/gui_shell_object_panel.py
 gametool/gui_shell_source_panel.py
 gametool/gui_source_browser.py
 gametool/gui_topbar.py
+gametool/gui_trigger_eca.py
 gametool/gui_ui_text_reports.py
 gametool/gui_worker_host.py
 gametool/gui_worker_registry.py
@@ -258,11 +268,13 @@ gametool/guide_minimap.py
 gametool/guide_report.py
 gametool/hero_chain.py
 gametool/historical_icon_bindings.py
+gametool/huffman.py
 gametool/icon_candidate_bindings.py
 gametool/icon_evidence_builder.py
 gametool/icon_evidence_counts.py
 gametool/icon_evidence_exports.py
 gametool/icon_evidence_index.py
+gametool/icon_evidence_models.py
 gametool/icon_evidence_presentation.py
 gametool/icon_evidence_query.py
 gametool/icon_field_evidence.py
@@ -326,6 +338,7 @@ gametool/map_info.py
 gametool/map_loader.py
 gametool/mapmeta.py
 gametool/mmp.py
+gametool/mpq.py
 gametool/mpq_adpcm.py
 gametool/mpq_block_reader.py
 gametool/mpq_compression.py
@@ -362,6 +375,7 @@ gametool/object_text_selection.py
 gametool/object_text_sources.py
 gametool/order_ids.py
 gametool/orders.py
+gametool/pack_query_cli.py
 gametool/presentation_safety.py
 gametool/quality_gate.py
 gametool/quality_paths.py
@@ -369,6 +383,7 @@ gametool/quality_test_paths.py
 gametool/quality_tool_paths.py
 gametool/real_save_cli.py
 gametool/real_save_files.py
+gametool/references.py
 gametool/resource_content_refs.py
 gametool/resource_inventory.py
 gametool/resources.py
@@ -428,6 +443,7 @@ gametool/ui_texts.py
 gametool/w3f.py
 gametool/w3i.py
 gametool/w3obj.py
+gametool/w3world.py
 gametool/war3_encoding.py
 gametool/wct.py
 gametool/westrings.py

@@ -130,7 +130,7 @@ class TestImportedNamesForExport(unittest.TestCase):
                 "war3mapImported\\icon.blp": b"BLP",  # imp 里是相对名 icon.blp
             }
         )
-        names = _imported_names(arch)
+        names = _imported_names(arch)  # pyright: ignore[reportArgumentType]
         # 直查得到的原名保留；相对名直查不到时补 war3mapImported\ 前缀
         self.assertIn("war3mapImported\\model.mdx", names)
         self.assertIn("war3mapImported\\icon.blp", names)
@@ -141,7 +141,7 @@ class TestImportedNamesForExport(unittest.TestCase):
         imp = _build(1, [(13, "UI\\CampaignIcon.blp")])
         arch = _FakeArchive({"war3campaign.imp": imp})
 
-        names = _imported_names(arch)
+        names = _imported_names(arch)  # pyright: ignore[reportArgumentType]
 
         self.assertIn("UI\\CampaignIcon.blp", names)
 
@@ -151,7 +151,7 @@ class TestImportedNamesForExport(unittest.TestCase):
         imp = _build(1, [(8, "icon.blp"), (13, "ReplaceableTextures\\custom.blp")])
         arch = _FakeArchive({"war3map.imp": imp})
 
-        names = _imported_names(arch)
+        names = _imported_names(arch)  # pyright: ignore[reportArgumentType]
 
         self.assertIn("war3mapImported\\icon.blp", names)
         self.assertIn("icon.blp", names)
@@ -161,7 +161,7 @@ class TestImportedNamesForExport(unittest.TestCase):
     def test_no_imp_returns_empty(self):
         from gametool.api import _imported_names
 
-        self.assertEqual(_imported_names(_FakeArchive({})), [])
+        self.assertEqual(_imported_names(_FakeArchive({})), [])  # pyright: ignore[reportArgumentType]
 
     def test_add_import_summary_reports_missing_resources(self):
         from gametool.api import MapData
@@ -176,16 +176,18 @@ class TestImportedNamesForExport(unittest.TestCase):
         )
         md = MapData(path="x.w3x", name="x")
 
-        add_import_summary(md, arch)
+        add_import_summary(md, arch)  # pyright: ignore[reportArgumentType]
 
-        self.assertEqual(md.import_summary.entry_count, 2)
-        self.assertEqual(md.import_summary.standard_count, 1)
-        self.assertEqual(md.import_summary.custom_count, 1)
+        self.assertEqual(md.import_summary.entry_count, 2)  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertEqual(md.import_summary.standard_count, 1)  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertEqual(md.import_summary.custom_count, 1)  # pyright: ignore[reportOptionalMemberAccess]
         self.assertEqual(
-            md.import_summary.resolved_paths, ("war3mapImported\\icon.blp",)
+            md.import_summary.resolved_paths,  # pyright: ignore[reportOptionalMemberAccess]
+            ("war3mapImported\\icon.blp",),
         )
         self.assertEqual(
-            md.import_summary.missing_paths, ("ReplaceableTextures\\custom.blp",)
+            md.import_summary.missing_paths,  # pyright: ignore[reportOptionalMemberAccess]
+            ("ReplaceableTextures\\custom.blp",),  # pyright: ignore[reportOptionalMemberAccess]
         )
 
     def test_add_import_summary_reads_campaign_import_table(self):
@@ -201,10 +203,10 @@ class TestImportedNamesForExport(unittest.TestCase):
         )
         md = MapData(path="x.w3n", name="x")
 
-        add_import_summary(md, arch)
+        add_import_summary(md, arch)  # pyright: ignore[reportArgumentType]
 
-        self.assertEqual(md.import_summary.entry_count, 1)
-        self.assertEqual(md.import_summary.resolved_paths, ("UI\\CampaignIcon.blp",))
+        self.assertEqual(md.import_summary.entry_count, 1)  # pyright: ignore[reportOptionalMemberAccess]
+        self.assertEqual(md.import_summary.resolved_paths, ("UI\\CampaignIcon.blp",))  # pyright: ignore[reportOptionalMemberAccess]
 
 
 if __name__ == "__main__":

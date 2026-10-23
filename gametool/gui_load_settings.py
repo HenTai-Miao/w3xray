@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import tkinter as tk
 
+from typing import TYPE_CHECKING
+
 from .load_options import (
     default_load_options,
     normalize_load_options,
@@ -12,6 +14,18 @@ from .load_options import (
 
 class LoadSettingsMixin:
     """Keep module load switches enabled now that the settings UI is removed."""
+
+    load_options: dict[str, bool] = {}
+    load_option_vars: dict[str, tk.BooleanVar] = {}
+
+    if TYPE_CHECKING:
+        from collections.abc import Callable
+        from .map_data import MapData
+
+        _campaign_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _save_config: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _start_map_switch: Callable[[MapData, str | None], None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        map_data: MapData | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
 
     def _init_load_options(self) -> None:
         self.load_options = default_load_options()

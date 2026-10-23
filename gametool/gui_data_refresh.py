@@ -3,16 +3,44 @@
 from __future__ import annotations
 
 from collections import Counter
-from tkinter import font as tkfont
+from tkinter import font as tkfont, ttk
+from typing import TYPE_CHECKING
 
 from .base_names import BASE_NAMES, BASE_NAMES_EN
 from .map_info import format_map_info
 from .search import compile_query
 from .theme import CARD, FONT, ROW_ALT
 
+if TYPE_CHECKING:
+    import customtkinter as ctk
+    from .map_data import MapData
+    from .script_scan import ChatCommand, Recipe
+
 
 class DataRefreshMixin:
     """Populate the read-only data tabs from the current map."""
+
+    # 宿主 (App) 组合时注入的控件与状态 — 类级注解仅作静态声明, 无运行时值
+    if TYPE_CHECKING:
+        commands: list[ChatCommand]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        map_data: MapData | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        info_box: ctk.CTkTextbox  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        cmd_hint: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        cmd_search: ctk.StringVar  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        cmd_tree: ttk.Treeview  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        rec_hint: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        rec_search: ctk.StringVar  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        rec_tree: ttk.Treeview  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        pre_hint: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        pre_search: ctk.StringVar  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        orphan_hint: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        orphan_search: ctk.StringVar  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        orphan_tree: ttk.Treeview  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        unit_title: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        unit_tree: ttk.Treeview  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        doodad_title: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        doodad_tree: ttk.Treeview  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        recipes: list[Recipe]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
 
     def _refresh_orphans(self) -> None:
         if not hasattr(self, "orphan_tree"):
@@ -155,8 +183,10 @@ class DataRefreshMixin:
         base_name = BASE_NAMES.get(code)
         return f"{base_name}({code})" if base_name else code
 
+    _rec_font: tkfont.Font | None = None
+
     def _measure_font(self):
-        if not hasattr(self, "_rec_font"):
+        if self._rec_font is None:
             self._rec_font = tkfont.Font(family=FONT, size=11)
         return self._rec_font
 

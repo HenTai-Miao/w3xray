@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 import tkinter as tk
 from tkinter import ttk
 
@@ -42,6 +43,23 @@ class _TriggerGroup:
 
 class TriggerEcaViewMixin:
     """Build and refresh the read-only GUI trigger workbench."""
+
+    if TYPE_CHECKING:
+        from collections.abc import Callable
+        from tkinter import Misc
+
+        from .map_data import MapData
+
+        map_data: MapData | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        trigger_eca_search: ctk.StringVar  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        trigger_eca_status: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        trigger_eca_tree: ttk.Treeview  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        trigger_eca_detail: ctk.CTkTextbox  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _attach_ctx_menu: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _attach_tree_copy: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _trigger_eca_groups: dict[object, list[object]]  # pyright: ignore[reportUninitializedInstanceVariable] - 本类运行时状态
+        _trigger_eca_map: MapData | None  # pyright: ignore[reportUninitializedInstanceVariable] - 本类运行时状态
+        _trigger_eca_nodes: dict[object, object]  # pyright: ignore[reportUninitializedInstanceVariable] - 本类运行时状态
 
     def _build_trigger_eca_tab(self, parent) -> None:
         top = ctk.CTkFrame(parent, fg_color=BG)

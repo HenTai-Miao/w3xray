@@ -2,11 +2,22 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import customtkinter as ctk
 from PIL import Image, ImageTk
 
 
 class IconCacheMixin:
+    """Host-injected caches; annotations only, no runtime values."""
+
+    if TYPE_CHECKING:
+        from .icons import IconResolver
+
+    icons: IconResolver | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+    _photo_cache: dict[tuple[str, int, str], object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入 (ctk.CTkImage | ImageTk.PhotoImage)
+    _pil_icon_cache: dict[tuple[str, int], Image.Image | None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+
     def _get_photo(self, icon_path, size=36):
         if not icon_path:
             return None
@@ -16,7 +27,7 @@ class IconCacheMixin:
         photo = None
         pil = self._get_icon_pil(icon_path)
         if pil is not None:
-            icon = pil.resize((size, size), Image.LANCZOS)
+            icon = pil.resize((size, size), Image.Resampling.LANCZOS)
             photo = ctk.CTkImage(light_image=icon, dark_image=icon, size=(size, size))
         self._photo_cache[key] = photo
         return photo
@@ -30,7 +41,7 @@ class IconCacheMixin:
         photo = None
         pil = self._get_icon_pil(icon_path)
         if pil is not None:
-            icon = pil.resize((size, size), Image.LANCZOS)
+            icon = pil.resize((size, size), Image.Resampling.LANCZOS)
             photo = ImageTk.PhotoImage(icon)
         self._photo_cache[key] = photo
         return photo

@@ -2454,6 +2454,13 @@ class _InputStream:
 class _Item:
     __slots__ = ("pNext", "pPrev", "DecompressedValue", "Weight", "pParent", "pChildLo")
 
+    pNext: "_Item | None"
+    pPrev: "_Item | None"
+    DecompressedValue: int
+    Weight: int
+    pParent: "_Item | None"
+    pChildLo: "_Item | None"
+
     def __init__(self):
         self.pNext = None
         self.pPrev = None
@@ -2468,6 +2475,9 @@ INSERT_BEFORE = 2
 
 
 class _HuffmannTree:
+    head: _Item
+    items_by_byte: list[_Item | None]
+
     def __init__(self):
         # ListHead 是循环双向链表的哨兵
         self.head = _Item()
@@ -2549,19 +2559,21 @@ class _HuffmannTree:
         # 自底向上建树
         child_lo = self.head.pPrev
         while child_lo is not self.head:
-            child_hi = child_lo.pPrev
+            child_hi = child_lo.pPrev  # pyright: ignore[reportOptionalMemberAccess] - 算法不变量保证非 None
             if child_hi is self.head:
                 break
             new_item = self._create_new_item(
-                0, child_hi.Weight + child_lo.Weight, INSERT_AFTER
+                0,
+                child_hi.Weight + child_lo.Weight,  # pyright: ignore[reportOptionalMemberAccess] - 算法不变量保证非 None
+                INSERT_AFTER,  # pyright: ignore[reportOptionalMemberAccess] - 算法不变量保证非 None
             )
             if new_item is None:
                 return False
-            child_lo.pParent = new_item
-            child_hi.pParent = new_item
+            child_lo.pParent = new_item  # pyright: ignore[reportOptionalMemberAccess] - 算法不变量保证非 None
+            child_hi.pParent = new_item  # pyright: ignore[reportOptionalMemberAccess] - 算法不变量保证非 None
             new_item.pChildLo = child_lo
             max_weight = self._fixup_item_pos_by_weight(new_item, max_weight)
-            child_lo = child_hi.pPrev
+            child_lo = child_hi.pPrev  # pyright: ignore[reportOptionalMemberAccess] - 算法不变量保证非 None
 
         self.min_valid_value = 1
         return True
@@ -2571,7 +2583,7 @@ class _HuffmannTree:
             item.Weight += 1
 
             higher_item = self._find_higher_or_equal_item(item.pPrev, item.Weight)
-            child_hi = higher_item.pNext
+            child_hi = higher_item.pNext  # pyright: ignore[reportOptionalMemberAccess] - 算法不变量保证非 None
 
             if child_hi is not item:
                 # 把 child_hi 移到 item 右边
@@ -2582,15 +2594,15 @@ class _HuffmannTree:
                 self._remove_item(item)
                 self._link_two_items(higher_item, item)
 
-                child_lo = child_hi.pParent.pChildLo
+                child_lo = child_hi.pParent.pChildLo  # pyright: ignore[reportOptionalMemberAccess] - 算法不变量保证非 None
                 parent = item.pParent
-                if parent.pChildLo is item:
-                    parent.pChildLo = child_hi
+                if parent.pChildLo is item:  # pyright: ignore[reportOptionalMemberAccess] - 算法不变量保证非 None
+                    parent.pChildLo = child_hi  # pyright: ignore[reportOptionalMemberAccess] - 算法不变量保证非 None
                 if child_lo is child_hi:
-                    child_hi.pParent.pChildLo = item
+                    child_hi.pParent.pChildLo = item  # pyright: ignore[reportOptionalMemberAccess] - 算法不变量保证非 None
                 parent = item.pParent
-                item.pParent = child_hi.pParent
-                child_hi.pParent = parent
+                item.pParent = child_hi.pParent  # pyright: ignore[reportOptionalMemberAccess] - 算法不变量保证非 None
+                child_hi.pParent = parent  # pyright: ignore[reportOptionalMemberAccess] - 算法不变量保证非 None
 
                 self.min_valid_value += 1
 
@@ -2598,7 +2610,7 @@ class _HuffmannTree:
 
     def insert_new_branch_and_rebalance(self, value1, value2):
         last_item = self.head.pPrev
-        child_hi = self._create_new_item(value1, last_item.Weight, INSERT_BEFORE)
+        child_hi = self._create_new_item(value1, last_item.Weight, INSERT_BEFORE)  # pyright: ignore[reportOptionalMemberAccess] - 算法不变量保证非 None
         if child_hi is not None:
             child_hi.pParent = last_item
             self.items_by_byte[value1] = child_hi
@@ -2606,7 +2618,7 @@ class _HuffmannTree:
             child_lo = self._create_new_item(value2, 0, INSERT_BEFORE)
             if child_lo is not None:
                 child_lo.pParent = last_item
-                last_item.pChildLo = child_lo
+                last_item.pChildLo = child_lo  # pyright: ignore[reportOptionalMemberAccess] - 算法不变量保证非 None
                 self.items_by_byte[value2] = child_lo
 
                 self.inc_weights_and_rebalance(child_lo)
@@ -2619,13 +2631,13 @@ class _HuffmannTree:
             return HUFF_DECOMPRESS_ERROR
         item = self.head.pNext
 
-        while item.pChildLo is not None:
+        while item.pChildLo is not None:  # pyright: ignore[reportOptionalMemberAccess] - 算法不变量保证非 None
             ok, bit = is_.get_1_bit()
             if not ok:
                 return HUFF_DECOMPRESS_ERROR
-            item = item.pChildLo.pPrev if bit else item.pChildLo
+            item = item.pChildLo.pPrev if bit else item.pChildLo  # pyright: ignore[reportOptionalMemberAccess] - 算法不变量保证非 None
 
-        return item.DecompressedValue
+        return item.DecompressedValue  # pyright: ignore[reportOptionalMemberAccess] - 算法不变量保证非 None
 
     def decompress(self, out_size, is_):
         out = bytearray()
@@ -2652,7 +2664,8 @@ class _HuffmannTree:
                 if not ok:
                     return bytes(out)
                 if not self.insert_new_branch_and_rebalance(
-                    self.head.pPrev.DecompressedValue, value
+                    self.head.pPrev.DecompressedValue,  # pyright: ignore[reportOptionalMemberAccess] - 算法不变量保证非 None
+                    value,  # pyright: ignore[reportOptionalMemberAccess] - 算法不变量保证非 None
                 ):
                     return bytes(out)
                 if not is_sparse:

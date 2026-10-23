@@ -51,7 +51,6 @@ from .mpq_crypto import (
 )
 from .huffman import huff_decompress as huff_decompress
 from .mpq_file_types import guess_extension as guess_extension
-from .mpq_files import STATIC_MAP_FILES as STATIC_MAP_FILES, list_archive_files
 from .mpq_layout import (
     MPQLayout as MPQLayout,
     _Block as _Block,
@@ -72,6 +71,20 @@ _RESOLVE_CACHE_LIMIT: Final = 2_000_000
 
 
 class MPQArchive:
+    archive_offset: int  # pyright: ignore[reportUninitializedInstanceVariable] - _parse_header 延迟初始化
+    header_size: int  # pyright: ignore[reportUninitializedInstanceVariable] - _parse_header 延迟初始化
+    archive_size: int  # pyright: ignore[reportUninitializedInstanceVariable] - _parse_header 延迟初始化
+    format_version: int  # pyright: ignore[reportUninitializedInstanceVariable] - _parse_header 延迟初始化
+    sector_size_shift: int  # pyright: ignore[reportUninitializedInstanceVariable] - _parse_header 延迟初始化
+    sector_size: int  # pyright: ignore[reportUninitializedInstanceVariable] - _parse_header 延迟初始化
+    hash_table_pos: int  # pyright: ignore[reportUninitializedInstanceVariable] - _parse_header 延迟初始化
+    block_table_pos: int  # pyright: ignore[reportUninitializedInstanceVariable] - _parse_header 延迟初始化
+    hash_count: int  # pyright: ignore[reportUninitializedInstanceVariable] - _parse_header 延迟初始化
+    block_count: int  # pyright: ignore[reportUninitializedInstanceVariable] - _parse_header 延迟初始化
+    _layout: MPQLayout  # pyright: ignore[reportUninitializedInstanceVariable] - _parse_header 延迟初始化
+    hash_table: list[HashEntry]  # pyright: ignore[reportUninitializedInstanceVariable] - _parse_header 延迟初始化
+    block_table: list[_Block]  # pyright: ignore[reportUninitializedInstanceVariable] - _parse_header 延迟初始化
+
     def __init__(
         self,
         path: str,
@@ -174,7 +187,7 @@ class MPQArchive:
         for count in range(self.hash_count):
             raw_entry = self.hash_table[(index + count) & (self.hash_count - 1)]
             entry = (
-                raw_entry if isinstance(raw_entry, HashEntry) else HashEntry(*raw_entry)
+                raw_entry if isinstance(raw_entry, HashEntry) else HashEntry(*raw_entry)  # pyright: ignore[reportCallIssue, reportGeneralTypeIssues]
             )
             if entry.block_index == 0xFFFFFFFF:
                 break
@@ -212,6 +225,7 @@ class MPQArchive:
         bi = entry.block_index
         if bi >= len(self.block_table):  # 块表被截断/索引越界
             raise KeyError(name)
+        assert candidate is not None  # entry 命中时必有真名
         cache_key = (bi, candidate)
         cached = self._payload_cache.get(cache_key)
         if cached is not None:
@@ -302,5 +316,8 @@ class MPQArchive:
         """并集枚举 listfile、内置固定名单和导入清单。"""
         if self._names is not None:
             return self._names
+        # 延迟导入断开 mpq → mpq_files → (类型) map_data → (类型) archive_source → mpq 静态环
+        from .mpq_files import list_archive_files  # noqa: PLC0415
+
         self._names = list_archive_files(self)
         return self._names

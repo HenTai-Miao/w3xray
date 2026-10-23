@@ -82,7 +82,7 @@ def test_ctypes_api_binds_exact_unicode_and_narrow_abi() -> None:
     dll = FakeNativeLibrary()
 
     # When: the ctypes adapter binds and calls storage/file open.
-    api = CtypesCascLibApi(library=dll)
+    api = CtypesCascLibApi(library=dll)  # pyright: ignore[reportArgumentType]
     storage = api.open_storage("C:/魔兽争霸 III")
     file_handle = api.open_file(storage, "UI/TriggerData.txt")
 
@@ -128,7 +128,7 @@ def test_ctypes_api_binds_exact_unicode_and_narrow_abi() -> None:
 def test_fake_names_returned_by_find_use_casc_open_by_name_contract() -> None:
     # Given: CascLib's documented synthetic FileDataID name from CASC_FIND_DATA.
     dll = FakeNativeLibrary()
-    api = CtypesCascLibApi(library=dll)
+    api = CtypesCascLibApi(library=dll)  # pyright: ignore[reportArgumentType]
 
     # When: the synthetic name is reopened exactly as returned by enumeration.
     _ = api.open_file(101, "FILE0000004D.dat")
@@ -141,7 +141,7 @@ def test_fake_names_returned_by_find_use_casc_open_by_name_contract() -> None:
 def test_open_file_encodes_non_ascii_logical_paths_as_utf8() -> None:
     # Given: a logical CASC path containing characters outside ASCII.
     dll = FakeNativeLibrary()
-    api = CtypesCascLibApi(library=dll)
+    api = CtypesCascLibApi(library=dll)  # pyright: ignore[reportArgumentType]
 
     # When: the path crosses CascLib's narrow-character API boundary.
     _ = api.open_file(101, "UI\\测试.txt")
@@ -158,7 +158,7 @@ def test_open_storage_failure_includes_native_error() -> None:
 
     # When/Then: the adapter preserves operation and code.
     with pytest.raises(CascNativeError) as caught:
-        CtypesCascLibApi(library=dll).open_storage("C:/Warcraft III")
+        CtypesCascLibApi(library=dll).open_storage("C:/Warcraft III")  # pyright: ignore[reportArgumentType]
     assert caught.value.operation == "CascOpenStorage"
     assert caught.value.native_error_code == 1006
 
@@ -177,15 +177,15 @@ def test_open_file_distinguishes_missing_from_native_failure(
 
     # When/Then: only ERROR_FILE_NOT_FOUND becomes a missing-path error.
     with pytest.raises(error_type) as caught:
-        CtypesCascLibApi(library=dll).open_file(101, "UI/Missing.txt")
-    assert caught.value.native_error_code == error_code
+        CtypesCascLibApi(library=dll).open_file(101, "UI/Missing.txt")  # pyright: ignore[reportArgumentType]
+    assert caught.value.native_error_code == error_code  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def test_zero_byte_read_passes_real_bytes_read_pointer() -> None:
     # Given: CascLib reports an empty file.
     dll = FakeNativeLibrary()
     dll.read_payload = b""
-    api = CtypesCascLibApi(library=dll)
+    api = CtypesCascLibApi(library=dll)  # pyright: ignore[reportArgumentType]
 
     # When: the adapter reads zero bytes.
     data = api.read_file(202, 0)
@@ -203,7 +203,7 @@ def test_partial_read_is_not_silently_accepted() -> None:
 
     # When/Then: the adapter reports expected, actual, and the native error state.
     with pytest.raises(CascPartialReadError) as caught:
-        CtypesCascLibApi(library=dll).read_file(202, 4)
+        CtypesCascLibApi(library=dll).read_file(202, 4)  # pyright: ignore[reportArgumentType]
     assert (caught.value.expected, caught.value.actual) == (4, 2)
     assert caught.value.native_error_code == 0
 
@@ -213,7 +213,7 @@ def test_read_failure_and_oversize_are_distinct() -> None:
     dll = FakeNativeLibrary()
     dll.read_ok = False
     dll.error = 1005
-    api = CtypesCascLibApi(library=dll)
+    api = CtypesCascLibApi(library=dll)  # pyright: ignore[reportArgumentType]
 
     # When/Then: native failure carries its code, while oversize is rejected before allocation.
     with pytest.raises(CascNativeError) as caught:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import tkinter as tk
-from typing import Final, assert_never
+from typing import TYPE_CHECKING, Final, assert_never
 from tkinter import ttk
 
 from .theme import LAYOUT_VERSION
@@ -17,6 +17,14 @@ LEGACY_OBJECT_SASHES_KEY: Final = "sashes"
 
 class PaneStateMixin:
     """Persist every registered PanedWindow under a stable name."""
+
+    if TYPE_CHECKING:
+        from collections.abc import Callable
+
+        _load_config: Callable[[], dict[str, object]]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _save_config: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _paned_windows: dict[str, PaneWidget]  # pyright: ignore[reportUninitializedInstanceVariable] - _init_pane_state 注入
+        update_idletasks: Callable[[], None]  # pyright: ignore[reportUninitializedInstanceVariable] - ctk.CTk 宿主方法
 
     def _init_pane_state(self) -> None:
         self._paned_windows: dict[str, PaneWidget] = {}
@@ -42,7 +50,7 @@ class PaneStateMixin:
             for name, paned in self._paned_windows.items()
             if (positions := _paned_sash_positions(paned))
         }
-        payload = {
+        payload: dict[str, int | list[int] | dict[str, list[int]] | str] = {
             "layout": LAYOUT_VERSION,
             PANE_SASHES_KEY: pane_sashes,
         }

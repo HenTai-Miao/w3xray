@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import tkinter as tk
-from tkinter import ttk
+from tkinter import Misc, ttk
 
 
-class ClipboardMixin:
+class ClipboardMixin(Misc):
     """Attach compact context menus to text inputs and tables."""
+
+    # Misc 基类提供 clipboard_clear/append/tk_popup 等宿主方法; App 组合时由 CTk 实现承载。
 
     def _attach_ctx_menu(
         self, ctk_widget, paste: bool = False, copy_all: bool = False
