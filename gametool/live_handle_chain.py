@@ -1349,8 +1349,8 @@ def derive_offsets(
     reader: MemoryReader,
     dll_base: int,
     dll_end: int,
-    scan_limit: int = 0x4000000,
-    max_hm_candidates: int = 8,
+    scan_limit: int = 0,
+    max_hm_candidates: int = 0,
     budget: "ScanBudget | None" = None,
     on_stage: "Callable[[DiscoveryStage], None] | None" = None,
 ) -> LiveHandleOffsets | None:
@@ -1359,6 +1359,8 @@ def derive_offsets(
     不依赖版本号或硬编码 RVA: 先收集"长得像句柄管理器"的候选,
     逐个构建句柄系统并用选中链端到端验证, 全部通过才算成功
     (避免先遇到的假阳性候选导致整体失败)。
+    scan_limit<=0 (默认) 扫完整 DLL 段; max_hm_candidates<=0 (默认) 候选满量收集,
+    不设人为截断 — 时间安全由 ScanBudget 时间闸兜底。
     适用于经典引擎家族; 失败/预算耗尽返回 None (调用方用
     budget.timed_out 区分「推导失败」与「可稍后重试」)。
     on_stage: 每进入一个阶段回调一次 (顺序见 DERIVE_STAGES;
@@ -1369,7 +1371,8 @@ def derive_offsets(
         if on_stage is not None:
             on_stage(DERIVE_STAGES[name])
 
-    hi = min(dll_end, dll_base + scan_limit)
+    # scan_limit<=0 = 扫完整 DLL 段 (旧 64MB 默认曾截掉大体积 Game.dll 的后段候选)
+    hi = min(dll_end, dll_base + scan_limit) if scan_limit > 0 else dll_end
     if hi <= dll_base:
         return None
     tpl = classic_template()
@@ -1388,7 +1391,7 @@ def derive_offsets(
         ):
             seen_managers.add(value)
             hm_candidates.append((addr, value))
-            if len(hm_candidates) >= max_hm_candidates:
+            if 0 < max_hm_candidates <= len(hm_candidates):
                 break
     _enter("build-systems")
     systems: list[tuple[LiveHandleOffsets, HandleSystem]] = []
