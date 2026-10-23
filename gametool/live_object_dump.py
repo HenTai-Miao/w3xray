@@ -413,6 +413,15 @@ def _write_affixes_tsv(defs: dict[str, dict[str, str]], out_dir: str) -> int:
     return 1
 
 
+def _fail_with_notes(
+    notes: tuple[str, ...], out_dir: str, pid: int = 0
+) -> "LiveObjectDumpResult":
+    """失败出口统一把原因打到 stdout (旧行为静默 exit 2, 用户不知道为什么)。"""
+    for note in notes:
+        print(f"导出未执行: {note}")
+    return LiveObjectDumpResult(pid, 0, 0, 0, 0, {}, out_dir, 0, notes)
+
+
 def dump_live_objects(
     out_dir: str,
     pid: int | None = None,
@@ -434,41 +443,24 @@ def dump_live_objects(
     mem_setup()
     pids = find_war3_pids()
     if not pids:
-        return LiveObjectDumpResult(0, 0, 0, 0, 0, {}, out_dir, 0, ("war3 未运行",))
+        return _fail_with_notes(("war3 未运行",), out_dir)
     if pid is not None:
         if pid not in pids:
-            return LiveObjectDumpResult(
-                pid,
-                0,
-                0,
-                0,
-                0,
-                {},
-                out_dir,
-                0,
-                (f"--pid {pid} 不在运行中的 war3 进程列表 {pids}",),
+            return _fail_with_notes(
+                (f"--pid {pid} 不在运行中的 war3 进程列表 {pids}",), out_dir
             )
         chosen = pid
     elif len(pids) > 1:
-        return LiveObjectDumpResult(
-            0,
-            0,
-            0,
-            0,
-            0,
-            {},
-            out_dir,
-            0,
+        return _fail_with_notes(
             (f"检测到多个 war3 进程 {pids} — 不猜, 用 --pid <PID> 显式选择",),
+            out_dir,
         )
     else:
         chosen = pids[0]
 
     handle = open_process(chosen)
     if not handle:
-        return LiveObjectDumpResult(
-            chosen, 0, 0, 0, 0, {}, out_dir, 0, ("OpenProcess 失败 (需管理员)",)
-        )
+        return _fail_with_notes(("OpenProcess 失败 (需管理员)",), out_dir, pid=chosen)
     try:
         version = detect_version(handle)
         max_addr = 0x7FFFFFFEFFFF if version["arch"] == "x64" else 0x7FFF0000
