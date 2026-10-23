@@ -237,6 +237,13 @@ class _PackQueryWindow(ctk.CTkToplevel):
         ctk.CTkButton(row, text="查询", width=84, command=self._run_clicked).pack(
             side="left"
         )
+        self._near_kind = ctk.CTkOptionMenu(
+            row,
+            values=["全部", "单位", "装饰", "物品", "脚本"],
+            width=76,
+        )
+        self._near_kind.set("全部")
+        # near 模式才显示 (switch 时切换)
 
         pin_row = ctk.CTkFrame(self, fg_color="transparent")
         pin_row.pack(fill="x", padx=14, pady=(10, 0))
@@ -376,6 +383,10 @@ class _PackQueryWindow(ctk.CTkToplevel):
     def _switch_mode(self, command: str) -> None:
         self._mode.set(command)
         self._keyword.configure(placeholder_text=self._PLACEHOLDERS.get(command, ""))
+        if command == "near":
+            self._near_kind.pack(side="left", padx=(8, 0))
+        else:
+            self._near_kind.pack_forget()
         self._keyword.focus_set()
 
     def _coords_from_clipboard(self) -> None:
@@ -410,6 +421,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
         _LAST_KEYWORD = self._keyword.get().strip()  # pyright: ignore[reportConstantRedefinition]
         _LAST_MODE = command  # pyright: ignore[reportConstantRedefinition]
         keyword = self._keyword.get().strip()
+        if command == "near" and self._near_kind.get() != "全部":
+            keyword = (keyword + " --kind " + self._near_kind.get()).strip()
         # 免词清单 = 本窗九模式中可空词执行的 (affixes/registered 仅 CLI 有, 不在此窗)
         if keyword or command in (
             "stats",
