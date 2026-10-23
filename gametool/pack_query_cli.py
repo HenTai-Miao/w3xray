@@ -2386,7 +2386,7 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
         parts = parts[:ki] + parts[ki + 2 :]
     if len(parts) not in (2, 3):
         return [
-            "用法: near <x> <y> [radius=3000]",
+            "用法: near <x> <y> [radius=3000] [--kind 单位/装饰/物品/脚本]",
             "  （坐标来源: live 探针输出尾部 JSON 的 x/y, 或地图编辑器; 查脚底有什么/附近谁在掉什么）",
         ]
     try:

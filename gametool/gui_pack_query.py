@@ -370,7 +370,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         "skills": "关键词可空=全量…  (回车查)",
         "units": "关键词可空=全量…  (回车查)",
         "locate": "特征码分号分隔: 码1;码2;…  (战役定位)",
-        "near": "坐标反查: x y [radius]  (live 探针尾部 JSON 有 x/y)",
+        "near": "坐标反查: x y [radius] [--kind 单位/装饰/物品/脚本]  (探针 JSON 有 x/y)",
     }
 
     def _switch_mode(self, command: str) -> None:
