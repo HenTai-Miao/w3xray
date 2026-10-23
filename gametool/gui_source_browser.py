@@ -11,32 +11,45 @@ from tkinter import filedialog
 from .api import quick_map_name
 from .gui_worker_registry import GuiWorkerTicket
 from .map_directory import scan_battle_maps
-from .map_gallery import MapEntry, render_map_gallery
+from .map_gallery import MapEntry, MapGallery, render_map_gallery
 
 
 class SourceBrowserMixin:
     """Manage the global left source panel."""
 
     if TYPE_CHECKING:
+        import customtkinter as ctk
+        import tkinter as tk
+        from tkinter import ttk
         from collections.abc import Callable
 
-        _autosize_tree: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _cur_dir: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        left_brow: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        left_title: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        map_gallery: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        map_list: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        map_search: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        mode_seg: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        status: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _load_config: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        from .map_data import MapData
+
+        mode_seg: ctk.CTkSegmentedButton  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        left_brow: ctk.CTkFrame  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        left_title: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        map_search: tk.StringVar  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        map_gallery: MapGallery  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        map_list: ttk.Treeview  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        status: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        map_data: MapData | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        update_idletasks: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _autosize_tree: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _load_config: Callable[[], dict[str, str]]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _save_config: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _post_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _save_config: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _start_campaign_load: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _start_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _start_campaign_load: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _start_map_switch: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _start_path_load: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        update_idletasks: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _cur_dir: dict[str, str | None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _dir_maps: list[tuple[str, str]]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _dir_campaigns: list[dict[str, object]]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _node_map: dict[str, tuple[str, int | str]]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _map_gallery_entries: list[MapEntry]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        mode: str  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _campaign_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _campaign_views: object | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
 
     def on_pick_dir(self) -> None:
         kind = "战役" if self.mode == "campaign" else "对战图"
@@ -148,7 +161,7 @@ class SourceBrowserMixin:
         entries = []
         self.map_list.delete(*self.map_list.get_children())
         for index, campaign in enumerate(self._dir_campaigns):
-            if query and query not in campaign["name"].lower():
+            if query and query not in str(campaign["name"]).lower():
                 continue
             parent_id = f"c{index}"
             self.map_list.insert(
@@ -163,7 +176,7 @@ class SourceBrowserMixin:
             entries.append(
                 MapEntry(
                     iid=parent_id,
-                    title=campaign["name"],
+                    title=str(campaign["name"]),
                     subtitle="战役图 · 共享对象与关卡子图",
                     action=action,
                 )
@@ -203,13 +216,13 @@ class SourceBrowserMixin:
         self.map_search.set("")
         self._populate_left()
 
-    def _on_tree_open(self, _event) -> None:
+    def _on_tree_open(self, event: tk.Event[tk.Misc]) -> None:
         selected = self.map_list.focus()
         info = self._node_map.get(selected)
         if info and info[0] == "campaign":
             index = info[1]
-            if not self._dir_campaigns[index]["loaded"]:
-                self._load_campaign_node(index)
+            if not self._dir_campaigns[int(index)]["loaded"]:
+                self._load_campaign_node(int(index))
 
     def _load_campaign_node(self, index: int) -> None:
         self._start_campaign_load(index)
@@ -224,18 +237,28 @@ class SourceBrowserMixin:
         elif kind == "md":
             self._campaign_path = next(
                 (
-                    campaign["path"]
-                    for campaign in self._dir_campaigns
-                    if campaign["views"]
-                    and any(md is payload for _, md in campaign["views"])
+                    str(c["path"])
+                    for c in self._dir_campaigns
+                    if c["views"]
+                    and any(
+                        md is payload
+                        for _, md in c["views"]  # pyright: ignore[reportGeneralTypeIssues]
+                    )
                 ),
                 None,
             )
             self._start_map_switch(payload, self._campaign_path)
-        elif kind == "campaign" and not self._dir_campaigns[payload]["loaded"]:
-            self._load_campaign_node(payload)
+        elif (
+            kind == "campaign"
+            and not self._dir_campaigns[
+                int(payload) if not isinstance(payload, int) else payload
+            ]["loaded"]
+        ):
+            self._load_campaign_node(
+                int(payload) if not isinstance(payload, int) else payload
+            )
 
-    def _on_map_pick(self, _event) -> None:
+    def _on_map_pick(self, event: tk.Event[tk.Misc]) -> None:
         selected = self.map_list.selection()
         if selected:
             self._open_node(selected[0])

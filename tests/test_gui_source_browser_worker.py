@@ -21,9 +21,12 @@ class _Status:
 
 
 class _SourceBrowser(SourceBrowserMixin, GuiWorkerHostMixin):
+    _cur_dir: dict[str, str | None]  # pyright: ignore[reportIncompatibleVariableOverride] - 测试桩
+    status: _Status  # pyright: ignore[reportIncompatibleVariableOverride] - 测试桩
+
     def __init__(self) -> None:
         self._cur_dir = {"battle": None, "campaign": None}
-        self.status = _Status()
+        self.status = _Status()  # pyright: ignore[reportIncompatibleVariableOverride] - 测试桩
         self.scheduled: dict[str, Callable[[], None]] = {}
         self.filled: list[tuple[tuple[str, str], ...]] = []
         self._next_after = 1
