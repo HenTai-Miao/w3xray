@@ -107,14 +107,16 @@ class TestParseW3i(unittest.TestCase):
         self.assertIsNone(parse_w3i(b"\x01\x02"))
 
     def test_real_v25_fixture(self):
-        data = open(os.path.join(FIX, "w3i_v25.w3i"), "rb").read()
+        with open(os.path.join(FIX, "w3i_v25.w3i"), "rb") as fh:
+            data = fh.read()
         info = parse_w3i(data)
         self.assertEqual(info.version, 25)  # pyright: ignore[reportOptionalMemberAccess]
         self.assertTrue(isinstance(info.map_name, str))  # pyright: ignore[reportOptionalMemberAccess]
         self.assertGreaterEqual(len(info.players), 1)  # pyright: ignore[reportOptionalMemberAccess]
 
     def test_real_v18_fixture(self):
-        data = open(os.path.join(FIX, "w3i_v18.w3i"), "rb").read()
+        with open(os.path.join(FIX, "w3i_v18.w3i"), "rb") as fh:
+            data = fh.read()
         info = parse_w3i(data)
         self.assertEqual(info.version, 18)  # pyright: ignore[reportOptionalMemberAccess]
         self.assertGreaterEqual(len(info.players), 1)  # pyright: ignore[reportOptionalMemberAccess]

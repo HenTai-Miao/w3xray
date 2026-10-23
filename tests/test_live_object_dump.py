@@ -98,11 +98,14 @@ class TestWriteObjectPack:
         out = str(tmp_path / "pack")
         files = write_object_pack(blocks, out)
         assert files == 4  # 对象ID/物品 + 对象ID/单位 + 对象字段 + 对象来源
-        items = open(os.path.join(out, "对象ID", "物品.tsv"), encoding="utf-8").read()
+        with open(os.path.join(out, "对象ID", "物品.tsv"), encoding="utf-8") as fh:
+            items = fh.read()
         assert "I04W\t" in items and "副本-随机装备" in items
-        units = open(os.path.join(out, "对象ID", "单位.tsv"), encoding="utf-8").read()
+        with open(os.path.join(out, "对象ID", "单位.tsv"), encoding="utf-8") as fh:
+            units = fh.read()
         assert "树人长者" in units
-        fields = open(os.path.join(out, "对象字段.tsv"), encoding="utf-8").read()
+        with open(os.path.join(out, "对象字段.tsv"), encoding="utf-8") as fh:
+            fields = fh.read()
         # 字段行来源列 = 内存对象表 (pack_query load_shop_stocks 兼容 7 列)
         assert "内存对象表" in fields
         assert fields.splitlines()[0].split("\t") == [
@@ -114,7 +117,8 @@ class TestWriteObjectPack:
             "值",
             "来源",
         ]
-        assert open(os.path.join(out, "对象来源.txt"), encoding="utf-8").read()
+        with open(os.path.join(out, "对象来源.txt"), encoding="utf-8") as fh:
+            assert fh.read()
 
     def test_name_falls_back_to_tip_then_code(self, tmp_path):
         blocks = {
@@ -123,7 +127,8 @@ class TestWriteObjectPack:
         }
         out = str(tmp_path / "pack")
         write_object_pack(blocks, out)
-        units = open(os.path.join(out, "对象ID", "单位.tsv"), encoding="utf-8").read()
+        with open(os.path.join(out, "对象ID", "单位.tsv"), encoding="utf-8") as fh:
+            units = fh.read()
         assert "无名有提示" in units
         assert "n00Y" in units
 
@@ -131,7 +136,8 @@ class TestWriteObjectPack:
         blocks = {"I000": {"Name": "带\t制表\n换行", "Ubertip": "x"}}
         out = str(tmp_path / "pack")
         write_object_pack(blocks, out)
-        items = open(os.path.join(out, "对象ID", "物品.tsv"), encoding="utf-8").read()
+        with open(os.path.join(out, "对象ID", "物品.tsv"), encoding="utf-8") as fh:
+            items = fh.read()
         # 列数不因值内换行/制表而爆掉
         row = [r for r in items.splitlines() if r.startswith("物品\tI000")][0]
         assert len(row.split("\t")) == 7
@@ -220,18 +226,14 @@ class TestDumpWritesLuaLayer:
 
         reg = {"MsgA": {"records": [[1, {"k": "v"}], [2, {"k": "w"}]]}}
         assert _write_registered_data_tsv(reg, out) == 1  # pyright: ignore[reportArgumentType]
-        rows = (
-            open(os.path.join(out, "注册数据.tsv"), encoding="utf-8")
-            .read()
-            .splitlines()
-        )
+        with open(os.path.join(out, "注册数据.tsv"), encoding="utf-8") as fh:
+            rows = fh.read().splitlines()
         assert rows[0].split("\t") == ["消息名", "序号", "记录JSON"]
         assert len(rows) == 3
         aff = {"甲": {"multiplier": "1.5", "stat": "点物理攻击"}}
         assert _write_affixes_tsv(aff, out) == 1
-        arows = (
-            open(os.path.join(out, "词缀表.tsv"), encoding="utf-8").read().splitlines()
-        )
+        with open(os.path.join(out, "词缀表.tsv"), encoding="utf-8") as fh:
+            arows = fh.read().splitlines()
         assert arows[0].split("\t") == ["词缀名", "倍率", "属性"]
         # 空数据不写文件
         assert _write_registered_data_tsv({}, out) == 0

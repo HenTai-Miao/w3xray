@@ -291,13 +291,16 @@ def save_snapshot(regions, out_dir):
         for base, data in regions:
             index.append({"base": base, "off": f.tell(), "len": len(data)})
             f.write(data)
-    json.dump(index, open(os.path.join(out_dir, "index.json"), "w"), indent=1)
+    with open(os.path.join(out_dir, "index.json"), "w", encoding="utf-8") as fh:
+        json.dump(index, fh, indent=1)
     return blob_path
 
 
 def load_snapshot(snap_dir):
-    index = json.load(open(os.path.join(snap_dir, "index.json")))
-    blob = open(os.path.join(snap_dir, "snap.bin"), "rb").read()
+    with open(os.path.join(snap_dir, "index.json"), encoding="utf-8") as fh:
+        index = json.load(fh)
+    with open(os.path.join(snap_dir, "snap.bin"), "rb") as fh:
+        blob = fh.read()
     return [(e["base"], blob[e["off"] : e["off"] + e["len"]]) for e in index]
 
 
@@ -355,7 +358,8 @@ def enum_modules(h):
 def read_file_version(path):
     """VS_FIXEDFILEINFO -> 'a.b.c.d'; 失败返回 None。"""
     try:
-        d = open(path, "rb").read(64 * 1024 * 1024)
+        with open(path, "rb") as fh:
+            d = fh.read(64 * 1024 * 1024)
     except OSError:
         return None
     pos = d.find(b"\xbd\x04\xef\xfe")
@@ -420,7 +424,8 @@ def read_pe_fingerprint(path):
 
 def pe_machine(path):
     try:
-        d = open(path, "rb").read(65536)  # PE 头可达 64KB (证书表前移时)
+        with open(path, "rb") as fh:
+            d = fh.read(65536)  # PE 头可达 64KB (证书表前移时)
         e = struct.unpack_from("<I", d, 0x3C)[0]
         return struct.unpack_from("<H", d, e + 4)[0]
     except OSError, struct.error:
@@ -476,7 +481,8 @@ def load_names(pack_dir, kind="物品"):
     p = os.path.join(pack_dir, "对象ID", f"{kind}.tsv")
     if os.path.exists(p):
         try:
-            text = open(p, encoding="utf-8", errors="replace").read()
+            with open(p, encoding="utf-8", errors="replace") as fh:
+                text = fh.read()
         except OSError:
             text = ""  # 包 TSV 被系统层锁死 (杀软扫描): 软失败退 BASE_NAMES_EN 兜底
         for line in text.splitlines()[1:]:
@@ -505,7 +511,8 @@ def _icon_paths_from_pack(pack_dir):
     paths = {}
     p2 = os.path.join(pack_dir, "对象字段.tsv")
     try:
-        lines = open(p2, encoding="utf-8", errors="replace").readlines()
+        with open(p2, encoding="utf-8", errors="replace") as fh:
+            lines = fh.readlines()
     except OSError:
         return paths  # 包表锁死: 软失败 (图标缺失不致命)
     for line in lines:
@@ -578,7 +585,8 @@ def build_templates(pack_dir, cache_dir=None, verbose=False):
                     for cand in (p, p.replace("/", "\\"), p.lower().replace("/", "\\")):
                         try:
                             if arch.has_file(cand):
-                                open(dst, "wb").write(arch.read_file(cand))
+                                with open(dst, "wb") as fh:
+                                    fh.write(arch.read_file(cand))
                                 templates.setdefault(_iid_for_path(paths, p), dst)
                                 break
                         except Exception:
@@ -659,7 +667,8 @@ def get_icon_array(path, size):
     if key in _ICON_CACHE:
         return _ICON_CACHE[key]
     try:
-        img = decode_blp(open(path, "rb").read())
+        with open(path, "rb") as fh:
+            img = decode_blp(fh.read())
     except OSError:
         img = None
     if img is None:

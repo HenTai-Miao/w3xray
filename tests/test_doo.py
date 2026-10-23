@@ -420,7 +420,8 @@ class TestParseUnits(unittest.TestCase):
 
     def test_real_map_fixture(self):
         # 真实地图的 war3mapUnits.doo（1 个出生点单位 'sloc'）
-        data = open(os.path.join(FIX, "matrix.units.doo"), "rb").read()
+        with open(os.path.join(FIX, "matrix.units.doo"), "rb") as fh:
+            data = fh.read()
         units = parse_units(data)
         self.assertEqual(len(units), 1)
         self.assertEqual(units[0].type_id, "sloc")
@@ -455,7 +456,8 @@ class TestParseUnits(unittest.TestCase):
     def test_real_map_version7_fixture(self):
         # 真实地图 TheRiseOfEyes 的 war3mapUnits.doo —— 版本 7（RoC 布局），1 个 'sloc'。
         # 旧解析器按 TFT(版本 8) 读会错位 → 0/1；版本感知后应完整读出。
-        data = open(os.path.join(FIX, "riseofeyes.units.v7.doo"), "rb").read()
+        with open(os.path.join(FIX, "riseofeyes.units.v7.doo"), "rb") as fh:
+            data = fh.read()
         self.assertEqual(struct.unpack_from("<i", data, 4)[0], 7)  # 确认确为版本 7
         units = parse_units(data)
         self.assertEqual(len(units), 1)

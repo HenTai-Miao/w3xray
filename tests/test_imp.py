@@ -98,7 +98,8 @@ class TestParseImp(unittest.TestCase):
 
     def test_real_map_fixture(self):
         # 真实地图 Matrix3 的 war3map.imp（5 条）
-        data = open(os.path.join(FIX, "matrix.imp"), "rb").read()
+        with open(os.path.join(FIX, "matrix.imp"), "rb") as fh:
+            data = fh.read()
         names = parse_imp(data)
         self.assertEqual(len(names), 5)
         self.assertTrue(all(isinstance(n, str) and n for n in names))

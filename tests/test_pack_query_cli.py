@@ -1331,7 +1331,8 @@ def test_query_export_writes_markdown(tmp_path, pack, capsys) -> None:
     assert "已导出: " in out
     export_path = out.splitlines()[0].split("已导出: ", 1)[1]
     assert os.path.exists(export_path)
-    content = open(export_path, encoding="utf-8").read()
+    with open(export_path, encoding="utf-8") as fh:
+        content = fh.read()
     assert "I0AA" in content
     assert "冰晶" in content
 
