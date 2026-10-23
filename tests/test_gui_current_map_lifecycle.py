@@ -66,14 +66,19 @@ def _snapshot(path: Path) -> CurrentMapSnapshot:
     )
 
 
+class _FakeResolver:
+    def __init__(self, events: list[str]) -> None:
+        self._events = events
+
+    def close(self) -> None:
+        self._events.append("resolver")
+
+
 class _LifecycleHarness(GuiLifecycleMixin):
     def __init__(self, events: list[str]) -> None:
         self._events = events
         self._casc_browser_dialog = None
-        self.icons = self
-
-    def close(self) -> None:
-        self._events.append("resolver")
+        self.icons = _FakeResolver(events)
 
     def _shutdown_background_loader(self) -> None:
         self._events.append("loader")

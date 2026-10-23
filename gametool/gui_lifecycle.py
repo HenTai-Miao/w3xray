@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 import json
 import logging
@@ -23,32 +23,52 @@ class GuiLifecycleMixin:
     """Own app-level config, open-file action, and shutdown flow."""
 
     if TYPE_CHECKING:
-        from collections.abc import Callable
+        import customtkinter as ctk
+        import tkinter as tk
+        from collections.abc import Callable, Sequence
 
-        _cur_dir: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _scan_dir: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        data_tools_menu: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        external_listfile_clear: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        external_listfile_label: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        game_data_label: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        map_label: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        mode_seg: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        recipes: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        status: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _populate_left: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _refresh_description_cache_state: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _refresh_enabled_modules: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _refresh_trigger_eca: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _reset_detail_panel: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _save_layout_state: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        from collections.abc import Sequence as _Seq
+
+        from .map_data import MapData
+
+        _cur_dir: dict[str, str | None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _scan_dir: Callable[[str, str], None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        data_tools_menu: tk.Menu  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        external_listfile_clear: ctk.CTkButton  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        external_listfile_label: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        game_data_label: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        map_label: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        mode_seg: ctk.CTkSegmentedButton  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        recipes: list[object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        status: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _populate_left: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _refresh_description_cache_state: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _refresh_enabled_modules: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _refresh_trigger_eca: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _reset_detail_panel: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _save_layout_state: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _set_campaign_views: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _shutdown_background_loader: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _shutdown_current_map_gui: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _shutdown_gui_worker_host: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _shutdown_object_filter_runner: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _start_path_load: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        destroy: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _shutdown_background_loader: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _shutdown_current_map_gui: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _shutdown_gui_worker_host: Callable[..., Sequence[str]]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _shutdown_object_filter_runner: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _start_path_load: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        destroy: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         geometry: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+
+        mode: str  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _campaign_views: object | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _campaign_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        map_data: MapData | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        icons: _IconResolverLike | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _pil_icon_cache: dict[tuple[str, int], object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _photo_cache: dict[tuple[str, int, str], object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        external_listfile_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        game_data_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        author_bundle_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+
+        class _IconResolverLike(Protocol):
+            def close(self) -> None: ...
 
     def _config_path(self) -> str:
         return os.path.join(os.path.expanduser("~"), ".w3x_extractor.json")
