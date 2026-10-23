@@ -22,10 +22,12 @@ class _Status:
 
 
 class _Exporter(ExportActionsMixin, GuiWorkerHostMixin):
+    status: _Status  # 测试桩窄化
+
     def __init__(self) -> None:
         self.map_data = MapData(path="map.w3x", name="map")
         self.map_data.scripts = {"war3map.j": "script"}
-        self.status = _Status()
+        self.status = _Status()  # pyright: ignore[reportIncompatibleVariableOverride] - 测试桩
         self.scheduled: dict[str, Callable[[], None]] = {}
         self.opened: list[tuple[str, int, str]] = []
         self._next_after = 1
@@ -76,5 +78,5 @@ def test_script_export_finishing_after_shutdown_never_opens_output(
     assert lingering == ("export-scripts",)
     assert exporter.scheduled == {}
     assert exporter.opened == []
-    assert exporter.status.values == ["正在导出脚本 …"]
+    assert exporter.status.values == ["正在导出脚本 …"]  # pyright: ignore[reportAttributeAccessIssue]
     assert exporter._shutdown_gui_worker_host(1) == ()

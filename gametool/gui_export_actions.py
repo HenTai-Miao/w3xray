@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from tkinter import messagebox
-from typing import assert_never
+from typing import TYPE_CHECKING, assert_never
 
 from .api import export_all_files, export_loaded_map_files, tmp_extract_dir
 from .gui_worker_registry import GuiWorkerTicket
@@ -63,6 +63,18 @@ def build_pack_export_presentation(
 
 
 class ExportActionsMixin:
+    if TYPE_CHECKING:
+        from collections.abc import Callable
+
+        _campaign_path: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        external_listfile_path: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        game_data_path: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        map_data: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        status: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _post_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _start_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        update_idletasks: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+
     def _need_map(self):
         if not self.map_data:
             messagebox.showinfo("提示", "请先打开一张地图")

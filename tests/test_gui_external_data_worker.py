@@ -23,9 +23,11 @@ class _Status:
 
 
 class _ExternalData(ExternalDataToolsMixin, GuiWorkerHostMixin):
+    status: _Status  # 测试桩窄化
+
     def __init__(self) -> None:
         self.map_data = MapData(path="map.w3x", name="map")
-        self.status = _Status()
+        self.status = _Status()  # pyright: ignore[reportIncompatibleVariableOverride] - 测试桩
         self.scheduled: dict[str, Callable[[], None]] = {}
         self.opened: list[tuple[str, int, str]] = []
         self._next_after = 1

@@ -46,9 +46,11 @@ class _InventorySource:
 
 
 class _CascHost(CascBrowserMixin, GuiWorkerHostMixin):
+    status: _Status  # 测试桩窄化
+
     def __init__(self) -> None:
         self.game_data_path = "/game-data"
-        self.status = _Status()
+        self.status = _Status()  # pyright: ignore[reportIncompatibleVariableOverride] - 测试桩
         self.scheduled: dict[str, Callable[[], None]] = {}
         self.shown: list[_InventorySource] = []
         self._next_after = 1

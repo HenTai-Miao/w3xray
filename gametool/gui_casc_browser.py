@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from pathlib import Path
@@ -22,6 +24,17 @@ from .theme import FONT, SUBTLE, TEXT, primary_button_style, secondary_button_st
 
 class CascBrowserMixin:
     """Open and own the optional native game-data browser."""
+
+    if TYPE_CHECKING:
+        import customtkinter as ctk
+        from collections.abc import Callable
+
+        external_listfile_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        game_data_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        status: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _casc_browser_dialog: CascBrowserDialog | None = None
+        _post_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _start_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
 
     def on_browse_game_data(self) -> None:
         path = self.game_data_path

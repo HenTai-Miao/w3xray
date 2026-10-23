@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import os
 from pathlib import Path
 from tkinter import filedialog, messagebox
@@ -20,6 +22,31 @@ from .trusted_description_cache import (
 
 class ExternalDataToolsMixin:
     """Manage author plaintext selection and read-only save analysis actions."""
+
+    if TYPE_CHECKING:
+        import customtkinter as ctk
+        import tkinter as tk
+        from collections.abc import Callable
+
+        from .map_data import MapData
+
+        data_tools_button: ctk.CTkButton  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        data_tools_menu: tk.Menu  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        map_data: MapData | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        status: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _load_config: Callable[[], dict[str, object]]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _need_map: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _open_dir: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _post_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _refresh_external_source_labels: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _reload_active_source: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _save_config: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _start_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+
+    author_bundle_path: str | None = ""
+    description_cache_path: str | None = ""
+    description_cache_manifest_sha256: str = ""
+    description_cache_entry_count: int = 0
 
     def on_pick_author_bundle(self) -> None:
         path = filedialog.askdirectory(title="选择作者明文补充包目录")
@@ -117,6 +144,9 @@ class ExternalDataToolsMixin:
 
     def _start_real_save_analysis(self, path: str) -> None:
         md = self.map_data
+        if md is None:
+            self.status.configure(text="先打开地图再分析存档")
+            return
         out = tmp_extract_dir(md.name, "真实存档分析", clean=True)
         self.status.configure(text="正在只读分析真实存档 …")
 

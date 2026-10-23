@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import glob
 import os
 from tkinter import filedialog
@@ -14,6 +16,27 @@ from .map_gallery import MapEntry, render_map_gallery
 
 class SourceBrowserMixin:
     """Manage the global left source panel."""
+
+    if TYPE_CHECKING:
+        from collections.abc import Callable
+
+        _autosize_tree: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _cur_dir: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        left_brow: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        left_title: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        map_gallery: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        map_list: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        map_search: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        mode_seg: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        status: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _load_config: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _post_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _save_config: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _start_campaign_load: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _start_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _start_map_switch: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _start_path_load: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        update_idletasks: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
 
     def on_pick_dir(self) -> None:
         kind = "战役" if self.mode == "campaign" else "对战图"
