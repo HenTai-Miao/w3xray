@@ -65,3 +65,15 @@ def test_last_pack_memo_fail_open(monkeypatch, tmp_path) -> None:
     # And: reading a missing file yields empty.
     assert actions.load_last_pack_dir() == ""
     assert not os.path.exists(str(blocked / "sub"))
+
+
+def test_json_toggle_outputs_json_line() -> None:
+    """JSON 勾选经 _run 主线程读值传 _run_query 参数 (不经跨线程 tk var 读)。"""
+    import inspect
+
+    from gametool.gui_pack_query import _PackQueryWindow
+
+    src = inspect.getsource(_PackQueryWindow._run)
+    assert "as_json = self._var_json.get()" in src  # 主线程读
+    sig = inspect.signature(_PackQueryWindow._run_query)
+    assert "as_json" in sig.parameters

@@ -269,6 +269,13 @@ class _PackQueryWindow(ctk.CTkToplevel):
         )
         find_entry.pack(side="left")
         self._find_state = {"start": "1.0"}
+        self._var_json = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(
+            find_row,
+            text="JSON 输出",
+            variable=self._var_json,
+            font=("Microsoft YaHei UI", 10),
+        ).pack(side="right", padx=(8, 0))
 
         def _find_next():
             needle = self._find_var.get().strip()
@@ -429,9 +436,10 @@ class _PackQueryWindow(ctk.CTkToplevel):
         import threading  # noqa: PLC0415
 
         done: list[tuple[str, str]] = []
+        as_json = self._var_json.get()
 
         def _worker() -> None:
-            done.append(self._run_query(command, keyword))
+            done.append(self._run_query(command, keyword, as_json))
 
         threading.Thread(target=_worker, daemon=True).start()
 
@@ -445,7 +453,9 @@ class _PackQueryWindow(ctk.CTkToplevel):
 
         self.after(60, _poll)
 
-    def _run_query(self, command: str, keyword: str) -> tuple[str, str]:
+    def _run_query(
+        self, command: str, keyword: str, as_json: bool = False
+    ) -> tuple[str, str]:
         """线程内执行查询: 不碰任何 Tk 对象, 返回 (正文, 耗时行)。"""
         try:
             from gametool.pack_query_cli import (
@@ -458,7 +468,11 @@ class _PackQueryWindow(ctk.CTkToplevel):
         import io  # noqa: PLC0415
 
         options = PackQueryCliOptions(
-            pack_dir=self._pack_dir, command=command, query=keyword, limit=0
+            pack_dir=self._pack_dir,
+            command=command,
+            query=keyword,
+            limit=0,
+            as_json=as_json,
         )
         buffer = io.StringIO()
         err_buffer = io.StringIO()
