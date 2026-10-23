@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import pathlib
@@ -1785,3 +1786,41 @@ def test_query_reports_elapsed_to_stderr(tmp_path, pack, capsys) -> None:
     captured = capsys.readouterr()
     assert "[耗时 " in captured.err and "ms]" in captured.err
     assert "[耗时" not in captured.out  # stdout 结果不被污染
+
+
+def test_run_cli_json_output(pack, capsys):
+    """--json: stdout 改输出 {"section","lines"} 单行 JSON 供脚本解析; 耗时仍走 stderr。"""
+    rc = run_pack_query_cli(
+        parse_pack_query_cli_options([str(pack), "--json", "item", "I0AA"])
+    )
+    captured = capsys.readouterr()
+    out = captured.out
+    err = captured.err
+    assert rc == 0
+    payload = json.loads(out.strip())
+    assert payload["section"] == ""
+    assert any("冰晶" in line for line in payload["lines"])
+    assert "[耗时 " in err
+
+
+def test_run_cli_json_campaign_sectioned(tmp_path, capsys):
+    """--json 战役容器分段: 每段一个 JSON 对象, section 携带「子地图 名」。"""
+    root = tmp_path / "campaign"
+    sub = root / "子地图" / "001_x"
+    sub.mkdir(parents=True)
+    (sub / "掉落与获取关系.tsv").write_text(
+        "关系ID\t地图子图\t关系类型\t装备ID\t装备名称\t来源分类\t来源ID\t来源名称\t实例序号\t玩家\tX\tY\tZ\t掉落组\t组内序号\t概率\t槽位\t合成材料ID\t合成材料名称与数量\t证据文件\n"
+        "h1\t测试图\t脚本/触发奖励\tI0A1\t宝物甲\t单位\tu0AA\t雪妖\t\t\t\t\t\t\t\t\t\t\t\tw3x\n",
+        encoding="utf-8",
+    )
+    rc = run_pack_query_cli(
+        parse_pack_query_cli_options([str(root), "--json", "where", "宝物甲"])
+    )
+    out = capsys.readouterr().out
+    assert rc == 0
+    payloads = [json.loads(line) for line in out.strip().splitlines()]
+    assert payloads[0]["section"] == "容器级" or payloads[0]["section"].startswith(
+        "子地图"
+    )
+    assert any("宝物甲" in ln for p in payloads for ln in p["lines"])
+    assert any(p["section"].startswith("子地图 ") for p in payloads)

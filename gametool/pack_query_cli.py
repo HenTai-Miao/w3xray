@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import bisect
+import json
 import time
 import os
 import csv
@@ -86,13 +87,16 @@ _LOCKED_FILES: set[tuple[str, str]] = set()
 
 def _iter_tsv_lines(path: Path):
     """带瞬态重试与锁死披露的行迭代 (脚本索引类 TSV 共用防线)。"""
+    key = (str(path.parent), path.name)
+    if key in _LOCKED_FILES:
+        return  # 已确认锁死: 跳过重试 (记忆化, 与 _read_rows 同纪律)
     for _attempt in range(3):
         try:
             yield from path.open(encoding="utf-8", errors="replace")
             return
         except OSError:
             time.sleep(0.05)
-    _LOCKED_FILES.add((str(path.parent), path.name))
+    _LOCKED_FILES.add(key)
 
 
 def _read_rows(pack_dir: Path, rel: str) -> list[list[str]]:
@@ -562,6 +566,7 @@ class PackQueryCliOptions:
     query: str
     limit: int = 0  # 0 = 不限量 (满量输出); --limit N 显式缩减
     pack_dir_b: str = ""  # diff 子命令的第二个包
+    as_json: bool = False  # --json: stdout 改输出 {"lines": [...]} 供脚本解析
 
 
 @dataclass(frozen=True, slots=True)
@@ -591,6 +596,9 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         if limit < 0:
             raise PackQueryCliOptionError("--limit 必须为非负整数 (0=不限量)")
         rest = rest[:i] + rest[i + 2 :]
+    as_json = "--json" in rest
+    if as_json:
+        rest = [x for x in rest if x != "--json"]
     against = ""
     if "--against" in rest:
         i = rest.index("--against")
@@ -621,7 +629,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         rest = rest + [""]
     if len(rest) != 3:
         raise PackQueryCliOptionError(
-            "用法: pack-query <资料包目录> <"
+            "用法: pack-query <资料包目录> [--json] <"
             + ",".join(_COMMANDS)
             + "> <查询词>"
             + ("  (near 用法: near <x> <y> [radius])" if command == "near" else "")
@@ -655,6 +663,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         query=query.strip(),
         limit=limit,
         pack_dir_b=against,
+        as_json=as_json,
     )
 
 
@@ -3266,6 +3275,17 @@ def _campaign_subpacks(pack: Path) -> list[Path]:
     )
 
 
+def _emit_lines(lines: list[str], as_json: bool, section: str = "") -> None:
+    """结果行输出: 文本逐行, 或 --json 时输出 {section, lines} 单对象。"""
+    if not as_json:
+        if section:
+            print("== " + section + " ==")
+        for line in lines:
+            print(line)
+        return
+    print(json.dumps({"section": section, "lines": lines}, ensure_ascii=False))
+
+
 def run_pack_query_cli(options: PackQueryCliOptions) -> int:
     """执行查询并计时；耗时行走 stderr (不污染 stdout 结果)。"""
     import time  # noqa: PLC0415
@@ -3300,8 +3320,7 @@ def _run_query_inner(options: PackQueryCliOptions) -> int:
     if options.command == "diff":
         other = options.pack_dir_b or options.query
         lines = _query_diff(pack, options.query, options.limit, other)
-        for line in lines:
-            print(line)
+        _emit_lines(lines, options.as_json)
         return (
             0
             if not lines or not lines[0].startswith(("未找到", "diff 需要", "第二个包"))
@@ -3314,17 +3333,13 @@ def _run_query_inner(options: PackQueryCliOptions) -> int:
         # 结果附后; 只聚合子地图会把 shop 商人 这类容器级查询吞成「无结果」
         base_lines = _QUERIES[options.command](pack, options.query, options.limit)
         if base_lines and not base_lines[0].startswith("未找到"):
-            print("== 容器级 ==")
-            for line in base_lines:
-                print(line)
+            _emit_lines(base_lines, options.as_json, section="容器级")
             printed = True
         for sub in subs:
             lines = _QUERIES[options.command](sub, options.query, options.limit)
             if not lines or lines[0].startswith("未找到"):
                 continue
-            print("== 子地图 " + sub.name + " ==")
-            for line in lines:
-                print(line)
+            _emit_lines(lines, options.as_json, section="子地图 " + sub.name)
             printed = True
         if not printed:
             print("子地图均无结果: " + options.query)
@@ -3334,8 +3349,7 @@ def _run_query_inner(options: PackQueryCliOptions) -> int:
             return 2
         return 0
     lines = _QUERIES[options.command](pack, options.query, options.limit)
-    for line in lines:
-        print(line)
+    _emit_lines(lines, options.as_json)
     return 0 if not lines or not lines[0].startswith("未找到") else 2
 
 
