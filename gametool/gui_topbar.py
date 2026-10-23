@@ -173,6 +173,13 @@ def build_topbar(app) -> None:
         command=lambda: open_live_probe_dialog(
             app,
             getattr(app, "_last_pack_dir", None) or load_last_pack_dir(),
+            query_callback=lambda code: open_pack_query_dialog(
+                app,
+                lambda: getattr(app, "_last_pack_dir", None) or load_last_pack_dir(),
+                app.on_export_pack,
+                prefill=code,
+                prefill_command="doc",
+            ),
         ),
         **secondary_button_style(),
     )

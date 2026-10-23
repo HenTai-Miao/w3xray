@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import os
 import tkinter as tk
 import threading
@@ -18,9 +19,15 @@ _FONT = ("Microsoft YaHei UI", 11)
 
 
 class LiveProbeWindow(ctk.CTkToplevel):
-    def __init__(self, master, pack_dir: str | None) -> None:
+    def __init__(
+        self,
+        master,
+        pack_dir: str | None,
+        query_callback: "Callable[[str], None] | None" = None,
+    ) -> None:
         super().__init__(master)
         self._pack_dir = pack_dir
+        self._query_callback = query_callback
         self.title("live 探针 — 只读内存读取")
         self.geometry("860x560")
         self.configure(fg_color=BG)
@@ -125,6 +132,11 @@ class LiveProbeWindow(ctk.CTkToplevel):
             ),
         )
         menu.add_command(label="导出为 .md", command=lambda: self._export_md())
+        menu.add_separator()
+        menu.add_command(
+            label="用选中/剪贴板码查包查询",
+            command=self._query_selected_code,
+        )
         self._output.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
 
         self.after(120, self._start)
@@ -205,6 +217,26 @@ class LiveProbeWindow(ctk.CTkToplevel):
         self._output.insert("1.0", body if body.strip() else f"(退出码 {code_str})")
         self._output.configure(state="disabled")
 
+    def _query_selected_code(self) -> None:
+        """取输出区选中文本 (退剪贴板) 的四码, 交给包查询窗 doc 模式。"""
+        try:
+            code = self._output.get("sel first", "sel last").strip()
+        except tk.TclError:
+            code = ""
+        if not code:
+            try:
+                code = self.clipboard_get().strip()
+            except Exception:
+                return
+        # 四码或含四码的片段都行: 提取前一个 [A-Z][0-9A-Z]{3} 形态
+        import re  # noqa: PLC0415
+
+        m = re.search(r"[A-Z][0-9A-Z]{3}", code)
+        if not m:
+            return
+        if self._query_callback is not None:
+            self._query_callback(m.group(0))
+
     def _export_md(self) -> None:
         """输出区导出为 .md (桌面优先, fail-open)。"""
         import time  # noqa: PLC0415
@@ -236,7 +268,11 @@ class LiveProbeWindow(ctk.CTkToplevel):
             self._copy_hint.configure(text="导出失败 (目录不可写)")
 
 
-def open_live_probe_dialog(master, pack_dir: str | None = None) -> None:
+def open_live_probe_dialog(
+    master,
+    pack_dir: str | None = None,
+    query_callback: "Callable[[str], None] | None" = None,
+) -> None:
     if pack_dir is None:
         pack_dir = os.environ.get("GAMEXRAY_LAST_PACK", "") or None
-    LiveProbeWindow(master, pack_dir)
+    LiveProbeWindow(master, pack_dir, query_callback=query_callback)
