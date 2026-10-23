@@ -51,7 +51,28 @@ class LiveProbeWindow(ctk.CTkToplevel):
             font=_FONT,
             command=self._start,
         )
-        self._probe_button.pack(side="left", padx=12, pady=8)
+        self._probe_button.pack(side="left", padx=(12, 6), pady=8)
+        self._var_players = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(
+            bar,
+            text="玩家列表",
+            variable=self._var_players,
+            font=("Microsoft YaHei UI", 10),
+        ).pack(side="left", padx=(0, 6))
+        self._var_all_units = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(
+            bar,
+            text="全单位",
+            variable=self._var_all_units,
+            font=("Microsoft YaHei UI", 10),
+        ).pack(side="left", padx=(0, 6))
+        self._var_resources = ctk.BooleanVar(value=False)
+        ctk.CTkCheckBox(
+            bar,
+            text="资源对齐 (HUD 值校准)",
+            variable=self._var_resources,
+            font=("Microsoft YaHei UI", 10),
+        ).pack(side="left", padx=(0, 6))
         self._copy_hint = ctk.CTkLabel(
             bar, text="", font=("Microsoft YaHei UI", 10), text_color=TEXT
         )
@@ -75,6 +96,9 @@ class LiveProbeWindow(ctk.CTkToplevel):
         self._output.configure(state="disabled")
 
         pack_dir = self._pack_dir
+        want_players = self._var_players.get()
+        want_all = self._var_all_units.get()
+        want_resources = self._var_resources.get()
         done: list[str] = []
 
         def _worker() -> None:
@@ -84,7 +108,13 @@ class LiveProbeWindow(ctk.CTkToplevel):
             from .live_cli import LiveCliOptions, run_live_cli
 
             buffer = io.StringIO()
-            options = LiveCliOptions(pack_dir=pack_dir)
+            resources = ("reported", "reported") if want_resources else None
+            options = LiveCliOptions(
+                pack_dir=pack_dir,
+                players=want_players,
+                all_units=want_all,
+                resources=resources,
+            )
             code = 0
             try:
                 with contextlib.redirect_stdout(buffer):
