@@ -244,7 +244,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
 - **运行时只读透视**：`main.py live` 从运行中的游戏进程只读提取地图与对象信息（`ReadProcessMemory`，绝不写入），加密壳图静态解析失败时经内存层导出完整知识包：`live --dump-objects <目录>` 产出对象表/字段/注册数据/词缀表 TSV，供 `pack-query` 查询。
 - **获取当前地图**：GUI 顶栏按钮或 CLI `main.py current` 根据游戏进程与磁盘证据定位 `.w3x/.w3m/.w3n`，通过置信度门槛后只解析私有临时快照，不改源地图。
 - **局内定位反查**：`live` 输出尾部的探针 JSON 带当前坐标，复制进
-  `pack-query <包> near <x> <y>` 即知脚下怪/商人/物品（自动附掉落与货架注解）——
+  `pack-query <包> near <x> <y> [--kind 单位/装饰/物品/脚本]` 即知脚下怪/商人/物品（自动附掉落与货架注解；--kind 过滤治装饰噪声，GUI near 模式有同款下拉）——
   『我站在 这是哪、这怪掉什么』一条链路答完。
   GUI 全程免终端：顶栏「live 探针」弹窗只读读取（可勾选玩家列表/全单位/资源对齐），
   探针 JSON 自动复制，切到「包查询」near 模式点「从剪贴板提取坐标」即查；
