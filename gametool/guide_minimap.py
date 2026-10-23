@@ -181,7 +181,7 @@ def load_minimap_assets(
             try:
                 for unit in parse_units(archive.read_file("war3mapUnits.doo")):
                     positions[unit.type_id] = (unit.x, unit.y)
-            except Exception:  # noqa: BLE001 - 放置表解析失败不阻断底图。
+            except Exception:  # noqa: BLE001, S110 - 放置表解析失败不阻断底图。
                 pass
     for unit in md.units:
         positions[unit.type_id] = (unit.x, unit.y)

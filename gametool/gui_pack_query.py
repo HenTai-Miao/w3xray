@@ -447,7 +447,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
                     from .pack_query_cli import _store_last_query  # noqa: PLC0415
 
                     _store_last_query(pathlib.Path(self._pack_dir), command, keyword)
-                except Exception:
+                except Exception:  # noqa: S110 - again 记忆 fail-open
                     pass
             done.append((result, elapsed))
 

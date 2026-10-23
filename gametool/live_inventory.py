@@ -194,7 +194,7 @@ def _process_identity(handle):
         buf = ctypes.create_unicode_buffer(0x400)
         if k32.K32GetModuleFileNameExW(handle, None, buf, 0x400):
             return buf.value
-    except Exception:  # noqa: BLE001 - 身份读取失败不阻断探测。
+    except Exception:  # noqa: BLE001, S110 - 身份读取失败不阻断探测。
         pass
     return None
 
@@ -495,7 +495,7 @@ def load_names(pack_dir, kind="物品"):
                 n2 = BASE_NAMES_EN.get(code, "")
                 if n2 and len(code) == 4:
                     nm.setdefault(code.encode(), n2)
-    except Exception:
+    except Exception:  # noqa: S110 - BASE_NAMES 兜底失败退空表
         pass
     return nm
 
@@ -565,7 +565,7 @@ def build_templates(pack_dir, cache_dir=None, verbose=False):
                 if os.path.exists(m):
                     try:
                         archives.append(PathArchiveSource(m).open())
-                    except Exception:
+                    except Exception:  # noqa: S110 - 坏档案跳过不阻断其余
                         pass
             for p in sorted(set(missing)):
                 fn = p.replace("/", "_").lower()
@@ -878,7 +878,7 @@ def append_live_journal(rep):
         }
         with (root / "journal-v1.jsonl").open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    except Exception:  # noqa: BLE001 - journal 属派生数据, 失败不影响探测。
+    except Exception:  # noqa: BLE001, S110 - journal 属派生数据, 失败不影响探测。
         pass
 
 
