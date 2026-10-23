@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tkinter as tk
 from typing import TYPE_CHECKING
 
@@ -183,6 +184,13 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self._keyword.insert(0, prefill or _LAST_KEYWORD)
         self._keyword.pack(side="left", padx=(0, 8))
         self._keyword.bind("<Return>", lambda _e: self._run(self._mode.get()))
+        self._paste_coords = ctk.CTkButton(
+            row,
+            text="从剪贴板提取坐标",
+            width=140,
+            command=self._coords_from_clipboard,
+        )
+        self._paste_coords.pack(side="left", padx=(0, 8))
         self._mode_commands = [
             "doc",
             "search",
@@ -355,6 +363,30 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self._mode.set(command)
         self._keyword.configure(placeholder_text=self._PLACEHOLDERS.get(command, ""))
         self._keyword.focus_set()
+
+    def _coords_from_clipboard(self) -> None:
+        """从剪贴板提取坐标填入关键词框。
+        支持两种形态: live 探针 JSON 片段 ("x": 150, "y": 150) 或裸「x y [radius]」。
+        """
+        try:
+            raw = self.clipboard_get()
+        except Exception:
+            return
+        xs = re.findall(r'"x"\s*:\s*(-?[\d.]+)', raw)
+        ys = re.findall(r'"y"\s*:\s*(-?[\d.]+)', raw)
+        if xs and ys:
+            x, y = xs[-1], ys[-1]  # 探针 JSON 多单位时取最后一个 (通常=选中单位)
+        else:
+            nums = re.findall(r"-?[\d.]+", raw)
+            if len(nums) < 2:
+                return
+            x, y = nums[0], nums[1]
+        radius = re.findall(r'"radius"\s*:\s*([\d.]+)|半径\s*([\d.]+)', raw)
+        parts = [x, y]
+        if radius and (radius[-1][0] or radius[-1][1]):
+            parts.append(radius[-1][0] or radius[-1][1])
+        self._keyword.delete(0, "end")
+        self._keyword.insert(0, " ".join(parts))
 
     def _run_clicked(self) -> None:
         self._run(self._mode.get())
