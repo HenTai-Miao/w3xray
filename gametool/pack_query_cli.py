@@ -99,6 +99,10 @@ def _read_rows(pack_dir: Path, rel: str) -> list[list[str]]:
     path = pack_dir / rel
     if not path.exists():
         return []
+    cache_key = (str(pack_dir), rel)
+    if cache_key in _LOCKED_FILES:
+        # 已确认锁死: 跳过全部重试 — 每次查询 27x50ms 重试税不可接受
+        return []
     # 瞬态锁 (杀软实时扫描扫到一半) 短重试消噪; 持续锁 (隔离/ACL 损坏) 才记入披露表
     stat = None
     for _attempt in range(3):
@@ -108,7 +112,7 @@ def _read_rows(pack_dir: Path, rel: str) -> list[list[str]]:
         except OSError:
             time.sleep(0.05)
     if stat is None:
-        _LOCKED_FILES.add((str(pack_dir), rel))
+        _LOCKED_FILES.add(cache_key)
         return []
     # Windows mtime 粒度可能 ~15ms: 同秒内改写会让 (mtime,size) 不变 — 加内容指纹免疫
     fingerprint = None
@@ -120,9 +124,8 @@ def _read_rows(pack_dir: Path, rel: str) -> list[list[str]]:
         except OSError:
             time.sleep(0.05)
     if fingerprint is None:
-        _LOCKED_FILES.add((str(pack_dir), rel))
+        _LOCKED_FILES.add(cache_key)
         return []
-    cache_key = (str(pack_dir), rel)
     cached = _ROWS_CACHE.get(cache_key)
     if cached is not None and cached[0] == fingerprint:
         return cached[1]
@@ -144,7 +147,7 @@ def _read_rows(pack_dir: Path, rel: str) -> list[list[str]]:
             _ROWS_CACHE[cache_key] = (fingerprint, rows)
             return rows
     csv.field_size_limit(previous_limit)
-    _LOCKED_FILES.add((str(pack_dir), rel))
+    _LOCKED_FILES.add(cache_key)
     return []
 
 
@@ -3268,7 +3271,7 @@ def run_pack_query_cli(options: PackQueryCliOptions) -> int:
     import time  # noqa: PLC0415
 
     started = time.perf_counter()
-    _LOCKED_FILES.clear()
+    # 锁死表跨查询保留 (记忆驱动跳重试); 披露每次都打 — 用户每次都该知道结果可能缺失
     code = _run_query_inner(options)
     for locked_pack, locked_rel in sorted(_LOCKED_FILES):
         print(
