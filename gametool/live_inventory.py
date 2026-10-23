@@ -478,13 +478,16 @@ def load_names(pack_dir, kind="物品"):
             c = line.split("\t")
             if len(c) > 4 and len(c[1]) == 4:
                 nm[c[1].encode()] = clean(c[4])
+    # BASE_NAMES_EN 兜底按 kind 匹配分类 (旧版恒用 item 过滤 → 单位/英雄在无包时全 '?')
+    kind_marks = ("item",) if kind == "物品" else ("unit", "hero", "building")
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     sys.path.insert(0, repo)
     try:
         from gametool.base_names import BASE_NAMES_EN, BASE_CATEGORIES
 
         for code, cat in BASE_CATEGORIES.items():
-            if cat and "item" in str(cat).lower():
+            cat_text = str(cat).lower()
+            if cat and any(mark in cat_text for mark in kind_marks):
                 n2 = BASE_NAMES_EN.get(code, "")
                 if n2 and len(code) == 4:
                     nm.setdefault(code.encode(), n2)
