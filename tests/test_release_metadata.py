@@ -83,3 +83,28 @@ def test_main_version_gate(capsys):
     )
     assert proc.returncode == 0
     assert proc.stdout.strip() == f"GameXRay {_RELEASE_VERSION}"
+
+
+def test_main_help_gate(capsys):
+    """main.py --help 列全模式清单并退出 0。"""
+    import subprocess
+    import sys
+
+    proc = subprocess.run(
+        [sys.executable, "-X", "utf8", "main.py", "--help"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert proc.returncode == 0
+    for token in (
+        "cli",
+        "pack-query",
+        "guide",
+        "live",
+        "current",
+        "batch",
+        "integrity",
+        "casc",
+    ):
+        assert token in proc.stdout

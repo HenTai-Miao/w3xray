@@ -22,6 +22,22 @@ def main() -> None:
 
         print("GameXRay " + __version__)
         raise SystemExit(0)
+    if len(sys.argv) >= 2 and sys.argv[1] in {"--help", "-h"}:
+        print(
+            "GameXRay 游戏档案透视器\n"
+            "  无参数            启动图形界面\n"
+            "  cli <地图>        解析地图导出知识包\n"
+            "  pack-query <包>…  查询知识包 (28 子命令; --json 结构化输出)\n"
+            "  guide <地图>      一份逐关速查报告\n"
+            "  live              运行中游戏只读探针 (--dump-objects 导出对象表)\n"
+            "  current           定位正在使用的地图\n"
+            "  batch <目录>      批量导出 (schema-6)\n"
+            "  integrity         根快照/校验/retained-cache 审计\n"
+            "  casc …            CASC 客户端浏览/导出\n"
+            "  save / savecodes  存档容器/存档码读取\n"
+            "  --version         输出版本号"
+        )
+        raise SystemExit(0)
     if len(sys.argv) >= 2 and sys.argv[1] == "integrity":
         from gametool.integrity_cli import run_integrity_cli
 
