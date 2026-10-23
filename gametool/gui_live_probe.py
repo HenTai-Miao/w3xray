@@ -35,6 +35,10 @@ class LiveProbeWindow(ctk.CTkToplevel):
         self.grab_set()
         self.bind("<Escape>", lambda _e: self.destroy())
         self.bind("<Control-r>", lambda _e: self._start())
+        # GUI 惯例: 弹窗几何持久化 (复用 pack_query 的 memo 体系)
+        from .gui_pack_query import bind_geometry_memory  # noqa: PLC0415
+
+        bind_geometry_memory(self, "gui-live-probe", "860x560")
 
         header = ctk.CTkFrame(self, fg_color=CARD, corner_radius=12)
         header.pack(fill="x", padx=14, pady=(14, 8))

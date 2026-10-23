@@ -78,7 +78,12 @@ def _load_memo() -> None:
 
 
 def _remember_geometry(win, name: str) -> None:
-    """窗口关闭时把尺寸写进进程级记忆。"""
+    """窗口关闭时把尺寸写进进程级记忆 (未渲染的 200x200 默认不覆盖好记忆)。"""
+    try:
+        if int(win.winfo_width()) <= 1:
+            return  # 从未渲染: 别用默认尺寸污染已保存的记忆
+    except Exception:
+        pass
     _WINDOW_GEOMETRY[name] = win.geometry()
 
 
@@ -89,6 +94,7 @@ def apply_saved_geometry(win, name: str, fallback: str) -> None:
 
 def bind_geometry_memory(win, name: str, fallback: str) -> None:
     """还原 + 关闭落盘一体化: 弹窗记忆惯例的最小接入点。"""
+    _load_memo()  # 跨弹窗接入时 dict 可能未填充 (探针等独立弹窗)
 
     def _on_destroy(event) -> None:
         # <Destroy> 会因子控件销毁冒泡触发, 只有顶层自身销毁才记 geometry
