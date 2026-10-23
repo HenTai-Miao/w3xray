@@ -68,3 +68,18 @@ def test_readme_points_to_both_windows_acceptance_reports() -> None:
     assert "gamexray-acceptance-" in readme
     assert "windows-onedir/acceptance.json" in readme
     assert "windows-onefile/acceptance.json" in readme
+
+
+def test_main_version_gate(capsys):
+    """main.py --version 零依赖输出 GameXRay <版本> 并退出 0。"""
+    import subprocess
+    import sys
+
+    proc = subprocess.run(
+        [sys.executable, "-X", "utf8", "main.py", "--version"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert proc.returncode == 0
+    assert proc.stdout.strip() == f"GameXRay {_RELEASE_VERSION}"
