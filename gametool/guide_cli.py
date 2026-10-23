@@ -127,7 +127,7 @@ def run_guide_cli(options: GuideCliOptions) -> int:
     context = build_map_load_context()
     try:
         map_data = load_map(options.map_path, load_context=context)
-    except Exception as exc:  # noqa: BLE001 - CLI 边界统一转成稳定错误码。
+    except Exception as exc:
         diagnosis = diagnose_archive_open(options.map_path, exc)
         print(f"无法解析地图：{diagnosis.message}", file=sys.stderr)
         return 2
@@ -151,7 +151,7 @@ def run_guide_cli(options: GuideCliOptions) -> int:
 
             for line in write_guide_minimap(map_data, out_path, extra_json):
                 print(single_line_text(line))
-        except Exception as exc:  # noqa: BLE001 - CLI 边界统一转成稳定错误码。
+        except Exception as exc:
             print(f"小地图标注图生成失败：{exc}", file=sys.stderr)
             hint = _minimap_error_hint(options.map_path)
             if hint:

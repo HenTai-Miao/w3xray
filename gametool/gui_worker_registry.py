@@ -172,8 +172,8 @@ class GuiWorkerRegistry:  # [OK: MUTABLE_OK] - lifecycle registry owns changing 
 __all__ = (
     "GuiWorkerRegistry",
     "GuiWorkerRegistryStopped",
+    "GuiWorkerTarget",
     "GuiWorkerThread",
     "GuiWorkerThreadFactory",
-    "GuiWorkerTarget",
     "GuiWorkerTicket",
 )

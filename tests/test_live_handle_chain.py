@@ -191,7 +191,7 @@ def test_resolve_and_inventory():
 
 
 def test_selected_unit():
-    regions, hero, _other, o = _build_memory()
+    regions, _hero, _other, o = _build_memory()
     reader = MemoryReader(regions)
     system = HandleSystem(reader, DLL_BASE, o)
     sel = selected_unit(reader, system, o, DLL_BASE)
@@ -201,7 +201,7 @@ def test_selected_unit():
 
 
 def test_walk_item_units_orders_by_count():
-    regions, _hero, other, o = _build_memory()
+    regions, _hero, _other, o = _build_memory()
     reader = MemoryReader(regions)
     system = HandleSystem(reader, DLL_BASE, o)
     units = walk_item_units(reader, system, o)

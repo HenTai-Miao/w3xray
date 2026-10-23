@@ -150,8 +150,8 @@ def _candidate_key(row: IconCandidateEvidence) -> tuple[str | int, ...]:
 
 __all__ = (
     "GlobalAnonymousIcon",
-    "GlobalEvidenceIndex",
     "GlobalEvidenceError",
+    "GlobalEvidenceIndex",
     "GlobalIconGap",
     "GlobalResolvedIcon",
 )

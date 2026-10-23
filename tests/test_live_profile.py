@@ -139,7 +139,7 @@ class TestProfileVerification:
             checks=(lh.ProfileCheck(rva=0, expect=b"\x00" * 4),),
         )
         fp = lh.ProfileFingerprint(machine=0x14C, timestamp=9, image_size=2)
-        ok, fails, patches = lh.verify_profile(reader, BASE, p, fp)
+        ok, fails, _patches = lh.verify_profile(reader, BASE, p, fp)
         assert not ok and any("PE 指纹不符" in f for f in fails)
 
     def test_fingerprint_match_runtime_patch_passes_with_evidence(self):

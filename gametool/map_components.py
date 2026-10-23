@@ -56,7 +56,7 @@ def _add_script_refs(
                     base_id=shared.base_id,
                     name=shared.name,
                     is_custom=shared.is_custom,
-                    fields=[("来源", "战役共享对象")] + list(shared.fields),
+                    fields=[("来源", "战役共享对象"), *list(shared.fields)],
                     search_text=shared.search_text,
                     icon=shared.icon,
                 )

@@ -37,7 +37,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
         self.bind("<Escape>", lambda _e: self.destroy())
         self.bind("<Control-r>", lambda _e: self._start())
         # GUI 惯例: 弹窗几何持久化 (复用 pack_query 的 memo 体系)
-        from .gui_pack_query import bind_geometry_memory  # noqa: PLC0415
+        from .gui_pack_query import bind_geometry_memory
 
         bind_geometry_memory(self, "gui-live-probe", "860x560")
 
@@ -168,7 +168,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
         self.after(120, self._start)
 
     def _last_unit_query_file(self) -> pathlib.Path:
-        from .gui_pack_query import _memo_dir  # noqa: PLC0415
+        from .gui_pack_query import _memo_dir
 
         return pathlib.Path(_memo_dir()) / "live-probe-unit.txt"
 
@@ -193,7 +193,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
             pass  # fail-open: 记忆失败不影响探针
 
     def _last_map_path_file(self) -> pathlib.Path:
-        from .gui_pack_query import _memo_dir  # noqa: PLC0415
+        from .gui_pack_query import _memo_dir
 
         return pathlib.Path(_memo_dir()) / "live-probe-map.txt"
 
@@ -299,7 +299,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
                 self.clipboard_append(tail.strip())
                 copied = "  ·  探针 JSON 已复制 (near 可提取坐标)"
                 # 结构化摘要: 单位/物品/玩家数一行可见, 免读长输出
-                import json  # noqa: PLC0415
+                import json
 
                 try:
                     probe = json.loads(tail.strip())
@@ -336,7 +336,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
                 raw = self.clipboard_get().strip()
             except Exception:
                 return
-        import re  # noqa: PLC0415
+        import re
 
         nums = re.findall(r"-?\d+(?:\.\d+)?", raw)
         if len(nums) < 2:
@@ -357,7 +357,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
             except Exception:
                 return
         # 四码或含四码的片段都行: 提取前一个 [A-Z][0-9A-Z]{3} 形态
-        import re  # noqa: PLC0415
+        import re
 
         m = re.search(r"[A-Z][0-9A-Z]{3}", code)
         if not m:
@@ -367,7 +367,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
 
     def _export_md(self) -> None:
         """输出区导出为 .md (桌面优先, fail-open)。"""
-        import time  # noqa: PLC0415
+        import time
 
         text = self._output.get("1.0", "end").strip()
         if not text:

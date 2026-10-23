@@ -156,7 +156,7 @@ def test_find_auto_resource_rows_lumber_may_be_none():
     assert rows[0].lumber is None
     # 报告组装等价逻辑: None 不参与 round。
     assert round(rows[0].gold) == 7801
-    assert rows[0].lumber is None  # noqa: PT018 (显式断言 None 语义)
+    assert rows[0].lumber is None
 
 
 def test_rank_auto_rows_orders_and_returns_all():

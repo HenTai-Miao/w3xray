@@ -26,7 +26,7 @@ def validate_mpq_candidate(
     """Return stable evidence for one aligned MPQ main-header candidate."""
     base = (f"candidate_offset={offset}", f"file_size={file_size}")
     if len(raw) < MPQ_HEADER.size:
-        return base + ("header_truncated",)
+        return (*base, "header_truncated")
     (
         _magic,
         header_size,
@@ -38,12 +38,7 @@ def validate_mpq_candidate(
         hash_count,
         block_count,
     ) = MPQ_HEADER.unpack(raw)
-    fields = base + (
-        f"header_size={header_size}",
-        f"format_version={format_version}",
-        f"hash_count={hash_count}",
-        f"block_count={block_count}",
-    )
+    fields = (*base, f"header_size={header_size}", f"format_version={format_version}", f"hash_count={hash_count}", f"block_count={block_count}")
     protected_classic = war3_map and format_version == 0
     try:
         effective_header_size = normalize_classic_header_size(
@@ -59,16 +54,16 @@ def validate_mpq_candidate(
             protected_classic=protected_classic,
         )
     except MPQLayoutError as exc:
-        return fields + (f"layout_error={exc}",)
+        return (*fields, f"layout_error={exc}")
     fields += (
         f"effective_header_size={effective_header_size}",
         f"protected_classic={str(protected_classic).lower()}",
         f"table_offsets_wrapped={str(table_offsets_wrapped).lower()}",
     )
     if sector_shift > 20:
-        return fields + (f"sector_shift={sector_shift}", "sector_shift_invalid")
+        return (*fields, f"sector_shift={sector_shift}", "sector_shift_invalid")
     if hash_count <= 0 or hash_count & (hash_count - 1):
-        return fields + ("hash_count_not_power_of_two",)
+        return (*fields, "hash_count_not_power_of_two")
     hash_start = resolve_classic_table_offset(
         offset,
         hash_pos,
@@ -80,14 +75,14 @@ def validate_mpq_candidate(
         f"hash_table_end={hash_end}",
     )
     if hash_end > file_size:
-        return fields + ("hash_table_oob",)
+        return (*fields, "hash_table_oob")
     block_start = resolve_classic_table_offset(
         offset,
         block_pos,
         wrap_32bit=protected_classic,
     )
     if block_start > file_size:
-        return fields + (f"block_table_start={block_start}", "block_table_start_oob")
+        return (*fields, f"block_table_start={block_start}", "block_table_start_oob")
     block_end = min(file_size, block_start + block_count * 16)
     fields += (
         f"block_table_start={block_start}",
@@ -101,7 +96,7 @@ def validate_mpq_candidate(
             file_size,
         )
     except MPQLayoutError as exc:
-        return fields + (f"layout_error={exc}",)
+        return (*fields, f"layout_error={exc}")
     if format_version != 0:
-        return fields + ("format_unsupported",)
-    return fields + ("structure=valid",)
+        return (*fields, "format_unsupported")
+    return (*fields, "structure=valid")

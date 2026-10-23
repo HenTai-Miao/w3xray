@@ -10,7 +10,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Final, Literal, assert_never
 
-type JsonValue = str | int | float | bool | None | tuple[JsonValue, ...]
+type JsonValue = str | int | float | bool | tuple[JsonValue, ...] | None
 
 
 class ItemRelationKind(StrEnum):
@@ -114,11 +114,7 @@ class ItemRelation:
 
 def relation_endpoints(relation: "ItemRelation") -> tuple[RelationObject, ...]:
     """Target item plus the source and skill endpoints that exist."""
-    return (relation.item,) + tuple(
-        endpoint
-        for endpoint in (relation.source, relation.skill)
-        if endpoint is not None
-    )
+    return (relation.item, *tuple(endpoint for endpoint in (relation.source, relation.skill) if endpoint is not None))
 
 
 @dataclass(frozen=True, slots=True)

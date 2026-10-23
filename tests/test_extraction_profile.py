@@ -14,7 +14,7 @@ from gametool.extraction_profile import (
     parse_profile_arg,
 )
 from gametool.games import get_adapter, list_adapters
-from gametool.games.warcraft import WARCRAFT_ADAPTER  # noqa: F401 - 注册副作用
+from gametool.games.warcraft import WARCRAFT_ADAPTER
 from gametool.knowledge_pack_contents import _allowed, _category_gate
 
 

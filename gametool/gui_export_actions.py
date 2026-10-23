@@ -298,7 +298,7 @@ class ExportActionsMixin:
 
 def _last_pack_memo_path() -> str:
     try:
-        from .cache_root import gamexray_cache_root  # noqa: PLC0415
+        from .cache_root import gamexray_cache_root
 
         return str(gamexray_cache_root() / "gui-last-pack.txt")
     except OSError:
@@ -321,7 +321,7 @@ def save_last_pack_dir(out: str) -> None:
     if not path:
         return
     try:
-        from pathlib import Path  # noqa: PLC0415
+        from pathlib import Path
 
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         Path(path).write_text(out, encoding="utf-8")

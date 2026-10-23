@@ -50,7 +50,7 @@ _COUNT_KEYS: Final = tuple(
 _PUBLISHED_STATES: Final = frozenset(("完整", "部分完成", "受限"))
 
 type JsonValue = (
-    str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
+    str | int | float | bool | list["JsonValue"] | dict[str, "JsonValue"] | None
 )
 
 

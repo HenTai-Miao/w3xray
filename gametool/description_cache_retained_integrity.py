@@ -126,10 +126,10 @@ __all__ = (
     "RetainedCacheRole",
     "RetainedDescriptionCacheArtifact",
     "RetentionArtifactReason",
-    "TransientDescriptionCacheArtifact",
     "StableRetentionInspection",
+    "TransientDescriptionCacheArtifact",
     "format_description_cache_retention_report",
-    "inspect_retained_description_caches",
     "inspect_bound_retained_description_caches",
+    "inspect_retained_description_caches",
     "parse_description_cache_retention_report",
 )

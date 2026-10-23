@@ -29,7 +29,7 @@ def main() -> None:
     multiprocessing.freeze_support()
     configure_cli_output()
     if len(sys.argv) >= 2 and sys.argv[1] == "--version":
-        from gametool import __version__  # noqa: PLC0415
+        from gametool import __version__
 
         print("GameXRay " + __version__)
         raise SystemExit(0)

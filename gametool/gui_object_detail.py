@@ -55,7 +55,7 @@ class ObjectDetailMixin:
         self._show_detail(results[index])
 
     def _on_card_right_click(self, event) -> None:
-        import tkinter as tk  # noqa: PLC0415
+        import tkinter as tk
 
         tree = self.object_gallery.cards
         iid = tree.identify_row(event.y)
@@ -84,7 +84,7 @@ class ObjectDetailMixin:
         obj = getattr(self, "_selected_detail_object", None)
         if obj is None:
             return
-        from .gui_shell_object_panel import _pack_query_selected  # noqa: PLC0415
+        from .gui_shell_object_panel import _pack_query_selected
 
         _pack_query_selected(self, command)
 

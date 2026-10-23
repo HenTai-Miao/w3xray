@@ -25,7 +25,7 @@ _WINDOW_GEOMETRY: dict[str, str] = {}  # 窗口名 -> "WxH" (进程级)
 
 def _memo_dir() -> str:
     try:
-        from .cache_root import gamexray_cache_root  # noqa: PLC0415
+        from .cache_root import gamexray_cache_root
 
         return str(gamexray_cache_root() / "gui-query-memo")
     except OSError:
@@ -34,9 +34,9 @@ def _memo_dir() -> str:
 
 def _save_memo() -> None:
     """收藏+历史落盘 (fail-open): 重启程序不丢。"""
-    import json  # noqa: PLC0415
+    import json
 
-    from pathlib import Path  # noqa: PLC0415
+    from pathlib import Path
 
     base = _memo_dir()
     if not base:
@@ -58,9 +58,9 @@ def _save_memo() -> None:
 
 
 def _load_memo() -> None:
-    import json  # noqa: PLC0415
+    import json
 
-    from pathlib import Path  # noqa: PLC0415
+    from pathlib import Path
 
     base = _memo_dir()
     if not base:
@@ -381,7 +381,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
     }
 
     def _near_kind_file(self) -> pathlib.Path:
-        from .gui_pack_query import _memo_dir  # noqa: PLC0415
+        from .gui_pack_query import _memo_dir
 
         return pathlib.Path(_memo_dir()) / "near-kind.txt"
 
@@ -476,7 +476,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self.configure(cursor="watch")
         # 后台线程跑查询, Tk 只在主线程碰 — 大包首查不再卡界面。
         # 交付用主线程轮询 (跨线程 after/event_generate 在 Tk 下会死锁主循环)
-        import threading  # noqa: PLC0415
+        import threading
 
         done: list[tuple[str, str]] = []
         as_json = self._var_json.get()
@@ -486,10 +486,10 @@ class _PackQueryWindow(ctk.CTkToplevel):
             # CLI again 共享记忆: GUI 成功查询也落 memo (未找到/异常不写)
             if command != "diff" and result and not result.startswith("未找到"):
                 try:
-                    from .pack_query_cli import _store_last_query  # noqa: PLC0415
+                    from .pack_query_cli import _store_last_query
 
                     _store_last_query(pathlib.Path(self._pack_dir), command, keyword)
-                except Exception:  # noqa: S110 - again 记忆 fail-open
+                except Exception:
                     pass
             done.append((result, elapsed))
 
@@ -516,8 +516,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
             )
         except ImportError as exc:  # pragma: no cover
             return (f"查询模块不可用: {exc}", "")
-        import contextlib  # noqa: PLC0415
-        import io  # noqa: PLC0415
+        import contextlib
+        import io
 
         options = PackQueryCliOptions(
             pack_dir=self._pack_dir,
@@ -562,7 +562,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         text = source_box.get("1.0", "end").strip()
         if not text:
             return
-        from .archive_export import tmp_extract_dir  # noqa: PLC0415
+        from .archive_export import tmp_extract_dir
 
         out_dir = tmp_extract_dir("pack-query-export")
         safe = "".join(ch if ch not in '\\/:*?"<>|' else "_" for ch in label)

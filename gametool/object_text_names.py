@@ -21,29 +21,7 @@ _TRUSTED_NAME: Final[re.Pattern[str]] = re.compile(
     re.IGNORECASE,
 )
 _RACES: Final[tuple[str, ...]] = ("Human", "Orc", "Undead", "NightElf", "Neutral")
-_TRUSTED_REFERENCE_NAMES: Final[tuple[str, ...]] = (
-    "units\\itemfunc.txt",
-    "units\\itemstrings.txt",
-    "units\\campaignunitfunc.txt",
-    "units\\campaignunitstrings.txt",
-    "Units\\HumanUnitFunc.txt",
-    "Units\\HumanUnitStrings.txt",
-    "units\\campaignabilityfunc.txt",
-    "units\\campaignabilitystrings.txt",
-    "Units\\HumanAbilityFunc.txt",
-    "Units\\HumanAbilityStrings.txt",
-    "Units\\CampaignUpgradeFunc.txt",
-    "Units\\campaignupgradestrings.txt",
-    "Units\\HumanUpgradeFunc.txt",
-    "Units\\HumanUpgradeStrings.txt",
-    "Units\\NeutralUpgradeFunc.txt",
-    "Units\\NeutralUpgradeStrings.txt",
-) + tuple(
-    f"Units\\{race}{object_type}{source}.txt"
-    for race in _RACES
-    for object_type in ("Unit", "Ability", "Upgrade")
-    for source in ("Func", "Strings")
-)
+_TRUSTED_REFERENCE_NAMES: Final[tuple[str, ...]] = ("units\\itemfunc.txt", "units\\itemstrings.txt", "units\\campaignunitfunc.txt", "units\\campaignunitstrings.txt", "Units\\HumanUnitFunc.txt", "Units\\HumanUnitStrings.txt", "units\\campaignabilityfunc.txt", "units\\campaignabilitystrings.txt", "Units\\HumanAbilityFunc.txt", "Units\\HumanAbilityStrings.txt", "Units\\CampaignUpgradeFunc.txt", "Units\\campaignupgradestrings.txt", "Units\\HumanUpgradeFunc.txt", "Units\\HumanUpgradeStrings.txt", "Units\\NeutralUpgradeFunc.txt", "Units\\NeutralUpgradeStrings.txt", *tuple(f"Units\\{race}{object_type}{source}.txt" for race in _RACES for object_type in ("Unit", "Ability", "Upgrade") for source in ("Func", "Strings")))
 
 
 def trusted_names(

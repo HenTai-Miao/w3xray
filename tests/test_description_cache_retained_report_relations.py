@@ -12,7 +12,7 @@ from gametool import description_cache_retained_integrity as retained_api
 
 
 type JsonValue = (
-    str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
+    str | int | float | bool | list["JsonValue"] | dict[str, "JsonValue"] | None
 )
 
 

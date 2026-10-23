@@ -214,7 +214,7 @@ def _require_leaf(name: str) -> None:
 __all__ = (
     "AtomicRenamePathError",
     "AtomicRenameUnavailableError",
-    "require_atomic_rename_support",
     "rename_exchange",
     "rename_noreplace",
+    "require_atomic_rename_support",
 )

@@ -72,7 +72,7 @@ def _u32(data):
     return np.frombuffer(data, dtype="<u4").astype(np.uint64)
 
 
-def _sources_to(targets_arr, regions, window=0):  # noqa: ARG001 - 窗口扫描参数预留
+def _sources_to(targets_arr, regions, window=0):
     """全内存一遍: 返回 (src, val) 其中 val == targets_arr 中某值。"""
     srcs_all, vals_all = [], []
     for base, data in regions:
@@ -166,7 +166,7 @@ def _learn_def_layout(
     )
     offs = Counter()
     if len(pivots):
-        psrc, pval, _ = _sources_into_windows(pivots - np.uint64(0x200), 0x204, regions)
+        _psrc, pval, _ = _sources_into_windows(pivots - np.uint64(0x200), 0x204, regions)
         for v2 in pval.tolist():
             # 指针目标在 pivot 下方: 找 >= v2 的最小 pivot (窗口主)
             i = int(np.searchsorted(pivots, np.uint64(v2), side="left"))

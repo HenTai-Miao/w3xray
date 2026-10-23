@@ -44,7 +44,7 @@ def diagnose_archive_open(
         return ArchiveOpenDiagnosis(
             ArchiveDiagnosisKind.READ_ERROR,
             "原始地图路径不是可读取的普通文件，无法完成有界 MPQ 诊断。",
-            (f"path={path}", "path_type=directory") + _error_evidence(error),
+            (f"path={path}", "path_type=directory", *_error_evidence(error)),
         )
     try:
         handle, file_size = open_regular_binary(path)
@@ -144,12 +144,7 @@ def _diagnose_readable(
     return ArchiveOpenDiagnosis(
         ArchiveDiagnosisKind.NO_HEADER,
         "未找到可用的 MPQ 头，文件不像可直接读取的 Warcraft III MPQ 地图。",
-        (
-            f"path={path}",
-            f"searched_bytes={scan_end}",
-            "alignment=512",
-        )
-        + _error_evidence(error),
+        (f"path={path}", f"searched_bytes={scan_end}", "alignment=512", *_error_evidence(error)),
     )
 
 

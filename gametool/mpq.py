@@ -10,7 +10,7 @@ from .mpq_block_reader import (
     DERIVE_KEY as _DERIVE_KEY,
     decompress_mpq_block,
     decompress_unencrypted_block,
-    parse_sector_offsets as _parse_sector_offsets,  # noqa: F401 - compatibility export
+    parse_sector_offsets as _parse_sector_offsets,
     peek_mpq_block,
     read_mpq_block,
     read_mpq_block_anonymous,
@@ -43,7 +43,7 @@ from .mpq_constants import (
     HASH_TABLE_OFFSET as HASH_TABLE_OFFSET,
 )
 from .mpq_crypto import (
-    CRYPT_TABLE as _CRYPT,  # noqa: F401 - compatibility export
+    CRYPT_TABLE as _CRYPT,
     _decrypt as _decrypt,
     _detect_offtable_key as _detect_offtable_key,
     _hash as _hash,
@@ -317,7 +317,7 @@ class MPQArchive:
         if self._names is not None:
             return self._names
         # 延迟导入断开 mpq → mpq_files → (类型) map_data → (类型) archive_source → mpq 静态环
-        from .mpq_files import list_archive_files  # noqa: PLC0415
+        from .mpq_files import list_archive_files
 
         self._names = list_archive_files(self)
         return self._names

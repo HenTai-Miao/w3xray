@@ -7,7 +7,7 @@ import pytest
 
 np = pytest.importorskip("numpy")
 
-from gametool.hero_chain import read_inventory  # noqa: E402
+from gametool.hero_chain import read_inventory
 
 BASE = 0x08000000
 

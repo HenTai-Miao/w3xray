@@ -11,7 +11,7 @@ from typing import Final, TypedDict, override
 from .icon_resources import IconObjectReference
 
 type JsonValue = (
-    str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
+    str | int | float | bool | list["JsonValue"] | dict[str, "JsonValue"] | None
 )
 
 _IDENTITY_KEYS: Final = frozenset(("map", "sha256"))

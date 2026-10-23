@@ -618,7 +618,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         rest = rest[:i] + rest[i + 2 :]
     command = rest[1] if len(rest) > 1 else ""
     if command == "near" and len(rest) in (4, 5):
-        rest = rest[:2] + [" ".join(rest[2:])]
+        rest = [*rest[:2], " ".join(rest[2:])]
     if (
         command
         in (
@@ -638,7 +638,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         and len(rest) == 2
     ):
         # 这些子命令查询词可省 (全量列出)
-        rest = rest + [""]
+        rest = [*rest, ""]
     if len(rest) != 3:
         raise PackQueryCliOptionError(
             "用法: pack-query <资料包目录> [--json] <"
@@ -3215,7 +3215,7 @@ def _query_stats(pack: Path, query: str, limit: int) -> list[str]:
     obj_dir = pack / "对象ID"
     # 导出时间 = 对象表目录 mtime (包重导时刷新), 用户可判断包新旧
     if obj_dir.is_dir():
-        import datetime  # noqa: PLC0415
+        import datetime
 
         exported = datetime.datetime.fromtimestamp(obj_dir.stat().st_mtime)
         out.append(f"导出时间: {exported:%Y-%m-%d %H:%M}")
@@ -3269,14 +3269,14 @@ def _query_export(pack: Path, query: str, limit: int) -> list[str]:
     out_path = os.path.join(out_dir, safe + ".md")
     with open(out_path, "w", encoding="utf-8") as handle:
         handle.write("\n".join(lines))
-    return [f"已导出: {out_path}"] + lines
+    return [f"已导出: {out_path}", *lines]
 
 
 _LAST_QUERY_FILE = "pack-query-last.json"
 
 
 def _memo_dir() -> Path:
-    from .cache_root import gamexray_cache_root  # noqa: PLC0415
+    from .cache_root import gamexray_cache_root
 
     return gamexray_cache_root() / "gui-query-memo"
 
@@ -3327,9 +3327,7 @@ def _query_again(pack: Path, query: str, limit: int) -> list[str]:
     run_fn = _QUERIES.get(last["command"])
     if run_fn is None:
         return ["最近查询的命令已失效: " + last["command"]]
-    return [
-        f"[重跑] {last['command']} {last['query']} (来自 {last['pack']})",
-    ] + run_fn(memo_pack, last["query"], limit)
+    return [f"[重跑] {last['command']} {last['query']} (来自 {last['pack']})", *run_fn(memo_pack, last["query"], limit)]
 
 
 _QUERIES = {
@@ -3389,7 +3387,7 @@ def _emit_lines(lines: list[str], as_json: bool, section: str = "") -> None:
 
 def run_pack_query_cli(options: PackQueryCliOptions) -> int:
     """执行查询并计时；耗时行走 stderr (不污染 stdout 结果)。"""
-    import time  # noqa: PLC0415
+    import time
 
     started = time.perf_counter()
     # 锁死表跨查询保留 (记忆驱动跳重试); 披露每次都打 — 用户每次都该知道结果可能缺失

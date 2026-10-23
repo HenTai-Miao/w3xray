@@ -215,8 +215,8 @@ def build_detail_panel(host: ObjectPanelHost, paned: tk.PanedWindow) -> None:
 
 def _pack_query_selected(host, command: str = "doc") -> None:
     obj = getattr(host, "_selected_detail_object", None)
-    from .gui_pack_query import open_pack_query_dialog  # noqa: PLC0415
-    from .gui_export_actions import load_last_pack_dir  # noqa: PLC0415
+    from .gui_pack_query import open_pack_query_dialog
+    from .gui_export_actions import load_last_pack_dir
 
     # 按对象类型智能路由: where/drop 语义只对物品/单位成立,
     # 技能/增益/科技/装饰物点上会得到「未找到」— 改路由到专属命令。

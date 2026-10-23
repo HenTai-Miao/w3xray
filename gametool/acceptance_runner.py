@@ -145,7 +145,7 @@ def _run_check(name: str, action: Callable[[], str]) -> AcceptanceCheck:
     started = perf_counter()
     try:
         detail = action()
-    except Exception as exc:  # noqa: BLE001  # BROAD_EXCEPT_OK - acceptance boundary records each lane.
+    except Exception as exc:  # BROAD_EXCEPT_OK - acceptance boundary records each lane.
         return AcceptanceCheck(
             name,
             AcceptanceStatus.FAIL,

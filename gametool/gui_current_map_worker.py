@@ -136,7 +136,7 @@ def run_discovery(
                 event_sink(generation, ResolutionReady(resolution))
             case unreachable:
                 assert_never(unreachable)
-    except Exception:  # noqa: BLE001  # BROAD_EXCEPT_OK - stable worker event.
+    except Exception:  # BROAD_EXCEPT_OK - stable worker event.
         event_sink(generation, WorkerError())
 
 
@@ -150,7 +150,7 @@ def run_snapshot(
     """Create a stable snapshot and transfer it through the ownership sink."""
     try:
         snapshot_sink(generation, snapshot_factory(path))
-    except Exception:  # noqa: BLE001  # BROAD_EXCEPT_OK - stable worker event.
+    except Exception:  # BROAD_EXCEPT_OK - stable worker event.
         event_sink(generation, WorkerError())
 
 

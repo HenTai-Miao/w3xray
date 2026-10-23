@@ -234,7 +234,7 @@ def _auto_map_path() -> str | None:
         from .current_map_models import ResolutionStatus
 
         resolution = locate_current_map()
-    except Exception:  # noqa: BLE001 - 自动定位失败降级为「请显式给路径」
+    except Exception:
         return None
     if resolution.status != ResolutionStatus.FOUND:
         return None
@@ -280,7 +280,7 @@ def run_live_cli(options: LiveCliOptions) -> int:
         return 0
     try:
         from .live_inventory import main as live_main
-    except Exception:  # noqa: BLE001 - 依赖缺失给出可执行提示而不是堆栈。
+    except Exception:
         print(
             "缺少运行依赖 numpy/pillow，请用："
             "uv run --with numpy --with pillow python main.py live ...",
@@ -297,7 +297,7 @@ def run_live_cli(options: LiveCliOptions) -> int:
         return 2
     try:
         pack_dir = _ensure_pack_dir(options)
-    except Exception as exc:  # noqa: BLE001 - CLI 边界统一转退出码。
+    except Exception as exc:
         print(f"无法准备资料包：{type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
     args = ["--pack", pack_dir, "--strategy", options.strategy]
@@ -328,6 +328,6 @@ def run_live_cli(options: LiveCliOptions) -> int:
         args += ["--pid", options.pid]
     try:
         return live_main(args)
-    except Exception as exc:  # noqa: BLE001 - 读取失败不抛堆栈给玩家。
+    except Exception as exc:
         print(f"实时读取失败：{type(exc).__name__}: {exc}", file=sys.stderr)
         return 2

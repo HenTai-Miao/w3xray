@@ -84,10 +84,10 @@ class TrustedDescriptionCacheError(OSError):
 
 
 __all__ = (
-    "TrustedDescriptionCacheError",
-    "TrustedDescriptionCachePayloads",
     "TrustedCacheGenerationProof",
     "TrustedCacheLeafProof",
+    "TrustedDescriptionCacheError",
+    "TrustedDescriptionCachePayloads",
     "VerifiedDescriptionCache",
     "VerifiedDescriptionCacheGeneration",
 )

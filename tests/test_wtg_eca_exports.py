@@ -175,7 +175,7 @@ class WtgEcaExportTest(unittest.TestCase):
         )
         action = replace(
             summary.eca_functions[0],
-            parameters=summary.eca_functions[0].parameters + (array,),
+            parameters=(*summary.eca_functions[0].parameters, array),
         )
         summary = replace(summary, eca_functions=(action,))
 

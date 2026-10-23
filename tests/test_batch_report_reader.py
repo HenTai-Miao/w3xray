@@ -70,7 +70,7 @@ def test_unknown_header_still_rejected() -> None:
 
 def test_longer_legacy_variant_rejected() -> None:
     # Given: a "legacy" variant longer than the current header is illegal.
-    longer = ACQUISITION_REPORT_HEADER + ("多出的列",)
+    longer = (*ACQUISITION_REPORT_HEADER, "多出的列")
     content = _tsb(longer, (("a",) * len(longer),))
 
     # When/Then: only shorter trailing-column variants are accepted.

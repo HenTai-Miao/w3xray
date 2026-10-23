@@ -69,7 +69,7 @@ def decode_blp(data: bytes):
 def _decode_blp1(data, Image):
     if len(data) < 28 + 128 + 4:  # 头(24)+mip偏移表(64)+mip大小表(64)+jpeg头长(4)
         return None
-    (compression, flags, width, height, pic_type, pic_subtype) = struct.unpack_from(
+    (compression, flags, width, height, _pic_type, _pic_subtype) = struct.unpack_from(
         "<IIIIII", data, 4
     )
     if not (0 < width <= _MAX_DIM and 0 < height <= _MAX_DIM):

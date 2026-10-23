@@ -32,7 +32,7 @@ _SHA256: Final = re.compile(r"[0-9a-f]{64}")
 _TRANSACTION_ID: Final = re.compile(r"[0-9a-f]{32}")
 
 type JsonValue = (
-    str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
+    str | int | float | bool | list["JsonValue"] | dict[str, "JsonValue"] | None
 )
 
 

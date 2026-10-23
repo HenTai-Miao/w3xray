@@ -21,7 +21,7 @@ from .description_cache_retained_report_validation import validate_retention_rep
 
 
 type JsonValue = (
-    str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
+    str | int | float | bool | list["JsonValue"] | dict[str, "JsonValue"] | None
 )
 
 _TOP_KEYS: Final = frozenset(

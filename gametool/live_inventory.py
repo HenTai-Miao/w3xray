@@ -150,7 +150,7 @@ _INTEGRITY_NAMES = {
 }
 
 
-def log_live_exception(stage, ex):  # noqa: ARG001 - ex 经 format_exc() 上下文捕获
+def log_live_exception(stage, ex):
     """兜底异常带栈落盘 (fail-open) 并返回提示后缀。
 
     学自 trainer format_error 三件套 (reason/recovery/diagnostic_log
@@ -176,7 +176,7 @@ def log_live_exception(stage, ex):  # noqa: ARG001 - ex 经 format_exc() 上下�
                 )
             )
         return f" (诊断日志: {p})"
-    except Exception:  # noqa: BLE001 - 日志属派生数据, 失败不影响探测。
+    except Exception:
         return ""
 
 
@@ -194,7 +194,7 @@ def _process_identity(handle):
         buf = ctypes.create_unicode_buffer(0x400)
         if k32.K32GetModuleFileNameExW(handle, None, buf, 0x400):
             return buf.value
-    except Exception:  # noqa: BLE001, S110 - 身份读取失败不阻断探测。
+    except Exception:
         pass
     return None
 
@@ -239,7 +239,7 @@ def _integrity_rid(process_handle):
         cnt = adv32.GetSidSubAuthorityCount(ctypes.c_void_p(sid)).contents.value
         adv32.GetSidSubAuthority.restype = ctypes.POINTER(ctypes.c_ulong)
         return adv32.GetSidSubAuthority(ctypes.c_void_p(sid), cnt - 1).contents.value
-    except Exception:  # noqa: BLE001 - 预检失败不影响主流程
+    except Exception:
         return None
 
 
@@ -418,7 +418,7 @@ def read_pe_fingerprint(path):
         return ProfileFingerprint(
             machine=machine, timestamp=timestamp, image_size=image_size
         )
-    except Exception, struct.error:  # noqa: BLE001 - 指纹拿不到就不比
+    except Exception, struct.error:
         return None
 
 
@@ -502,7 +502,7 @@ def load_names(pack_dir, kind="物品"):
                 n2 = BASE_NAMES_EN.get(code, "")
                 if n2 and len(code) == 4:
                     nm.setdefault(code.encode(), n2)
-    except Exception:  # noqa: S110 - BASE_NAMES 兜底失败退空表
+    except Exception:
         pass
     return nm
 
@@ -573,7 +573,7 @@ def build_templates(pack_dir, cache_dir=None, verbose=False):
                 if os.path.exists(m):
                     try:
                         archives.append(PathArchiveSource(m).open())
-                    except Exception:  # noqa: S110 - 坏档案跳过不阻断其余
+                    except Exception:
                         pass
             for p in sorted(set(missing)):
                 fn = p.replace("/", "_").lower()
@@ -765,7 +765,7 @@ def match_image_full(
             n0 = float(h * w)
             varw0 = np.maximum(s2 - s1 * s1 / n0, 1e-9)
             cache[(h, w)] = (ones_fft0, s1, varw0)
-        ones_fft, S1, varw = cache[(h, w)]
+        _ones_fft, S1, varw = cache[(h, w)]
         B = np.fft.rfft2(t[::-1, ::-1], (fh, fw))
         cross = np.fft.irfft2(A0 * B, (fh, fw))
         n = float(h * w)
@@ -888,7 +888,7 @@ def append_live_journal(rep):
         }
         with (root / "journal-v1.jsonl").open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
-    except Exception:  # noqa: BLE001, S110 - journal 属派生数据, 失败不影响探测。
+    except Exception:
         pass
 
 
@@ -1270,7 +1270,7 @@ def read_live(
                         )
                         if lines:
                             report["player_rows"] = lines
-                except Exception as ex:  # noqa: BLE001 - 标注失败不影响资源主体
+                except Exception as ex:
                     report["notes"].append(f"按玩家号标注失败: {ex}")
             if unit_query:
                 pool = list(report["units"])
@@ -1399,7 +1399,7 @@ def read_live(
                 return report["resources"]
             report["notes"].append("资源扫描无结果 (报数与内存值不匹配或已变动)")
             return None
-        except Exception as ex:  # noqa: BLE001 - 兜底失败回退原策略链
+        except Exception as ex:
             report["notes"].append(
                 f"资源兜底扫描异常: {ex}" + log_live_exception("try_resources_scan", ex)
             )

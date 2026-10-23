@@ -129,10 +129,10 @@ class BuildGraphTest(unittest.TestCase):
         return md, unit, abil, item
 
     def test_forward_reference_resolved(self):
-        md, unit, abil, item = self._mk()
+        md, _unit, _abil, _item = self._mk()
         build_reference_graph(md)
         self.assertIn("H001", md.references)
-        label, resolved = md.references["H001"][0]
+        _label, resolved = md.references["H001"][0]
         self.assertEqual(resolved, [("A001", "火球")])  # 码还原成名字
 
     def test_reverse_index(self):
@@ -250,7 +250,7 @@ class BuildGraphTest(unittest.TestCase):
     def test_preplaced_type_is_root(self):
         from gametool.doo import Unit
 
-        md, _u, _a, item = self._mk()
+        md, _u, _a, _item = self._mk()
         # 把孤立物品改成被预放置引用(假装它是个被摆上去的单位类型)
         md.units = [Unit(type_id="I001", variation=0, x=0, y=0, z=0, angle=0)]
         build_reference_graph(md)

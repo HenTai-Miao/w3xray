@@ -127,7 +127,7 @@ class ScriptFeaturesTest(unittest.TestCase):
         self.assertEqual(implicit, set())
 
     def test_elevator_constant(self):
-        feats, implicit = scan_script_features("set id = bj_ELEVATOR_CODE01\n")
+        _feats, implicit = scan_script_features("set id = bj_ELEVATOR_CODE01\n")
         self.assertIn("DTrf", implicit)
 
 

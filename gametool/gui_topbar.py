@@ -287,14 +287,14 @@ def _render_minimap(app) -> None:
     app.status.configure(text="正在渲染小地图标注 …")
     app.minimap_button.configure(state="disabled")
 
-    from .gui_worker_registry import GuiWorkerTicket  # noqa: PLC0415
+    from .gui_worker_registry import GuiWorkerTicket
 
     def work(ticket: GuiWorkerTicket) -> None:
         import contextlib
         import io
 
-        from .guide_cli import GuideCliOptions, run_guide_cli  # noqa: PLC0415
-        from .presentation_safety import format_user_exception  # noqa: PLC0415
+        from .guide_cli import GuideCliOptions, run_guide_cli
+        from .presentation_safety import format_user_exception
 
         out = os.path.splitext(map_path)[0] + "-minimap.png"
         buffer = io.StringIO()
@@ -317,7 +317,7 @@ def _render_minimap(app) -> None:
             app.minimap_button.configure(state="normal")
             if rc == 0 and os.path.exists(out):
                 app.status.configure(text="小地图已生成: " + out)
-                os.startfile(out)  # noqa: S606 - Windows 默认图看器打开
+                os.startfile(out)
             else:
                 app.status.configure(text="小地图生成失败")
                 messagebox.showerror("小地图", log[-2000:] or "生成失败")
@@ -342,13 +342,13 @@ def _show_guide(app) -> None:
     app.status.configure(text="正在整理攻略速查 …")
     app.guide_button.configure(state="disabled")
 
-    from .gui_worker_registry import GuiWorkerTicket  # noqa: PLC0415
+    from .gui_worker_registry import GuiWorkerTicket
 
     def work(ticket: GuiWorkerTicket) -> None:
         import contextlib
         import io
 
-        from .guide_cli import GuideCliOptions, run_guide_cli  # noqa: PLC0415
+        from .guide_cli import GuideCliOptions, run_guide_cli
 
         buffer = io.StringIO()
         try:
@@ -362,7 +362,7 @@ def _show_guide(app) -> None:
                     )
                 )
         except Exception as exc:  # BROAD_EXCEPT_OK - GUI worker boundary.
-            from .presentation_safety import format_user_exception  # noqa: PLC0415
+            from .presentation_safety import format_user_exception
 
             rc, log = 2, format_user_exception(exc, paths=(map_path,))
         else:
@@ -384,17 +384,17 @@ def _show_guide(app) -> None:
 
 
 def _open_guide_window(app, text: str) -> None:
-    import tkinter as tk  # noqa: PLC0415
+    import tkinter as tk
 
-    from .guide_report import GUIDE_SECTION_TITLES  # noqa: PLC0415
+    from .guide_report import GUIDE_SECTION_TITLES
 
-    import customtkinter as ctk  # noqa: PLC0415
+    import customtkinter as ctk
 
     win = ctk.CTkToplevel(app)
     md = getattr(app, "map_data", None)
     map_name = getattr(md, "name", "") if md else ""
     win.title(f"攻略速查 — {map_name}" if map_name else "攻略速查")
-    from .gui_pack_query import bind_geometry_memory  # noqa: PLC0415
+    from .gui_pack_query import bind_geometry_memory
 
     bind_geometry_memory(win, "guide", "860x640")
     win.transient(app)
@@ -451,7 +451,7 @@ def _open_guide_window(app, text: str) -> None:
             font=(FONT, 11),
             fg_color="transparent",
             border_width=1,
-            command=lambda t=title, b=box: (_jump_to_section(b, t), _mark_active(t)),  # noqa: F821 - 闭包晚绑定, box 在下方创建  # pyright: ignore[reportUnboundVariable]
+            command=lambda t=title, b=box: (_jump_to_section(b, t), _mark_active(t)),
         )
         btn.pack(side="left", padx=(0, 4))
         section_buttons[title] = btn
@@ -504,7 +504,7 @@ def _jump_to_section(box, title: str) -> None:
 
 def _export_guide(app, text: str) -> None:
     """攻略速查报告落盘 .txt 并复制路径 (与查询窗口导出 .md 同目录语义)。"""
-    from .archive_export import tmp_extract_dir  # noqa: PLC0415
+    from .archive_export import tmp_extract_dir
 
     name = "guide"
     md = getattr(app, "map_data", None)
@@ -521,18 +521,18 @@ def _export_guide(app, text: str) -> None:
 
 def _open_last_pack(app) -> None:
     """打开最近导出的资料包目录 (会话内或磁盘记忆)。"""
-    from .gui_export_actions import load_last_pack_dir  # noqa: PLC0415
+    from .gui_export_actions import load_last_pack_dir
 
     target = getattr(app, "_last_pack_dir", None) or load_last_pack_dir()
     if not target or not os.path.isdir(target):
         messagebox.showinfo("资料包目录", "尚未导出资料包——先点「包查询」触发一次导出")
         return
-    os.startfile(target)  # noqa: S606 - Windows 资源管理器打开
+    os.startfile(target)
 
 
 def _attach_tooltip(widget, text: str) -> None:
     """CTk 控件 hover 提示: Enter 显示 / Leave 销毁 (轻量 Toplevel)。"""
-    import tkinter as tk  # noqa: PLC0415
+    import tkinter as tk
 
     state = {"tip": None}
 
@@ -569,12 +569,12 @@ def _attach_tooltip(widget, text: str) -> None:
 
 def _show_hotkeys(app) -> None:
     """键盘流速查弹窗 (与 README 速查表同源)。"""
-    import customtkinter as ctk  # noqa: PLC0415
+    import customtkinter as ctk
 
     win = ctk.CTkToplevel(app)
     win.title("键盘速查")
     win.transient(app)
-    from gametool.gui_pack_query import bind_geometry_memory  # noqa: PLC0415
+    from gametool.gui_pack_query import bind_geometry_memory
 
     bind_geometry_memory(win, "gui-hotkeys", "520x360")
     win.grab_set()
@@ -611,7 +611,7 @@ def _show_hotkeys(app) -> None:
     box.configure(state="disabled")
 
     def _export_hotkeys_md(content: str) -> None:
-        from .archive_export import tmp_extract_dir  # noqa: PLC0415
+        from .archive_export import tmp_extract_dir
 
         out_dir = tmp_extract_dir("hotkeys-export")
         out_path = os.path.join(out_dir, "键盘速查.md")
@@ -626,7 +626,7 @@ def _show_hotkeys(app) -> None:
 
 def _bind_textbox_search(win, box, exporter=None) -> None:
     """CTkTextbox 内搜: Ctrl+F 聚焦, 回车逐处跳并高亮 (定位双通道惯例)。"""
-    import tkinter as tk  # noqa: PLC0415
+    import tkinter as tk
 
     bar = ctk.CTkFrame(win)
     bar.pack(fill="x", padx=10, pady=(10, 0))

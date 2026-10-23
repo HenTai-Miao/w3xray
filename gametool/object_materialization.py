@@ -186,7 +186,7 @@ def _merge_parallel(
                     _materialize_job, *zip(*jobs, strict=False), chunksize=chunksize
                 )
             )
-    except Exception:  # noqa: BLE001 - 并行边界，失败回退串行。
+    except Exception:
         return None
     return tuple(replace(item) for item in merged)
 

@@ -228,7 +228,7 @@ def _load_snapshot_cache(path: Path) -> ClientObjectSnapshot | None:
         return None
     try:
         snapshot = pickle.loads(payload)
-    except Exception:  # noqa: BLE001 - 缓存边界，损坏即回退现算。
+    except Exception:
         return None
     if isinstance(snapshot, ClientObjectSnapshot):
         return snapshot

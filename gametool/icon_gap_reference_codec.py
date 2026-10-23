@@ -7,7 +7,7 @@ import json
 from typing import Final, override
 
 type JsonValue = (
-    str | int | float | bool | None | list["JsonValue"] | dict[str, "JsonValue"]
+    str | int | float | bool | list["JsonValue"] | dict[str, "JsonValue"] | None
 )
 
 _REFERENCE_KEYS: Final = frozenset(

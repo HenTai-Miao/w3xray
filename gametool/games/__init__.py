@@ -19,9 +19,9 @@ __all__ = (
     "ALL_CATEGORIES",
     "ExportGroup",
     "GameAdapter",
-    "register_adapter",
     "get_adapter",
     "list_adapters",
+    "register_adapter",
 )
 
 
