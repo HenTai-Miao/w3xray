@@ -144,7 +144,12 @@ def _diagnose_readable(
     return ArchiveOpenDiagnosis(
         ArchiveDiagnosisKind.NO_HEADER,
         "未找到可用的 MPQ 头，文件不像可直接读取的 Warcraft III MPQ 地图。",
-        (f"path={path}", f"searched_bytes={scan_end}", "alignment=512", *_error_evidence(error)),
+        (
+            f"path={path}",
+            f"searched_bytes={scan_end}",
+            "alignment=512",
+            *_error_evidence(error),
+        ),
     )
 
 

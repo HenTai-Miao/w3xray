@@ -10,7 +10,7 @@ from .mpq_block_reader import (
     DERIVE_KEY as _DERIVE_KEY,
     decompress_mpq_block,
     decompress_unencrypted_block,
-    parse_sector_offsets as _parse_sector_offsets,
+    parse_sector_offsets as _parse_sector_offsets,  # noqa: F401 - compatibility export
     peek_mpq_block,
     read_mpq_block,
     read_mpq_block_anonymous,
@@ -43,7 +43,7 @@ from .mpq_constants import (
     HASH_TABLE_OFFSET as HASH_TABLE_OFFSET,
 )
 from .mpq_crypto import (
-    CRYPT_TABLE as _CRYPT,
+    CRYPT_TABLE as _CRYPT,  # noqa: F401 - compatibility export
     _decrypt as _decrypt,
     _detect_offtable_key as _detect_offtable_key,
     _hash as _hash,

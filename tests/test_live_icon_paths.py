@@ -11,7 +11,7 @@ import pytest
 
 pytest.importorskip("numpy")
 
-from gametool.live_inventory import _icon_paths_from_pack
+from gametool.live_inventory import _icon_paths_from_pack  # noqa: E402 - numpy 未装时 importorskip 先退出
 
 
 def _write_pack(tmp_path: Path, rows: list[str]) -> Path:

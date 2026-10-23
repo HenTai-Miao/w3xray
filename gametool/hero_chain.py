@@ -166,7 +166,9 @@ def _learn_def_layout(
     )
     offs = Counter()
     if len(pivots):
-        _psrc, pval, _ = _sources_into_windows(pivots - np.uint64(0x200), 0x204, regions)
+        _psrc, pval, _ = _sources_into_windows(
+            pivots - np.uint64(0x200), 0x204, regions
+        )
         for v2 in pval.tolist():
             # 指针目标在 pivot 下方: 找 >= v2 的最小 pivot (窗口主)
             i = int(np.searchsorted(pivots, np.uint64(v2), side="left"))

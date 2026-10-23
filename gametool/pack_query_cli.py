@@ -3327,7 +3327,10 @@ def _query_again(pack: Path, query: str, limit: int) -> list[str]:
     run_fn = _QUERIES.get(last["command"])
     if run_fn is None:
         return ["最近查询的命令已失效: " + last["command"]]
-    return [f"[重跑] {last['command']} {last['query']} (来自 {last['pack']})", *run_fn(memo_pack, last["query"], limit)]
+    return [
+        f"[重跑] {last['command']} {last['query']} (来自 {last['pack']})",
+        *run_fn(memo_pack, last["query"], limit),
+    ]
 
 
 _QUERIES = {

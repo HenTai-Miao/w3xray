@@ -38,7 +38,13 @@ def validate_mpq_candidate(
         hash_count,
         block_count,
     ) = MPQ_HEADER.unpack(raw)
-    fields = (*base, f"header_size={header_size}", f"format_version={format_version}", f"hash_count={hash_count}", f"block_count={block_count}")
+    fields = (
+        *base,
+        f"header_size={header_size}",
+        f"format_version={format_version}",
+        f"hash_count={hash_count}",
+        f"block_count={block_count}",
+    )
     protected_classic = war3_map and format_version == 0
     try:
         effective_header_size = normalize_classic_header_size(

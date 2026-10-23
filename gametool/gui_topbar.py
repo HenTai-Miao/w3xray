@@ -451,7 +451,10 @@ def _open_guide_window(app, text: str) -> None:
             font=(FONT, 11),
             fg_color="transparent",
             border_width=1,
-            command=lambda t=title, b=box: (_jump_to_section(b, t), _mark_active(t)),
+            command=lambda t=title: (
+                _jump_to_section(box, t),
+                _mark_active(t),
+            ),  # box 闭包 late-binding: 点击时已定义
         )
         btn.pack(side="left", padx=(0, 4))
         section_buttons[title] = btn

@@ -7,7 +7,7 @@ import pytest
 
 np = pytest.importorskip("numpy")
 
-from gametool.hero_chain import read_inventory
+from gametool.hero_chain import read_inventory  # noqa: E402 - numpy 未装时 importorskip 先退出
 
 BASE = 0x08000000
 

@@ -8,7 +8,7 @@ import os
 
 from .extraction_profile import ExtractionProfile
 from .games import GameAdapter, get_adapter
-from .games.warcraft import WARCRAFT_ADAPTER
+from .games.warcraft import WARCRAFT_ADAPTER  # noqa: F401 - 注册副作用
 from .map_data import MapData
 from .extraction_completeness import (
     build_extraction_completeness_report,

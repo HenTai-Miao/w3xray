@@ -117,7 +117,9 @@ class BackgroundLoaderMixin(BackgroundLoaderHost):
     ) -> None:
         try:
             payload = build_payload()
-        except Exception as exc:  # BROAD_EXCEPT_OK - worker boundary returns typed GUI payloads.
+        except (
+            Exception
+        ) as exc:  # BROAD_EXCEPT_OK - worker boundary returns typed GUI payloads.
             traceback.print_exc()
             message = (
                 diagnose_archive_open(source_path, exc).message
@@ -190,7 +192,9 @@ def _discard_loader_payload(payload: LoaderPayload) -> None:
             if resolver is not None:
                 try:
                     resolver.close()
-                except Exception:  # BROAD_EXCEPT_OK - third-party resolver close is best effort.
+                except (
+                    Exception
+                ):  # BROAD_EXCEPT_OK - third-party resolver close is best effort.
                     return
         case LoadedCampaign() | LoaderError():
             return

@@ -114,7 +114,14 @@ class ItemRelation:
 
 def relation_endpoints(relation: "ItemRelation") -> tuple[RelationObject, ...]:
     """Target item plus the source and skill endpoints that exist."""
-    return (relation.item, *tuple(endpoint for endpoint in (relation.source, relation.skill) if endpoint is not None))
+    return (
+        relation.item,
+        *tuple(
+            endpoint
+            for endpoint in (relation.source, relation.skill)
+            if endpoint is not None
+        ),
+    )
 
 
 @dataclass(frozen=True, slots=True)

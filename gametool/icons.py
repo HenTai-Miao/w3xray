@@ -108,7 +108,9 @@ class IconResolver:
                     if os.path.exists(p):
                         try:
                             self._game.append(_open_game_mpq(p))
-                        except Exception:  # BROAD_EXCEPT_OK - invalid optional game archive.
+                        except (
+                            Exception
+                        ):  # BROAD_EXCEPT_OK - invalid optional game archive.
                             continue
         return self._game
 
