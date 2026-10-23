@@ -84,6 +84,17 @@ _ROWS_CACHE: dict[tuple[str, str], tuple[tuple[int, int, int], list[list[str]]]]
 _LOCKED_FILES: set[tuple[str, str]] = set()
 
 
+def _iter_tsv_lines(path: Path):
+    """带瞬态重试与锁死披露的行迭代 (脚本索引类 TSV 共用防线)。"""
+    for _attempt in range(3):
+        try:
+            yield from path.open(encoding="utf-8", errors="replace")
+            return
+        except OSError:
+            time.sleep(0.05)
+    _LOCKED_FILES.add((str(path.parent), path.name))
+
+
 def _read_rows(pack_dir: Path, rel: str) -> list[list[str]]:
     path = pack_dir / rel
     if not path.exists():
@@ -487,7 +498,7 @@ def load_formulas(pack_dir: Path) -> list[tuple[str, list[tuple[str, int]]]]:
     path = pack_dir / "脚本调用参数索引.tsv"
     if not path.exists():
         return out
-    for line in path.open(encoding="utf-8"):
+    for line in _iter_tsv_lines(path):
         if "call YDWENewItemsFormula(" not in line:
             continue
         tail = line.split("call YDWENewItemsFormula(", 1)[1].rstrip().rstrip(")")
@@ -513,7 +524,7 @@ def load_placements(pack_dir: Path) -> list[tuple[str, float, float, str]]:
     path = pack_dir / "脚本调用参数索引.tsv"
     if not path.exists():
         return out
-    for line in path.open(encoding="utf-8"):
+    for line in _iter_tsv_lines(path):
         if "=CreateUnit(p, '" in line:
             tail = line.split("=CreateUnit(p, '", 1)[1]
             parts = tail.rstrip().rstrip(")").split(", ")
@@ -2062,7 +2073,7 @@ def _query_quest(pack: Path, query: str, limit: int) -> list[str]:
     lines = []
     path = pack / "脚本字符串索引.tsv"
     if path.exists():
-        for line in path.open(encoding="utf-8"):
+        for line in _iter_tsv_lines(path):
             if query in line and (
                 "CreateQuestBJ" in line or "DisplayTimedTextToForce" in line
             ):
@@ -2083,7 +2094,7 @@ def _query_text(pack: Path, query: str, limit: int) -> list[str]:
     lines = []
     for path in sorted(pack.glob("*.tsv")):
         try:
-            for line in path.open(encoding="utf-8"):
+            for line in _iter_tsv_lines(path):
                 if query in line:
                     lines.append(path.name + ": " + _clean(line.rstrip("\n")))  # 整行
                     break
@@ -3146,11 +3157,9 @@ def _query_stats(pack: Path, query: str, limit: int) -> list[str]:
     out: list[str] = []
     info = pack / "地图信息.txt"
     if info.exists():
-        for line in info.read_text(encoding="utf-8", errors="replace").splitlines()[
-            :12
-        ]:
+        for line in _iter_tsv_lines(info):
             if line.strip():
-                out.append(line)
+                out.append(line)  # 满量: 玩家/队伍/小地图标记段不再 12 行截断
     obj_dir = pack / "对象ID"
     # 导出时间 = 对象表目录 mtime (包重导时刷新), 用户可判断包新旧
     if obj_dir.is_dir():
