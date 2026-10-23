@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import os
+import tkinter as tk
 import threading
 
 import customtkinter as ctk
@@ -82,6 +83,49 @@ class LiveProbeWindow(ctk.CTkToplevel):
         self._output.pack(fill="both", expand=True, padx=14, pady=(0, 14))
         self._output.insert("1.0", "点击「开始探针」读取当前对局 (需游戏运行中)。")
         self._output.configure(state="disabled")
+
+        # GUI 惯例: Ctrl+F 内搜 + 右键复制/导出
+        find_row = ctk.CTkFrame(self, fg_color="transparent")
+        find_row.pack(fill="x", padx=14, pady=(0, 4))
+        self._find_var = ctk.StringVar()
+        find_entry = ctk.CTkEntry(
+            find_row,
+            textvariable=self._find_var,
+            placeholder_text="结果内搜索 (回车跳下一处)…",
+            width=280,
+            height=26,
+        )
+        find_entry.pack(side="left")
+        self._find_state = {"start": "1.0"}
+
+        def _find_next() -> None:
+            needle = self._find_var.get().strip()
+            if not needle:
+                return
+            start = self._find_state["start"]
+            pos = self._output.search(needle, start, stopindex="end", nocase=True)
+            if not pos:
+                pos = self._output.search(
+                    needle, "1.0", stopindex="end", nocase=True
+                )  # 回卷
+            if pos:
+                self._output.see(pos)
+                end = f"{pos}+{len(needle)}c"
+                self._output.tag_add("sel", pos, end)
+                self._find_state["start"] = end
+
+        find_entry.bind("<Return>", lambda _e: _find_next())
+        self.bind_all("<Control-f>", lambda _e: find_entry.focus_set() or "break")
+        menu = tk.Menu(self, tearoff=0)
+        menu.add_command(
+            label="复制全部",
+            command=lambda: (
+                self._output.clipboard_clear(),
+                self._output.clipboard_append(self._output.get("1.0", "end").strip()),
+            ),
+        )
+        menu.add_command(label="导出为 .md", command=lambda: self._export_md())
+        self._output.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
 
         self.after(120, self._start)
 
@@ -160,6 +204,36 @@ class LiveProbeWindow(ctk.CTkToplevel):
         self._output.delete("1.0", "end")
         self._output.insert("1.0", body if body.strip() else f"(退出码 {code_str})")
         self._output.configure(state="disabled")
+
+    def _export_md(self) -> None:
+        """输出区导出为 .md (桌面优先, fail-open)。"""
+        import time  # noqa: PLC0415
+
+        text = self._output.get("1.0", "end").strip()
+        if not text:
+            return
+        home = os.path.expanduser("~")
+        target_dir = os.path.join(home, "Desktop")
+        if not os.path.isdir(target_dir):
+            target_dir = os.environ.get("TEMP", home)
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        path = os.path.join(target_dir, f"live-probe-{stamp}.md")
+        try:
+            with open(path, "w", encoding="utf-8", newline="") as fh:
+                fh.write(
+                    "# live 探针输出"
+                    + chr(10) * 2
+                    + chr(96) * 3
+                    + chr(10)
+                    + text
+                    + chr(10)
+                    + chr(96) * 3
+                    + chr(10)
+                )
+
+            self._copy_hint.configure(text="已导出: " + path)
+        except OSError:
+            self._copy_hint.configure(text="导出失败 (目录不可写)")
 
 
 def open_live_probe_dialog(master, pack_dir: str | None = None) -> None:
