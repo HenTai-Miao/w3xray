@@ -34,6 +34,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
         self.transient(master)
         self.grab_set()
         self.bind("<Escape>", lambda _e: self.destroy())
+        self.bind("<Control-r>", lambda _e: self._start())
 
         header = ctk.CTkFrame(self, fg_color=CARD, corner_radius=12)
         header.pack(fill="x", padx=14, pady=(14, 8))
@@ -54,7 +55,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
         bar.pack(fill="x", padx=14, pady=(0, 8))
         self._probe_button = ctk.CTkButton(
             bar,
-            text="开始探针",
+            text="开始探针 (Ctrl+R 重探)",
             width=110,
             font=_FONT,
             command=self._start,
@@ -180,7 +181,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
             except Exception as exc:  # 撑住弹窗: 任何异常都落文本区
                 done.append(f"探针异常: {type(exc).__name__}: {exc}")
                 return
-            done.append(f"__CODE__{code}__" + buffer.getvalue())
+            done.append(f"{code}" + chr(0) + buffer.getvalue())
 
         threading.Thread(target=_worker, daemon=True).start()
 
@@ -196,19 +197,47 @@ class LiveProbeWindow(ctk.CTkToplevel):
 
     def _finish(self, text: str) -> None:
         self._probe_button.configure(state="normal")
-        if text.startswith("__CODE__"):
-            code_str, body = text.split("__", 2)[1], text.split("__", 2)[2]
+        if chr(0) in text:
+            code_str, body = text.split(chr(0), 1)
             body = body or "(无输出)"
         else:
             code_str, body = "1", text
         # 探针 JSON 自动复制: 尾部 {" 开头的整段 (供 near 模式「从剪贴板提取坐标」直接用)
         copied = ""
-        tail = body[body.rindex('{"') :] if '{"' in body else ""
+        # 外层根 = 首个行首 { (indent 输出); rindex 会命中内层对象致 Extra data
+        root_pos = next(
+            (
+                i
+                for i, ch in enumerate(body)
+                if ch == "{" and (i == 0 or body[i - 1] in (chr(10), chr(13)))
+            ),
+            -1,
+        )
+        tail = body[root_pos:] if root_pos >= 0 else ""
         if tail.strip() and code_str == "0":
             try:
                 self.clipboard_clear()
                 self.clipboard_append(tail.strip())
-                copied = "  ·  探针 JSON 已复制到剪贴板 (near 模式可一键提取坐标)"
+                copied = "  ·  探针 JSON 已复制 (near 可提取坐标)"
+                # 结构化摘要: 单位/物品/玩家数一行可见, 免读长输出
+                import json  # noqa: PLC0415
+
+                try:
+                    probe = json.loads(tail.strip())
+                    unit_count = len(probe.get("units") or [])
+                    item_count = sum(
+                        len(u.get("items") or []) for u in probe.get("units") or []
+                    )
+                    owned = probe.get("owned_units")
+                    extra = ""
+                    if owned is not None:
+                        extra = f" · 在场单位 {len(owned)}"
+                    copied = (
+                        f"  ·  带物单位 {unit_count} · 物品 {item_count}{extra}"
+                        + "  ·  JSON 已复制 (near 可提取坐标)"
+                    )
+                except ValueError:
+                    pass
             except Exception:
                 copied = ""
         self._copy_hint.configure(text=copied)
