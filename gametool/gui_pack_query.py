@@ -242,7 +242,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             values=["全部", "单位", "装饰", "物品", "脚本"],
             width=76,
         )
-        self._near_kind.set("全部")
+        self._near_kind.set(self._load_near_kind())
         # near 模式才显示 (switch 时切换)
 
         pin_row = ctk.CTkFrame(self, fg_color="transparent")
@@ -380,6 +380,26 @@ class _PackQueryWindow(ctk.CTkToplevel):
         "near": "坐标反查: x y [radius] [--kind 单位/装饰/物品/脚本]  (探针 JSON 有 x/y)",
     }
 
+    def _near_kind_file(self) -> pathlib.Path:
+        from .gui_pack_query import _memo_dir  # noqa: PLC0415
+
+        return pathlib.Path(_memo_dir()) / "near-kind.txt"
+
+    def _load_near_kind(self) -> str:
+        try:
+            value = (
+                pathlib.Path(self._near_kind_file()).read_text(encoding="utf-8").strip()
+            )
+        except OSError:
+            return "全部"
+        return value if value in ("全部", "单位", "装饰", "物品", "脚本") else "全部"
+
+    def _save_near_kind(self, value: str) -> None:
+        try:
+            pathlib.Path(self._near_kind_file()).write_text(value, encoding="utf-8")
+        except OSError:
+            pass  # fail-open: 记忆失败不影响查询
+
     def _switch_mode(self, command: str) -> None:
         self._mode.set(command)
         self._keyword.configure(placeholder_text=self._PLACEHOLDERS.get(command, ""))
@@ -421,8 +441,11 @@ class _PackQueryWindow(ctk.CTkToplevel):
         _LAST_KEYWORD = self._keyword.get().strip()  # pyright: ignore[reportConstantRedefinition]
         _LAST_MODE = command  # pyright: ignore[reportConstantRedefinition]
         keyword = self._keyword.get().strip()
-        if command == "near" and self._near_kind.get() != "全部":
-            keyword = (keyword + " --kind " + self._near_kind.get()).strip()
+        if command == "near":
+            kind = self._near_kind.get()
+            self._save_near_kind(kind)
+            if kind != "全部":
+                keyword = (keyword + " --kind " + kind).strip()
         # 免词清单 = 本窗九模式中可空词执行的 (affixes/registered 仅 CLI 有, 不在此窗)
         if keyword or command in (
             "stats",
