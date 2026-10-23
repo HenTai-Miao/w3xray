@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
 import json
 import logging
@@ -29,7 +29,13 @@ class GuiLifecycleMixin:
 
         from collections.abc import Sequence as _Seq
 
+        from PIL import Image
+
+        from .gui_icon_cache import _IconResolverLike
+        from .gui_icon_evidence_loader import PreparedIconResolver
+        from .script_scan import ChatCommand
         from .map_data import MapData
+        from .script_scan import Recipe
 
         _cur_dir: dict[str, str | None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _scan_dir: Callable[[str, str], None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
@@ -39,7 +45,7 @@ class GuiLifecycleMixin:
         game_data_label: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         map_label: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         mode_seg: ctk.CTkSegmentedButton  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        recipes: list[object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        recipes: list[Recipe]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         status: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _populate_left: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _refresh_description_cache_state: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
@@ -52,7 +58,7 @@ class GuiLifecycleMixin:
         _shutdown_current_map_gui: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _shutdown_gui_worker_host: Callable[..., Sequence[str]]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _shutdown_object_filter_runner: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _start_path_load: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _start_path_load: Callable[[str], None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         destroy: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         geometry: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
 
@@ -60,15 +66,12 @@ class GuiLifecycleMixin:
         _campaign_views: object | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _campaign_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         map_data: MapData | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        icons: _IconResolverLike | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _pil_icon_cache: dict[tuple[str, int], object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        icons: _IconResolverLike | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入 (协议见 gui_icon_cache)
+        _pil_icon_cache: dict[tuple[str, int], Image.Image | None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _photo_cache: dict[tuple[str, int, str], object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         external_listfile_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         game_data_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         author_bundle_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-
-        class _IconResolverLike(Protocol):
-            def close(self) -> None: ...
 
     def _config_path(self) -> str:
         return os.path.join(os.path.expanduser("~"), ".w3x_extractor.json")
@@ -221,7 +224,13 @@ class GuiLifecycleMixin:
         self._start_path_load(path)
 
     def _on_loaded(
-        self, md, cmds, recipes=None, resolver=None, views=None, campaign_path=None
+        self,
+        md: MapData,
+        commands: list[ChatCommand],
+        recipes: list[Recipe] | None = None,
+        resolver: PreparedIconResolver | None = None,
+        views: list[tuple[str, MapData]] | None = None,
+        campaign_path: str | None = None,
     ) -> None:
         if views:
             self._set_campaign_views(views, campaign_path)
@@ -231,7 +240,7 @@ class GuiLifecycleMixin:
             self._campaign_views = None
             self._campaign_path = None
             self._populate_left()
-        self._render_map(md, cmds, recipes, resolver)
+        self._render_map(md, commands, recipes, resolver)
 
     def _render_map(self, md, cmds, recipes, resolver) -> None:
         self.map_data = md

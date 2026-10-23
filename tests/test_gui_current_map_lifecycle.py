@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from pathlib import Path
 from threading import Event, Thread
 
@@ -30,26 +30,28 @@ class _Widget:
 
 class _Harness(CurrentMapGuiMixin, GuiWorkerHostMixin):
     def __init__(self) -> None:
-        self._cur_dir = {"battle": None, "campaign": None}
-        self.current_map_button = _Widget()
-        self.status = _Widget()
+        self._cur_dir = {"battle": None, "campaign": None}  # pyright: ignore[reportAttributeAccessIssue] - 测试桩
+        self.current_map_button = _Widget()  # pyright: ignore[reportAttributeAccessIssue] - 测试桩
+        self.status = _Widget()  # pyright: ignore[reportAttributeAccessIssue] - 测试桩
         self.scheduled: dict[str, Callable[[], None]] = {}
         self._next_after = 1
         self._init_gui_worker_host()
         self._init_current_map_gui()
 
-    def _load_config(self) -> Mapping[str, str | None]:
+    def _load_config(self) -> dict[str, str]:  # pyright: ignore[reportIncompatibleMethodOverride] - 测试桩
         return {}
 
-    def after(self, delay_ms: int, callback: Callable[[], None]) -> str:
+    def after(  # pyright: ignore[reportIncompatibleMethodOverride] - 测试桩
+        self, delay_ms: int, callback: Callable[[], None]
+    ) -> str:
         _ = delay_ms
         after_id = f"after-{self._next_after}"
         self._next_after += 1
         self.scheduled[after_id] = callback
         return after_id
 
-    def after_cancel(self, after_id: str) -> None:
-        self.scheduled.pop(after_id, None)
+    def after_cancel(self, id: str) -> None:  # pyright: ignore[reportIncompatibleMethodOverride] - 测试桩
+        self.scheduled.pop(id, None)
 
 
 def _snapshot(path: Path) -> CurrentMapSnapshot:
@@ -69,6 +71,10 @@ def _snapshot(path: Path) -> CurrentMapSnapshot:
 class _FakeResolver:
     def __init__(self, events: list[str]) -> None:
         self._events = events
+
+    def get_image(self, icon_path: str):
+        _ = icon_path
+        return None
 
     def close(self) -> None:
         self._events.append("resolver")

@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 import threading
 from tkinter import TclError
-from typing import TYPE_CHECKING, Final
+from typing import ParamSpec, TYPE_CHECKING, Final
 
 from .gui_worker_registry import (
     GuiWorkerRegistry,
@@ -26,9 +26,18 @@ if TYPE_CHECKING:
         _gui_post_poll_id: str | None = None
         _gui_post_stopped: bool = False
 
-        def after(self, delay_ms: int, callback: Callable[[], None]) -> str: ...
+        _P = ParamSpec("_P")
 
-        def after_cancel(self, after_id: str) -> None: ...
+        def after(
+            self,
+            ms: int,
+            func: Callable[_P, object],
+            *args: _P.args,
+            **kwargs: _P.kwargs,
+        ) -> str: ...
+
+        def after_cancel(self, id: str) -> None: ...
+
 
 else:
     _TkAfterHost = object

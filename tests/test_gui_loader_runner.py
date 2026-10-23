@@ -28,7 +28,7 @@ class _Status:
 
 class _LoaderRunner(BackgroundLoaderMixin, GuiWorkerHostMixin):
     def __init__(self) -> None:
-        self.status = _Status()
+        self.status = _Status()  # pyright: ignore[reportAttributeAccessIssue] - 测试桩
         self.scheduled: dict[str, Callable[[], None]] = {}
         self.posted = threading.Event()
         self.cancelled: list[str] = []
@@ -36,14 +36,16 @@ class _LoaderRunner(BackgroundLoaderMixin, GuiWorkerHostMixin):
         self._init_gui_worker_host()
         self._init_background_loader()
 
-    def after(self, delay_ms: int, callback: Callable[[], None]) -> str:
+    def after(  # pyright: ignore[reportIncompatibleMethodOverride] - 测试桩
+        self, delay_ms: int, callback: Callable[[], None]
+    ) -> str:
         _ = delay_ms
         after_id = f"after-{self._next_after}"
         self._next_after += 1
         self.scheduled[after_id] = callback
         return after_id
 
-    def after_cancel(self, after_id: str) -> None:
+    def after_cancel(self, after_id: str) -> None:  # pyright: ignore[reportIncompatibleMethodOverride] - 测试桩
         self.cancelled.append(after_id)
         self.scheduled.pop(after_id, None)
 

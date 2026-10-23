@@ -9,6 +9,8 @@ import os
 from tkinter import filedialog
 
 from .api import quick_map_name
+from .gui_loader_host import CampaignEntry
+from .map_data import MapData
 from .gui_worker_registry import GuiWorkerTicket
 from .map_directory import scan_battle_maps
 from .map_gallery import MapEntry, MapGallery, render_map_gallery
@@ -23,6 +25,7 @@ class SourceBrowserMixin:
         from tkinter import ttk
         from collections.abc import Callable
 
+        from .gui_loader_host import CampaignEntry
         from .map_data import MapData
 
         mode_seg: ctk.CTkSegmentedButton  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
@@ -40,11 +43,11 @@ class SourceBrowserMixin:
         _post_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _start_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _start_campaign_load: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _start_map_switch: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _start_path_load: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _start_map_switch: Callable[[MapData, str | None], None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _start_path_load: Callable[[str], None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _cur_dir: dict[str, str | None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _dir_maps: list[tuple[str, str]]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _dir_campaigns: list[dict[str, object]]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _dir_campaigns: list[CampaignEntry]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _node_map: dict[str, tuple[str, int | str]]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _map_gallery_entries: list[MapEntry]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         mode: str  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
@@ -84,7 +87,7 @@ class SourceBrowserMixin:
                 )
                 items = [
                     {
-                        "path": path,
+                        "path": path or "",
                         "name": os.path.basename(path),
                         "loaded": False,
                         "views": None,
@@ -169,10 +172,10 @@ class SourceBrowserMixin:
                 "end",
                 iid=parent_id,
                 text=f" {campaign['name']}",
-                open=bool(campaign["loaded"]),
+                open=bool(campaign.get("loaded")),
             )
             self._node_map[parent_id] = ("campaign", index)
-            action = "查看子图" if campaign["loaded"] else "加载战役"
+            action = "查看子图" if campaign.get("loaded") else "加载战役"
             entries.append(
                 MapEntry(
                     iid=parent_id,
@@ -187,8 +190,9 @@ class SourceBrowserMixin:
         self._render_map_gallery()
 
     def _append_campaign_children(self, parent_id: str, campaign, entries) -> None:
-        if campaign["loaded"] and campaign["views"]:
-            for index, (label, md) in enumerate(campaign["views"]):
+        views = campaign.get("views") or []
+        if campaign.get("loaded") and views:
+            for index, (label, md) in enumerate(views):
                 child_id = f"{parent_id}_s{index}"
                 self.map_list.insert(parent_id, "end", iid=child_id, text=f" {label}")
                 self._node_map[child_id] = ("md", md)
@@ -221,7 +225,7 @@ class SourceBrowserMixin:
         info = self._node_map.get(selected)
         if info and info[0] == "campaign":
             index = info[1]
-            if not self._dir_campaigns[int(index)]["loaded"]:
+            if not self._dir_campaigns[int(index)].get("loaded"):
                 self._load_campaign_node(int(index))
 
     def _load_campaign_node(self, index: int) -> None:
@@ -233,27 +237,24 @@ class SourceBrowserMixin:
             return
         kind, payload = info
         if kind == "path":
-            self._start_path_load(payload)
+            self._start_path_load(str(payload))
         elif kind == "md":
+            md_payload = payload if isinstance(payload, MapData) else None
+            if md_payload is None:
+                return
             self._campaign_path = next(
                 (
                     str(c["path"])
                     for c in self._dir_campaigns
-                    if c["views"]
-                    and any(
-                        md is payload
-                        for _, md in c["views"]  # pyright: ignore[reportGeneralTypeIssues]
-                    )
+                    if c.get("views")
+                    and any(md is payload for _, md in c.get("views") or [])
                 ),
                 None,
             )
-            self._start_map_switch(payload, self._campaign_path)
-        elif (
-            kind == "campaign"
-            and not self._dir_campaigns[
-                int(payload) if not isinstance(payload, int) else payload
-            ]["loaded"]
-        ):
+            self._start_map_switch(md_payload, self._campaign_path)
+        elif kind == "campaign" and not self._dir_campaigns[
+            int(payload) if not isinstance(payload, int) else payload
+        ].get("loaded"):
             self._load_campaign_node(
                 int(payload) if not isinstance(payload, int) else payload
             )
@@ -263,10 +264,15 @@ class SourceBrowserMixin:
         if selected:
             self._open_node(selected[0])
 
-    def _set_campaign_views(self, views, path=None) -> None:
+    def _set_campaign_views(
+        self,
+        views: list[tuple[str, MapData]] | None,
+        path: str | None = None,
+    ) -> None:
         self._campaign_views = views
         self._campaign_path = path
         if views:
+            assert views is not None
             name = quick_map_name(path) if path else "战役"
             entry = next(
                 (
@@ -280,9 +286,13 @@ class SourceBrowserMixin:
                 entry["loaded"] = True
                 entry["views"] = views
             else:
-                self._dir_campaigns.insert(
-                    0, {"path": path, "name": name, "loaded": True, "views": views}
-                )
+                fresh: CampaignEntry = {
+                    "path": path or "",
+                    "name": name,
+                    "loaded": True,
+                    "views": views,
+                }
+                self._dir_campaigns.insert(0, fresh)
             self.mode = "campaign"
             self.mode_seg.set("战役图")
         self._populate_left()

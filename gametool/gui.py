@@ -5,8 +5,16 @@ from __future__ import annotations
 import tkinter as tk
 
 import customtkinter as ctk
+from PIL import Image
+
+from typing import TYPE_CHECKING
 
 from .api import MapData
+
+if TYPE_CHECKING:
+    from .gui_icon_cache import _IconResolverLike
+    from .script_scan import ChatCommand, Recipe
+
 from .gui_clipboard import ClipboardMixin
 from .gui_current_map import CurrentMapGuiMixin
 from .gui_casc_browser import CascBrowserMixin
@@ -65,6 +73,22 @@ class App(
     ctk.CTk,
 ):
     """Compose the GUI from focused mixins."""
+
+    # 宿主注入字段的权威类型 (压过各 mixin 的 TYPE_CHECKING 声明, 消解多基类 MRO 合并冲突)
+    map_data: MapData | None
+    commands: list[ChatCommand]
+    recipes: list[Recipe]
+    icons: _IconResolverLike | None
+    external_listfile_path: str | None
+    game_data_path: str | None
+    author_bundle_path: str | None
+    description_cache_path: str | None
+    mode: str
+    _campaign_views: object | None
+    _campaign_path: str | None
+    _cur_dir: dict[str, str | None]
+    _pil_icon_cache: dict[tuple[str, int], Image.Image | None]
+    _photo_cache: dict[tuple[str, int, str], object]
 
     def __init__(self) -> None:
         super().__init__()

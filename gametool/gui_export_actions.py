@@ -77,7 +77,7 @@ class ExportActionsMixin:
         _last_pack_dir: str | None = None
         _post_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _start_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        update_idletasks: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        update_idletasks: Callable[[], None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
 
     def _need_map(self) -> "MapData | None":
         """未开图弹提示并返回 None；已开图返回 md (调用方以 is None 判空)。"""

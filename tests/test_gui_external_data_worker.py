@@ -33,14 +33,16 @@ class _ExternalData(ExternalDataToolsMixin, GuiWorkerHostMixin):
         self._next_after = 1
         self._init_gui_worker_host()
 
-    def after(self, delay_ms: int, callback: Callable[[], None]) -> str:
+    def after(  # pyright: ignore[reportIncompatibleMethodOverride] - 测试桩
+        self, delay_ms: int, callback: Callable[[], None]
+    ) -> str:
         assert delay_ms >= 0
         after_id = f"after-{self._next_after}"
         self._next_after += 1
         self.scheduled[after_id] = callback
         return after_id
 
-    def after_cancel(self, after_id: str) -> None:
+    def after_cancel(self, after_id: str) -> None:  # pyright: ignore[reportIncompatibleMethodOverride] - 测试桩
         self.scheduled.pop(after_id, None)
 
     def _open_dir(self, output: str, count: int, kind: str) -> None:

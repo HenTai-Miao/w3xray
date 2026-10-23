@@ -29,26 +29,21 @@ if TYPE_CHECKING:
     from typing import Any
 
     from .api import MapData
+    from .script_scan import ChatCommand, Recipe
     from .gui_reports import GuiReportBlock
 
     class _ReportTabsHost:
         """宿主 App (gui.py) 提供的状态、部件与 Tk 剪贴板方法 (仅类型检查用)。"""
 
         map_data: MapData | None = None
-        commands: list[Any] = []
-        recipes: list[Any] = []
+        commands: list[ChatCommand]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        recipes: list[Recipe]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         overview_box: ctk.CTkTextbox | None = None
         overview_cards: list[ctk.CTkFrame] = []
         overview_surface: Any = None
         analysis_box: ctk.CTkTextbox | None = None
         analysis_cards: list[ctk.CTkFrame] = []
         analysis_surface: Any = None
-
-        def clipboard_clear(self) -> None:
-            raise NotImplementedError
-
-        def clipboard_append(self, text: str) -> None:
-            raise NotImplementedError
 
     _HostBase = _ReportTabsHost
 else:
@@ -147,8 +142,8 @@ class ReportTabsMixin(_HostBase):
 
     def _copy_report_text(self, textbox) -> None:
         text = textbox.get("1.0", "end").strip()
-        self.clipboard_clear()
-        self.clipboard_append(text)
+        textbox.clipboard_clear()
+        textbox.clipboard_append(text)
 
     def _set_textbox(self, textbox, text: str) -> None:
         textbox.configure(state="normal")

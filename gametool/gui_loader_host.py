@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, NotRequired, Protocol, TypedDict
+from typing import TYPE_CHECKING, NotRequired, TypedDict
 
 if TYPE_CHECKING:
+    import customtkinter as ctk
+
     from .gui_loader import PreparedIconResolver
     from .gui_worker_registry import GuiWorkerTarget, GuiWorkerTicket
     from .map_data import MapData
     from .script_scan import ChatCommand, Recipe
-
-
-class LoaderStatus(Protocol):
-    def configure(self, *, text: str) -> None: ...
 
 
 class CampaignEntry(TypedDict):
@@ -25,17 +23,13 @@ class CampaignEntry(TypedDict):
 
 if TYPE_CHECKING:
 
-    class _TypingStatus:
-        def configure(self, *, text: str) -> None:
-            _ = text
-
     class BackgroundLoaderHost:
         load_options: dict[str, bool] = {}
         game_data_path: str | None = None
         author_bundle_path: str | None = None
         description_cache_path: str | None = None
         external_listfile_path: str | None = None
-        status: LoaderStatus = _TypingStatus()
+        status: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _dir_campaigns: list[CampaignEntry] = []
 
         def _start_gui_worker(
@@ -60,10 +54,10 @@ if TYPE_CHECKING:
             self,
             md: MapData,
             commands: list[ChatCommand],
-            recipes: list[Recipe],
-            resolver: PreparedIconResolver | None,
-            views: list[tuple[str, MapData]] | None,
-            campaign_path: str | None,
+            recipes: list[Recipe] | None = None,
+            resolver: PreparedIconResolver | None = None,
+            views: list[tuple[str, MapData]] | None = None,
+            campaign_path: str | None = None,
         ) -> None: ...
 
         def _refresh_campaign_tree(self) -> None: ...

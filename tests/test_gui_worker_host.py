@@ -17,7 +17,9 @@ class _Host(GuiWorkerHostMixin):
         self._after_next = 1
         self._init_gui_worker_host()
 
-    def after(self, delay_ms: int, callback: Callable[[], None]) -> str:
+    def after(  # pyright: ignore[reportIncompatibleMethodOverride] - 测试桩
+        self, delay_ms: int, callback: Callable[[], None]
+    ) -> str:
         assert delay_ms >= 0
         self.after_threads.append(threading.get_ident())
         after_id = f"after-{self._after_next}"
@@ -25,7 +27,7 @@ class _Host(GuiWorkerHostMixin):
         self.scheduled[after_id] = callback
         return after_id
 
-    def after_cancel(self, after_id: str) -> None:
+    def after_cancel(self, after_id: str) -> None:  # pyright: ignore[reportIncompatibleMethodOverride] - 测试桩
         self.scheduled.pop(after_id, None)
 
     def run_next(self) -> None:
@@ -40,7 +42,9 @@ class _ClosedHost(_Host):
         super().__init__()
         self.closed = True
 
-    def after(self, delay_ms: int, callback: Callable[[], None]) -> str:
+    def after(  # pyright: ignore[reportIncompatibleMethodOverride] - 测试桩
+        self, delay_ms: int, callback: Callable[[], None]
+    ) -> str:
         if self.closed:
             raise TclError("application destroyed")
         return super().after(delay_ms, callback)

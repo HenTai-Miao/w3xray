@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from pathlib import Path
 import pytest
 
@@ -36,12 +36,12 @@ class _Harness(CurrentMapGuiMixin, GuiWorkerHostMixin):
             "battle": "/current/battle",
             "campaign": None,
         }
-        self._cur_dir = self._root_values
-        self.config: dict[str, str | None] = {}
+        self._cur_dir = self._root_values  # pyright: ignore[reportAttributeAccessIssue] - 测试桩
+        self.config: dict[str, str] = {}
         self._button = _Widget()
         self._status = _Widget()
-        self.current_map_button = self._button
-        self.status = self._status
+        self.current_map_button = self._button  # pyright: ignore[reportAttributeAccessIssue] - 测试桩
+        self.status = self._status  # pyright: ignore[reportAttributeAccessIssue] - 测试桩
         self.loaded: list[str] = []
         self.scheduled: list[Callable[[], None]] = []
         self.cancelled: list[str] = []
@@ -49,19 +49,21 @@ class _Harness(CurrentMapGuiMixin, GuiWorkerHostMixin):
         self._gui_workers = GuiWorkerRegistry(thread_factory=_InlineThread)
         self._init_current_map_gui()
 
-    def _load_config(self) -> Mapping[str, str | None]:
+    def _load_config(self) -> dict[str, str]:  # pyright: ignore[reportIncompatibleMethodOverride] - 测试桩
         return self.config
 
     def _start_path_load(self, path: str) -> None:
         self.loaded.append(path)
         self.status.configure(text="正在解析当前地图")
 
-    def after(self, delay_ms: int, callback: Callable[[], None]) -> str:
+    def after(  # pyright: ignore[reportIncompatibleMethodOverride] - 测试桩
+        self, delay_ms: int, callback: Callable[[], None]
+    ) -> str:
         _ = delay_ms
         self.scheduled.append(callback)
         return f"after-{len(self.scheduled)}"
 
-    def after_cancel(self, after_id: str) -> None:
+    def after_cancel(self, after_id: str) -> None:  # pyright: ignore[reportIncompatibleMethodOverride] - 测试桩
         self.cancelled.append(after_id)
 
     def set_campaign_root(self, path: str) -> None:

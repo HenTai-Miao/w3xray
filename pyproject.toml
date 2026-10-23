@@ -36,10 +36,7 @@ typeCheckingMode = "recommended"
 pythonVersion = "3.14"
 pythonPlatform = "All"
 exclude = ["**/__pycache__", "**/.venv", "**/build", "**/dist"]
-# 文件级豁免仅剩 6 个 App 组合层重灾 mixin (联查下 174 处宿主注入噪音, 单文件协议化工程量大, 逐轮清偿):
-ignore = [
-    "gametool/gui.py",
-]
+
 [tool.ruff]
 target-version = "py314"
 line-length = 88
@@ -57,3 +54,4 @@ quote-style = "double"
 indent-style = "space"
 docstring-code-format = true
 docstring-code-line-length = "dynamic"
+

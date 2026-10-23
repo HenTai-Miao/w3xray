@@ -2,19 +2,24 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import Protocol
 
 import customtkinter as ctk
 from PIL import Image, ImageTk
 
 
+class _IconResolverLike(Protocol):
+    """图标 resolver 的最小结构协议: 桌面取图 + 关闭释放 (icons 字段唯一消费面)。"""
+
+    def get_image(self, icon_path: str) -> Image.Image | None: ...
+
+    def close(self) -> None: ...
+
+
 class IconCacheMixin:
     """Host-injected caches; annotations only, no runtime values."""
 
-    if TYPE_CHECKING:
-        from .icons import IconResolver
-
-    icons: IconResolver | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+    icons: _IconResolverLike | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
     _photo_cache: dict[tuple[str, int, str], object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入 (ctk.CTkImage | ImageTk.PhotoImage)
     _pil_icon_cache: dict[tuple[str, int], Image.Image | None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
 

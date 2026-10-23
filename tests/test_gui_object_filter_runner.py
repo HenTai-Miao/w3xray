@@ -49,9 +49,9 @@ class _Status:
 class _FilterRunner(ObjectFilterRunnerMixin, GuiWorkerHostMixin):
     def __init__(self) -> None:
         self.map_data = MapData(path="map.w3x", name="map")
-        self.search_var = _Search()
+        self.search_var = _Search()  # pyright: ignore[reportAttributeAccessIssue] - 测试桩
         self.object_fine_filter = _FineCombo()
-        self.status = _Status()
+        self.status = _Status()  # pyright: ignore[reportAttributeAccessIssue] - 测试桩
         self.scheduled: dict[str, Callable[[], None]] = {}
         self.posted = threading.Event()
         self.handled: list[ObjectFilterResult] = []
@@ -59,7 +59,9 @@ class _FilterRunner(ObjectFilterRunnerMixin, GuiWorkerHostMixin):
         self._init_gui_worker_host()
         self._init_object_filter_runner()
 
-    def after(self, delay_ms: int, callback: Callable[[], None]) -> str:
+    def after(  # pyright: ignore[reportIncompatibleMethodOverride] - 测试桩
+        self, delay_ms: int, callback: Callable[[], None]
+    ) -> str:
         _ = delay_ms
         poll_id = f"after-{self._next_after}"
         self._next_after += 1

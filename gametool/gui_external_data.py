@@ -34,17 +34,17 @@ class ExternalDataToolsMixin:
         data_tools_menu: tk.Menu  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         map_data: MapData | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         status: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _load_config: Callable[[], dict[str, object]]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _load_config: Callable[[], dict[str, str]]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _need_map: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _open_dir: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _post_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _refresh_external_source_labels: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _reload_active_source: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        _save_config: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _save_config: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _start_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
 
-    author_bundle_path: str | None = ""
-    description_cache_path: str | None = ""
+    author_bundle_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+    description_cache_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
     description_cache_manifest_sha256: str = ""
     description_cache_entry_count: int = 0
 

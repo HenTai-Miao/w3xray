@@ -29,10 +29,11 @@ ObjectFilterPayload = ObjectFilterResult | ObjectFilterError
 
 
 if TYPE_CHECKING:
-    from .gui_worker_registry import GuiWorkerTarget
+    import customtkinter as ctk
+    import tkinter as tk
+    from tkinter import ttk
 
-    class _SearchVariable(Protocol):
-        def get(self) -> str: ...
+    from .gui_worker_registry import GuiWorkerTarget
 
     class _FineCombo(Protocol):
         def get(self) -> str: ...
@@ -41,16 +42,9 @@ if TYPE_CHECKING:
 
         def configure(self, *, values: list[str]) -> None: ...
 
-    class _Configurable(Protocol):
-        def configure(self, *, text: str) -> None: ...
-
-    class _TypingSearchVariable:
-        def get(self) -> str:
-            return ""
-
     class _TypingFineCombo:
         def get(self) -> str:
-            return ALL_OBJECTS_LABEL
+            return ""
 
         def set(self, value: str) -> None:
             _ = value
@@ -58,36 +52,13 @@ if TYPE_CHECKING:
         def configure(self, *, values: list[str]) -> None:
             _ = values
 
-    class _TypingConfigurable:
-        def configure(self, *, text: str) -> None:
-            _ = text
-
-    class _ObjectTree(Protocol):
-        def delete(self, *items: str) -> None: ...
-
-        def get_children(self) -> tuple[str, ...]: ...
-
-        def insert(
-            self,
-            parent: str,
-            index: str,
-            *,
-            iid: str,
-            image: str,
-            text: str,
-            values: tuple[str, ...] = (),
-            tags: tuple[str, ...],
-        ) -> str: ...
-
-        def tag_configure(self, tag: str, *, background: str) -> None: ...
-
     class _ObjectFilterHost:
         map_data: MapData | None = None
-        search_var: _SearchVariable = _TypingSearchVariable()
-        status: _Configurable = _TypingConfigurable()
+        search_var: tk.StringVar  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        status: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         col_results: dict[str, list[GameObject]] = {}
-        col_headers: dict[str, _Configurable] = {}
-        col_trees: dict[str, _ObjectTree] = {}
+        col_headers: dict[str, ctk.CTkLabel]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        col_trees: dict[str, ttk.Treeview]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         object_fine_filter: _FineCombo = _TypingFineCombo()
 
         def _start_gui_worker(
@@ -110,8 +81,13 @@ if TYPE_CHECKING:
 
         def _render_object_cards(self) -> None: ...
 
-        def _autosize_tree(self, tree: _ObjectTree) -> None: ...
-
+        def _autosize_tree(
+            self,
+            tree: ttk.Treeview,
+            col: str = "#0",
+            minw: int = 120,
+            pad: int = 46,
+        ) -> None: ...
 else:
     _ObjectFilterHost = object
 

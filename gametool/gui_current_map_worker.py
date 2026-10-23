@@ -25,22 +25,12 @@ type SnapshotCleanup = Callable[[CurrentMapSnapshot], None]
 
 
 if TYPE_CHECKING:
+    from typing import ParamSpec
     import queue
-    from typing import Protocol
+
+    import customtkinter as ctk
 
     from .gui_worker_registry import GuiWorkerTarget, GuiWorkerTicket
-
-    class _Configurable(Protocol):
-        def configure(self, **values: str) -> None: ...
-
-        def cget(self, key: str) -> str | Callable[[], None]: ...
-
-    class _TypingConfigurable:
-        def configure(self, **values: str) -> None:
-            return
-
-        def cget(self, key: str) -> str:
-            return key
 
     class CurrentMapHost:
         _current_map_initialized: bool = False
@@ -51,17 +41,24 @@ if TYPE_CHECKING:
         _current_map_stopped: bool = False
         _current_map_poll_id: str | None = None
         _current_map_snapshots: list[CurrentMapSnapshot] = []
-        _cur_dir: Mapping[str, str | Path | None] = {}
-        current_map_button: _Configurable = _TypingConfigurable()
-        status: _Configurable = _TypingConfigurable()
+        _cur_dir: dict[str, str | None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        current_map_button: ctk.CTkButton  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        status: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
 
-        def _load_config(self) -> Mapping[str, str | Path | None]: ...
+        _P = ParamSpec("_P")
 
+        def after(
+            self,
+            ms: int,
+            func: Callable[_P, object],
+            *args: _P.args,
+            **kwargs: _P.kwargs,
+        ) -> str: ...
+
+        def after_cancel(self, id: str) -> None: ...
+
+        def _load_config(self) -> dict[str, str]: ...
         def _start_path_load(self, path: str) -> None: ...
-
-        def after(self, delay_ms: int, callback: Callable[[], None]) -> str: ...
-
-        def after_cancel(self, after_id: str) -> None: ...
 
         def _start_gui_worker(
             self,

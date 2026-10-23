@@ -47,7 +47,13 @@ class SourcePanelHost(Protocol):
 
     def _populate_left(self) -> None: ...
 
-    def _attach_ctx_menu(self, widget: ctk.CTkEntry, *, paste: bool) -> None: ...
+    def _attach_ctx_menu(
+        self,
+        widget: ctk.CTkEntry | ctk.CTkTextbox,
+        *,
+        paste: bool = False,
+        copy_all: bool = False,
+    ) -> None: ...
 
     def _on_map_pick(self, event: tk.Event[tk.Misc]) -> None: ...
 

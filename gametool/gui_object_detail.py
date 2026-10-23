@@ -88,8 +88,8 @@ class ObjectDetailMixin:
 
         _pack_query_selected(self, command)
 
-    def _show_detail(self, obj) -> None:
-        self._selected_detail_object = obj
+    def _show_detail(self, item) -> None:
+        self._selected_detail_object = item
         self._render_selected_object_detail()
 
     def _render_selected_object_detail(self) -> None:
