@@ -186,7 +186,7 @@ class IconGapGuiTest(GuiTestCase):
         md.icon_evidence = IconEvidenceIndex.build(
             unresolved=(
                 UnresolvedIconEvidence(
-                    IconObjectReference(
+                    IconObjectReference(  # pyright: ignore[reportArgumentType]
                         "物品",
                         "I001",
                         "烈焰剑",
@@ -222,7 +222,7 @@ def _map_with_gap_rows() -> MapData:
     md.icon_evidence = IconEvidenceIndex.build(
         unresolved=(
             UnresolvedIconEvidence(
-                IconObjectReference(
+                IconObjectReference(  # pyright: ignore[reportArgumentType]
                     "物品",
                     "I001",
                     "烈焰剑",

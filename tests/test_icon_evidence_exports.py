@@ -76,7 +76,7 @@ def test_unresolved_report_preserves_raw_paths_attempts_and_field_evidence() -> 
     index = IconEvidenceIndex.build(
         unresolved=(
             UnresolvedIconEvidence(
-                reference,
+                reference,  # pyright: ignore[reportArgumentType]
                 IconGapReason.NAMED_RESOURCE_MISSING,
                 (),
                 (attempt,),
@@ -101,7 +101,7 @@ def test_unresolved_report_preserves_raw_paths_attempts_and_field_evidence() -> 
 def test_filtered_icon_fields_never_leak_into_gap_rows() -> None:
     # Given
     index = IconEvidenceIndex.build(
-        filtered=(FilteredIconEvidence(_reference("单位", "h001")),)
+        filtered=(FilteredIconEvidence(_reference("单位", "h001")),)  # pyright: ignore[reportArgumentType]
     )
 
     # When
@@ -116,7 +116,7 @@ def test_unresolved_report_keeps_distinct_logical_submaps_separate() -> None:
     index = IconEvidenceIndex.build(
         unresolved=tuple(
             UnresolvedIconEvidence(
-                _reference("技能", rawcode, map_path=map_path),
+                _reference("技能", rawcode, map_path=map_path),  # pyright: ignore[reportArgumentType]
                 IconGapReason.NAMED_RESOURCE_MISSING,
                 (),
                 (),
@@ -149,7 +149,7 @@ def _index_with_two_object_references() -> IconEvidenceIndex:
     return IconEvidenceIndex.build(
         unresolved=tuple(
             UnresolvedIconEvidence(
-                _reference(category, rawcode),
+                _reference(category, rawcode),  # pyright: ignore[reportArgumentType]
                 IconGapReason.HISTORICAL_CLIENT_MISS,
                 (),
                 (attempt,),

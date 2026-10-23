@@ -64,7 +64,7 @@ class ExternalListfileCoreTest(unittest.TestCase):
         # When: external names are supplied to the export path.
         with tempfile.TemporaryDirectory() as out:
             _export_all_impl(
-                Archive(),
+                Archive(),  # pyright: ignore[reportArgumentType]
                 out,
                 1,
                 external_names=("war3mapImported\\Hero.mdx", "..\\escape.blp"),
@@ -93,7 +93,8 @@ class ExternalListfileGuiTest(GuiTestCase):
             # Then: the app stores it and exposes the active path in the top bar.
             self.assertEqual(self.app.external_listfile_path, path)
             self.assertIn(
-                os.path.basename(path), self.app.external_listfile_label.cget("text")
+                os.path.basename(path),
+                self.app.external_listfile_label.cget("text"),  # pyright: ignore[reportAttributeAccessIssue]
             )
         finally:
             os.remove(path)
@@ -132,7 +133,7 @@ class ExternalListfileGuiTest(GuiTestCase):
 
         # When: the listfile selection is cleared.
         with patch.object(self.app, "_start_path_load", side_effect=calls.append):
-            self.app.external_listfile_clear.invoke()
+            self.app.external_listfile_clear.invoke()  # pyright: ignore[reportAttributeAccessIssue]
 
         # Then: the map is rebuilt without stale external names.
         self.assertIsNone(self.app.external_listfile_path)
@@ -263,7 +264,8 @@ class ExternalListfileGuiTest(GuiTestCase):
             # Then: the app stores it and shows the directory basename in the top bar.
             self.assertEqual(self.app.game_data_path, data_dir)
             self.assertIn(
-                os.path.basename(data_dir), self.app.game_data_label.cget("text")
+                os.path.basename(data_dir),
+                self.app.game_data_label.cget("text"),  # pyright: ignore[reportAttributeAccessIssue]
             )
 
 

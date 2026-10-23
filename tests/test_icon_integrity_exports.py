@@ -22,7 +22,7 @@ def test_icon_integrity_splits_every_counter_without_calling_gaps_write_failures
     # Given
     unresolved = tuple(
         UnresolvedIconEvidence(
-            _reference(category, rawcode),
+            _reference(category, rawcode),  # pyright: ignore[reportArgumentType]
             IconGapReason.HISTORICAL_CLIENT_MISS,
             (),
             (),
@@ -33,7 +33,7 @@ def test_icon_integrity_splits_every_counter_without_calling_gaps_write_failures
     index = IconEvidenceIndex.build(
         resolved=(
             ResolvedIconEvidence(
-                resolved_reference,
+                resolved_reference,  # pyright: ignore[reportArgumentType]
                 r"Icons\Hit.blp",
                 "map.w3x",
                 b"BLP1hit",
@@ -43,7 +43,7 @@ def test_icon_integrity_splits_every_counter_without_calling_gaps_write_failures
             ),
         ),
         unresolved=unresolved,
-        filtered=(FilteredIconEvidence(_reference("单位", "h002")),),
+        filtered=(FilteredIconEvidence(_reference("单位", "h002")),),  # pyright: ignore[reportArgumentType]
         anonymous=(
             AnonymousIconResource(
                 7,

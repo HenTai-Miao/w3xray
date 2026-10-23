@@ -119,7 +119,7 @@ def _gap_groups(
 ) -> tuple[tuple[UnresolvedIconEvidence, ...], ...]:
     grouped: dict[tuple[str, str, str], list[UnresolvedIconEvidence]] = {}
     for row in index.unresolved:
-        key = icon_gap_identity(row.reference)
+        key = icon_gap_identity(row.reference)  # pyright: ignore[reportArgumentType]
         grouped.setdefault(key, []).append(row)
     return tuple(tuple(grouped[key]) for key in sorted(grouped))
 
@@ -130,7 +130,7 @@ def _references(
     by_identity: dict[tuple[str, ...], _ReferenceJson] = {}
     for row in rows:
         reference = row.reference
-        payload = _reference_json(reference)
+        payload = _reference_json(reference)  # pyright: ignore[reportArgumentType]
         identity = tuple(payload[key] for key in _REFERENCE_KEY_ORDER)
         by_identity.setdefault(identity, payload)
     return tuple(by_identity[key] for key in sorted(by_identity, key=_text_tuple_key))

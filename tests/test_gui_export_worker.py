@@ -41,7 +41,7 @@ class _Exporter(ExportActionsMixin, GuiWorkerHostMixin):
     def after_cancel(self, after_id: str) -> None:
         self.scheduled.pop(after_id, None)
 
-    def _open_dir(self, output: str, count: int, kind: str) -> None:
+    def _open_dir(self, output: str, count: int, kind: str) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
         self.opened.append((output, count, kind))
 
 

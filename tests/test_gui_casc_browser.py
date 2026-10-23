@@ -43,7 +43,8 @@ class CascBrowserEntryTest(GuiTestCase):
 
         # Then: browsing cannot open a non-existent native storage.
         self.assertEqual(
-            self.app.data_tools_menu.entrycget("浏览 CASC Root", "state"), "disabled"
+            self.app.data_tools_menu.entrycget("浏览 CASC Root", "state"),  # pyright: ignore[reportAttributeAccessIssue]
+            "disabled",  # pyright: ignore[reportAttributeAccessIssue]
         )
 
     def test_browser_is_enabled_for_readable_casclib_backend(self) -> None:
@@ -62,7 +63,8 @@ class CascBrowserEntryTest(GuiTestCase):
 
         # Then: the full-root browser command is available.
         self.assertEqual(
-            self.app.data_tools_menu.entrycget("浏览 CASC Root", "state"), "normal"
+            self.app.data_tools_menu.entrycget("浏览 CASC Root", "state"),  # pyright: ignore[reportAttributeAccessIssue]
+            "normal",  # pyright: ignore[reportAttributeAccessIssue]
         )
         self.assertTrue(source.closed)
 
@@ -83,7 +85,8 @@ class CascBrowserEntryTest(GuiTestCase):
 
         # Then: capability, not native backend identity, enables browsing.
         self.assertEqual(
-            self.app.data_tools_menu.entrycget("浏览 CASC Root", "state"), "normal"
+            self.app.data_tools_menu.entrycget("浏览 CASC Root", "state"),  # pyright: ignore[reportAttributeAccessIssue]
+            "normal",  # pyright: ignore[reportAttributeAccessIssue]
         )
         self.assertTrue(source.closed)
 

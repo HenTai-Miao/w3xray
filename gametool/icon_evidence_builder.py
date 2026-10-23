@@ -144,7 +144,7 @@ def collect_icon_field_references(
             )
             match decision.disposition:
                 case IconFieldDisposition.FILTERED_NON_ICON:
-                    filtered.append(FilteredIconEvidence(_reference(md, obj, field)))
+                    filtered.append(FilteredIconEvidence(_reference(md, obj, field)))  # pyright: ignore[reportArgumentType]
                 case (
                     IconFieldDisposition.ELIGIBLE
                     | IconFieldDisposition.NOT_AN_ICON_FIELD

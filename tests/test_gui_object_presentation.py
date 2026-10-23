@@ -216,7 +216,7 @@ class ObjectPresentationTest(GuiTestCase):
         md.icon_evidence = IconEvidenceIndex.build(
             unresolved=(
                 UnresolvedIconEvidence(
-                    reference=IconObjectReference(
+                    reference=IconObjectReference(  # pyright: ignore[reportArgumentType]
                         category="物品",
                         object_id="I001",
                         object_name="烈焰剑",

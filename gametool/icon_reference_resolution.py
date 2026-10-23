@@ -197,7 +197,7 @@ def _resolved(
     attempts: list[IconLookupAttempt],
 ) -> ResolvedIconEvidence:
     return ResolvedIconEvidence(
-        reference,
+        reference,  # pyright: ignore[reportArgumentType]
         resolved_path,
         source_path,
         payload,

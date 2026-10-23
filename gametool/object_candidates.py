@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import struct
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, Final
+from typing import Protocol, Final
 
 from .object_candidate_values import (
     expand_codes as _expand_codes,
@@ -13,17 +13,21 @@ from .object_candidate_values import (
     wts_value_source as _wts_value_source,
 )
 from .fields import field_type, is_concat_type, label_for
-from .extraction_diagnostics import read_component, record_component_parse_issue
+from .extraction_diagnostics import (
+    DiagnosticTarget,
+    read_component,
+    record_component_parse_issue,
+)
 from .map_archive_reader import MapArchiveReader
 from .object_candidate_models import ObjectCandidate, ObjectFieldValue, ObjectSourceKind
 from .references import extract_refs_by_type
 from .w3obj import EXT_CATEGORY, parse_object_data, parse_object_data_report
 
-if TYPE_CHECKING:
-    from .map_data import MapData
-
-
 OBJECT_EXTS: Final[tuple[str, ...]] = ("w3u", "w3t", "w3a", "w3q", "w3b", "w3d", "w3h")
+
+
+class _DiagnosticHost(DiagnosticTarget, Protocol):
+    """Structural surface of MapData used here (breaks map_data import cycle)."""
 
 
 def collect_object_candidates(
@@ -31,7 +35,7 @@ def collect_object_candidates(
     wts: Mapping[int, str],
     *,
     prefix: str = "war3map",
-    md: MapData | None = None,
+    md: DiagnosticTarget | None = None,
 ) -> tuple[ObjectCandidate, ...]:
     """Collect candidates for one binary prefix and shared map text sources."""
     from .object_candidate_text_tables import (
@@ -56,7 +60,7 @@ def collect_binary_object_candidates(
     ext: str,
     *,
     prefix: str = "war3map",
-    md: MapData | None = None,
+    md: DiagnosticTarget | None = None,
 ) -> tuple[ObjectCandidate, ...]:
     """Parse one binary object file without affecting candidates from other sources."""
     filename = f"{prefix}.{ext}"

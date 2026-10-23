@@ -67,7 +67,7 @@ def validate_icon_publication(
         normalized_path=normalized_path,
         reason=reason,
     )
-    exports = (_failed_export(index.resolved[0].reference),) if index.resolved else ()
+    exports = (_failed_export(index.resolved[0].reference),) if index.resolved else ()  # pyright: ignore[reportArgumentType]
     gap_text = format_unresolved_icon_tsv(index)
     if reference_json is not None:
         gap_text = _replace_reference_json(gap_text, reference_json)
@@ -124,7 +124,7 @@ def _icon_index(
     resolved = (
         (
             ResolvedIconEvidence(
-                resolved_reference,
+                resolved_reference,  # pyright: ignore[reportArgumentType]
                 _PATH,
                 "map.w3x",
                 b"BLP1resolved",
@@ -140,7 +140,7 @@ def _icon_index(
         resolved=resolved,
         unresolved=(
             UnresolvedIconEvidence(
-                reference,
+                reference,  # pyright: ignore[reportArgumentType]
                 reason,
                 (),
                 (),

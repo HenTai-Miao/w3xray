@@ -11,18 +11,20 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Protocol
+from typing import Protocol
 
 from .extraction_diagnostics import (
     ComponentParseError,
     read_component,
+    DiagnosticTarget,
     record_component_parse_issue,
 )
 from .slk import parse_slk
 from .war3_encoding import decode_warcraft_string
 
-if TYPE_CHECKING:
-    from .map_data import MapData
+
+class _DiagnosticHost(DiagnosticTarget, Protocol):
+    """Structural surface of MapData used here (breaks map_data import cycle)."""
 
 
 class SlkArchive(Protocol):
@@ -148,7 +150,7 @@ def _find_name(archive: SlkArchive, name: str) -> str | None:
 
 
 def _read_text(
-    archive: SlkArchive, name: str, md: MapData | None = None
+    archive: SlkArchive, name: str, md: DiagnosticTarget | None = None
 ) -> tuple[str, str] | None:
     """在 MPQ 里找并读出该 SLK 文本；找不到/解码失败返回 None。"""
     fn = _find_name(archive, name)
@@ -177,7 +179,7 @@ def parse_category_objects(
     archive: SlkArchive,
     category: str,
     *,
-    md: MapData | None = None,
+    md: DiagnosticTarget | None = None,
 ) -> dict[str, dict[str, str]]:
     """解析某分类的全部 SLK 文件，按对象码合并列，返回 {码: {列名: 值}}。
 

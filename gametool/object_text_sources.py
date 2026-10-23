@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Final
+from typing import Final, Protocol
 
 from .extraction_diagnostics import (
     ComponentParseError,
+    DiagnosticTarget,
     read_component,
     record_component_parse_issue,
 )
@@ -25,8 +26,9 @@ from .object_text_records import (
 from .textobj import looks_like_text_object, parse_text_objects
 from .war3_encoding import decode_warcraft_string
 
-if TYPE_CHECKING:
-    from .map_data import MapData
+
+class _DiagnosticHost(DiagnosticTarget, Protocol):
+    """Structural surface of MapData used here (breaks map_data import cycle)."""
 
 
 _ANONYMOUS_HEAD_BYTES: Final = 8 * 1024
@@ -36,7 +38,7 @@ def collect_text_object_records(
     archive: MapArchiveReader,
     known_names: Sequence[str] = (),
     *,
-    md: MapData | None = None,
+    md: DiagnosticTarget | None = None,
 ) -> tuple[TextObjectRecord, ...]:
     """Collect named trusted sources and optional anonymous object-table blocks."""
     records: list[TextObjectRecord] = []
@@ -94,7 +96,7 @@ def collect_text_object_records(
 
 def _anonymous_records(
     archive: AnonymousTextObjectArchive,
-    md: MapData | None,
+    md: DiagnosticTarget | None,
 ) -> tuple[TextObjectRecord, ...]:
     records: list[TextObjectRecord] = []
     for index, block in archive.iter_blocks():

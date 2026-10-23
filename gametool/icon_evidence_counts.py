@@ -68,7 +68,7 @@ def icon_integrity_counts(
 
 def normalized_icon_gap_count(index: IconEvidenceIndex) -> int:
     """Count one identity per logical map and normalized unresolved path."""
-    return len({icon_gap_identity(row.reference) for row in index.unresolved})
+    return len({icon_gap_identity(row.reference) for row in index.unresolved})  # pyright: ignore[reportArgumentType]
 
 
 def icon_gap_identity(reference: IconObjectReference) -> tuple[str, str, str]:

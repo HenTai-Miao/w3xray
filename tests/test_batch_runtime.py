@@ -84,7 +84,7 @@ def test_progress_uses_deterministic_nonnegative_eta() -> None:
     # Then
     assert progress.elapsed_ms == 4_000
     assert progress.eta_seconds == 6.0
-    assert progress.eta_seconds >= 0
+    assert progress.eta_seconds >= 0  # pyright: ignore[reportOptionalOperand]
 
 
 def test_progress_has_no_eta_before_first_completion() -> None:

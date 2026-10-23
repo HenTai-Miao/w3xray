@@ -118,7 +118,7 @@ def _merge_resolved_icon(
         records.append(export_named_icon(str(stage), row))
         return
     current = records[previous]
-    merged = tuple(sorted(set((*current.objects, row.reference)), key=_reference_key))
+    merged = tuple(sorted(set((*current.objects, row.reference)), key=_reference_key))  # pyright: ignore[reportArgumentType, reportCallIssue]
     records[previous] = replace(current, objects=merged)
 
 

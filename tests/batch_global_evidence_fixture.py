@@ -129,7 +129,7 @@ def _evidence(
     evidence = IconEvidenceIndex.build(
         resolved=(
             ResolvedIconEvidence(
-                named_reference,
+                named_reference,  # pyright: ignore[reportArgumentType]
                 named_path,
                 fingerprint.path,
                 b"BLP1named",
@@ -140,7 +140,7 @@ def _evidence(
         ),
         unresolved=(
             UnresolvedIconEvidence(
-                gap_reference,
+                gap_reference,  # pyright: ignore[reportArgumentType]
                 gap_reason,
                 (IconDiagnosticFlag.HISTORICAL_EVIDENCE_CHECKED,),
                 (),

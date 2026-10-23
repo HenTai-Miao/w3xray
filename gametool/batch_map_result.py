@@ -85,7 +85,7 @@ def build_map_result(
         unresolved_endpoint_count=unresolved_endpoint_count,
         client_unavailable_icon_count=len(
             {
-                icon_gap_identity(row.reference)
+                icon_gap_identity(row.reference)  # pyright: ignore[reportArgumentType]
                 for row in icon_index.unresolved
                 if IconDiagnosticFlag.CLIENT_NOT_PROVIDED in row.diagnostics
             }

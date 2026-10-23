@@ -44,7 +44,7 @@ def export_named_icon(
             resolved_path=resource.resolved_path,
             source_path=resource.source_path,
             digest=digest,
-            objects=objects,
+            objects=objects,  # pyright: ignore[reportArgumentType]
             resolution_layer=resolution_layer,
             state=IconExportState.UNSAFE_PATH,
             error="unsafe named icon path",
@@ -64,7 +64,7 @@ def export_named_icon(
         payload=resource.payload,
         original_path=original,
         png_path=png,
-        objects=objects,
+        objects=objects,  # pyright: ignore[reportArgumentType]
         resolution_layer=resolution_layer,
     )
 

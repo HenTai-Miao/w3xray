@@ -26,7 +26,7 @@ _PATH = r"ReplaceableTextures\CommandButtons\BTNHero.blp"
 def test_reference_sort_is_independent_of_equal_primary_key_input_order() -> None:
     # Given
     row = UnresolvedIconEvidence(
-        IconObjectReference(
+        IconObjectReference(  # pyright: ignore[reportArgumentType]
             "技能",
             "A001",
             "当前对象",
@@ -39,8 +39,8 @@ def test_reference_sort_is_independent_of_equal_primary_key_input_order() -> Non
         (),
         (),
     )
-    first = replace(row, reference=replace(row.reference, field_label="A"))
-    second = replace(row, reference=replace(row.reference, field_label="Z"))
+    first = replace(row, reference=replace(row.reference, field_label="A"))  # pyright: ignore[reportArgumentType]
+    second = replace(row, reference=replace(row.reference, field_label="Z"))  # pyright: ignore[reportArgumentType]
 
     # When
     forward = IconEvidenceIndex.build(unresolved=(second, first)).unresolved
@@ -124,7 +124,7 @@ def test_merge_never_preserves_an_adopted_candidate() -> None:
 
 def _resolved(*, source_path: str, payload: bytes) -> ResolvedIconEvidence:
     return ResolvedIconEvidence(
-        IconObjectReference(
+        IconObjectReference(  # pyright: ignore[reportArgumentType]
             "技能",
             "A001",
             "当前对象",

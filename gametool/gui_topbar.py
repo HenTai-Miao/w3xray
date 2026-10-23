@@ -425,7 +425,7 @@ def _open_guide_window(app, text: str, force: bool = False) -> None:
             font=(FONT, 11),
             fg_color="transparent",
             border_width=1,
-            command=lambda t=title, b=box: (_jump_to_section(b, t), _mark_active(t)),  # noqa: F821 - 闭包晚绑定, box 在下方创建
+            command=lambda t=title, b=box: (_jump_to_section(b, t), _mark_active(t)),  # noqa: F821 - 闭包晚绑定, box 在下方创建  # pyright: ignore[reportUnboundVariable]
         )
         btn.pack(side="left", padx=(0, 4))
         section_buttons[title] = btn
@@ -441,7 +441,7 @@ def _open_guide_window(app, text: str, force: bool = False) -> None:
         lambda _e: _GUIDE_SCROLL.update(
             {
                 (
-                    getattr(app, "map_data", None).path
+                    getattr(app, "map_data", None).path  # pyright: ignore[reportOptionalMemberAccess]
                     if getattr(app, "map_data", None)
                     else ""
                 ): box.index("insert")
@@ -529,7 +529,7 @@ def _attach_tooltip(widget, text: str) -> None:
             pady=4,
         )
         label.pack()
-        state["tip"] = tip
+        state["tip"] = tip  # pyright: ignore[reportArgumentType]
 
     def _hide(_e=None) -> None:
         if state["tip"] is not None:

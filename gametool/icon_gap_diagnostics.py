@@ -67,7 +67,10 @@ def unresolved_icon_evidence(
             reasons.add(IconGapReason.CLIENT_SOURCE_UNAVAILABLE)
     reason = next(item for item in _GAP_REASON_PRIORITY if item in reasons)
     return UnresolvedIconEvidence(
-        reference, reason, tuple(diagnostics), tuple(attempts)
+        reference,  # pyright: ignore[reportArgumentType]
+        reason,
+        tuple(diagnostics),
+        tuple(attempts),  # pyright: ignore[reportArgumentType]
     )
 
 

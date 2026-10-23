@@ -64,7 +64,7 @@ class _CascHost(CascBrowserMixin, GuiWorkerHostMixin):
     def after_cancel(self, after_id: str) -> None:
         self.scheduled.pop(after_id, None)
 
-    def _show_casc_browser(self, source: _InventorySource) -> None:
+    def _show_casc_browser(self, source: _InventorySource) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
         self.shown.append(source)
 
 

@@ -67,7 +67,7 @@ class _FilterRunner(ObjectFilterRunnerMixin, GuiWorkerHostMixin):
         self.posted.set()
         return poll_id
 
-    def after_cancel(self, poll_id: str) -> None:
+    def after_cancel(self, poll_id: str) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
         self.scheduled.pop(poll_id, None)
 
     def _handle_object_filter_payload(
@@ -124,7 +124,7 @@ def test_shutdown_tracks_blocked_filter_and_prevents_late_status(
     assert lingering == ("object-filter",)
     assert runner.scheduled == {}
     assert runner.handled == []
-    assert runner.status.values == ["正在筛选对象 …"]
+    assert runner.status.values == ["正在筛选对象 …"]  # pyright: ignore[reportAttributeAccessIssue]
     assert runner._shutdown_gui_worker_host(1) == ()
 
 
@@ -148,12 +148,12 @@ def test_replaced_filter_only_delivers_current_result(
         return _result("new")
 
     monkeypatch.setattr(filter_runner, "filter_objects_by_query", filter_query)
-    runner.search_var.value = "old"
+    runner.search_var.value = "old"  # pyright: ignore[reportAttributeAccessIssue]
     runner._refresh_list()
     assert first_started.wait(1)
 
     # When
-    runner.search_var.value = "new"
+    runner.search_var.value = "new"  # pyright: ignore[reportAttributeAccessIssue]
     runner._refresh_list()
     assert second_done.wait(1)
     assert runner.posted.wait(1)
@@ -203,12 +203,12 @@ def test_refresh_list_syncs_fine_choices_and_resets_stale_pick() -> None:
     }
     runner = _FilterRunner()
     runner.map_data = md
-    runner.object_fine_filter.value = "神器"
+    runner.object_fine_filter.value = "神器"  # pyright: ignore[reportAttributeAccessIssue]
 
     # When: the filter refreshes against that map.
     runner._refresh_list()
 
     # Then: the dropdown lists only present categories and resets the stale pick.
-    assert runner.object_fine_filter.choices[-1] == ["全部", "英雄"]
-    assert runner.object_fine_filter.value == "全部"
+    assert runner.object_fine_filter.choices[-1] == ["全部", "英雄"]  # pyright: ignore[reportAttributeAccessIssue]
+    assert runner.object_fine_filter.value == "全部"  # pyright: ignore[reportAttributeAccessIssue]
     runner._shutdown_gui_worker_host(1)

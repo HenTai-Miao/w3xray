@@ -164,7 +164,7 @@ def _write_undiagnosed_icon_gap(root: Path) -> None:
     index = IconEvidenceIndex.build(
         unresolved=(
             UnresolvedIconEvidence(
-                IconObjectReference(
+                IconObjectReference(  # pyright: ignore[reportArgumentType]
                     "技能",
                     "A001",
                     "暴风雪",

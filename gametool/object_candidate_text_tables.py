@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING, assert_never
+from typing import TYPE_CHECKING, Protocol, assert_never
+
+from .extraction_diagnostics import DiagnosticTarget
 
 from .fields import field_type
 from .object_candidate_models import ObjectCandidate, ObjectFieldValue, ObjectSourceKind
@@ -24,13 +26,16 @@ from .slk_objects import (
 
 if TYPE_CHECKING:
     from .map_archive_reader import MapArchiveReader
-    from .map_data import MapData
+
+
+class _DiagnosticHost(DiagnosticTarget, Protocol):
+    """Structural surface of MapData used here (breaks map_data import cycle)."""
 
 
 def collect_text_candidates(
     archive: MapArchiveReader,
     wts: Mapping[int, str],
-    md: MapData | None,
+    md: DiagnosticTarget | None,
 ) -> tuple[ObjectCandidate, ...]:
     """Collect candidates from trusted and bounded anonymous text tables."""
     result: list[ObjectCandidate] = []
@@ -78,7 +83,7 @@ def collect_text_candidates(
 def collect_slk_candidates(
     archive: MapArchiveReader,
     wts: Mapping[int, str],
-    md: MapData | None,
+    md: DiagnosticTarget | None,
 ) -> tuple[ObjectCandidate, ...]:
     """Collect candidates from every supported embedded SLK family."""
     result: list[ObjectCandidate] = []
