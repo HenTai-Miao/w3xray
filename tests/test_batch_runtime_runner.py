@@ -210,9 +210,11 @@ def test_output_lock_closes_descriptors_when_unlock_fails(
     monkeypatch.setattr(batch_output_lock, "_DIRECTORY_DESCRIPTORS_AVAILABLE", False)
 
     # When: the lease exits through the cleanup failure.
-    with pytest.raises(OSError, match="unlock failed"):
-        with batch_output_lock.hold_batch_output_lock(tmp_path / "output") as lease:
-            descriptors = (lease.lock_descriptor, lease.root_descriptor)
+    with (
+        pytest.raises(OSError, match="unlock failed"),
+        batch_output_lock.hold_batch_output_lock(tmp_path / "output") as lease,
+    ):
+        descriptors = (lease.lock_descriptor, lease.root_descriptor)
     assert descriptors is not None
     observed = set(closed)
     acquired = {descriptor for descriptor in descriptors if descriptor >= 0}

@@ -48,16 +48,18 @@ def test_recovery_move_completion_then_callable_fault_keeps_exact_record(
         raise move_fault
 
     # When: both source and recovery names are re-proved after the exception.
-    with open_parent(tmp_path) as descriptor:
-        with pytest.raises(PublicationCommitContextError) as raised:
-            _ = move_object_to_recovery(
-                descriptor,
-                _identity(tmp_path),
-                source,
-                expected,
-                names,
-                move_then_raise,
-            )
+    with (
+        open_parent(tmp_path) as descriptor,
+        pytest.raises(PublicationCommitContextError) as raised,
+    ):
+        _ = move_object_to_recovery(
+            descriptor,
+            _identity(tmp_path),
+            source,
+            expected,
+            names,
+            move_then_raise,
+        )
 
     # Then: the exact recovery inode and initiating fault are both authoritative.
     recovery = names.path(RetainedCacheRole.RECOVERY)
@@ -89,16 +91,18 @@ def test_recovery_move_return_then_source_reacquisition_surfaces_both_sides(
         reacquired.append(_identity(source))
 
     # When: the mandatory postcondition reads both names.
-    with open_parent(tmp_path) as descriptor:
-        with pytest.raises(PublicationCommitContextError) as raised:
-            _ = move_object_to_recovery(
-                descriptor,
-                _identity(tmp_path),
-                source,
-                expected,
-                names,
-                move_then_reacquire,
-            )
+    with (
+        open_parent(tmp_path) as descriptor,
+        pytest.raises(PublicationCommitContextError) as raised,
+    ):
+        _ = move_object_to_recovery(
+            descriptor,
+            _identity(tmp_path),
+            source,
+            expected,
+            names,
+            move_then_reacquire,
+        )
 
     # Then: recovery stays retained and current source is separately transient.
     assert len(reacquired) == 1
@@ -155,16 +159,18 @@ def test_already_recovery_candidate_that_disappeared_has_no_phantom_transient(
     _ = recovery.rename(displaced)
 
     # When: source-equals-recovery proof sees readable absence.
-    with open_parent(tmp_path) as descriptor:
-        with pytest.raises(PublicationCommitContextError) as raised:
-            _ = move_object_to_recovery(
-                descriptor,
-                _identity(tmp_path),
-                recovery,
-                expected,
-                names,
-                rename_in_parent,
-            )
+    with (
+        open_parent(tmp_path) as descriptor,
+        pytest.raises(PublicationCommitContextError) as raised,
+    ):
+        _ = move_object_to_recovery(
+            descriptor,
+            _identity(tmp_path),
+            recovery,
+            expected,
+            names,
+            rename_in_parent,
+        )
 
     # Then: absence creates neither a retained nor a phantom transient record.
     assert raised.value.retained == ()
@@ -209,17 +215,19 @@ def test_normal_target_takeover_preserves_simultaneous_source_side(
         takeover_complete = True
 
     # When: intended-role proof normalizes the unexpected target to recovery.
-    with open_parent(tmp_path) as descriptor:
-        with pytest.raises(PublicationCommitContextError) as raised:
-            _ = retain_object(
-                descriptor,
-                _identity(tmp_path),
-                source,
-                expected,
-                names,
-                RetainedCacheRole.PREVIOUS,
-                takeover_both_names,
-            )
+    with (
+        open_parent(tmp_path) as descriptor,
+        pytest.raises(PublicationCommitContextError) as raised,
+    ):
+        _ = retain_object(
+            descriptor,
+            _identity(tmp_path),
+            source,
+            expected,
+            names,
+            RetainedCacheRole.PREVIOUS,
+            takeover_both_names,
+        )
 
     # Then: expected, target takeover, and simultaneous source takeover all survive.
     assert len(target_foreign) == len(source_foreign) == 1

@@ -68,16 +68,18 @@ def test_backup_recovery_record_stays_disjoint_from_later_stage_transient(
     backup_identity = _identity(backup)
 
     # When: finalization attempts backup first and then the colliding held stage.
-    with bound_stage(stage) as bound:
-        with pytest.raises(PublicationCommitContextError) as raised:
-            _ = finalize_private_artifacts(
-                bound,
-                backup,
-                output,
-                names,
-                rename_in_parent,
-                os.fsync,
-            )
+    with (
+        bound_stage(stage) as bound,
+        pytest.raises(PublicationCommitContextError) as raised,
+    ):
+        _ = finalize_private_artifacts(
+            bound,
+            backup,
+            output,
+            names,
+            rename_in_parent,
+            os.fsync,
+        )
 
     # Then: the normalized backup remains retained, never duplicated as transient.
     recovery = names.path(RetainedCacheRole.RECOVERY)

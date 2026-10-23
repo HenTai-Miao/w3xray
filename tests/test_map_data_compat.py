@@ -165,9 +165,8 @@ def test_bytes_archive_source_removes_temp_file_when_mpq_open_fails(
     source = BytesArchiveSource("broken.w3x", b"not an MPQ archive")
 
     # When: MPQArchive rejects the temporary payload.
-    with pytest.raises(ValueError):
-        with source.open():
-            pass
+    with pytest.raises(ValueError), source.open():
+        pass
 
     # Then: the normal MPQ error survives and the source cleans the file.
     assert len(created_paths) == 1

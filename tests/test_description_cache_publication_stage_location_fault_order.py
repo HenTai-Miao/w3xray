@@ -51,17 +51,19 @@ def test_location_parent_fault_follows_prior_failure_without_replacing_cause(
     monkeypatch.setattr(stage_retention, "require_parent_identity", fail_parent)
 
     # When: the caller's final parent proof funnels the fault through the locator.
-    with bound_stage(stage) as bound:
-        with pytest.raises(PublicationCommitContextError) as raised:
-            _ = stage_retention.retain_stage(
-                bound,
-                output,
-                names,
-                rename_in_parent,
-                lambda _descriptor: None,
-                (),
-                (),
-            )
+    with (
+        bound_stage(stage) as bound,
+        pytest.raises(PublicationCommitContextError) as raised,
+    ):
+        _ = stage_retention.retain_stage(
+            bound,
+            output,
+            names,
+            rename_in_parent,
+            lambda _descriptor: None,
+            (),
+            (),
+        )
 
     # Then: prior, syscall, and typed parent objects remain in exact order.
     assert_failure_order(raised.value, (primary, parent_fault, parent_error))

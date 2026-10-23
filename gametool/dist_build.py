@@ -158,7 +158,9 @@ def parse_cli_options(argv: Sequence[str]) -> DistCliOptions:
     """Parse the tiny dist-builder CLI."""
     options = DistCliOptions()
     for argument in argv:
-        match argument:  # [OK: MATCH_OK] - unknown CLI strings become DistArgumentError.
+        match (
+            argument
+        ):  # [OK: MATCH_OK] - unknown CLI strings become DistArgumentError.
             case "--dry-run":
                 options = replace(options, dry_run=True)
             case "--no-clean":

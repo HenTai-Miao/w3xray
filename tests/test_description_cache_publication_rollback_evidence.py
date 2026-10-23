@@ -44,17 +44,19 @@ def test_rollback_selection_failure_reproves_seeded_transient_evidence(
     )
 
     # When: rollback selection has no candidate and rebuilds its error evidence.
-    with open_parent(tmp_path) as descriptor:
-        with pytest.raises(PublicationCommitContextError) as raised:
-            _ = select_live_identity_path(
-                descriptor,
-                tmp_path,
-                parent_identity,
-                (),
-                (7, 8),
-                (),
-                (seeded,),
-            )
+    with (
+        open_parent(tmp_path) as descriptor,
+        pytest.raises(PublicationCommitContextError) as raised,
+    ):
+        _ = select_live_identity_path(
+            descriptor,
+            tmp_path,
+            parent_identity,
+            (),
+            (7, 8),
+            (),
+            (seeded,),
+        )
 
     # Then: only the current name/inode escapes, never the stale pair.
     assert _identity(displaced) == stale_identity

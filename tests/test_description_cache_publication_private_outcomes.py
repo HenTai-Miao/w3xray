@@ -128,16 +128,18 @@ def test_independent_backup_and_stage_faults_are_both_attempted_and_ordered(
     monkeypatch.setattr(finalization, "retain_stage", fail_stage)
 
     # When: the orchestrator captures each attempt before aggregating evidence.
-    with bound_stage(stage) as bound:
-        with pytest.raises(PublicationCommitContextError) as raised:
-            _ = finalization.finalize_private_artifacts(
-                bound,
-                backup,
-                output,
-                names,
-                lambda _descriptor, _source, _target: None,
-                lambda _descriptor: None,
-            )
+    with (
+        bound_stage(stage) as bound,
+        pytest.raises(PublicationCommitContextError) as raised,
+    ):
+        _ = finalization.finalize_private_artifacts(
+            bound,
+            backup,
+            output,
+            names,
+            lambda _descriptor, _source, _target: None,
+            lambda _descriptor: None,
+        )
 
     # Then: both injected objects precede their typed attempt errors in order.
     assert attempts == ["backup", "stage"]

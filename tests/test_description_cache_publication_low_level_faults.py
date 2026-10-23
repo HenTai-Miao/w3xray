@@ -105,13 +105,15 @@ def test_public_parent_stat_wrapper_ledgers_exact_fault(
 
     monkeypatch.setattr(parent_identity.os, "stat", fail_stat)
 
-    with open_parent(tmp_path) as descriptor:
-        with pytest.raises(PublicationCommitContextError) as raised:
-            parent_identity.require_parent_identity(
-                descriptor,
-                tmp_path,
-                expected,
-            )
+    with (
+        open_parent(tmp_path) as descriptor,
+        pytest.raises(PublicationCommitContextError) as raised,
+    ):
+        parent_identity.require_parent_identity(
+            descriptor,
+            tmp_path,
+            expected,
+        )
 
     assert_failure_order(raised.value, (fault,))
     assert raised.value.__cause__ is fault

@@ -55,11 +55,11 @@ class CascBrowserEntryTest(GuiTestCase):
         source.inventory_view = GameDataInventoryView.FULL_ROOT
 
         # When: source controls refresh after selection.
-        with patch("gametool.gui_lifecycle.probe_game_data_path", return_value=probe):
-            with patch(
-                "gametool.gui_lifecycle.open_game_data_source", return_value=source
-            ):
-                self.app._refresh_external_source_labels()
+        with (
+            patch("gametool.gui_lifecycle.probe_game_data_path", return_value=probe),
+            patch("gametool.gui_lifecycle.open_game_data_source", return_value=source),
+        ):
+            self.app._refresh_external_source_labels()
 
         # Then: the full-root browser command is available.
         self.assertEqual(
@@ -75,13 +75,15 @@ class CascBrowserEntryTest(GuiTestCase):
         source = _InventorySource()
 
         # When: source controls refresh after selection.
-        with patch("gametool.gui_lifecycle.probe_game_data_path", return_value=probe):
-            with patch(
+        with (
+            patch("gametool.gui_lifecycle.probe_game_data_path", return_value=probe),
+            patch(
                 "gametool.gui_lifecycle.open_game_data_source",
                 return_value=source,
                 create=True,
-            ):
-                self.app._refresh_external_source_labels()
+            ),
+        ):
+            self.app._refresh_external_source_labels()
 
         # Then: capability, not native backend identity, enables browsing.
         self.assertEqual(
@@ -97,26 +99,26 @@ class CascBrowserEntryTest(GuiTestCase):
         shown: list[_InventorySource] = []
 
         # When: the browser action opens in its worker.
-        with patch(
-            "gametool.gui_casc_browser.open_game_data_source",
-            return_value=source,
-            create=True,
-        ):
-            with patch(
+        with (
+            patch(
+                "gametool.gui_casc_browser.open_game_data_source",
+                return_value=source,
+                create=True,
+            ),
+            patch(
                 "gametool.gui_casc_browser.CascLibDataSource",
                 side_effect=AssertionError("native constructor bypass"),
                 create=True,
-            ):
-                with patch.object(
-                    self.app,
-                    "_gui_workers",
-                    GuiWorkerRegistry(thread_factory=InlineGuiThread),
-                ):
-                    with patch.object(
-                        self.app, "_show_casc_browser", side_effect=shown.append
-                    ):
-                        self.app.on_browse_game_data()
-                        self.pump_events_until(lambda: bool(shown))
+            ),
+            patch.object(
+                self.app,
+                "_gui_workers",
+                GuiWorkerRegistry(thread_factory=InlineGuiThread),
+            ),
+            patch.object(self.app, "_show_casc_browser", side_effect=shown.append),
+        ):
+            self.app.on_browse_game_data()
+            self.pump_events_until(lambda: bool(shown))
 
         # Then: the common source reaches the browser unchanged.
         self.assertEqual(shown, [source])

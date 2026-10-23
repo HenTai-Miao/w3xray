@@ -108,6 +108,8 @@ def test_author_bundle_normalizes_to_verified_supplemental_file(tmp_path: Path) 
 
 def test_supplemental_error_survives_generator_context_unwind() -> None:
     # Given / When / Then: contextlib may attach traceback state to the exception.
-    with pytest.raises(SupplementalEvidenceError, match="original reason"):
-        with _exception_tunnel():
-            raise SupplementalEvidenceError("original reason")
+    with (
+        pytest.raises(SupplementalEvidenceError, match="original reason"),
+        _exception_tunnel(),
+    ):
+        raise SupplementalEvidenceError("original reason")

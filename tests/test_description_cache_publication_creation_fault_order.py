@@ -122,20 +122,22 @@ def test_creation_failure_matrix_preserves_exact_fault_order(
             assert_never(unreachable)
 
     # When: creation normalization reaches the selected later boundary.
-    with open_parent(tmp_path) as descriptor:
-        with pytest.raises(PublicationCommitContextError) as raised:
-            normalization.raise_normalized_stage_creation_failure(
-                descriptor,
-                stage,
-                output,
-                parent_identity,
-                stage_identity,
-                stage_identity,
-                names,
-                rename_in_parent,
-                os.fsync,
-                initiating,
-            )
+    with (
+        open_parent(tmp_path) as descriptor,
+        pytest.raises(PublicationCommitContextError) as raised,
+    ):
+        normalization.raise_normalized_stage_creation_failure(
+            descriptor,
+            stage,
+            output,
+            parent_identity,
+            stage_identity,
+            stage_identity,
+            names,
+            rename_in_parent,
+            os.fsync,
+            initiating,
+        )
 
     # Then: every exact object appears once in operation order.
     match sequence:

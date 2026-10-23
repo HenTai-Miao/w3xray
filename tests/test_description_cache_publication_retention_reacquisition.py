@@ -50,17 +50,19 @@ def test_installed_target_reacquisition_keeps_move_fault_after_recovery_success(
             raise move_fault
 
     # When: postcondition proof normalizes the reacquired source to recovery.
-    with open_parent(tmp_path) as descriptor:
-        with pytest.raises(RetainedObjectInstalledContextError) as raised:
-            _ = retain_object(
-                descriptor,
-                _identity(tmp_path),
-                source,
-                expected,
-                names,
-                RetainedCacheRole.PREVIOUS,
-                move_reacquire_then_raise,
-            )
+    with (
+        open_parent(tmp_path) as descriptor,
+        pytest.raises(RetainedObjectInstalledContextError) as raised,
+    ):
+        _ = retain_object(
+            descriptor,
+            _identity(tmp_path),
+            source,
+            expected,
+            names,
+            RetainedCacheRole.PREVIOUS,
+            move_reacquire_then_raise,
+        )
 
     # Then: installed and recovery objects survive with only the move fault ledgered.
     assert len(reacquired) == 1
@@ -96,17 +98,19 @@ def test_installed_target_reacquisition_keeps_move_and_recovery_faults(
         raise recovery_fault
 
     # When: installed-target handling cannot normalize the reacquired source.
-    with open_parent(tmp_path) as descriptor:
-        with pytest.raises(RetainedObjectInstalledContextError) as raised:
-            _ = retain_object(
-                descriptor,
-                _identity(tmp_path),
-                source,
-                expected,
-                names,
-                RetainedCacheRole.PREVIOUS,
-                fail_both_moves,
-            )
+    with (
+        open_parent(tmp_path) as descriptor,
+        pytest.raises(RetainedObjectInstalledContextError) as raised,
+    ):
+        _ = retain_object(
+            descriptor,
+            _identity(tmp_path),
+            source,
+            expected,
+            names,
+            RetainedCacheRole.PREVIOUS,
+            fail_both_moves,
+        )
 
     # Then: both exact faults remain ordered and both typed causes stay reachable.
     assert_failure_order(raised.value, (move_fault, recovery_fault))
@@ -137,17 +141,19 @@ def test_completed_intended_move_file_exists_fault_forbids_rollback(
         raise move_fault
 
     # When: postcondition proof sees the exact intended target and absent source.
-    with open_parent(tmp_path) as descriptor:
-        with pytest.raises(RetainedObjectInstalledContextError) as raised:
-            _ = retain_object(
-                descriptor,
-                _identity(tmp_path),
-                source,
-                expected,
-                names,
-                RetainedCacheRole.FAILED_STAGE,
-                install_then_raise,
-            )
+    with (
+        open_parent(tmp_path) as descriptor,
+        pytest.raises(RetainedObjectInstalledContextError) as raised,
+    ):
+        _ = retain_object(
+            descriptor,
+            _identity(tmp_path),
+            source,
+            expected,
+            names,
+            RetainedCacheRole.FAILED_STAGE,
+            install_then_raise,
+        )
 
     # Then: the installed subtype binds the exact target and exposes no rollback record.
     assert raised.value.installed.role is RetainedCacheRole.FAILED_STAGE

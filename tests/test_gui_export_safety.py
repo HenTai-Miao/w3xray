@@ -24,23 +24,23 @@ class GuiExportSafetyTest(GuiTestCase):
         }
         self.app.map_data = md
 
-        with patch(
-            "gametool.gui_export_actions.tmp_extract_dir", return_value=str(output)
-        ):
-            with patch.object(
+        with (
+            patch(
+                "gametool.gui_export_actions.tmp_extract_dir", return_value=str(output)
+            ),
+            patch.object(
                 self.app,
                 "_gui_workers",
                 GuiWorkerRegistry(thread_factory=InlineGuiThread),
-            ):
-                with patch(
-                    "gametool.gui_export_actions.write_script_exports",
-                    side_effect=OSError(errno.EACCES, "denied", str(secret)),
-                ):
-                    with patch(
-                        "gametool.gui_export_actions.messagebox.showerror"
-                    ) as show_error:
-                        self.app.on_export_scripts()
-                        self.pump_events_until(lambda: show_error.called)
+            ),
+            patch(
+                "gametool.gui_export_actions.write_script_exports",
+                side_effect=OSError(errno.EACCES, "denied", str(secret)),
+            ),
+            patch("gametool.gui_export_actions.messagebox.showerror") as show_error,
+        ):
+            self.app.on_export_scripts()
+            self.pump_events_until(lambda: show_error.called)
 
         message = show_error.call_args.args[1]
         self.assertIn("PermissionError", message)
@@ -59,19 +59,19 @@ class GuiExportSafetyTest(GuiTestCase):
         }
         self.app.map_data = md
 
-        with patch(
-            "gametool.gui_export_actions.tmp_extract_dir", return_value=str(output)
-        ):
-            with patch.object(
+        with (
+            patch(
+                "gametool.gui_export_actions.tmp_extract_dir", return_value=str(output)
+            ),
+            patch.object(
                 self.app,
                 "_gui_workers",
                 GuiWorkerRegistry(thread_factory=InlineGuiThread),
-            ):
-                with patch(
-                    "gametool.gui_export_actions.messagebox.showinfo"
-                ) as show_info:
-                    self.app.on_export_scripts()
-                    self.pump_events_until(lambda: show_info.called)
+            ),
+            patch("gametool.gui_export_actions.messagebox.showinfo") as show_info,
+        ):
+            self.app.on_export_scripts()
+            self.pump_events_until(lambda: show_info.called)
 
         self.assertEqual(outside.read_text(encoding="utf-8"), "before")
 
@@ -87,19 +87,19 @@ class GuiExportSafetyTest(GuiTestCase):
         }
         self.app.map_data = md
 
-        with patch(
-            "gametool.gui_export_actions.tmp_extract_dir", return_value=str(output)
-        ):
-            with patch.object(
+        with (
+            patch(
+                "gametool.gui_export_actions.tmp_extract_dir", return_value=str(output)
+            ),
+            patch.object(
                 self.app,
                 "_gui_workers",
                 GuiWorkerRegistry(thread_factory=InlineGuiThread),
-            ):
-                with patch(
-                    "gametool.gui_export_actions.messagebox.showinfo"
-                ) as show_info:
-                    self.app.on_export_ids()
-                    self.pump_events_until(lambda: show_info.called)
+            ),
+            patch("gametool.gui_export_actions.messagebox.showinfo") as show_info,
+        ):
+            self.app.on_export_ids()
+            self.pump_events_until(lambda: show_info.called)
 
         self.assertEqual(outside.read_text(encoding="utf-8"), "before")
 

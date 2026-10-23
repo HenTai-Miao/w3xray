@@ -78,9 +78,9 @@ def test_main_header_discovery_stops_at_scan_budget(tmp_path: Path) -> None:
             0,
             access=mmap.ACCESS_READ,
         ) as data,
+        pytest.raises(MPQLayoutError, match="没找到 MPQ 头"),
     ):
-        with pytest.raises(MPQLayoutError, match="没找到 MPQ 头"):
-            locate_mpq_layout(data)
+        locate_mpq_layout(data)
 
 
 def test_hash_table_entry_budget_rejects_sparse_archive(tmp_path: Path) -> None:
@@ -98,9 +98,9 @@ def test_hash_table_entry_budget_rejects_sparse_archive(tmp_path: Path) -> None:
             0,
             access=mmap.ACCESS_READ,
         ) as data,
+        pytest.raises(MPQLayoutError, match="hash 表过大"),
     ):
-        with pytest.raises(MPQLayoutError, match="hash 表过大"):
-            locate_mpq_layout(data)
+        locate_mpq_layout(data)
 
 
 def test_block_table_entry_budget_rejects_sparse_archive(tmp_path: Path) -> None:
@@ -118,9 +118,9 @@ def test_block_table_entry_budget_rejects_sparse_archive(tmp_path: Path) -> None
             0,
             access=mmap.ACCESS_READ,
         ) as data,
+        pytest.raises(MPQLayoutError, match="block 表过大"),
     ):
-        with pytest.raises(MPQLayoutError, match="block 表过大"):
-            locate_mpq_layout(data)
+        locate_mpq_layout(data)
 
 
 class TestMpqHeader(unittest.TestCase):

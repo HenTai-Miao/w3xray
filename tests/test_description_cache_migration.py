@@ -256,6 +256,8 @@ def test_migration_error_propagates_through_context_manager() -> None:
         yield
 
     # When / Then: the typed migration error propagates without being masked.
-    with pytest.raises(DescriptionCacheMigrationError, match="fixture failure"):
-        with boundary():
-            raise DescriptionCacheMigrationError("fixture failure")
+    with (
+        pytest.raises(DescriptionCacheMigrationError, match="fixture failure"),
+        boundary(),
+    ):
+        raise DescriptionCacheMigrationError("fixture failure")

@@ -101,17 +101,19 @@ def test_raw_retention_named_read_matrix(
 
     monkeypatch.setattr(named_leaf, "object_identity", inject_fault)
 
-    with open_parent(tmp_path) as descriptor:
-        with pytest.raises(PublicationCommitContextError) as raised:
-            _ = retain_object(
-                descriptor,
-                parent_identity,
-                source,
-                expected,
-                names,
-                RetainedCacheRole.PREVIOUS,
-                rename_in_parent,
-            )
+    with (
+        open_parent(tmp_path) as descriptor,
+        pytest.raises(PublicationCommitContextError) as raised,
+    ):
+        _ = retain_object(
+            descriptor,
+            parent_identity,
+            source,
+            expected,
+            names,
+            RetainedCacheRole.PREVIOUS,
+            rename_in_parent,
+        )
 
     expected_transient = (
         (PublicationTransientRecord(tmp_path, probed.name, parent_identity, None),)

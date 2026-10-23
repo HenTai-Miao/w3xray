@@ -20,6 +20,8 @@ def test_load_names_pack_tsv_overrides_fallback(tmp_path):
     tsv_dir = tmp_path / "对象ID"
     tsv_dir.mkdir()
     row = "x\tHpal\tx\tx\t圣骑士定制名\tx"
-    (tsv_dir / "单位.tsv").write_text("c\tcode\tc2\tn\tname\tr\n" + row, encoding="utf-8")
+    (tsv_dir / "单位.tsv").write_text(
+        "c\tcode\tc2\tn\tname\tr\n" + row, encoding="utf-8"
+    )
     units = load_names(str(tmp_path), "单位")
     assert units.get(b"Hpal") == "圣骑士定制名"

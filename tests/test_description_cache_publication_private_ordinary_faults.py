@@ -99,16 +99,18 @@ def test_private_ordinary_fault_keeps_failed_leaf_and_attempts_other_name(
             assert_never(unreachable)
 
     # When: aggregate finalization isolates the first attempt from the second.
-    with bound_stage(stage) as bound:
-        with pytest.raises(PublicationCommitContextError) as raised:
-            _ = finalization.finalize_private_artifacts(
-                bound,
-                backup,
-                output,
-                names,
-                rename_in_parent,
-                os.fsync,
-            )
+    with (
+        bound_stage(stage) as bound,
+        pytest.raises(PublicationCommitContextError) as raised,
+    ):
+        _ = finalization.finalize_private_artifacts(
+            bound,
+            backup,
+            output,
+            names,
+            rename_in_parent,
+            os.fsync,
+        )
 
     # Then: both names were attempted and the exact ordinary object is reachable once.
     assert attempts == ["backup", "stage"]

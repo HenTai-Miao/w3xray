@@ -110,13 +110,14 @@ class ExternalListfileGuiTest(GuiTestCase):
             handle.write("hidden/config.json\n")
             path = handle.name
         try:
-            with patch(
-                "gametool.gui_lifecycle.filedialog.askopenfilename", return_value=path
+            with (
+                patch(
+                    "gametool.gui_lifecycle.filedialog.askopenfilename",
+                    return_value=path,
+                ),
+                patch.object(self.app, "_start_path_load", side_effect=calls.append),
             ):
-                with patch.object(
-                    self.app, "_start_path_load", side_effect=calls.append
-                ):
-                    self.app.on_pick_external_listfile()
+                self.app.on_pick_external_listfile()
         finally:
             os.remove(path)
 
@@ -166,23 +167,26 @@ class ExternalListfileGuiTest(GuiTestCase):
             completions: list[tuple[str, int, str]] = []
 
             # When: the user clicks export all.
-            with patch(
-                "gametool.gui_export_actions.export_all_files", side_effect=fake_export
-            ):
-                with patch.object(
+            with (
+                patch(
+                    "gametool.gui_export_actions.export_all_files",
+                    side_effect=fake_export,
+                ),
+                patch.object(
                     self.app,
                     "_open_dir",
                     side_effect=lambda path, count, kind: completions.append(
                         (path, count, kind)
                     ),
-                ):
-                    with patch.object(
-                        self.app,
-                        "_gui_workers",
-                        GuiWorkerRegistry(thread_factory=InlineGuiThread),
-                    ):
-                        self.app.on_export_all()
-                        self.pump_events_until(lambda: bool(completions))
+                ),
+                patch.object(
+                    self.app,
+                    "_gui_workers",
+                    GuiWorkerRegistry(thread_factory=InlineGuiThread),
+                ),
+            ):
+                self.app.on_export_all()
+                self.pump_events_until(lambda: bool(completions))
 
             # Then: the worker receives the selected listfile path.
             self.assertEqual(calls, [("map.w3x", listfile_path)])
@@ -218,34 +222,36 @@ class ExternalListfileGuiTest(GuiTestCase):
                 source_calls.append((md, external_listfile_path))
                 return out
 
-            with patch(
-                "gametool.gui_export_actions.export_loaded_map_files",
-                side_effect=fake_source_export,
-            ):
-                with patch(
+            with (
+                patch(
+                    "gametool.gui_export_actions.export_loaded_map_files",
+                    side_effect=fake_source_export,
+                ),
+                patch(
                     "gametool.gui_export_actions.export_all_files",
                     side_effect=lambda path, **_kwargs: path_calls.append(path) or out,
-                ):
-                    with patch.object(
-                        self.app,
-                        "_open_dir",
-                        side_effect=lambda path, count, kind: completions.append(
-                            (path, count, kind)
-                        ),
-                    ):
-                        with patch(
-                            "gametool.gui_export_actions.messagebox.showerror",
-                            side_effect=lambda _title, message: errors.append(message),
-                        ):
-                            with patch.object(
-                                self.app,
-                                "_gui_workers",
-                                GuiWorkerRegistry(thread_factory=InlineGuiThread),
-                            ):
-                                self.app.on_export_all()
-                                self.pump_events_until(
-                                    lambda: bool(completions) or bool(errors),
-                                )
+                ),
+                patch.object(
+                    self.app,
+                    "_open_dir",
+                    side_effect=lambda path, count, kind: completions.append(
+                        (path, count, kind)
+                    ),
+                ),
+                patch(
+                    "gametool.gui_export_actions.messagebox.showerror",
+                    side_effect=lambda _title, message: errors.append(message),
+                ),
+                patch.object(
+                    self.app,
+                    "_gui_workers",
+                    GuiWorkerRegistry(thread_factory=InlineGuiThread),
+                ),
+            ):
+                self.app.on_export_all()
+                self.pump_events_until(
+                    lambda: bool(completions) or bool(errors),
+                )
 
         # Then: the child source and listfile reach the worker; the parent path is unused.
         self.assertEqual(source_calls, [(child, "/tmp/child-listfile.txt")])

@@ -64,17 +64,19 @@ def test_rollback_candidate_named_read_matrix(
     fault = fault_type("injected rollback candidate read")
     _inject_fault(monkeypatch, candidate.name, fault)
 
-    with open_parent(tmp_path) as descriptor:
-        with pytest.raises(PublicationCommitContextError) as raised:
-            _ = select_live_identity_path(
-                descriptor,
-                tmp_path,
-                parent_identity,
-                (candidate,),
-                (7, 8),
-                (),
-                (),
-            )
+    with (
+        open_parent(tmp_path) as descriptor,
+        pytest.raises(PublicationCommitContextError) as raised,
+    ):
+        _ = select_live_identity_path(
+            descriptor,
+            tmp_path,
+            parent_identity,
+            (candidate,),
+            (7, 8),
+            (),
+            (),
+        )
 
     expected_transient = (
         (PublicationTransientRecord(tmp_path, candidate.name, parent_identity, None),)
@@ -114,21 +116,23 @@ def test_recovery_candidate_named_read_matrix(
         return
 
     if records_failure:
-        with open_parent(tmp_path) as descriptor:
-            with pytest.raises(PublicationCommitContextError) as raised:
-                _ = normalize_recovery_failure(
-                    descriptor,
-                    tmp_path,
-                    parent_identity,
-                    (candidate,),
-                    (9, 10),
-                    (),
-                    (),
-                    (),
-                    names,
-                    reject_retain,
-                    sync_parent,
-                )
+        with (
+            open_parent(tmp_path) as descriptor,
+            pytest.raises(PublicationCommitContextError) as raised,
+        ):
+            _ = normalize_recovery_failure(
+                descriptor,
+                tmp_path,
+                parent_identity,
+                (candidate,),
+                (9, 10),
+                (),
+                (),
+                (),
+                names,
+                reject_retain,
+                sync_parent,
+            )
         assert raised.value.retained == ()
         assert raised.value.transient == (
             PublicationTransientRecord(tmp_path, candidate.name, parent_identity, None),

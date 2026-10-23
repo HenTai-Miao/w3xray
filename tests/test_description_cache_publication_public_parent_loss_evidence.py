@@ -80,17 +80,19 @@ def test_result_boundary_parent_loss_reports_active_and_retained_as_transient(
     monkeypatch.setattr(publication_evidence, "require_parent_identity", lose_parent)
 
     # When: the success boundary re-proves caller-addressable evidence.
-    with open_parent(parent) as descriptor:
-        with pytest.raises(PublicationCommitContextError) as raised:
-            _ = require_live_result_evidence(
-                descriptor,
-                parent,
-                _identity(displaced if displaced.exists() else parent),
-                active,
-                _identity(active),
-                proof,
-                (parent / "stage", parent / "backup"),
-            )
+    with (
+        open_parent(parent) as descriptor,
+        pytest.raises(PublicationCommitContextError) as raised,
+    ):
+        _ = require_live_result_evidence(
+            descriptor,
+            parent,
+            _identity(displaced if displaced.exists() else parent),
+            active,
+            _identity(active),
+            proof,
+            (parent / "stage", parent / "backup"),
+        )
 
     # Then: no unaddressable retained path escapes; active is descriptor-proved.
     assert raised.value is parent_error
