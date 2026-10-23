@@ -11,6 +11,7 @@ _BUTTONS = (
     "current_map_button",
     "profile_settings_button",
     "pack_query_button",
+    "live_probe_button",
     "minimap_button",
     "guide_button",
     "data_tools_button",
@@ -39,4 +40,4 @@ def test_seven_buttons_have_tooltips() -> None:
 def test_no_duplicate_tooltips() -> None:
     calls = _calls()
     assert len(calls) == len(set(calls)), f"重复 tooltip: {calls}"
-    assert len(calls) == 7
+    assert len(calls) == 8  # 包查询 + live 探针

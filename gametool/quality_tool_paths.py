@@ -241,6 +241,7 @@ gametool/gui_load_settings.py
 gametool/gui_loader.py
 gametool/gui_loader_host.py
 gametool/gui_loader_runner.py
+gametool/gui_live_probe.py
 gametool/gui_module_refresh.py
 gametool/gui_object_detail.py
 gametool/gui_object_filter_runner.py

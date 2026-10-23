@@ -22,6 +22,7 @@ from .theme import (
 )
 
 
+from .gui_live_probe import open_live_probe_dialog
 from .gui_pack_query import open_pack_query_dialog
 from .gui_export_actions import load_last_pack_dir
 from .gui_profile_settings import open_extraction_profile_dialog  # 提取开关设置对话框
@@ -163,6 +164,23 @@ def build_topbar(app) -> None:
         "九模式查询: doc/search/list/buffs/export/synth/skills/units/locate (Ctrl+1..9)",
     )
     app.pack_query_button.pack(side="left", padx=(0, 4))
+    app.live_probe_button = ctk.CTkButton(
+        source_tools,
+        text="live 探针",
+        width=68,
+        height=26,
+        font=(FONT, 11),
+        command=lambda: open_live_probe_dialog(
+            app,
+            getattr(app, "_last_pack_dir", None) or load_last_pack_dir(),
+        ),
+        **secondary_button_style(),
+    )
+    _attach_tooltip(
+        app.live_probe_button,
+        "只读内存探针: 选中单位背包/在场单位/资源 (游戏运行中可用; JSON 自动复制)",
+    )
+    app.live_probe_button.pack(side="left", padx=(0, 4))
     app.minimap_button = ctk.CTkButton(
         source_tools,
         text="小地图",
