@@ -253,7 +253,4 @@ def _looks_like_native_casc(path: str) -> bool:
 
 
 def _has_any_file(path: str) -> bool:
-    for _dirpath, _dirs, files in os.walk(path):
-        if files:
-            return True
-    return False
+    return any(files for _dirpath, _dirs, files in os.walk(path))

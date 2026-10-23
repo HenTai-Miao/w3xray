@@ -1379,9 +1379,7 @@ def derive_offsets(
     _enter("candidates")
     hm_candidates: list[tuple[int, int]] = []
     seen_managers: set[int] = set()
-    _tick = 0
-    for addr, value in _iter_dwords(reader, dll_base, hi):
-        _tick += 1
+    for _tick, (addr, value) in enumerate(_iter_dwords(reader, dll_base, hi), start=1):
         if not _tick & 0xFFFF and budget is not None and not budget.check():
             return None
         if (

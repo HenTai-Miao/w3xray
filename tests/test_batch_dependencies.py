@@ -58,7 +58,7 @@ def test_batch_extraction_revision_is_six() -> None:
     expected_revision = 6
 
     # When / Then: older extraction revisions cannot be silently reused.
-    assert batch_dependencies.BATCH_EXTRACTION_REVISION == expected_revision
+    assert expected_revision == batch_dependencies.BATCH_EXTRACTION_REVISION
 
 
 def test_classic_dependency_changes_with_archive_identity(tmp_path: Path) -> None:

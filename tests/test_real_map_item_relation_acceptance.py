@@ -135,7 +135,7 @@ def test_current_batch_covers_all_sources_and_required_artifacts(
     assert source_paths == published_paths
     assert set(context.old_by_digest) == set(context.new_by_digest)
     for output in context.new_by_digest.values():
-        assert _REQUIRED_ARTIFACTS <= {path.name for path in output.iterdir()}
+        assert {path.name for path in output.iterdir()} >= _REQUIRED_ARTIFACTS
 
 
 def test_every_old_non_placeholder_raw_text_remains_current_evidence(
@@ -163,8 +163,8 @@ def test_relation_rows_keep_stable_evidence_and_explicit_unresolved_state(
     for output in acceptance_context.new_by_digest.values():
         acquisition = read_tsv(output / "掉落与获取关系.tsv")
         skills = read_tsv(output / "装备技能关系.tsv")
-        assert _ACQUISITION_REQUIRED <= set(acquisition.header)
-        assert _SKILL_REQUIRED <= set(skills.header)
+        assert set(acquisition.header) >= _ACQUISITION_REQUIRED
+        assert set(skills.header) >= _SKILL_REQUIRED
 
         # When/Then: each relation retains stable identity and static provenance.
         _assert_relation_rows(acquisition, "证据文件")

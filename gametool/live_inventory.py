@@ -321,9 +321,10 @@ def enum_modules(h):
     """
     psapi = ctypes.WinDLL("psapi")
     needed = wt.DWORD()
-    if not psapi.EnumProcessModulesEx(h, None, 0, ctypes.byref(needed), 0x03):
-        if not psapi.EnumProcessModules(h, None, 0, ctypes.byref(needed)):
-            return []
+    if not psapi.EnumProcessModulesEx(
+        h, None, 0, ctypes.byref(needed), 0x03
+    ) and not psapi.EnumProcessModules(h, None, 0, ctypes.byref(needed)):
+        return []
     arr_t = ctypes.c_void_p * (needed.value // ctypes.sizeof(ctypes.c_void_p) or 1)
     arr = arr_t()
     ok = psapi.EnumProcessModulesEx(

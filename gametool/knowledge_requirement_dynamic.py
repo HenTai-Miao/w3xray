@@ -150,9 +150,7 @@ def evaluate_requirement_rows(
         available = request_available(row.request, facts)
         if row.request == "核对提取是否完整":
             status = completeness_status(facts)
-        elif row.request == "提取完整对象说明" and facts.text_partial:
-            status = "部分覆盖"
-        elif row.request == "分析装备掉落与获取" and (
+        elif row.request == "提取完整对象说明" and facts.text_partial or row.request == "分析装备掉落与获取" and (
             facts.relation_partial or facts.text_partial
         ):
             status = "部分覆盖"

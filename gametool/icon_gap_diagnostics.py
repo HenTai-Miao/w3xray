@@ -62,9 +62,10 @@ def unresolved_icon_evidence(
         reasons.add(IconGapReason.ANONYMOUS_PAYLOAD_UNBOUND)
     if history.available:
         reasons.add(IconGapReason.HISTORICAL_CLIENT_MISS)
-    if game_source is None or isinstance(game_source, TrustedIconEvidenceSource):
-        if not history.available:
-            reasons.add(IconGapReason.CLIENT_SOURCE_UNAVAILABLE)
+    if (
+        game_source is None or isinstance(game_source, TrustedIconEvidenceSource)
+    ) and not history.available:
+        reasons.add(IconGapReason.CLIENT_SOURCE_UNAVAILABLE)
     reason = next(item for item in _GAP_REASON_PRIORITY if item in reasons)
     return UnresolvedIconEvidence(
         reference,  # pyright: ignore[reportArgumentType]
