@@ -474,7 +474,11 @@ def load_names(pack_dir, kind="物品"):
     nm = {}
     p = os.path.join(pack_dir, "对象ID", f"{kind}.tsv")
     if os.path.exists(p):
-        for line in open(p, encoding="utf-8").read().splitlines()[1:]:
+        try:
+            text = open(p, encoding="utf-8", errors="replace").read()
+        except OSError:
+            text = ""  # 包 TSV 被系统层锁死 (杀软扫描): 软失败退 BASE_NAMES_EN 兜底
+        for line in text.splitlines()[1:]:
             c = line.split("\t")
             if len(c) > 4 and len(c[1]) == 4:
                 nm[c[1].encode()] = clean(c[4])
@@ -499,7 +503,11 @@ def load_names(pack_dir, kind="物品"):
 def _icon_paths_from_pack(pack_dir):
     paths = {}
     p2 = os.path.join(pack_dir, "对象字段.tsv")
-    for line in open(p2, encoding="utf-8", errors="replace"):
+    try:
+        lines = open(p2, encoding="utf-8", errors="replace").readlines()
+    except OSError:
+        return paths  # 包表锁死: 软失败 (图标缺失不致命)
+    for line in lines:
         c = line.rstrip("\n").split("\t")
         if (
             len(c) >= 6
