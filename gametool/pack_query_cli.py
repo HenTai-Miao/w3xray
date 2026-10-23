@@ -31,7 +31,7 @@ import math
 import re
 import sys
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .cli_output import configure_cli_output
@@ -569,6 +569,7 @@ class PackQueryCliOptions:
     limit: int = 0  # 0 = 不限量 (满量输出); --limit N 显式缩减
     pack_dir_b: str = ""  # diff 子命令的第二个包
     as_json: bool = False  # --json: stdout 改输出 {"lines": [...]} 供脚本解析
+    near_kind: str = ""  # near 的 --kind 过滤: 单位/装饰/物品/脚本 (空=全部)
 
 
 @dataclass(frozen=True, slots=True)
@@ -601,6 +602,13 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
     as_json = "--json" in rest
     if as_json:
         rest = [x for x in rest if x != "--json"]
+    near_kind = ""
+    if "--kind" in rest:
+        i = rest.index("--kind")
+        if i + 1 >= len(rest):
+            raise PackQueryCliOptionError("--kind 需要一个值: 单位/装饰/物品/脚本")
+        near_kind = rest[i + 1]
+        rest = rest[:i] + rest[i + 2 :]
     against = ""
     if "--against" in rest:
         i = rest.index("--against")
@@ -669,6 +677,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         limit=limit,
         pack_dir_b=against,
         as_json=as_json,
+        near_kind=near_kind,
     )
 
 
@@ -2369,6 +2378,12 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
 
     表头驱动解析预放置表列位；Rect 负号带空格(- 5184.0)统一归一；装饰物聚类报告。"""
     parts = query.split()
+    kind_filter = ""
+    if "--kind" in parts:
+        ki = parts.index("--kind")
+        if ki + 1 < len(parts):
+            kind_filter = parts[ki + 1]
+        parts = parts[:ki] + parts[ki + 2 :]
     if len(parts) not in (2, 3):
         return [
             "用法: near <x> <y> [radius=3000]",
@@ -2387,7 +2402,11 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
     def dist(x: float, y: float) -> float:
         return math.hypot(x - px, y - py)
 
+    if kind_filter and kind_filter not in ("单位", "装饰", "物品", "脚本"):
+        return [f"未知 --kind {kind_filter} (可选: 单位/装饰/物品/脚本; 缺省=全部)"]
     for rel, kind in (("预放置单位.tsv", "单位"), ("预放置装饰物.tsv", "装饰")):
+        if kind_filter and kind != kind_filter:
+            continue  # --kind 过滤: 只看指定类
         rows = _read_rows(pack, rel)
         if kind == "单位" and rows:
             # 脚本 CreateUnit 放置 (yuekong 全部商店即此法) 合入坐标反查
@@ -2464,6 +2483,8 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
             for d, label in nearest:  # 半径外最近全部列出
                 lines.append(f"  (半径外最近{kind}: {label} 距{d:.0f})")
 
+    if kind_filter in ("单位", "装饰") and len(lines) > 1:
+        return lines  # --kind 过滤: 只要预放置段且非空
     script_items = [
         (code, x, y)
         for code, x, y, kind in load_placements(pack)
@@ -2497,7 +2518,14 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
             name = load_units(pack).get(code, code)
             drop = f"  掉: {drop_map[code]}" if code in drop_map else ""
             lines.append(f"  脚本单位: {name} [{code}] @({x:g},{y:g}) 距{d:.0f}{drop}")
-    if not lines:
+    if kind_filter and len(lines) == 1:
+        return [
+            f"坐标 ({px:g},{py:g}) 半径 {radius:g} 内无 {kind_filter} 类命中。",
+            "  （可去掉 --kind 看全部类; 或加大半径: near <x> <y> 20000 --kind "
+            + kind_filter
+            + "）",
+        ]
+    if not lines or len(lines) == 1:
         return [
             f"坐标 ({px:g},{py:g}) 半径 {radius:g} 内无预放置/脚本内容。",
             "  （多半在可玩区域外——核对坐标; 或加大半径: near <x> <y> 20000）",
@@ -3386,6 +3414,9 @@ def _run_query_inner(options: PackQueryCliOptions) -> int:
     战役容器包 (子地图/*/) 自动逐关查询并以「== 子地图 名 ==」分段——
     容器 guide 只有容器级信息, 逐关数据都在子地图包里 (旧版直接答未找到)。"""
     configure_cli_output()
+    if options.command == "near" and options.near_kind:
+        # --kind 编入 query 串 (内部协议), _query_near 解析后摘除
+        options = replace(options, query=options.query + " --kind " + options.near_kind)
     pack = Path(options.pack_dir)
     if not pack.is_dir():
         print("资料包目录不存在: " + options.pack_dir, file=sys.stderr)
