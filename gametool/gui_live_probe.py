@@ -81,6 +81,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
             font=("Microsoft YaHei UI", 10),
         )
         self._unit_entry.pack(side="left", padx=(0, 8))
+        self._unit_entry.insert(0, self._load_last_unit_query())
         self._var_players = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
             bar,
@@ -162,6 +163,31 @@ class LiveProbeWindow(ctk.CTkToplevel):
 
         self.after(120, self._start)
 
+    def _last_unit_query_file(self) -> pathlib.Path:
+        from .gui_pack_query import _memo_dir  # noqa: PLC0415
+
+        return pathlib.Path(_memo_dir()) / "live-probe-unit.txt"
+
+    def _load_last_unit_query(self) -> str:
+        try:
+            return (
+                pathlib.Path(self._last_unit_query_file())
+                .read_text(encoding="utf-8")
+                .strip()
+            )
+        except OSError:
+            return ""
+
+    def _save_last_unit_query(self, query: str | None) -> None:
+        if not query:
+            return
+        try:
+            pathlib.Path(self._last_unit_query_file()).write_text(
+                query, encoding="utf-8"
+            )
+        except OSError:
+            pass  # fail-open: 记忆失败不影响探针
+
     def _last_map_path_file(self) -> pathlib.Path:
         from .gui_pack_query import _memo_dir  # noqa: PLC0415
 
@@ -200,7 +226,8 @@ class LiveProbeWindow(ctk.CTkToplevel):
         want_all = self._var_all_units.get()
         want_resources = self._var_resources.get()
         map_path = self._map_entry.get().strip() or None
-        unit_query = self._unit_entry.get().strip() or None  # 注意: 上一行缩进已同块
+        unit_query = self._unit_entry.get().strip() or None
+        self._save_last_unit_query(unit_query)  # 注意: 上一行缩进已同块
         self._save_last_map_path(map_path)
         done: list[str] = []
 
