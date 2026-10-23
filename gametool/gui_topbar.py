@@ -580,8 +580,16 @@ def _show_hotkeys(app) -> None:
     win.bind("<Escape>", lambda _e: win.destroy())
     rows = (
         (
-            "Ctrl+1..9",
-            "直切 doc/search/list/buffs/export/synth/skills/units/locate 模式",
+            "Ctrl+1..9, Ctrl+0",
+            "直切 doc/search/list/buffs/export/synth/skills/units/locate/near 模式",
+        ),
+        (
+            "包查询勾选 JSON",
+            "输出 {section,lines} 单行 JSON 供脚本解析",
+        ),
+        (
+            "live 探针弹窗",
+            "只读读局: Ctrl+R 重探; 勾选玩家/全单位/资源; JSON 自动复制",
         ),
         ("回车", "执行当前模式查询 / 跳下一处搜索命中"),
         ("Ctrl+F", "聚焦内搜框 (结果找完续搜收藏框)"),

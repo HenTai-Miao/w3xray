@@ -245,6 +245,9 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
 - **局内定位反查**：`live` 输出尾部的探针 JSON 带当前坐标，复制进
   `pack-query <包> near <x> <y>` 即知脚下怪/商人/物品（自动附掉落与货架注解）——
   『我站在 这是哪、这怪掉什么』一条链路答完。
+  GUI 全程免终端：顶栏「live 探针」弹窗只读读取（可勾选玩家列表/全单位/资源对齐），
+  探针 JSON 自动复制，切到「包查询」near 模式点「从剪贴板提取坐标」即查；
+  结果里四码右键可直达 doc 全景。near 查询勾选「JSON 输出」可得结构化单行。
 - **解包**：把地图(MPQ 压缩包)内部文件全部解出；文件名发现采用**三层并集**((listfile) + 内置固定名单 + war3map.imp 导入清单)，GUI 也可选择外部 listfile 补充被删掉的文件名；无文件名的匿名 block 会逐块尝试恢复加密 key、按内容猜扩展名导出到 `Unknown/`，若从 MDX/脚本等内容反推出真实资源路径则按原路径补导出并写 `RecoveredNames/manifest.tsv`，极端损坏或无法解码的原始 payload 会保留到 `UnknownRaw/manifest.tsv`；提取完整性报告会标出疑似数据级加密/运行时解密保护，不做运行时内存 dump 或绕过。
 - **CASC 客户端浏览**：选择可读的 Windows 原生游戏数据后，「数据工具」可分页浏览整个 Root（每页 200 条）、按 mask 重扫并导出所选；CLI `casc inventory` 输出含路径类型、FileDataID、CKey、EKey、大小和本地可用状态的 TSV，`casc extract` 按任一稳定标识导出单文件。
 - **作者明文补充包**：`cli <地图> --author-bundle <目录>` 或 GUI「数据工具」接入。补充包必须包含 `gamexray-author-bundle.tsv`，首行是 `GAMEXRAY-AUTHOR-BUNDLE<TAB>1`，第二行绑定源地图 SHA256，后续每行绑定内部路径和文件 SHA256；文件放在包内 `files/`，路径穿越、重复名、哈希不符和容量超限都会拒绝。
