@@ -108,3 +108,19 @@ def test_main_help_gate(capsys):
         "casc",
     ):
         assert token in proc.stdout
+
+
+def test_main_unknown_subcommand_fails_fast(capsys):
+    """未知子命令不弹 GUI: stderr 指引 + 退出 2 (脚本打错字快速失败)。"""
+    import subprocess
+    import sys
+
+    proc = subprocess.run(
+        [sys.executable, "-X", "utf8", "main.py", "typo-command"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert proc.returncode == 2
+    assert "未知子命令" in proc.stderr
+    assert "--help" in proc.stderr

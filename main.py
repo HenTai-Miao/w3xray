@@ -145,6 +145,13 @@ def main() -> None:
             print(f"CLI 参数错误：{exc}", file=sys.stderr)
             raise SystemExit(2) from None
         raise SystemExit(run_cli(options))
+    # 未知子命令: 不静默弹 GUI (脚本打错字会挂死在窗口上) — 给指引后退出 2
+    if sys.argv[1:] and not sys.argv[1].startswith("-"):
+        print(
+            f"未知子命令: {sys.argv[1]} — 运行 main.py --help 查看全部模式",
+            file=sys.stderr,
+        )
+        raise SystemExit(2)
     from gametool.single_instance import ensure_single_instance
 
     ensure_single_instance()
