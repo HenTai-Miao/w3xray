@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import bisect
+import time
 import os
 import csv
 import math
@@ -79,15 +80,37 @@ def _clean(text: str) -> str:
 
 _ROWS_CACHE: dict[tuple[str, str], tuple[tuple[int, int, int], list[list[str]]]] = {}
 
+# 本进程内遇到的 OS 级锁死表 (杀软隔离/ACL 损坏): (pack_dir, rel) — 查询出口统一披露
+_LOCKED_FILES: set[tuple[str, str]] = set()
+
 
 def _read_rows(pack_dir: Path, rel: str) -> list[list[str]]:
     path = pack_dir / rel
     if not path.exists():
         return []
-    stat = path.stat()
+    # 瞬态锁 (杀软实时扫描扫到一半) 短重试消噪; 持续锁 (隔离/ACL 损坏) 才记入披露表
+    stat = None
+    for _attempt in range(3):
+        try:
+            stat = path.stat()
+            break
+        except OSError:
+            time.sleep(0.05)
+    if stat is None:
+        _LOCKED_FILES.add((str(pack_dir), rel))
+        return []
     # Windows mtime 粒度可能 ~15ms: 同秒内改写会让 (mtime,size) 不变 — 加内容指纹免疫
-    with path.open("rb") as handle:
-        fingerprint = (stat.st_mtime_ns, stat.st_size, hash(handle.read(4096)))
+    fingerprint = None
+    for _attempt in range(3):
+        try:
+            with path.open("rb") as handle:
+                fingerprint = (stat.st_mtime_ns, stat.st_size, hash(handle.read(4096)))
+            break
+        except OSError:
+            time.sleep(0.05)
+    if fingerprint is None:
+        _LOCKED_FILES.add((str(pack_dir), rel))
+        return []
     cache_key = (str(pack_dir), rel)
     cached = _ROWS_CACHE.get(cache_key)
     if cached is not None and cached[0] == fingerprint:
@@ -99,13 +122,19 @@ def _read_rows(pack_dir: Path, rel: str) -> list[list[str]]:
         csv.field_size_limit(sys.maxsize)
     except OverflowError:  # pragma: no cover - 32 位 Python 回退
         csv.field_size_limit(2**31 - 1)
-    try:
-        with path.open(encoding="utf-8", newline="") as f:
-            rows = list(csv.reader(f, delimiter="\t"))
-    finally:
-        csv.field_size_limit(previous_limit)
-    _ROWS_CACHE[cache_key] = (fingerprint, rows)
-    return rows
+    for _attempt in range(3):
+        try:
+            with path.open(encoding="utf-8", newline="") as f:
+                rows = list(csv.reader(f, delimiter="\t"))
+        except OSError:
+            time.sleep(0.05)
+        else:
+            csv.field_size_limit(previous_limit)
+            _ROWS_CACHE[cache_key] = (fingerprint, rows)
+            return rows
+    csv.field_size_limit(previous_limit)
+    _LOCKED_FILES.add((str(pack_dir), rel))
+    return []
 
 
 def load_items(pack_dir: Path) -> dict[str, tuple[str, str]]:
@@ -3230,7 +3259,14 @@ def run_pack_query_cli(options: PackQueryCliOptions) -> int:
     import time  # noqa: PLC0415
 
     started = time.perf_counter()
+    _LOCKED_FILES.clear()
     code = _run_query_inner(options)
+    for locked_pack, locked_rel in sorted(_LOCKED_FILES):
+        print(
+            f"[⚠ 数据文件被系统层锁死, 本次结果可能缺失: {locked_rel} — "
+            f"检查杀软隔离区/文件 ACL 后重导知识包: {locked_pack}]",
+            file=sys.stderr,
+        )
     elapsed_ms = (time.perf_counter() - started) * 1000
     if elapsed_ms > 500:
         print(f"[耗时 {elapsed_ms:.0f}ms — 同包再查走热缓存会快很多]", file=sys.stderr)
