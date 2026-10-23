@@ -74,6 +74,13 @@ class LiveProbeWindow(ctk.CTkToplevel):
         )
         self._map_entry.pack(side="left", padx=(0, 8))
         self._map_entry.insert(0, self._load_last_map_path())
+        self._unit_entry = ctk.CTkEntry(
+            bar,
+            placeholder_text="单位过滤 (名/四码, 可空)…",
+            width=170,
+            font=("Microsoft YaHei UI", 10),
+        )
+        self._unit_entry.pack(side="left", padx=(0, 8))
         self._var_players = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
             bar,
@@ -193,6 +200,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
         want_all = self._var_all_units.get()
         want_resources = self._var_resources.get()
         map_path = self._map_entry.get().strip() or None
+        unit_query = self._unit_entry.get().strip() or None  # 注意: 上一行缩进已同块
         self._save_last_map_path(map_path)
         done: list[str] = []
 
@@ -206,6 +214,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
             resources = ("reported", "reported") if want_resources else None
             options = LiveCliOptions(
                 map_path=map_path,
+                unit_query=unit_query,
                 pack_dir=pack_dir,
                 players=want_players,
                 all_units=want_all,
