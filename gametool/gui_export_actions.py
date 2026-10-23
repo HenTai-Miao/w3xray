@@ -64,22 +64,27 @@ def build_pack_export_presentation(
 
 class ExportActionsMixin:
     if TYPE_CHECKING:
+        import customtkinter as ctk
         from collections.abc import Callable
 
-        _campaign_path: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        external_listfile_path: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        game_data_path: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        map_data: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
-        status: object  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        from .map_data import MapData
+
+        _campaign_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        external_listfile_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        game_data_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        map_data: MapData | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        status: ctk.CTkLabel  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _last_pack_dir: str | None = None
         _post_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _start_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         update_idletasks: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
 
-    def _need_map(self):
+    def _need_map(self) -> "MapData | None":
+        """未开图弹提示并返回 None；已开图返回 md (调用方以 is None 判空)。"""
         if not self.map_data:
             messagebox.showinfo("提示", "请先打开一张地图")
-            return False
-        return True
+            return None
+        return self.map_data
 
     def _open_dir(self, out, n, kind):
         self.status.configure(text=f"已导出 {n} 个{kind}到临时目录 {out}")
@@ -105,9 +110,9 @@ class ExportActionsMixin:
         messagebox.showinfo(presentation.title, presentation.message)
 
     def on_export_all(self):
-        if not self._need_map():
+        md = self._need_map()
+        if md is None:
             return
-        md = self.map_data
         campaign_path = self._campaign_path
         path = campaign_path or md.path
         is_campaign_child = campaign_path is not None and md.path != campaign_path
@@ -145,9 +150,9 @@ class ExportActionsMixin:
         _ = self._start_gui_worker("export-all", work, replace=True)
 
     def on_export_scripts(self):
-        if not self._need_map():
+        md = self._need_map()
+        if md is None:
             return
-        md = self.map_data
         out = tmp_extract_dir(md.name, "脚本", clean=True)
         scripts = build_readable_script_exports(md)
         self.status.configure(text="正在导出脚本 …")
@@ -173,9 +178,9 @@ class ExportActionsMixin:
         _ = self._start_gui_worker("export-scripts", work, replace=True)
 
     def on_export_ids(self):
-        if not self._need_map():
+        md = self._need_map()
+        if md is None:
             return
-        md = self.map_data
         out = tmp_extract_dir(md.name, "ID列表", clean=True)
         objects = {c: list(v) for c, v in md.objects.items()}
         self.status.configure(text="正在导出ID列表 …")
@@ -206,12 +211,15 @@ class ExportActionsMixin:
         _ = self._start_gui_worker("export-ids", work, replace=True)
 
     def on_export_pack(self):
-        if not self._need_map():
+        md = self._need_map()
+        if md is None:
             return
         # 首次导出大图时物化是主要开销；默认吃满可用核（用户可显式覆盖）。
         os.environ.setdefault("GAMEXRAY_MATERIALIZE_WORKERS", str(os.cpu_count() or 1))
-        out = tmp_extract_dir(self.map_data.name, "资料包", clean=True)
-        md = self.map_data
+        out = tmp_extract_dir(md.name, "资料包", clean=True)
+        md = self._need_map()
+        if md is None:
+            return
         profile_summary = load_profile().summary()
         self.status.configure(text=f"正在整理地图资料包 …（{profile_summary}）")
 
