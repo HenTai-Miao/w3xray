@@ -10,7 +10,7 @@ from gametool import __version__
 
 
 _ROOT: Final = Path(__file__).resolve().parents[1]
-_RELEASE_VERSION: Final = "0.4.0"
+_RELEASE_VERSION: Final = "0.5.0"
 
 
 def test_release_version_matches_project_runtime_and_lockfile() -> None:
@@ -37,8 +37,8 @@ def test_readme_describes_windows_package_tradeoffs() -> None:
     release_section = readme.split("## 开发运行（uv）", maxsplit=1)[0]
 
     # When/Then: both formats and their operational tradeoffs are explicit.
-    assert "gamexray-v0.4.0-windows-x64.zip" in release_section
-    assert "gamexray-v0.4.0-windows-x64.exe" in release_section
+    assert "gamexray-v0.5.0-windows-x64.zip" in release_section
+    assert "gamexray-v0.5.0-windows-x64.exe" in release_section
     assert "功能相同" in release_section
     assert "启动更快" in release_section
     assert "更容易诊断" in release_section

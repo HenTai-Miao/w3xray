@@ -16,19 +16,19 @@ GUI触发器、场景放置、触发指令、合成配方、孤立对象、分�
 
 Windows x64 同时提供：
 
-- `gamexray-v0.4.0-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
-- `gamexray-v0.4.0-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
+- `gamexray-v0.5.0-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
+- `gamexray-v0.5.0-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
 
 两者功能相同；遇到杀软误报或启动问题时优先使用 ZIP 版。
 
 macOS 提供两个未签名、未公证的 onedir ZIP，请按 Mac 处理器选择并完整解压：
 
-- `gamexray-v0.4.0-macos-arm64.zip`：Apple Silicon（M1/M2/M3/M4/M5）。
-- `gamexray-v0.4.0-macos-x64.zip`：Intel Mac。
+- `gamexray-v0.5.0-macos-arm64.zip`：Apple Silicon（M1/M2/M3/M4/M5）。
+- `gamexray-v0.5.0-macos-x64.zip`：Intel Mac。
 
 Linux 提供：
 
-- `gamexray-v0.4.0-linux-x64.tar.gz`：Linux x86-64，解压后运行 `./GameXRay 游戏档案透视器/GameXRay 游戏档案透视器`。
+- `gamexray-v0.5.0-linux-x64.tar.gz`：Linux x86-64，解压后运行 `./GameXRay 游戏档案透视器/GameXRay 游戏档案透视器`。
 
 macOS/Linux 包支持地图与战役的静态提取；Windows 专用的 CascLib 游戏客户端原生后端不包含在这两类包中。macOS 首次运行可能出现 Gatekeeper 未验证开发者提示。
 
