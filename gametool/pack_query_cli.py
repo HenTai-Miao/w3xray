@@ -45,6 +45,7 @@ __all__ = (
 )
 
 _COMMANDS = (
+    "again",
     "item",
     "recipe",
     "where",
@@ -59,6 +60,7 @@ _COMMANDS = (
     "refs",
     "locate",
     "affixes",
+    "again",
     "registered",
     "search",
     "diff",
@@ -613,6 +615,8 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         command
         in (
             "affixes",
+            "again",
+            "again",
             "registered",
             "diff",
             "list",
@@ -646,6 +650,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         )
     if not query.strip() and command not in (
         "affixes",
+        "again",
         "registered",
         "diff",
         "list",
@@ -3232,6 +3237,65 @@ def _query_export(pack: Path, query: str, limit: int) -> list[str]:
     return [f"已导出: {out_path}"] + lines
 
 
+_LAST_QUERY_FILE = "pack-query-last.json"
+
+
+def _memo_dir() -> Path:
+    from .cache_root import gamexray_cache_root  # noqa: PLC0415
+
+    return gamexray_cache_root() / "gui-query-memo"
+
+
+def _load_last_query() -> dict[str, str] | None:
+    """GUI/CLI 共享的最近一次成功查询; 缺失/损坏返回 None (fail-open)。"""
+    path = _memo_dir() / _LAST_QUERY_FILE
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        pack, command, query = payload["pack"], payload["command"], payload["query"]
+        if not (
+            isinstance(pack, str)
+            and isinstance(command, str)
+            and isinstance(query, str)
+        ):
+            return None
+        return {"pack": pack, "command": command, "query": query}
+    except OSError, ValueError, KeyError:
+        return None
+
+
+def _store_last_query(pack: Path, command: str, query: str) -> None:
+    try:
+        d = _memo_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        (d / _LAST_QUERY_FILE).write_text(
+            json.dumps(
+                {"pack": str(pack), "command": command, "query": query},
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+    except OSError:
+        pass  # fail-open: 记忆失败不影响查询本身
+
+
+def _query_again(pack: Path, query: str, limit: int) -> list[str]:
+    """again: 重跑最近一次成功查询 (pack/command/query 均从 memo 取)。"""
+    last = _load_last_query()
+    if last is None:
+        return [
+            "无最近查询记录 (again 记住上一次成功查询; 先跑任意一次普通查询)",
+        ]
+    memo_pack = Path(last["pack"])
+    if not memo_pack.is_dir():
+        return ["最近查询的资料包目录已不存在: " + last["pack"]]
+    run_fn = _QUERIES.get(last["command"])
+    if run_fn is None:
+        return ["最近查询的命令已失效: " + last["command"]]
+    return [
+        f"[重跑] {last['command']} {last['query']} (来自 {last['pack']})",
+    ] + run_fn(memo_pack, last["query"], limit)
+
+
 _QUERIES = {
     "item": _query_item,
     "recipe": _query_recipe,
@@ -3253,6 +3317,7 @@ _QUERIES = {
     "list": _query_list,
     "doc": _query_doc,
     "buffs": _query_buffs,
+    "again": _query_again,
     "export": _query_export,
     "stats": _query_stats,
     "synth": _query_synth,
@@ -3348,7 +3413,14 @@ def _run_query_inner(options: PackQueryCliOptions) -> int:
             )
             return 2
         return 0
+    if options.command == "again":
+        # again 的 pack 参数来自 memo, 当前 pack_dir 只作显示
+        lines = _query_again(pack, options.query, options.limit)
+        _emit_lines(lines, options.as_json)
+        return 0
     lines = _QUERIES[options.command](pack, options.query, options.limit)
+    if not (options.command == "diff" or lines and lines[0].startswith("未找到")):
+        _store_last_query(pack, options.command, options.query)
     _emit_lines(lines, options.as_json)
     return 0 if not lines or not lines[0].startswith("未找到") else 2
 

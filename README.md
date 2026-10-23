@@ -210,6 +210,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
   | 商店货架与价格 | `shop` / `price` |
   | 站标点问脚下（掉落+商店+脚本放置单位/物品；坐标来自 live 探针 JSON） | `near <x> <y> [radius]` |
   | 战役这关是哪关 | `locate <码1;码2>` |
+  | 重跑最近一次成功查询（CLI/GUI 共享记忆） | `again` |
   | 物品表清单（供脚本/AI） | `list [表名]` |
   | 增益/技能/英雄效果排查 | `buffs` / `skills` / `heroes` |
   | 科技等级与费用 | `tech` |

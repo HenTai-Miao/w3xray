@@ -1824,3 +1824,48 @@ def test_run_cli_json_campaign_sectioned(tmp_path, capsys):
     )
     assert any("宝物甲" in ln for p in payloads for ln in p["lines"])
     assert any(p["section"].startswith("子地图 ") for p in payloads)
+
+
+def test_run_cli_again_roundtrip(tmp_path, capsys, monkeypatch):
+    """again 记住最近一次成功查询并重跑; 未找到/失败不污染记忆。"""
+    import gametool.pack_query_cli as pq
+
+    memo = tmp_path / "memo"
+    monkeypatch.setattr(pq, "_memo_dir", lambda: memo)
+    pack_dir = tmp_path
+    obj = pack_dir / "对象ID"
+    obj.mkdir()
+    (obj / "物品.tsv").write_text(
+        "物品	四码	数值	四码2	名称	英雄	描述"
+        + chr(10)
+        + "物品	I0AA	1	I0AA	冰晶	是	+10攻",
+        encoding="utf-8",
+    )
+    # 首查成功 (item I0AA)
+    rc = run_pack_query_cli(
+        parse_pack_query_cli_options([str(pack_dir), "item", "I0AA"])
+    )
+    assert rc == 0
+    # again 重跑
+    rc = run_pack_query_cli(parse_pack_query_cli_options([str(pack_dir), "again", ""]))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "[重跑] item I0AA" in out
+    assert "冰晶" in out
+    # 未找到查询不污染记忆
+    run_pack_query_cli(
+        parse_pack_query_cli_options([str(pack_dir), "item", "不存在的物品"])
+    )
+    rc = run_pack_query_cli(parse_pack_query_cli_options([str(pack_dir), "again", ""]))
+    out = capsys.readouterr().out
+    assert "[重跑] item I0AA" in out
+
+
+def test_again_without_history(tmp_path, capsys, monkeypatch):
+    import gametool.pack_query_cli as pq
+
+    monkeypatch.setattr(pq, "_memo_dir", lambda: tmp_path / "memo")
+    rc = run_pack_query_cli(parse_pack_query_cli_options([str(tmp_path), "again", ""]))
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "无最近查询记录" in out

@@ -588,6 +588,10 @@ def _show_hotkeys(app) -> None:
             "输出 {section,lines} 单行 JSON 供脚本解析",
         ),
         (
+            "pack-query again",
+            "重跑最近一次成功查询 (CLI/GUI 共享记忆)",
+        ),
+        (
             "live 探针弹窗",
             "只读读局: Ctrl+R 重探; 勾选玩家/全单位/资源; JSON 自动复制",
         ),
