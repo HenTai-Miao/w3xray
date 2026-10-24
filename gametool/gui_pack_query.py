@@ -439,6 +439,14 @@ class _PackQueryWindow(ctk.CTkToplevel):
             label="用选中坐标 near 再查 (半径 100, 更精细)",
             command=lambda: self._near_rerun_from_selection("100"),
         )
+        menu.add_command(
+            label="用选中码 where 反查获取途径",
+            command=lambda: self._code_rerun("where"),
+        )
+        menu.add_command(
+            label="用选中码 drop 反查掉落",
+            command=lambda: self._code_rerun("drop"),
+        )
         self._output.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
 
     def _clear_history(self) -> None:
@@ -522,6 +530,22 @@ class _PackQueryWindow(ctk.CTkToplevel):
         else:
             self._near_kind.pack_forget()
         self._keyword.focus_set()
+
+    def _code_rerun(self, prefix: str) -> None:
+        """选中码以指定语义重查 (where=获取途径, drop=掉落; 对齐探针 306 直达)。"""
+        try:
+            raw = self._output.get("sel.first", "sel.last").strip()
+        except tk.TclError:
+            raw = ""
+        import re as _re
+
+        matches = _re.findall(r"[A-Z][0-9A-Z]{3}", raw)
+        if len(matches) != 1:
+            return  # 多匹配拒猜测 (对齐探针 309)
+        self._switch_mode(prefix)
+        self._keyword.delete(0, "end")
+        self._keyword.insert(0, matches[0])
+        self._run_clicked()
 
     def _near_rerun_from_box(self, box, radius: str) -> None:
         """选中行含坐标时以该点为中心再查 (半径收缩迭代, 由远及近逼近目标)。"""

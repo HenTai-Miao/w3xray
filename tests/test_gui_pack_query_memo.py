@@ -138,3 +138,14 @@ def test_near_rerun_menu_method_exists() -> None:
     assert "self._run_clicked()" in core  # 直接执行
     whole = inspect.getsource(_PackQueryWindow)
     assert '("100")' in whole  # 精细档菜单已挂
+
+
+def test_code_rerun_menu_methods() -> None:
+    """输出区码 where/drop 直达: 单匹配才发, 走统一切换。"""
+    import inspect
+
+    from gametool.gui_pack_query import _PackQueryWindow
+
+    src = inspect.getsource(_PackQueryWindow._code_rerun)
+    assert "len(matches) != 1" in src  # 多匹配拒猜测
+    assert "self._switch_mode(prefix)" in src  # 统一切换入口
