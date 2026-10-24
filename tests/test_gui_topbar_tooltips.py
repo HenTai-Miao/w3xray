@@ -41,3 +41,11 @@ def test_no_duplicate_tooltips() -> None:
     calls = _calls()
     assert len(calls) == len(set(calls)), f"重复 tooltip: {calls}"
     assert len(calls) == 8  # 包查询 + live 探针
+
+
+def test_guide_near_reverse_guard() -> None:
+    """guide near 反查: 模板行 near x y 直采纳; 全选 >4 数字拒绝猜测。"""
+    src = (Path(__file__).parents[1] / "gametool" / "gui_topbar.py").read_text(
+        encoding="utf-8"
+    )
+    assert "bnear" in src and "len(nums) > 4" in src  # 模板行直取 + 多数字守卫

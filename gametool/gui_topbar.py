@@ -545,6 +545,13 @@ def _near_selected_coords(app, box) -> None:
     nums = re.findall(r"-?\d+(?:\.\d+)?", raw)
     if len(nums) < 2:
         return
+    # 多数字选区防误导: 模板行形态 "near x y" (或纯坐标对) 直接采纳;
+    # 其余 (全选长文本混入小地图标记等) 超过 4 个数字拒绝猜测 — 精确选中一行再反查
+    near_match = re.search(r"\bnear\s+(-?[\d.]+)\s+(-?[\d.]+)", raw)
+    if near_match:
+        nums = [near_match.group(1), near_match.group(2)]
+    elif len(nums) > 4:
+        return
 
     open_pack_query_dialog(
         app,
