@@ -256,12 +256,6 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 "tech",
                 "item",
                 "heroes",
-                "price",
-                "quest",
-                "cmd",
-                "text",
-                "refs",
-                "affixes",
             ],
             width=280,
         )
@@ -278,6 +272,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 "text",
                 "refs",
                 "affixes",
+                "registered",
             ],
             width=280,
         )
@@ -299,6 +294,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "text",
             "refs",
             "affixes",
+            "registered",
         ):
             self._mode_extra.set(_initial)
             self._mode_extra2.set("<<none>>")
@@ -556,6 +552,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         "text": "任意词 → 全 tsv 索引行兜底 (search 未中时最后一张网)",
         "refs": "码 → 脚本引用分类 (给予/消耗/其他——判升级链终点)",
         "affixes": "词缀词可空=全量…  (回车查)",
+        "registered": "消息词可空=全部触发消息…  (回车查)",
     }
 
     def _near_kind_file(self) -> pathlib.Path:
@@ -594,6 +591,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "text",
             "refs",
             "affixes",
+            "registered",
         ):
             self._mode_extra.set(command)
             self._mode_extra2.set("<<none>>")
