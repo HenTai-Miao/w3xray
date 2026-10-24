@@ -1614,6 +1614,10 @@ def main(argv=None):
         print(f"== 全部单位 ({len(all_rows)}个, 按 所有者+四码 聚合) ==")
         for (o2, c2), n2 in sorted(combo.items()):
             print(f"  P{o2} {names[(o2, c2)]} [{c2}] ×{n2}")
+    if all_rows:
+        first_pos = next((u for u in all_rows if u.get("x") is not None), None)
+        if first_pos is not None:
+            print(f"坐标反查模板：near {first_pos['x']:g} {first_pos['y']:g}")
     locate_cmd = campaign_locate_command(args.pack, rep)
     if locate_cmd:
         print("== 战役定位 (若当前为 .w3n 战役, 直接复制本行定位任务关) ==")
