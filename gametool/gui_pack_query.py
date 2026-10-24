@@ -397,6 +397,11 @@ class _PackQueryWindow(ctk.CTkToplevel):
         menu.add_command(
             label="导出为 .md", command=lambda: self._export_md(self._output)
         )
+        menu.add_separator()
+        menu.add_command(
+            label="用选中坐标 near 再查 (半径 500)",
+            command=self._near_rerun_from_selection,
+        )
         self._output.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
 
     def _clear_history(self) -> None:
@@ -469,6 +474,20 @@ class _PackQueryWindow(ctk.CTkToplevel):
         else:
             self._near_kind.pack_forget()
         self._keyword.focus_set()
+
+    def _near_rerun_from_selection(self) -> None:
+        """选中行含坐标时以该点为中心再查 (半径收缩迭代, 由远及近逼近目标)。"""
+        try:
+            raw = self._output.get("sel.first", "sel.last").strip()
+        except tk.TclError:
+            raw = ""
+        nums = re.findall(r"-?[\d.]+", raw)
+        if len(nums) < 2:
+            return
+        self._mode.set("near")
+        self._keyword.delete(0, "end")
+        self._keyword.insert(0, nums[0] + " " + nums[1] + " 500")
+        self._run_clicked()
 
     def _coords_from_clipboard(self) -> None:
         """从剪贴板提取坐标填入关键词框。

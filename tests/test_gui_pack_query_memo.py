@@ -122,3 +122,15 @@ def test_coords_clipboard_prefers_selected_block() -> None:
     src = inspect.getsource(_PackQueryWindow._coords_from_clipboard)
     assert '"selected"' in src  # selected 块优先
     assert "xs[-1]" in src  # 兜底仍在 (无 selected 时退最后一对)
+
+
+def test_near_rerun_menu_method_exists() -> None:
+    """near 迭代右键: 选中坐标行以半径 500 再查 (由远及近逼近)。"""
+    import inspect
+
+    from gametool.gui_pack_query import _PackQueryWindow
+
+    src = inspect.getsource(_PackQueryWindow._near_rerun_from_selection)
+    assert 'self._mode.set("near")' in src
+    assert '" 500"' in src  # 半径收缩
+    assert "self._run_clicked()" in src  # 直接执行
