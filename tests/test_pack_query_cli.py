@@ -3,6 +3,9 @@
 
 from __future__ import annotations
 
+import io
+import contextlib
+
 import json
 import os
 import shutil
@@ -1305,7 +1308,6 @@ def test_query_buffs_lists_and_filters(tmp_path, pack, capsys) -> None:
         "增益\tB002\t2\tB002\t月蚀\t是\t夜晚移速提高。\n",
         encoding="utf-8",
     )
-    import io
     import contextlib
 
     buffer = io.StringIO()
@@ -1399,7 +1401,6 @@ def test_query_diff_shows_field_level_changes(tmp_path) -> None:
             [str(tmp_path / "new"), "diff", str(tmp_path / "old")]
         )
     )
-    import contextlib
     import io
 
     buffer = io.StringIO()
@@ -1417,7 +1418,6 @@ def test_query_diff_shows_field_level_changes(tmp_path) -> None:
 
 
 def test_query_near_annotates_shop_stocks(tmp_path) -> None:
-    import contextlib
     import io
 
     t = chr(9)
@@ -1561,7 +1561,6 @@ def test_query_units_lists_and_strips_colors(tmp_path, pack, capsys) -> None:
 
 
 def test_query_near_includes_script_placed_units(tmp_path) -> None:
-    import contextlib
     import io
 
     # Given: a unit placed by script CreateUnit (not in the placement table).
@@ -1628,7 +1627,6 @@ def test_query_near_includes_script_placed_units(tmp_path) -> None:
 
 
 def test_query_diff_synth_recipe_changes(tmp_path) -> None:
-    import contextlib
     import io
 
     # Given: two packs where a recipe's materials changed.
@@ -1721,7 +1719,6 @@ def test_query_diff_synth_recipe_changes(tmp_path) -> None:
 
 
 def test_query_near_includes_script_placed_items(tmp_path) -> None:
-    import contextlib
     import io
 
     # Given: an item placed by script CreateItem.
@@ -1788,7 +1785,6 @@ def test_query_near_includes_script_placed_items(tmp_path) -> None:
 
 
 def test_query_reports_elapsed_to_stderr(tmp_path, pack, capsys) -> None:
-    import contextlib
     import io
 
     buffer_out = io.StringIO()
@@ -1880,3 +1876,27 @@ def test_again_without_history(tmp_path, capsys, monkeypatch):
     out = capsys.readouterr().out
     assert rc == 0
     assert "无最近查询记录" in out
+
+
+def test_json_shape_smoke(tmp_path) -> None:
+    """--json 形态冒烟: 输出必为合法 JSON 且含 section/lines 两键。"""
+    import json as _json
+    import contextlib
+    import os
+
+    pack = os.environ.get("GAMEXRAY_TEST_PACK")
+    if not pack or not pathlib.Path(pack).exists():
+        pytest.skip("需真包 (设 GAMEXRAY_TEST_PACK)")
+    from gametool.pack_query_cli import PackQueryCliOptions, run_pack_query_cli
+
+    for command, query in (("shop", "商"), ("text", "冰"), ("stats", "")):
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            run_pack_query_cli(
+                PackQueryCliOptions(
+                    pack_dir=pack, command=command, query=query, as_json=True
+                )
+            )
+        payload = _json.loads(buffer.getvalue())
+        assert set(payload) >= {"section", "lines"}
+        assert isinstance(payload["lines"], list)
