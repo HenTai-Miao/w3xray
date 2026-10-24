@@ -492,6 +492,11 @@ class _PackQueryWindow(ctk.CTkToplevel):
 
     def _switch_mode(self, command: str) -> None:
         self._mode.set(command)
+        # 扩展排高亮联动: 值属扩展组则高亮该值, 否则清高亮 (避免两排误导性高亮)
+        if command in ("again", "stats", "shop", "tech", "item", "heroes"):
+            self._mode_extra.set(command)
+        else:
+            self._mode_extra.set("<<none>>")
         if command == "again":
             # placeholder 动态显示最近一次查询 (用户不用猜记忆里有什么)
             from .pack_query_cli import _load_last_query  # noqa: PLC0415
