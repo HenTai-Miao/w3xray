@@ -280,6 +280,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "price",
             "quest",
             "cmd",
+            "text",
         ):
             self._mode_extra.set(_initial)
         else:
@@ -554,6 +555,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "price",
             "quest",
             "cmd",
+            "text",
         ):
             self._mode_extra.set(command)
         else:
