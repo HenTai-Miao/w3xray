@@ -360,6 +360,19 @@ class _PackQueryWindow(ctk.CTkToplevel):
             self.after(120, lambda: self._run("doc"))
 
         menu = tk.Menu(self, tearoff=0)
+        menu.add_command(
+            label="复制选中",
+            command=lambda: (
+                (
+                    self._output.clipboard_clear(),
+                    self._output.clipboard_append(
+                        self._output.get("sel first", "sel last")
+                    ),
+                )
+                if self._output.tag_ranges("sel")
+                else None
+            ),
+        )
         menu.add_command(label="复制全部", command=self._copy_all)
         menu.add_command(
             label="导出为 .md", command=lambda: self._export_md(self._output)

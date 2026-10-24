@@ -487,6 +487,17 @@ def _open_guide_window(app, text: str) -> None:
     )
     guide_menu = tk.Menu(win, tearoff=0)
     guide_menu.add_command(
+        label="复制选中",
+        command=lambda: (
+            (
+                box.clipboard_clear(),
+                box.clipboard_append(box.get("sel first", "sel last")),
+            )
+            if box.tag_ranges("sel")
+            else None
+        ),
+    )
+    guide_menu.add_command(
         label="复制全部",
         command=lambda: (
             box.clipboard_clear(),

@@ -165,6 +165,19 @@ class LiveProbeWindow(ctk.CTkToplevel):
                 self._output.clipboard_append(self._output.get("1.0", "end").strip()),
             ),
         )
+        menu.add_command(
+            label="复制选中",
+            command=lambda: (
+                (
+                    self._output.clipboard_clear(),
+                    self._output.clipboard_append(
+                        self._output.get("sel first", "sel last")
+                    ),
+                )
+                if self._output.tag_ranges("sel")
+                else None
+            ),
+        )
         menu.add_command(label="导出为 .md", command=self._export_md)
         menu.add_separator()
         menu.add_command(
