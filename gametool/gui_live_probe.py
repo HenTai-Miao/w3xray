@@ -372,6 +372,16 @@ class LiveProbeWindow(ctk.CTkToplevel):
                 return
         import re
 
+        # JSON 形态显式取 selected 块坐标 (对齐查询窗 312 轮语义——尾部是 all_units,
+        # 取首对数靠「selected 恰好在前」的巧合而非结构语义)
+        sel_block = re.search(r'"selected"\s*:\s*\{[^{}]*\}', raw)
+        if sel_block:
+            mx = re.search(r'"x"\s*:\s*(-?[\d.]+)', sel_block.group(0))
+            my = re.search(r'"y"\s*:\s*(-?[\d.]+)', sel_block.group(0))
+            if mx and my:
+                if self._query_callback is not None:
+                    self._query_callback(f"near {mx.group(1)} {my.group(1)}")
+                return
         nums = re.findall(r"-?\d+(?:\.\d+)?", raw)
         if len(nums) < 2:
             return

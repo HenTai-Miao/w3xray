@@ -104,3 +104,11 @@ def test_extract_code_multi_match_refuses(_tk, tmp_path) -> None:
     inner.tag_add("sel", "1.0", "1.end")
     assert win._extract_code() == ""
     assert "多个码" in win._copy_hint.cget("text")
+
+
+def test_near_coords_prefers_selected_block() -> None:
+    """探针 near 直达: 剪贴板 JSON 优先取 selected 块坐标 (312 语义对齐)。"""
+    import inspect
+
+    src = inspect.getsource(LiveProbeWindow._near_selected_coords)
+    assert '"selected"' in src
