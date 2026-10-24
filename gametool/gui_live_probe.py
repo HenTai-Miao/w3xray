@@ -335,6 +335,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
         self._output.configure(state="normal")
         self._output.delete("1.0", "end")
         self._output.insert("1.0", body if body.strip() else f"(退出码 {code_str})")
+        self._output.see("1.0")  # 回滚视口到摘要行 (长输出时旧视口停在中部)
         self._output.configure(state="disabled")
 
     def _near_selected_coords(self) -> None:
