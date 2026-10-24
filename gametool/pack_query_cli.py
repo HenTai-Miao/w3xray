@@ -3291,6 +3291,25 @@ def _query_stats(pack: Path, query: str, limit: int) -> list[str]:
             out.append(f"{tsv.stem}: {total} 行 (自定义 {custom})")
         else:
             out.append(f"{tsv.stem}: {total} 行")
+    # 记忆资产段: again/near 链的用户侧状态一屏可见
+    memo = _memo_dir()
+    last = _load_last_query()
+    history = _memo_dir() / "history.json"
+    out.append("")
+    out.append("== 查询记忆 ==")
+    if last:
+        out.append(f"最近查询: {last['command']} {last['query']} (来自 {last['pack']})")
+    else:
+        out.append("最近查询: (无——成功查询会记入 again 记忆)")
+    if history.exists():
+        try:
+            import json as _json
+
+            entries = _json.loads(history.read_text(encoding="utf-8"))
+            out.append(f"历史条数: {len(entries)} (GUI 下拉/again 共享)")
+        except OSError, ValueError:
+            pass
+    out.append(f"记忆目录: {memo}")
     return out
 
 
