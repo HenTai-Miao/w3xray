@@ -36,6 +36,7 @@
 
 - Ctrl+1..9 切模式（第九位 locate 战役定位）+ 动态 placeholder：`gui_pack_query.py` `_switch_mode/_PLACEHOLDERS`
 - 回车执行当前模式（非固定 doc）：`_run` 绑定处
+- Ctrl+A 全选输出（CTkTextbox 不默认绑；bind_all Control-a: sel 全文+insert 置尾+break）——探针/查询窗/guide 弹窗三窗齐 (273-274 轮)：
 - Ctrl+F 内搜（回车循环跳转+选区高亮+尾部回卷）：
   `gui_pack_query.py` `_find_next`、`gui_topbar.py` `_find_next`（攻略速查）
 - Esc 关闭：两弹窗 `bind("<Escape>", ... destroy)`
