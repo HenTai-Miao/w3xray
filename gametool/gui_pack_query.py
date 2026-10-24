@@ -532,7 +532,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         nums = re.findall(r"-?[\d.]+", raw)
         if len(nums) < 2:
             return
-        self._mode.set("near")
+        self._switch_mode("near")  # 统一入口 (扩展排高亮清显跟随)
         self._keyword.delete(0, "end")
         self._keyword.insert(0, nums[0] + " " + nums[1] + " " + radius)
         self._run_clicked()

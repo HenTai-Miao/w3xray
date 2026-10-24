@@ -133,7 +133,7 @@ def test_near_rerun_menu_method_exists() -> None:
     from gametool.gui_pack_query import _PackQueryWindow
 
     core = inspect.getsource(_PackQueryWindow._near_rerun_from_box)
-    assert 'self._mode.set("near")' in core
+    assert 'self._switch_mode("near")' in core  # 统一切换入口 (327/328)
     assert "radius" in core  # 半径参数化 (500/100 双档)
     assert "self._run_clicked()" in core  # 直接执行
     whole = inspect.getsource(_PackQueryWindow)
