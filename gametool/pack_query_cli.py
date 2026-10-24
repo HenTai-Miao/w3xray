@@ -2543,6 +2543,10 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
     return lines
 
 
+_NEAR_ROW_RE = re.compile(
+    r"^\s*(单位|装饰|装饰群|脚本单位|脚本物品):\s*(.+?)\s*\[(\w+)\]"
+    r"(?:\s*×(\d+))?\s*@\((-?[\d.]+),(-?[\d.]+)\)(?:\s*距(\d+))?"
+)
 _FN_HEAD_RE = re.compile(
     r"(?m)^(?:function|private function|public function|static function)\s+(\w+)\s+takes"
 )
@@ -3463,6 +3467,32 @@ def _run_query_inner(options: PackQueryCliOptions) -> int:
             )
             return 2
         return 0
+    if options.command == "near" and options.as_json:
+        # near 结构化输出: entries 数组供脚本/AI 消费 (文本行照附)
+        lines = _query_near(pack, options.query, options.limit)
+        entries = []
+        for line in lines:
+            m = _NEAR_ROW_RE.match(line)
+            if m:
+                entries.append(
+                    {
+                        "kind": m.group(1),
+                        "name": m.group(2).strip(),
+                        "code": m.group(3),
+                        "count": int(m.group(4) or 1),
+                        "x": float(m.group(5)),
+                        "y": float(m.group(6)),
+                        "dist": int(m.group(7) or 0),
+                        "detail": line.strip(),
+                    }
+                )
+        print(
+            json.dumps(
+                {"section": "near", "entries": entries, "lines": lines},
+                ensure_ascii=False,
+            )
+        )
+        return 0 if len(entries) else 2
     if options.command == "again":
         # again 的 pack 参数来自 memo, 当前 pack_dir 只作显示
         lines = _query_again(pack, options.query, options.limit)
