@@ -499,7 +499,7 @@ def _open_guide_window(app, text: str) -> None:
         command=lambda: (
             (
                 box.clipboard_clear(),
-                box.clipboard_append(box.get("sel first", "sel last")),
+                box.clipboard_append(box.get("sel.first", "sel.last")),
             )
             if box.tag_ranges("sel")
             else None
@@ -532,7 +532,7 @@ def _open_guide_window(app, text: str) -> None:
 def _near_selected_coords(app, box) -> None:
     """取选中/剪贴板的前两个数字, 打开包查询窗 near 模式反查。"""
     try:
-        raw = box.get("sel first", "sel last").strip()
+        raw = box.get("sel.first", "sel.last").strip()
     except Exception:
         raw = ""
     if not raw:

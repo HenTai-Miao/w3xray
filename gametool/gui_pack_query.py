@@ -355,7 +355,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 (
                     self._pinned_box.clipboard_clear(),
                     self._pinned_box.clipboard_append(
-                        self._pinned_box.get("sel first", "sel last")
+                        self._pinned_box.get("sel.first", "sel.last")
                     ),
                 )
                 if self._pinned_box.tag_ranges("sel")
@@ -386,7 +386,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 (
                     self._output.clipboard_clear(),
                     self._output.clipboard_append(
-                        self._output.get("sel first", "sel last")
+                        self._output.get("sel.first", "sel.last")
                     ),
                 )
                 if self._output.tag_ranges("sel")

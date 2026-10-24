@@ -99,3 +99,15 @@ def test_stats_mode_in_panel() -> None:
     src = inspect.getsource(_PackQueryWindow)
     assert src.count('"stats",') >= 2  # _mode_commands + SegmentedButton values
     assert '"stats":' in src  # placeholder 表
+
+
+def test_sel_index_dot_syntax_everywhere() -> None:
+    """sel 索引必须用点号形态 ("sel.first") — 空格形态 Tcl 炸 (306 轮真 bug)。"""
+    import pathlib as _pl
+
+    for name in ("gui_pack_query.py", "gui_topbar.py", "gui_live_probe.py"):
+        src = (_pl.Path(__file__).parents[1] / "gametool" / name).read_text(
+            encoding="utf-8"
+        )
+        assert '"sel first"' not in src, name
+        assert '"sel.last"' in src or "sel.first" in src or "sel" not in src, name
