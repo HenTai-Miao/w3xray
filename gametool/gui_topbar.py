@@ -327,7 +327,7 @@ def _render_minimap(app) -> None:
     _ = app._start_gui_worker("render-minimap", work, replace=True)
 
 
-def _show_guide(app) -> None:
+def _show_guide(app, *, refresh: bool = False) -> None:
     """弹窗展示当前地图的攻略速查报告 (指令/任务/配方/商店/掉落)。"""
     md = getattr(app, "map_data", None)
     if not md or not getattr(md, "path", ""):
@@ -335,7 +335,7 @@ def _show_guide(app) -> None:
         return
     map_path = md.path
     cached = _GUIDE_CACHE.get(map_path)
-    if cached:
+    if cached and not refresh:
         _open_guide_window(app, cached)
         app.status.configure(text="攻略速查（缓存）已就绪")
         return
@@ -357,7 +357,7 @@ def _show_guide(app) -> None:
                     GuideCliOptions(
                         map_path=map_path,
                         section=None,
-                        refresh=False,
+                        refresh=refresh,
                         minimap_marks=None,
                     )
                 )
@@ -499,7 +499,7 @@ def _open_guide_window(app, text: str) -> None:
     )
     guide_menu.add_command(
         label="强制重算 (清缓存刷新报告)",
-        command=lambda: (_GUIDE_CACHE.clear(), _show_guide(app)),
+        command=lambda: (_GUIDE_CACHE.clear(), _show_guide(app, refresh=True)),
     )
     guide_menu.add_separator()
     guide_menu.add_command(
