@@ -212,6 +212,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "where",
             "drop",
             "again",
+            "stats",
         ]
         for _i, _cmd in enumerate(self._mode_commands, start=1):
             keynum = _i if _i < 10 else 0  # near 排第 10 = Ctrl+0; again 第 11 位走不到
@@ -237,6 +238,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 "where",
                 "drop",
                 "again",
+                "stats",
             ],
             width=280,
         )
@@ -425,6 +427,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         "where": "物品名/四码 → 获取途径 (合成/掉落/商店/脚本奖励满量)",
         "drop": "单位/物品名 → 死亡掉落与奖池证据 (含脚本触发)",
         "again": "回车重跑最近一次成功查询 (pack/command/query 从记忆取)",
+        "stats": "回车看包总览: 表行数/导出时间/查询记忆  (关键词可空)",
     }
 
     def _near_kind_file(self) -> pathlib.Path:

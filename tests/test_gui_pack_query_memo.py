@@ -88,3 +88,14 @@ def test_gui_success_writes_cli_again_memo() -> None:
     src = inspect.getsource(_PackQueryWindow)
     assert "_store_last_query" in src
     assert 'not result.startswith("未找到")' in src
+
+
+def test_stats_mode_in_panel() -> None:
+    """stats 总览模式在模式面板第 14 位 (查看型, 关键词可空)。"""
+    import inspect
+
+    from gametool.gui_pack_query import _PackQueryWindow
+
+    src = inspect.getsource(_PackQueryWindow)
+    assert src.count('"stats",') >= 2  # _mode_commands + SegmentedButton values
+    assert '"stats":' in src  # placeholder 表
