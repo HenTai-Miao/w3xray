@@ -112,3 +112,11 @@ def test_near_coords_prefers_selected_block() -> None:
 
     src = inspect.getsource(LiveProbeWindow._near_selected_coords)
     assert '"selected"' in src
+
+
+def test_probe_near_rerun_radius_guard() -> None:
+    """探针 near 再查: 半径 500 收缩迭代 (对齐查询窗 315)。"""
+    import inspect
+
+    src = inspect.getsource(LiveProbeWindow._near_rerun_selected)
+    assert ' 500"' in src  # 半径参数直填 (f-string 尾形态)
