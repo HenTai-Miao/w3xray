@@ -2496,8 +2496,8 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
                     clusters.append(
                         (dist(gcx, gcy), f"{name} [{code}]", len(group), gcx, gcy)
                     )
-            clusters.sort()
             note_c = _truncated_note(clusters, limit)
+            clusters.sort()
             for d, label, n, gcx, gcy in _bounded(clusters, limit):
                 code = label.rsplit("[", 1)[-1].rstrip("]") if "[" in label else ""
                 drop = f"  掉: {drop_map[code]}" if code in drop_map else ""
@@ -2541,14 +2541,14 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
             d = dist(x, y)
             if d <= radius:
                 spawned.append((d, m.group(1), x, y))
-        spawned.sort()
         note_s = _truncated_note(spawned, limit)
+        spawned.sort()
         for d, code, x, y in _bounded(spawned, limit):
             name = load_units(pack).get(code, code)
             drop = f"  掉: {drop_map[code]}" if code in drop_map else ""
             lines.append(f"  脚本单位: {name} [{code}] @({x:g},{y:g}) 距{d:.0f}{drop}")
-            if note_s:
-                lines.append(note_s)
+        if note_s:
+            lines.append(note_s)
     if kind_filter and len(lines) == 1:
         return [
             f"坐标 ({px:g},{py:g}) 半径 {radius:g} 内无 {kind_filter} 类命中。",
@@ -2716,11 +2716,17 @@ def _query_refs(pack: Path, query: str, limit: int) -> list[str]:
     lines = [f"{label}  ({obj_kind})  共{len(give) + len(consume) + len(other)}处引用"]
     lines.append(f"  给予/创建: {len(give)} 处")
     lines.extend(f"    行{e[0]} {e[1]}  {e[2]}" for e in _bounded(give, limit))
+    if _t := _truncated_note(give, limit):
+        lines.append(_t)
     lines.append(f"  作为材料/触发媒介(被检测或移除): {len(consume)} 处")
     lines.extend(f"    行{e[0]} {e[1]}  {e[2]}" for e in _bounded(consume, limit))
+    if _t := _truncated_note(consume, limit):
+        lines.append(_t)
     if other:
         lines.append(f"  其他引用: {len(other)} 处")
         lines.extend(f"    行{e[0]} {e[1]}  {e[2]}" for e in _bounded(other, limit))
+        if _t := _truncated_note(other, limit):
+            lines.append(_t)
     if obj_kind == "物品" and give and not consume:
         if _script_encrypted(pack):
             lines.append(
