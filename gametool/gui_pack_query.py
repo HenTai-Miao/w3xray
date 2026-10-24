@@ -262,6 +262,12 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self._mode_extra.set("again")  # 占位显示 (真实模式以 self._mode 为准)
         self._mode_extra.configure(command=self._extra_mode_clicked)
         self._mode_extra.pack(side="left", padx=(0, 8))
+        # 初开时扩展排高亮同步 (记忆恢复的模式可能属扩展组)
+        _initial = self._mode.get()
+        if _initial in ("again", "stats", "shop", "tech", "item", "heroes"):
+            self._mode_extra.set(_initial)
+        else:
+            self._mode_extra.set("<<none>>")
         ctk.CTkButton(row, text="查询", width=84, command=self._run_clicked).pack(
             side="left"
         )
