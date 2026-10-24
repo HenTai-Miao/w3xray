@@ -74,3 +74,21 @@ def test_probe_json_not_copied_on_failure(_tk, tmp_path):
     win = LiveProbeWindow(_tk, pack_dir=str(tmp_path))
     win._finish(json_marker(2) + '{"slots": []}\n')
     assert "已复制" not in win._copy_hint.cget("text")
+
+
+def test_probe_where_drop_menu_routes(_tk, tmp_path) -> None:
+    """右键 where/drop 直达: 前缀码经 query_callback 送达, 无码不发。"""
+    sent: list[str] = []
+    win = LiveProbeWindow(_tk, tmp_path, query_callback=sent.append)
+    # 探针自动启动定时器会清空输出 — 置禁用让 _start 早退, 保住测试文本
+    win._probe_button.configure(state="disabled")
+    # CTkTextbox insert/tag 有代理延迟 — 直接驱动内部 tk.Text 保证同步可见
+    inner = win._output._textbox
+    inner.configure(state="normal")  # 展示区默认 disabled, insert 静默无效
+    inner.insert("1.0", "冰晶指环 [I083]")
+    inner.tag_add("sel", "1.6", "1.11")
+    win._where_selected_code()
+    assert sent == ["where I083"]
+    inner.delete("1.0", "end")
+    win._drop_selected_code()
+    assert sent == ["where I083"]  # 无码不重复发

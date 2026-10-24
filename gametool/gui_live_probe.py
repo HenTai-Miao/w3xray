@@ -171,7 +171,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
                 (
                     self._output.clipboard_clear(),
                     self._output.clipboard_append(
-                        self._output.get("sel first", "sel last")
+                        self._output.get("sel.first", "sel.last")
                     ),
                 )
                 if self._output.tag_ranges("sel")
@@ -187,6 +187,14 @@ class LiveProbeWindow(ctk.CTkToplevel):
         menu.add_command(
             label="用选中/剪贴板坐标 near 反查",
             command=self._near_selected_coords,
+        )
+        menu.add_command(
+            label="用选中/剪贴板码 where 反查获取途径",
+            command=self._where_selected_code,
+        )
+        menu.add_command(
+            label="用选中/剪贴板码 drop 反查掉落",
+            command=self._drop_selected_code,
         )
         self._output.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
 
@@ -354,7 +362,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
     def _near_selected_coords(self) -> None:
         """取选中/剪贴板的 x/y, 交给包查询窗 near 模式反查。"""
         try:
-            raw = self._output.get("sel first", "sel last").strip()
+            raw = self._output.get("sel.first", "sel.last").strip()
         except tk.TclError:
             raw = ""
         if not raw:
@@ -371,25 +379,40 @@ class LiveProbeWindow(ctk.CTkToplevel):
         if self._query_callback is not None:
             self._query_callback(f"near {x} {y}")
 
-    def _query_selected_code(self) -> None:
-        """取输出区选中文本 (退剪贴板) 的四码, 交给包查询窗 doc 模式。"""
+    def _extract_code(self) -> str:
+        """取输出区选中文本 (退剪贴板) 的四码, 无则空串。"""
         try:
-            code = self._output.get("sel first", "sel last").strip()
+            code = self._output.get("sel.first", "sel.last").strip()
         except tk.TclError:
             code = ""
         if not code:
             try:
                 code = self.clipboard_get().strip()
             except Exception:
-                return
+                return ""
         # 四码或含四码的片段都行: 提取前一个 [A-Z][0-9A-Z]{3} 形态
         import re
 
         m = re.search(r"[A-Z][0-9A-Z]{3}", code)
-        if not m:
-            return
-        if self._query_callback is not None:
-            self._query_callback(m.group(0))
+        return m.group(0) if m else ""
+
+    def _query_selected_code(self) -> None:
+        """取选中/剪贴板四码, 交给包查询窗 doc 模式。"""
+        code = self._extract_code()
+        if code and self._query_callback is not None:
+            self._query_callback(code)
+
+    def _where_selected_code(self) -> None:
+        """四码 where 反查: 物品获取途径 (合成/掉落/商店/脚本奖励)。"""
+        code = self._extract_code()
+        if code and self._query_callback is not None:
+            self._query_callback("where " + code)
+
+    def _drop_selected_code(self) -> None:
+        """四码 drop 反查: 谁掉/谁给 (死亡触发+关系表证据)。"""
+        code = self._extract_code()
+        if code and self._query_callback is not None:
+            self._query_callback("drop " + code)
 
     def _export_md(self) -> None:
         """输出区导出为 .md (桌面优先, fail-open)。"""

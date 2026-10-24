@@ -179,7 +179,15 @@ def build_topbar(app) -> None:
                 app.on_export_pack,
                 prefill=code,
                 # near 坐标直达 near 模式, 其余按四码走 doc
-                prefill_command=("near" if code.startswith("near ") else "doc"),
+                prefill_command=(
+                    "near"
+                    if code.startswith("near ")
+                    else "where"
+                    if code.startswith("where ")
+                    else "drop"
+                    if code.startswith("drop ")
+                    else "doc"
+                ),
             ),
         ),
         **secondary_button_style(),
