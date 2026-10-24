@@ -2112,7 +2112,17 @@ def _query_quest(pack: Path, query: str, limit: int) -> list[str]:
     if lines:
         return lines
     if query:
-        return ["未找到任务文本: " + query]
+        # 任务总量提示 + text 改道 (否定断言四维: 总量/换词/数据源)
+        total = sum(
+            1
+            for line in _iter_tsv_lines(path)
+            if "CreateQuestBJ" in line or "DisplayTimedTextToForce" in line
+        )
+        hint = f"本图任务文本共 {total} 条" if total else "本图未捕获到任务文本"
+        return [
+            "未找到任务文本: " + query,
+            f"  （{hint}; 可用 text <词> 全文本索引兜底，或换更短关键词）",
+        ]
     return [
         "本图未捕获到任务文本 (无 CreateQuestBJ/DisplayTimedTextToForce 调用)。",
         "  （脚本加密图的任务文本不可读; 或该图确实无任务系统——可用 text <词> 全文本索引兜底）",
