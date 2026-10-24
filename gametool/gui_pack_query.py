@@ -220,6 +220,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "price",
             "quest",
             "cmd",
+            "text",
+            "refs",
         ]
         for _i, _cmd in enumerate(self._mode_commands, start=1):
             keynum = _i if _i < 10 else 0  # near 排第 10 = Ctrl+0; again 第 11 位走不到
@@ -262,6 +264,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 "price",
                 "quest",
                 "cmd",
+                "text",
+                "refs",
             ],
             width=280,
         )
@@ -281,6 +285,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "quest",
             "cmd",
             "text",
+            "refs",
         ):
             self._mode_extra.set(_initial)
         else:
@@ -520,6 +525,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
         "price": "物品名/四码 → 金币价 (地图价优先, 未命中给总量提示)",
         "quest": "任务词 → 任务文本满量 (未命中给总量提示+text 改道)",
         "cmd": "指令词 → 注册/条件/动作链全文 (空词看注册清单)",
+        "text": "任意词 → 全 tsv 索引行兜底 (search 未中时最后一张网)",
+        "refs": "码 → 脚本引用分类 (给予/消耗/其他——判升级链终点)",
     }
 
     def _near_kind_file(self) -> pathlib.Path:
@@ -556,6 +563,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "quest",
             "cmd",
             "text",
+            "refs",
         ):
             self._mode_extra.set(command)
         else:

@@ -101,7 +101,9 @@ def test_stats_mode_in_panel() -> None:
     assert src.count('"shop",') >= 2 and src.count('"tech",') >= 2  # 16 模式 (322)
     assert src.count('"item",') >= 2 and src.count('"heroes",') >= 2  # 18 模式 (323)
     assert src.count('"quest",') >= 2 and src.count('"cmd",') >= 2  # 21 模式 (338)
-    assert src.count('"text",') >= 2  # 22 模式 (339)
+    assert (
+        src.count('"text",') >= 4 and src.count('"refs",') >= 2
+    )  # 23 模式 (339/340, 列表+名单+placeholder)
     assert '"stats":' in src  # placeholder 表
 
 
