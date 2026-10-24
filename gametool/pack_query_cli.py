@@ -2404,8 +2404,13 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
         radius = float(parts[2]) if len(parts) == 3 else 3000.0
     except ValueError:
         return ["坐标与半径必须是数字: near <x> <y> [radius]"]
+    raw_radius = radius
     radius = max(50.0, min(radius, 20000.0))
     lines = [f"== 坐标 ({px:g}, {py:g}) 半径 {radius:g} =="]
+    if radius != raw_radius:
+        lines.append(
+            f"  (半径 {raw_radius:g} 超界已钳制到 {radius:g}; 有效范围 50~20000)"
+        )
     drop_map = _source_drop_map(pack)
     shop_map = _source_shop_map(pack)
 
