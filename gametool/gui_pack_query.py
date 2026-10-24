@@ -367,7 +367,11 @@ class _PackQueryWindow(ctk.CTkToplevel):
         pin_menu.add_separator()
         pin_menu.add_command(
             label="用选中坐标 near 再查 (半径 500)",
-            command=self._near_rerun_from_pinned,
+            command=lambda: self._near_rerun_from_pinned("500"),
+        )
+        pin_menu.add_command(
+            label="用选中坐标 near 再查 (半径 100, 更精细)",
+            command=lambda: self._near_rerun_from_pinned("100"),
         )
         pin_menu.add_command(
             label="导出收藏为 .md",
@@ -405,7 +409,11 @@ class _PackQueryWindow(ctk.CTkToplevel):
         menu.add_separator()
         menu.add_command(
             label="用选中坐标 near 再查 (半径 500)",
-            command=self._near_rerun_from_selection,
+            command=lambda: self._near_rerun_from_selection("500"),
+        )
+        menu.add_command(
+            label="用选中坐标 near 再查 (半径 100, 更精细)",
+            command=lambda: self._near_rerun_from_selection("100"),
         )
         self._output.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
 
@@ -480,24 +488,10 @@ class _PackQueryWindow(ctk.CTkToplevel):
             self._near_kind.pack_forget()
         self._keyword.focus_set()
 
-    def _near_rerun_from_pinned(self) -> None:
-        """收藏区选中坐标行同样半径 500 再查 (收藏即工作台)。"""
-        try:
-            raw = self._pinned_box.get("sel.first", "sel.last").strip()
-        except tk.TclError:
-            raw = ""
-        nums = re.findall(r"-?[\d.]+", raw)
-        if len(nums) < 2:
-            return
-        self._mode.set("near")
-        self._keyword.delete(0, "end")
-        self._keyword.insert(0, nums[0] + " " + nums[1] + " 500")
-        self._run_clicked()
-
-    def _near_rerun_from_selection(self) -> None:
+    def _near_rerun_from_box(self, box, radius: str) -> None:
         """选中行含坐标时以该点为中心再查 (半径收缩迭代, 由远及近逼近目标)。"""
         try:
-            raw = self._output.get("sel.first", "sel.last").strip()
+            raw = box.get("sel.first", "sel.last").strip()
         except tk.TclError:
             raw = ""
         nums = re.findall(r"-?[\d.]+", raw)
@@ -505,8 +499,14 @@ class _PackQueryWindow(ctk.CTkToplevel):
             return
         self._mode.set("near")
         self._keyword.delete(0, "end")
-        self._keyword.insert(0, nums[0] + " " + nums[1] + " 500")
+        self._keyword.insert(0, nums[0] + " " + nums[1] + " " + radius)
         self._run_clicked()
+
+    def _near_rerun_from_selection(self, radius: str = "500") -> None:
+        self._near_rerun_from_box(self._output, radius)
+
+    def _near_rerun_from_pinned(self, radius: str = "500") -> None:
+        self._near_rerun_from_box(self._pinned_box, radius)
 
     def _coords_from_clipboard(self) -> None:
         """从剪贴板提取坐标填入关键词框。
