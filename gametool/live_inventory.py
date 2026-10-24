@@ -1592,6 +1592,8 @@ def main(argv=None):
         print(f"{label}: {sel['unit']} [{sel['code']}]{pos}")
         for it in sel["items"]:
             print(f"  槽{it['slot']}: {it['name']} [{it['code']}]")
+        if sel.get("x") is not None:
+            print(f"坐标反查模板：near {sel['x']:g} {sel['y']:g}")
         others = [u for u in rep.get("units", []) if u != sel]
         if others:
             print("其余带物品单位:")
