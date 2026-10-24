@@ -398,6 +398,10 @@ class _PackQueryWindow(ctk.CTkToplevel):
             command=lambda: self._near_rerun_from_pinned("100"),
         )
         pin_menu.add_command(
+            label="用选中码查完整描述 (doc)",
+            command=lambda: self._code_rerun("doc", self._pinned_box),
+        )
+        pin_menu.add_command(
             label="用选中码 where 反查获取途径",
             command=lambda: self._code_rerun("where", self._pinned_box),
         )
@@ -446,6 +450,10 @@ class _PackQueryWindow(ctk.CTkToplevel):
         menu.add_command(
             label="用选中坐标 near 再查 (半径 100, 更精细)",
             command=lambda: self._near_rerun_from_selection("100"),
+        )
+        menu.add_command(
+            label="用选中码查完整描述 (doc)",
+            command=lambda: self._code_rerun("doc"),
         )
         menu.add_command(
             label="用选中码 where 反查获取途径",
