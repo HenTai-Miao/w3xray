@@ -364,6 +364,11 @@ class _PackQueryWindow(ctk.CTkToplevel):
         )
         pin_menu.add_command(label="复制收藏全部", command=self._copy_pinned)
         pin_menu.add_command(label="清空收藏", command=self._clear_pinned)
+        pin_menu.add_separator()
+        pin_menu.add_command(
+            label="用选中坐标 near 再查 (半径 500)",
+            command=self._near_rerun_from_pinned,
+        )
         pin_menu.add_command(
             label="导出收藏为 .md",
             command=lambda: self._export_md(self._pinned_box, "收藏对比"),
@@ -474,6 +479,20 @@ class _PackQueryWindow(ctk.CTkToplevel):
         else:
             self._near_kind.pack_forget()
         self._keyword.focus_set()
+
+    def _near_rerun_from_pinned(self) -> None:
+        """收藏区选中坐标行同样半径 500 再查 (收藏即工作台)。"""
+        try:
+            raw = self._pinned_box.get("sel.first", "sel.last").strip()
+        except tk.TclError:
+            raw = ""
+        nums = re.findall(r"-?[\d.]+", raw)
+        if len(nums) < 2:
+            return
+        self._mode.set("near")
+        self._keyword.delete(0, "end")
+        self._keyword.insert(0, nums[0] + " " + nums[1] + " 500")
+        self._run_clicked()
 
     def _near_rerun_from_selection(self) -> None:
         """选中行含坐标时以该点为中心再查 (半径收缩迭代, 由远及近逼近目标)。"""
