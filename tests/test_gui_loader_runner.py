@@ -114,7 +114,7 @@ def test_shutdown_returns_before_blocked_loader_and_discards_late_payload() -> N
         error_status="failed",
         source_path=None,
     )
-    assert started.wait(1)
+    assert started.wait(5)
     closer = threading.Thread(
         target=lambda: (runner._shutdown_background_loader(), shutdown_done.set()),
         daemon=True,
@@ -124,7 +124,7 @@ def test_shutdown_returns_before_blocked_loader_and_discards_late_payload() -> N
     closer.start()
     returned_before_release = shutdown_done.wait(0.2)
     release.set()
-    assert resolver.closed.wait(1)
+    assert resolver.closed.wait(5)
     closer.join(1)
 
     # Then
@@ -158,7 +158,7 @@ def test_replaced_loader_discards_obsolete_resolver_without_tk_callback() -> Non
         error_status="failed",
         source_path=None,
     )
-    assert stale_started.wait(1)
+    assert stale_started.wait(5)
 
     # When
     runner._start_loader_job(
@@ -167,10 +167,12 @@ def test_replaced_loader_discards_obsolete_resolver_without_tk_callback() -> Non
         error_status="failed",
         source_path=None,
     )
-    assert current_built.wait(1)
-    assert runner.posted.wait(1)
+    assert current_built.wait(5)
+    assert runner.posted.wait(
+        5
+    )  # 全量跑 CPU 满载时 1s 可能不够 (261/266/272/287 轮偶发实证)
     release_stale.set()
-    assert stale.closed.wait(1)
+    assert stale.closed.wait(5)
 
     # Then
     assert len(runner.scheduled) == 1
@@ -203,7 +205,9 @@ def test_source_open_failure_uses_archive_diagnosis() -> None:
                 error_status="解析失败",
                 source_path=str(path),
             )
-            assert runner.posted.wait(1)
+            assert runner.posted.wait(
+                5
+            )  # 全量跑 CPU 满载时 1s 可能不够 (261/266/272/287 轮偶发实证)
             runner.run_scheduled()
 
     # Then
@@ -231,7 +235,9 @@ def test_map_switch_failure_keeps_non_archive_error() -> None:
             error_status="切换失败",
             source_path=None,
         )
-        assert runner.posted.wait(1)
+        assert runner.posted.wait(
+            5
+        )  # 全量跑 CPU 满载时 1s 可能不够 (261/266/272/287 轮偶发实证)
         runner.run_scheduled()
 
     # Then
