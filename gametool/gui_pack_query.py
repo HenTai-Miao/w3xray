@@ -416,6 +416,17 @@ class _PackQueryWindow(ctk.CTkToplevel):
 
     def _switch_mode(self, command: str) -> None:
         self._mode.set(command)
+        if command == "again":
+            # placeholder 动态显示最近一次查询 (用户不用猜记忆里有什么)
+            from .pack_query_cli import _load_last_query  # noqa: PLC0415
+
+            last = _load_last_query()
+            if last:
+                self._keyword.configure(
+                    placeholder_text=f"重跑: {last['command']} {last['query']}"
+                )
+                self._keyword.focus_set()
+                return
         self._keyword.configure(placeholder_text=self._PLACEHOLDERS.get(command, ""))
         if command == "near":
             self._near_kind.pack(side="left", padx=(8, 0))
