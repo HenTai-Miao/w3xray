@@ -51,3 +51,12 @@ def test_guide_near_reverse_guard() -> None:
     assert "bnear" in src and "len(nums) > 4" in src  # 模板行直取 + 多数字守卫
     assert 'radius: str = ""' in src  # 半径参数化 (guide 双档 320)
     assert 'box, "100")' in src  # 精细档菜单
+
+
+def test_guide_code_menu_multi_match_guard() -> None:
+    """guide 码直达: 单匹配才发 (拒猜测), prefix 路由 where/drop/doc。"""
+    src = (Path(__file__).parents[1] / "gametool" / "gui_topbar.py").read_text(
+        encoding="utf-8"
+    )
+    assert "len(matches) != 1" in src  # 多匹配拒猜测 (309 语义)
+    assert '_code_selected(app, box, "drop")' in src  # 三键菜单

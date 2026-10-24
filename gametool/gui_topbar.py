@@ -522,6 +522,19 @@ def _open_guide_window(app, text: str) -> None:
     )
     guide_menu.add_separator()
     guide_menu.add_command(
+        label="用选中/剪贴板码查包查询",
+        command=lambda: _code_selected(app, box),
+    )
+    guide_menu.add_command(
+        label="用选中/剪贴板码 where 反查获取途径",
+        command=lambda: _code_selected(app, box, "where"),
+    )
+    guide_menu.add_command(
+        label="用选中/剪贴板码 drop 反查掉落",
+        command=lambda: _code_selected(app, box, "drop"),
+    )
+    guide_menu.add_separator()
+    guide_menu.add_command(
         label="用选中/剪贴板坐标 near 再查 (半径 500)",
         command=lambda: _near_selected_coords(app, box, "500"),
     )
@@ -531,6 +544,32 @@ def _open_guide_window(app, text: str) -> None:
     )
     box.bind("<Button-3>", lambda e: guide_menu.tk_popup(e.x_root, e.y_root))
     win.bind("<Escape>", lambda _e: win.destroy())
+
+
+def _code_selected(app, box, prefix: str = "") -> None:
+    """取选中/剪贴板的四码, 打开包查询窗 (prefix 空则 doc 直达)。"""
+    try:
+        raw = box.get("sel.first", "sel.last").strip()
+    except Exception:
+        raw = ""
+    if not raw:
+        try:
+            raw = box.clipboard_get().strip()
+        except Exception:
+            return
+    import re  # noqa: PLC0415
+
+    matches = re.findall(r"[A-Z][0-9A-Z]{3}", raw)
+    if len(matches) != 1:
+        return  # 多匹配拒猜测 (对齐探针 309)
+    code = matches[0]
+    open_pack_query_dialog(
+        app,
+        lambda: getattr(app, "_last_pack_dir", None) or load_last_pack_dir(),
+        app.on_export_pack,
+        prefill=(f"{prefix} {code}" if prefix else code),
+        prefill_command=(prefix if prefix else "doc"),
+    )
 
 
 def _near_selected_coords(app, box, radius: str = "") -> None:
