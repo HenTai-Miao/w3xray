@@ -222,11 +222,17 @@ def _recipe_lines(md: MapData) -> tuple[str, ...]:
 
 
 def _shop_lines(md: MapData) -> tuple[str, ...]:
-    return _grouped_source_lines(md, ItemRelationKind.SHOP_SELL, "、")
+    return _grouped_source_lines(
+        md, ItemRelationKind.SHOP_SELL, "、", coords=_placement_coords(md)
+    )
 
 
 def _drop_lines(md: MapData) -> tuple[str, ...]:
-    rows = list(_grouped_source_lines(md, ItemRelationKind.UNIT_DROP, "；"))
+    rows = list(
+        _grouped_source_lines(
+            md, ItemRelationKind.UNIT_DROP, "；", coords=_placement_coords(md)
+        )
+    )
     # 可破坏物掉落 (箱子/路障) 是独立关系类型——迷失国度 75 行此类证据
     # 此前整类不进 drops 段, 玩家只看得到「怪物掉落」
     rows.extend(_grouped_source_lines(md, ItemRelationKind.DESTRUCTABLE_DROP, "；"))
@@ -281,10 +287,24 @@ def _clue_lines(md: MapData) -> tuple[str, ...]:
     return tuple(rows)  # 线索全量: 匹配多少收多少, 不设条数上限
 
 
+_CODE_IN_KEY = re.compile(r"\((\w{4})\)$")
+
+
+def _placement_coords(md: MapData) -> dict[str, tuple[float, float]]:
+    """单位码 -> 第一处预放置坐标 (near 联动: 玩家复制命令即达)。"""
+    coords: dict[str, tuple[float, float]] = {}
+    for unit in md.units:
+        code = unit.type_id
+        if code and code not in coords:
+            coords[code] = (unit.x, unit.y)
+    return coords
+
+
 def _grouped_source_lines(
     md: MapData,
     kind: ItemRelationKind,
     separator: str,
+    coords: dict[str, tuple[float, float]] | None = None,
 ) -> tuple[str, ...]:
     grouped: dict[str, list[str]] = {}
     seen_entries: dict[str, set[str]] = {}
@@ -302,7 +322,13 @@ def _grouped_source_lines(
         grouped.setdefault(key, []).append(entry)
     rows: list[str] = []
     for source, items in grouped.items():
-        rows.append(f"- {source}：{separator.join(items)}")  # 全量, 无截断
+        suffix = ""
+        if coords:
+            m = _CODE_IN_KEY.search(source)
+            if m and m.group(1) in coords:
+                x, y = coords[m.group(1)]
+                suffix = f"  @({x:g},{y:g})"
+        rows.append(f"- {source}：{separator.join(items)}{suffix}")  # 全量, 无截断
     return tuple(rows)
 
 

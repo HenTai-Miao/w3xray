@@ -410,3 +410,20 @@ def test_parse_guide_cli_options_rejects_bad_input() -> None:
         parse_guide_cli_options(("t.w3x", "--section", "nonsense"))
     with pytest.raises(GuideCliOptionError, match="不能重复"):
         parse_guide_cli_options(("t.w3x", "--section", "recipes", "--section", "shops"))
+
+
+def test_drops_and_shops_lines_carry_first_placement_coords(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # shops/drops 段来源行补 @第一处预放置坐标——玩家复制 near 命令即达 (v10)。
+    md = _map_data(monkeypatch)
+    md.units.append(
+        Unit(type_id="nrwm", variation=0, x=11.0, y=22.0, z=0.0, angle=0.0, player=15),
+    )
+    md.units.append(
+        Unit(type_id="nwwd", variation=0, x=33.0, y=44.0, z=0.0, angle=0.0, player=15),
+    )
+    report = format_guide_report(md, "drops")
+    assert "雷暴元素(nrwm)：召唤卷轴 100%  @(11,22)" in report
+    shop_report = format_guide_report(md, "shops")
+    assert "@(33,44)" in shop_report
