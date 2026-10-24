@@ -389,6 +389,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
 
         find_entry.bind("<Return>", lambda _e: _find_next())
         self.bind_all("<Control-f>", lambda _e: find_entry.focus_set() or "break")
+        # CapsLock 大写态变体 (Tk 绑定大小写敏感)
+        self.bind_all("<Control-F>", lambda _e: find_entry.focus_set() or "break")
         # Ctrl+A 全选输出 (CTkTextbox 不默认绑)
         self.bind_all(
             "<Control-a>",
@@ -463,6 +465,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "<Button-3>", lambda e: pin_menu.tk_popup(e.x_root, e.y_root)
         )
         self.bind_all("<Control-p>", lambda _e: self._pinned_box.focus_set() or "break")
+        # CapsLock 大写态变体 (Tk 绑定大小写敏感)
+        self.bind_all("<Control-P>", lambda _e: self._pinned_box.focus_set() or "break")
 
         if prefill:
             self.after(120, lambda: self._run(prefill_command or "doc"))

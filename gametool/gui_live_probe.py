@@ -39,7 +39,9 @@ class LiveProbeWindow(ctk.CTkToplevel):
         self.grab_set()
         self.bind("<Escape>", lambda _e: self.destroy())
         self.bind("<Control-r>", lambda _e: self._start())
-        # GUI 惯例: 弹窗几何持久化 (复用 pack_query 的 memo 体系)
+        self.bind("<Control-r>", lambda _e: self._start())
+        # CapsLock 大写态变体 (Tk 绑定大小写敏感)
+        self.bind("<Control-R>", lambda _e: self._start())
         from .gui_pack_query import bind_geometry_memory
 
         bind_geometry_memory(self, "gui-live-probe", "860x560")
@@ -148,6 +150,8 @@ class LiveProbeWindow(ctk.CTkToplevel):
 
         find_entry.bind("<Return>", lambda _e: _find_next())
         self.bind_all("<Control-f>", lambda _e: find_entry.focus_set() or "break")
+        # CapsLock 大写态变体 (Tk 绑定大小写敏感)
+        self.bind_all("<Control-F>", lambda _e: find_entry.focus_set() or "break")
         # Ctrl+A 全选输出 (CTkTextbox 不默认绑)
         self.bind_all(
             "<Control-a>",

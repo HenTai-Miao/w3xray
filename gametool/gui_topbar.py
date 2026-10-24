@@ -409,6 +409,8 @@ def _open_guide_window(app, text: str) -> None:
     win.grab_set()
     win.bind("<Escape>", lambda _e: win.destroy())
     win.bind("<Control-f>", lambda _e: search_entry.focus_set() or "break")
+    # CapsLock 大写态变体 (Tk 绑定大小写敏感)
+    win.bind("<Control-F>", lambda _e: search_entry.focus_set() or "break")
     win.bind(
         "<Control-a>",
         lambda _e: (
@@ -792,3 +794,6 @@ def _bind_textbox_search(win, box, exporter=None) -> None:
         "<Escape>", lambda _e: (box.tag_remove("hit", "1.0", "end"), win.focus_set())
     )
     win.bind("<Control-f>", lambda _e: entry.focus_set() or None)
+
+    # CapsLock 大写态变体 (Tk 绑定大小写敏感)
+    win.bind("<Control-F>", lambda _e: entry.focus_set() or None)
