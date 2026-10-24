@@ -493,7 +493,39 @@ def _open_guide_window(app, text: str) -> None:
         label="强制重算 (清缓存刷新报告)",
         command=lambda: (_GUIDE_CACHE.clear(), _show_guide(app)),
     )
+    guide_menu.add_separator()
+    guide_menu.add_command(
+        label="用选中/剪贴板坐标 near 反查",
+        command=lambda: _near_selected_coords(app, box),
+    )
     box.bind("<Button-3>", lambda e: guide_menu.tk_popup(e.x_root, e.y_root))
+    win.bind("<Escape>", lambda _e: win.destroy())
+
+
+def _near_selected_coords(app, box) -> None:
+    """取选中/剪贴板的前两个数字, 打开包查询窗 near 模式反查。"""
+    try:
+        raw = box.get("sel first", "sel last").strip()
+    except Exception:
+        raw = ""
+    if not raw:
+        try:
+            raw = box.clipboard_get().strip()
+        except Exception:
+            return
+    import re  # noqa: PLC0415
+
+    nums = re.findall(r"-?\d+(?:\.\d+)?", raw)
+    if len(nums) < 2:
+        return
+
+    open_pack_query_dialog(
+        app,
+        lambda: getattr(app, "_last_pack_dir", None) or load_last_pack_dir(),
+        app.on_export_pack,
+        prefill=f"near {nums[0]} {nums[1]}",
+        prefill_command="near",
+    )
 
 
 def _jump_to_section(box, title: str) -> None:
