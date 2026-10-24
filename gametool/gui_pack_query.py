@@ -209,6 +209,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "units",
             "locate",
             "near",
+            "where",
+            "drop",
             "again",
         ]
         for _i, _cmd in enumerate(self._mode_commands, start=1):
@@ -232,9 +234,11 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 "units",
                 "locate",
                 "near",
+                "where",
+                "drop",
                 "again",
             ],
-            width=210,
+            width=280,
         )
         self._mode.set(prefill_command or _LAST_MODE)
         self._mode.pack(side="left", padx=(0, 8))
@@ -418,6 +422,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
         "units": "关键词可空=全量…  (回车查)",
         "locate": "特征码分号分隔: 码1;码2;…  (战役定位)",
         "near": "坐标反查: x y [radius] [--kind 单位/装饰/物品/脚本]  (探针 JSON 有 x/y)",
+        "where": "物品名/四码 → 获取途径 (合成/掉落/商店/脚本奖励满量)",
+        "drop": "单位/物品名 → 死亡掉落与奖池证据 (含脚本触发)",
         "again": "回车重跑最近一次成功查询 (pack/command/query 从记忆取)",
     }
 
