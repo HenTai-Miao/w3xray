@@ -149,3 +149,4 @@ def test_code_rerun_menu_methods() -> None:
     src = inspect.getsource(_PackQueryWindow._code_rerun)
     assert "len(matches) != 1" in src  # 多匹配拒猜测
     assert "self._switch_mode(prefix)" in src  # 统一切换入口
+    assert "box if box is not None" in src  # 收藏区同款 (box 参数化)

@@ -398,6 +398,14 @@ class _PackQueryWindow(ctk.CTkToplevel):
             command=lambda: self._near_rerun_from_pinned("100"),
         )
         pin_menu.add_command(
+            label="用选中码 where 反查获取途径",
+            command=lambda: self._code_rerun("where", self._pinned_box),
+        )
+        pin_menu.add_command(
+            label="用选中码 drop 反查掉落",
+            command=lambda: self._code_rerun("drop", self._pinned_box),
+        )
+        pin_menu.add_command(
             label="导出收藏为 .md",
             command=lambda: self._export_md(self._pinned_box, "收藏对比"),
         )
@@ -531,10 +539,11 @@ class _PackQueryWindow(ctk.CTkToplevel):
             self._near_kind.pack_forget()
         self._keyword.focus_set()
 
-    def _code_rerun(self, prefix: str) -> None:
+    def _code_rerun(self, prefix: str, box=None) -> None:
         """选中码以指定语义重查 (where=获取途径, drop=掉落; 对齐探针 306 直达)。"""
+        box = box if box is not None else self._output
         try:
-            raw = self._output.get("sel.first", "sel.last").strip()
+            raw = box.get("sel.first", "sel.last").strip()
         except tk.TclError:
             raw = ""
         import re as _re
