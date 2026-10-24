@@ -241,6 +241,15 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 "near",
                 "where",
                 "drop",
+            ],
+            width=280,
+        )
+        self._mode.set(prefill_command or _LAST_MODE)
+        self._mode.pack(side="left", padx=(0, 8))
+        # 扩展模式第二行 (低频查点选; 切换时与主面板联动 set)
+        self._mode_extra = ctk.CTkSegmentedButton(
+            row,
+            values=[
                 "again",
                 "stats",
                 "shop",
@@ -250,8 +259,9 @@ class _PackQueryWindow(ctk.CTkToplevel):
             ],
             width=280,
         )
-        self._mode.set(prefill_command or _LAST_MODE)
-        self._mode.pack(side="left", padx=(0, 8))
+        self._mode_extra.set("again")  # 占位显示 (真实模式以 self._mode 为准)
+        self._mode_extra.configure(command=self._extra_mode_clicked)
+        self._mode_extra.pack(side="left", padx=(0, 8))
         ctk.CTkButton(row, text="查询", width=84, command=self._run_clicked).pack(
             side="left"
         )
@@ -554,6 +564,11 @@ class _PackQueryWindow(ctk.CTkToplevel):
             parts.append(radius[-1][0] or radius[-1][1])
         self._keyword.delete(0, "end")
         self._keyword.insert(0, " ".join(parts))
+
+    def _extra_mode_clicked(self, value: str) -> None:
+        """扩展面板点选: 同步主面板模式并执行切换 (near 专有控件显隐跟随)。"""
+        self._mode.set(value)
+        self._switch_mode(value)
 
     def _run_clicked(self) -> None:
         self._run(self._mode.get())
