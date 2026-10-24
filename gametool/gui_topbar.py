@@ -522,15 +522,19 @@ def _open_guide_window(app, text: str) -> None:
     )
     guide_menu.add_separator()
     guide_menu.add_command(
-        label="用选中/剪贴板坐标 near 反查",
-        command=lambda: _near_selected_coords(app, box),
+        label="用选中/剪贴板坐标 near 再查 (半径 500)",
+        command=lambda: _near_selected_coords(app, box, "500"),
+    )
+    guide_menu.add_command(
+        label="用选中坐标 near 再查 (半径 100, 更精细)",
+        command=lambda: _near_selected_coords(app, box, "100"),
     )
     box.bind("<Button-3>", lambda e: guide_menu.tk_popup(e.x_root, e.y_root))
     win.bind("<Escape>", lambda _e: win.destroy())
 
 
-def _near_selected_coords(app, box) -> None:
-    """取选中/剪贴板的前两个数字, 打开包查询窗 near 模式反查。"""
+def _near_selected_coords(app, box, radius: str = "") -> None:
+    """取选中/剪贴板的坐标, 打开包查询窗 near 模式反查 (radius 空则用默认半径)。"""
     try:
         raw = box.get("sel.first", "sel.last").strip()
     except Exception:
@@ -557,7 +561,7 @@ def _near_selected_coords(app, box) -> None:
         app,
         lambda: getattr(app, "_last_pack_dir", None) or load_last_pack_dir(),
         app.on_export_pack,
-        prefill=f"near {nums[0]} {nums[1]}",
+        prefill="near {} {}{}".format(nums[0], nums[1], f" {radius}" if radius else ""),
         prefill_command="near",
     )
 
