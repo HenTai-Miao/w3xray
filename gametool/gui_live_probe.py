@@ -198,7 +198,11 @@ class LiveProbeWindow(ctk.CTkToplevel):
         )
         menu.add_command(
             label="用选中/剪贴板坐标 near 再查 (半径 500)",
-            command=self._near_rerun_selected,
+            command=lambda: self._near_rerun_selected("500"),
+        )
+        menu.add_command(
+            label="用选中/剪贴板坐标 near 再查 (半径 100, 更精细)",
+            command=lambda: self._near_rerun_selected("100"),
         )
         self._output.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
 
@@ -393,7 +397,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
         if self._query_callback is not None:
             self._query_callback(f"near {x} {y}")
 
-    def _near_rerun_selected(self) -> None:
+    def _near_rerun_selected(self, radius: str = "500") -> None:
         """选中/剪贴板坐标以半径 500 再查 (对齐查询窗 315 收缩迭代语义)。"""
         try:
             raw = self._output.get("sel.first", "sel.last").strip()
@@ -410,7 +414,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
         if len(nums) < 2:
             return
         if self._query_callback is not None:
-            self._query_callback(f"near {nums[0]} {nums[1]} 500")
+            self._query_callback(f"near {nums[0]} {nums[1]} {radius}")
 
     def _extract_code(self) -> str:
         """取输出区选中文本 (退剪贴板) 的四码, 无则空串。"""

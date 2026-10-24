@@ -119,4 +119,4 @@ def test_probe_near_rerun_radius_guard() -> None:
     import inspect
 
     src = inspect.getsource(LiveProbeWindow._near_rerun_selected)
-    assert ' 500"' in src  # 半径参数直填 (f-string 尾形态)
+    assert "{radius}" in src  # 半径参数化 (500/100 双档, 318 对齐) (f-string 尾形态)
