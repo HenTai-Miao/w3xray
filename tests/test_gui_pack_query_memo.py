@@ -171,3 +171,25 @@ def test_code_rerun_menu_methods() -> None:
     assert "len(matches) != 1" in src  # 多匹配拒猜测
     assert "self._switch_mode(prefix)" in src  # 统一切换入口
     assert "box if box is not None" in src  # 收藏区同款 (box 参数化)
+
+
+def test_free_word_list_complete() -> None:
+    """免词清单: 空词总览型模式全部在列 (365 轮漏三模式教训——清单也入守卫)。"""
+    import inspect
+
+    from gametool.gui_pack_query import _PackQueryWindow
+
+    src = inspect.getsource(_PackQueryWindow._run)
+    for mode in (
+        "stats",
+        "list",
+        "buffs",
+        "skills",
+        "units",
+        "heroes",
+        "synth",
+        "affixes",
+        "registered",
+        "again",
+    ):
+        assert f'"{mode}",' in src, mode
