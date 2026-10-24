@@ -2149,6 +2149,10 @@ def _query_text(pack: Path, query: str, limit: int) -> list[str]:
         if limit and len(lines) >= limit:
             break
     if lines:
+        if limit and len(lines) >= limit:
+            lines.append(
+                f"  (已达 --limit {limit}, 结果可能不止——收窄关键词或去掉 --limit)"
+            )
         return lines
     return [
         "未找到文本: " + query + " (扫全部 *.tsv 索引行)",
