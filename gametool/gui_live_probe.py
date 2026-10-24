@@ -29,7 +29,10 @@ class LiveProbeWindow(ctk.CTkToplevel):
         super().__init__(master)
         self._pack_dir = pack_dir
         self._query_callback = query_callback
-        self.title("live 探针 — 只读内存读取")
+        pack_name = pathlib.Path(pack_dir).name if pack_dir else ""
+        self.title(
+            "live 探针 — 只读内存读取" + (f" · {pack_name}" if pack_name else "")
+        )
         self.geometry("860x560")
         self.configure(fg_color=BG)
         self.transient(master)
