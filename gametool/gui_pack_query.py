@@ -706,7 +706,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             self._save_near_kind(kind)
             if kind != "全部":
                 keyword = (keyword + " --kind " + kind).strip()
-        # 免词清单 = 本窗九模式中可空词执行的 (affixes/registered 仅 CLI 有, 不在此窗)
+        # 免词清单 = 本窗可空词执行的模式 (affixes/registered/again/stats 等总览型全在内)
         if keyword or command in (
             "stats",
             "list",
@@ -715,6 +715,9 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "units",
             "heroes",
             "synth",
+            "affixes",
+            "registered",
+            "again",
         ):
             entry = (command, keyword)
             if entry in _HISTORY:
