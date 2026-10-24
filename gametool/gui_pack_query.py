@@ -217,6 +217,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "tech",
             "item",
             "heroes",
+            "price",
         ]
         for _i, _cmd in enumerate(self._mode_commands, start=1):
             keynum = _i if _i < 10 else 0  # near 排第 10 = Ctrl+0; again 第 11 位走不到
@@ -256,6 +257,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 "tech",
                 "item",
                 "heroes",
+                "price",
             ],
             width=280,
         )
@@ -264,7 +266,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self._mode_extra.pack(side="left", padx=(0, 8))
         # 初开时扩展排高亮同步 (记忆恢复的模式可能属扩展组)
         _initial = self._mode.get()
-        if _initial in ("again", "stats", "shop", "tech", "item", "heroes"):
+        if _initial in ("again", "stats", "shop", "tech", "item", "heroes", "price"):
             self._mode_extra.set(_initial)
         else:
             self._mode_extra.set("<<none>>")
@@ -500,6 +502,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         "tech": "科技名/码 → 等级/造价/效果/前置  (一屏科技单)",
         "item": "物品名/四码 → 效果/价格/描述 (自定义行优先)",
         "heroes": "英雄名 → 属性/技能/获取 (预放置+关系表)",
+        "price": "物品名/四码 → 金币价 (地图价优先, 未命中给总量提示)",
     }
 
     def _near_kind_file(self) -> pathlib.Path:
@@ -525,7 +528,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
     def _switch_mode(self, command: str) -> None:
         self._mode.set(command)
         # 扩展排高亮联动: 值属扩展组则高亮该值, 否则清高亮 (避免两排误导性高亮)
-        if command in ("again", "stats", "shop", "tech", "item", "heroes"):
+        if command in ("again", "stats", "shop", "tech", "item", "heroes", "price"):
             self._mode_extra.set(command)
         else:
             self._mode_extra.set("<<none>>")
