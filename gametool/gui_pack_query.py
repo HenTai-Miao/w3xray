@@ -261,6 +261,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 "cmd",
                 "text",
                 "refs",
+                "affixes",
             ],
             width=280,
         )
@@ -276,6 +277,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 "cmd",
                 "text",
                 "refs",
+                "affixes",
             ],
             width=280,
         )
@@ -296,6 +298,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "cmd",
             "text",
             "refs",
+            "affixes",
         ):
             self._mode_extra.set(_initial)
             self._mode_extra2.set("<<none>>")
@@ -539,6 +542,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         "cmd": "指令词 → 注册/条件/动作链全文 (空词看注册清单)",
         "text": "任意词 → 全 tsv 索引行兜底 (search 未中时最后一张网)",
         "refs": "码 → 脚本引用分类 (给予/消耗/其他——判升级链终点)",
+        "affixes": "词缀词可空=全量…  (回车查)",
     }
 
     def _near_kind_file(self) -> pathlib.Path:
@@ -576,6 +580,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "cmd",
             "text",
             "refs",
+            "affixes",
         ):
             self._mode_extra.set(command)
             self._mode_extra2.set("<<none>>")
