@@ -291,7 +291,8 @@ def run_live_cli(options: LiveCliOptions) -> int:
     if options.map_path is None and options.pack_dir is None:
         print(
             "未指定地图路径，且未能自动定位正在使用的图；请:"
-            " main.py live <地图.w3x|.w3n> (或 --pack <资料包目录>)",
+            " main.py live <地图.w3x|.w3n> (或 --pack <资料包目录>)。"
+            " 若游戏正停在主菜单 (未进图), 进图后重试——未加载的地图无使用中证据。",
             file=sys.stderr,
         )
         return 2
