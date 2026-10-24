@@ -215,6 +215,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "stats",
             "shop",
             "tech",
+            "item",
+            "heroes",
         ]
         for _i, _cmd in enumerate(self._mode_commands, start=1):
             keynum = _i if _i < 10 else 0  # near 排第 10 = Ctrl+0; again 第 11 位走不到
@@ -243,6 +245,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 "stats",
                 "shop",
                 "tech",
+                "item",
+                "heroes",
             ],
             width=280,
         )
@@ -452,6 +456,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
         "stats": "回车看包总览: 表行数/导出时间/查询记忆  (关键词可空)",
         "shop": "店名/商人 → 货架+制造+出售满量  (未命中列全图商店)",
         "tech": "科技名/码 → 等级/造价/效果/前置  (一屏科技单)",
+        "item": "物品名/四码 → 效果/价格/描述 (自定义行优先)",
+        "heroes": "英雄名 → 属性/技能/获取 (预放置+关系表)",
     }
 
     def _near_kind_file(self) -> pathlib.Path:
