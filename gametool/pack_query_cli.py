@@ -3484,6 +3484,14 @@ def _run_query_inner(options: PackQueryCliOptions) -> int:
                         "y": float(m.group(6)),
                         "dist": int(m.group(7) or 0),
                         "detail": line.strip(),
+                        "drops": (
+                            line.split("掉:", 1)[1].split("卖:", 1)[0].strip()
+                            if "掉:" in line
+                            else None
+                        ),
+                        "sell": line.split("卖:", 1)[-1].strip()
+                        if "卖:" in line
+                        else None,
                     }
                 )
         print(
