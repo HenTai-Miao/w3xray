@@ -343,6 +343,19 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 "（有上会话结果时此处自动恢复; Ctrl+F 内搜本区）\n",
             )
         pin_menu = tk.Menu(self, tearoff=0)
+        pin_menu.add_command(
+            label="复制选中",
+            command=lambda: (
+                (
+                    self._pinned_box.clipboard_clear(),
+                    self._pinned_box.clipboard_append(
+                        self._pinned_box.get("sel first", "sel last")
+                    ),
+                )
+                if self._pinned_box.tag_ranges("sel")
+                else None
+            ),
+        )
         pin_menu.add_command(label="复制收藏全部", command=self._copy_pinned)
         pin_menu.add_command(label="清空收藏", command=self._clear_pinned)
         pin_menu.add_command(
@@ -352,6 +365,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self._pinned_box.bind(
             "<Button-3>", lambda e: pin_menu.tk_popup(e.x_root, e.y_root)
         )
+        self.bind_all("<Control-p>", lambda _e: self._pinned_box.focus_set() or "break")
 
         if prefill:
             self.after(120, lambda: self._run(prefill_command or "doc"))
