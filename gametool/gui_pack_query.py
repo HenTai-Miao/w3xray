@@ -209,9 +209,12 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "units",
             "locate",
             "near",
+            "again",
         ]
         for _i, _cmd in enumerate(self._mode_commands, start=1):
-            keynum = _i if _i < 10 else 0  # near 排第 10 = Ctrl+0
+            keynum = _i if _i < 10 else 0  # near 排第 10 = Ctrl+0; again 第 11 位走不到
+            if _i > 10:
+                break  # again 仅面板点击切换 (Ctrl+0 已归 near)
             self.bind_all(
                 f"<Control-Key-{keynum}>",
                 lambda _e, c=_cmd: self._switch_mode(c),
@@ -229,8 +232,9 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 "units",
                 "locate",
                 "near",
+                "again",
             ],
-            width=200,
+            width=210,
         )
         self._mode.set(prefill_command or _LAST_MODE)
         self._mode.pack(side="left", padx=(0, 8))
@@ -387,6 +391,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         "units": "关键词可空=全量…  (回车查)",
         "locate": "特征码分号分隔: 码1;码2;…  (战役定位)",
         "near": "坐标反查: x y [radius] [--kind 单位/装饰/物品/脚本]  (探针 JSON 有 x/y)",
+        "again": "回车重跑最近一次成功查询 (pack/command/query 从记忆取)",
     }
 
     def _near_kind_file(self) -> pathlib.Path:
