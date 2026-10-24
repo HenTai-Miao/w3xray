@@ -60,7 +60,6 @@ _COMMANDS = (
     "refs",
     "locate",
     "affixes",
-    "again",
     "registered",
     "search",
     "diff",
@@ -639,7 +638,6 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         command
         in (
             "affixes",
-            "again",
             "again",
             "registered",
             "diff",
