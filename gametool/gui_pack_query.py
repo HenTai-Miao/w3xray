@@ -478,10 +478,21 @@ class _PackQueryWindow(ctk.CTkToplevel):
             raw = self.clipboard_get()
         except Exception:
             return
+        # 优先取 selected 块内坐标 — 探针 JSON 的 selected 在最前, 尾部是 all_units
+        # (旧取 xs[-1] 拿到的是全图末尾单位, 注释「通常=选中单位」不实)
+        sel_block = re.search(r'"selected"\s*:\s*\{[^{}]*\}', raw)
+        if sel_block:
+            block = sel_block.group(0)
+            mx = re.search(r'"x"\s*:\s*(-?[\d.]+)', block)
+            my = re.search(r'"y"\s*:\s*(-?[\d.]+)', block)
+            if mx and my:
+                self._keyword.delete(0, "end")
+                self._keyword.insert(0, mx.group(1) + " " + my.group(1))
+                return
         xs = re.findall(r'"x"\s*:\s*(-?[\d.]+)', raw)
         ys = re.findall(r'"y"\s*:\s*(-?[\d.]+)', raw)
         if xs and ys:
-            x, y = xs[-1], ys[-1]  # 探针 JSON 多单位时取最后一个 (通常=选中单位)
+            x, y = xs[-1], ys[-1]  # 无 selected 块时退最后一对 (裸坐标列表)
         else:
             nums = re.findall(r"-?[\d.]+", raw)
             if len(nums) < 2:

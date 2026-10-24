@@ -111,3 +111,14 @@ def test_sel_index_dot_syntax_everywhere() -> None:
         )
         assert '"sel first"' not in src, name
         assert '"sel.last"' in src or "sel.first" in src or "sel" not in src, name
+
+
+def test_coords_clipboard_prefers_selected_block() -> None:
+    """剪贴板提取坐标: 探针 JSON 有 selected 块时取其坐标而非全图末尾单位。"""
+    import inspect
+
+    from gametool.gui_pack_query import _PackQueryWindow
+
+    src = inspect.getsource(_PackQueryWindow._coords_from_clipboard)
+    assert '"selected"' in src  # selected 块优先
+    assert "xs[-1]" in src  # 兜底仍在 (无 selected 时退最后一对)
