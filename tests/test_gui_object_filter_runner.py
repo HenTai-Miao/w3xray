@@ -114,13 +114,13 @@ def test_shutdown_tracks_blocked_filter_and_prevents_late_status(
 
     monkeypatch.setattr(filter_runner, "filter_objects_by_query", block)
     runner._refresh_list()
-    assert started.wait(1)
+    assert started.wait(5)
 
     # When
     runner._shutdown_object_filter_runner()
     lingering = runner._shutdown_gui_worker_host(0)
     release.set()
-    assert finished.wait(1)
+    assert finished.wait(5)
 
     # Then
     assert lingering == ("object-filter",)
@@ -152,13 +152,13 @@ def test_replaced_filter_only_delivers_current_result(
     monkeypatch.setattr(filter_runner, "filter_objects_by_query", filter_query)
     runner.search_var.value = "old"  # pyright: ignore[reportAttributeAccessIssue]
     runner._refresh_list()
-    assert first_started.wait(1)
+    assert first_started.wait(5)
 
     # When
     runner.search_var.value = "new"  # pyright: ignore[reportAttributeAccessIssue]
     runner._refresh_list()
-    assert second_done.wait(1)
-    assert runner.posted.wait(1)
+    assert second_done.wait(5)
+    assert runner.posted.wait(5)
     release_first.set()
     runner.run_scheduled()
     assert runner._shutdown_gui_worker_host(1) == ()

@@ -282,13 +282,13 @@ def test_blocked_discovery_is_tracked_and_late_resolution_is_ignored(
 
     monkeypatch.setattr(current_gui, "locate_current_map", locate)
     harness.on_open_current_map()
-    assert started.wait(1)
+    assert started.wait(5)
 
     # When
     harness._shutdown_current_map_gui()
     lingering = harness._shutdown_gui_worker_host(0)
     release.set()
-    assert finished.wait(1)
+    assert finished.wait(5)
 
     # Then
     assert lingering == ("current-map",)

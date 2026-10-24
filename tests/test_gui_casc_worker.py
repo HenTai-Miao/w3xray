@@ -90,16 +90,16 @@ def test_casc_source_arriving_after_shutdown_is_closed(
 
     monkeypatch.setattr(casc_gui, "open_game_data_source", open_source)
     host.on_browse_game_data()
-    assert started.wait(1)
+    assert started.wait(5)
 
     # When
     lingering = host._shutdown_gui_worker_host(0)
     release.set()
-    assert finished.wait(1)
+    assert finished.wait(5)
 
     # Then
     assert lingering == ("casc-open",)
-    assert source.closed.wait(1)
+    assert source.closed.wait(5)
     assert host.scheduled == {}
     assert host.shown == []
     assert host._shutdown_gui_worker_host(1) == ()

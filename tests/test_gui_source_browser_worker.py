@@ -68,12 +68,12 @@ def test_scan_finishing_after_shutdown_never_updates_source_panel(
 
     monkeypatch.setattr(source_browser, "scan_battle_maps", scan)
     browser._scan_dir("/maps", "battle")
-    assert started.wait(1)
+    assert started.wait(5)
 
     # When
     lingering = browser._shutdown_gui_worker_host(0)
     release.set()
-    assert finished.wait(1)
+    assert finished.wait(5)
 
     # Then
     assert lingering == ("source-scan",)

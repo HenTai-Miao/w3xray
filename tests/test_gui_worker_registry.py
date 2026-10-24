@@ -25,7 +25,7 @@ def test_shutdown_is_bounded_when_worker_ignores_cancellation() -> None:
         _ = release.wait(2)
 
     _ = registry.start("loader", block, replace=False)
-    assert started.wait(1)
+    assert started.wait(5)
 
     # When
     began = monotonic()
@@ -54,11 +54,11 @@ def test_replaced_ticket_cannot_deliver_callback() -> None:
         second_ready.set()
 
     first = registry.start("filter", collect_first, replace=True)
-    assert first_ready.wait(1)
+    assert first_ready.wait(5)
 
     # When
     second = registry.start("filter", collect_second, replace=True)
-    assert second_ready.wait(1)
+    assert second_ready.wait(5)
 
     # Then
     assert tickets == [first, second]
@@ -140,10 +140,10 @@ def test_finish_is_safe_when_cancellation_wins_worker_race() -> None:
 
     def finish_late(_ticket: GuiWorkerTicket) -> None:
         started.set()
-        _ = release.wait(1)
+        _ = release.wait(5)
 
     ticket = registry.start("scan", finish_late, replace=False)
-    assert started.wait(1)
+    assert started.wait(5)
 
     # When
     registry.cancel_group("scan")

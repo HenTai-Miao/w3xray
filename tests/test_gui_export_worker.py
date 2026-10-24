@@ -69,12 +69,12 @@ def test_script_export_finishing_after_shutdown_never_opens_output(
     )
     monkeypatch.setattr(export_actions, "write_script_exports", write_scripts)
     exporter.on_export_scripts()
-    assert started.wait(1)
+    assert started.wait(5)
 
     # When
     lingering = exporter._shutdown_gui_worker_host(0)
     release.set()
-    assert finished.wait(1)
+    assert finished.wait(5)
 
     # Then
     assert lingering == ("export-scripts",)

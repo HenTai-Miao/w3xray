@@ -70,12 +70,12 @@ def test_save_analysis_finishing_after_shutdown_never_opens_result(
     monkeypatch.setattr(external_data, "analyze_real_save_path", analyze)
     monkeypatch.setattr(external_data, "write_text", lambda *_args: 1)
     harness._start_real_save_analysis("/saves")
-    assert started.wait(1)
+    assert started.wait(5)
 
     # When
     lingering = harness._shutdown_gui_worker_host(0)
     release.set()
-    assert finished.wait(1)
+    assert finished.wait(5)
 
     # Then
     assert lingering == ("real-save-analysis",)

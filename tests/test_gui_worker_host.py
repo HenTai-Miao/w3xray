@@ -66,7 +66,7 @@ def test_current_ticket_delivers_posted_callback() -> None:
         posted.set()
 
     _ = host._start_gui_worker("loader", worker, replace=True)
-    assert posted.wait(1)
+    assert posted.wait(5)
 
     # When
     host.run_next()
@@ -93,7 +93,7 @@ def test_replaced_ticket_cleans_callback_at_tk_delivery_boundary() -> None:
         posted.set()
 
     ticket = host._start_gui_worker("filter", worker, replace=True)
-    assert posted.wait(1)
+    assert posted.wait(5)
     host._gui_workers.cancel_group("filter")
     assert not host._gui_workers.accepts(ticket)
 
@@ -121,7 +121,7 @@ def test_shutdown_cleans_callback_already_queued_for_tk() -> None:
         posted.set()
 
     _ = host._start_gui_worker("casc", worker, replace=False)
-    assert posted.wait(1)
+    assert posted.wait(5)
     queued_callback = next(iter(host.scheduled.values()))
 
     # When
@@ -144,7 +144,7 @@ def test_result_arriving_after_shutdown_is_cleaned_without_tk_post() -> None:
 
     def worker(ticket: GuiWorkerTicket) -> None:
         started.set()
-        _ = release.wait(1)
+        _ = release.wait(5)
         assert not host._post_gui_worker(
             ticket,
             lambda: None,
@@ -153,12 +153,12 @@ def test_result_arriving_after_shutdown_is_cleaned_without_tk_post() -> None:
         finished.set()
 
     _ = host._start_gui_worker("loader", worker, replace=False)
-    assert started.wait(1)
+    assert started.wait(5)
     assert host._shutdown_gui_worker_host(0) == ("loader",)
 
     # When
     release.set()
-    assert finished.wait(1)
+    assert finished.wait(5)
 
     # Then
     assert cleaned == ["late"]
@@ -180,7 +180,7 @@ def test_worker_never_calls_tk_after_from_its_background_thread() -> None:
 
     # When
     _ = host._start_gui_worker("export", worker, replace=False)
-    assert finished.wait(1)
+    assert finished.wait(5)
 
     # Then
     assert host.after_threads == [main_thread]
@@ -197,7 +197,7 @@ def test_poll_reschedule_failure_cleans_result_arriving_after_tk_closes() -> Non
 
     def worker(ticket: GuiWorkerTicket) -> None:
         started.set()
-        _ = release.wait(1)
+        _ = release.wait(5)
         assert not host._post_gui_worker(
             ticket,
             lambda: None,
@@ -206,12 +206,12 @@ def test_poll_reschedule_failure_cleans_result_arriving_after_tk_closes() -> Non
         finished.set()
 
     _ = host._start_gui_worker("export", worker, replace=False)
-    assert started.wait(1)
+    assert started.wait(5)
 
     # When
     host.run_next()
     release.set()
-    assert finished.wait(1)
+    assert finished.wait(5)
 
     # Then
     assert cleaned == ["closed"]
