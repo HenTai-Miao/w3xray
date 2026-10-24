@@ -213,6 +213,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "drop",
             "again",
             "stats",
+            "shop",
+            "tech",
         ]
         for _i, _cmd in enumerate(self._mode_commands, start=1):
             keynum = _i if _i < 10 else 0  # near 排第 10 = Ctrl+0; again 第 11 位走不到
@@ -239,6 +241,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 "drop",
                 "again",
                 "stats",
+                "shop",
+                "tech",
             ],
             width=280,
         )
@@ -446,6 +450,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
         "drop": "单位/物品名 → 死亡掉落与奖池证据 (含脚本触发)",
         "again": "回车重跑最近一次成功查询 (pack/command/query 从记忆取)",
         "stats": "回车看包总览: 表行数/导出时间/查询记忆  (关键词可空)",
+        "shop": "店名/商人 → 货架+制造+出售满量  (未命中列全图商店)",
+        "tech": "科技名/码 → 等级/造价/效果/前置  (一屏科技单)",
     }
 
     def _near_kind_file(self) -> pathlib.Path:

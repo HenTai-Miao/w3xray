@@ -98,6 +98,7 @@ def test_stats_mode_in_panel() -> None:
 
     src = inspect.getsource(_PackQueryWindow)
     assert src.count('"stats",') >= 2  # _mode_commands + SegmentedButton values
+    assert src.count('"shop",') >= 2 and src.count('"tech",') >= 2  # 16 模式 (322)
     assert '"stats":' in src  # placeholder 表
 
 
