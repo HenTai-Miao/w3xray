@@ -393,8 +393,14 @@ class LiveProbeWindow(ctk.CTkToplevel):
         # 四码或含四码的片段都行: 提取前一个 [A-Z][0-9A-Z]{3} 形态
         import re
 
-        m = re.search(r"[A-Z][0-9A-Z]{3}", code)
-        return m.group(0) if m else ""
+        matches = re.findall(r"[A-Z][0-9A-Z]{3}", code)
+        if not matches:
+            return ""
+        if len(matches) > 1:
+            # 全选/长选区含多个码 — 猜一个会误导 (JSON 尾部首个码是随机条目)
+            self._copy_hint.configure(text="选区含多个码——请精确选中一个")
+            return ""
+        return matches[0]
 
     def _query_selected_code(self) -> None:
         """取选中/剪贴板四码, 交给包查询窗 doc 模式。"""

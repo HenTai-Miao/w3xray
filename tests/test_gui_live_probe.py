@@ -92,3 +92,15 @@ def test_probe_where_drop_menu_routes(_tk, tmp_path) -> None:
     inner.delete("1.0", "end")
     win._drop_selected_code()
     assert sent == ["where I083"]  # 无码不重复发
+
+
+def test_extract_code_multi_match_refuses(_tk, tmp_path) -> None:
+    """全选含多个码时拒绝猜测, 状态栏提示精确选中。"""
+    win = LiveProbeWindow(_tk, tmp_path, query_callback=lambda s: None)
+    inner = win._output._textbox
+    inner.configure(state="normal")
+    inner.delete("1.0", "end")
+    inner.insert("1.0", "I083 I09A H004")
+    inner.tag_add("sel", "1.0", "1.end")
+    assert win._extract_code() == ""
+    assert "多个码" in win._copy_hint.cget("text")
