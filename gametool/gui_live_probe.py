@@ -283,6 +283,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
             from .live_cli import LiveCliOptions, run_live_cli
 
             buffer = io.StringIO()
+            err_buffer = io.StringIO()
             resources = ("reported", "reported") if want_resources else None
             options = LiveCliOptions(
                 map_path=map_path,
@@ -294,14 +295,21 @@ class LiveProbeWindow(ctk.CTkToplevel):
             )
             code = 0
             try:
-                with contextlib.redirect_stdout(buffer):
+                with (
+                    contextlib.redirect_stdout(buffer),
+                    contextlib.redirect_stderr(err_buffer),
+                ):
                     code = run_live_cli(options)
             except SystemExit as exc:  # 返回码路径
                 code = int(exc.code or 0)
             except Exception as exc:  # 撑住弹窗: 任何异常都落文本区
                 done.append(f"探针异常: {type(exc).__name__}: {exc}")
                 return
-            done.append(f"{code}" + chr(0) + buffer.getvalue())
+            body = buffer.getvalue()
+            if code != 0 and err_buffer.getvalue().strip():
+                # 出路口径走 stderr (无图/未运行/主菜单提示) — GUI 用户必须看到
+                body = body + err_buffer.getvalue()
+            done.append(f"{code}" + chr(0) + body)
 
         threading.Thread(target=_worker, daemon=True).start()
 
