@@ -387,6 +387,13 @@ def _bounded(seq, limit: int):
     return seq[:limit] if limit else seq
 
 
+def _truncated_note(seq, limit: int) -> str:
+    """截断披露行: --limit 生效且确有截断时提示还有多少 (空串=未截断)。"""
+    if limit and len(seq) > limit:
+        return f"  (已达 --limit {limit}, 其余 {len(seq) - limit} 条未显示——去掉 --limit 看全量)"
+    return ""
+
+
 def _query_tech(pack: Path, query: str, limit: int) -> list[str]:
     techs = load_techs(pack)
     fields = load_tech_fields(pack)
@@ -2461,6 +2468,7 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
                     sum(p[1] for p in t[2]) / len(t[2]),
                 ),
             )
+            note = _truncated_note(hits, limit)
             for code, name, xs in _bounded(hits, limit):
                 cx = sum(p[0] for p in xs) / len(xs)
                 cy = sum(p[1] for p in xs) / len(xs)
@@ -2469,6 +2477,8 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
                 lines.append(
                     f"  {kind}: {name} [{code}] ×{len(xs)} @({cx:g},{cy:g}) 距{dist(cx, cy):.0f}{drop}{sell}"
                 )
+            if note:
+                lines.append(note)
         else:
             clusters: list[tuple[float, str, int, float, float]] = []
             for (code, name), pts in entries.items():
@@ -2487,12 +2497,15 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
                         (dist(gcx, gcy), f"{name} [{code}]", len(group), gcx, gcy)
                     )
             clusters.sort()
+            note_c = _truncated_note(clusters, limit)
             for d, label, n, gcx, gcy in _bounded(clusters, limit):
                 code = label.rsplit("[", 1)[-1].rstrip("]") if "[" in label else ""
                 drop = f"  掉: {drop_map[code]}" if code in drop_map else ""
                 lines.append(
                     f"  {kind}群: {label} ×{n} @({gcx:g},{gcy:g}) 距{d:.0f}{drop}"
                 )
+            if note_c:
+                lines.append(note_c)
         if not entries and nearest:
             nearest.sort()
             for d, label in nearest:  # 半径外最近全部列出
@@ -2529,10 +2542,13 @@ def _query_near(pack: Path, query: str, limit: int) -> list[str]:
             if d <= radius:
                 spawned.append((d, m.group(1), x, y))
         spawned.sort()
+        note_s = _truncated_note(spawned, limit)
         for d, code, x, y in _bounded(spawned, limit):
             name = load_units(pack).get(code, code)
             drop = f"  掉: {drop_map[code]}" if code in drop_map else ""
             lines.append(f"  脚本单位: {name} [{code}] @({x:g},{y:g}) 距{d:.0f}{drop}")
+            if note_s:
+                lines.append(note_s)
     if kind_filter and len(lines) == 1:
         return [
             f"坐标 ({px:g},{py:g}) 半径 {radius:g} 内无 {kind_filter} 类命中。",
