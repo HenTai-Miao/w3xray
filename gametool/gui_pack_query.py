@@ -217,11 +217,6 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "tech",
             "item",
             "heroes",
-            "price",
-            "quest",
-            "cmd",
-            "text",
-            "refs",
         ]
         for _i, _cmd in enumerate(self._mode_commands, start=1):
             keynum = _i if _i < 10 else 0  # near 排第 10 = Ctrl+0; again 第 11 位走不到
@@ -272,6 +267,21 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self._mode_extra.set("again")  # 占位显示 (真实模式以 self._mode 为准)
         self._mode_extra.configure(command=self._extra_mode_clicked)
         self._mode_extra.pack(side="left", padx=(0, 8))
+        # 扩展第二排 (数值/文本/引用类; 与扩展排共用联动)
+        self._mode_extra2 = ctk.CTkSegmentedButton(
+            row,
+            values=[
+                "price",
+                "quest",
+                "cmd",
+                "text",
+                "refs",
+            ],
+            width=280,
+        )
+        self._mode_extra2.set("<<none>>")
+        self._mode_extra2.configure(command=self._extra_mode_clicked)
+        self._mode_extra2.pack(side="left", padx=(0, 8))
         # 初开时扩展排高亮同步 (记忆恢复的模式可能属扩展组)
         _initial = self._mode.get()
         if _initial in (
@@ -288,8 +298,10 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "refs",
         ):
             self._mode_extra.set(_initial)
+            self._mode_extra2.set("<<none>>")
         else:
             self._mode_extra.set("<<none>>")
+            self._mode_extra2.set(_initial)
         ctk.CTkButton(row, text="查询", width=84, command=self._run_clicked).pack(
             side="left"
         )
@@ -566,8 +578,10 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "refs",
         ):
             self._mode_extra.set(command)
+            self._mode_extra2.set("<<none>>")
         else:
             self._mode_extra.set("<<none>>")
+            self._mode_extra2.set(command)
         if command == "again":
             # placeholder 动态显示最近一次查询 (用户不用猜记忆里有什么)
             from .pack_query_cli import _load_last_query  # noqa: PLC0415
