@@ -107,6 +107,19 @@ def test_stats_mode_in_panel() -> None:
     assert '"stats":' in src  # placeholder 表
 
 
+def test_mode_panel_three_rows() -> None:
+    """23 模式三排布局: 主排+扩展排+扩展二排, 双排高亮互斥。"""
+    import inspect
+
+    from gametool.gui_pack_query import _PackQueryWindow
+
+    src = inspect.getsource(_PackQueryWindow)
+    assert "_mode_extra2" in src  # 扩展二排
+    assert (
+        src.count('_mode_extra2.set("<<none>>")') >= 3
+    )  # 构造占位+切换+初开双排互斥清显
+
+
 def test_sel_index_dot_syntax_everywhere() -> None:
     """sel 索引必须用点号形态 ("sel.first") — 空格形态 Tcl 炸 (306 轮真 bug)。"""
     import pathlib as _pl
