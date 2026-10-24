@@ -394,6 +394,14 @@ def _truncated_note(seq, limit: int) -> str:
     return ""
 
 
+def _limit_disclosure_note(lines: list[str], limit: int) -> None:
+    """显式 --limit 截断披露: 尾部追加提示行 (满量纪律——截断不得静默)。"""
+    if limit and len(lines) >= limit:
+        lines.append(
+            f"  (已达 --limit {limit}, 以上可能不全——收窄关键词或去掉 --limit 查看全部)"
+        )
+
+
 def _query_tech(pack: Path, query: str, limit: int) -> list[str]:
     techs = load_techs(pack)
     fields = load_tech_fields(pack)
@@ -480,6 +488,7 @@ def _query_tech(pack: Path, query: str, limit: int) -> list[str]:
         lines.append("")
         if limit and len(lines) >= limit * 8:
             break
+    _limit_disclosure_note(lines, limit)
     if lines:
         return lines
     # 未命中时给科技总量提示——「未找到」不代表本图没有科技系统
@@ -774,6 +783,7 @@ def _query_item(pack: Path, query: str, limit: int) -> list[str]:
             lines.append("  " + (tooltips.get(code, "") or desc))  # ides/utub 全文
             if limit and len(lines) >= limit * 3:
                 break
+    _limit_disclosure_note(lines, limit)
     if lines:
         return lines
     # 未命中时给物品总量提示 (「未找到」不代表本图没有物品表)
@@ -812,6 +822,9 @@ def _query_price(pack: Path, query: str, limit: int) -> list[str]:
             )
             if limit and len(lines) >= limit:
                 break
+    if lines:
+        _limit_disclosure_note(lines, limit)
+        return lines
     if not lines:
         price = _base_prices().get(query.lower())
         if price:
@@ -889,6 +902,7 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
             lines.append("  " + item)
         lines.append("")
     if lines:
+        _limit_disclosure_note(lines, limit)
         return lines
     # 口语店名常不含在完整名里 (「商人」不在「银月配方商」中) —— 答「未找到」
     # 前先把本图真实商店列出来, 并加 ⚠ 前缀让容器聚合把容器级结果打印出来
@@ -1106,6 +1120,7 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
         lines.append(
             "  （若有预放置坐标/脚本位置，可用 near <x> <y> 按坐标反查周边掉落与单位）"
         )
+    _limit_disclosure_note(lines, limit)
     return lines
 
 
@@ -2102,6 +2117,7 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
                 + "/".join(sorted(kinds))
                 + ")——不得断言打怪掉落; NPC 随身携带不构成掉落证据"
             )
+    _limit_disclosure_note(lines, limit)
     return lines
 
 
@@ -2116,6 +2132,7 @@ def _query_quest(pack: Path, query: str, limit: int) -> list[str]:
                 lines.append(_clean(line.rstrip("\n")))  # 整行, 不开窗
                 if limit and len(lines) >= limit:
                     break
+    _limit_disclosure_note(lines, limit)
     if lines:
         return lines
     if query:
@@ -2656,6 +2673,7 @@ def _query_cmd(pack: Path, query: str, limit: int) -> list[str]:
             else "  动作: (未找到 TriggerAddAction)"
         )
         lines.append("")
+    _limit_disclosure_note(lines, limit)
     return lines
 
 
@@ -2788,6 +2806,7 @@ def _query_affix(pack: Path, query: str, limit: int) -> list[str]:
             lines.append(f"  公式: 词条等级 × {mult} {unit}{stat}")
         if limit and len(lines) >= limit * 2:
             break
+    _limit_disclosure_note(lines, limit)
     if lines:
         return lines
     return [f"未找到词缀: {query}（本包词缀表共 {len(affixes)} 条）"]
