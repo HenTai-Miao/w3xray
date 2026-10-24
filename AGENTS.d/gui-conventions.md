@@ -34,7 +34,7 @@
 
 ## 5. 键盘流
 
-- Ctrl+1..9 切模式（第九位 locate 战役定位）+ 动态 placeholder：`gui_pack_query.py` `_switch_mode/_PLACEHOLDERS`
+- Ctrl+1..0 切模式（第 10 位 near 坐标反查；面板 13 模式 = 核心 10 + where/drop/again 无快捷键）+ 动态 placeholder（again 模式动态显示最近查询）：`gui_pack_query.py` `_switch_mode/_PLACEHOLDERS`
 - 回车执行当前模式（非固定 doc）：`_run` 绑定处
 - Ctrl+A 全选输出（CTkTextbox 不默认绑；bind_all Control-a: sel 全文+insert 置尾+break）——探针/查询窗/guide 弹窗三窗齐 (273-274 轮)：
 - Ctrl+F 内搜（回车循环跳转+选区高亮+尾部回卷）：
