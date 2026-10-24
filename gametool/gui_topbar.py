@@ -417,6 +417,15 @@ def _open_guide_window(app, text: str) -> None:
             "break",
         )[2],
     )
+    # CapsLock 大写态变体 (Tk 绑定大小写敏感)
+    win.bind(
+        "<Control-A>",
+        lambda _e: (
+            box.tag_add("sel", "1.0", "end"),
+            box.mark_set("insert", "end"),
+            "break",
+        )[2],
+    )
     search_row = ctk.CTkFrame(win, fg_color="transparent")
     search_row.pack(fill="x", padx=8, pady=(8, 0))
     search_var = ctk.StringVar()

@@ -157,6 +157,15 @@ class LiveProbeWindow(ctk.CTkToplevel):
                 "break",
             )[2],
         )
+        # CapsLock 大写态变体 (Tk 绑定大小写敏感)
+        self.bind_all(
+            "<Control-A>",
+            lambda _e: (
+                self._output.tag_add("sel", "1.0", "end"),
+                self._output.mark_set("insert", "end"),
+                "break",
+            )[2],
+        )
         menu = tk.Menu(self, tearoff=0)
         menu.add_command(
             label="复制全部",
