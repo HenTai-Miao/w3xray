@@ -148,6 +148,15 @@ class LiveProbeWindow(ctk.CTkToplevel):
 
         find_entry.bind("<Return>", lambda _e: _find_next())
         self.bind_all("<Control-f>", lambda _e: find_entry.focus_set() or "break")
+        # Ctrl+A 全选输出 (CTkTextbox 不默认绑)
+        self.bind_all(
+            "<Control-a>",
+            lambda _e: (
+                self._output.tag_add("sel", "1.0", "end"),
+                self._output.mark_set("insert", "end"),
+                "break",
+            )[2],
+        )
         menu = tk.Menu(self, tearoff=0)
         menu.add_command(
             label="复制全部",
