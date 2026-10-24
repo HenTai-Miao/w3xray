@@ -449,7 +449,9 @@ class _PackQueryWindow(ctk.CTkToplevel):
     def _on_history_pick(self, value: str) -> None:
         for cmd, kw in _HISTORY:
             if f"{cmd} {kw}".strip() == value:
-                self._mode.set(cmd)
+                self._switch_mode(
+                    cmd
+                )  # 走统一切换 (扩展排高亮/near 显隐/placeholder 跟随)
                 self._keyword.delete(0, "end")
                 self._keyword.insert(0, kw)
                 self._run(cmd)
