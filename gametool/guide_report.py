@@ -117,6 +117,14 @@ def format_guide_report(md: MapData, section: str | None = None) -> str:
         "- 战役容器：指令/任务/掉落/合成在各任务关里——逐关查询用 "
         "`pack-query <战役包> <命令> <词>`（自动按「== 子地图 名 ==」聚合）"
     )
+    # 尾部 near 模板: 报告里首个 @坐标 → 可直接复制执行的坐标反查 (near 联动)
+    if section in (None, "shops", "drops"):
+        for line in lines:
+            m = _COORD_IN_LINE.search(line)
+            if m:
+                lines.append("")
+                lines.append(f"- 坐标反查模板：near {m.group(1)} {m.group(2)}")
+                break
     if is_campaign and section is None:
         lines.append("")
         lines.append(hint)
@@ -288,6 +296,7 @@ def _clue_lines(md: MapData) -> tuple[str, ...]:
 
 
 _CODE_IN_KEY = re.compile(r"\((\w{4})\)$")
+_COORD_IN_LINE = re.compile(r"@\((-?[\d.]+),(-?[\d.]+)\)")
 
 
 def _placement_coords(md: MapData) -> dict[str, tuple[float, float]]:

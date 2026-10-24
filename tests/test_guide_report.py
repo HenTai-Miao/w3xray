@@ -427,3 +427,6 @@ def test_drops_and_shops_lines_carry_first_placement_coords(
     assert "雷暴元素(nrwm)：召唤卷轴 100%  @(11,22)" in report
     shop_report = format_guide_report(md, "shops")
     assert "@(33,44)" in shop_report
+    # 报告尾部给可复制 near 模板 (首个 @坐标)
+    full = format_guide_report(md)
+    assert "坐标反查模板：near 33 44" in full  # 首个 @ 在 shops 段 (nwwd)
