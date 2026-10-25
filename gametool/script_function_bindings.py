@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from bisect import bisect_left
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import re
 
 from .save_call_context import extract_call_args
@@ -71,6 +71,7 @@ class ScriptFunctionBindings:
             key: (tuple(item.offset for item in rows), tuple(rows))
             for key, rows in grouped.items()
         }
+        self._reference_cache: dict[tuple[str, int | None, int], FunctionReference] = {}
 
     def active(self, owner: int | None, position: int) -> tuple[str, ...]:
         return tuple(
@@ -133,6 +134,10 @@ class ScriptFunctionBindings:
     ) -> str:
         prefixes, _ = reference_parts(expression, lua=self.lua)
         for prefix in prefixes[:-1]:
+            if prefix == "_ENV" and self.symbols.is_standard_environment(
+                owner, position
+            ):
+                continue
             symbol = self.symbols.symbol(prefix, owner, position)
             assignment, note = self._write(symbol, owner, position)
             if note:
@@ -181,31 +186,47 @@ class ScriptFunctionBindings:
                     raw, (function,), "" if function.complete else "回调函数范围未闭合"
                 )
         value = re.sub(r"^function\s+", "", value).strip().replace(":", ".")
-        seen: set[ScriptSymbol] = set()
+        seen: set[tuple[str, int | None, int]] = set()
+        trail: list[tuple[str, int | None, int]] = []
+
+        def finish(result: FunctionReference) -> FunctionReference:
+            facts = replace(result, expression="")
+            for key in trail:
+                self._reference_cache[key] = facts
+            return result
+
         while (
             name := qualified_name(script_views(value, lua=self.lua).syntax)
         ) is not None:
             value = name.replace(":", ".")
+            key = value, owner, start
+            if cached := self._reference_cache.get(key):
+                return finish(replace(cached, expression=raw))
+            trail.append(key)
             symbol = self.symbols.symbol(value, owner, start)
-            if symbol in seen:
-                return FunctionReference(raw, (), "函数别名形成循环，静态绑定未确定")
-            seen.add(symbol)
+            if key in seen:
+                return finish(
+                    FunctionReference(raw, (), "函数别名形成循环，静态绑定未确定")
+                )
+            seen.add(key)
             assignment, diagnostic = self._write(symbol, owner, start)
             if diagnostic:
-                return FunctionReference(raw, (), diagnostic)
+                return finish(FunctionReference(raw, (), diagnostic))
             if assignment is not None:
                 diagnostic = self._parent_diagnostic(
                     value, owner, start, (assignment.owner, assignment.offset)
                 )
                 if diagnostic:
-                    return FunctionReference(raw, (), diagnostic)
+                    return finish(FunctionReference(raw, (), diagnostic))
                 atom = self.atoms.assignment(assignment)
                 if atom is not None and atom.function is not None:
                     function = atom.function
-                    return FunctionReference(
-                        raw,
-                        (function,),
-                        "" if function.complete else "回调函数范围未闭合",
+                    return finish(
+                        FunctionReference(
+                            raw,
+                            (function,),
+                            "" if function.complete else "回调函数范围未闭合",
+                        )
                     )
                 value = strip_outer_parentheses(self.atoms.value(assignment))
                 value = re.sub(r"^function\s+", "", value).strip()
@@ -220,8 +241,10 @@ class ScriptFunctionBindings:
                     for item in candidates
                 )
                 if any(parent_notes):
-                    return FunctionReference(
-                        raw, (), "; ".join(filter(None, parent_notes))
+                    return finish(
+                        FunctionReference(
+                            raw, (), "; ".join(filter(None, parent_notes))
+                        )
                     )
                 diagnostic = (
                     f"回调同名歧义：{len(candidates)} 个候选，未确定实际绑定"
@@ -239,7 +262,7 @@ class ScriptFunctionBindings:
                             (diagnostic, "函数定义处于条件分支，实际绑定须按原文核对"),
                         )
                     )
-                return FunctionReference(raw, candidates, diagnostic)
+                return finish(FunctionReference(raw, candidates, diagnostic))
             canonical = symbol[2]
             builtins = {"FourCC", *GEOMETRY_BUILTINS}
             if self.lua is True:
@@ -247,10 +270,17 @@ class ScriptFunctionBindings:
             if canonical in builtins:
                 diagnostic = self._parent_diagnostic(value, owner, start, None)
                 if diagnostic:
-                    return FunctionReference(raw, (), diagnostic)
+                    return finish(FunctionReference(raw, (), diagnostic))
                 if symbol[1] < 0:
-                    return FunctionReference(raw, (), builtin=canonical)
-            return FunctionReference(
-                raw, (), "未找到回调函数定义；可能来自外部脚本或运行时赋值"
+                    return finish(FunctionReference(raw, (), builtin=canonical))
+            return finish(
+                FunctionReference(
+                    raw,
+                    (),
+                    self.symbols.environment_diagnostic(value, owner, start)
+                    or "未找到回调函数定义；可能来自外部脚本或运行时赋值",
+                )
             )
-        return FunctionReference(raw, (), "动态回调表达式，静态证据未能确定函数")
+        return finish(
+            FunctionReference(raw, (), "动态回调表达式，静态证据未能确定函数")
+        )

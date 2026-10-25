@@ -32,6 +32,11 @@ PLACEMENT_APIS = frozenset(
 )
 
 
+def placement_api_name(name: str, *, lua: bool | None) -> str:
+    name = name.removeprefix("_G.")
+    return name.removeprefix("_ENV.") if lua is True else name
+
+
 @dataclass(frozen=True, slots=True)
 class ScriptPlacement:
     code: str
@@ -100,8 +105,10 @@ class _Analysis:
     ) -> tuple[ScriptPlacement | None, str]:
         functions = self.functions
         if functions.bound(call.name, call.owner, call.start):
-            return None, "创建函数已被绑定或重定义，未假定为原生函数"
-        name = call.name.removeprefix("_G.")
+            return None, functions.symbols.environment_diagnostic(
+                call.name, call.owner, call.start
+            ) or "创建函数已被绑定或重定义，未假定为原生函数"
+        name = placement_api_name(call.name, lua=self.lua)
         kind = (
             "destructable"
             if "Destructable" in name
@@ -258,7 +265,8 @@ class _Analysis:
         calls = tuple(
             call
             for call in functions.structure.calls
-            if call.complete and call.name.removeprefix("_G.") in PLACEMENT_APIS
+            if call.complete
+            and placement_api_name(call.name, lua=self.lua) in PLACEMENT_APIS
         )
         found: dict[tuple[int, tuple[str, float, float, str]], ScriptPlacement] = {}
         unresolved: dict[int, tuple[CallSpan, str]] = {}

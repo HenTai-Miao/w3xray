@@ -21,7 +21,9 @@ def rectangle_name(syntax: str) -> str | None:
     """Keep existing Unicode gg_rct_ suffixes as complete variable references."""
     raw = syntax.strip()
     return (
-        _SPACE.sub("", raw) if re.fullmatch(r"(?:_G\s*\.\s*)?gg_rct_\w+", raw) else None
+        _SPACE.sub("", raw)
+        if re.fullmatch(r"(?:(?:_G|_ENV)\s*\.\s*)?gg_rct_\w+", raw)
+        else None
     )
 
 

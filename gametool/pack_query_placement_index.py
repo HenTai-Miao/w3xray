@@ -6,7 +6,11 @@ from dataclasses import dataclass
 from functools import lru_cache
 
 from .script_assignments import expression_key
-from .script_placement_analysis import PLACEMENT_APIS, analyze_script_placements
+from .script_placement_analysis import (
+    PLACEMENT_APIS,
+    analyze_script_placements,
+    placement_api_name,
+)
 from .script_scopes import script_structure
 from .script_source_identity import ScriptSourceNames
 from .script_sources import AnalysisScriptSource, script_language
@@ -36,7 +40,7 @@ def indexed_placements(
         source.source: {
             expression_key(source.text[call.start : call.end], lua=source.lua)
             for call in script_structure(source.text, lua=source.lua).calls
-            if call.name.removeprefix("_G.") in PLACEMENT_APIS
+            if placement_api_name(call.name, lua=source.lua) in PLACEMENT_APIS
         }
         for source in contexts
     }

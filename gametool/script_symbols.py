@@ -59,6 +59,13 @@ class ScriptSymbols:
         self._environment_foreign_write = any(
             owner is not None for owner, _position in environment_writes
         )
+        from .script_environments import LuaEnvironments
+
+        self.environments = (
+            LuaEnvironments(self)
+            if lua is True and re.search(r"\b_ENV\b", self.views.syntax)
+            else None
+        )
 
     def control_data(
         self, owner: int | None
@@ -166,16 +173,54 @@ class ScriptSymbols:
 
     def symbol(self, expression: str, owner: int | None, position: int) -> ScriptSymbol:
         key = expression_key(expression, lua=self.lua)
+        lexical = self._lexical_symbol(key, owner, position)
+        if self.environments is not None and (
+            key.startswith("_ENV.") or lexical[1] < 0 and key != "_ENV"
+        ):
+            environment = self.environments.identity(owner, position)
+            if key.startswith("_ENV."):
+                key = key.removeprefix("_ENV.")
+                if environment[1] < 0:
+                    return None, -1, key
+            if environment[1] >= 0:
+                return environment[0], environment[1], environment[2] + "." + key
         if key.startswith("_G.") and self.is_global_environment(owner, position):
             return None, -1, key.removeprefix("_G.")
         return self._lexical_symbol(key, owner, position)
 
     def is_global_environment(self, owner: int | None, position: int) -> bool:
         """An explicit local table or source-visible replacement is not the globals table."""
+        return self._global_table_available(owner, position) and (
+            self.environments is None
+            or self.environments.identity(owner, position)[1] < 0
+        )
+
+    def is_standard_environment(self, owner: int | None, position: int) -> bool:
+        return self.lua is True and (
+            self.environments is None
+            or self.environments.identity(owner, position)[1] < 0
+        )
+
+    def _global_table_available(self, owner: int | None, position: int) -> bool:
         return self._lexical_symbol("_G", owner, position)[1] < 0 and not (
             self._environment_foreign_write
             or self._environment_first_write is not None
             and (owner is not None or self._environment_first_write < position)
+        )
+
+    def environment_diagnostic(
+        self, expression: str, owner: int | None, position: int
+    ) -> str:
+        key = expression_key(expression, lua=self.lua)
+        return (
+            "Lua _ENV 未确认为标准全局环境，未将此自由名称当作原生函数"
+            if self.environments is not None
+            and self.environments.identity(owner, position)[1] >= 0
+            and (
+                key.startswith("_ENV.")
+                or self._lexical_symbol(key, owner, position)[1] < 0
+            )
+            else ""
         )
 
     def _lexical_symbol(

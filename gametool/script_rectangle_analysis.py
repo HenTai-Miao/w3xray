@@ -95,11 +95,13 @@ def analyze_script_rectangles(
         name = rectangle_name(assignment.target)
         if name is None:
             continue
+        if name.startswith("_ENV.") and lua is not True:
+            continue
         if name.startswith("_G.") and functions.bound(
             "_G", assignment.owner, assignment.start
         ):
             continue
-        name = name.removeprefix("_G.")
+        name = name.removeprefix("_G.").removeprefix("_ENV.")
         arguments = (
             tuple(None for _ in functions.symbols.parameters.get(assignment.owner, ()))
             if assignment.owner is not None

@@ -374,6 +374,7 @@ tests/test_script_geometry_complete.py
 tests/test_script_numeric_dataflow.py
 tests/test_script_geometry_factories.py
 tests/test_script_global_geometry_identity.py
+tests/test_script_lua_environments.py
 tests/test_near_region_completeness.py
 tests/test_campaign_spatial_diagnostics.py
 tests/test_query_limit_contract.py

@@ -428,6 +428,7 @@ gametool/script_atoms.py
 gametool/script_function_graph.py
 gametool/script_function_bindings.py
 gametool/script_symbols.py
+gametool/script_environments.py
 gametool/script_control_ranges.py
 gametool/script_item_pools.py
 gametool/script_sources.py

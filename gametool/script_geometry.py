@@ -230,18 +230,23 @@ class GeometryAliases:
         name = qualified_name(syntax) or rectangle_name(syntax)
         if name is not None:
             target = self.functions.resolve(name, position, owner)
-            if name == "_G" and self.functions.symbols.is_global_environment(
-                owner, position
+            if (
+                name == "_G"
+                and self.functions.symbols.is_global_environment(owner, position)
+            ) or (
+                name == "_ENV"
+                and self.functions.symbols.is_standard_environment(owner, position)
             ):
                 result = (self.environment,)
             elif len(target.functions) == 1 and not target.diagnostic:
                 result = ((target.functions[0].start, -2, "return"),)
             else:
                 parts, _ = reference_parts(name, lua=self.functions.lua)
-                if (
-                    parts
-                    and parts[0] == "_G"
+                if parts and (
+                    parts[0] == "_G"
                     and self.functions.symbols.is_global_environment(owner, position)
+                    or parts[0] == "_ENV"
+                    and self.functions.symbols.is_standard_environment(owner, position)
                 ):
                     parts = parts[1:]
                 result = tuple(
