@@ -197,6 +197,18 @@ def test_free_word_list_complete() -> None:
         assert f'"{mode}",' in src, mode
 
 
+def test_history_full_retention() -> None:
+    """历史全量落盘不截 (374): 旧 del [10:] 让 stats「历史条数」失真;
+    展示层下拉只取 12 条, 落盘/统计走全量。"""
+    import inspect
+
+    from gametool.gui_pack_query import _PackQueryWindow
+
+    whole = inspect.getsource(_PackQueryWindow)
+    assert "del _HISTORY[10:]" not in whole  # 落盘前截断禁再入仓
+    assert "_HISTORY[:12]" in whole  # 展示层限定仍显式 (可用性 vs 满量分工)
+
+
 def test_diff_mode_wiring() -> None:
     """diff GUI 模式 (373): 记忆旧包 + pack_dir_b 传递 + 空旧包拒发。"""
     import inspect

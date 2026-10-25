@@ -3331,7 +3331,9 @@ def _query_stats(pack: Path, query: str, limit: int) -> list[str]:
             import json as _json
 
             entries = _json.loads(history.read_text(encoding="utf-8"))
-            out.append(f"历史条数: {len(entries)} (GUI 下拉/again 共享)")
+            out.append(
+                f"历史条数: {len(entries)} (374 起全量落盘; GUI 下拉展示最近 12 条, again 走独立记忆)"
+            )
         except OSError, ValueError:
             pass
     out.append(f"记忆目录: {memo}")

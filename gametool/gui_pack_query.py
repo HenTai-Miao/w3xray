@@ -19,7 +19,9 @@ if TYPE_CHECKING:
 _LAST_KEYWORD = ""
 _LAST_MODE = "doc"
 _LAST_RESULT = ""
-_HISTORY: list[tuple[str, str]] = []  # (模式, 关键词) 最近 10 条
+_HISTORY: list[
+    tuple[str, str]
+] = []  # (模式, 关键词) 全量落盘; 下拉只展示最近 12 条 (374 轮: 旧落盘前截 10 → stats 历史条数失真)
 _WINDOW_GEOMETRY: dict[str, str] = {}  # 窗口名 -> "WxH" (进程级)
 
 
@@ -164,7 +166,9 @@ class _PackQueryWindow(ctk.CTkToplevel):
         ).pack(fill="x", padx=12, pady=(0, 8))
 
         row = ctk.CTkFrame(self, fg_color="transparent")
-        _HISTORY_VALUES = [f"{c} {k}".strip() for c, k in _HISTORY] or ["(无历史)"]
+        _HISTORY_VALUES = [f"{c} {k}".strip() for c, k in _HISTORY[:12]] or [
+            "(无历史)"
+        ]  # 展示层取 12 条 (374: 落盘全量)
         self._history = ctk.CTkOptionMenu(
             row,
             values=_HISTORY_VALUES,
@@ -734,7 +738,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
             if entry in _HISTORY:
                 _HISTORY.remove(entry)
             _HISTORY.insert(0, entry)
-            del _HISTORY[10:]
+            # 374 轮: 落盘全量不截 — 旧 del [10:] 让 stats「历史条数」失真;
+            # 下拉展示层只取前 12 条 (构造处), 信息不丢
         _save_memo()
         if (
             command in ("doc", "export", "search", "locate", "near") and not keyword
