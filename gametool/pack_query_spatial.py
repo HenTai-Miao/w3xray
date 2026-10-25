@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Protocol, TypedDict, runtime_checkable
 
 from .pack_query_regions import NearRegion, containing_regions
+from .pack_query_options import query_limit_error
 from .static_numbers import format_number
 from .script_sources import AnalysisScriptSource
 
@@ -216,10 +217,8 @@ def query_near(
     pack: Path, query: str, limit: int, sources: SpatialSources
 ) -> SpatialQueryResult:
     """Read all spatial sources, preserving every visible placement in JSON."""
-    if isinstance(limit, bool) or not isinstance(limit, int) or limit < 0:
-        return SpatialQueryResult(
-            ("显式 --limit 必须是非负整数；0 表示全量。",), input_error=True
-        )
+    if note := query_limit_error(limit):
+        return SpatialQueryResult((note,), input_error=True)
     parts = query.split()
     kind_filter = ""
     if "--kind" in parts:

@@ -2,7 +2,7 @@
 """pack-query 子命令：一次进程内查询地图知识包（物品/配方/坐标/掉落/任务/全文）。
 
 用法：
-    uv run main.py pack-query <资料包目录> <子命令> <查询词> [--limit N] (默认全量输出; --limit N 为显式缩减)
+    uv run main.py pack-query <资料包目录> <子命令> <查询词> [--limit N|all|全部] (默认全量输出; --limit N 为显式缩减)
 
 子命令：
     item   <名字|四码>   物品属性（金币价; 装备效果取自携带技能属性字段; 真实提示文本优先于继承模板描述）
@@ -40,7 +40,7 @@ from typing import TYPE_CHECKING, cast
 
 from .cli_output import configure_cli_output
 from .csv_fields import full_csv_fields
-from .pack_query_options import PackQueryCliOptions
+from .pack_query_options import PackQueryCliOptions, parse_query_limit
 from .pack_query_placement_index import IndexedPlacements, indexed_placements
 from .presentation_safety import single_line_text
 from .static_numbers import format_number
@@ -758,7 +758,7 @@ class PackQueryCliOptionError(ValueError):
 
 
 def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
-    """解析 pack-query 后的参数：<资料包目录> <子命令> <查询词> [--limit N]。
+    """解析 pack-query 后的参数：<资料包目录> <子命令> <查询词> [--limit N|all|全部]。
 
     默认 limit=0 全量输出——不敲 --limit 就拿到全部匹配; --limit N 是显式缩减。"""
     rest = list(argv)
@@ -766,13 +766,11 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
     if "--limit" in rest:
         i = rest.index("--limit")
         if i + 1 >= len(rest):
-            raise PackQueryCliOptionError("--limit 需要一个数字参数")
+            raise PackQueryCliOptionError("--limit 需要非负整数或 all/全部 (0=全量)")
         try:
-            limit = int(rest[i + 1])
+            limit = parse_query_limit(rest[i + 1])
         except ValueError as exc:
-            raise PackQueryCliOptionError("--limit 需要一个数字参数") from exc
-        if limit < 0:
-            raise PackQueryCliOptionError("--limit 必须为非负整数 (0=不限量)")
+            raise PackQueryCliOptionError(str(exc)) from exc
         rest = rest[:i] + rest[i + 2 :]
     as_json = "--json" in rest
     if as_json:

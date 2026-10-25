@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Protocol
 
 from .pack_query_spatial import NearEntry, SpatialQueryResult
 from .pack_query_regions import NearRegion
+from .pack_query_options import query_limit_error
 
 if TYPE_CHECKING:
     from .pack_query_options import PackQueryCliOptions
@@ -163,6 +164,15 @@ def execute_query(
 ) -> PackQueryResult:
     """Run a full query without printing or touching any GUI objects."""
     started = time.perf_counter()
+    if note := query_limit_error(options.limit):
+        result = _message(options, note, 2)
+        result = replace(
+            result,
+            sections=tuple(
+                replace(section, input_error=True) for section in result.sections
+            ),
+        )
+        return _timed_result(result, started)
     with queries._TABLE_READ_LOCK:
         previous = queries._QUERY_ROWS
         previous_scripts = queries._QUERY_SCRIPTS
@@ -187,10 +197,16 @@ def execute_query(
             for pack, rel in sorted(queries._LOCKED_FILES.intersection(touched))
             if (Path(pack) / rel).resolve().is_relative_to(root)
         )
+    return _timed_result(
+        replace(result, diagnostics=(*result.diagnostics, *diagnostics)), started
+    )
+
+
+def _timed_result(result: PackQueryResult, started: float) -> PackQueryResult:
     elapsed_ms = (time.perf_counter() - started) * 1000
     hint = " — 同包再查走热缓存会快很多" if elapsed_ms > 500 else ""
     return replace(
-        result, diagnostics=(*diagnostics, f"[耗时 {elapsed_ms:.0f}ms{hint}]")
+        result, diagnostics=(*result.diagnostics, f"[耗时 {elapsed_ms:.0f}ms{hint}]")
     )
 
 

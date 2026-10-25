@@ -20,6 +20,7 @@
 - Standard _G fields share ordinary global identities without merging independent geometry. Local/replaced _G receivers stay distinct; captured functions keep their original binding. Environment escapes retain shared complete diagnostics for accessible globals, and readonly predicate aliases never alias results to input handles.
 
 ## Orientation
+- Pack-query count validation is shared in pack_query_options.py: API nonnegative integers have no numeric ceiling, zero means full coverage, and CLI all/全部 normalize to zero. Reject invalid counts before locks, data access or query memory; preserve complete-record truncation disclosures.
 - Spatial campaign queries retain diagnostic-only scopes with full origin messages and checked_packs. Determine matches and input errors from structured fields, never rendered headings; uncertainty alone returns 2 and never replaces successful query memory. Explicit result limits do not truncate diagnostics.
 - Near `regions` retains every confirmed source/assignment/context boundary, including repeated names; keep normalized and source bounds, full provenance, and complete-record limits with regions_total/regions_omitted. Campaign and again preserve the structured data; region metadata is never a point coordinate handoff.
 - `main.py`: default GUI plus `description-cache`, `integrity`, `cli`, `guide`, `current`, `casc`, `save`, `acceptance`, and `batch` dispatch.
