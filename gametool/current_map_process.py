@@ -15,7 +15,6 @@ from .current_map_probe_command import (
     COMMAND_OUTPUT_LIMIT,
     COMMAND_TIMEOUT_SECONDS,
     MAX_COMMAND_CHARS,
-    MAX_OPEN_PATHS,
     MAX_PROBE_PIDS,
     ProbeIssue as ProbeIssue,
     ProbeParseError,
@@ -173,13 +172,11 @@ def probe_proc_open_maps(
                 if not path.is_absolute():
                     path = (fd_dir / path).resolve(strict=False)
                 if is_map_path(path):
+                    # 377: 旧 4096 evidence cap 静默截断已删 (与 lsof 侧同判) —
+                    # is_map_path 过滤后证据天然少量, _MAX_FDS_PER_PID 单层兑底
                     evidence.append(
                         MapEvidence(path, EvidenceKind.DIRECT_OPEN, process.pid)
                     )
-                    if len(evidence) >= MAX_OPEN_PATHS:
-                        break
-        if len(evidence) >= MAX_OPEN_PATHS:
-            break
     if denied:
         return OpenMapProbeReport((), False, ProbeIssue.ACCESS_DENIED)
     return OpenMapProbeReport(ordered_evidence(evidence), True)

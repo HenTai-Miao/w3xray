@@ -22,7 +22,7 @@
 - `gametool/object_materialization.py`: pure per-object materialization; `GAMEXRAY_MATERIALIZE_WORKERS>1` enables process-pool parallel merge (serial fallback on any failure); the `guide` CLI auto-sets it to min(8, cores).
 - `gametool/save_container.py`: read-only `.w3z`/`.w3v` recorded-save container decoding (checksums verified, no repacking)——边界全部是响亮的 SaveContainerError 炸弹护栏, 不静默丢数据。`real_save_files.py` 满量纪律: 存档是用户自己的数据——目录累计预算/文件条数上限/内嵌 MPQ 前500文件切片/8MB 文本预算/证据串 200 截断全部删除, 唯一保留 1GB 分配炸弹护栏 (与 MPQ 解压层一致)。
 - `gametool/current_map_models.py`: typed evidence and pure confidence resolution.
-- `gametool/current_map_process.py`, `current_map_probe_command.py`, `current_map_inuse_probe.py`: bounded OS process/open-file/in-use-file probes.
+- `gametool/current_map_process.py`, `current_map_probe_command.py`, `current_map_inuse_probe.py`: bounded OS process/open-file/in-use-file probes (bounded = payload 16MB cap + per-pid fds 8192 + 超时 10s + PID 128; 377 轮删 record/evidence 冗余 cap — 静默截断违反披露纪律, 过滤后证据天然少量).
 - `gametool/current_map_discovery.py`: bounded roots, recent cache/`.wgc`/game-log hints, and orchestration.
 - `gametool/current_map_snapshot.py`, `current_map_snapshot_cleanup.py`: stable private copies and owned cleanup.
 - `gametool/current_map_cli.py`, `gui_current_map.py`, `gui_current_map_worker.py`, `gui_current_map_presenter.py`: CLI/GUI current-map entry, worker, and presentation.

@@ -21,8 +21,9 @@ from .current_map_models import EvidenceKind, GameProcess, MapEvidence
 COMMAND_TIMEOUT_SECONDS: Final = 10.0
 COMMAND_OUTPUT_LIMIT: Final = 16 * 1024 * 1024
 MAX_PROBE_PIDS: Final = 128
-MAX_PROCESS_RECORDS: Final = 2048
-MAX_OPEN_PATHS: Final = 4096
+# 377: MAX_PROCESS_RECORDS (2048) 与 MAX_OPEN_PATHS (4096) 已删 — record/evidence
+# cap 静默截断违反披露纪律, 无界风险由 COMMAND_OUTPUT_LIMIT (16MB payload cap)
+# 与 _MAX_FDS_PER_PID 单层兑底
 MAX_PATH_CHARS: Final = 4096
 MAX_COMMAND_CHARS: Final = 32768
 MAP_SUFFIXES: Final = frozenset({".w3x", ".w3m", ".w3n"})
@@ -156,9 +157,10 @@ def parse_posix_processes(payload: bytes) -> tuple[GameProcess, ...]:
             continue
         command_line = fields[1]
         if _is_posix_game_process(command_line):
+            # 377: 旧 2048 record cap 静默截断 — >2048 进程的机器上 war3 可能被
+            # 截掉且无披露。无界风险由 16MB payload cap (OUTPUT_LIMIT) 单层兜底,
+            # 双层 cap 纯冗余, 删。
             processes.append(GameProcess(pid, "Warcraft III", command_line))
-            if len(processes) >= MAX_PROCESS_RECORDS:
-                break
     if not saw_record:
         raise ProbeParseError("ps")
     return tuple(processes)
@@ -181,9 +183,8 @@ def parse_windows_processes(payload: bytes) -> tuple[GameProcess, ...]:
         except ProbeParseError:
             continue
         if len(command_line) <= MAX_COMMAND_CHARS and _is_game_executable(name):
+            # 377: 同上 — record cap 删, payload cap 单层兑底
             processes.append(GameProcess(pid, name, command_line))
-            if len(processes) >= MAX_PROCESS_RECORDS:
-                break
     return tuple(processes)
 
 
@@ -210,8 +211,8 @@ def parse_lsof_open_maps(
                 evidence.append(
                     MapEvidence(path, EvidenceKind.DIRECT_OPEN, current_pid)
                 )
-                if len(evidence) >= MAX_OPEN_PATHS:
-                    break
+    # 377: 旧 4096 evidence cap 静默截断已删 — is_map_path 过滤后 direct-open
+    # 证据天然少量, 无界风险由 16MB payload cap 单层兜底
     return ordered_evidence(evidence)
 
 
