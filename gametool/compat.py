@@ -176,14 +176,14 @@ def _return_bug_items(md: MapData, target_patch: str) -> tuple[CompatItem, ...]:
     )
     if not names:
         return ()
+    # 满量: 全部函数名列出, 不用「等 N 个」暗示还有未列出 (205 轮删硬截断后残留的误导措辞, 371 轮清除)
     shown = "、".join(names)
-    suffix = "" if len(names) <= 8 else f" 等 {len(names)} 个"
     return (
         CompatItem(
             CompatSeverity.WARNING,
             "script.return_bug",
-            "疑似 1.20E return bug",
-            f"发现 {shown}{suffix} 使用句柄/整数 return bug 类型转换；"
+            f"疑似 1.20E return bug (共 {len(names)} 个函数)",
+            f"发现 {shown} 使用句柄/整数 return bug 类型转换；"
             f"{target_patch} 已修复该漏洞，通常需要改为 hashtable 或安全索引方案。",
         ),
     )
