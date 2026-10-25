@@ -6,7 +6,7 @@ from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 import math
 from pathlib import Path
-from typing import Protocol, TypedDict
+from typing import Protocol, TypedDict, runtime_checkable
 
 from .pack_query_placements import script_rectangles
 from .static_numbers import format_number
@@ -46,6 +46,11 @@ class SpatialSources(Protocol):
     def load_script_contexts(self, pack: Path) -> tuple[AnalysisScriptSource, ...]: ...
     def _source_drop_map(self, pack: Path) -> dict[str, str]: ...
     def _source_shop_map(self, pack: Path) -> dict[str, str]: ...
+
+
+@runtime_checkable
+class PlacementDiagnostics(Protocol):
+    def load_placement_diagnostics(self, pack: Path) -> list[str]: ...
 
 
 def preplaced_objects(
@@ -316,10 +321,15 @@ def query_near(
             output.lines.append("  所在矩形: " + ", ".join(rectangles))
     if len(output.lines) == 1:
         detail = f" {kind_filter} 类命中" if kind_filter else "预放置/脚本内容"
-        return SpatialQueryResult(
-            (
-                f"坐标 ({format_number(x)},{format_number(y)}) 半径 {format_number(radius)} 内无{detail}。",
-                "  （核对坐标; 可去掉 --kind 看全部类，或加大半径参数: near <x> <y> <radius>）",
-            )
+        output.lines = [
+            f"坐标 ({format_number(x)},{format_number(y)}) 半径 {format_number(radius)} 内无{detail}。",
+            "  （核对坐标; 可去掉 --kind 看全部类，或加大半径参数: near <x> <y> <radius>）",
+        ]
+    if isinstance(sources, PlacementDiagnostics) and (
+        notes := sources.load_placement_diagnostics(pack)
+    ):
+        output.lines.append(
+            f"  ⚠ 另有 {len(notes)} 处脚本创建的对象或坐标未静态确定；上述结果仅含已确认点位。"
         )
+        output.lines.extend(notes)
     return output.result()

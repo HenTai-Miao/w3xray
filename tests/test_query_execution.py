@@ -237,7 +237,9 @@ def test_all_scripts_and_object_code_forms_share_coordinate_queries(
             queries.PackQueryCliOptions(str(tmp_path), "where", code)
         )
         assert where.exit_code == 0 and f"[{code}]" in where.render()
-    assert "nBAD" not in result.render() and "nDYN" not in result.render()
+    assert "nBAD" not in result.render()
+    assert "nDYN" not in {row["code"] for row in payload["entries"]}
+    assert "nDYN" in result.render() and "坐标未静态确定" in result.render()
 
 
 def test_index_argument_rows_do_not_duplicate_source_placements(tmp_path: Path) -> None:

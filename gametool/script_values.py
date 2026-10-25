@@ -192,7 +192,7 @@ class ScriptValues:
     def resolve(
         self,
         expression: str,
-        owner: int,
+        owner: int | None,
         position: int,
         arguments: tuple[str | None, ...],
         *,
@@ -207,7 +207,7 @@ class ScriptValues:
     def resolve_many(
         self,
         expression: str,
-        owner: int,
+        owner: int | None,
         position: int,
         arguments: tuple[str | None, ...],
         *,
@@ -228,7 +228,7 @@ class ScriptValues:
     def argument_values(
         self,
         expressions: tuple[str, ...],
-        owner: int,
+        owner: int | None,
         position: int,
         arguments: tuple[str | None, ...],
         *,

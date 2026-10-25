@@ -75,12 +75,13 @@ class ScriptFunctions(ScriptFunctionBindings):
     def __init__(self, text: str, *, lua: bool | None) -> None:
         super().__init__(text, lua=lua)
         self._graphs: dict[int, FunctionGraph] = {}
+        self._source_graph: FunctionGraph | None = None
         self.values = ScriptValues(self)
 
     def resolved_text(
         self,
         text: str,
-        owner: int,
+        owner: int | None,
         start: int,
         arguments: tuple[str | None, ...],
         *,
@@ -134,7 +135,7 @@ class ScriptFunctions(ScriptFunctionBindings):
     def scalar(
         self,
         expression: str,
-        owner: int,
+        owner: int | None,
         position: int,
         arguments: tuple[str | None, ...],
         *,
@@ -147,7 +148,7 @@ class ScriptFunctions(ScriptFunctionBindings):
     def literal(
         self,
         expression: str,
-        owner: int,
+        owner: int | None,
         position: int,
         arguments: tuple[str | None, ...],
         *,
@@ -161,7 +162,7 @@ class ScriptFunctions(ScriptFunctionBindings):
     def argument_values(
         self,
         expressions: tuple[str, ...],
-        owner: int,
+        owner: int | None,
         position: int,
         arguments: tuple[str | None, ...],
         *,
@@ -177,16 +178,54 @@ class ScriptFunctions(ScriptFunctionBindings):
             return cached
         arguments = tuple(None for _ in self.symbols.parameters.get(function.start, ()))
         root_tail = function.start in self.symbols.variadic
-        nodes = [FunctionNode(function, arguments, root_tail)]
+        graph = self._build_graph((FunctionNode(function, arguments, root_tail),))
+        self._graphs[function.start] = graph
+        return graph
+
+    def source_graph(self) -> FunctionGraph:
+        """Share every encoded call context; ambiguous bindings remain unresolved."""
+        if self._source_graph is None:
+            top = FunctionSpan(
+                "<源码顶层>",
+                -1,
+                0,
+                len(self.text),
+                len(self.text),
+                None,
+                1,
+                len(self.lines),
+                True,
+                self.lua is True,
+            )
+            roots = (FunctionNode(top, ()),) + tuple(
+                FunctionNode(
+                    function,
+                    tuple(
+                        None for _ in self.symbols.parameters.get(function.start, ())
+                    ),
+                    function.start in self.symbols.variadic,
+                )
+                for function in self.structure.functions
+            )
+            self._source_graph = self._build_graph(roots, strict=True)
+        return self._source_graph
+
+    def _build_graph(
+        self, roots: tuple[FunctionNode, ...], *, strict: bool = False
+    ) -> FunctionGraph:
+        nodes = list(roots)
         identities: dict[tuple[int, tuple[str | None, ...], bool], int] = {
-            (function.start, arguments, root_tail): 0
+            (node.function.start, node.arguments, node.unknown_tail): index
+            for index, node in enumerate(nodes)
         }
-        parents: list[int | None] = [None]
+        parents: list[int | None] = [None] * len(nodes)
         edges: list[FunctionEdge] = []
         cursor = 0
         while cursor < len(nodes):
             node = nodes[cursor]
-            for call in self.calls.get(node.function.start, ()):
+            for call in self.calls.get(
+                None if node.function.start < 0 else node.function.start, ()
+            ):
                 if not call.complete or not self.bound(
                     call.name, call.owner, call.start
                 ):
@@ -202,7 +241,7 @@ class ScriptFunctions(ScriptFunctionBindings):
                 selectors = tuple(
                     self.resolved_text(
                         item.selector,
-                        node.function.start,
+                        call.owner,
                         self.views.arguments.rfind(
                             item.selector, node.function.body_start, item.start
                         ),
@@ -212,7 +251,11 @@ class ScriptFunctions(ScriptFunctionBindings):
                     for item in active
                     if item.selector
                 )
-                if not reference.functions:
+                if (
+                    not reference.functions
+                    or strict
+                    and (reference.diagnostic or len(reference.functions) != 1)
+                ):
                     edges.append(
                         FunctionEdge(
                             cursor,
@@ -229,7 +272,7 @@ class ScriptFunctions(ScriptFunctionBindings):
                     args = (call.name.rsplit(":", 1)[0], *args)
                 actual = self.argument_values(
                     args,
-                    node.function.start,
+                    call.owner,
                     call.start,
                     node.arguments,
                     unknown_tail=node.unknown_tail,
@@ -312,7 +355,6 @@ class ScriptFunctions(ScriptFunctionBindings):
                 if degrees[target] == 0:
                     pending.append(target)
         graph = FunctionGraph(tuple(nodes), tuple(edges), visited < len(nodes))
-        self._graphs[function.start] = graph
         return graph
 
 

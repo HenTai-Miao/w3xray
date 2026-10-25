@@ -442,6 +442,7 @@ gametool/script_values.py
 gametool/script_value_models.py
 gametool/script_lua_builtins.py
 gametool/script_names.py
+gametool/script_placement_analysis.py
 gametool/search.py
 gametool/single_instance.py
 gametool/slk.py

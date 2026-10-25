@@ -702,18 +702,30 @@ def load_formulas(pack_dir: Path) -> list[tuple[str, list[tuple[str, int]]]]:
 
 
 def load_placements(pack_dir: Path) -> list[tuple[str, float, float, str]]:
-    """脚本创建坐标；原文与旧包索引互补，同一位置按较大出现次数去重。"""
+    """原文保留调用上下文；索引只补非镜像调用，同点按较大次数合并。"""
     from .pack_query_placements import script_placements
+    from .script_assignments import expression_key
+    from .script_scopes import script_structure
+    from .script_placement_analysis import PLACEMENT_APIS, analyze_script_placements
 
+    contexts = load_script_contexts(pack_dir)
     source_rows = [
         placement
-        for source, text, lua in load_script_contexts(pack_dir)
+        for source, text, lua in contexts
         for placement in script_placements(text, lua=lua)
     ]
     indexed_rows: list[tuple[str, float, float, str]] = []
     path = pack_dir / "脚本调用参数索引.tsv"
     if not path.exists():
         return source_rows
+    source_calls = {
+        source.replace("\\", "/"): {
+            expression_key(text[call.start : call.end], lua=lua)
+            for call in script_structure(text, lua=lua).calls
+            if call.name.removeprefix("_G.") in PLACEMENT_APIS
+        }
+        for source, text, lua in contexts
+    }
     seen: set[tuple[str, ...]] = set()
     for row, summary, offset in _call_argument_rows(pack_dir):
         # One source call has a row per argument; its summary is one call site.
@@ -721,20 +733,32 @@ def load_placements(pack_dir: Path) -> list[tuple[str, float, float, str]]:
         if key in seen:
             continue
         seen.add(key)
+        lua = script_language(
+            row[0],
+            available_sources=(
+                source for source, _text in load_script_sources(pack_dir)
+            ),
+            declared_script_type=_pack_script_type(pack_dir),
+        )
         indexed_rows.extend(
-            script_placements(
-                summary,
-                lua=script_language(
-                    row[0],
-                    available_sources=(
-                        source for source, _text in load_script_sources(pack_dir)
-                    ),
-                    declared_script_type=_pack_script_type(pack_dir),
-                ),
-            )
+            placement.row()
+            for placement in analyze_script_placements(summary, lua=lua).placements
+            if expression_key(placement.expression, lua=lua)
+            not in source_calls.get(row[0].replace("\\", "/"), set())
         )
     counts = Counter(source_rows) | Counter(indexed_rows)
     return list(counts.elements())
+
+
+def load_placement_diagnostics(pack_dir: Path) -> list[str]:
+    """Disclose every creation site whose object or coordinates remain unknown."""
+    from .script_placement_analysis import analyze_script_placements
+
+    return [
+        f"  {source}:{row.line} / 偏移{row.offset}: {row.reason}\n    原文: {row.expression}"
+        for source, text, lua in load_script_contexts(pack_dir)
+        for row in analyze_script_placements(text, lua=lua).diagnostics
+    ]
 
 
 @dataclass(frozen=True, slots=True)
