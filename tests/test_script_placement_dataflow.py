@@ -243,7 +243,9 @@ def test_near_miss_discloses_every_unresolved_source_site(
     data = json.loads(result.render(as_json=True))
     assert not data["entries"]
     output = result.render()
-    assert "2 处脚本创建" in output and all(code in output for code in ("I001", "I002"))
+    assert "2 条脚本点位诊断" in output and all(
+        code in output for code in ("I001", "I002")
+    )
 
 
 def test_index_mirror_cannot_bypass_source_global_binding(tmp_path: Path) -> None:

@@ -329,7 +329,7 @@ def query_near(
         notes := sources.load_placement_diagnostics(pack)
     ):
         output.lines.append(
-            f"  ⚠ 另有 {len(notes)} 处脚本创建的对象或坐标未静态确定；上述结果仅含已确认点位。"
+            f"  ⚠ 另有 {len(notes)} 条脚本点位诊断（对象、坐标或来源未确认）；上述结果仅含已确认点位。"
         )
         output.lines.extend(notes)
     return output.result()
