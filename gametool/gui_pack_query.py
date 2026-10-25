@@ -273,6 +273,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 "refs",
                 "affixes",
                 "registered",
+                "diff",
             ],
             width=280,
         )
@@ -295,6 +296,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "refs",
             "affixes",
             "registered",
+            "diff",
         ):
             self._mode_extra.set(_initial)
             self._mode_extra2.set("<<none>>")
@@ -553,6 +555,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         "refs": "码 → 脚本引用分类 (给予/消耗/其他——判升级链终点)",
         "affixes": "词缀词可空=全量…  (回车查)",
         "registered": "消息词可空=全部触发消息…  (回车查)",
+        "diff": "旧包目录路径…  (新包 vs 旧包: 新增/删除/变更; 可选词: 物品/单位/技能/英雄)",
     }
 
     def _near_kind_file(self) -> pathlib.Path:
@@ -592,6 +595,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             "refs",
             "affixes",
             "registered",
+            "diff",
         ):
             self._mode_extra.set(command)
             self._mode_extra2.set("<<none>>")
@@ -610,6 +614,13 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 self._keyword.focus_set()
                 return
         self._keyword.configure(placeholder_text=self._PLACEHOLDERS.get(command, ""))
+        if command == "diff":
+            # placeholder 动态显示记忆的旧包 (新旧包反复对比是 diff 常态)
+            last_against = self._diff_against()
+            if last_against:
+                self._keyword.configure(
+                    placeholder_text=f"上次旧包: {last_against}  (回车重用, 或填新路径)"
+                )
         if command == "near":
             self._near_kind.pack(side="left", padx=(8, 0))
         else:
@@ -726,12 +737,16 @@ class _PackQueryWindow(ctk.CTkToplevel):
             del _HISTORY[10:]
         _save_memo()
         if (
-            command in ("doc", "export", "search", "diff", "locate", "near")
-            and not keyword
-        ):
+            command in ("doc", "export", "search", "locate", "near") and not keyword
+        ) or (command == "diff" and not keyword and not self._diff_against()):
             self._output.delete("1.0", "end")
             self._find_state["start"] = "1.0"
-            self._output.insert("1.0", f"{command} 需要四码或名称")
+            self._output.insert(
+                "1.0",
+                f"{command} 需要四码或名称"
+                if command != "diff"
+                else "diff 需要旧包目录: 在关键词框填旧包路径 (新包=当前窗包)",
+            )
             return
         self._output.delete("1.0", "end")
         self._find_state["start"] = "1.0"
@@ -768,6 +783,25 @@ class _PackQueryWindow(ctk.CTkToplevel):
 
         self.after(60, _poll)
 
+    def _diff_against_file(self) -> pathlib.Path:
+        from .gui_pack_query import _memo_dir
+
+        return pathlib.Path(_memo_dir()) / "diff-against.txt"
+
+    def _diff_against(self) -> str:
+        """记忆的上次 diff 旧包路径 (fail-open; diff 场景新旧包反复对比是常态)。"""
+        try:
+            value = self._diff_against_file().read_text(encoding="utf-8").strip()
+        except OSError:
+            return ""
+        return value if value and os.path.isdir(value) else ""
+
+    def _save_diff_against(self, value: str) -> None:
+        try:
+            self._diff_against_file().write_text(value, encoding="utf-8")
+        except OSError:
+            pass  # fail-open: 记忆失败不影响查询
+
     def _run_query(
         self, command: str, keyword: str, as_json: bool = False
     ) -> tuple[str, str]:
@@ -782,11 +816,20 @@ class _PackQueryWindow(ctk.CTkToplevel):
         import contextlib
         import io
 
+        pack_b = ""
+        if command == "diff":
+            # 旧包来源: 关键词框填了用关键词 (CLI 同款语义), 否则用记忆的上次旧包
+            pack_b = (
+                keyword if keyword and os.path.isdir(keyword) else self._diff_against()
+            )
+            if pack_b and keyword and os.path.isdir(keyword):
+                self._save_diff_against(keyword)
         options = PackQueryCliOptions(
             pack_dir=self._pack_dir,
             command=command,
             query=keyword,
             limit=0,
+            pack_dir_b=pack_b,
             as_json=as_json,
         )
         buffer = io.StringIO()

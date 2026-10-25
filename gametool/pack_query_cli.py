@@ -3000,7 +3000,11 @@ def _query_diff(pack: Path, query: str, limit: int, pack_b: str = "") -> list[st
             name = _clean(old_by_id[i][4]) if len(old_by_id[i]) > 4 else i
             out.append(f"  - [{i}] {name}")
         shown = 0
-        cap = limit if limit > 0 else 20
+        cap = (
+            limit  # 0 = 不限量满量列出 (旧隐性默认 20 已删, 373 轮); 显式 --limit 才截
+        )
+        if cap <= 0:
+            cap = len(changed) + 1  # 不限量: 循环条件恒假等价写法 (cap>len(changed))
         field_changes.update(
             _diff_field_changes(
                 old_pack, pack, table, [i for i in changed if i not in field_changes]

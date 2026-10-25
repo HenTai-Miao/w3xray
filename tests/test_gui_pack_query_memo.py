@@ -108,7 +108,9 @@ def test_stats_mode_in_panel() -> None:
         and src.count('"registered",')
         >= 3  # 25 模式 (三排重整后三处=二排 values+两名单, 342/344/363)
     )  # 23 模式 (339/340, 列表+名单+placeholder)
+    assert src.count('"diff",') >= 2  # 26 模式 diff (373: 二排 values+switch 名单)
     assert '"stats":' in src  # placeholder 表
+    assert '"diff":' in src  # 373 diff placeholder 入表
 
 
 def test_mode_panel_three_rows() -> None:
@@ -193,3 +195,22 @@ def test_free_word_list_complete() -> None:
         "again",
     ):
         assert f'"{mode}",' in src, mode
+
+
+def test_diff_mode_wiring() -> None:
+    """diff GUI 模式 (373): 记忆旧包 + pack_dir_b 传递 + 空旧包拒发。"""
+    import inspect
+
+    from gametool.gui_pack_query import _PackQueryWindow
+
+    whole = inspect.getsource(_PackQueryWindow)
+    # 记忆读写方法在位 (fail-open 同款口径)
+    assert "_diff_against" in whole
+    assert "diff-against.txt" in whole
+    # _run_query 传 pack_dir_b (CLI 同款语义: 关键词=旧包路径优先, 记忆兑底)
+    qsrc = inspect.getsource(_PackQueryWindow._run_query)
+    assert "pack_dir_b=pack_b" in qsrc
+    assert "_diff_against()" in qsrc
+    # 空旧包且无记忆时拒发 (不再落在 CLI 的笼统「需要四码或名称」)
+    rsrc = inspect.getsource(_PackQueryWindow._run)
+    assert "diff 需要旧包目录" in rsrc

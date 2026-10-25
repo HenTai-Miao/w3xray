@@ -1412,9 +1412,10 @@ def test_query_diff_shows_field_level_changes(tmp_path) -> None:
         )
     text = buffer.getvalue()
 
-    # Then: the field-level change is explicit.
+    # Then: the field-level change is explicit (373 轮满量化: 默认不截, 变更行全文)
     assert "变更 1" in text
     assert "igol: 3000 -> 5000" in text
+    assert "其余" not in text  # 旧隐性默认 20 已删 — 无 --limit 不截变更行
 
 
 def test_query_near_annotates_shop_stocks(tmp_path) -> None:

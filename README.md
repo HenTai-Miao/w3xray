@@ -249,7 +249,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
   GUI 全程免终端：顶栏「live 探针」弹窗只读读取（可勾选玩家列表/全单位/资源对齐），
   探针 JSON 自动复制，切到「包查询」near 模式点「从剪贴板提取坐标」即查；
   结果里四码右键可直达 doc 全景。near 查询勾选「JSON 输出」可得结构化单行。
-  查询窗面板 25 模式（三排布局）：核心 10 (Ctrl+1~0) + 扩展 15（where 获取途径、drop 掉落证据、again 重跑、stats 总览、shop 货架、tech 科技、item 装备效果、heroes 英雄、price 金币价、quest 任务、cmd 指令链、text 全文兜底、refs 引用分类、affixes 词缀、registered 触发消息）——从"怎么来的"到"什么效果"全部面板一键，结果行右键直达 where/drop/near 迭代。
+  查询窗面板 26 模式（三排布局）：核心 10 (Ctrl+1~0) + 扩展 16（where 获取途径、drop 掉落证据、again 重跑、stats 总览、shop 货架、tech 科技、item 装备效果、heroes 英雄、price 金币价、quest 任务、cmd 指令链、text 全文兜底、refs 引用分类、affixes 词缀、registered 触发消息、diff 双包对比）——从"怎么来的"到"什么效果"到"更新了什么"全部面板一键，结果行右键直达 where/drop/near 迭代。
 - **解包**：把地图(MPQ 压缩包)内部文件全部解出；文件名发现采用**三层并集**((listfile) + 内置固定名单 + war3map.imp 导入清单)，GUI 也可选择外部 listfile 补充被删掉的文件名；无文件名的匿名 block 会逐块尝试恢复加密 key、按内容猜扩展名导出到 `Unknown/`，若从 MDX/脚本等内容反推出真实资源路径则按原路径补导出并写 `RecoveredNames/manifest.tsv`，极端损坏或无法解码的原始 payload 会保留到 `UnknownRaw/manifest.tsv`；提取完整性报告会标出疑似数据级加密/运行时解密保护，不做运行时内存 dump 或绕过。
 - **CASC 客户端浏览**：选择可读的 Windows 原生游戏数据后，「数据工具」可分页浏览整个 Root（每页 200 条）、按 mask 重扫并导出所选；CLI `casc inventory` 输出含路径类型、FileDataID、CKey、EKey、大小和本地可用状态的 TSV，`casc extract` 按任一稳定标识导出单文件。
 - **作者明文补充包**：`cli <地图> --author-bundle <目录>` 或 GUI「数据工具」接入。补充包必须包含 `gamexray-author-bundle.tsv`，首行是 `GAMEXRAY-AUTHOR-BUNDLE<TAB>1`，第二行绑定源地图 SHA256，后续每行绑定内部路径和文件 SHA256；文件放在包内 `files/`，路径穿越、重复名、哈希不符和容量超限都会拒绝。
