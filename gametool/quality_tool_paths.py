@@ -449,6 +449,7 @@ gametool/script_numeric_expressions.py
 gametool/script_rectangle_analysis.py
 gametool/script_source_identity.py
 gametool/pack_query_placement_index.py
+gametool/pack_query_regions.py
 gametool/search.py
 gametool/single_instance.py
 gametool/slk.py

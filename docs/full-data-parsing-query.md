@@ -112,6 +112,12 @@ uv run main.py pack-query "<知识包目录>" again --json
 
 `--json` 的查询结果标准输出是一个可直接 `json.loads` 的 JSON 文档；诊断和耗时走标准错误。单图保留 `section`、`lines`，并增加 `pack`、`command`、`query`、`exit_code`、`warnings`。战役增加 `sections`，每段带自身知识包路径；`near` 同时在总结果与各段提供 `entries`，总结果条目带 `section` 标明任务关。未命中与坐标参数错误也使用同一 JSON 结构；命令行选项自身的解析错误沿用 CLI 错误出口。
 
+`near` 的区域结果使用独立 `regions` 数组，避免同名 `gg_rct_*` 的多个范围在名称汇总中丢失。`pack_query_regions.py` 按源码顺序保留每个确认的赋值与参数上下文，不合并不同来源、偏移或边界的证据。记录字段为 `name/source/language/line/offset/end_line/end_offset/bounds/source_bounds/expression/evidence`；`bounds` 是用于包含判断的规范范围，`source_bounds` 保留原始四个边界值，包括反向顺序。偏移使用解析脚本文本的字符位置，原文与 getter/调用证据完整保留。未知语言明确标为 unknown，未知或可能修改的区域仍走诊断，不进入确认数组。
+
+文本输出保留「所在矩形」名称导航，并逐条显示每个范围和源位置、赋值原文。包含判断仍针对查询点，半径不把不包含该点的区域变成命中；类别过滤沿用原有区域层语义。区域默认全量；显式 `--limit N` 在该区域列表上按完整记录缩减，并在文本报告余量、JSON 提供 `regions_total` 和 `regions_omitted`。总数是缩减前已确认包含查询点的记录数，不代表整图区域总数，也不包括未确定的区域。
+
+共享 `SpatialQueryResult` / `QuerySection` 直接携带区域数据，CLI 与 GUI 不从文本反解析。战役聚合的每条区域带所属 section 和包路径，逐关也保留原记录与总量；只有区域命中而没有放置实例时仍是有效查询结果，again 重跑保留同一结构。区域范围与源行号、偏移不冒充单点坐标。此次仅改变查询时的展示和 JSON，未改变地图导出或攻略内容，保留现有 guide/live/batch 缓存版本；已有可读脚本知识包直接获得新输出。
+
 `gametool.pack_query_cli.execute_pack_query` 返回 `PackQueryResult`，不修改标准输出和标准错误；CLI 负责打印，GUI 直接消费返回值。所有查询使用一致的成功判定、最近查询记忆和战役遍历。`again` 重跑原命令，包括逐关查询，同时保留原始查询记忆。
 
 表格缓存以纳秒 mtime、大小和全文件 SHA-256 共同失效。一次查询内每张表仅做一次校验与读取，下一次查询重新验证；同尺寸、同 mtime、仅尾部变动也会被识别。暂时无权限或被占用的文件在后续查询重新尝试，读取失败不永久污染当前 GUI 进程。

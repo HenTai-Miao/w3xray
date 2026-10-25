@@ -8,7 +8,7 @@ import math
 from pathlib import Path
 from typing import Protocol, TypedDict, runtime_checkable
 
-from .pack_query_placements import script_rectangles
+from .pack_query_regions import NearRegion, containing_regions
 from .static_numbers import format_number
 from .script_sources import AnalysisScriptSource
 
@@ -34,6 +34,8 @@ class NearEntry(TypedDict):
 class SpatialQueryResult:
     lines: tuple[str, ...]
     entries: tuple[NearEntry, ...] = ()
+    regions: tuple[NearRegion, ...] = ()
+    regions_total: int = 0
 
 
 class SpatialSources(Protocol):
@@ -150,6 +152,8 @@ class _Output:
             f"== 坐标 ({format_number(x)}, {format_number(y)}) 半径 {format_number(radius)} =="
         ]
         self.entries: list[NearEntry] = []
+        self.regions: list[NearRegion] = []
+        self.regions_total = 0
 
     def distance(self, point: Point) -> float:
         return math.hypot(point[0] - self.x, point[1] - self.y)
@@ -196,7 +200,12 @@ class _Output:
             self.lines.insert(
                 1, "  聚合行坐标为组中心；--json 的 positions 保留每个实例的完整坐标。"
             )
-        return SpatialQueryResult(tuple(self.lines), tuple(self.entries))
+        return SpatialQueryResult(
+            tuple(self.lines),
+            tuple(self.entries),
+            tuple(self.regions),
+            self.regions_total,
+        )
 
 
 def query_near(
@@ -310,15 +319,19 @@ def query_near(
             )
         output.limit_note(len(ordered), limit)
     if kind_filter in ("", "脚本", "单位"):
-        rectangles: dict[str, None] = {}
-        for source, text, lua in sources.load_script_contexts(pack):
-            for name, left, bottom, right, top in script_rectangles(text, lua=lua):
-                if min(left, right) <= x <= max(left, right) and min(
-                    bottom, top
-                ) <= y <= max(bottom, top):
-                    rectangles[name] = None
-        if rectangles:
-            output.lines.append("  所在矩形: " + ", ".join(rectangles))
+        matches = containing_regions(sources.load_script_contexts(pack), x, y)
+        output.regions_total = len(matches)
+        output.regions.extend(matches[:limit] if limit else matches)
+        if output.regions:
+            names = dict.fromkeys(region["name"] for region in output.regions)
+            output.lines.append("  所在矩形: " + ", ".join(names))
+            for region in output.regions:
+                left, bottom, right, top = map(format_number, region["bounds"])
+                output.lines.append(
+                    f"    区域 {region['name']}: ({left},{bottom}) .. ({right},{top}) — {region['source']}:{region['line']} / 偏移{region['offset']}"
+                )
+                output.lines.append("      原文: " + region["expression"])
+            output.limit_note(len(matches), limit)
     if len(output.lines) == 1:
         detail = f" {kind_filter} 类命中" if kind_filter else "预放置/脚本内容"
         output.lines = [

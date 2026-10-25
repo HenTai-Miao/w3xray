@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
 from .pack_query_spatial import NearEntry, SpatialQueryResult
+from .pack_query_regions import NearRegion
 
 if TYPE_CHECKING:
     from .pack_query_options import PackQueryCliOptions
@@ -53,6 +54,8 @@ class QuerySection:
     pack: str
     lines: tuple[str, ...]
     entries: tuple[NearEntry, ...] = ()
+    regions: tuple[NearRegion, ...] = ()
+    regions_total: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,6 +92,26 @@ class PackQueryResult:
                 for section in self.sections
                 for entry in section.entries
             ]
+            payload["regions"] = [
+                {
+                    **region,
+                    **(
+                        {"section": section.section, "pack": section.pack}
+                        if self.campaign
+                        else {}
+                    ),
+                }
+                for section in self.sections
+                for region in section.regions
+            ]
+            payload["regions_total"] = sum(
+                max(section.regions_total, len(section.regions))
+                for section in self.sections
+            )
+            payload["regions_omitted"] = sum(
+                max(section.regions_total - len(section.regions), 0)
+                for section in self.sections
+            )
         if self.campaign:
             payload["sections"] = [
                 {
@@ -96,7 +119,16 @@ class PackQueryResult:
                     "pack": section.pack,
                     "lines": list(section.lines),
                     **(
-                        {"entries": list(section.entries)}
+                        {
+                            "entries": list(section.entries),
+                            "regions": list(section.regions),
+                            "regions_total": max(
+                                section.regions_total, len(section.regions)
+                            ),
+                            "regions_omitted": max(
+                                section.regions_total - len(section.regions), 0
+                            ),
+                        }
                         if self.command == "near"
                         else {}
                     ),
@@ -203,7 +235,7 @@ def _collect_query(
         return _message_lines(options, lines, 2)
     if subs:
         sections: list[QuerySection] = []
-        if _has_result(options.command, lines, section.entries):
+        if _has_result(options.command, lines, section.entries, section.regions):
             sections.append(replace(section, section="容器级"))
         for sub in subs:
             sub_section = _run_section(
@@ -214,7 +246,12 @@ def _collect_query(
                 options.query,
                 options.limit,
             )
-            if _has_result(options.command, sub_section.lines, sub_section.entries):
+            if _has_result(
+                options.command,
+                sub_section.lines,
+                sub_section.entries,
+                sub_section.regions,
+            ):
                 sections.append(sub_section)
         if not sections:
             return _message_lines(
@@ -230,7 +267,7 @@ def _collect_query(
         return PackQueryResult(
             str(pack), options.command, options.query, tuple(sections), 0, campaign=True
         )
-    success = _has_result(options.command, lines, section.entries)
+    success = _has_result(options.command, lines, section.entries, section.regions)
     if success and remember:
         queries._store_last_query(pack, options.command, options.query)
     return PackQueryResult(
@@ -239,12 +276,15 @@ def _collect_query(
 
 
 def _has_result(
-    command: str, lines: Sequence[str], entries: tuple[NearEntry, ...] = ()
+    command: str,
+    lines: Sequence[str],
+    entries: tuple[NearEntry, ...] = (),
+    regions: tuple[NearRegion, ...] = (),
 ) -> bool:
     if not lines or lines[0].startswith(("未找到", "diff 需要", "第二个包")):
         return False
     if command == "near":
-        return bool(entries) or any("所在矩形:" in line for line in lines)
+        return bool(entries or regions) or any("所在矩形:" in line for line in lines)
     return True
 
 
@@ -253,7 +293,14 @@ def _run_section(
 ) -> QuerySection:
     if command == "near":
         result = queries._query_near_result(pack, query, limit)
-        return QuerySection(title, str(pack), result.lines, result.entries)
+        return QuerySection(
+            title,
+            str(pack),
+            result.lines,
+            result.entries,
+            result.regions,
+            result.regions_total,
+        )
     return _section(command, title, pack, queries._QUERIES[command](pack, query, limit))
 
 
