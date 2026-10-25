@@ -2887,7 +2887,8 @@ def _query_search(pack: Path, query: str, limit: int) -> list[str]:
     if not out:
         return [
             "未找到: " + query,
-            "  （search 只扫对象八表的名称/ID 列——合成查 recipe、获取途径查 where、聊天指令查 cmd）",
+            "  （search 只扫对象八表的名称/ID 列——改道: 合成 recipe / 获取途径 where"
+            " / 聊天指令 cmd / 任务 quest / 词缀 affixes / 触发消息 registered / 价格 price）",
         ]
     return out
 

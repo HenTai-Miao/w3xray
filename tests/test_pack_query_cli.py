@@ -1249,6 +1249,9 @@ def test_query_search_no_hit_reports_miss(tmp_path, pack, capsys) -> None:
     out = capsys.readouterr().out.strip()
     assert out.startswith("未找到: 不存在的词")
     assert "recipe" in out  # 否定带改道出路
+    # 378: 出路行七命令收口 (四维出路纪律的 search 侧)
+    for cmd in ("where", "cmd", "quest", "affixes", "registered", "price"):
+        assert cmd in out, cmd
 
 
 def test_query_diff_reports_added_and_removed(tmp_path, pack, capsys) -> None:
