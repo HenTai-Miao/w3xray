@@ -143,3 +143,70 @@ def test_guide_rerun_uses_shared_precise_coordinate_selection(
         app, _Box("单位 [n123] ×8 @(1e-7,-2e3) 距50"), "100"
     )
     assert calls == ["near 1e-7 -2e3 100"]
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        '{"x":1,"y":2}\n{"x":3,"y":4}',
+        '{"x":1,"y":2,"x":3,"y":4}',
+        "near 1 2\n@(3,4)",
+    ],
+)
+def test_ambiguous_handoff_preserves_input_and_never_queries_any_gui_surface(
+    raw: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from gametool.gui_pack_query import _PackQueryWindow
+    from gametool.gui_live_probe import LiveProbeWindow
+    from gametool import gui_topbar
+
+    calls: list[str] = []
+    entry = _Entry()
+    entry.text = "preserved"
+    window = SimpleNamespace(
+        _keyword=entry,
+        clipboard_get=lambda: raw,
+        _switch_mode=calls.append,
+        _run_clicked=lambda: calls.append("run"),
+    )
+    _PackQueryWindow._coords_from_clipboard(
+        cast(_PackQueryWindow, cast(object, window))
+    )
+    _PackQueryWindow._near_rerun_from_box(
+        cast(_PackQueryWindow, cast(object, window)), _Box(raw), "100"
+    )
+    probe = SimpleNamespace(_output=_Box(raw), _query_callback=calls.append)
+    LiveProbeWindow._near_rerun_selected(
+        cast(LiveProbeWindow, cast(object, probe)), "100"
+    )
+    monkeypatch.setattr(
+        gui_topbar,
+        "open_pack_query_dialog",
+        lambda *_args, **_kwargs: calls.append("open"),
+    )
+    gui_topbar._near_selected_coords(
+        SimpleNamespace(on_export_pack=lambda: None), _Box(raw), "100"
+    )
+    assert entry.text == "preserved" and not calls
+
+
+@pytest.mark.parametrize(
+    "raw,expected",
+    [
+        ("near 1e-7 -2e3 500", "1e-7 -2e3 500"),
+        ('{"selected":{"x":1,"y":2},"radius":100,"note":"半径 900"}', "1 2 100"),
+    ],
+)
+def test_clipboard_keeps_the_explicit_radius_and_ignores_json_description(
+    raw: str,
+    expected: str,
+) -> None:
+    from gametool.gui_pack_query import _PackQueryWindow
+
+    entry = _Entry()
+    window = SimpleNamespace(_keyword=entry, clipboard_get=lambda: raw)
+    _PackQueryWindow._coords_from_clipboard(
+        cast(_PackQueryWindow, cast(object, window))
+    )
+    assert entry.text == expected

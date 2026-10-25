@@ -329,6 +329,7 @@ tests/test_full_input_boundaries.py
 tests/test_query_completeness.py
 tests/test_query_execution.py
 tests/test_query_coordinates.py
+tests/test_query_coordinate_json.py
 tests/test_query_search_complete.py
 tests/test_query_object_lists_complete.py
 tests/test_query_result_limits.py

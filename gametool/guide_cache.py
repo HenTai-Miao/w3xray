@@ -33,7 +33,7 @@ __all__ = (
 # v7: 战役容器 (.w3n) 报告尾附逐关查询指引 (旧 v6 容器报告无解释)——
 # 旧 v6 整体退役。
 # v8: 容器 --section 空段改为输出同一指引 (旧 v7 空段什么都不印)——旧 v7 退役。
-GUIDE_CACHE_VERSION = "guide-v33"  # v33: Lua _ENV 词法环境、原生身份与完整诊断
+GUIDE_CACHE_VERSION = "guide-v34"  # v34: 完整 JSON 坐标证据与无歧义攻略 near 模板
 
 
 def report_cache_path(map_path: str) -> Path | None:

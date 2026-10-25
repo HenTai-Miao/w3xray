@@ -386,6 +386,7 @@ gametool/pack_query_placements.py
 gametool/pack_query_spatial.py
 gametool/pack_query_search.py
 gametool/query_coordinates.py
+gametool/query_coordinate_json.py
 gametool/presentation_safety.py
 gametool/quality_gate.py
 gametool/quality_paths.py
