@@ -12,17 +12,19 @@ from typing import TYPE_CHECKING
 from .save_call_context import extract_call_args
 from .script_lexing import literal_string_value, script_views
 from .script_lua_builtins import array_literal_parts, select_values, unpack_values
-from .script_names import qualified_name
+from .script_names import qualified_name, rectangle_name
 from .script_numeric_expressions import NumericExpression, numeric_expression
 from .script_geometry import GeometryAliases
 from .script_geometry_values import (
     GEOMETRY_BUILTINS,
     GEOMETRY_CONSTRUCTORS,
     GEOMETRY_READERS,
+    GEOMETRY_TRANSFORMS,
     geometry_center,
     computed_geometry,
     geometry_constructor,
     geometry_coordinates,
+    geometry_transform,
 )
 from .script_object_literals import literal_object_code, strip_outer_parentheses
 from .script_returns import ReturnSpan, script_returns
@@ -385,6 +387,9 @@ class ScriptValues:
                     continue
                 elif (
                     name := qualified_name(
+                        script_views(value, lua=self.functions.lua).syntax
+                    )
+                    or rectangle_name(
                         script_views(value, lua=self.functions.lua).syntax
                     )
                 ) is not None:
@@ -769,6 +774,30 @@ class ScriptValues:
                     result = geometry_constructor(
                         frame.label, StaticValues(replacements, actual.tail)
                     )
+                elif frame.label in GEOMETRY_TRANSFORMS:
+                    spec = GEOMETRY_TRANSFORMS[frame.label]
+                    notes = dict.fromkeys(
+                        note
+                        for index, kind in enumerate(spec)
+                        if kind != "number"
+                        and (
+                            expression := frame.call_arguments[index]
+                            if index < len(frame.call_arguments)
+                            else frame.call_arguments[-1]
+                            if frame.call_arguments
+                            else ""
+                        )
+                        and (
+                            note := self.geometry_note(
+                                expression, key.owner, key.position
+                            )
+                        )
+                    )
+                    result = (
+                        StaticValue(None, diagnostic="; ".join(notes))
+                        if notes
+                        else geometry_transform(frame.label, actual)
+                    )
                 elif frame.label in GEOMETRY_READERS:
                     kind, index = GEOMETRY_READERS[frame.label]
                     item = actual.at(0)
@@ -828,6 +857,7 @@ class ScriptValues:
                         StaticValues((result,)),
                         f"{frame.label}; 几何表达式: {key.text}",
                         parents,
+                        numeric=frame.label in GEOMETRY_TRANSFORMS,
                     ),
                 )
             elif frame.stage in {"select", "table.unpack"}:

@@ -372,6 +372,7 @@ tests/test_script_names_complete.py
 tests/test_script_placement_dataflow.py
 tests/test_script_geometry_complete.py
 tests/test_script_numeric_dataflow.py
+tests/test_script_geometry_factories.py
 tests/test_script_source_identity_complete.py
 tests/test_script_object_code_occurrence_index.py
 tests/test_script_protection.py

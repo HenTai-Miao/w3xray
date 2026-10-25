@@ -8,12 +8,12 @@ from typing import TYPE_CHECKING
 from .save_call_context import extract_call_args
 from .script_assignments import script_assignments, reference_parts
 from .script_lexing import script_views
-from .script_names import NAME_PATTERN, qualified_name
+from .script_names import NAME_PATTERN, qualified_name, rectangle_name
 from .script_numeric_expressions import numeric_expression
 from .script_object_literals import strip_outer_parentheses
 from .script_returns import script_returns
 from .script_geometry_values import (
-    GEOMETRY_CONSTRUCTORS,
+    GEOMETRY_FACTORIES,
     GEOMETRY_READERS,
     GEOMETRY_MUTATORS,
 )
@@ -40,6 +40,10 @@ _READ_ONLY = frozenset(
         "FourCC",
         "select",
         "table.unpack",
+        "RectContainsCoords",
+        "RectContainsLoc",
+        "RectContainsUnit",
+        "RectContainsItem",
         *GEOMETRY_READERS,
     }
 )
@@ -82,7 +86,7 @@ class GeometryAliases:
                 and functions.resolve(
                     atom.call.name, atom.call.start, atom.call.owner
                 ).builtin
-                in GEOMETRY_CONSTRUCTORS
+                in GEOMETRY_FACTORIES
             ):
                 assigned = (
                     (assignment.owner, atom.call.start, "@geometry:constructor"),
@@ -153,7 +157,7 @@ class GeometryAliases:
                     )
                 )
             elif (
-                reference.builtin not in GEOMETRY_CONSTRUCTORS
+                reference.builtin not in GEOMETRY_FACTORIES
                 and reference.builtin not in _READ_ONLY
                 and not (
                     call.name.removeprefix("_G.") in _READ_ONLY
@@ -213,7 +217,7 @@ class GeometryAliases:
         syntax = script_views(value, lua=self.functions.lua).syntax
         if value == "...":
             return ((owner, -3, "..."),)
-        name = qualified_name(syntax)
+        name = qualified_name(syntax) or rectangle_name(syntax)
         if name is not None:
             target = self.functions.resolve(name, position, owner)
             if len(target.functions) == 1 and not target.diagnostic:
@@ -238,7 +242,7 @@ class GeometryAliases:
             target = (
                 self.functions.resolve(whole.name, position, owner) if whole else None
             )
-            if target is not None and target.builtin in GEOMETRY_CONSTRUCTORS:
+            if target is not None and target.builtin in GEOMETRY_FACTORIES:
                 result = ((owner, position, "@geometry:constructor"),)
             elif target is not None and target.builtin in GEOMETRY_READERS:
                 result = ()

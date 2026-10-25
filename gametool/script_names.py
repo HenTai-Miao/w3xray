@@ -17,6 +17,14 @@ def qualified_name(syntax: str) -> str | None:
     return _SPACE.sub("", raw) if NAME_PATTERN.fullmatch(raw) else None
 
 
+def rectangle_name(syntax: str) -> str | None:
+    """Keep existing Unicode gg_rct_ suffixes as complete variable references."""
+    raw = syntax.strip()
+    return (
+        _SPACE.sub("", raw) if re.fullmatch(r"(?:_G\s*\.\s*)?gg_rct_\w+", raw) else None
+    )
+
+
 def member_suffix(syntax: str, start: int) -> bool:
     cursor = start - 1
     while cursor >= 0 and syntax[cursor].isspace():

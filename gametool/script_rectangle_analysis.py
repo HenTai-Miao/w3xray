@@ -5,11 +5,11 @@ from __future__ import annotations
 from bisect import bisect_right
 from dataclasses import dataclass
 from functools import lru_cache
-import re
 
 from .script_assignments import ScriptAssignment, script_assignments
 from .script_function_graph import script_functions
 from .script_geometry_values import geometry_coordinates
+from .script_names import rectangle_name
 from .script_placement_analysis import PlacementDiagnostic
 
 
@@ -92,8 +92,8 @@ def analyze_script_rectangles(
         return ""
 
     for assignment in script_assignments(script, lua=lua):
-        name = re.sub(r"\s+", "", assignment.target)
-        if re.fullmatch(r"(?:_G\.)?gg_rct_\w+", name) is None:
+        name = rectangle_name(assignment.target)
+        if name is None:
             continue
         if name.startswith("_G.") and functions.bound(
             "_G", assignment.owner, assignment.start

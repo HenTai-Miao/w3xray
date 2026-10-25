@@ -8,6 +8,13 @@ from .script_value_models import StaticValue, StaticValues, split_value_expressi
 from .static_numbers import format_number, static_number
 
 GEOMETRY_CONSTRUCTORS = {"Location": ("location", 2), "Rect": ("rect", 4)}
+GEOMETRY_TRANSFORMS = {
+    "RectFromLoc": ("location", "location"),
+    "OffsetLocation": ("location", "number", "number"),
+    "OffsetRectBJ": ("rect", "number", "number"),
+    "RectFromCenterSizeBJ": ("location", "number", "number"),
+}
+GEOMETRY_FACTORIES = frozenset((*GEOMETRY_CONSTRUCTORS, *GEOMETRY_TRANSFORMS))
 GEOMETRY_READERS = {
     "GetLocationX": ("location", 0),
     "GetLocationY": ("location", 1),
@@ -31,7 +38,7 @@ GEOMETRY_MUTATORS = frozenset(
     }
 )
 GEOMETRY_BUILTINS = frozenset(
-    (*GEOMETRY_CONSTRUCTORS, *GEOMETRY_READERS, *GEOMETRY_MUTATORS)
+    (*GEOMETRY_FACTORIES, *GEOMETRY_READERS, *GEOMETRY_MUTATORS)
 )
 
 
@@ -97,4 +104,59 @@ def geometry_center(coordinates: tuple[float, ...]) -> tuple[float, float]:
 
     return midpoint(coordinates[0], coordinates[2]), midpoint(
         coordinates[1], coordinates[3]
+    )
+
+
+def geometry_transform(name: str, actual: StaticValues) -> StaticValue:
+    """Read standard source formulas, producing a fresh typed geometry value."""
+    spec = GEOMETRY_TRANSFORMS[name]
+    if len(actual.values) != len(spec) or actual.tail is not None:
+        return StaticValue(None, diagnostic=f"{name} 几何参数数量未确定")
+    coordinates: list[tuple[float, ...]] = []
+    notes: dict[str, None] = {}
+    for index, (kind, value) in enumerate(zip(spec, actual.values, strict=True)):
+        number = (
+            static_number(value.value, lua=True)
+            if kind == "number" and value.kind == kind and value.value is not None
+            else None
+        )
+        point = (
+            (number,)
+            if number is not None
+            else geometry_coordinates(value)
+            if kind != "number" and value.kind == kind
+            else None
+        )
+        if point is None:
+            notes[
+                f"第{index + 1}参: " + (value.diagnostic or f"未确认的 {kind} 值")
+            ] = None
+        else:
+            coordinates.append(point)
+    if notes:
+        return StaticValue(
+            None, diagnostic=f"{name} 几何输入未静态确定; " + "; ".join(notes)
+        )
+    first = coordinates[0]
+    result_kind = "Location" if name == "OffsetLocation" else "Rect"
+    if name == "RectFromLoc":
+        result = (*first, *coordinates[1])
+    elif name == "OffsetLocation":
+        result = (first[0] + coordinates[1][0], first[1] + coordinates[2][0])
+    elif name == "OffsetRectBJ":
+        dx, dy = coordinates[1][0], coordinates[2][0]
+        result = (first[0] + dx, first[1] + dy, first[2] + dx, first[3] + dy)
+    else:
+        half_width, half_height = coordinates[1][0] * 0.5, coordinates[2][0] * 0.5
+        result = (
+            first[0] - half_width,
+            first[1] - half_height,
+            first[0] + half_width,
+            first[1] + half_height,
+        )
+    return geometry_constructor(
+        result_kind,
+        StaticValues(
+            tuple(StaticValue(format_number(number), "number") for number in result)
+        ),
     )
