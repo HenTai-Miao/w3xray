@@ -58,6 +58,8 @@ class ScriptAtoms:
             end = function.end
         elif cursor in self.literals:
             end = self.literals[cursor]
+        elif self.views.syntax.startswith("...", cursor):
+            end = cursor + 3
         else:
             simple = _SIMPLE.match(self.views.arguments, cursor)
             if simple is None:
@@ -82,12 +84,14 @@ class ScriptAtoms:
             return None, stop
         return ScriptAtom(first, end, call, function), stop
 
-    def assignment(self, assignment: ScriptAssignment) -> ScriptAtom | None:
+    def assignment_values(
+        self, assignment: ScriptAssignment
+    ) -> tuple[ScriptAtom | None, ...]:
         values = self._values.get(assignment.offset)
         if values is None:
             result: list[ScriptAtom | None] = []
             cursor = assignment.rhs
-            for _ in range(assignment.count):
+            while True:
                 atom, stop = self._atom(cursor, assignment.owner)
                 result.append(atom)
                 if (
@@ -99,6 +103,10 @@ class ScriptAtoms:
                 cursor = stop + 1
             values = tuple(result)
             self._values[assignment.offset] = values
+        return values
+
+    def assignment(self, assignment: ScriptAssignment) -> ScriptAtom | None:
+        values = self.assignment_values(assignment)
         return values[assignment.ordinal] if assignment.ordinal < len(values) else None
 
     def value(self, assignment: ScriptAssignment) -> str:

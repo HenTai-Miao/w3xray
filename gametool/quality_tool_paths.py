@@ -439,6 +439,7 @@ gametool/static_numbers.py
 gametool/script_trigger_registration_index.py
 gametool/script_variable_usage_index.py
 gametool/script_values.py
+gametool/script_value_models.py
 gametool/search.py
 gametool/single_instance.py
 gametool/slk.py

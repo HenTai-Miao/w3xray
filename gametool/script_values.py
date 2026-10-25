@@ -1,9 +1,9 @@
-"""Conservative scalar dataflow through source getters, without script execution."""
+"""Conservative scalar and Lua list dataflow, without script execution."""
 
 from __future__ import annotations
 
 from bisect import bisect_right
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 import re
 from typing import TYPE_CHECKING
@@ -13,6 +13,13 @@ from .script_lexing import literal_string_value, script_views
 from .script_object_literals import literal_object_code, strip_outer_parentheses
 from .script_returns import ReturnSpan, script_returns
 from .script_scopes import script_structure
+from .script_value_models import (
+    StaticValue as StaticValue,
+    StaticValues,
+    flatten_values,
+    split_value_expressions,
+    unknown_values,
+)
 
 if TYPE_CHECKING:
     from .script_function_bindings import ScriptFunctionBindings
@@ -24,20 +31,15 @@ _NUMBER = re.compile(
 
 
 @dataclass(frozen=True, slots=True)
-class StaticValue:
-    value: str | None
-    kind: str = "unknown"
-    diagnostic: str = ""
-    proof: int = -1
-
-
-@dataclass(frozen=True, slots=True)
 class _Expression:
     text: str
     owner: int | None
     position: int
     context: int | None
     arguments: tuple[str | None, ...]
+    multi: bool = False
+    parts: tuple[str, ...] | None = None
+    unknown_tail: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +57,10 @@ class _Frame:
     row: ReturnSpan | None = None
     label: str = ""
     parents: tuple[int, ...] = ()
+    ordinal: int = 0
+    call_arguments: tuple[str, ...] = ()
+    bound_count: int = 0
+    cursor: int = 0
 
 
 class ScriptValues:
@@ -63,7 +69,7 @@ class ScriptValues:
         self.returns: dict[int | None, list[ReturnSpan]] = {}
         for row in script_returns(functions.text, lua=functions.lua):
             self.returns.setdefault(row.owner, []).append(row)
-        self.results: dict[_Expression, StaticValue] = {}
+        self.results: dict[_Expression, StaticValues] = {}
         self.proofs: list[_Proof] = []
         self._proof_lines: dict[int, tuple[str, ...]] = {}
         self._events: dict[int | None, set[int]] = {}
@@ -83,6 +89,10 @@ class ScriptValues:
         position: int,
         context: int | None,
         arguments: tuple[str | None, ...],
+        *,
+        multi: bool = False,
+        parts: tuple[str, ...] | None = None,
+        unknown_tail: bool = False,
     ) -> _Expression:
         epochs = self._epochs.get(owner)
         if epochs is None:
@@ -91,29 +101,92 @@ class ScriptValues:
                 events.update((control.start, control.end))
             epochs = tuple(sorted(events))
             self._epochs[owner] = epochs
-        # Within one epoch the visible locals, preceding writes and control blocks
-        # are identical. Retain source offsets in proofs, rather than recomputing
-        # the same nested argument at every call's character position.
         boundary = epochs[bisect_right(epochs, position) - 1]
+        raw = text.strip()
+        value = strip_outer_parentheses(raw)
+        # Parentheses enforce a scalar even in the final position of a Lua list.
+        expands = multi and (parts is not None or raw == value)
         return _Expression(
-            strip_outer_parentheses(text), owner, boundary, context, arguments
+            value, owner, boundary, context, arguments, expands, parts, unknown_tail
         )
 
-    def _result(
-        self,
-        value: str | None,
-        kind: str = "unknown",
-        diagnostic: str = "",
-        *,
-        label: str = "",
-        parents: tuple[int, ...] = (),
-    ) -> StaticValue:
-        parents = tuple(parent for parent in parents if parent >= 0)
-        proof = -1
-        if label or parents:
-            proof = len(self.proofs)
-            self.proofs.append(_Proof(label, parents))
-        return StaticValue(value, kind, diagnostic, proof)
+    @staticmethod
+    def _literal(
+        value: str, lua: bool | None, *, computed: bool = False
+    ) -> StaticValue | None:
+        string = literal_string_value(value)
+        if string is not None:
+            if lua is not True and value.startswith("'") and literal_object_code(value):
+                return StaticValue(value, "object")
+            return StaticValue(json.dumps(string, ensure_ascii=False), "string")
+        if _NUMBER.fullmatch(value):
+            return StaticValue(value, "number")
+        if value in {"true", "false", "nil", "null"}:
+            return StaticValue(
+                value, "boolean" if value in {"true", "false"} else "nil"
+            )
+        if computed and literal_object_code(value):
+            return StaticValue(value, "object")
+        return None
+
+    def _save(self, key: _Expression, values: StaticValues) -> None:
+        self.results[key] = (
+            values if key.multi or key.parts is not None else values.scalar()
+        )
+
+    def _proof(
+        self, values: StaticValues, label: str, parents: tuple[int, ...] = ()
+    ) -> StaticValues:
+        dependencies = tuple(
+            dict.fromkeys(
+                p
+                for p in (
+                    *parents,
+                    *(item.proof for item in values.values),
+                    values.tail.proof if values.tail else -1,
+                )
+                if p >= 0
+            )
+        )
+        if not label and not parents:
+            return values
+        number = len(self.proofs)
+        self.proofs.append(_Proof(label, dependencies))
+        return StaticValues(
+            tuple(replace(item, proof=number) for item in values.values),
+            replace(values.tail, proof=number) if values.tail else None,
+            values.variable_width,
+        )
+
+    def binding_values(
+        self, function: int, actual: StaticValues
+    ) -> tuple[tuple[StaticValue, ...], bool]:
+        count = len(self.functions.symbols.parameters.get(function, ()))
+        values = tuple(
+            actual.at(index)
+            if self.functions.lua is True or index < len(actual.values) or actual.tail
+            else StaticValue(None, diagnostic="缺少实参")
+            for index in range(count)
+        )
+        variadic = function in self.functions.symbols.variadic
+        if variadic:
+            values += actual.values[count:]
+        return values, variadic and actual.tail is not None
+
+    def widen_recursive(
+        self, function: int, actual: StaticValues, expressions: tuple[str, ...]
+    ) -> StaticValues:
+        # Only a recursively growing variadic tail is unknown; encoded literal
+        # prefixes and all ordinary/nonrecursive lists keep their full lengths.
+        fixed = max(
+            len(self.functions.symbols.parameters.get(function, ())),
+            len(expressions) - 1,
+        )
+        return StaticValues(
+            actual.values[:fixed],
+            StaticValue(None, diagnostic="递归变长尾部的长度/值未静态确定"),
+            True,
+        )
 
     def resolve(
         self,
@@ -121,42 +194,127 @@ class ScriptValues:
         owner: int,
         position: int,
         arguments: tuple[str | None, ...],
+        *,
+        unknown_tail: bool = False,
     ) -> StaticValue:
-        root = self._key(expression, owner, position, owner, arguments)
+        return self._evaluate(
+            self._key(
+                expression, owner, position, owner, arguments, unknown_tail=unknown_tail
+            )
+        ).at(0)
+
+    def resolve_many(
+        self,
+        expression: str,
+        owner: int,
+        position: int,
+        arguments: tuple[str | None, ...],
+        *,
+        unknown_tail: bool = False,
+    ) -> StaticValues:
+        return self._evaluate(
+            self._key(
+                expression,
+                owner,
+                position,
+                owner,
+                arguments,
+                multi=self.functions.lua is True,
+                unknown_tail=unknown_tail,
+            )
+        )
+
+    def argument_values(
+        self,
+        expressions: tuple[str, ...],
+        owner: int,
+        position: int,
+        arguments: tuple[str | None, ...],
+        *,
+        unknown_tail: bool = False,
+    ) -> StaticValues:
+        return self._evaluate(
+            self._key(
+                "",
+                owner,
+                position,
+                owner,
+                arguments,
+                multi=True,
+                parts=expressions,
+                unknown_tail=unknown_tail,
+            )
+        )
+
+    def _evaluate(self, root: _Expression) -> StaticValues:
         pending = [_Frame(root)]
         active: set[_Expression] = {root}
+        active_functions: dict[int, list[_Frame]] = {}
         while pending:
             frame = pending[-1]
             key = frame.key
             if key in self.results:
                 pending.pop()
                 active.discard(key)
+                if frame.stage == "return" and frame.function is not None:
+                    active_functions[frame.function].pop()
                 continue
             if frame.stage == "start":
                 value = key.text
-                string = literal_string_value(value)
-                if string is not None:
-                    if (
-                        self.functions.lua is not True
-                        and value.startswith("'")
-                        and literal_object_code(value)
-                    ):
-                        result = StaticValue(value, "object")
-                    else:
-                        result = StaticValue(
-                            json.dumps(string, ensure_ascii=False), "string"
+                if key.parts is not None:
+                    frame.stage = "list"
+                    frame.dependencies = tuple(
+                        self._key(
+                            part,
+                            key.owner,
+                            key.position,
+                            key.context,
+                            key.arguments,
+                            multi=self.functions.lua is True
+                            and index == len(key.parts) - 1,
+                            unknown_tail=key.unknown_tail,
                         )
-                    self.results[key] = result
-                    continue
-                if _NUMBER.fullmatch(value):
-                    self.results[key] = StaticValue(value, "number")
-                    continue
-                if value in {"true", "false", "nil", "null"}:
-                    self.results[key] = StaticValue(
-                        value, "boolean" if value in {"true", "false"} else "nil"
+                        for index, part in enumerate(key.parts)
                     )
+                elif (literal := self._literal(value, self.functions.lua)) is not None:
+                    self._save(key, StaticValues((literal,)))
                     continue
-                if _NAME.fullmatch(value):
+                elif value == "...":
+                    if key.context not in self.functions.symbols.variadic:
+                        self._save(
+                            key,
+                            unknown_values("当前函数不是变长参数函数", multi=key.multi),
+                        )
+                    else:
+                        count = len(
+                            self.functions.symbols.parameters.get(key.context, ())
+                        )
+                        values = tuple(
+                            self._literal(item, self.functions.lua, computed=True)
+                            if item is not None
+                            else None
+                            for item in key.arguments[count:]
+                        )
+                        self._save(
+                            key,
+                            StaticValues(
+                                tuple(
+                                    item
+                                    or StaticValue(
+                                        None, diagnostic="变长实参值未静态确定"
+                                    )
+                                    for item in values
+                                ),
+                                StaticValue(
+                                    None, diagnostic="变长实参数量/值未静态确定"
+                                )
+                                if key.unknown_tail
+                                else None,
+                                True,
+                            ),
+                        )
+                    continue
+                elif _NAME.fullmatch(value):
                     symbol = self.functions.symbols.symbol(
                         value, key.owner, key.position
                     )
@@ -164,22 +322,37 @@ class ScriptValues:
                         symbol, key.owner, key.position
                     )
                     if note:
-                        self.results[key] = StaticValue(None, diagnostic=note)
+                        self._save(key, unknown_values(note, multi=False))
                         continue
                     if assignment is not None:
-                        rhs = self.functions.atoms.value(assignment)
-                        if not rhs:
-                            self.results[key] = StaticValue(
-                                None, diagnostic="赋值不是可确认的标量表达式"
+                        atoms = self.functions.atoms.assignment_values(assignment)
+                        if any(atom is None for atom in atoms):
+                            self._save(
+                                key,
+                                unknown_values(
+                                    "赋值表达式未完整解析，未假定后续值为空",
+                                    multi=False,
+                                ),
                             )
                             continue
+                        parts = tuple(
+                            self.functions.atoms.views.arguments[
+                                atom.start : atom.end
+                            ].strip()
+                            for atom in atoms
+                            if atom is not None
+                        )
                         dependency = self._key(
-                            rhs,
+                            "",
                             assignment.owner,
                             self.functions._rhs_position(assignment),
                             key.context,
                             key.arguments,
+                            multi=True,
+                            parts=parts,
+                            unknown_tail=key.unknown_tail,
                         )
+                        frame.ordinal = assignment.ordinal
                     else:
                         names = (
                             self.functions.symbols.parameters.get(key.context, ())
@@ -193,24 +366,43 @@ class ScriptValues:
                             else None
                         )
                         if supplied is None:
-                            self.results[key] = StaticValue(
-                                None, diagnostic="实参值由运行时决定，未静态确定"
+                            self._save(
+                                key,
+                                unknown_values(
+                                    "实参值由运行时决定，未静态确定", multi=False
+                                ),
                             )
                             continue
-                        dependency = self._key(
-                            supplied, key.owner, key.position, key.context, ()
+                        literal = self._literal(
+                            supplied, self.functions.lua, computed=True
                         )
+                        self._save(
+                            key,
+                            StaticValues(
+                                (
+                                    literal
+                                    or StaticValue(
+                                        None, diagnostic="实参不是已确认的字面量"
+                                    ),
+                                )
+                            ),
+                        )
+                        continue
                     frame.stage, frame.dependencies = "alias", (dependency,)
                 else:
-                    structure = script_structure(value, lua=self.functions.lua)
-                    calls = [
+                    calls = tuple(
                         call
-                        for call in structure.calls
+                        for call in script_structure(
+                            value, lua=self.functions.lua
+                        ).calls
                         if call.start == 0 and call.end == len(value) and call.complete
-                    ]
+                    )
                     if len(calls) != 1:
-                        self.results[key] = StaticValue(
-                            None, diagnostic="动态实参或运算表达式，未静态求值"
+                        self._save(
+                            key,
+                            unknown_values(
+                                "动态实参或运算表达式，未静态求值", multi=False
+                            ),
                         )
                         continue
                     call = calls[0]
@@ -223,8 +415,11 @@ class ScriptValues:
                         call.name, key.owner, key.position
                     ):
                         if len(args) != 1:
-                            self.results[key] = StaticValue(
-                                None, diagnostic="FourCC 实参数量未确定"
+                            self._save(
+                                key,
+                                unknown_values(
+                                    "FourCC 实参数量未确定", multi=key.multi
+                                ),
                             )
                             continue
                         frame.stage = "fourcc"
@@ -233,30 +428,42 @@ class ScriptValues:
                             call.name, key.position, key.owner
                         )
                         if len(reference.functions) != 1 or reference.diagnostic:
-                            self.results[key] = StaticValue(
-                                None,
-                                diagnostic="返回值函数未唯一确定: "
-                                + (reference.diagnostic or call.name),
+                            self._save(
+                                key,
+                                unknown_values(
+                                    "返回值函数未唯一确定: "
+                                    + (reference.diagnostic or call.name),
+                                    multi=key.multi,
+                                ),
                             )
                             continue
                         function = reference.functions[0]
                         returns = self.returns.get(function.start, ())
-                        if not function.complete or len(returns) != 1:
-                            self.results[key] = StaticValue(
-                                None,
-                                diagnostic=f"{function.name} 有 {len(returns)} 处返回或范围未闭合；未合并为固定值",
+                        if not function.complete or len(returns) > 1:
+                            self._save(
+                                key,
+                                unknown_values(
+                                    f"{function.name} 有 {len(returns)} 处返回或范围未闭合；未合并为固定值",
+                                    multi=key.multi,
+                                ),
                             )
                             continue
-                        row = returns[0]
+                        row = returns[0] if returns else None
                         ranges = self.functions.symbols.control_data(function.start)[0]
-                        if row.diagnostic or any(
-                            item.start <= row.start < item.end
-                            and item.condition != "do"
-                            for item in ranges
+                        if row is not None and (
+                            row.diagnostic
+                            or any(
+                                item.start <= row.start < item.end
+                                and item.condition != "do"
+                                for item in ranges
+                            )
                         ):
-                            self.results[key] = StaticValue(
-                                None,
-                                diagnostic=f"{function.name} 返回位于分支/循环或表达式不完整，值未静态确定",
+                            self._save(
+                                key,
+                                unknown_values(
+                                    f"{function.name} 返回位于分支/循环或表达式不完整，值未静态确定",
+                                    multi=key.multi,
+                                ),
                             )
                             continue
                         frame.stage, frame.function, frame.row = (
@@ -264,81 +471,127 @@ class ScriptValues:
                             function.start,
                             row,
                         )
-                        frame.label = f"{function.name}; 第{row.line}行 / 偏移{row.start}: return {row.expression}"
+                        frame.label = (
+                            f"{function.name}; 第{row.line}行 / 偏移{row.start}: return {row.expression}"
+                            if row
+                            else f"{function.name}; 第{function.end_line}行: 函数末尾无返回值"
+                        )
                         if ":" in call.name:
                             args = (call.name.rsplit(":", 1)[0], *args)
-                    frame.dependencies = tuple(
+                    frame.call_arguments = args
+                    frame.dependencies = (
                         self._key(
-                            arg, key.owner, key.position, key.context, key.arguments
-                        )
-                        for arg in args
+                            "",
+                            key.owner,
+                            key.position,
+                            key.context,
+                            key.arguments,
+                            multi=True,
+                            parts=args,
+                            unknown_tail=key.unknown_tail,
+                        ),
                     )
-            missing = next(
-                (item for item in frame.dependencies if item not in self.results), None
-            )
-            if missing is not None:
+            while (
+                frame.cursor < len(frame.dependencies)
+                and frame.dependencies[frame.cursor] in self.results
+            ):
+                frame.cursor += 1
+            if frame.cursor < len(frame.dependencies):
+                missing = frame.dependencies[frame.cursor]
                 if missing in active:
-                    self.results[key] = StaticValue(
-                        None, diagnostic="返回值或变量依赖形成递归环，未静态求值"
+                    self._save(
+                        key,
+                        unknown_values(
+                            "返回值或变量依赖形成递归环，未静态求值", multi=key.multi
+                        ),
                     )
                     continue
                 active.add(missing)
                 pending.append(_Frame(missing))
                 continue
             values = tuple(self.results[item] for item in frame.dependencies)
-            if frame.stage == "arguments":
-                names = (
-                    self.functions.symbols.parameters.get(frame.function, ())
-                    if frame.function is not None
-                    else ()
-                )
-                bindings = tuple(
-                    values[index].value if index < len(values) else None
-                    for index in range(len(names))
-                )
-                assert frame.row is not None and frame.function is not None
+            if frame.stage == "list":
+                self._save(key, flatten_values(values))
+            elif frame.stage == "arguments":
+                assert frame.function is not None
+                actual = values[0]
+                bound, unknown_tail = self.binding_values(frame.function, actual)
+                ancestors = active_functions.get(frame.function, ())
+                if (
+                    frame.function in self.functions.symbols.variadic
+                    and actual.variable_width
+                    and ancestors
+                    and len(bound) > ancestors[-1].bound_count
+                ):
+                    actual = self.widen_recursive(
+                        frame.function, actual, frame.call_arguments
+                    )
+                    bound, unknown_tail = self.binding_values(frame.function, actual)
+                    frame.label += "; 递归变长尾部未静态确定"
+                bindings = tuple(item.value for item in bound)
+                names = self.functions.symbols.parameters.get(frame.function, ())
                 if names:
                     frame.label += "; 实参 " + ", ".join(
-                        f"{name}={value if value is not None else '动态'}"
-                        for name, value in zip(names, bindings)
+                        f"{name}={item if item is not None else '动态'}"
+                        for name, item in zip(names, bindings)
                     )
-                frame.parents = tuple(item.proof for item in values if item.proof >= 0)
-                frame.stage = "return"
+                frame.parents = tuple(
+                    item.proof
+                    for item in (
+                        *actual.values,
+                        *((actual.tail,) if actual.tail else ()),
+                    )
+                    if item.proof >= 0
+                )
+                frame.stage, frame.bound_count = "return", len(bound)
+                active_functions.setdefault(frame.function, []).append(frame)
+                parts = (
+                    split_value_expressions(
+                        frame.row.expression, lua=self.functions.lua
+                    )
+                    if frame.row
+                    else ()
+                )
+                if parts is None:
+                    self._save(
+                        key,
+                        unknown_values("返回值列表未闭合，未假定为空", multi=key.multi),
+                    )
+                    continue
+                frame.cursor = 0
                 frame.dependencies = (
                     self._key(
-                        frame.row.first,
+                        "",
                         frame.function,
-                        frame.row.expression_start,
+                        frame.row.expression_start if frame.row else 0,
                         frame.function,
                         bindings,
+                        multi=True,
+                        parts=parts,
+                        unknown_tail=unknown_tail,
                     ),
                 )
                 continue
-            if frame.stage == "fourcc":
-                item = values[0]
+            elif frame.stage == "fourcc":
+                item = values[0].at(0)
                 string = (
                     literal_string_value(item.value)
                     if item.value is not None and item.kind == "string"
                     else None
                 )
                 raw = f"FourCC({string!r})" if string is not None else ""
-                self.results[key] = self._result(
-                    raw if raw and literal_object_code(raw) else None,
-                    "object" if raw and literal_object_code(raw) else "unknown",
-                    ""
-                    if raw and literal_object_code(raw)
-                    else item.diagnostic or "FourCC 实参不是四字节文本",
-                    parents=(item.proof,),
+                valid = bool(raw and literal_object_code(raw))
+                result = StaticValue(
+                    raw if valid else None,
+                    "object" if valid else "unknown",
+                    "" if valid else item.diagnostic or "FourCC 实参不是四字节文本",
+                    item.proof,
                 )
+                self._save(key, StaticValues((result,)))
+            elif frame.stage == "alias":
+                self._save(key, StaticValues((values[0].at(frame.ordinal),)))
             else:
-                item = values[0]
-                self.results[key] = self._result(
-                    item.value,
-                    item.kind,
-                    item.diagnostic,
-                    label=frame.label,
-                    parents=(*frame.parents, item.proof),
-                )
+                self._save(key, self._proof(values[0], frame.label, frame.parents))
         return self.results[root]
 
     def proof_lines(self, value: StaticValue) -> tuple[str, ...]:

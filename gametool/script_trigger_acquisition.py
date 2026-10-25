@@ -258,23 +258,28 @@ class _Analysis:
             active = [item for item in active if item.end > call.start]
             args = extract_call_args(self.views, call.open + 1)
             position, operation = signature
-            if position is not None and position >= len(args):
+            if position is not None and not args:
                 continue
-            scalar = (
-                self.functions.scalar(
-                    args[position],
-                    function.start,
-                    call.start,
-                    node.arguments if node is not None else (),
-                )
-                if position is not None
-                else StaticValue(None)
+            actual = self.functions.argument_values(
+                args,
+                function.start,
+                call.start,
+                node.arguments if node is not None else (),
+                unknown_tail=node.unknown_tail if node is not None else False,
             )
+            scalar = actual.at(position) if position is not None else StaticValue(None)
             value, value_note = scalar.value, scalar.diagnostic
             code = literal_object_code(value) if value is not None else ""
             argument_evidence = ""
-            if position is not None and (not code or value != args[position]):
-                argument_evidence = f"物品实参 {args[position]}" + (
+            if position is not None and (
+                position >= len(args) or not code or value != args[position]
+            ):
+                argument = (
+                    args[position]
+                    if position < len(args)
+                    else f"展开后第{position + 1}个实参（原始参数：{', '.join(args)}）"
+                )
+                argument_evidence = f"物品实参 {argument}" + (
                     f" -> {value}" if code else f"; {value_note or '物品码未静态确定'}"
                 )
             units, items = list(common_units), list(common_items)
@@ -287,7 +292,11 @@ class _Analysis:
                         selector, function.body_start, branch.start
                     )
                     selector = self.functions.resolved_text(
-                        selector, function.start, start, node.arguments
+                        selector,
+                        function.start,
+                        start,
+                        node.arguments,
+                        unknown_tail=node.unknown_tail,
                     )
                     if selector != branch.selector:
                         branch_conditions.append("返回值/实参展开（静态）: " + selector)
@@ -409,6 +418,7 @@ def trigger_acquisitions(
                             node.function.start,
                             node.function.body_start,
                             node.arguments,
+                            unknown_tail=node.unknown_tail,
                         ).strip()
                         if resolved != original:
                             conditions.append("字面量实参展开（静态）: " + resolved)

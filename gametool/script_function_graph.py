@@ -16,6 +16,7 @@ from .script_function_bindings import (
     FunctionReference as FunctionReference,
 )
 from .script_values import ScriptValues, StaticValue
+from .script_value_models import StaticValues
 
 _NAME = re.compile(r"[A-Za-z_]\w*(?:[.:][A-Za-z_]\w*)*")
 
@@ -24,6 +25,7 @@ _NAME = re.compile(r"[A-Za-z_]\w*(?:[.:][A-Za-z_]\w*)*")
 class FunctionNode:
     function: FunctionSpan
     arguments: tuple[str | None, ...]
+    unknown_tail: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,7 +80,13 @@ class ScriptFunctions(ScriptFunctionBindings):
         self.values = ScriptValues(self)
 
     def resolved_text(
-        self, text: str, owner: int, start: int, arguments: tuple[str | None, ...]
+        self,
+        text: str,
+        owner: int,
+        start: int,
+        arguments: tuple[str | None, ...],
+        *,
+        unknown_tail: bool = False,
     ) -> str:
         """Substitute only known scalar tokens, keeping strings and calls opaque."""
         syntax = script_views(text, lua=self.lua).syntax
@@ -91,7 +99,11 @@ class ScriptFunctions(ScriptFunctionBindings):
             ):
                 continue
             result = self.scalar(
-                text[call.start : call.end], owner, start + call.start, arguments
+                text[call.start : call.end],
+                owner,
+                start + call.start,
+                arguments,
+                unknown_tail=unknown_tail,
             )
             if result.value is not None:
                 replacements.append((call.start, call.end, result.value))
@@ -104,7 +116,11 @@ class ScriptFunctions(ScriptFunctionBindings):
             if symbol not in self.writes and symbol[0] != owner:
                 continue
             value, _note = self.literal(
-                match.group(), owner, start + match.start(), arguments
+                match.group(),
+                owner,
+                start + match.start(),
+                arguments,
+                unknown_tail=unknown_tail,
             )
             if value is not None:
                 replacements.append((match.start(), match.end(), value))
@@ -123,8 +139,12 @@ class ScriptFunctions(ScriptFunctionBindings):
         owner: int,
         position: int,
         arguments: tuple[str | None, ...],
+        *,
+        unknown_tail: bool = False,
     ) -> StaticValue:
-        return self.values.resolve(expression, owner, position, arguments)
+        return self.values.resolve(
+            expression, owner, position, arguments, unknown_tail=unknown_tail
+        )
 
     def literal(
         self,
@@ -132,19 +152,38 @@ class ScriptFunctions(ScriptFunctionBindings):
         owner: int,
         position: int,
         arguments: tuple[str | None, ...],
+        *,
+        unknown_tail: bool = False,
     ) -> tuple[str | None, str]:
-        result = self.scalar(expression, owner, position, arguments)
+        result = self.scalar(
+            expression, owner, position, arguments, unknown_tail=unknown_tail
+        )
         return result.value, result.diagnostic
+
+    def argument_values(
+        self,
+        expressions: tuple[str, ...],
+        owner: int,
+        position: int,
+        arguments: tuple[str | None, ...],
+        *,
+        unknown_tail: bool = False,
+    ) -> StaticValues:
+        return self.values.argument_values(
+            expressions, owner, position, arguments, unknown_tail=unknown_tail
+        )
 
     def graph(self, function: FunctionSpan) -> FunctionGraph:
         cached = self._graphs.get(function.start)
         if cached is not None:
             return cached
         arguments = tuple(None for _ in self.symbols.parameters.get(function.start, ()))
-        nodes = [FunctionNode(function, arguments)]
-        identities: dict[tuple[int, tuple[str | None, ...]], int] = {
-            (function.start, arguments): 0
+        root_tail = function.start in self.symbols.variadic
+        nodes = [FunctionNode(function, arguments, root_tail)]
+        identities: dict[tuple[int, tuple[str | None, ...], bool], int] = {
+            (function.start, arguments, root_tail): 0
         }
+        parents: list[int | None] = [None]
         edges: list[FunctionEdge] = []
         cursor = 0
         while cursor < len(nodes):
@@ -170,6 +209,7 @@ class ScriptFunctions(ScriptFunctionBindings):
                             item.selector, node.function.body_start, item.start
                         ),
                         node.arguments,
+                        unknown_tail=node.unknown_tail,
                     )
                     for item in active
                     if item.selector
@@ -187,49 +227,64 @@ class ScriptFunctions(ScriptFunctionBindings):
                     )
                     continue
                 args = extract_call_args(self.views, call.open + 1)
-                expands = (
-                    self.lua is True
-                    and bool(args)
-                    and any(
-                        item.start == 0 and item.end == len(args[-1]) and item.complete
-                        for item in script_structure(args[-1], lua=True).calls
-                    )
-                )
                 if ":" in call.name:
                     args = (call.name.rsplit(":", 1)[0], *args)
+                actual = self.argument_values(
+                    args,
+                    node.function.start,
+                    call.start,
+                    node.arguments,
+                    unknown_tail=node.unknown_tail,
+                )
                 for target in reference.functions:
                     parameters = self.symbols.parameters.get(target.start, ())
-                    bindings: list[str | None] = []
+                    bound, unknown_tail = self.values.binding_values(
+                        target.start, actual
+                    )
+                    target_actual = actual
                     notes = [reference.diagnostic] if reference.diagnostic else []
-                    value_proofs: dict[str, None] = {}
-                    for index, name in enumerate(parameters):
-                        result = (
-                            self.scalar(
-                                args[index],
-                                node.function.start,
-                                call.start,
-                                node.arguments,
-                            )
-                            if index < len(args)
-                            else StaticValue(
-                                None,
-                                diagnostic="末个调用可能展开多个返回值，此参数未静态确定"
-                                if expands
-                                else "缺少实参",
-                            )
+                    if target.start in self.symbols.variadic and actual.variable_width:
+                        ancestor: int | None = cursor
+                        while ancestor is not None:
+                            previous = nodes[ancestor]
+                            if previous.function.start == target.start and len(
+                                bound
+                            ) > len(previous.arguments):
+                                target_actual = self.values.widen_recursive(
+                                    target.start, actual, args
+                                )
+                                bound, unknown_tail = self.values.binding_values(
+                                    target.start, target_actual
+                                )
+                                notes.append("递归变长尾部的长度/值未静态确定")
+                                break
+                            ancestor = parents[ancestor]
+                    bindings = tuple(result.value for result in bound)
+                    value_proofs = dict.fromkeys(
+                        line
+                        for result in (
+                            *target_actual.values,
+                            *((target_actual.tail,) if target_actual.tail else ()),
                         )
-                        bindings.append(result.value)
-                        value_proofs.update(
-                            (line, None) for line in self.values.proof_lines(result)
-                        )
+                        for line in self.values.proof_lines(result)
+                    )
+                    for index, result in enumerate(bound):
                         if result.diagnostic:
+                            name = (
+                                parameters[index]
+                                if index < len(parameters)
+                                else f"变长参数{index - len(parameters) + 1}"
+                            )
                             notes.append(f"{name}: {result.diagnostic}")
-                    identity = (target.start, tuple(bindings))
+                    if unknown_tail:
+                        notes.append("变长实参包含未确定的尾部")
+                    identity = (target.start, bindings, unknown_tail)
                     number = identities.get(identity)
                     if number is None:
                         number = len(nodes)
                         identities[identity] = number
-                        nodes.append(FunctionNode(target, tuple(bindings)))
+                        nodes.append(FunctionNode(target, bindings, unknown_tail))
+                        parents.append(cursor)
                     edges.append(
                         FunctionEdge(
                             cursor,
@@ -282,6 +337,16 @@ def format_function_graph(
             f"{name}={value if value is not None else '动态'}"
             for name, value in zip(names, node.arguments)
         )
+        if function.start in functions.symbols.variadic:
+            extra = ", ".join(
+                value if value is not None else "动态"
+                for value in node.arguments[len(names) :]
+            )
+            values += (
+                (", " if values else "")
+                + f"...=({extra})"
+                + (" + 未确定尾部" if node.unknown_tail else "")
+            )
         lines.append(
             f"    节点{index + 1}: {function.name}({values}); 第{function.start_line}行 / 偏移{function.start}"
         )

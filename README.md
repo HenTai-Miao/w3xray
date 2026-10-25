@@ -382,3 +382,5 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
 - 战役优先按 `war3campaign.w3f` 声明顺序加载子图，其次使用 listfile/常见名恢复；若 W3F 与 listfile 都被删除且子图使用非标准名称，仍可能无法枚举该子图。
 
 地图查询还会追踪可确认的函数返回值，例如 `CreateItem(RewardId(), …)` 或 `Grant(Identity(FourCC("I001")))`。返回值索引完整保留同行、跨行及嵌套返回语句，并附源码范围；多分支和递归返回保留诊断。实现与边界见 [全量解析与查询说明](docs/full-data-parsing-query.md)。
+
+Lua 多返回值查询支持 `Grant(Ids())`、`local a,b=Ids()` 和 `...` 透传；末表达式完整展开，括号或非末位置按单值处理，未知长度尾部保留诊断。查询与攻略共享结果，支持从第二个及后续返回值反查物品来源。

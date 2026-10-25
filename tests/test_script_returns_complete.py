@@ -279,13 +279,13 @@ def test_getter_in_unit_selector_is_resolved_without_changing_source() -> None:
     )
 
 
-def test_first_value_of_returned_arguments_does_not_guess_extra_parameters() -> None:
+def test_last_argument_expands_all_statically_known_return_values() -> None:
     script = _script(
         "function Ids() return FourCC('I001'),FourCC('I002') end function Grant(a,b) CreateItem(a,0,0); CreateItem(b,0,0) end",
         "Grant(Ids())",
     )
     rows = trigger_acquisitions(script, lua=True)
-    assert {row.item_code for row in rows} == {"I001", ""}
+    assert {row.item_code for row in rows} == {"I001", "I002"}
 
 
 def test_uninitialized_local_shadow_does_not_reuse_getter_parameter() -> None:

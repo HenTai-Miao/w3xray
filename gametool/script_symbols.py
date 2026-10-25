@@ -24,6 +24,7 @@ class ScriptSymbols:
         self.functions = {item.start: item for item in structure.functions}
         self.locals: dict[tuple[int | None, str], list[int]] = {}
         self.parameters: dict[int, tuple[str, ...]] = {}
+        self.variadic: set[int] = set()
         self.loop_targets: set[int] = set()
         self.controls: dict[
             int | None, tuple[tuple[ControlRange, ...], ScopeLookup[ControlRange]]
@@ -68,8 +69,25 @@ class ScriptSymbols:
                     header[opening + 1 : header.rfind(")")] if opening >= 0 else ""
                 )
                 names = [match.group() for match in _IDENT.finditer(parameters)]
+                if "..." in parameters:
+                    self.variadic.add(function.start)
             else:
-                names = re.findall(r"(?:takes|,)\s+\w+\s+(\w+)", header)
+                takes = re.search(r"\btakes\s+(.*?)\s+returns\b", header, re.DOTALL)
+                parameters = takes.group(1).strip() if takes is not None else ""
+                names = (
+                    []
+                    if parameters == "nothing"
+                    else [
+                        match.group(1)
+                        for part in parameters.split(",")
+                        if (
+                            match := re.fullmatch(
+                                r"\s*[A-Za-z_]\w*\s+([A-Za-z_]\w*)\s*", part
+                            )
+                        )
+                        is not None
+                    ]
+                )
             if function.lua and ":" in header[: header.find("(")]:
                 names.insert(0, "self")
             self.parameters[function.start] = tuple(names)
