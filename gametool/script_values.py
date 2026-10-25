@@ -13,6 +13,7 @@ from .save_call_context import extract_call_args
 from .script_lexing import literal_string_value, script_views
 from .script_lua_builtins import array_literal_parts, select_values, unpack_values
 from .script_names import qualified_name
+from .script_numeric_expressions import NumericExpression, numeric_expression
 from .script_geometry import GeometryAliases
 from .script_geometry_values import (
     GEOMETRY_BUILTINS,
@@ -59,6 +60,7 @@ class _Expression:
 class _Proof:
     label: str
     parents: tuple[int, ...]
+    derived_numeric: bool = False
 
 
 @dataclass(slots=True)
@@ -74,6 +76,8 @@ class _Frame:
     call_arguments: tuple[str, ...] = ()
     bound_count: int = 0
     cursor: int = 0
+    numeric: NumericExpression | None = None
+    bindings: tuple[str | None, ...] = ()
 
 
 class ScriptValues:
@@ -156,7 +160,12 @@ class ScriptValues:
         )
 
     def _proof(
-        self, values: StaticValues, label: str, parents: tuple[int, ...] = ()
+        self,
+        values: StaticValues,
+        label: str,
+        parents: tuple[int, ...] = (),
+        *,
+        numeric: bool = False,
     ) -> StaticValues:
         dependencies = tuple(
             dict.fromkeys(
@@ -172,7 +181,14 @@ class ScriptValues:
         if not label and not parents:
             return values
         number = len(self.proofs)
-        self.proofs.append(_Proof(label, dependencies))
+        self.proofs.append(
+            _Proof(
+                label,
+                dependencies,
+                numeric
+                or any(self.proofs[parent].derived_numeric for parent in dependencies),
+            )
+        )
         return StaticValues(
             tuple(replace(item, proof=number) for item in values.values),
             replace(values.tail, proof=number) if values.tail else None,
@@ -207,6 +223,38 @@ class ScriptValues:
             actual.values[:fixed],
             StaticValue(None, diagnostic="递归变长尾部的长度/值未静态确定"),
             True,
+        )
+
+    def widen_numeric_recursion(
+        self, bound: tuple[StaticValue, ...], previous: tuple[str | None, ...]
+    ) -> tuple[StaticValue, ...]:
+        """A changing numeric recurrence is symbolic, never an enumeration budget."""
+        if len(bound) < len(previous):
+            return bound
+        return tuple(
+            replace(
+                item,
+                value=None,
+                kind="unknown",
+                diagnostic="递归数值或几何变换的后续值未静态确定",
+            )
+            if index < len(previous)
+            and item.value is not None
+            and item.value != previous[index]
+            and item.kind in {"number", "location", "rect"}
+            and item.proof >= 0
+            and self.proofs[item.proof].derived_numeric
+            else item
+            for index, item in enumerate(bound)
+        )
+
+    def has_numeric_dependency(self, values: tuple[StaticValue, ...]) -> bool:
+        return any(
+            item.value is not None
+            and item.kind in {"number", "location", "rect"}
+            and item.proof >= 0
+            and self.proofs[item.proof].derived_numeric
+            for item in values
         )
 
     def resolve(
@@ -424,6 +472,21 @@ class ScriptValues:
                         )
                         continue
                     frame.stage, frame.dependencies = "alias", (dependency,)
+                elif (
+                    numeric := numeric_expression(value, lua=self.functions.lua)
+                ) is not None:
+                    frame.stage, frame.numeric = "numeric", numeric
+                    frame.dependencies = tuple(
+                        self._key(
+                            operand.expression,
+                            key.owner,
+                            key.position,
+                            key.context,
+                            key.arguments,
+                            unknown_tail=key.unknown_tail,
+                        )
+                        for operand in numeric.operands
+                    )
                 else:
                     calls = tuple(
                         call
@@ -583,7 +646,10 @@ class ScriptValues:
                     )
                     bound, unknown_tail = self.binding_values(frame.function, actual)
                     frame.label += "; 递归变长尾部未静态确定"
+                if ancestors:
+                    bound = self.widen_numeric_recursion(bound, ancestors[-1].bindings)
                 bindings = tuple(item.value for item in bound)
+                frame.bindings = bindings
                 names = self.functions.symbols.parameters.get(frame.function, ())
                 if names:
                     frame.label += "; 实参 " + ", ".join(
@@ -645,6 +711,44 @@ class ScriptValues:
                 self._save(key, StaticValues((result,)))
             elif frame.stage == "alias":
                 self._save(key, StaticValues((values[0].at(frame.ordinal),)))
+            elif frame.stage == "numeric":
+                assert frame.numeric is not None
+                operands = tuple(group.at(0) for group in values)
+                note = "; ".join(
+                    dict.fromkeys(
+                        item.diagnostic or f"非数值操作数: {item.kind}"
+                        for item in operands
+                        if item.kind != "number" or item.value is None
+                    )
+                )
+                expression = (
+                    frame.numeric.render(tuple(item.value or "" for item in operands))
+                    if not note
+                    else ""
+                )
+                number = (
+                    static_number(expression, lua=self.functions.lua is True)
+                    if expression
+                    else None
+                )
+                result = (
+                    StaticValue(format_number(number), "number")
+                    if number is not None
+                    else StaticValue(
+                        None,
+                        diagnostic="数值表达式未静态确定: "
+                        + (note or "语法、除零或非有限结果"),
+                    )
+                )
+                self._save(
+                    key,
+                    self._proof(
+                        StaticValues((result,)),
+                        f"静态数值表达式: {key.text}",
+                        tuple(item.proof for item in operands if item.proof >= 0),
+                        numeric=bool(operands),
+                    ),
+                )
             elif frame.stage == "geometry":
                 actual = values[0]
                 if frame.label in GEOMETRY_CONSTRUCTORS:

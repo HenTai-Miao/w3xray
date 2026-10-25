@@ -73,7 +73,14 @@ def geometry_constructor(name: str, actual: StaticValues) -> StaticValue:
         for value in values
     )
     if any(number is None for number in numbers):
-        return StaticValue(None, diagnostic=f"{name} 含动态、缺失或非有限坐标")
+        notes = "; ".join(
+            dict.fromkeys(value.diagnostic for value in values if value.diagnostic)
+        )
+        return StaticValue(
+            None,
+            diagnostic=f"{name} 含动态、缺失或非有限坐标"
+            + ("; " + notes if notes else ""),
+        )
     return StaticValue(
         name
         + "("

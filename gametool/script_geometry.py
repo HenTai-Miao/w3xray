@@ -9,6 +9,7 @@ from .save_call_context import extract_call_args
 from .script_assignments import script_assignments, reference_parts
 from .script_lexing import script_views
 from .script_names import NAME_PATTERN, qualified_name
+from .script_numeric_expressions import numeric_expression
 from .script_object_literals import strip_outer_parentheses
 from .script_returns import script_returns
 from .script_geometry_values import (
@@ -206,6 +207,9 @@ class GeometryAliases:
         if cached is not None:
             return cached
         value = strip_outer_parentheses(text.strip())
+        if numeric_expression(value, lua=self.functions.lua) is not None:
+            self._references[key] = ()
+            return ()
         syntax = script_views(value, lua=self.functions.lua).syntax
         if value == "...":
             return ((owner, -3, "..."),)

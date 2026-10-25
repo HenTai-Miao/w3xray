@@ -124,7 +124,7 @@ def analyze_script_rectangles(
                     context.evidence,
                 )
                 if result and context.incoming:
-                    dynamic[result] = None
+                    dynamic["; ".join((result, *context.diagnostics))] = None
         if any(offset == assignment.start for offset, _row in found) and not dynamic:
             continue
         diagnostics.append(

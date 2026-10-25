@@ -205,7 +205,7 @@ class _Analysis:
                 dict.fromkeys(
                     item.diagnostic
                     for item in proofs
-                    if item.diagnostic.startswith("几何句柄")
+                    if item.diagnostic.startswith(("几何句柄", "数值表达式", "返回值"))
                 )
             )
             return None, "坐标未静态确定；保留动态/缺失/非有限坐标，不猜测点位" + (
@@ -311,7 +311,8 @@ class _Analysis:
                                 tuple(proof),
                             )
                     elif context.incoming:
-                        dynamic.setdefault(call.start, {})[note] = None
+                        reason = "; ".join((note, *context.diagnostics))
+                        dynamic.setdefault(call.start, {})[reason] = None
         resolved_offsets = {placement.offset for placement in found.values()}
         diagnostics = tuple(
             PlacementDiagnostic(

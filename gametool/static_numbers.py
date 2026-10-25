@@ -42,6 +42,12 @@ def static_number(expression: str, *, lua: bool = False) -> float | None:
         return None
 
 
+def numeric_literal_end(text: str, start: int) -> int | None:
+    """Expose the same literal grammar to prepared expression scanners."""
+    match = _NUMBER.match(text, start)
+    return match.end() if match is not None else None
+
+
 def _parse_number(expression: str, *, lua: bool) -> float:
     values: list[float] = []
     operators: list[str] = []

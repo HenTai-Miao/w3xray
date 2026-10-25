@@ -8,6 +8,7 @@ import re
 from .script_assignments import ScriptAssignment
 from .script_lexing import script_literals, script_views
 from .script_names import QUALIFIED_NAME
+from .script_numeric_expressions import numeric_prefix
 from .script_scopes import CallSpan, FunctionSpan, ScriptStructure
 
 _SIMPLE = re.compile(
@@ -40,6 +41,20 @@ class ScriptAtoms:
         self._values: dict[int, tuple[ScriptAtom | None, ...]] = {}
 
     def _atom(self, start: int, owner: int | None) -> tuple[ScriptAtom | None, int]:
+        arithmetic = numeric_prefix(
+            self.views, self.calls, start, owner, lua=self.views.lua
+        )
+        if arithmetic is not None:
+            stop = arithmetic.end
+            while stop < len(self.text) and self.views.arguments[stop].isspace():
+                stop += 1
+            if (
+                stop < len(self.text)
+                and self.views.syntax[stop] in "+-*/%^&|~<>.[:(=!?)]}"
+                or _LOGICAL.match(self.views.syntax, stop)
+            ):
+                return None, stop
+            return ScriptAtom(arithmetic.start, arithmetic.end), stop
         cursor = start
         opening = 0
         while cursor < len(self.text):
@@ -81,7 +96,7 @@ class ScriptAtoms:
         if (
             opening
             or stop < len(self.text)
-            and self.views.syntax[stop] in "+-*/%^&|~<>.[:"
+            and self.views.syntax[stop] in "+-*/%^&|~<>.[:(=!?)]}"
             or _LOGICAL.match(self.views.syntax, stop)
         ):
             return None, stop

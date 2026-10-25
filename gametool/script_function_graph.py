@@ -34,6 +34,7 @@ class FunctionContext:
     node: FunctionNode
     incoming: bool
     evidence: tuple[str, ...] = ()
+    diagnostics: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -259,9 +260,12 @@ class ScriptFunctions(ScriptFunctionBindings):
             if edge.target is not None and edge.source in reachable
         }
         proofs: dict[int, dict[str, None]] = {}
+        diagnostics: dict[int, dict[str, None]] = {}
         for edge in graph.edges:
             if edge.target is not None:
                 proof = proofs.setdefault(edge.target, {})
+                if edge.diagnostic:
+                    diagnostics.setdefault(edge.target, {})[edge.diagnostic] = None
                 proof.update(dict.fromkeys(edge.value_proofs))
                 proof[
                     f"调用来源 第{bisect_right(self.lines, edge.call.start)}行 / 偏移{edge.call.start}: {self.text[edge.call.start : edge.call.end]}"
@@ -269,7 +273,12 @@ class ScriptFunctions(ScriptFunctionBindings):
         grouped: dict[int, list[FunctionContext]] = {}
         for index, node in enumerate(graph.nodes):
             grouped.setdefault(node.function.start, []).append(
-                FunctionContext(node, index in incoming, tuple(proofs.get(index, {})))
+                FunctionContext(
+                    node,
+                    index in incoming,
+                    tuple(proofs.get(index, {})),
+                    tuple(diagnostics.get(index, {})),
+                )
             )
         self._source_contexts = MappingProxyType(
             {owner: tuple(values) for owner, values in grouped.items()}
@@ -364,6 +373,16 @@ class ScriptFunctions(ScriptFunctionBindings):
                                     target.start, target_actual
                                 )
                                 notes.append("递归变长尾部的长度/值未静态确定")
+                                break
+                            ancestor = parents[ancestor]
+                    if self.values.has_numeric_dependency(bound):
+                        ancestor = cursor
+                        while ancestor is not None:
+                            previous = nodes[ancestor]
+                            if previous.function.start == target.start:
+                                bound = self.values.widen_numeric_recursion(
+                                    bound, previous.arguments
+                                )
                                 break
                             ancestor = parents[ancestor]
                     bindings = tuple(result.value for result in bound)

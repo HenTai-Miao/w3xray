@@ -445,6 +445,7 @@ gametool/script_names.py
 gametool/script_placement_analysis.py
 gametool/script_geometry.py
 gametool/script_geometry_values.py
+gametool/script_numeric_expressions.py
 gametool/script_rectangle_analysis.py
 gametool/script_source_identity.py
 gametool/pack_query_placement_index.py
