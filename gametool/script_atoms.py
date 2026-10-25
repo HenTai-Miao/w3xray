@@ -7,10 +7,13 @@ import re
 
 from .script_assignments import ScriptAssignment
 from .script_lexing import script_literals, script_views
+from .script_names import QUALIFIED_NAME
 from .script_scopes import CallSpan, FunctionSpan, ScriptStructure
 
 _SIMPLE = re.compile(
-    r"(?:[+-]?(?:\$[0-9a-fA-F]+|0[xX][0-9a-fA-F]+|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)|[A-Za-z_]\w*(?:[.:][A-Za-z_]\w*)*)"
+    r"(?:[+-]?(?:\$[0-9a-fA-F]+|0[xX][0-9a-fA-F]+|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)|"
+    + QUALIFIED_NAME
+    + r")"
 )
 _LOGICAL = re.compile(r"(?:and|or)\b")
 

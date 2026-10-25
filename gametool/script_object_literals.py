@@ -33,7 +33,11 @@ def strip_outer_parentheses(value: str) -> str:
 def literal_object_code(value: str) -> str:
     """Decode one complete four-byte literal, never a dynamic expression."""
     value = strip_outer_parentheses(value)
-    wrapped = re.fullmatch(r"(?:_G\.)?FourCC\s*\((.*)\)", value, re.DOTALL)
+    wrapped = re.fullmatch(
+        r"(?:_G\s*\.\s*)?FourCC\s*\((.*)\)",
+        script_views(value).arguments,
+        re.DOTALL,
+    )
     if wrapped:
         literal = literal_string_value(strip_outer_parentheses(wrapped.group(1)))
     elif value.startswith("'"):

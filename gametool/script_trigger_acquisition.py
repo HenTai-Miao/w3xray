@@ -42,7 +42,7 @@ _OUTPUTS = {
 _NUMBER = re.compile(r"(?<![\w.])(?:\$[0-9a-fA-F]+|0[xX][0-9a-fA-F]+|[0-9]+)(?![\w.])")
 _EQUAL = re.compile(r"\s*\)*\s*==\s*\(*\s*\Z")
 _OPERAND = re.compile(
-    r"(?:_G\.)?(GetDyingUnit|GetTriggerUnit|GetManipulatedItem)\s*\(\s*\)\Z"
+    r"(?:_G\s*\.\s*)?(GetDyingUnit|GetTriggerUnit|GetManipulatedItem)\s*\(\s*\)\Z"
 )
 _RANDOM_APIS = frozenset({"GetRandomInt", "GetRandomReal"})
 
@@ -127,7 +127,11 @@ def _selectors(
         if api not in {"GetUnitTypeId", "GetItemTypeId"}:
             continue
         args = extract_call_args(views, call.open + 1)
-        operand = _OPERAND.fullmatch(args[0]) if len(args) == 1 else None
+        operand = (
+            _OPERAND.fullmatch(script_views(args[0], lua=lua).syntax)
+            if len(args) == 1
+            else None
+        )
         if operand is None:
             continue
         allowed = (

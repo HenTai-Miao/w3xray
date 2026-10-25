@@ -7,13 +7,27 @@ import re
 from .save_call_context import extract_call_args
 from .script_lexing import script_views
 from .script_object_literals import literal_object_code as _object_code
-from .script_tokens import is_lua_function_definition
+from .script_object_literals import strip_outer_parentheses
+from .script_scopes import script_structure
+from .script_function_graph import ScriptFunctions, script_functions
 from .static_numbers import static_number
 
-_CALL_RE = re.compile(
-    r"\b(CreateUnit|CreateUnitAtLoc|BlzCreateUnitWithSkin|CreateCorpse|CreateItem|CreateItemLoc|BlzCreateItemWithSkin|CreateDestructable|CreateDestructableZ|CreateDeadDestructable|CreateDeadDestructableZ)\s*\("
+_PLACEMENT_APIS = frozenset(
+    {
+        "CreateUnit",
+        "CreateUnitAtLoc",
+        "BlzCreateUnitWithSkin",
+        "CreateCorpse",
+        "CreateItem",
+        "CreateItemLoc",
+        "BlzCreateItemWithSkin",
+        "CreateDestructable",
+        "CreateDestructableZ",
+        "CreateDeadDestructable",
+        "CreateDeadDestructableZ",
+    }
 )
-_RECT_ASSIGN_RE = re.compile(r"\b(gg_rct_\w+)\s*=\s*Rect\s*\(")
+_RECT_ASSIGN_RE = re.compile(r"\b(gg_rct_\w+)\s*=\s*(?P<global>_G\s*\.\s*)?Rect\s*\(")
 
 
 def script_placements(
@@ -29,12 +43,17 @@ def script_placements(
     # preserving offsets. Arguments come from the original call so FourCC
     # literals are retained without mistaking quoted example calls for code.
     views = script_views(script, lua=lua)
-    code_text = views.syntax
-    for match in _CALL_RE.finditer(code_text):
-        if is_lua_function_definition(code_text, match.start()):
+    functions: ScriptFunctions | None = None
+    for call in script_structure(script, lua=lua).calls:
+        name = call.name.removeprefix("_G.")
+        if name not in _PLACEMENT_APIS or not call.complete:
             continue
-        args = extract_call_args(views, match.end())
-        name = match.group(1)
+        if call.name.startswith("_G."):
+            if functions is None:
+                functions = script_functions(script, lua=lua)
+            if functions.bound("_G", call.owner, call.start):
+                continue
+        args = extract_call_args(views, call.open + 1)
         kind = (
             "destructable"
             if "Destructable" in name
@@ -47,8 +66,20 @@ def script_placements(
         if len(args) < offset + (2 if location else 3):
             continue
         code = _object_code(args[offset])
+        if code and strip_outer_parentheses(args[offset]).startswith("_G"):
+            if functions is None:
+                functions = script_functions(script, lua=lua)
+            if functions.bound("_G", call.owner, call.start):
+                continue
         if location:
-            loc = re.fullmatch(r"Location\s*\((.*)\)", args[offset + 1], re.DOTALL)
+            loc = re.fullmatch(
+                r"(?:_G\s*\.\s*)?Location\s*\((.*)\)", args[offset + 1], re.DOTALL
+            )
+            if loc and args[offset + 1].startswith("_G"):
+                if functions is None:
+                    functions = script_functions(script, lua=lua)
+                if functions.bound("_G", call.owner, call.start):
+                    continue
             coords = (
                 extract_call_args("Location(" + loc.group(1) + ")", len("Location("))
                 if loc
@@ -73,6 +104,13 @@ def script_rectangles(
     code_text = views.syntax
     rectangles: list[tuple[str, float, float, float, float]] = []
     for match in _RECT_ASSIGN_RE.finditer(code_text):
+        if match.group("global"):
+            functions = script_functions(script, lua=lua)
+            function = functions.structure.scopes.at(match.start())
+            if functions.bound(
+                "_G", function.start if function else None, match.start()
+            ):
+                continue
         arguments = extract_call_args(views, match.end())
         if len(arguments) != 4:
             continue

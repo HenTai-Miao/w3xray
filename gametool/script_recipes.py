@@ -10,6 +10,7 @@ import re
 
 from .save_call_context import extract_call_args
 from .script_lexing import script_views
+from .script_names import QUALIFIED_NAME, name_before, qualified_name
 from .script_object_literals import literal_object_code
 from .script_sources import script_language
 
@@ -34,8 +35,8 @@ _EVENT = re.compile(
     r"\b(?:(?P<call>" + _CALL_NAMES + r")\s*\(|"
     r"(?P<block>function|endfunction|if|endif|loop|endloop|for|while|do|repeat|until|end)\b)"
 )
-_HEADER = re.compile(r"\s*(?:([A-Za-z_]\w*(?:[.:][A-Za-z_]\w*)*)\s*)?(\(|takes\b)")
-_WRAPPER = re.compile(r"([A-Za-z_]\w*)\s*\(")
+_HEADER = re.compile(r"\s*(?:(" + QUALIFIED_NAME + r")\s*)?(\(|takes\b)")
+_WRAPPER = re.compile(r"(" + QUALIFIED_NAME + r")\s*\(")
 _PARENS = re.compile(r"[()]")
 _COUNT = re.compile(r"[+-]?\s*(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?")
 
@@ -125,6 +126,9 @@ def _calls(script: str, *, lua: bool | None) -> Iterator[_Call]:
         cursor = match.end()
         name = match.group("call")
         if name:
+            parsed = name_before(syntax, match.end() - 1)
+            if parsed is None or parsed[1] not in {name, "_G." + name}:
+                continue
             end = closed.get(match.end() - 1)
             if end is None:
                 continue
@@ -133,9 +137,9 @@ def _calls(script: str, *, lua: bool | None) -> Iterator[_Call]:
                 extract_call_args(views, match.end()),
                 current,
                 control_depth > current.control_base,
-                bisect_right(line_starts, match.start()),
-                match.start(),
-                script[match.start() : end + 1],
+                bisect_right(line_starts, parsed[0]),
+                parsed[0],
+                script[parsed[0] : end + 1],
             )
             # Nested item construction belongs to its consuming outer call.
             cursor = end + 1
@@ -151,7 +155,9 @@ def _calls(script: str, *, lua: bool | None) -> Iterator[_Call]:
             identity += 1
             blocks.append(("function", current))
             current = _Scope(
-                header.group(1) or f"<匿名@{match.start()}>", identity, control_depth
+                qualified_name(header.group(1) or "") or f"<匿名@{match.start()}>",
+                identity,
+                control_depth,
             )
             cursor = (
                 closed.get(header.end() - 1, header.end() - 1) + 1
@@ -188,14 +194,19 @@ def _item_code(expression: str, *, lua: bool | None) -> str:
         literal = literal_object_code(expression)
         if literal:
             return literal
-        wrapper = _WRAPPER.match(expression)
-        if wrapper is None or wrapper.group(1) not in _ITEM_LOOKUPS:
-            return ""
         views = script_views(expression, lua=lua)
+        wrapper = _WRAPPER.match(views.syntax)
+        name = (
+            (qualified_name(wrapper.group(1)) or "").removeprefix("_G.")
+            if wrapper
+            else ""
+        )
+        if wrapper is None or name not in _ITEM_LOOKUPS:
+            return ""
         if _closing_parens(views.syntax).get(wrapper.end() - 1) != len(expression) - 1:
             return ""
         args = extract_call_args(views, wrapper.end())
-        index = _ITEM_LOOKUPS[wrapper.group(1)]
+        index = _ITEM_LOOKUPS[name]
         expression = args[index] if index < len(args) else ""
     return ""
 

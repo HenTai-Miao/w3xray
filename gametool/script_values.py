@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from .save_call_context import extract_call_args
 from .script_lexing import literal_string_value, script_views
 from .script_lua_builtins import array_literal_parts, select_values, unpack_values
+from .script_names import qualified_name
 from .script_object_literals import literal_object_code, strip_outer_parentheses
 from .script_returns import ReturnSpan, script_returns
 from .script_scopes import script_structure
@@ -25,7 +26,6 @@ from .script_value_models import (
 if TYPE_CHECKING:
     from .script_function_bindings import ScriptFunctionBindings
 
-_NAME = re.compile(r"[A-Za-z_]\w*(?:[.:][A-Za-z_]\w*)*")
 _NUMBER = re.compile(
     r"[+-]?(?:\$[0-9a-fA-F]+|0[xX][0-9a-fA-F]+|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)"
 )
@@ -315,7 +315,12 @@ class ScriptValues:
                             ),
                         )
                     continue
-                elif _NAME.fullmatch(value):
+                elif (
+                    name := qualified_name(
+                        script_views(value, lua=self.functions.lua).syntax
+                    )
+                ) is not None:
+                    value = name
                     symbol = self.functions.symbols.symbol(
                         value, key.owner, key.position
                     )

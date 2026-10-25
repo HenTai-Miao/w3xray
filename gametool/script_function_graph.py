@@ -6,10 +6,10 @@ from bisect import bisect_right
 from collections import deque
 from dataclasses import dataclass, field
 from functools import lru_cache
-import re
 
 from .save_call_context import extract_call_args
 from .script_lexing import script_views
+from .script_names import NAME_PATTERN
 from .script_scopes import CallSpan, FunctionSpan, script_structure
 from .script_function_bindings import (
     ScriptFunctionBindings,
@@ -17,8 +17,6 @@ from .script_function_bindings import (
 )
 from .script_values import ScriptValues, StaticValue
 from .script_value_models import StaticValues
-
-_NAME = re.compile(r"[A-Za-z_]\w*(?:[.:][A-Za-z_]\w*)*")
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,7 +107,7 @@ class ScriptFunctions(ScriptFunctionBindings):
                 replacements.append((call.start, call.end, result.value))
         parts: list[str] = []
         cursor = 0
-        for match in _NAME.finditer(syntax):
+        for match in NAME_PATTERN.finditer(syntax):
             if syntax[match.end() :].lstrip().startswith("("):
                 continue
             symbol = self.symbols.symbol(match.group(), owner, start + match.start())

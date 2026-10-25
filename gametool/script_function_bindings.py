@@ -10,11 +10,10 @@ from .save_call_context import extract_call_args
 from .script_assignments import ScriptAssignment, reference_parts, script_assignments
 from .script_atoms import ScriptAtoms
 from .script_lexing import script_views
+from .script_names import qualified_name
 from .script_object_literals import strip_outer_parentheses
 from .script_scopes import CallSpan, FunctionSpan, script_structure, source_line_starts
 from .script_symbols import ScriptSymbol, ScriptSymbols
-
-_NAME = re.compile(r"[A-Za-z_]\w*(?:[.:][A-Za-z_]\w*)*")
 
 
 @dataclass(frozen=True, slots=True)
@@ -116,7 +115,13 @@ class ScriptFunctionBindings:
 
     def bound(self, expression: str, owner: int | None, position: int) -> bool:
         symbol = self.symbols.symbol(expression.replace(":", "."), owner, position)
-        return symbol[1] >= 0 or symbol in self.writes or symbol in self.definitions
+        return (
+            symbol[1] >= 0
+            or symbol in self.writes
+            or symbol in self.definitions
+            or expression.startswith("_G.")
+            and self.bound("_G", owner, position)
+        )
 
     def _parent_diagnostic(
         self,
@@ -151,12 +156,19 @@ class ScriptFunctionBindings:
         start += max(0, raw.find(value))
         # Anonymous callback locations are taken from the source, never guessed by name.
         while (
-            wrapper := re.match(r"(?:_G\.)?(?:Condition|Filter)\s*\(", value)
+            wrapper := re.match(
+                r"(?:_G\s*\.\s*)?(?:Condition|Filter)\s*\(",
+                script_views(value, lua=self.lua).syntax,
+            )
         ) is not None:
             args = extract_call_args(script_views(value, lua=self.lua), wrapper.end())
             if len(args) != 1 or not value.endswith(")"):
                 break
-            start += value.find(args[0], wrapper.end())
+            argument_start = wrapper.end()
+            syntax = script_views(value, lua=self.lua).syntax
+            while argument_start < len(syntax) and syntax[argument_start].isspace():
+                argument_start += 1
+            start += argument_start
             value = strip_outer_parentheses(args[0])
             start += max(0, args[0].find(value))
         if re.match(r"function\s*\(", value):
@@ -169,7 +181,10 @@ class ScriptFunctionBindings:
                 )
         value = re.sub(r"^function\s+", "", value).strip().replace(":", ".")
         seen: set[ScriptSymbol] = set()
-        while _NAME.fullmatch(value):
+        while (
+            name := qualified_name(script_views(value, lua=self.lua).syntax)
+        ) is not None:
+            value = name.replace(":", ".")
             symbol = self.symbols.symbol(value, owner, start)
             if symbol in seen:
                 return FunctionReference(raw, (), "函数别名形成循环，静态绑定未确定")

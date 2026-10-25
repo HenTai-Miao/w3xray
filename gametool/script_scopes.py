@@ -11,9 +11,16 @@ import re
 from types import MappingProxyType
 
 from .script_lexing import script_views
+from .script_names import (
+    IDENTIFIER,
+    QUALIFIED_NAME,
+    member_suffix,
+    name_before,
+    qualified_name,
+)
 
-_IDENT = r"[A-Za-z_][A-Za-z0-9_]*"
-_NAME = _IDENT + r"(?:[.:]" + _IDENT + r")*"
+_IDENT = IDENTIFIER
+_NAME = QUALIFIED_NAME
 _FUNCTION = re.compile(r"\bfunction\b")
 _JASS_HEADER = re.compile(r"\s+(" + _IDENT + r")\s+takes\b")
 _JASS_RETURN = re.compile(r"\breturns\s+" + _IDENT)
@@ -193,13 +200,8 @@ def _assigned_name(syntax: str, position: int) -> str:
     position -= 1
     while position and syntax[position - 1].isspace():
         position -= 1
-    end = position
-    while position and (
-        syntax[position - 1].isalnum() or syntax[position - 1] in "_.:"
-    ):
-        position -= 1
-    name = syntax[position:end]
-    return name if re.fullmatch(_NAME, name) else ""
+    parsed = name_before(syntax, position)
+    return parsed[1] if parsed is not None else ""
 
 
 @lru_cache(maxsize=8)
@@ -247,10 +249,8 @@ def script_structure(text: str, *, lua: bool | None = None) -> ScriptStructure:
             if header is not None:
                 opening = header.end() - 1
                 body = pairs.get(opening, opening) + 1
-                name = (
-                    header.group(1)
-                    or _assigned_name(syntax, match.start())
-                    or f"<匿名@{match.start()}>"
+                name = (qualified_name(header.group(1)) if header.group(1) else "") or (
+                    _assigned_name(syntax, match.start()) or f"<匿名@{match.start()}>"
                 )
             else:
                 assert jass is not None
@@ -316,7 +316,10 @@ def script_structure(text: str, *, lua: bool | None = None) -> ScriptStructure:
     calls: list[CallSpan] = []
     ancestors: list[CallSpan] = []
     for match in _CALL.finditer(syntax):
-        name, opening = match.group(1), match.end() - 1
+        if member_suffix(syntax, match.start()):
+            continue  # A dynamic receiver must not masquerade as its final name.
+        name, opening = qualified_name(match.group(1)), match.end() - 1
+        assert name is not None
         enclosing = scopes.at(match.start())
         language = enclosing.lua if enclosing is not None else lua
         keywords = (

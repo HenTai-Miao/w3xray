@@ -8,6 +8,7 @@ import re
 from typing import Final
 
 from .script_lexing import script_views
+from .script_names import name_before
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,13 +86,16 @@ def iter_native_call_chunks(
     """Yield balanced native call chunks, including multiline calls."""
     syntax = script_views(script, lua=lua).syntax
     for match in native_re.finditer(syntax):
+        parsed = name_before(syntax, match.end())
+        if parsed is None or parsed[1] not in {match.group(1), "_G." + match.group(1)}:
+            continue
         open_index = _call_open(syntax, match.end())
         if open_index is None:
             continue
         end = _call_end(syntax, open_index)
         if end is None:
             continue
-        yield NativeCallChunk(match.group(1), script[match.start() : end])
+        yield NativeCallChunk(match.group(1), script[parsed[0] : end])
 
 
 def _call_open(script: str, start: int) -> int | None:
