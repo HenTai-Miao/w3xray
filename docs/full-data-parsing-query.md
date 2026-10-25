@@ -118,6 +118,14 @@ uv run main.py pack-query "<知识包目录>" again --json
 
 共享 `SpatialQueryResult` / `QuerySection` 直接携带区域数据，CLI 与 GUI 不从文本反解析。战役聚合的每条区域带所属 section 和包路径，逐关也保留原记录与总量；只有区域命中而没有放置实例时仍是有效查询结果，again 重跑保留同一结构。区域范围与源行号、偏移不冒充单点坐标。此次仅改变查询时的展示和 JSON，未改变地图导出或攻略内容，保留现有 guide/live/batch 缓存版本；已有可读脚本知识包直接获得新输出。
 
+空间诊断由 `SpatialQueryResult.spatial_diagnostics` 和 `QuerySection.spatial_diagnostics` 直接传递，不从渲染行反解析。near JSON 的顶层 `spatial_diagnostics` 为 `{section, pack, message}` 记录数组；战役每段同时保留自身完整消息。无确认命中但有诊断的容器或子图仍进入输出；普通纯未命中的包可以继续汇总，`checked_packs` 列出有效查询已经处理的全部包范围。默认及显式结果 limit 都不会截断诊断。
+
+`has_matches` 依据结构化 `entries/regions`，不因来源文字包含「所在矩形」或展示文案变化而改变。只有诊断没有确认结果时退出码为 2，不写入成功查询记忆；混合命中和诊断的战役保留所有相关段并返回 0。again 保留同一诊断、来源和范围结构，且不覆盖原查询记忆。
+
+near 的坐标、半径、类别和 API 显式 limit 校验通过 `input_error` 传递；无效参数在发现子地图范围前返回，`checked_packs` 为空。API limit 必须是非负整数，0 为全量，布尔、非整数及负数均给出参数诊断，避免切片异常或虚构省略数量。CLI 选项本身的解析错误仍沿用原出口。此轮只改变查询状态、展示与诊断聚合，不要求地图重新提取或攻略缓存换代。
+
+CLI 的无参或空白 near 也进入共享参数校验，输出坐标来源提示及同一 JSON 错误结构；不在外层当作缺少普通查询词处理。其他需要关键词的命令仍保持原规则。
+
 `gametool.pack_query_cli.execute_pack_query` 返回 `PackQueryResult`，不修改标准输出和标准错误；CLI 负责打印，GUI 直接消费返回值。所有查询使用一致的成功判定、最近查询记忆和战役遍历。`again` 重跑原命令，包括逐关查询，同时保留原始查询记忆。
 
 表格缓存以纳秒 mtime、大小和全文件 SHA-256 共同失效。一次查询内每张表仅做一次校验与读取，下一次查询重新验证；同尺寸、同 mtime、仅尾部变动也会被识别。暂时无权限或被占用的文件在后续查询重新尝试，读取失败不永久污染当前 GUI 进程。

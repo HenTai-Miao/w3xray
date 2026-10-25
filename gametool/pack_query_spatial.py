@@ -36,6 +36,8 @@ class SpatialQueryResult:
     entries: tuple[NearEntry, ...] = ()
     regions: tuple[NearRegion, ...] = ()
     regions_total: int = 0
+    spatial_diagnostics: tuple[str, ...] = ()
+    input_error: bool = False
 
 
 class SpatialSources(Protocol):
@@ -154,6 +156,7 @@ class _Output:
         self.entries: list[NearEntry] = []
         self.regions: list[NearRegion] = []
         self.regions_total = 0
+        self.spatial_diagnostics: list[str] = []
 
     def distance(self, point: Point) -> float:
         return math.hypot(point[0] - self.x, point[1] - self.y)
@@ -205,6 +208,7 @@ class _Output:
             tuple(self.entries),
             tuple(self.regions),
             self.regions_total,
+            tuple(self.spatial_diagnostics),
         )
 
 
@@ -212,13 +216,17 @@ def query_near(
     pack: Path, query: str, limit: int, sources: SpatialSources
 ) -> SpatialQueryResult:
     """Read all spatial sources, preserving every visible placement in JSON."""
+    if isinstance(limit, bool) or not isinstance(limit, int) or limit < 0:
+        return SpatialQueryResult(
+            ("显式 --limit 必须是非负整数；0 表示全量。",), input_error=True
+        )
     parts = query.split()
     kind_filter = ""
     if "--kind" in parts:
         index = parts.index("--kind")
         if index + 1 >= len(parts):
             return SpatialQueryResult(
-                ("未知 --kind: 需要一个值 (单位/装饰/物品/脚本)",)
+                ("未知 --kind: 需要一个值 (单位/装饰/物品/脚本)",), input_error=True
             )
         kind_filter = parts[index + 1]
         parts = parts[:index] + parts[index + 2 :]
@@ -227,20 +235,25 @@ def query_near(
             (
                 "用法: near <x> <y> [radius=3000] [--kind 单位/装饰/物品/脚本]",
                 "  （坐标来源: live 探针输出尾部 JSON 的 x/y, 或地图编辑器; 查脚底有什么/附近谁在掉什么）",
-            )
+            ),
+            input_error=True,
         )
     try:
         x, y = float(parts[0]), float(parts[1])
         radius = float(parts[2]) if len(parts) == 3 else 3000.0
     except ValueError:
-        return SpatialQueryResult(("坐标与半径必须是数字: near <x> <y> [radius]",))
+        return SpatialQueryResult(
+            ("坐标与半径必须是数字: near <x> <y> [radius]",), input_error=True
+        )
     if not all(math.isfinite(value) for value in (x, y, radius)) or radius < 0:
         return SpatialQueryResult(
-            ("坐标与半径必须是有限数字，且半径必须非负: near <x> <y> [radius]",)
+            ("坐标与半径必须是有限数字，且半径必须非负: near <x> <y> [radius]",),
+            input_error=True,
         )
     if kind_filter not in ("", "单位", "装饰", "物品", "脚本"):
         return SpatialQueryResult(
-            (f"未知 --kind {kind_filter} (可选: 单位/装饰/物品/脚本; 缺省=全部)",)
+            (f"未知 --kind {kind_filter} (可选: 单位/装饰/物品/脚本; 缺省=全部)",),
+            input_error=True,
         )
     output = _Output(x, y, radius)
     drops, shops = sources._source_drop_map(pack), sources._source_shop_map(pack)
@@ -341,6 +354,7 @@ def query_near(
     if isinstance(sources, PlacementDiagnostics) and (
         notes := sources.load_placement_diagnostics(pack)
     ):
+        output.spatial_diagnostics.extend(notes)
         output.lines.append(
             f"  ⚠ 另有 {len(notes)} 条脚本点位诊断（对象、坐标或来源未确认）；上述结果仅含已确认点位。"
         )

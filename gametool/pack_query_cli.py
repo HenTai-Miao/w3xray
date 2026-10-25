@@ -797,6 +797,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
     if (
         command
         in (
+            "near",
             "affixes",
             "again",
             "registered",
@@ -811,7 +812,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         )
         and len(rest) == 2
     ):
-        # 这些子命令查询词可省 (全量列出)
+        # near 的缺参由空间查询层给出结构化用法；其余可省词命令全量列出。
         rest = [*rest, ""]
     if len(rest) != 3:
         raise PackQueryCliOptionError(
@@ -831,6 +832,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
             "未知子命令: " + command + " (可选: " + ",".join(_COMMANDS) + ")"
         )
     if not query.strip() and command not in (
+        "near",
         "affixes",
         "again",
         "registered",

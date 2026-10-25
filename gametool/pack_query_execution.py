@@ -56,6 +56,8 @@ class QuerySection:
     entries: tuple[NearEntry, ...] = ()
     regions: tuple[NearRegion, ...] = ()
     regions_total: int = 0
+    spatial_diagnostics: tuple[str, ...] = ()
+    input_error: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +69,7 @@ class PackQueryResult:
     exit_code: int
     campaign: bool = False
     diagnostics: tuple[str, ...] = ()
+    checked_packs: tuple[str, ...] = ()
 
     def render(self, *, as_json: bool = False) -> str:
         """Render one complete JSON document or all text sections."""
@@ -112,6 +115,18 @@ class PackQueryResult:
                 max(section.regions_total - len(section.regions), 0)
                 for section in self.sections
             )
+            payload["spatial_diagnostics"] = [
+                {"section": section.section, "pack": section.pack, "message": note}
+                for section in self.sections
+                for note in section.spatial_diagnostics
+            ]
+            payload["has_matches"] = any(
+                section.entries or section.regions for section in self.sections
+            )
+            payload["input_error"] = any(
+                section.input_error for section in self.sections
+            )
+            payload["checked_packs"] = list(self.checked_packs)
         if self.campaign:
             payload["sections"] = [
                 {
@@ -128,6 +143,11 @@ class PackQueryResult:
                             "regions_omitted": max(
                                 section.regions_total - len(section.regions), 0
                             ),
+                            "spatial_diagnostics": list(section.spatial_diagnostics),
+                            "has_matches": _has_result(
+                                "near", section.lines, section.entries, section.regions
+                            ),
+                            "input_error": section.input_error,
                         }
                         if self.command == "near"
                         else {}
@@ -217,7 +237,7 @@ def _collect_query(
         return _message_lines(
             options, lines, 0 if _has_result(options.command, lines) else 2
         )
-    subs = queries._campaign_subpacks(pack)
+    subs = queries._campaign_subpacks(pack) if options.command != "near" else []
     section = _run_section(
         queries,
         options.command,
@@ -227,15 +247,18 @@ def _collect_query(
         options.limit,
     )
     lines = section.lines
-    if (
-        options.command == "near"
-        and lines
-        and lines[0].startswith(("用法: near", "坐标与半径", "未知 --kind"))
-    ):
-        return _message_lines(options, lines, 2)
+    if options.command == "near" and section.input_error:
+        return PackQueryResult(str(pack), options.command, options.query, (section,), 2)
+    if options.command == "near":
+        subs = queries._campaign_subpacks(pack)
+    checked = (
+        (str(pack), *(str(sub) for sub in subs)) if options.command == "near" else ()
+    )
     if subs:
         sections: list[QuerySection] = []
-        if _has_result(options.command, lines, section.entries, section.regions):
+        if _has_result(options.command, lines, section.entries, section.regions) or (
+            options.command == "near" and section.spatial_diagnostics
+        ):
             sections.append(replace(section, section="容器级"))
         for sub in subs:
             sub_section = _run_section(
@@ -251,27 +274,45 @@ def _collect_query(
                 sub_section.lines,
                 sub_section.entries,
                 sub_section.regions,
-            ):
+            ) or (options.command == "near" and sub_section.spatial_diagnostics):
                 sections.append(sub_section)
         if not sections:
-            return _message_lines(
-                options,
-                [
-                    "子地图均无结果: " + options.query,
-                    "容器级与全部子地图均已查询；可换名称/四码，或用 search、text、near 继续查。",
-                ],
-                2,
+            return replace(
+                _message_lines(
+                    options,
+                    [
+                        "子地图均无结果: " + options.query,
+                        "容器级与全部子地图均已查询；可换名称/四码，或用 search、text、near 继续查。",
+                    ],
+                    2,
+                ),
+                checked_packs=checked,
             )
-        if remember:
+        success = any(
+            _has_result(options.command, row.lines, row.entries, row.regions)
+            for row in sections
+        )
+        if remember and success:
             queries._store_last_query(pack, options.command, options.query)
         return PackQueryResult(
-            str(pack), options.command, options.query, tuple(sections), 0, campaign=True
+            str(pack),
+            options.command,
+            options.query,
+            tuple(sections),
+            0 if success else 2,
+            campaign=True,
+            checked_packs=checked,
         )
     success = _has_result(options.command, lines, section.entries, section.regions)
     if success and remember:
         queries._store_last_query(pack, options.command, options.query)
     return PackQueryResult(
-        str(pack), options.command, options.query, (section,), 0 if success else 2
+        str(pack),
+        options.command,
+        options.query,
+        (section,),
+        0 if success else 2,
+        checked_packs=checked,
     )
 
 
@@ -281,10 +322,10 @@ def _has_result(
     entries: tuple[NearEntry, ...] = (),
     regions: tuple[NearRegion, ...] = (),
 ) -> bool:
+    if command == "near":
+        return bool(entries or regions)
     if not lines or lines[0].startswith(("未找到", "diff 需要", "第二个包")):
         return False
-    if command == "near":
-        return bool(entries or regions) or any("所在矩形:" in line for line in lines)
     return True
 
 
@@ -300,6 +341,8 @@ def _run_section(
             result.entries,
             result.regions,
             result.regions_total,
+            result.spatial_diagnostics,
+            result.input_error,
         )
     return _section(command, title, pack, queries._QUERIES[command](pack, query, limit))
 
