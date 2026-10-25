@@ -16,6 +16,7 @@ from .script_geometry_values import (
     GEOMETRY_FACTORIES,
     GEOMETRY_READERS,
     GEOMETRY_MUTATORS,
+    GEOMETRY_PREDICATES,
 )
 from .script_scopes import script_structure
 
@@ -40,10 +41,7 @@ _READ_ONLY = frozenset(
         "FourCC",
         "select",
         "table.unpack",
-        "RectContainsCoords",
-        "RectContainsLoc",
-        "RectContainsUnit",
-        "RectContainsItem",
+        *GEOMETRY_PREDICATES,
         *GEOMETRY_READERS,
     }
 )
@@ -66,6 +64,9 @@ class GeometryAliases:
         self.functions = functions
         self.parents: dict[_Node, _Node] = {}
         self.effects: dict[_Node, dict[int, GeometryEffect]] = {}
+        self.environment: _Node = (None, -4, "@geometry:environment")
+        self.global_members: set[_Node] = set()
+        self.global_roots: set[_Node] = set()
         self._references: dict[tuple[str, int | None, int], tuple[_Node, ...]] = {}
         pending: list[tuple[tuple[_Node, ...], GeometryEffect]] = []
         for assignment in script_assignments(functions.text, lua=functions.lua):
@@ -183,6 +184,12 @@ class GeometryAliases:
             for node in nodes:
                 self.effects.setdefault(self.root(node), {})[effect.offset] = effect
 
+    def register_globals(self, nodes: tuple[_Node, ...]) -> None:
+        for node in nodes:
+            if node[0] is None and node[1] == -1:
+                self.global_members.add(node)
+                self.global_roots.add(self.root(node))
+
     def root(self, node: _Node) -> _Node:
         trail: list[_Node] = []
         while node in self.parents and self.parents[node] != node:
@@ -201,6 +208,9 @@ class GeometryAliases:
             previous = self.root(node)
             if previous != root:
                 self.effects.setdefault(root, {}).update(self.effects.pop(previous, {}))
+                if previous in self.global_roots:
+                    self.global_roots.discard(previous)
+                    self.global_roots.add(root)
                 self.parents[previous] = root
 
     def reference(
@@ -220,15 +230,26 @@ class GeometryAliases:
         name = qualified_name(syntax) or rectangle_name(syntax)
         if name is not None:
             target = self.functions.resolve(name, position, owner)
-            if len(target.functions) == 1 and not target.diagnostic:
+            if name == "_G" and self.functions.symbols.is_global_environment(
+                owner, position
+            ):
+                result = (self.environment,)
+            elif len(target.functions) == 1 and not target.diagnostic:
                 result = ((target.functions[0].start, -2, "return"),)
             else:
                 parts, _ = reference_parts(name, lua=self.functions.lua)
+                if (
+                    parts
+                    and parts[0] == "_G"
+                    and self.functions.symbols.is_global_environment(owner, position)
+                ):
+                    parts = parts[1:]
                 result = tuple(
                     self.functions.symbols.symbol(part, owner, position)
                     for part in parts
                 )
                 self.union(result)
+                self.register_globals(result)
         else:
             calls = script_structure(value, lua=self.functions.lua).calls
             whole = next(
@@ -244,7 +265,10 @@ class GeometryAliases:
             )
             if target is not None and target.builtin in GEOMETRY_FACTORIES:
                 result = ((owner, position, "@geometry:constructor"),)
-            elif target is not None and target.builtin in GEOMETRY_READERS:
+            elif target is not None and (
+                target.builtin in GEOMETRY_READERS
+                or target.builtin in GEOMETRY_PREDICATES
+            ):
                 result = ()
             elif (
                 target is not None
@@ -268,6 +292,7 @@ class GeometryAliases:
                     for match in NAME_PATTERN.finditer("".join(masked))
                     if match.group() not in {"nil", "null", "true", "false"}
                 )
+                self.register_globals(result)
         self._references[key] = result
         return result
 
@@ -276,7 +301,10 @@ class GeometryAliases:
     ) -> tuple[GeometryEffect, ...]:
         effects: dict[int, GeometryEffect] = {}
         for node in self.reference(expression, owner, position):
-            effects.update(self.effects.get(self.root(node), {}))
+            root = self.root(node)
+            effects.update(self.effects.get(root, {}))
+            if root in self.global_roots:
+                effects.update(self.effects.get(self.root(self.environment), {}))
         return tuple(effects[offset] for offset in sorted(effects))
 
     def diagnostic(self, expression: str, owner: int | None, position: int) -> str:

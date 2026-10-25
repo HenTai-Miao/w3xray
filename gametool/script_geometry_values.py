@@ -37,8 +37,11 @@ GEOMETRY_MUTATORS = frozenset(
         "RemoveRect",
     }
 )
+GEOMETRY_PREDICATES = frozenset(
+    {"RectContainsCoords", "RectContainsLoc", "RectContainsUnit", "RectContainsItem"}
+)
 GEOMETRY_BUILTINS = frozenset(
-    (*GEOMETRY_FACTORIES, *GEOMETRY_READERS, *GEOMETRY_MUTATORS)
+    (*GEOMETRY_FACTORIES, *GEOMETRY_READERS, *GEOMETRY_MUTATORS, *GEOMETRY_PREDICATES)
 )
 
 

@@ -20,6 +20,7 @@ from .script_geometry_values import (
     GEOMETRY_CONSTRUCTORS,
     GEOMETRY_READERS,
     GEOMETRY_TRANSFORMS,
+    GEOMETRY_PREDICATES,
     geometry_center,
     computed_geometry,
     geometry_constructor,
@@ -846,6 +847,11 @@ class ScriptValues:
                             result = StaticValue(
                                 None, diagnostic="矩形中心超出有限数值范围"
                             )
+                elif frame.label in GEOMETRY_PREDICATES:
+                    result = StaticValue(
+                        None,
+                        diagnostic="只读区域判断不作为静态坐标值；调用与参数证据保留",
+                    )
                 else:
                     result = StaticValue(
                         None, diagnostic="几何修改调用只保留副作用证据，不作为静态坐标"

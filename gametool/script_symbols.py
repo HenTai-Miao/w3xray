@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from .script_assignments import expression_key
+from .script_assignments import expression_key, script_assignments
 from .script_lexing import script_views
 from .script_scopes import ScopeLookup, ScriptStructure
 from .script_control_ranges import ControlRange, control_ranges
@@ -41,6 +41,24 @@ class ScriptSymbols:
                     (position, context.end if context is not None else end, position)
                 )
             self.visibility[owner, name] = ScopeLookup(intervals)
+        environment_writes = [
+            (row.owner, row.offset)
+            for row in script_assignments(text, lua=lua)
+            if row.key in {"_G", "_G._G"}
+            and self._lexical_symbol("_G", row.owner, row.start)[1] < 0
+        ]
+        environment_writes.extend(
+            (function.parent, function.start)
+            for function in structure.functions
+            if function.name == "_G"
+            and self._lexical_symbol("_G", function.parent, function.start)[1] < 0
+        )
+        self._environment_first_write = min(
+            (position for _owner, position in environment_writes), default=None
+        )
+        self._environment_foreign_write = any(
+            owner is not None for owner, _position in environment_writes
+        )
 
     def control_data(
         self, owner: int | None
@@ -148,8 +166,21 @@ class ScriptSymbols:
 
     def symbol(self, expression: str, owner: int | None, position: int) -> ScriptSymbol:
         key = expression_key(expression, lua=self.lua)
-        if key.startswith("_G."):
+        if key.startswith("_G.") and self.is_global_environment(owner, position):
             return None, -1, key.removeprefix("_G.")
+        return self._lexical_symbol(key, owner, position)
+
+    def is_global_environment(self, owner: int | None, position: int) -> bool:
+        """An explicit local table or source-visible replacement is not the globals table."""
+        return self._lexical_symbol("_G", owner, position)[1] < 0 and not (
+            self._environment_foreign_write
+            or self._environment_first_write is not None
+            and (owner is not None or self._environment_first_write < position)
+        )
+
+    def _lexical_symbol(
+        self, key: str, owner: int | None, position: int
+    ) -> ScriptSymbol:
         base = _IDENT.match(key)
         if base is not None:
             current, boundary = owner, position
