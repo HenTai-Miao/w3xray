@@ -40,6 +40,7 @@ from typing import TYPE_CHECKING, cast
 
 from .cli_output import configure_cli_output
 from .csv_fields import full_csv_fields
+from .pack_query_objects import object_table, valid_object_code
 from .pack_query_options import PackQueryCliOptions, parse_query_limit
 from .pack_query_placement_index import IndexedPlacements, indexed_placements
 from .presentation_safety import single_line_text
@@ -112,6 +113,7 @@ _QUERY_ROWS: dict[tuple[str, str], list[list[str]]] | None = None
 _QUERY_SCRIPTS: dict[str, str | None] | None = None
 _QUERY_SCRIPT_SOURCES: dict[str, tuple[tuple[str, str], ...]] | None = None
 _QUERY_FILES: set[tuple[str, str]] | None = None
+_QUERY_OBJECT_WARNINGS: dict[str, list[str]] | None = None
 
 # 本进程内遇到的 OS 级锁死表 (杀软隔离/ACL 损坏): (pack_dir, rel) — 查询出口统一披露
 _LOCKED_FILES: set[tuple[str, str]] = set()
@@ -195,10 +197,23 @@ def _table_identity(stat: os.stat_result) -> tuple[int, int, int, int]:
     return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns)
 
 
+def _object_rows(pack: Path, table: str) -> tuple[tuple[str, ...], ...]:
+    relative = "对象ID/" + table + ".tsv"
+    with _TABLE_READ_LOCK:
+        result = object_table(
+            table, tuple(tuple(row) for row in _read_rows(pack, relative))
+        )
+        if _QUERY_OBJECT_WARNINGS is not None and result.diagnostics:
+            _QUERY_OBJECT_WARNINGS.setdefault(str(pack), []).extend(
+                f"[⚠ {relative} — {note} 来源: {pack}]" for note in result.diagnostics
+            )
+    return result.rows
+
+
 def load_items(pack_dir: Path) -> dict[str, tuple[str, str]]:
     """物品四码 -> (去色名称, 描述)。"""
     out: dict[str, tuple[str, str]] = {}
-    for r in _read_rows(pack_dir, "对象ID/物品.tsv"):
+    for r in _object_rows(pack_dir, "物品"):
         if len(r) > 4 and len(r[1]) == 4:
             out[r[1]] = (_clean(r[4]), _clean(r[6]) if len(r) > 6 else "")
     return out
@@ -207,7 +222,7 @@ def load_items(pack_dir: Path) -> dict[str, tuple[str, str]]:
 def load_units(pack_dir: Path) -> dict[str, str]:
     """单位四码 -> 名称。"""
     out: dict[str, str] = {}
-    for r in _read_rows(pack_dir, "对象ID/单位.tsv"):
+    for r in _object_rows(pack_dir, "单位"):
         if len(r) > 4 and len(r[1]) == 4:
             out[r[1]] = _clean(r[4])
     return out
@@ -217,7 +232,7 @@ def load_destructables(pack_dir: Path) -> dict[str, str]:
     """可破坏物四码 -> 名称。"""
     return {
         row[1]: _clean(row[4])
-        for row in _read_rows(pack_dir, "对象ID/可破坏物.tsv")
+        for row in _object_rows(pack_dir, "可破坏物")
         if len(row) > 4 and len(row[1]) == 4
     }
 
@@ -225,8 +240,8 @@ def load_destructables(pack_dir: Path) -> dict[str, str]:
 def load_item_bases(pack_dir: Path) -> dict[str, str]:
     """物品四码 -> 基础对象四码（对象ID/物品.tsv 第4列）。"""
     out: dict[str, str] = {}
-    for r in _read_rows(pack_dir, "对象ID/物品.tsv"):
-        if len(r) > 4 and len(r[1]) == 4 and len(r[3]) == 4:
+    for r in _object_rows(pack_dir, "物品"):
+        if len(r) > 4 and len(r[1]) == 4 and valid_object_code(r[3]):
             out[r[1]] = r[3].lower()
     return out
 
@@ -406,9 +421,9 @@ def _tech_base_fields() -> dict[str, dict[str, str]]:
 def load_techs(pack_dir: Path) -> dict[str, tuple[str, str]]:
     """科技四码 -> (去色名称, 基础ID小写)。基础ID非四码时为空串。"""
     out: dict[str, tuple[str, str]] = {}
-    for r in _read_rows(pack_dir, "对象ID/科技.tsv"):
+    for r in _object_rows(pack_dir, "科技"):
         if len(r) > 4 and len(r[1]) == 4:
-            base = r[3].lower() if len(r[3]) == 4 else ""
+            base = r[3].lower() if valid_object_code(r[3]) else ""
             out[r[1]] = (_clean(r[4]), base)
     return out
 
@@ -3052,16 +3067,36 @@ def _query_diff(pack: Path, query: str, limit: int, pack_b: str = "") -> list[st
     for table in tables:
         if filter_table and table != filter_table:
             continue
-        old_rows = _read_rows(old_pack, f"对象ID/{table}.tsv")
-        new_rows = _read_rows(pack, f"对象ID/{table}.tsv")
+        old_rows = _object_rows(old_pack, table)
+        new_rows = _object_rows(pack, table)
         if not old_rows and not new_rows:
             continue
         old_by_id = {r[1]: r for r in old_rows[1:] if len(r) > 4}
         new_by_id = {r[1]: r for r in new_rows[1:] if len(r) > 4}
         added = [i for i in new_by_id if i not in old_by_id]
         removed = [i for i in old_by_id if i not in new_by_id]
+        same_header = old_rows[0] == new_rows[0]
+        old_columns = sorted(enumerate(old_rows[0]), key=lambda entry: entry[1])
+        new_columns = sorted(enumerate(new_rows[0]), key=lambda entry: entry[1])
+
+        def values(
+            row: tuple[str, ...], columns: list[tuple[int, str]]
+        ) -> tuple[tuple[str, str | None], ...]:
+            return tuple(
+                (name, row[index] if index < len(row) else None)
+                for index, name in columns
+            )
+
         changed = [
-            i for i in new_by_id if i in old_by_id and new_by_id[i] != old_by_id[i]
+            i
+            for i in new_by_id
+            if i in old_by_id
+            and (
+                new_by_id[i] != old_by_id[i]
+                if same_header
+                else values(new_by_id[i], new_columns)
+                != values(old_by_id[i], old_columns)
+            )
         ]
         # 字段级变化也算变更 (物品.tsv 行相同但对象字段.tsv 值不同)
         field_changes = _diff_field_changes(
@@ -3175,7 +3210,7 @@ def _query_list(pack: Path, query: str, limit: int) -> list[str]:
     for table in tables:
         if want and table != want:
             continue
-        rows = _read_rows(pack, f"对象ID/{table}.tsv")
+        rows = _object_rows(pack, table)
         if len(rows) <= 1:
             continue
         out.append(f"== {table} ({len(rows) - 1}) ==")
@@ -3223,8 +3258,15 @@ def _query_object_list(
     pack: Path, query: str, table: str, missing: str, limit: int = 0
 ) -> list[str]:
     """List every valid legacy/current record and its complete description."""
-    rows = _read_rows(pack, f"对象ID/{table}.tsv")
+    rows = _object_rows(pack, table)
     if len(rows) <= 1:
+        if _QUERY_OBJECT_WARNINGS is not None and any(
+            f"对象ID/{table}.tsv" in note
+            for note in _QUERY_OBJECT_WARNINGS.get(str(pack), ())
+        ):
+            return [
+                f"未找到可查询对象: {table}；请核对下方对象表诊断或重新导出知识包。"
+            ]
         return [missing]
     needle = _clean(query).casefold()
     out: list[str] = []
@@ -3277,7 +3319,7 @@ def _code_home_hint(pack: Path, query: str) -> str:
     """码在技能/增益表中时给出专属命令提示, 否则返回空串。"""
     code = query.strip()
     for table, cmd in (("技能", "skills"), ("增益", "buffs"), ("英雄", "heroes")):
-        for r in _read_rows(pack, "对象ID/" + table + ".tsv")[1:]:
+        for r in _object_rows(pack, table)[1:]:
             if len(r) > 4 and (r[1] == code or _clean(r[4]) == code):
                 return f"(该码属 {table} — 用 {cmd} {code} 查)"
     return ""
@@ -3326,7 +3368,7 @@ def _query_stats(pack: Path, query: str, limit: int) -> list[str]:
         out.append("本包无对象表")
         return out
     for tsv in sorted(obj_dir.glob("*.tsv")):
-        rows = _read_rows(pack, "对象ID/" + tsv.name)
+        rows = _object_rows(pack, tsv.stem)
         if len(rows) <= 1:
             continue
         custom_idx = rows[0].index("自定义") if "自定义" in rows[0] else -1
@@ -3519,7 +3561,7 @@ def run_pack_query_cli(options: PackQueryCliOptions) -> int:
     configure_cli_output()
     result = execute_pack_query(options)
     print(result.render(as_json=options.as_json))
-    for diagnostic in result.diagnostics:
+    for diagnostic in result.extra_diagnostics:
         print(diagnostic, file=sys.stderr)
     return result.exit_code
 

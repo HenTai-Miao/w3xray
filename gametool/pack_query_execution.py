@@ -31,6 +31,7 @@ class QueryBackend(Protocol):
     _QUERY_SCRIPTS: dict[str, str | None] | None
     _QUERY_SCRIPT_SOURCES: dict[str, tuple[tuple[str, str], ...]] | None
     _QUERY_FILES: set[tuple[str, str]] | None
+    _QUERY_OBJECT_WARNINGS: dict[str, list[str]] | None
     _LOCKED_FILES: set[tuple[str, str]]
     _QUERIES: dict[str, Callable[[Path, str, int], list[str]]]
 
@@ -71,6 +72,14 @@ class PackQueryResult:
     campaign: bool = False
     diagnostics: tuple[str, ...] = ()
     checked_packs: tuple[str, ...] = ()
+
+    @property
+    def extra_diagnostics(self) -> tuple[str, ...]:
+        """Keep typed diagnostics while displaying an identical warning only once."""
+        if not any(note.startswith("[⚠") for note in self.diagnostics):
+            return self.diagnostics
+        rendered = {line for section in self.sections for line in section.lines}
+        return tuple(note for note in self.diagnostics if note not in rendered)
 
     def render(self, *, as_json: bool = False) -> str:
         """Render one complete JSON document or all text sections."""
@@ -178,24 +187,67 @@ def execute_query(
         previous_scripts = queries._QUERY_SCRIPTS
         previous_sources = queries._QUERY_SCRIPT_SOURCES
         previous_files = queries._QUERY_FILES
+        previous_objects = queries._QUERY_OBJECT_WARNINGS
         queries._QUERY_ROWS = {}
         queries._QUERY_SCRIPTS = {}
         queries._QUERY_SCRIPT_SOURCES = {}
         queries._QUERY_FILES = set()
+        queries._QUERY_OBJECT_WARNINGS = {}
         try:
             result = _collect_query(options, queries)
         finally:
             touched = queries._QUERY_FILES or set()
+            object_warnings = queries._QUERY_OBJECT_WARNINGS or {}
             queries._QUERY_ROWS = previous
             queries._QUERY_SCRIPTS = previous_scripts
             queries._QUERY_SCRIPT_SOURCES = previous_sources
             queries._QUERY_FILES = previous_files
+            queries._QUERY_OBJECT_WARNINGS = previous_objects
+        if object_warnings:
+            remaining = dict(object_warnings)
+            sections = []
+            for section in result.sections:
+                notes = tuple(dict.fromkeys(remaining.pop(section.pack, ())))
+                sections.append(replace(section, lines=(*section.lines, *notes)))
+            campaign = (
+                result.campaign
+                or result.command != "diff"
+                and any(
+                    Path(pack).parent == Path(result.pack) / "子地图"
+                    for pack in remaining
+                )
+            )
+            for pack, notes in remaining.items():
+                label = (
+                    "容器级"
+                    if pack == result.pack
+                    else "子地图 " + Path(pack).name
+                    if campaign and Path(pack).parent == Path(result.pack) / "子地图"
+                    else "诊断来源 " + Path(pack).name
+                )
+                sections.append(QuerySection(label, pack, tuple(dict.fromkeys(notes))))
+            if campaign:
+                sections = [
+                    replace(section, section="容器级")
+                    if section.pack == result.pack
+                    else section
+                    for section in sections
+                ]
+                sections.sort(
+                    key=lambda section: (section.pack != result.pack, section.pack)
+                )
+            result = replace(result, sections=tuple(sections), campaign=campaign)
         root = Path(result.pack).resolve()
-        diagnostics = tuple(
-            f"[⚠ 数据文件读取失败, 本次结果可能缺失: {rel} — "
-            f"检查文件权限/编码或重新导出知识包: {pack}]"
-            for pack, rel in sorted(queries._LOCKED_FILES.intersection(touched))
-            if (Path(pack) / rel).resolve().is_relative_to(root)
+        diagnostics = (
+            *dict.fromkeys(
+                note for notes in object_warnings.values() for note in notes
+            ),
+            *(
+                f"[⚠ 数据文件读取失败, 本次结果可能缺失: {rel} — "
+                f"检查文件权限/编码或重新导出知识包: {pack}]"
+                for pack, rel in sorted(queries._LOCKED_FILES.intersection(touched))
+                if (Path(pack) / rel).resolve().is_relative_to(root)
+            ),
         )
     return _timed_result(
         replace(result, diagnostics=(*result.diagnostics, *diagnostics)), started

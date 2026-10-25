@@ -28,7 +28,7 @@ _PREFIX = re.compile(r"^\s*([^:：]+)[:：](.*)$", re.DOTALL)
 
 
 class SearchSources(Protocol):
-    def _read_rows(self, pack: Path, relative: str) -> list[list[str]]: ...
+    def _object_rows(self, pack: Path, table: str) -> tuple[tuple[str, ...], ...]: ...
     def _clean(self, text: str) -> str: ...
 
 
@@ -57,7 +57,7 @@ def query_search(
     invalid_rows = 0
     output: list[str] = []
     for table in (category,) if category else _TABLES:
-        rows = sources._read_rows(pack, f"对象ID/{table}.tsv")
+        rows = sources._object_rows(pack, table)
         if not rows:
             continue
         hits: list[tuple[str, str, tuple[tuple[str, str], ...]]] = []

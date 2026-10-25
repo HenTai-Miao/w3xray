@@ -807,7 +807,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             return ("查询失败: " + format_user_exception(exc), "")
         return (
             result.render(as_json=as_json) or "(无输出)",
-            "\n".join(result.diagnostics),
+            "\n".join(result.extra_diagnostics),
         )
 
     def _pin_current(self) -> None:
