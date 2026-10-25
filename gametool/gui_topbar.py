@@ -161,7 +161,7 @@ def build_topbar(app) -> None:
     )
     _attach_tooltip(
         app.pack_query_button,
-        "九模式查询: doc/search/list/buffs/export/synth/skills/units/locate (Ctrl+1..9)",
+        "包查询 26 模式三排面板: 核心 10 (Ctrl+1..0) + 扩展 16 (where/drop/diff/price/quest/cmd/text/refs/affixes/registered 等)",
     )
     app.pack_query_button.pack(side="left", padx=(0, 4))
     app.live_probe_button = ctk.CTkButton(
@@ -217,7 +217,10 @@ def build_topbar(app) -> None:
         command=lambda: _show_guide(app),
         **secondary_button_style(),
     )
-    _attach_tooltip(app.guide_button, "一键玩家攻略: 指令/任务/配方/商店/掉落/线索速查")
+    _attach_tooltip(
+        app.guide_button,
+        "一键玩家攻略: 指令/任务/英雄/配方/商店/掉落/开箱与兑换/线索 速查",
+    )
     app.guide_button.pack(side="left", padx=(0, 4))
     # 未加载地图前禁用地图相关按钮 (加载成功后 lifecycle 统一启用)
     for _btn in (app.minimap_button, app.guide_button, app.pack_query_button):
