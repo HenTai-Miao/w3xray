@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from .save_call_context import extract_call_args
 from .script_lexing import literal_string_value, script_views
+from .script_lua_builtins import array_literal_parts, select_values, unpack_values
 from .script_object_literals import literal_object_code, strip_outer_parentheses
 from .script_returns import ReturnSpan, script_returns
 from .script_scopes import script_structure
@@ -409,11 +410,10 @@ class ScriptValues:
                     args = extract_call_args(
                         script_views(value, lua=self.functions.lua), call.open + 1
                     )
-                    if call.name.removeprefix(
-                        "_G."
-                    ) == "FourCC" and not self.functions.bound(
-                        call.name, key.owner, key.position
-                    ):
+                    reference = self.functions.resolve(
+                        call.name, key.position, key.owner
+                    )
+                    if reference.builtin == "FourCC":
                         if len(args) != 1:
                             self._save(
                                 key,
@@ -423,10 +423,29 @@ class ScriptValues:
                             )
                             continue
                         frame.stage = "fourcc"
+                    elif reference.builtin in {"select", "table.unpack"}:
+                        frame.stage = reference.builtin
+                        frame.label = f"{reference.builtin}; 静态列表运算: {value}"
+                        if reference.builtin == "table.unpack":
+                            parts, note = array_literal_parts(args[0] if args else "")
+                            if parts is None:
+                                self._save(key, unknown_values(note, multi=key.multi))
+                                continue
+                            frame.dependencies = tuple(
+                                self._key(
+                                    "",
+                                    key.owner,
+                                    key.position,
+                                    key.context,
+                                    key.arguments,
+                                    multi=True,
+                                    parts=items,
+                                    unknown_tail=key.unknown_tail,
+                                )
+                                for items in (parts, args[1:])
+                            )
+                            continue
                     else:
-                        reference = self.functions.resolve(
-                            call.name, key.position, key.owner
-                        )
                         if len(reference.functions) != 1 or reference.diagnostic:
                             self._save(
                                 key,
@@ -590,6 +609,19 @@ class ScriptValues:
                 self._save(key, StaticValues((result,)))
             elif frame.stage == "alias":
                 self._save(key, StaticValues((values[0].at(frame.ordinal),)))
+            elif frame.stage in {"select", "table.unpack"}:
+                result = (
+                    select_values(values[0])
+                    if frame.stage == "select"
+                    else unpack_values(values[0], values[1])
+                )
+                parents = tuple(
+                    item.proof
+                    for group in values
+                    for item in (*group.values, *((group.tail,) if group.tail else ()))
+                    if item.proof >= 0
+                )
+                self._save(key, self._proof(result, frame.label, parents))
             else:
                 self._save(key, self._proof(values[0], frame.label, frame.parents))
         return self.results[root]

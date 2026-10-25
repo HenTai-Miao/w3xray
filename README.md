@@ -384,3 +384,5 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
 地图查询还会追踪可确认的函数返回值，例如 `CreateItem(RewardId(), …)` 或 `Grant(Identity(FourCC("I001")))`。返回值索引完整保留同行、跨行及嵌套返回语句，并附源码范围；多分支和递归返回保留诊断。实现与边界见 [全量解析与查询说明](docs/full-data-parsing-query.md)。
 
 Lua 多返回值查询支持 `Grant(Ids())`、`local a,b=Ids()` 和 `...` 透传；末表达式完整展开，括号或非末位置按单值处理，未知长度尾部保留诊断。查询与攻略共享结果，支持从第二个及后续返回值反查物品来源。
+
+Lua `select` 支持正负索引、参数计数与变长参数，`table.unpack` 支持本次调用中新建的数组、末字段多返回值及显式范围，完整保留源码编码的元素。函数别名按赋值时的绑定解析；局部遮蔽、重定义和父表替换会阻止误用标准库或旧函数。可变表、含空洞数组的默认长度，以及超出源码数组的展开范围仍明确标为未静态确定。

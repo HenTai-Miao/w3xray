@@ -367,6 +367,7 @@ tests/test_script_local_index.py
 tests/test_script_loop_index.py
 tests/test_script_mechanics.py
 tests/test_script_multivalue_complete.py
+tests/test_script_lua_builtins_complete.py
 tests/test_script_object_code_occurrence_index.py
 tests/test_script_protection.py
 tests/test_script_return_index.py

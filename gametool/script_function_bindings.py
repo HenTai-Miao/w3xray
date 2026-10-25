@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import re
 
 from .save_call_context import extract_call_args
-from .script_assignments import ScriptAssignment, script_assignments
+from .script_assignments import ScriptAssignment, reference_parts, script_assignments
 from .script_atoms import ScriptAtoms
 from .script_lexing import script_views
 from .script_object_literals import strip_outer_parentheses
@@ -22,6 +22,7 @@ class FunctionReference:
     expression: str
     functions: tuple[FunctionSpan, ...]
     diagnostic: str = ""
+    builtin: str = ""
 
 
 class ScriptFunctionBindings:
@@ -117,6 +118,31 @@ class ScriptFunctionBindings:
         symbol = self.symbols.symbol(expression.replace(":", "."), owner, position)
         return symbol[1] >= 0 or symbol in self.writes or symbol in self.definitions
 
+    def _parent_diagnostic(
+        self,
+        expression: str,
+        owner: int | None,
+        position: int,
+        binding: tuple[int | None, int] | None,
+    ) -> str:
+        prefixes, _ = reference_parts(expression, lua=self.lua)
+        for prefix in prefixes[:-1]:
+            symbol = self.symbols.symbol(prefix, owner, position)
+            assignment, note = self._write(symbol, owner, position)
+            if note:
+                return f"父表 {prefix}: {note}"
+            if binding is None:
+                if assignment or symbol[1] >= 0 or symbol in self.definitions:
+                    return f"父表 {prefix} 已被绑定，未假定为标准库"
+            elif assignment is not None:
+                binding_owner, binding_position = binding
+                if (
+                    assignment.owner == binding_owner
+                    and assignment.offset > binding_position
+                ) or (binding_owner is None and assignment.owner is not None):
+                    return f"父表 {prefix} 在成员绑定后被替换，未沿用旧函数"
+        return ""
+
     def resolve(
         self, expression: str, start: int, owner: int | None
     ) -> FunctionReference:
@@ -152,6 +178,11 @@ class ScriptFunctionBindings:
             if diagnostic:
                 return FunctionReference(raw, (), diagnostic)
             if assignment is not None:
+                diagnostic = self._parent_diagnostic(
+                    value, owner, start, (assignment.owner, assignment.offset)
+                )
+                if diagnostic:
+                    return FunctionReference(raw, (), diagnostic)
                 atom = self.atoms.assignment(assignment)
                 if atom is not None and atom.function is not None:
                     function = atom.function
@@ -166,6 +197,16 @@ class ScriptFunctionBindings:
                 continue
             candidates = tuple(self.definitions.get(symbol, ()))
             if candidates:
+                parent_notes = tuple(
+                    self._parent_diagnostic(
+                        value, owner, start, (item.parent, item.start)
+                    )
+                    for item in candidates
+                )
+                if any(parent_notes):
+                    return FunctionReference(
+                        raw, (), "; ".join(filter(None, parent_notes))
+                    )
                 diagnostic = (
                     f"回调同名歧义：{len(candidates)} 个候选，未确定实际绑定"
                     if len(candidates) > 1
@@ -183,6 +224,16 @@ class ScriptFunctionBindings:
                         )
                     )
                 return FunctionReference(raw, candidates, diagnostic)
+            canonical = symbol[2]
+            builtins = {"FourCC"}
+            if self.lua is True:
+                builtins.update(("select", "table.unpack"))
+            if canonical in builtins:
+                diagnostic = self._parent_diagnostic(value, owner, start, None)
+                if diagnostic:
+                    return FunctionReference(raw, (), diagnostic)
+                if symbol[1] < 0:
+                    return FunctionReference(raw, (), builtin=canonical)
             return FunctionReference(
                 raw, (), "未找到回调函数定义；可能来自外部脚本或运行时赋值"
             )
