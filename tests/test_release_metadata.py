@@ -94,6 +94,7 @@ def test_main_help_gate(capsys):
         [sys.executable, "-X", "utf8", "main.py", "--help"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=60,
     )
     assert proc.returncode == 0
@@ -119,6 +120,7 @@ def test_main_unknown_subcommand_fails_fast(capsys):
         [sys.executable, "-X", "utf8", "main.py", "typo-command"],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=60,
     )
     assert proc.returncode == 2
