@@ -169,7 +169,14 @@ def _write_lock(path: str, pid: int, image: str) -> None:
         with open(path, "w", encoding="utf-8") as f:
             json.dump({"pid": pid, "image": image}, f)
     except OSError:
-        pass
+        # 376: 锁写失败 = 双实例防护失效 (两 GUI 可能同时起) — 不阻塞启动
+        # (临时目录可能只读) 但必须响亮警示, 不得静默
+        import sys as _sys
+
+        print(
+            f"[⚠ 单实例锁写入失败: {path} — 另一个 GameXRay 可能与本实例并行运行]",
+            file=_sys.stderr,
+        )
 
 
 def ensure_single_instance():

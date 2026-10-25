@@ -85,7 +85,7 @@ def _remember_geometry(win, name: str) -> None:
         if int(win.winfo_width()) <= 1:
             return  # 从未渲染: 别用默认尺寸污染已保存的记忆
     except Exception:
-        pass
+        pass  # 376: Tk 窗口已销毁/未就绪 — 保留旧记忆, fail-open
     _WINDOW_GEOMETRY[name] = win.geometry()
 
 
@@ -773,7 +773,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
 
                     _store_last_query(pathlib.Path(self._pack_dir), command, keyword)
                 except Exception:
-                    pass
+                    pass  # 376: again 记忆失败不拦查询 — CLI 侧同函数自身已 fail-open
             done.append((result, elapsed))
 
         threading.Thread(target=_worker, daemon=True).start()

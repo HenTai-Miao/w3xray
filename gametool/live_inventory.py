@@ -195,7 +195,7 @@ def _process_identity(handle):
         if k32.K32GetModuleFileNameExW(handle, None, buf, 0x400):
             return buf.value
     except Exception:
-        pass
+        pass  # 376: psapi 缺失/权限不足 — 返回 None 由调用方 opened_path 分支披露
     return None
 
 
@@ -503,7 +503,7 @@ def load_names(pack_dir, kind="物品"):
                 if n2 and len(code) == 4:
                     nm.setdefault(code.encode(), n2)
     except Exception:
-        pass
+        pass  # 376: base_names 不可用 (隔离环境/import 失败) — 退 TSV 名/问号, 兜底语义
     return nm
 
 
@@ -569,12 +569,17 @@ def build_templates(pack_dir, cache_dir=None, verbose=False):
             from gametool.archive_source import PathArchiveSource
 
             archives = []
+            failed_roots = []
             for m in _mpq_roots():
                 if os.path.exists(m):
                     try:
                         archives.append(PathArchiveSource(m).open())
                     except Exception:
-                        pass
+                        # 376: 归档打开失败计入披露 — 不让用户把「归档坏了」
+                        # 误读成「图标本来就不存在」
+                        failed_roots.append(m)
+            if failed_roots and verbose:
+                print(f"⚠ MPQ 归档打开失败 {len(failed_roots)} 个: {failed_roots}")
             for p in sorted(set(missing)):
                 fn = p.replace("/", "_").lower()
                 dst = os.path.join(cache_dir, fn)
@@ -889,7 +894,19 @@ def append_live_journal(rep):
         with (root / "journal-v1.jsonl").open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except Exception:
-        pass
+        # 376: journal 是可追溯性资产 — 失败不得双重静默, 留痕 errors-v1.log
+        import traceback as _tb
+
+        try:
+            _log = gamexray_cache_root() / "live" / "errors-v1.log"
+            _log.parent.mkdir(parents=True, exist_ok=True)
+            with _log.open("a", encoding="utf-8") as _fh:
+                _fh.write(
+                    "[%s] stage=journal-fail\n%s\n"
+                    % (time.strftime("%Y-%m-%dT%H:%M:%S"), _tb.format_exc())
+                )
+        except Exception:
+            pass  # 最终兜底: 磁盘不可写时无处分流, 只能静默
 
 
 def _parse_resources_arg(parts):

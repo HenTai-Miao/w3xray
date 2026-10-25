@@ -418,7 +418,7 @@ def _query_tech(pack: Path, query: str, limit: int) -> list[str]:
                     try:
                         return int(float(v))
                     except ValueError:
-                        pass
+                        pass  # 非数值/占位符 — 试下一来源 (base 兑底), 最终 None=未知
             return None
 
         levels = _num("glvl", "最大等级")
@@ -3335,7 +3335,7 @@ def _query_stats(pack: Path, query: str, limit: int) -> list[str]:
                 f"历史条数: {len(entries)} (374 起全量落盘; GUI 下拉展示最近 12 条, again 走独立记忆)"
             )
         except OSError, ValueError:
-            pass
+            pass  # 记忆损坏不可读 — 总览其余段落照常, 条数行省略 (非关键披露)
     out.append(f"记忆目录: {memo}")
     return out
 

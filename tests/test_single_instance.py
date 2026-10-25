@@ -6,7 +6,13 @@ import sys
 import time
 import unittest
 
-from gametool.single_instance import _decide, _terminate, _image_path, _pid_alive
+from gametool.single_instance import (
+    _decide,
+    _terminate,
+    _write_lock,
+    _image_path,
+    _pid_alive,
+)
 
 
 class TestDecide(unittest.TestCase):
@@ -105,6 +111,18 @@ class TestTerminateImageGuard(unittest.TestCase):
                 p.kill()
             except OSError:
                 pass
+
+    def test_write_lock_failure_warns_not_silent(self):
+        """376: 锁写失败须响亮警示 (双实例防护失效不得静默)。"""
+        import contextlib
+        import io
+
+        buffer = io.StringIO()
+        with contextlib.redirect_stderr(buffer):
+            _write_lock(r"Z:\nonexistent-dir\lock.json", 1234, "x.exe")
+        err = buffer.getvalue()
+        assert "单实例锁写入失败" in err
+        assert "并行运行" in err
 
 
 if __name__ == "__main__":
