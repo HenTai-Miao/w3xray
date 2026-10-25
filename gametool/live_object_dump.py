@@ -319,10 +319,28 @@ def write_object_pack(
     return files
 
 
+def _region_action(state: int, protect: int, rs: int) -> str:
+    """区域处置: read=读入 / skip=超护栏跳过(必须计数披露) / ignore=不感兴趣。"""
+    if state == 0x1000 and protect in (2, 4, 5, 0x20, 0x40, 0x80):
+        return "skip" if rs > _MAX_REGION_BYTES else "read"
+    return "ignore"
+
+
+def _skipped_regions_note(skipped: int) -> str:
+    """跳过区域披露文案 — 0 计数也要显式写"无", 禁止静默省略字段。"""
+    if skipped <= 0:
+        return "无"
+    return f"{skipped} 个超大区域 (>256MB) 因单次分配护栏跳过读取"
+
+
 def _snapshot_regions(
     handle: int, max_addr: int
-) -> tuple[list[tuple[int, bytes]], int]:
-    """VirtualQueryEx + ReadProcessMemory 全量区域读取 (上限 _MAX_REGION_BYTES)。"""
+) -> tuple[list[tuple[int, bytes]], int, int]:
+    """VirtualQueryEx + ReadProcessMemory 全量区域读取。
+
+    单区域超 _MAX_REGION_BYTES 时跳过读取 (防单次分配炸弹) 但计数返回,
+    调用方负责在出处/notes 中披露跳过详情 — 护栏不得静默。
+    """
     k32 = ctypes.WinDLL("kernel32")
 
     class _MBI(ctypes.Structure):
@@ -338,6 +356,7 @@ def _snapshot_regions(
 
     regions: list[tuple[int, bytes]] = []
     total = 0
+    skipped = 0
     addr = 0x10000
     mbi = _MBI()
     while addr < max_addr:
@@ -346,11 +365,8 @@ def _snapshot_regions(
         ):
             break
         rs = mbi.RegionSize or 0x1000
-        if (
-            mbi.State == 0x1000
-            and mbi.Protect in (2, 4, 5, 0x20, 0x40, 0x80)
-            and rs <= _MAX_REGION_BYTES
-        ):
+        action = _region_action(mbi.State or 0, mbi.Protect or 0, rs)
+        if action == "read":
             buf = ctypes.create_string_buffer(rs)
             got = ctypes.c_size_t()
             if (
@@ -361,8 +377,10 @@ def _snapshot_regions(
             ):
                 regions.append((mbi.Base or 0, buf.raw[: got.value]))
                 total += got.value
+        elif action == "skip":
+            skipped += 1
         addr = (mbi.Base or 0) + rs
-    return regions, total
+    return regions, total, skipped
 
 
 def _write_registered_data_tsv(
@@ -464,7 +482,7 @@ def dump_live_objects(
     try:
         version = detect_version(handle)
         max_addr = 0x7FFFFFFEFFFF if version["arch"] == "x64" else 0x7FFF0000
-        regions, total = _snapshot_regions(handle, max_addr)
+        regions, total, skipped = _snapshot_regions(handle, max_addr)
     finally:
         ctypes.WinDLL("kernel32").CloseHandle(handle)
 
@@ -476,6 +494,8 @@ def dump_live_objects(
     # Lua 数据层 (云消息注册数据 + 词缀公式) — 无词表, 收到什么导什么
     registered = extract_registered_records(regions)
     affixes = extract_affix_definitions(regions)
+    skipped_note = _skipped_regions_note(skipped)
+    notes_line = f"超大区域跳过: {skipped_note}"
     files = write_object_pack(
         blocks,
         out_dir,
@@ -485,6 +505,7 @@ def dump_live_objects(
             "游戏版本": version.get("version"),
             "导出时间": time.strftime("%Y-%m-%d %H:%M:%S"),
             "扫描区域": f"{len(regions)} 区 / {total // 1048576}MB",
+            "超大区域跳过": skipped_note,
             "对象数": len(blocks),
             "重复块跳过": duplicates,
             "分类": json.dumps(categories, ensure_ascii=False),
@@ -497,6 +518,8 @@ def dump_live_objects(
             f"对象表导出: {len(blocks)} 个对象 "
             f"({len(regions)} 区 {total // 1048576}MB, 重复跳过 {duplicates})"
         )
+        if skipped:
+            print(f"  ⚠ {notes_line}")
         for cat, count in sorted(categories.items()):
             print(f"  {cat}: {count}")
         if registered:
@@ -508,6 +531,8 @@ def dump_live_objects(
         print(
             f'查询示例: uv run python -X utf8 main.py pack-query "{out_dir}" item <名称或四码>'
         )
+    if skipped:
+        notes.append(notes_line)
     return LiveObjectDumpResult(
         chosen,
         len(regions),

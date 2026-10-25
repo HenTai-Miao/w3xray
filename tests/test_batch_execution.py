@@ -6,12 +6,14 @@ import multiprocessing
 import os
 from pathlib import Path
 import threading
+from time import monotonic
 
 from gametool.batch_configuration import BatchOptions
 from gametool.batch_execution import (
     MapExecutionCancelled,
     MapExecutionFailure,
     MapExecutionSuccess,
+    _wait_for_child,
     execute_map_isolated,
 )
 from gametool.batch_execution_messages import (
@@ -252,3 +254,64 @@ def _memory_error_worker(
 
 def _active_child_ids() -> frozenset[int | None]:
     return frozenset(process.pid for process in multiprocessing.active_children())
+
+
+class _OversizePayloadReceiver:
+    """模拟子进程载荷超过 recv_bytes(maxlength) 传输上限的 Windows 管道。"""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def poll(self, timeout: float = 0.0) -> bool:
+        _ = timeout
+        return True
+
+    def recv_bytes(self, maxlength: int | None = None) -> bytes:
+        self.calls += 1
+        _ = maxlength
+        raise OSError("[WinError 233] 管道已结束 — 载荷超过 maxlength 上限")
+
+    def close(self) -> None:
+        return None
+
+
+class _AliveProcess:
+    exitcode = None
+
+    def __init__(self) -> None:
+        self.terminated = False
+
+    def is_alive(self) -> bool:
+        return not self.terminated
+
+    def join(self, timeout: float | None = None) -> None:
+        _ = timeout
+
+    def terminate(self) -> None:
+        self.terminated = True
+
+    def kill(self) -> None:
+        self.terminated = True
+
+    def close(self) -> None:
+        return None
+
+
+class _ImmediateCancel:
+    def is_set(self) -> bool:
+        return True
+
+
+def test_oversize_payload_diagnosed_not_crash() -> None:
+    # Given: 子进程回传载荷超过传输上限, recv_bytes 抛 OSError (旧版裸炸 traceback)
+    process = _AliveProcess()
+    receiver = _OversizePayloadReceiver()
+
+    # When
+    outcome = _wait_for_child(process, receiver, monotonic() + 60.0, None)
+
+    # Then: 诊断为具名失败, 不是未捕获异常
+    assert isinstance(outcome, MapExecutionFailure)
+    assert outcome.code == "child_message_too_large"
+    assert "64MB" in outcome.detail
+    assert receiver.calls >= 1

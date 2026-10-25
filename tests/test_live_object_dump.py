@@ -238,3 +238,28 @@ class TestDumpWritesLuaLayer:
         # 空数据不写文件
         assert _write_registered_data_tsv({}, out) == 0
         assert _write_affixes_tsv({}, out) == 0
+
+
+class TestRegionGuardDisclosure:
+    """超大区域护栏不得静默: 跳过必须计数, 披露字段禁止省略。
+
+    (369 轮: 旧版单区域超 256MB 直接跳过, 扫描区域行无任何跳过痕迹)
+    """
+
+    def test_skip_over_cap_reads_within_cap(self):
+        from gametool.live_object_dump import _region_action
+
+        # 常规可读区域: read
+        assert _region_action(0x1000, 0x04, 0x100000) == "read"
+        # 同保护属性但超过护栏: skip (计数, 不静默丢)
+        assert _region_action(0x1000, 0x04, 0x10000000 + 0x1000) == "skip"
+        # 非提交/非可读保护: ignore (与上限无关)
+        assert _region_action(0x2000, 0x04, 0x1000) == "ignore"
+        assert _region_action(0x1000, 0x01, 0x1000) == "ignore"
+
+    def test_note_discloses_zero_and_positive_counts(self):
+        from gametool.live_object_dump import _skipped_regions_note
+
+        assert _skipped_regions_note(0) == "无"
+        assert "3 个超大区域" in _skipped_regions_note(3)
+        assert ">256MB" in _skipped_regions_note(3)

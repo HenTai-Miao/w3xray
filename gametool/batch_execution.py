@@ -170,25 +170,47 @@ def _wait_for_child(
             _stop_and_reap(process)
             return MapExecutionFailure("map_timeout", "map execution timed out")
         if _receiver_has_payload(receiver, min(_POLL_SECONDS, remaining)):
-            try:
-                payload = receiver.recv_bytes(_MAX_MESSAGE_BYTES)
-            except EOFError:
-                payload = b""
-            if payload:
-                return _execution_outcome(payload)
+            outcome = _recv_child_payload(receiver, deadline)
+            if isinstance(outcome, MapExecutionFailure):
+                return outcome
+            if outcome:
+                return _execution_outcome(outcome)
         if not process.is_alive():
             process.join()
             if _receiver_has_payload(receiver, _POLL_SECONDS):
-                try:
-                    payload = receiver.recv_bytes(_MAX_MESSAGE_BYTES)
-                except EOFError:
-                    payload = b""
-                if payload:
-                    return _execution_outcome(payload)
+                outcome = _recv_child_payload(receiver, deadline)
+                if isinstance(outcome, MapExecutionFailure):
+                    return outcome
+                if outcome:
+                    return _execution_outcome(outcome)
             return MapExecutionFailure(
                 "child_process_exit",
                 f"child exited with code {process.exitcode}",
             )
+
+
+def _recv_child_payload(
+    receiver: _Receiver, deadline: float
+) -> bytes | MapExecutionFailure:
+    """读取子进程回传; EOF=空管道, OSError=载荷超 _MAX_MESSAGE_BYTES。
+
+    超长载荷不是可重试错误 (管道已损坏), 诊断为 child_message_too_large
+    失败返回 (MapExecutionFailure 是 dataclass 不是异常, 不能 raise);
+    超时抖动 (剩余时间不足) 返回空字节交给外层超时路径收尾。
+    """
+    try:
+        return receiver.recv_bytes(_MAX_MESSAGE_BYTES)
+    except EOFError:
+        return b""
+    except OSError as exc:
+        remaining = deadline - monotonic()
+        if remaining > _POLL_SECONDS:
+            return MapExecutionFailure(
+                "child_message_too_large",
+                f"child payload exceeded {_MAX_MESSAGE_BYTES // 1048576}MB "
+                f"transport cap: {exc}",
+            )
+        return b""
 
 
 def _receiver_has_payload(receiver: _Receiver, timeout: float) -> bool:
