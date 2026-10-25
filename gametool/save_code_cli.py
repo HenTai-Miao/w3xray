@@ -49,7 +49,10 @@ def run_save_code_cli(argv: tuple[str, ...]) -> int:
     )
     parser.add_argument("pack", help="导出知识包目录 (含 脚本可读文本/)")
     parser.add_argument(
-        "--limit", type=int, default=0, help="最多输出条数 (默认 0=全部输出)"
+        "--limit",
+        type=int,
+        default=0,
+        help="显式缩减首屏条数 (默认 0=全量输出; 达限披露余量)",
     )
     args = parser.parse_args(argv)
     pack = args.pack

@@ -38,7 +38,7 @@ def main() -> None:
             "GameXRay 游戏档案透视器\n"
             "  无参数            启动图形界面\n"
             "  cli <地图>        解析地图导出知识包\n"
-            "  pack-query <包>…  查询知识包 (28 子命令; --json 结构化输出)\n"
+            "  pack-query <包>…  查询知识包 (27 子命令; --json 结构化输出)\n"
             "  guide <地图>      一份逐关速查报告\n"
             "  live              运行中游戏只读探针 (--dump-objects 导出对象表)\n"
             "  current           定位正在使用的地图\n"
