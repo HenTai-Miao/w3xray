@@ -93,11 +93,7 @@ def query_search(
                 is None
             ):
                 continue
-            details = (
-                tuple((label, value) for label, value in fields if value)
-                if compiled.score_fields((code, name)) is None
-                else ()
-            )
+            details = tuple((label, value) for label, value in fields if value)
             hits.append((code, name, details))
         if not hits:
             continue
