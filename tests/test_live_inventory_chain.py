@@ -14,17 +14,24 @@ BASE = 0x08000000
 
 def test_campaign_locate_hint_builds_feature_codes() -> None:
     # 战役定位握手: 从实时读数压出 locate 命令模板
-    # (选中码+其前两件物品码+匹配单位码, 去重截 4)
+    # (选中码+全部物品码+匹配单位码, 去重满量 — 旧 [:4]/[:8] 截断已删)
     from gametool.live_inventory import campaign_locate_hint
 
     rep = {
         "selected_unit": {
             "code": "E601",
-            "items": [{"code": "I0AT"}, {"code": "I0FB"}, {"code": "I0XX"}],
+            "items": [
+                {"code": "I0AT"},
+                {"code": "I0FB"},
+                {"code": "I0XX"},
+                {"code": "I05S"},
+                {"code": "I06T"},
+                {"code": "I07U"},
+            ],  # 6 格全带 — 旧 [:4] 漏后两格
         },
-        "unit_matches": [{"code": "E601"}, {"code": "H004"}],
+        "unit_matches": [{"code": "E601"}, {"code": "H004"}, {"code": "U00A"}],
     }
-    assert campaign_locate_hint(rep) == "E601;I0AT;I0FB;I0XX;H004"
+    assert campaign_locate_hint(rep) == "E601;I0AT;I0FB;I0XX;I05S;I06T;I07U;H004;U00A"
     assert campaign_locate_hint({}) == ""
     assert campaign_locate_hint({"selected_unit": {"code": ""}}) == ""
     # 模板具体化: 带上 live 已知的 --pack 路径, 直接可复制执行
@@ -32,7 +39,7 @@ def test_campaign_locate_hint_builds_feature_codes() -> None:
 
     assert (
         campaign_locate_command(r"E:\packs\campaign", rep)
-        == 'pack-query "E:\\packs\\campaign" locate E601;I0AT;I0FB;I0XX;H004'
+        == 'pack-query "E:\\packs\\campaign" locate E601;I0AT;I0FB;I0XX;I05S;I06T;I07U;H004;U00A'
     )
     assert campaign_locate_command("x", {}) == ""
 

@@ -36,6 +36,7 @@ def clean(s):
 
 
 def _sample(names, min_len=3):
+    """名字候选过滤 (长度+字符集), 满量返回 — 旧采样上限已删 (367 轮审计)。"""
     cands = [
         (code, n)
         for code, n in names.items()
