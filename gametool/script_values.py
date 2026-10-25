@@ -5,6 +5,7 @@ from __future__ import annotations
 from bisect import bisect_right
 from dataclasses import dataclass, replace
 import json
+import math
 import re
 from typing import TYPE_CHECKING
 
@@ -12,9 +13,20 @@ from .save_call_context import extract_call_args
 from .script_lexing import literal_string_value, script_views
 from .script_lua_builtins import array_literal_parts, select_values, unpack_values
 from .script_names import qualified_name
+from .script_geometry import GeometryAliases
+from .script_geometry_values import (
+    GEOMETRY_BUILTINS,
+    GEOMETRY_CONSTRUCTORS,
+    GEOMETRY_READERS,
+    geometry_center,
+    computed_geometry,
+    geometry_constructor,
+    geometry_coordinates,
+)
 from .script_object_literals import literal_object_code, strip_outer_parentheses
 from .script_returns import ReturnSpan, script_returns
 from .script_scopes import script_structure
+from .static_numbers import format_number, static_number
 from .script_value_models import (
     StaticValue as StaticValue,
     StaticValues,
@@ -82,6 +94,12 @@ class ScriptValues:
                     (assignment.offset, assignment.offset + 1)
                 )
         self._epochs: dict[int | None, tuple[int, ...]] = {}
+        self._geometry_aliases: GeometryAliases | None = None
+
+    def geometry_note(self, expression: str, owner: int | None, position: int) -> str:
+        if self._geometry_aliases is None:
+            self._geometry_aliases = GeometryAliases(self.functions)
+        return self._geometry_aliases.diagnostic(expression, owner, position)
 
     def _key(
         self,
@@ -128,6 +146,8 @@ class ScriptValues:
             )
         if computed and literal_object_code(value):
             return StaticValue(value, "object")
+        if computed:
+            return computed_geometry(value)
         return None
 
     def _save(self, key: _Expression, values: StaticValues) -> None:
@@ -331,6 +351,15 @@ class ScriptValues:
                         self._save(key, unknown_values(note, multi=False))
                         continue
                     if assignment is not None:
+                        parent_note = self.functions._parent_diagnostic(
+                            value,
+                            key.owner,
+                            key.position,
+                            (assignment.owner, assignment.offset),
+                        )
+                        if parent_note:
+                            self._save(key, unknown_values(parent_note, multi=False))
+                            continue
                         atoms = self.functions.atoms.assignment_values(assignment)
                         if any(atom is None for atom in atoms):
                             self._save(
@@ -428,6 +457,8 @@ class ScriptValues:
                             )
                             continue
                         frame.stage = "fourcc"
+                    elif reference.builtin in GEOMETRY_BUILTINS:
+                        frame.stage, frame.label = "geometry", reference.builtin
                     elif reference.builtin in {"select", "table.unpack"}:
                         frame.stage = reference.builtin
                         frame.label = f"{reference.builtin}; 静态列表运算: {value}"
@@ -614,6 +645,87 @@ class ScriptValues:
                 self._save(key, StaticValues((result,)))
             elif frame.stage == "alias":
                 self._save(key, StaticValues((values[0].at(frame.ordinal),)))
+            elif frame.stage == "geometry":
+                actual = values[0]
+                if frame.label in GEOMETRY_CONSTRUCTORS:
+                    replacements = tuple(
+                        StaticValue(format_number(number), "number", proof=item.proof)
+                        if item.kind == "unknown"
+                        and index < len(frame.call_arguments)
+                        and (
+                            number := static_number(
+                                frame.call_arguments[index],
+                                lua=self.functions.lua is True,
+                            )
+                        )
+                        is not None
+                        else item
+                        for index, item in enumerate(actual.values)
+                    )
+                    result = geometry_constructor(
+                        frame.label, StaticValues(replacements, actual.tail)
+                    )
+                elif frame.label in GEOMETRY_READERS:
+                    kind, index = GEOMETRY_READERS[frame.label]
+                    item = actual.at(0)
+                    coordinates = geometry_coordinates(item)
+                    note = (
+                        self.geometry_note(
+                            frame.call_arguments[0], key.owner, key.position
+                        )
+                        if frame.call_arguments
+                        else "缺少几何参数"
+                    )
+                    if item.kind != kind or coordinates is None or note:
+                        result = StaticValue(
+                            None,
+                            diagnostic=note or item.diagnostic or "几何句柄未静态确定",
+                        )
+                    elif kind == "rect" and (
+                        coordinates[0] > coordinates[2]
+                        or coordinates[1] > coordinates[3]
+                    ):
+                        result = StaticValue(
+                            None, diagnostic="矩形上下界顺序未确认，未推导投影"
+                        )
+                    elif index < 4:
+                        result = StaticValue(
+                            format_number(coordinates[index]), "number"
+                        )
+                    else:
+                        x, y = geometry_center(coordinates)
+                        result = (
+                            geometry_constructor(
+                                "Location",
+                                StaticValues(
+                                    (
+                                        StaticValue(format_number(x), "number"),
+                                        StaticValue(format_number(y), "number"),
+                                    )
+                                ),
+                            )
+                            if index == 6
+                            else StaticValue(
+                                format_number(x if index == 4 else y), "number"
+                            )
+                        )
+                        if not all(math.isfinite(value) for value in (x, y)):
+                            result = StaticValue(
+                                None, diagnostic="矩形中心超出有限数值范围"
+                            )
+                else:
+                    result = StaticValue(
+                        None, diagnostic="几何修改调用只保留副作用证据，不作为静态坐标"
+                    )
+                parents = tuple(item.proof for item in actual.values if item.proof >= 0)
+                self._save(
+                    key,
+                    self._proof(
+                        StaticValues((result,)),
+                        f"{frame.label}; 几何表达式: {key.text}",
+                        parents,
+                    ),
+                )
             elif frame.stage in {"select", "table.unpack"}:
                 result = (
                     select_values(values[0])

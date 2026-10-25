@@ -4,12 +4,15 @@ from __future__ import annotations
 
 from bisect import bisect_right
 from collections import deque
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from functools import lru_cache
+from types import MappingProxyType
 
 from .save_call_context import extract_call_args
 from .script_lexing import script_views
 from .script_names import NAME_PATTERN
+from .script_geometry_values import GEOMETRY_READERS
 from .script_scopes import CallSpan, FunctionSpan, script_structure
 from .script_function_bindings import (
     ScriptFunctionBindings,
@@ -24,6 +27,13 @@ class FunctionNode:
     function: FunctionSpan
     arguments: tuple[str | None, ...]
     unknown_tail: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class FunctionContext:
+    node: FunctionNode
+    incoming: bool
+    evidence: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +86,7 @@ class ScriptFunctions(ScriptFunctionBindings):
         super().__init__(text, lua=lua)
         self._graphs: dict[int, FunctionGraph] = {}
         self._source_graph: FunctionGraph | None = None
+        self._source_contexts: Mapping[int, tuple[FunctionContext, ...]] | None = None
         self.values = ScriptValues(self)
 
     def resolved_text(
@@ -94,7 +105,11 @@ class ScriptFunctions(ScriptFunctionBindings):
             if (
                 call.owner is not None
                 or not call.complete
-                or not self.bound(call.name, owner, start + call.start)
+                or not (
+                    self.bound(call.name, owner, start + call.start)
+                    or self.resolve(call.name, start + call.start, owner).builtin
+                    in GEOMETRY_READERS
+                )
             ):
                 continue
             result = self.scalar(
@@ -209,6 +224,57 @@ class ScriptFunctions(ScriptFunctionBindings):
             )
             self._source_graph = self._build_graph(roots, strict=True)
         return self._source_graph
+
+    def source_contexts(self) -> Mapping[int, tuple[FunctionContext, ...]]:
+        """Index complete contexts and separate real inputs from default placeholders."""
+        if self._source_contexts is not None:
+            return self._source_contexts
+        graph = self.source_graph()
+        targets = {
+            graph.nodes[edge.target].function.start
+            for edge in graph.edges
+            if edge.target is not None
+        }
+        reachable = {0}
+        reachable.update(
+            index
+            for index, node in enumerate(
+                graph.nodes[: len(self.structure.functions) + 1]
+            )
+            if node.function.start not in targets
+        )
+        outgoing: dict[int, list[int]] = {}
+        for edge in graph.edges:
+            if edge.target is not None:
+                outgoing.setdefault(edge.source, []).append(edge.target)
+        pending = list(reachable)
+        while pending:
+            for target in outgoing.get(pending.pop(), ()):
+                if target not in reachable:
+                    reachable.add(target)
+                    pending.append(target)
+        incoming = {
+            edge.target
+            for edge in graph.edges
+            if edge.target is not None and edge.source in reachable
+        }
+        proofs: dict[int, dict[str, None]] = {}
+        for edge in graph.edges:
+            if edge.target is not None:
+                proof = proofs.setdefault(edge.target, {})
+                proof.update(dict.fromkeys(edge.value_proofs))
+                proof[
+                    f"调用来源 第{bisect_right(self.lines, edge.call.start)}行 / 偏移{edge.call.start}: {self.text[edge.call.start : edge.call.end]}"
+                ] = None
+        grouped: dict[int, list[FunctionContext]] = {}
+        for index, node in enumerate(graph.nodes):
+            grouped.setdefault(node.function.start, []).append(
+                FunctionContext(node, index in incoming, tuple(proofs.get(index, {})))
+            )
+        self._source_contexts = MappingProxyType(
+            {owner: tuple(values) for owner, values in grouped.items()}
+        )
+        return self._source_contexts
 
     def _build_graph(
         self, roots: tuple[FunctionNode, ...], *, strict: bool = False

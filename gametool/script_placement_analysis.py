@@ -11,6 +11,7 @@ from .script_function_graph import script_functions
 from .script_object_literals import literal_object_code, strip_outer_parentheses
 from .script_scopes import CallSpan, script_structure
 from .script_lexing import script_views
+from .script_geometry_values import geometry_coordinates
 from .script_value_models import StaticValue
 from .static_numbers import static_number
 
@@ -130,6 +131,20 @@ class _Analysis:
                 code_value.diagnostic or "实参不是对象码或整数"
             )
         if name in {"CreateUnitAtLoc", "CreateItemLoc"}:
+            handle = actual.at(offset + 1)
+            coordinates = geometry_coordinates(handle)
+            expression = (
+                raw[offset + 1] if len(raw) > offset + 1 else raw[-1] if raw else ""
+            )
+            handle_note = functions.values.geometry_note(
+                expression, call.owner, call.start
+            )
+            if handle_note:
+                return None, handle_note
+            if handle.kind == "location" and coordinates is not None:
+                x, y = coordinates
+                proofs = actual.values
+                return self.placement(call, arguments, code, x, y, kind, proofs), ""
             expression = (
                 strip_outer_parentheses(raw[offset + 1])
                 if len(raw) > offset + 1
@@ -149,7 +164,11 @@ class _Analysis:
                 or loc.name.removeprefix("_G.") != "Location"
                 or functions.bound(loc.name, call.owner, call.start)
             ):
-                return None, "位置不是已确认的 Location 构造；动态位置句柄未静态确定"
+                return (
+                    None,
+                    handle.diagnostic
+                    or "位置不是已确认的 Location 构造；动态位置句柄未静态确定",
+                )
             coords = extract_call_args(
                 script_views(expression, lua=self.lua), loc.open + 1
             )
@@ -182,7 +201,29 @@ class _Analysis:
             )
             proofs = actual.values
         if x is None or y is None:
-            return None, "坐标未静态确定；保留动态/缺失/非有限坐标，不猜测点位"
+            notes = tuple(
+                dict.fromkeys(
+                    item.diagnostic
+                    for item in proofs
+                    if item.diagnostic.startswith("几何句柄")
+                )
+            )
+            return None, "坐标未静态确定；保留动态/缺失/非有限坐标，不猜测点位" + (
+                "; " + "; ".join(notes) if notes else ""
+            )
+        return self.placement(call, arguments, code, x, y, kind, proofs), ""
+
+    def placement(
+        self,
+        call: CallSpan,
+        arguments: tuple[str | None, ...],
+        code: str,
+        x: float,
+        y: float,
+        kind: str,
+        proofs: tuple[StaticValue, ...],
+    ) -> ScriptPlacement:
+        functions = self.functions
         evidence = dict.fromkeys(
             line for value in proofs for line in functions.values.proof_lines(value)
         )
@@ -210,7 +251,7 @@ class _Analysis:
             bisect_right(functions.lines, call.start),
             self.text[call.start : call.end],
             tuple(evidence),
-        ), ""
+        )
 
     def run(self) -> PlacementAnalysis:
         functions = self.functions
@@ -246,53 +287,11 @@ class _Analysis:
         )
         dynamic: dict[int, dict[str, None]] = {}
         if contextual:
-            graph = functions.source_graph()
-            targets = {
-                graph.nodes[edge.target].function.start
-                for edge in graph.edges
-                if edge.target is not None
-            }
-            # Unknown default nodes let us inspect source bodies. Only the top
-            # level and functions without encoded callers are input roots;
-            # descendants of other default nodes are not extra runtime calls.
-            reachable = {0}
-            reachable.update(
-                index
-                for index, node in enumerate(
-                    graph.nodes[: len(functions.structure.functions) + 1]
-                )
-                if node.function.start not in targets
-            )
-            outgoing: dict[int, list[int]] = {}
-            for edge in graph.edges:
-                if edge.target is not None:
-                    outgoing.setdefault(edge.source, []).append(edge.target)
-            pending = list(reachable)
-            while pending:
-                for target in outgoing.get(pending.pop(), ()):
-                    if target not in reachable:
-                        reachable.add(target)
-                        pending.append(target)
-            incoming = {
-                edge.target
-                for edge in graph.edges
-                if edge.target is not None and edge.source in reachable
-            }
-            incoming_proofs: dict[int, dict[str, None]] = {}
-            for edge in graph.edges:
-                if edge.target is not None:
-                    proof = incoming_proofs.setdefault(edge.target, {})
-                    proof.update(dict.fromkeys(edge.value_proofs))
-                    proof[
-                        f"调用来源 第{bisect_right(functions.lines, edge.call.start)}行 / 偏移{edge.call.start}: {self.text[edge.call.start : edge.call.end]}"
-                    ] = None
-            by_owner: dict[int, list[int]] = {}
-            for index, node in enumerate(graph.nodes):
-                by_owner.setdefault(node.function.start, []).append(index)
+            contexts = functions.source_contexts()
             for call in contextual:
                 assert call.owner is not None
-                for index in by_owner.get(call.owner, ()):
-                    node = graph.nodes[index]
+                for context in contexts.get(call.owner, ()):
+                    node = context.node
                     placement, note = self.resolve(
                         call, node.arguments, node.unknown_tail
                     )
@@ -300,7 +299,7 @@ class _Analysis:
                         key = (call.start, placement.row())
                         if key not in found:
                             proof = dict.fromkeys(placement.evidence)
-                            proof.update(incoming_proofs.get(index, {}))
+                            proof.update(dict.fromkeys(context.evidence))
                             found[key] = ScriptPlacement(
                                 placement.code,
                                 placement.x,
@@ -311,7 +310,7 @@ class _Analysis:
                                 placement.expression,
                                 tuple(proof),
                             )
-                    elif index in incoming:
+                    elif context.incoming:
                         dynamic.setdefault(call.start, {})[note] = None
         resolved_offsets = {placement.offset for placement in found.values()}
         diagnostics = tuple(

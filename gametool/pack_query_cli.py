@@ -734,12 +734,16 @@ def load_placements(pack_dir: Path) -> list[tuple[str, float, float, str]]:
 def load_placement_diagnostics(pack_dir: Path) -> list[str]:
     """Disclose every unresolved creation site and ambiguous index source."""
     from .script_placement_analysis import analyze_script_placements
+    from .script_rectangle_analysis import analyze_script_rectangles
 
     contexts = load_script_contexts(pack_dir)
     return [
         f"  {source}:{row.line} / 偏移{row.offset}: {row.reason}\n    原文: {row.expression}"
         for source, text, lua in contexts
-        for row in analyze_script_placements(text, lua=lua).diagnostics
+        for row in (
+            *analyze_script_placements(text, lua=lua).diagnostics,
+            *analyze_script_rectangles(text, lua=lua).diagnostics,
+        )
     ] + list(_indexed_placement_report(pack_dir, contexts).diagnostics)
 
 

@@ -11,6 +11,7 @@ from .script_assignments import ScriptAssignment, reference_parts, script_assign
 from .script_atoms import ScriptAtoms
 from .script_lexing import script_views
 from .script_names import qualified_name
+from .script_geometry_values import GEOMETRY_BUILTINS
 from .script_object_literals import strip_outer_parentheses
 from .script_scopes import CallSpan, FunctionSpan, script_structure, source_line_starts
 from .script_symbols import ScriptSymbol, ScriptSymbols
@@ -240,7 +241,7 @@ class ScriptFunctionBindings:
                     )
                 return FunctionReference(raw, candidates, diagnostic)
             canonical = symbol[2]
-            builtins = {"FourCC"}
+            builtins = {"FourCC", *GEOMETRY_BUILTINS}
             if self.lua is True:
                 builtins.update(("select", "table.unpack"))
             if canonical in builtins:

@@ -166,10 +166,14 @@ def test_ambiguous_helper_binding_does_not_supply_numeric_context() -> None:
     assert not script_placements(text, lua=True)
 
 
-def test_location_handles_are_diagnosed_without_inventing_pointer_coordinates() -> None:
-    text = "function Spawn(id,p) CreateItemLoc(id,p) end Spawn(FourCC('I001'),Location(1,2))"
+def test_runtime_location_handles_are_diagnosed_without_inventing_coordinates() -> None:
+    text = "function Spawn(id,p) CreateItemLoc(id,p) end Spawn(FourCC('I001'),RuntimeLocation())"
     analysis = analyze_script_placements(text, lua=True)
-    assert not analysis.placements and "动态位置句柄" in analysis.diagnostics[0].reason
+    assert (
+        not analysis.placements
+        and "运行时" in analysis.diagnostics[0].reason
+        and "未静态确定" in analysis.diagnostics[0].reason
+    )
 
 
 def test_deep_forwarding_and_source_graph_are_iterative_and_shared() -> None:
