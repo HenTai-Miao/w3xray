@@ -33,7 +33,7 @@ from .trusted_description_cache_tables import (
 )
 
 
-_MAX_REPORT_BYTES: Final = 512 * 1024 * 1024
+_MAX_REPORT_BYTES: Final[int | None] = None
 
 
 class TrustedSourceError(ValueError):

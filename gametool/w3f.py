@@ -10,7 +10,6 @@ from enum import StrEnum
 from .war3_encoding import decode_warcraft_string
 from .wts import resolve
 
-_MAX_MAP_ENTRIES = 10_000
 _MIN_MAP_BUTTON_BYTES = 7
 _MIN_MAP_ORDER_BYTES = 2
 
@@ -96,7 +95,7 @@ class _Reader:
 
     def count(self, minimum_entry_size: int) -> int:
         value = self.i32()
-        maximum = min(_MAX_MAP_ENTRIES, self.remaining // minimum_entry_size)
+        maximum = self.remaining // minimum_entry_size
         if value < 0 or value > maximum:
             raise _TruncatedRead
         return value

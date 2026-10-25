@@ -1,89 +1,48 @@
-"""Resource-boundary tests for user-provided MPQ listfiles."""
+"""Full listfile reads and former count/line boundary regressions."""
 
 from __future__ import annotations
 
-from types import TracebackType
-from typing import Self, override
-from unittest.mock import patch
+from pathlib import Path
 
+import pytest
+
+from gametool import external_listfile
 from gametool.external_listfile import read_external_listfile
 
 
-class _RecordingReader:
-    def __init__(self, payload: bytes) -> None:
-        self.payload: bytes = payload
-        self.requested_sizes: list[int] = []
+def test_external_listfile_reads_every_chunk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from gametool import bounded_file
 
-    def __enter__(self) -> Self:
-        return self
-
-    def __exit__(
-        self,
-        _exc_type: type[BaseException] | None,
-        _exc: BaseException | None,
-        _traceback: TracebackType | None,
-    ) -> None:
-        return None
-
-    def read(self, size: int = -1) -> bytes:
-        self.requested_sizes.append(size)
-        return self.payload
+    monkeypatch.setattr(bounded_file, "_READ_CHUNK_BYTES", 3)
+    path = tmp_path / "listfile.txt"
+    path.write_bytes(b"war3map.j\r\nTextures\\last.blp\n")
+    assert read_external_listfile(str(path)) == ("war3map.j", "Textures\\last.blp")
 
 
-class _OversizedReader(_RecordingReader):
-    @override
-    def read(self, size: int = -1) -> bytes:
-        self.requested_sizes.append(size)
-        if size <= 0:
-            return b"truncated-name.blp"
-        return b"x" * (size + 1)
+def test_external_listfile_honors_an_explicit_embedding_budget(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "listfile.txt"
+    path.write_bytes(b"war3map.j\n")
+    monkeypatch.setattr(external_listfile, "MAX_EXTERNAL_LISTFILE_BYTES", 4)
+    assert read_external_listfile(str(path)) == ()
 
 
-def test_external_listfile_uses_a_bounded_read() -> None:
-    # Given: a file boundary that records the requested byte count.
-    reader = _RecordingReader(b"war3map.j\n")
-
-    # When: the external listfile is parsed.
-    with patch("builtins.open", return_value=reader):
-        names = read_external_listfile("virtual-listfile.txt")
-
-    # Then: the parser never requests the entire unbounded stream.
-    assert names == ("war3map.j",)
-    assert len(reader.requested_sizes) == 1
-    assert reader.requested_sizes[0] > 0
+def test_external_listfile_keeps_lines_above_the_old_character_ceiling(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "long.txt"
+    path.write_bytes(b"x" * 65537 + b"\n")
+    assert read_external_listfile(str(path)) == ("x" * 65537,)
 
 
-def test_external_listfile_rejects_payload_above_the_read_limit() -> None:
-    # Given: a file that contains one byte beyond any requested limit.
-    reader = _OversizedReader(b"")
-
-    # When: the external listfile is parsed.
-    with patch("builtins.open", return_value=reader):
-        names = read_external_listfile("oversized-listfile.txt")
-
-    # Then: no truncated prefix is accepted as a complete listfile.
-    assert names == ()
-
-
-def test_external_listfile_rejects_a_line_above_4096_characters() -> None:
-    # Given: one path-like line whose length exceeds the parser boundary.
-    reader = _RecordingReader((b"x" * 65537) + b"\n")
-
-    # When: the external listfile is parsed.
-    with patch("builtins.open", return_value=reader):
-        names = read_external_listfile("overlong-line.txt")
-
-    # Then: the oversized line is not retained or partially parsed.
-    assert names == ()
-
-
-def test_external_listfile_rejects_more_than_100000_entries() -> None:
-    # Given: a bounded-size file containing too many retained entries.
-    reader = _RecordingReader(b"x\n" * 10_000_001)
-
-    # When: the external listfile is parsed.
-    with patch("builtins.open", return_value=reader):
-        names = read_external_listfile("too-many-entries.txt")
-
-    # Then: the parser does not retain an unbounded tuple.
-    assert names == ()
+def test_external_listfile_keeps_entries_above_the_old_count_ceiling(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "many.txt"
+    path.write_bytes(b"x\n" * 10_000_001)
+    names = read_external_listfile(str(path))
+    assert len(names) == 10_000_001
+    assert names[0] == names[-1] == "x"

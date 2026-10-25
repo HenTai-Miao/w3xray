@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .script_sources import analysis_script_sources
+
 from collections import Counter
 
 from .item_relation_endpoints import resolve_relation_object
@@ -15,14 +17,13 @@ from .item_relation_models import (
 )
 from .map_data import MapData
 from .script_scan import scan_recipes
-from .script_sources import analysis_script_texts
 
 
 def build_recipe_item_relations(md: MapData) -> tuple[ItemRelation, ...]:
     """Return one counted, source-bearing relation per recognized recipe result."""
     rows: list[ItemRelation] = []
-    for source, text in analysis_script_texts(md):
-        for recipe in scan_recipes(text, source=source):
+    for source, text, lua in analysis_script_sources(md):
+        for recipe in scan_recipes(text, source=source, lua=lua):
             result, result_resolved = resolve_relation_object(md, recipe.result, "物品")
             ingredients: list[RelationIngredient] = []
             unresolved: list[str] = []
@@ -33,6 +34,9 @@ def build_recipe_item_relations(md: MapData) -> tuple[ItemRelation, ...]:
                     unresolved.append(f"材料 {item_id} 未解析")
             if not result_resolved:
                 unresolved.append(f"成品 {recipe.result} 未解析")
+            unresolved_reason = "；".join(
+                filter(None, (*unresolved, recipe.unresolved_reason))
+            )
             rows.append(
                 ItemRelation(
                     kind=ItemRelationKind.RECIPE,
@@ -42,16 +46,19 @@ def build_recipe_item_relations(md: MapData) -> tuple[ItemRelation, ...]:
                         source=recipe.source,
                         function=recipe.func,
                         line=recipe.line,
+                        offset=recipe.offset,
                         location=f"第 {recipe.line} 行" if recipe.line else "",
                         raw=recipe.evidence,
                     ),
-                    confidence=RelationConfidence.CONFIRMED,
+                    confidence=RelationConfidence(recipe.confidence),
                     completeness=(
                         RelationCompleteness.UNRESOLVED
                         if unresolved
+                        else RelationCompleteness.PARTIAL
+                        if recipe.unresolved_reason
                         else RelationCompleteness.COMPLETE
                     ),
-                    unresolved_reason="；".join(unresolved),
+                    unresolved_reason=unresolved_reason,
                     map_name=md.name,
                 ),
             )

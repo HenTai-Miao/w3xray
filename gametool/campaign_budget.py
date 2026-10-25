@@ -13,24 +13,30 @@ class CampaignByteBudget:
 
     __slots__ = ("_read_bytes", "_read_limit", "_retained_bytes", "_retained_limit")
 
-    def __init__(self, retained_limit: int, read_limit: int) -> None:
+    def __init__(self, retained_limit: int | None, read_limit: int | None) -> None:
         self._retained_limit = retained_limit
         self._read_limit = read_limit
         self._retained_bytes = 0
         self._read_bytes = 0
 
     @property
-    def remaining(self) -> int:
+    def remaining(self) -> int | None:
         """Return bytes allowed by both independent limits."""
-        return min(
-            self._retained_limit - self._retained_bytes,
-            self._read_limit - self._read_bytes,
-        )
+        remaining = [
+            maximum - used
+            for maximum, used in (
+                (self._retained_limit, self._retained_bytes),
+                (self._read_limit, self._read_bytes),
+            )
+            if maximum is not None
+        ]
+        return min(remaining) if remaining else None
 
     def reserve_read(self, declared_size: int | None) -> int | None:
         """Reserve one read attempt or return ``None`` when no budget remains."""
         reserved = max(1, declared_size or 0)
-        if reserved > self.remaining:
+        remaining = self.remaining
+        if remaining is not None and reserved > remaining:
             return None
         self._read_bytes += reserved
         return reserved

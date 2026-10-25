@@ -7,6 +7,7 @@ from .base_names import BASE_CATEGORIES, BASE_NAMES, BASE_NAMES_EN
 from .doo import Doodad, Unit
 from .doo_drops import DropSet
 from .knowledge_io import tsv
+from .static_numbers import format_number as _num
 
 
 def format_preplaced_units_tsv(md: MapData) -> str:
@@ -121,9 +122,3 @@ def _code_label(md: MapData, code: str) -> str:
 
 def _active_label(active: int) -> str:
     return "启用" if active else "禁用"
-
-
-def _num(value: float) -> str:
-    if value == int(value):
-        return str(int(value))
-    return f"{value:.4g}"

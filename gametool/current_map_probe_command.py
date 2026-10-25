@@ -1,4 +1,4 @@
-"""Bounded subprocess execution and output parsers for current-map probes."""
+"""Complete subprocess observations and output parsers for current-map probes."""
 
 from __future__ import annotations
 
@@ -13,19 +13,15 @@ from queue import Empty, Queue
 import re
 import subprocess
 from threading import Thread
+from time import monotonic
 from typing import Final, override
 
 from .current_map_models import EvidenceKind, GameProcess, MapEvidence
+from .csv_fields import full_csv_fields
 
 
-COMMAND_TIMEOUT_SECONDS: Final = 10.0
-COMMAND_OUTPUT_LIMIT: Final = 16 * 1024 * 1024
-MAX_PROBE_PIDS: Final = 128
-# 377: MAX_PROCESS_RECORDS (2048) 与 MAX_OPEN_PATHS (4096) 已删 — record/evidence
-# cap 静默截断违反披露纪律, 无界风险由 COMMAND_OUTPUT_LIMIT (16MB payload cap)
-# 与 _MAX_FDS_PER_PID 单层兑底
-MAX_PATH_CHARS: Final = 4096
-MAX_COMMAND_CHARS: Final = 32768
+COMMAND_TIMEOUT_SECONDS: Final[float | None] = None
+COMMAND_OUTPUT_LIMIT: Final[int | None] = None
 MAP_SUFFIXES: Final = frozenset({".w3x", ".w3m", ".w3n"})
 _WINDOWS_CREATE_NO_WINDOW: Final = 0x08000000
 _WINE_EXECUTABLES: Final = frozenset(
@@ -46,6 +42,7 @@ class ProbeIssue(StrEnum):
     TIMEOUT = "timeout"
     OUTPUT_LIMIT = "output_limit"
     COMMAND_FAILED = "command_failed"
+    RESOURCE_EXHAUSTED = "resource_exhausted"
     MALFORMED_OUTPUT = "malformed_output"
     ACCESS_DENIED = "access_denied"
     UNSUPPORTED_PLATFORM = "unsupported_platform"
@@ -70,10 +67,10 @@ class ProbeParseError(ValueError):
 def run_bounded_command(
     command: tuple[str, ...],
     *,
-    timeout_seconds: float,
-    output_limit: int,
+    timeout_seconds: float | None = None,
+    output_limit: int | None = None,
 ) -> CommandResult:
-    """Run one absolute executable without a shell and retain bounded output."""
+    """Run an absolute executable with full output and optional caller budgets."""
     if not command or not Path(command[0]).is_absolute():
         return CommandResult(b"", ProbeIssue.TOOL_UNAVAILABLE)
     try:
@@ -88,52 +85,73 @@ def run_bounded_command(
         )
     except OSError:
         return CommandResult(b"", ProbeIssue.TOOL_UNAVAILABLE)
-    captured: Queue[bytes] = Queue(maxsize=1)
+    deadline = (
+        None if timeout_seconds is None else monotonic() + max(0.0, timeout_seconds)
+    )
+    captured: Queue[CommandResult] = Queue(maxsize=1)
 
     def read_stdout() -> None:
         stream = process.stdout
         if stream is None:
-            captured.put(b"")
+            captured.put(CommandResult(b"", ProbeIssue.COMMAND_FAILED))
             return
         try:
-            payload = bytearray()
-            while len(payload) <= output_limit:
-                chunk = os.read(
-                    stream.fileno(),
-                    min(65536, output_limit + 1 - len(payload)),
-                )
-                if not chunk:
-                    break
-                payload.extend(chunk)
-            captured.put(bytes(payload))
-        except OSError:
-            captured.put(b"")
+            captured.put(_read_command_stdout(stream.fileno(), output_limit))
         finally:
             stream.close()
 
     reader = Thread(target=read_stdout, daemon=True)
     reader.start()
     try:
-        returncode = process.wait(timeout=timeout_seconds)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        try:
-            _ = process.wait(timeout=1.0)
-        except subprocess.TimeoutExpired:
-            reader.join(timeout=1.0)
-            return CommandResult(b"", ProbeIssue.TIMEOUT)
-        reader.join(timeout=1.0)
+        result = captured.get(
+            timeout=None if deadline is None else max(0.0, deadline - monotonic())
+        )
+        if result.issue is not None:
+            _stop_command(process)
+            return CommandResult(b"", result.issue, process.returncode)
+        returncode = process.wait(
+            timeout=None if deadline is None else max(0.0, deadline - monotonic())
+        )
+    except Empty, subprocess.TimeoutExpired:
+        _stop_command(process)
         return CommandResult(b"", ProbeIssue.TIMEOUT)
-    reader.join(timeout=1.0)
-    try:
-        payload = captured.get_nowait()
-    except Empty:
-        return CommandResult(b"", ProbeIssue.COMMAND_FAILED, returncode)
-    if len(payload) > output_limit:
-        return CommandResult(b"", ProbeIssue.OUTPUT_LIMIT, returncode)
+    finally:
+        reader.join(timeout=1.0)
     if returncode != 0:
         return CommandResult(b"", ProbeIssue.COMMAND_FAILED, returncode)
-    return CommandResult(payload, None, returncode)
+    return CommandResult(result.stdout, None, returncode)
+
+
+def _read_command_stdout(descriptor: int, output_limit: int | None) -> CommandResult:
+    """Always deliver a typed outcome, including allocation failures in the reader."""
+    try:
+        payload = bytearray()
+        while output_limit is None or len(payload) <= output_limit:
+            chunk = os.read(
+                descriptor,
+                65536
+                if output_limit is None
+                else min(65536, output_limit + 1 - len(payload)),
+            )
+            if not chunk:
+                break
+            payload.extend(chunk)
+        if output_limit is not None and len(payload) > output_limit:
+            return CommandResult(b"", ProbeIssue.OUTPUT_LIMIT)
+        return CommandResult(bytes(payload), None)
+    except MemoryError:
+        return CommandResult(b"", ProbeIssue.RESOURCE_EXHAUSTED)
+    except OSError:
+        return CommandResult(b"", ProbeIssue.COMMAND_FAILED)
+
+
+def _stop_command(process: subprocess.Popen[bytes]) -> None:
+    if process.poll() is None:
+        process.kill()
+    try:
+        _ = process.wait(timeout=1.0)
+    except subprocess.TimeoutExpired:
+        pass
 
 
 def popen_creation_flags(platform_name: str) -> int:
@@ -153,13 +171,10 @@ def parse_posix_processes(payload: bytes) -> tuple[GameProcess, ...]:
         except ProbeParseError:
             continue
         saw_record = True
-        if len(fields) == 1 or len(fields[1]) > MAX_COMMAND_CHARS:
+        if len(fields) == 1:
             continue
         command_line = fields[1]
         if _is_posix_game_process(command_line):
-            # 377: 旧 2048 record cap 静默截断 — >2048 进程的机器上 war3 可能被
-            # 截掉且无披露。无界风险由 16MB payload cap (OUTPUT_LIMIT) 单层兜底,
-            # 双层 cap 纯冗余, 删。
             processes.append(GameProcess(pid, "Warcraft III", command_line))
     if not saw_record:
         raise ProbeParseError("ps")
@@ -168,6 +183,11 @@ def parse_posix_processes(payload: bytes) -> tuple[GameProcess, ...]:
 
 def parse_windows_processes(payload: bytes) -> tuple[GameProcess, ...]:
     """Parse PowerShell ``ConvertTo-Csv`` records returned from CIM."""
+    with full_csv_fields():
+        return _parse_windows_processes(payload)
+
+
+def _parse_windows_processes(payload: bytes) -> tuple[GameProcess, ...]:
     reader = csv.DictReader(io.StringIO(payload.decode("utf-8-sig")))
     if not {"ProcessId", "Name", "CommandLine"}.issubset(reader.fieldnames or ()):
         raise ProbeParseError("CIM")
@@ -182,8 +202,7 @@ def parse_windows_processes(payload: bytes) -> tuple[GameProcess, ...]:
             pid = _parse_pid(pid_text, "CIM")
         except ProbeParseError:
             continue
-        if len(command_line) <= MAX_COMMAND_CHARS and _is_game_executable(name):
-            # 377: 同上 — record cap 删, payload cap 单层兑底
+        if _is_game_executable(name):
             processes.append(GameProcess(pid, name, command_line))
     return tuple(processes)
 
@@ -211,8 +230,6 @@ def parse_lsof_open_maps(
                 evidence.append(
                     MapEvidence(path, EvidenceKind.DIRECT_OPEN, current_pid)
                 )
-    # 377: 旧 4096 evidence cap 静默截断已删 — is_map_path 过滤后 direct-open
-    # 证据天然少量, 无界风险由 16MB payload cap 单层兜底
     return ordered_evidence(evidence)
 
 
@@ -241,7 +258,9 @@ def _is_posix_game_process(command_line: str) -> bool:
     return _MAC_GAME_COMMAND.match(command_line) is not None
 
 
-def parse_command_tokens(command_line: str, *, limit: int) -> tuple[str, ...]:
+def parse_command_tokens(
+    command_line: str, *, limit: int | None = None
+) -> tuple[str, ...]:
     """Split top-level command arguments without consuming Windows separators."""
     tokens: list[str] = []
     for match in _COMMAND_TOKEN_PATTERN.finditer(command_line):
@@ -249,7 +268,7 @@ def parse_command_tokens(command_line: str, *, limit: int) -> tuple[str, ...]:
         if token is None:
             continue
         tokens.append(token)
-        if len(tokens) >= limit:
+        if limit is not None and len(tokens) >= limit:
             break
     return tuple(tokens)
 
@@ -273,4 +292,4 @@ def _parse_pid(value: str, source: str) -> int:
 
 
 def is_map_path(path: Path) -> bool:
-    return len(str(path)) <= MAX_PATH_CHARS and path.suffix.casefold() in MAP_SUFFIXES
+    return path.suffix.casefold() in MAP_SUFFIXES

@@ -9,8 +9,6 @@ from typing import Final
 import unicodedata
 
 _CONTROL_CATEGORIES: Final = frozenset(("Cc", "Cf"))
-_MAX_DISPLAY_CHARS: Final = 1_000_000
-_MAX_ERROR_CHARS: Final = 100_000
 _QUOTED_ABSOLUTE_PATH: Final = re.compile(
     r"(?P<quote>['\"])(?:(?:[A-Za-z]:[\\/]|/)[^'\"\r\n]*)(?P=quote)",
 )
@@ -19,9 +17,9 @@ _UNQUOTED_ABSOLUTE_PATH: Final = re.compile(
 )
 
 
-def single_line_text(value: str, *, max_chars: int = _MAX_DISPLAY_CHARS) -> str:
-    """Replace terminal-affecting Unicode controls and bound displayed text."""
-    return _flatten_controls(value)[:max_chars]
+def single_line_text(value: str) -> str:
+    """Replace terminal-affecting Unicode controls without losing text."""
+    return _flatten_controls(value)
 
 
 def tsv_cell(value: str) -> str:
@@ -70,7 +68,7 @@ def format_user_exception(
     *,
     paths: Iterable[str] = (),
 ) -> str:
-    """Return a useful bounded error without host absolute paths or controls."""
+    """Return the full error without host absolute paths or controls."""
     redacted_paths = list(paths)
     for candidate in (
         getattr(error, "filename", None),
@@ -79,10 +77,7 @@ def format_user_exception(
         if isinstance(candidate, str):
             redacted_paths.append(candidate)
     message = redact_user_text(str(error), paths=redacted_paths)
-    return single_line_text(
-        f"{type(error).__name__}: {message}",
-        max_chars=_MAX_ERROR_CHARS,
-    )
+    return single_line_text(f"{type(error).__name__}: {message}")
 
 
 def _redact_path(message: str, path: str) -> str:

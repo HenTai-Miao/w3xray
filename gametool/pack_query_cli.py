@@ -7,40 +7,65 @@
 子命令：
     item   <名字|四码>   物品属性（金币价; 装备效果取自携带技能属性字段; 真实提示文本优先于继承模板描述）
     recipe <名字|四码>   相关合成配方（作为产物或材料，自动去重）
-    where  <名字|四码>   单位/地面物品的放置坐标
+    where  <名字|四码>   单位/地面物品/可破坏物的放置坐标
     drop   <名字|四码>   获取途径（掉落/商店/触发奖励; 无记录时回落文案级配方/来源线索）
     quest  <关键词>     任务注册文本与剧情对话
-    text   <关键词>     全包 TSV 有界搜索
+    text   <关键词>     全包 TSV 全行搜索 (--limit N 显式缩减)
     price  <名字|四码>   金币价（igol 地图价优先, 基础ID继承）
     tech   <名字|四码>   科技卡（最大等级/每级金木费用/效果/前置, 自定义字段优先基础继承）
     cmd    <指令文字>    聊天指令效果链（注册->触发器->条件+动作函数体节选, 免手搓脚本）
-    refs   <四码|名>     对象码脚本引用分类（给予/作为材料/生成），零消耗引用=升级链终止（脚本加密图不下终止结论）
+    refs   <四码|名>     逐对象分类引用与来源；零消耗只说明当前可读索引未发现材料引用
 
 设计动机：避免为每次查询写一次性脚本/起多个进程（文件变更通知会拖垮资源
-管理器外壳）；全部查询在单次进程内完成，输出有界。
+管理器外壳）；全部查询在单次进程内完成，默认满量输出，可显式 --limit 缩减。
 """
 
 from __future__ import annotations
 
 import bisect
+import hashlib
 import json
 import time
 import os
 import csv
-import math
 import re
 import sys
-from collections.abc import Sequence
-from dataclasses import dataclass, replace
+import threading
+from collections import Counter
+from collections.abc import Iterator, Sequence
+from dataclasses import dataclass, field as dataclass_field
+from functools import lru_cache
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 
 from .cli_output import configure_cli_output
+from .csv_fields import full_csv_fields
+from .pack_query_options import PackQueryCliOptions
 from .presentation_safety import single_line_text
+from .static_numbers import format_number
+from .script_lexing import literal_string_value, script_views
+from .script_trigger_bindings import CallbackReference, script_trigger_bindings
+from .script_function_graph import format_function_graph, script_functions
+from .script_trigger_acquisition import (
+    format_trigger_acquisitions,
+    trigger_acquisitions,
+)
+from .script_sources import (
+    AnalysisScriptSource,
+    analysis_script_text,
+    script_language,
+    script_type_from_report,
+)
+
+if TYPE_CHECKING:
+    from .pack_query_execution import PackQueryResult
+    from .pack_query_spatial import SpatialQueryResult
 
 __all__ = (
     "PackQueryCliOptionError",
     "PackQueryCliOptions",
     "parse_pack_query_cli_options",
+    "execute_pack_query",
     "run_pack_query_cli",
 )
 
@@ -80,7 +105,12 @@ def _clean(text: str) -> str:
     return _COLOR_RE.sub("", text).replace("|n", " ")
 
 
-_ROWS_CACHE: dict[tuple[str, str], tuple[tuple[int, int, int], list[list[str]]]] = {}
+_ROWS_CACHE: dict[tuple[str, str], tuple[tuple[int, int, str], list[list[str]]]] = {}
+_TABLE_READ_LOCK = threading.RLock()
+_QUERY_ROWS: dict[tuple[str, str], list[list[str]]] | None = None
+_QUERY_SCRIPTS: dict[str, str | None] | None = None
+_QUERY_SCRIPT_SOURCES: dict[str, tuple[tuple[str, str], ...]] | None = None
+_QUERY_FILES: set[tuple[str, str]] | None = None
 
 # 本进程内遇到的 OS 级锁死表 (杀软隔离/ACL 损坏): (pack_dir, rel) — 查询出口统一披露
 _LOCKED_FILES: set[tuple[str, str]] = set()
@@ -89,11 +119,14 @@ _LOCKED_FILES: set[tuple[str, str]] = set()
 def _iter_tsv_lines(path: Path):
     """带瞬态重试与锁死披露的行迭代 (脚本索引类 TSV 共用防线)。"""
     key = (str(path.parent), path.name)
-    if key in _LOCKED_FILES:
-        return  # 已确认锁死: 跳过重试 (记忆化, 与 _read_rows 同纪律)
-    for _attempt in range(3):
+    if _QUERY_FILES is not None:
+        _QUERY_FILES.add(key)
+    for _attempt in range(1 if key in _LOCKED_FILES else 3):
         try:
-            yield from path.open(encoding="utf-8", errors="replace")
+            with path.open(encoding="utf-8", errors="replace") as handle:
+                lines = list(handle)
+            _LOCKED_FILES.discard(key)
+            yield from lines
             return
         except OSError:
             time.sleep(0.05)
@@ -101,67 +134,72 @@ def _iter_tsv_lines(path: Path):
 
 
 def _read_rows(pack_dir: Path, rel: str) -> list[list[str]]:
+    """Read a stable whole-table snapshot; validate every byte on cache hits."""
+    with _TABLE_READ_LOCK:
+        key = (str(pack_dir), rel)
+        if _QUERY_FILES is not None:
+            _QUERY_FILES.add(key)
+        if _QUERY_ROWS is not None and key in _QUERY_ROWS:
+            return _QUERY_ROWS[key]
+        rows = _read_rows_locked(pack_dir, rel)
+        if _QUERY_ROWS is not None:
+            _QUERY_ROWS[key] = rows
+        return rows
+
+
+def _read_rows_locked(pack_dir: Path, rel: str) -> list[list[str]]:
     path = pack_dir / rel
-    if not path.exists():
-        return []
     cache_key = (str(pack_dir), rel)
-    if cache_key in _LOCKED_FILES:
-        # 已确认锁死: 跳过全部重试 — 每次查询 27x50ms 重试税不可接受
-        return []
-    # 瞬态锁 (杀软实时扫描扫到一半) 短重试消噪; 持续锁 (隔离/ACL 损坏) 才记入披露表
-    stat = None
-    for _attempt in range(3):
-        try:
-            stat = path.stat()
-            break
-        except OSError:
-            time.sleep(0.05)
-    if stat is None:
-        _LOCKED_FILES.add(cache_key)
-        return []
-    # Windows mtime 粒度可能 ~15ms: 同秒内改写会让 (mtime,size) 不变 — 加内容指纹免疫
-    fingerprint = None
-    for _attempt in range(3):
+    # Previously locked files get a cheap new attempt so a transient ACL or
+    # antivirus failure never poisons the rest of the GUI process's lifetime.
+    attempts = 1 if cache_key in _LOCKED_FILES else 3
+    for attempt in range(attempts):
         try:
             with path.open("rb") as handle:
-                fingerprint = (stat.st_mtime_ns, stat.st_size, hash(handle.read(4096)))
-            break
-        except OSError:
-            time.sleep(0.05)
-    if fingerprint is None:
-        _LOCKED_FILES.add(cache_key)
-        return []
-    cached = _ROWS_CACHE.get(cache_key)
-    if cached is not None and cached[0] == fingerprint:
-        return cached[1]
-    # 内存对象表导出的长富文本字段 (UR 物品全文效果) 可超 csv 默认 131072;
-    # 与 batch_report_reader 同纪律: 拉满上限读满, 不截断不报错。
-    previous_limit = csv.field_size_limit()
-    try:
-        csv.field_size_limit(sys.maxsize)
-    except OverflowError:  # pragma: no cover - 32 位 Python 回退
-        csv.field_size_limit(2**31 - 1)
-    for _attempt in range(3):
-        try:
-            with path.open(encoding="utf-8", newline="") as f:
-                rows = list(csv.reader(f, delimiter="\t"))
-        except OSError:
-            time.sleep(0.05)
-        else:
-            csv.field_size_limit(previous_limit)
+                before = os.fstat(handle.fileno())
+                digest = hashlib.file_digest(handle, "sha256").hexdigest()
+                after = os.fstat(handle.fileno())
+            if _table_identity(before) != _table_identity(after) or _table_identity(
+                after
+            ) != _table_identity(path.stat()):
+                continue
+            fingerprint = (after.st_mtime_ns, after.st_size, digest)
+            cached = _ROWS_CACHE.get(cache_key)
+            if cached is not None and cached[0] == fingerprint:
+                _LOCKED_FILES.discard(cache_key)
+                return cached[1]
+            with full_csv_fields():
+                with path.open(encoding="utf-8", newline="") as handle:
+                    rows = list(csv.reader(handle, delimiter="\t"))
+            if _table_identity(after) != _table_identity(path.stat()):
+                continue
             _ROWS_CACHE[cache_key] = (fingerprint, rows)
+            _LOCKED_FILES.discard(cache_key)
             return rows
-    csv.field_size_limit(previous_limit)
+        except FileNotFoundError:
+            _ROWS_CACHE.pop(cache_key, None)
+            _LOCKED_FILES.discard(cache_key)
+            return []
+        except OSError, UnicodeError, csv.Error:
+            if attempt + 1 < attempts:
+                time.sleep(0.05)
+    _ROWS_CACHE.pop(cache_key, None)
     _LOCKED_FILES.add(cache_key)
     return []
+
+
+def _table_identity(stat: os.stat_result) -> tuple[int, int, int, int]:
+    # Windows stat/fstat disagree on st_ctime (creation versus change time).
+    # Full-content hashes provide invalidation even for preserved mtime/size.
+    return (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns)
 
 
 def load_items(pack_dir: Path) -> dict[str, tuple[str, str]]:
     """物品四码 -> (去色名称, 描述)。"""
     out: dict[str, tuple[str, str]] = {}
     for r in _read_rows(pack_dir, "对象ID/物品.tsv"):
-        if len(r) > 6 and len(r[1]) == 4:
-            out[r[1]] = (_clean(r[4]), _clean(r[6]))
+        if len(r) > 4 and len(r[1]) == 4:
+            out[r[1]] = (_clean(r[4]), _clean(r[6]) if len(r) > 6 else "")
     return out
 
 
@@ -172,6 +210,15 @@ def load_units(pack_dir: Path) -> dict[str, str]:
         if len(r) > 4 and len(r[1]) == 4:
             out[r[1]] = _clean(r[4])
     return out
+
+
+def load_destructables(pack_dir: Path) -> dict[str, str]:
+    """可破坏物四码 -> 名称。"""
+    return {
+        row[1]: _clean(row[4])
+        for row in _read_rows(pack_dir, "对象ID/可破坏物.tsv")
+        if len(row) > 4 and len(row[1]) == 4
+    }
 
 
 def load_item_bases(pack_dir: Path) -> dict[str, str]:
@@ -393,12 +440,39 @@ def _truncated_note(seq, limit: int) -> str:
     return ""
 
 
-def _limit_disclosure_note(lines: list[str], limit: int) -> None:
-    """显式 --limit 截断披露: 尾部追加提示行 (满量纪律——截断不得静默)。"""
-    if limit and len(lines) >= limit:
-        lines.append(
-            f"  (已达 --limit {limit}, 以上可能不全——收窄关键词或去掉 --limit 查看全部)"
-        )
+def _limit_result_blocks(blocks: list[list[str]], limit: int) -> list[str]:
+    """Select actual result records while keeping their evidence together."""
+    lines = [line for block in _bounded(blocks, limit) for line in block]
+    note = _truncated_note(blocks, limit)
+    return [*lines, *([note] if note else [])]
+
+
+@dataclass
+class _AcquisitionBlocks:
+    """Each record counts once; supplemental evidence follows its first record."""
+
+    records: list[list[str]] = dataclass_field(default_factory=list)
+    first: dict[str, int] = dataclass_field(default_factory=dict)
+
+    def record(self, code: str, line: str) -> None:
+        self.first.setdefault(code, len(self.records))
+        self.records.append([line])
+
+    def supplement(self, code: str, lines: list[str]) -> None:
+        if not lines:
+            return
+        if code in self.first:
+            self.records[self.first[code]].extend(lines)
+        else:
+            self.first[code] = len(self.records)
+            self.records.append(lines.copy())
+
+    def render(self, limit: int) -> list[str]:
+        return _limit_result_blocks(self.records, limit)
+
+
+def _is_record_code(value: str) -> bool:
+    return len(value) == 4 and all(ord(char) <= 255 for char in value)
 
 
 def _query_tech(pack: Path, query: str, limit: int) -> list[str]:
@@ -406,9 +480,12 @@ def _query_tech(pack: Path, query: str, limit: int) -> list[str]:
     fields = load_tech_fields(pack)
     bases = _tech_base_fields()
     lines: list[str] = []
-    for code, (name, base_id) in techs.items():
-        if not _match(query, code, name):
-            continue
+    matches = [
+        (code, name, base_id)
+        for code, (name, base_id) in techs.items()
+        if _match(query, code, name)
+    ]
+    for code, name, base_id in _bounded(matches, limit):
         f = fields.get(code, {})
         base_f = bases.get(base_id, {})
 
@@ -417,7 +494,7 @@ def _query_tech(pack: Path, query: str, limit: int) -> list[str]:
                 if v and v.lstrip("'") not in ("-", "_", "'"):
                     try:
                         return int(float(v))
-                    except ValueError:
+                    except ValueError, OverflowError:
                         pass  # 非数值/占位符 — 试下一来源 (base 兑底), 最终 None=未知
             return None
 
@@ -454,17 +531,17 @@ def _query_tech(pack: Path, query: str, limit: int) -> list[str]:
                 w = str(lum_b + (lum_i or 0) * (n - 1)) if lum_b is not None else "-"
                 return "金" + g + " 木" + w
 
-            marks = sorted({1, min(5, levels), levels})
             lines.append(
-                "  级费用: " + " | ".join(str(n) + "级 " + _cost(n) for n in marks)
+                "  级费用: "
+                + " | ".join(str(n) + "级 " + _cost(n) for n in range(1, levels + 1))
             )
             gsum = (
-                sum(gold_b + (gold_i or 0) * (n - 1) for n in range(1, levels + 1))
+                levels * gold_b + (gold_i or 0) * levels * (levels - 1) // 2
                 if gold_b is not None
                 else None
             )
             wsum = (
-                sum(lum_b + (lum_i or 0) * (n - 1) for n in range(1, levels + 1))
+                levels * lum_b + (lum_i or 0) * levels * (levels - 1) // 2
                 if lum_b is not None
                 else None
             )
@@ -474,20 +551,24 @@ def _query_tech(pack: Path, query: str, limit: int) -> list[str]:
                     + (("金" + str(gsum) + " ") if gsum is not None else "")
                     + (("木" + str(wsum)) if wsum is not None else "")
                 )
-        if levels:
-            for lv in (1, levels):
-                t = f.get("gub1:" + str(lv))
-                if t:
-                    lines.append("  效果(" + str(lv) + "级): " + t)  # 全文, 不截断
+        tips = {
+            int(key.removeprefix("gub1:")): value
+            for key, value in f.items()
+            if key.startswith("gub1:") and key.removeprefix("gub1:").isdigit()
+        }
+        if "gub1" in f:
+            tips.setdefault(1, f["gub1"])
+        for lv, text in sorted(tips.items()):
+            if text:
+                lines.append("  效果(" + str(lv) + "级): " + text)
         reqs = sorted((k, v) for k, v in f.items() if k.startswith("greq:"))
         if reqs:
             lines.append(
                 "  前置: " + ", ".join(k.split(":", 1)[1] + "级←" + v for k, v in reqs)
             )
         lines.append("")
-        if limit and len(lines) >= limit * 8:
-            break
-    _limit_disclosure_note(lines, limit)
+    if note := _truncated_note(matches, limit):
+        lines.append(note)
     if lines:
         return lines
     # 未命中时给科技总量提示——「未找到」不代表本图没有科技系统
@@ -512,79 +593,148 @@ def _item_price(
     return prices.get(code.lower(), "")
 
 
-def load_formulas(pack_dir: Path) -> list[tuple[str, list[tuple[str, int]]]]:
-    """解析 YDWENewItemsFormula 调用 -> [(产物四码, [(材料四码, 数量)])]。
-
-    参数形如 ('I06Z', 8, 'I00F', 0, ..., 'I074')：末位是产物，
-    其余两两成对 (材料, 数量)，数量<=0 的占位材料会被过滤。
-    """
-    out: list[tuple[str, list[tuple[str, int]]]] = []
-    path = pack_dir / "脚本调用参数索引.tsv"
-    if not path.exists():
-        return out
-    for line in _iter_tsv_lines(path):
-        if "call YDWENewItemsFormula(" not in line:
-            continue
-        tail = line.split("call YDWENewItemsFormula(", 1)[1].rstrip().rstrip(")")
-        toks = [t.strip() for t in tail.split(",")]
-        if len(toks) < 3:
-            continue
-        try:
-            pairs = [
-                (toks[i].strip("'"), int(float(toks[i + 1].replace(" ", ""))))
-                for i in range(0, len(toks) - 1, 2)
-            ]
-        except ValueError:
-            continue
-        out.append(
-            (toks[-1].strip("'"), [(c, k) for c, k in pairs if k > 0 and c != "ches"])
+def _call_argument_rows(pack: Path) -> list[tuple[list[str], str, str]]:
+    """Read appended index columns by header while accepting headerless old packs."""
+    rows = _read_rows(pack, "脚本调用参数索引.tsv")
+    header = rows[0] if rows and rows[0][:2] == ["来源", "行号"] else []
+    summary_index = header.index("摘要") if "摘要" in header else -1
+    offset_index = header.index("调用偏移") if "调用偏移" in header else None
+    return [
+        (
+            row,
+            row[summary_index],
+            row[offset_index]
+            if offset_index is not None and offset_index < len(row)
+            else "",
         )
-    return out
+        for row in (rows[1:] if header else rows)
+        if row and (summary_index < 0 or summary_index < len(row))
+    ]
+
+
+def _indexed_call_identity(
+    row: list[str], summary: str, offset: str
+) -> tuple[str, ...]:
+    if offset:
+        return row[0], offset
+    return (*row[:2], summary) if len(row) > 2 else tuple(row)
+
+
+def _indexed_formula_arguments(rows: list[list[str]]) -> list[tuple[str, ...]]:
+    """Recover multiline calls from consecutive complete argument-index rows."""
+    groups: list[tuple[str, ...]] = []
+    args: list[str] = []
+    previous: tuple[str, ...] = ()
+    for row in rows:
+        key = (*row[:4], row[-1]) if len(row) >= 11 else ()
+        position = (
+            row[4].lstrip("0")
+            if key and row[3] == "YDWENewItemsFormula" and row[4].isdigit()
+            else ""
+        )
+        if key != previous or position != str(len(args) + 1):
+            if args:
+                groups.append(tuple(args))
+            args = []
+        previous = key
+        if position == str(len(args) + 1):
+            value = row[5]
+            # Undo only the exporter-added spreadsheet prefix on signed numbers.
+            value = (
+                re.sub(r"^(\s*)'(?=[+-])", r"\1", value)
+                if not value.rstrip().endswith("'")
+                else value
+            )
+            args.append(value)
+    if args:
+        groups.append(tuple(args))
+    return groups
+
+
+def load_formulas(pack_dir: Path) -> list[tuple[str, list[tuple[str, int]]]]:
+    """Read source formulas plus legacy call summaries with exact quantities."""
+    from .script_recipes import formula_from_arguments, scan_formulas
+
+    contexts = load_script_contexts(pack_dir)
+    source_formulas = [
+        formula
+        for source, script, lua in contexts
+        for formula in scan_formulas(script, source=source, lua=lua)
+    ]
+    # Index exports have one row per argument. A source/line/summary is one call,
+    # while distinct source sites remain available even for identical formulas.
+    seen: set[tuple[str, ...]] = set()
+    indexed_formulas = []
+    available = tuple(source for source, _script, _lua in contexts)
+    declared = _pack_script_type(pack_dir)
+    entries = _call_argument_rows(pack_dir)
+    rows = [row for row, _summary, _offset in entries]
+    structured = [
+        parsed
+        for args in _indexed_formula_arguments(rows)
+        if (parsed := formula_from_arguments(args)) is not None
+    ]
+    for row, summary, offset in entries:
+        if "YDWENewItemsFormula" not in summary:
+            continue
+        key = _indexed_call_identity(row, summary, offset)
+        if key in seen:
+            continue
+        seen.add(key)
+        source = row[0] if len(row) > 2 else ""
+        indexed_formulas.extend(
+            scan_formulas(
+                summary,
+                source=source,
+                lua=script_language(
+                    source, available_sources=available, declared_script_type=declared
+                ),
+            )
+        )
+    # Raw calls and their index mirrors share occurrences; neither source can
+    # hide additional declarations found only in the other evidence channel.
+    counts = (
+        Counter((row.result, row.ingredients) for row in source_formulas)
+        | Counter((row.result, row.ingredients) for row in indexed_formulas)
+        | Counter(structured)
+    )
+    return [(result, list(pairs)) for result, pairs in counts.elements()]
 
 
 def load_placements(pack_dir: Path) -> list[tuple[str, float, float, str]]:
-    """脚本创建的单位/地面物品 -> [(四码, x, y, 'unit'|'item')]。"""
-    out: list[tuple[str, float, float, str]] = []
+    """脚本创建坐标；原文与旧包索引互补，同一位置按较大出现次数去重。"""
+    from .pack_query_placements import script_placements
+
+    source_rows = [
+        placement
+        for source, text, lua in load_script_contexts(pack_dir)
+        for placement in script_placements(text, lua=lua)
+    ]
+    indexed_rows: list[tuple[str, float, float, str]] = []
     path = pack_dir / "脚本调用参数索引.tsv"
     if not path.exists():
-        return out
-    for line in _iter_tsv_lines(path):
-        if "=CreateUnit(p, '" in line:
-            tail = line.split("=CreateUnit(p, '", 1)[1]
-            parts = tail.rstrip().rstrip(")").split(", ")
-            if len(parts) < 3:
-                continue
-            try:
-                x = float(parts[1].replace(" ", ""))
-                y = float(parts[2].replace(" ", ""))
-            except ValueError:
-                continue
-            out.append((parts[0].strip("'"), x, y, "unit"))
-        elif "call CreateItem('" in line:
-            tail = line.split("call CreateItem('", 1)[1]
-            parts = tail.rstrip().rstrip(")").split(", ")
-            if len(parts) < 3:
-                continue
-            try:
-                x = float(parts[1].replace(" ", ""))
-                y = float(parts[2].replace(" ", ""))
-            except ValueError:
-                continue
-            out.append((parts[0].strip("'"), x, y, "item"))
-    return out
-
-
-@dataclass(frozen=True, slots=True)
-class PackQueryCliOptions:
-    """pack-query 子命令的已解析参数。"""
-
-    pack_dir: str
-    command: str
-    query: str
-    limit: int = 0  # 0 = 不限量 (满量输出); --limit N 显式缩减
-    pack_dir_b: str = ""  # diff 子命令的第二个包
-    as_json: bool = False  # --json: stdout 改输出 {"lines": [...]} 供脚本解析
-    near_kind: str = ""  # near 的 --kind 过滤: 单位/装饰/物品/脚本 (空=全部)
+        return source_rows
+    seen: set[tuple[str, ...]] = set()
+    for row, summary, offset in _call_argument_rows(pack_dir):
+        # One source call has a row per argument; its summary is one call site.
+        key = _indexed_call_identity(row, summary, offset)
+        if key in seen:
+            continue
+        seen.add(key)
+        indexed_rows.extend(
+            script_placements(
+                summary,
+                lua=script_language(
+                    row[0],
+                    available_sources=(
+                        source for source, _text in load_script_sources(pack_dir)
+                    ),
+                    declared_script_type=_pack_script_type(pack_dir),
+                ),
+            )
+        )
+    counts = Counter(source_rows) | Counter(indexed_rows)
+    return list(counts.elements())
 
 
 @dataclass(frozen=True, slots=True)
@@ -696,9 +846,9 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
 
 
 def _match(query: str, code: str, name: str) -> bool:
-    q = query.lower()
-    c = code.lower()
-    n = name.lower()
+    q = query.casefold()
+    c = code.casefold()
+    n = name.casefold()
     # 空字段不得参与匹配: name="" 时 "" in query 恒真, 空来源关系行
     # (脚本奖励行 来源ID/名称 为空) 会出现在每一个查询里 (来源 [] 噪声)
     return (bool(c) and q == c) or (bool(n) and (q in n or n in q))
@@ -762,26 +912,27 @@ def _query_item(pack: Path, query: str, limit: int) -> list[str]:
     tooltips = load_item_tooltips(pack)
     equipped_effects = load_item_equipped_effects(pack)
     lines = []
-    for code, (name, desc) in items.items():
-        if _match(query, code, name):
-            lines.append("[" + code + "] " + name)
-            price = _item_price(bases, code, overrides)
-            base = bases.get(code, "")
-            if price:
-                src = (
-                    "地图价"
-                    if code in overrides
-                    else ("继承基础 " + base if base else "")
-                )
-                lines.append("  金币: " + price + (" (" + src + ")" if src else ""))
-            # 装备真实效果（iabi 携带技能的属性字段，自定义行优先）。
-            if code in equipped_effects:
-                lines.append("  装备效果: " + ", ".join(equipped_effects[code]))
-            # 真实提示文本（地图自定义 ides/utub）优先；继承模板描述仅作兜底。
-            lines.append("  " + (tooltips.get(code, "") or desc))  # ides/utub 全文
-            if limit and len(lines) >= limit * 3:
-                break
-    _limit_disclosure_note(lines, limit)
+    matches = [
+        (code, name, desc)
+        for code, (name, desc) in items.items()
+        if _match(query, code, name)
+    ]
+    for code, name, desc in _bounded(matches, limit):
+        lines.append("[" + code + "] " + name)
+        price = _item_price(bases, code, overrides)
+        base = bases.get(code, "")
+        if price:
+            src = (
+                "地图价" if code in overrides else ("继承基础 " + base if base else "")
+            )
+            lines.append("  金币: " + price + (" (" + src + ")" if src else ""))
+        # 装备真实效果（iabi 携带技能的属性字段，自定义行优先）。
+        if code in equipped_effects:
+            lines.append("  装备效果: " + ", ".join(equipped_effects[code]))
+        # 真实提示文本（地图自定义 ides/utub）优先；继承模板描述仅作兜底。
+        lines.append("  " + (tooltips.get(code, "") or desc))  # ides/utub 全文
+    if note := _truncated_note(matches, limit):
+        lines.append(note)
     if lines:
         return lines
     # 未命中时给物品总量提示 (「未找到」不代表本图没有物品表)
@@ -798,30 +949,31 @@ def _query_price(pack: Path, query: str, limit: int) -> list[str]:
     bases = load_item_bases(pack)
     overrides = load_item_gold_overrides(pack)
     lines = []
-    for code, (name, _desc) in items.items():
-        if _match(query, code, name):
-            price = _item_price(bases, code, overrides)
-            base = bases.get(
-                code, code.lower() if code.lower() in _base_prices() else "-"
-            )
-            src = "地图价" if code in overrides else "继承"
-            lines.append(
-                "["
-                + code
-                + "] "
-                + name
-                + "  金币: "
-                + (price or "-")
-                + "  ("
-                + src
-                + ", 基础: "
-                + base
-                + ")"
-            )
-            if limit and len(lines) >= limit:
-                break
+    matches = [
+        (code, name, desc)
+        for code, (name, desc) in items.items()
+        if _match(query, code, name)
+    ]
+    for code, name, desc in _bounded(matches, limit):
+        price = _item_price(bases, code, overrides)
+        base = bases.get(code, code.lower() if code.lower() in _base_prices() else "-")
+        src = "地图价" if code in overrides else "继承"
+        lines.append(
+            "["
+            + code
+            + "] "
+            + name
+            + "  金币: "
+            + (price or "-")
+            + "  ("
+            + src
+            + ", 基础: "
+            + base
+            + ")"
+        )
+    if note := _truncated_note(matches, limit):
+        lines.append(note)
     if lines:
-        _limit_disclosure_note(lines, limit)
         return lines
     if not lines:
         price = _base_prices().get(query.lower())
@@ -843,11 +995,13 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
     bases = load_item_bases(pack)
     overrides = load_item_gold_overrides(pack)
     lines: list[str] = []
+    blocks: list[tuple[str, int, int]] = []
     stocked: set[str] = set()
     for shop_code, shop_name, codes in load_shop_stocks(pack):
         if not _match(query, shop_code, shop_name):
             continue
         stocked.add(shop_code)
+        block_start = len(lines)
         lines.append("== " + shop_name + " [" + shop_code + "]")
         for c in codes:
             name = items.get(c, (c, ""))[0]
@@ -857,51 +1011,63 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
                 "  " + name + "  " + (price or "?") + "金  (" + tag + " " + c + ")"
             )
         lines.append("")
-        if limit and len(lines) >= limit * 12:
-            break
+        blocks.append((shop_code, block_start, len(lines)))
     # 商店制造 (关系表独立通道): 奇迹古树/神秘藏宝室这类制造商店没有
     # usei 货架, 只靠 stock 扫描会答「未找到商店」
-    craft: dict[str, tuple[str, list[tuple[str, str]]]] = {}
+    craft: dict[str, tuple[str, dict[tuple[str, str], None]]] = {}
     for r in _read_rows(pack, "掉落与获取关系.tsv"):
         if len(r) < 8 or r[2] != "商店制造":
             continue
         code = r[6]
         if not code:
             continue
-        entry = craft.setdefault(code, (_clean(r[7]) or code, []))
+        entry = craft.setdefault(code, (_clean(r[7]) or code, {}))
         pair = (r[3], _clean(r[4]))
-        if pair not in entry[1]:
-            entry[1].append(pair)
+        entry[1].setdefault(pair, None)
     for code, (name, entries) in craft.items():
         if not _match(query, code, name):
             continue
+        block_start = len(lines)
         lines.append("== " + name + " [" + code + "]  (商店制造)")
         for icode, iname in entries:
             lines.append("  制造 " + iname + " [" + icode + "]")
         lines.append("")
+        blocks.append((code, block_start, len(lines)))
     # 关系表「商店出售」行: 货架字段缺失时的另一证据源——战役容器商店
     # (h704 银月配方商) 只有关系行, 对象字段无自定义 usei, 曾答未找到
-    sell: dict[str, tuple[str, list[str]]] = {}
+    sell: dict[str, tuple[str, dict[str, None]]] = {}
     for r in _read_rows(pack, "掉落与获取关系.tsv"):
         if len(r) < 8 or r[2] != "商店出售":
             continue
         code = r[6]
         if not code:
             continue
-        entry = sell.setdefault(code, (_clean(r[7]) or code, []))
+        entry = sell.setdefault(code, (_clean(r[7]) or code, {}))
         item = _clean(r[4]) + " [" + r[3] + "]"
-        if item not in entry[1]:
-            entry[1].append(item)
+        entry[1].setdefault(item, None)
     for code, (name, entries) in sell.items():
         if code in stocked or not _match(query, code, name):
             continue
+        block_start = len(lines)
         lines.append("== " + name + " [" + code + "]  (关系表出售)")
         for item in entries:
             lines.append("  " + item)
         lines.append("")
+        blocks.append((code, block_start, len(lines)))
     if lines:
-        _limit_disclosure_note(lines, limit)
-        return lines
+        if not limit:
+            return lines
+        shops = list(dict.fromkeys(code for code, _start, _end in blocks))
+        selected = set(_bounded(shops, limit))
+        output = [
+            line
+            for code, start, end in blocks
+            if code in selected
+            for line in lines[start:end]
+        ]
+        if note := _truncated_note(shops, limit):
+            output.append(note)
+        return output
     # 口语店名常不含在完整名里 (「商人」不在「银月配方商」中) —— 答「未找到」
     # 前先把本图真实商店列出来, 并加 ⚠ 前缀让容器聚合把容器级结果打印出来
     known: list[str] = []
@@ -926,11 +1092,24 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
     return ["未找到商店: " + query]
 
 
+def _recipe_evidence_note(row: list[str]) -> str:
+    """Keep an inferred or incomplete recipe visible as such in query output."""
+    details: list[str] = []
+    if len(row) > 23 and row[23] and row[23] != "已确认":
+        details.append(row[23])
+    if len(row) > 24 and row[24] and row[24] != "完整":
+        details.append(row[24])
+    if len(row) > 25 and row[25]:
+        details.append(row[25])
+    return "  （" + "；".join(details) + "）" if details else ""
+
+
 def _query_synth(pack: Path, query: str, limit: int) -> list[str]:
     """synth 全图合成总览: 所有配料一屏列完 (成品 <- 材料)。"""
     del query, limit  # synth 无视过滤与截断, 单配方查询走 recipe
     out: list[str] = []
     seen: set[tuple[str, str]] = set()
+    seen_formulas: set[tuple[str, tuple[tuple[str, int], ...]]] = set()
     items = load_items(pack)
     for r in _read_rows(pack, "掉落与获取关系.tsv"):
         if len(r) < 19 or r[2] != "合成":
@@ -939,12 +1118,14 @@ def _query_synth(pack: Path, query: str, limit: int) -> list[str]:
         if not mats or (prod, mats) in seen:
             continue
         seen.add((prod, mats))
-        out.append("[" + prod + "] " + pname + "  <-  " + mats)
+        out.append(
+            "[" + prod + "] " + pname + "  <-  " + mats + _recipe_evidence_note(r)
+        )
     for prod, pairs in load_formulas(pack):
-        key = (prod, ",".join(c for c, _k in pairs))
-        if key in seen:
+        key = (prod, tuple(sorted(pairs)))
+        if key in seen_formulas:
             continue
-        seen.add(key)
+        seen_formulas.add(key)
         prod_name = items.get(prod, (prod, ""))[0]
         mat_names = [items.get(c, (c, ""))[0] for c, _k in pairs]
         need = " + ".join(
@@ -953,13 +1134,13 @@ def _query_synth(pack: Path, query: str, limit: int) -> list[str]:
         out.append("[" + prod + "] " + prod_name + "  <-  " + need)
     if not out:
         return ["本包无合成配方"]
-    out.sort(key=str.casefold)
-    return out
+    return sorted(dict.fromkeys(out), key=str.casefold)
 
 
 def _query_recipe(pack: Path, query: str, limit: int) -> list[str]:
     items = load_items(pack)
     hits: list[str] = []
+    all_recipes: set[str] = set()
     seen: set[tuple[str, tuple[tuple[str, int], ...]]] = set()
     # 关系表「合成」行与脚本公式索引是两套证据: 公式索引只认脚本形态
     # (迷失国度 0 公式但关系表有秘法瓶/万灵药两条完整合成行)——两套都要
@@ -972,153 +1153,201 @@ def _query_recipe(pack: Path, query: str, limit: int) -> list[str]:
         mats = _clean(r[18])
         if not mats:
             continue
+        rendered = (
+            "[" + prod + "] " + pname + "  <-  " + mats + _recipe_evidence_note(r)
+        )
+        all_recipes.add(rendered)
         if not (
             _match(query, prod, pname)
-            or (r[17] and query.lower() in r[17].lower())
-            or query in mats
+            or (r[17] and query.casefold() in r[17].casefold())
+            or query.casefold() in mats.casefold()
         ):
             continue
         key = (prod, mats)
         if key in seen_rels:
             continue
         seen_rels.add(key)
-        hits.append("[" + prod + "] " + pname + "  <-  " + mats)
-        if limit and len(hits) >= limit:
-            break
+        hits.append(rendered)
     for prod, pairs in load_formulas(pack):
-        key = (prod, tuple(pairs))
+        key = (prod, tuple(sorted(pairs)))
         if key in seen:
             continue
         seen.add(key)
         prod_name = items.get(prod, (prod, ""))[0]
         mat_names = [items.get(c, (c, ""))[0] for c, _k in pairs]
+        need = " + ".join(
+            n + "x" + str(k) for (_c, k), n in zip(pairs, mat_names, strict=False)
+        )
+        rendered = "[" + prod + "] " + prod_name + "  <-  " + need
+        all_recipes.add(rendered)
         if _match(query, prod, prod_name) or any(
             _match(query, c, n) for (c, _k), n in zip(pairs, mat_names, strict=False)
         ):
-            need = " + ".join(
-                n + "x" + str(k) for (_c, k), n in zip(pairs, mat_names, strict=False)
-            )
-            hits.append("[" + prod + "] " + prod_name + "  <-  " + need)
-            if limit and len(hits) >= limit:
-                break
+            hits.append(rendered)
+    hits = list(dict.fromkeys(hits))
     if hits:
-        return hits
+        note = _truncated_note(hits, limit)
+        return [*_bounded(hits, limit), *([note] if note else [])]
     # 未命中时给出配方总量与查询提示——「未找到」不代表本图没有合成
-    total = {
-        r[3]
-        for r in _read_rows(pack, "掉落与获取关系.tsv")
-        if len(r) > 4 and "合成" in r[2]
-    }
-    total.update(r[3] for r in _read_rows(pack, "脚本公式索引.tsv") if len(r) > 3)
-    if total:
+    if all_recipes:
         return [
             "未找到相关配方: " + query,
-            f"  （本图关系表/公式索引共 {len(total)} 条合成配方; "
+            f"  （本图关系表/公式索引共 {len(all_recipes)} 条合成配方; "
             "可用 recipe <成品或材料名> 查询）",
         ]
     return ["未找到相关配方: " + query]
 
 
+def _acquisition_script_evidence(
+    pack: Path,
+    code: str,
+    script: str | None,
+    items: dict[str, tuple[str, str]],
+    units: dict[str, str],
+    names: dict[str, str],
+) -> tuple[list[str], list[str]]:
+    """Shared death and use/pickup evidence for both acquisition queries."""
+    if script is None:
+        return [], []
+    death: list[str] = []
+    usage: list[str] = []
+    sources = load_script_contexts(pack) or (AnalysisScriptSource("", script, None),)
+    legacy_sources: list[str] = []
+    for source, text, lua in sources:
+        if lua is True:
+            records = trigger_acquisitions(text, lua=True)
+            for destination, is_death in ((death, True), (usage, False)):
+                destination.extend(
+                    format_trigger_acquisitions(
+                        records,
+                        lambda value: names.get(value, value),
+                        source=source,
+                        target=code,
+                        death=is_death,
+                    )
+                )
+            continue
+        legacy_sources.append(text)
+    if legacy_sources:
+        # JASS functions may deliberately be split across exported WCT/main sources.
+        # Keep that established linkage, excluding Lua strings from the JASS parser.
+        text = "\n".join(legacy_sources)
+        helper_records = tuple(
+            record
+            for record in trigger_acquisitions(text, lua=False)
+            if record.graph is not None and (record.node or record.value_proof)
+        )
+        for destination, is_death in ((death, True), (usage, False)):
+            destination.extend(
+                format_trigger_acquisitions(
+                    helper_records,
+                    lambda value: names.get(value, value),
+                    source="、".join(
+                        source for source, _text, lua in sources if lua is not True
+                    ),
+                    target=code,
+                    death=is_death,
+                )
+            )
+        death.extend(_script_pool_drops(pack, code, script=text))
+        if code in units:
+            death.extend(_script_unit_direct_drops(text, code, items, units))
+            death.extend(_script_unit_random_drops(text, code, items, units))
+        if code in items:
+            usage.extend(_script_use_item_loot(text, code, names))
+            usage.extend(
+                _item_trigger_grant_lines(
+                    text, [code], lambda value: names.get(value, value)
+                )
+            )
+    return death, usage
+
+
 def _query_where(pack: Path, query: str, limit: int) -> list[str]:
+    from .pack_query_spatial import SpatialSources, preplaced_objects
+
     items = load_items(pack)
     units = load_units(pack)
-    names: dict[str, str] = {**units, **{c: n for c, (n, _d) in items.items()}}
-    lines = []
-    for code, x, y, kind in load_placements(pack):
-        name = names.get(code, code)
+    destructables = load_destructables(pack)
+    item_names = {code: name for code, (name, _desc) in items.items()}
+    names = {**destructables, **units, **item_names}
+    placement_names = {"unit": units, "item": item_names, "destructable": destructables}
+    blocks = _AcquisitionBlocks()
+    sources = cast(SpatialSources, cast(object, sys.modules[__name__]))
+    for kind, code, raw_name, (x, y) in preplaced_objects(pack, sources):
+        name = names.get(code, _clean(raw_name))
         if _match(query, code, name):
-            tag = "单位" if kind == "unit" else "地面物品"
-            lines.append(
-                "["
-                + code
-                + "] "
-                + name
-                + " ("
-                + tag
-                + ") -> ("
-                + f"{x:.0f}"
-                + ", "
-                + f"{y:.0f}"
-                + ")"
+            tag = "可破坏物" if code in destructables and kind == "装饰" else kind
+            blocks.record(
+                code,
+                f"[{code}] {name} ({tag}) -> ({format_number(x)}, {format_number(y)}) [预放置]",
             )
-            if limit and len(lines) >= limit:
-                break
-    # 预放置之外满量附上关系行 (I01F 事故: 任务物品无预放置点,
-    # 关系行明明存在却被跳过, 文案兜底还按描述子串错配到别的物品;
-    # 有预放置也有关系行的物品两类证据都给, 不静默吞掉)
-    for r in _read_rows(pack, "掉落与获取关系.tsv"):
-        if len(r) < 7:
+    for code, x, y, kind in load_placements(pack):
+        name = placement_names[kind].get(code, code)
+        if _match(query, code, name):
+            tag = {"unit": "单位", "item": "地面物品", "destructable": "可破坏物"}[kind]
+            blocks.record(
+                code,
+                f"[{code}] {name} ({tag}) -> ({format_number(x)}, {format_number(y)})",
+            )
+    for row in _read_rows(pack, "掉落与获取关系.tsv"):
+        if len(row) < 7 or not _is_record_code(row[3]):
             continue
-        code, name = r[3], _clean(r[4])
-        if not _match(query, code, name):
-            continue
-        lines.append(
-            name + " [" + code + "]  " + r[2] + " <- " + _relation_source_label(r)
+        code, name = row[3], _clean(row[4])
+        if _match(query, code, name):
+            blocks.record(
+                code, f"{name} [{code}]  {row[2]} <- {_relation_source_label(row)}"
+            )
+        if (
+            len(row) >= 8
+            and _is_record_code(row[6])
+            and _match(query, row[6], _clean(row[7]))
+        ):
+            blocks.record(
+                row[6], f"来源 {_clean(row[7])}[{row[6]}]: {row[2]} -> {name} [{code}]"
+            )
+    # Inspect every matching code, even when another code already has records.
+    candidates = dict.fromkeys(
+        (
+            *blocks.first,
+            *(code for code, name in names.items() if _match(query, code, name)),
         )
-        if limit and len(lines) >= limit:
-            break
-    # 来源侧: 查询词本身是来源 (可破坏物/商人/单位) 时, 关系表装备列
-    # 不匹配也要给出来源侧行 (路障 B007 掉三件物品, 两个命令曾都答未找到)
-    for r in _read_rows(pack, "掉落与获取关系.tsv"):
-        if len(r) < 8:
-            continue
-        src_name = _clean(r[7])
-        if not _match(query, r[6], src_name):
-            continue
-        lines.append(
-            "来源 "
-            + src_name
-            + "["
-            + r[6]
-            + "]: "
-            + r[2]
-            + " -> "
-            + _clean(r[4])
-            + " ["
-            + r[3]
-            + "]"
-        )
-        if limit and len(lines) >= limit:
-            break
-    # 使用触发随机产出 (宝箱开箱): 数组池内容静态可解, 满量列出
+    )
+    if _is_record_code(query) and not candidates:
+        candidates[query] = None
     script = load_script(pack)
-    if script is not None:
-        for code, (name, _d) in items.items():
-            if not _match(query, code, name):
-                continue
-            lines.extend(_script_use_item_loot(script, code, names))
-            lines.extend(
-                _item_trigger_grant_lines(script, [code], lambda c: names.get(c, c))
-            )
-            # 第三形态 (YDWE 每单位随机掉落) 与 drop 同源: where 曾答
-            # 「未找到获取途径」而 drop 能给出证据——两命令必须一致
-            lines.extend(_script_random_dist_item_drops(script, code, items, names))
-    if not lines:
-        # 单位查询不该吃物品文案兜底 (邪恶陨石人的任务文本曾被端出来
-        # 当「炎石守卫」的来源线索)——路由到 drop 的单位反查
-        for ucode, uname in load_units(pack).items():
-            if _match(query, ucode, uname):
-                return [
-                    "未找到 [" + ucode + "] " + uname + " 的预放置/关系表记录。",
-                    "单位掉落查询用 drop <单位名或码> (按单位反查死亡触发)。",
-                ]
-        hints = _tooltip_source_hints(pack, _hint_targets(pack, query), limit)
-        if hints:
-            head = (
-                "⚠ 文案级来源线索 (无预放置/关系表记录"
-                + ("; 脚本加密" if _script_encrypted(pack) else "")
-                + "; 未脚本验证):"
-            )
-            return [head] + ["  " + h for h in _bounded(hints, limit)]
-    if not lines:
-        lines = ["未找到放置记录: " + query]
-        hint = _code_home_hint(pack, query)
-        if hint:
-            lines.append(hint)
-        lines.append(
-            "  （若有预放置坐标/脚本位置，可用 near <x> <y> 按坐标反查周边掉落与单位）"
+    for code in candidates:
+        death, usage = _acquisition_script_evidence(
+            pack, code, script, items, units, names
         )
-    _limit_disclosure_note(lines, limit)
+        blocks.supplement(code, [*death, *usage])
+    if blocks.records:
+        return blocks.render(limit)
+    unit_misses = [
+        f"未找到 [{code}] {name} 的预放置/关系表记录。"
+        for code, name in units.items()
+        if _match(query, code, name)
+    ]
+    if unit_misses:
+        return [
+            *_limit_result_blocks([[line] for line in unit_misses], limit),
+            "单位掉落查询用 drop <单位名或码> (按单位反查死亡触发)。",
+        ]
+    hints = _tooltip_source_hints(pack, _hint_targets(pack, query))
+    if hints:
+        head = (
+            "⚠ 文案级来源线索 (无预放置/关系表记录"
+            + ("; 脚本加密" if _script_encrypted(pack) else "")
+            + "; 未脚本验证):"
+        )
+        return [head, *_limit_result_blocks([["  " + hint] for hint in hints], limit)]
+    lines = ["未找到放置记录: " + query]
+    hint = _code_home_hint(pack, query)
+    if hint:
+        lines.append(hint)
+    lines.append(
+        "  （若有预放置坐标/脚本位置，可用 near <x> <y> 按坐标反查周边掉落与单位）"
+    )
     return lines
 
 
@@ -1284,7 +1513,10 @@ def _script_use_item_loot(script: str, code: str, names: dict[str, str]) -> list
     return out
 
 
-def _item_trigger_blocks(script: str) -> list[tuple[str, list[str], str, set[str]]]:
+@lru_cache(maxsize=4)
+def _item_trigger_blocks(
+    script: str,
+) -> tuple[tuple[str, tuple[str, ...], str, frozenset[str]], ...]:
     """反应 GetManipulatedItem 的触发块 (stem, 条件物品码, 动作体, 事件集)。
 
     双形态: ①Trig_*Conditions/Trig_*Actions 成对 (wbc 开箱);
@@ -1293,7 +1525,7 @@ def _item_trigger_blocks(script: str) -> list[tuple[str, list[str], str, set[str
     配对按注册位置: 初始化函数里 t 会被反复 CreateTrigger 复用, 只按
     (作用域, 变量) 会把末个 action 配给所有条件 (YDWE 死亡模板事故)。"""
     conds, acts = _registration_maps(script)
-    blocks: list[tuple[str, list[str], str, set[str]]] = []
+    blocks: list[tuple[str, tuple[str, ...], str, frozenset[str]]] = []
     seen_bodies: set[str] = set()
     for m in _DEATH_COND_BLOCK_RE.finditer(script):
         cond_body = " ".join(m.group(2).split())
@@ -1318,7 +1550,7 @@ def _item_trigger_blocks(script: str) -> list[tuple[str, list[str], str, set[str
             continue
         seen_bodies.add(act)
         events = _registration_events(var, pos, scope_body, scope_start)
-        blocks.append((stem, codes, body, events))
+        blocks.append((stem, tuple(codes), body, frozenset(events)))
     for m in _FN_ALL_RE.finditer(script):
         name = m.group(1)
         if name in seen_bodies:
@@ -1339,8 +1571,8 @@ def _item_trigger_blocks(script: str) -> list[tuple[str, list[str], str, set[str
         _scope, scope_body, scope_start = _function_scope_at(script, pos)
         events = _registration_events(var, pos, scope_body, scope_start)
         stem = name[: -len("Actions")] if name.endswith("Actions") else name
-        blocks.append((stem, codes, body, events))
-    return blocks
+        blocks.append((stem, tuple(codes), body, frozenset(events)))
+    return tuple(blocks)
 
 
 def _item_trigger_grant_lines(
@@ -1427,13 +1659,15 @@ def use_item_loot_lines(script: str, name_of) -> list[str]:
     return out
 
 
-def _script_pool_drops(pack: Path, code: str) -> list[str]:
+def _script_pool_drops(
+    pack: Path, code: str, *, script: str | None = None
+) -> list[str]:
     """死亡触发兜底: 关系表无该单位掉落行时, 扫 GetDyingUnit 条件的两种形态。
 
     ①奖池 PlaceRandomItem —— 输出仍是"池子 N 选 1"形态, 不写成固定掉落;
     ②直落 CreateItemLoc/UnitAddItemByIdSwapped —— 奖池扫描看不见的
     "死亡位置直发"写法 (BossFH 直落 I01F 曾被漏报为"无掉落记录")。"""
-    script = load_script(pack)
+    script = load_script(pack) if script is None else script
     if script is None or len(code) != 4:
         return []
     want = "'" + code.lower() + "'"
@@ -1479,7 +1713,7 @@ def _script_pool_drops(pack: Path, code: str) -> list[str]:
         if denom and re.search(rf"SaveInteger.*?,\s*{denom[0]}\s*\)", action_body):
             chance = f"{denom[0]}/{denom[0]}=必掉"
         label = units.get(code, units.get(code.upper(), code))
-        out.append(f"{label} [{code}]  ⚠ 脚本死亡奖池 (关系表无此掉落记录):")
+        out.append(f"{label} [{code}]  ⚠ 脚本死亡奖池 (脚本证据):")
         for pvar, pidx in placed:  # 全部奖池
             entries = pools.get((pvar, pidx), [])
             total = sum(w for _, w in entries) or 1.0
@@ -1559,7 +1793,8 @@ _FN_ALL_RE = re.compile(
 )
 
 
-def _death_blocks(script: str) -> list[tuple[str, str, str, str]]:
+@lru_cache(maxsize=4)
+def _death_blocks(script: str) -> tuple[tuple[str, str, str, str], ...]:
     """死亡处理块 (stem, label, cond_text, body)。
 
     两种真实形态都要发现: ①Trig_*Conditions/Trig_*Actions 成对;
@@ -1590,7 +1825,7 @@ def _death_blocks(script: str) -> list[tuple[str, str, str, str]]:
         done.add(fname)
         stem = fname[: -len("Actions")] if fname.endswith("Actions") else fname
         blocks.append((stem, f"死亡处理函数 {fname} (动作体内判定)", "", body))
-    return blocks
+    return tuple(blocks)
 
 
 _UNIT_DEATH_REG_RE = re.compile(
@@ -1607,9 +1842,10 @@ _RANDOM_DIST_ADD_RE = re.compile(
 )
 
 
+@lru_cache(maxsize=4)
 def _unit_death_random_drops(
     script: str,
-) -> list[tuple[str, str, list[tuple[str, int]]]]:
+) -> tuple[tuple[str, str, tuple[tuple[str, int], ...]], ...]:
     """YDWE 每单位死亡掉落模板: (单位码, 处理函数, [(物品码, 权重)])。
 
     该模板用 bj_lastDyingWidget 取死亡单位、RandomDistAddItem 配权重,
@@ -1618,8 +1854,8 @@ def _unit_death_random_drops(
     关联方式: 同函数内 EVENT_UNIT_DEATH 注册的 unit 变量取其前最近的
     set u=CreateUnit(...,'码',...) 单位码; 触发器变量取 TriggerAddAction。"""
     out: dict[tuple[str, str], list[tuple[str, int]]] = {}
-    for hm in _FN_HEAD_RE.finditer(script):
-        end = script.find("endfunction", hm.start())
+    for hm in _FN_HEAD_RE.finditer(script_views(script).syntax):
+        end = script_views(script).syntax.find("endfunction", hm.start())
         body = script[hm.start() : len(script) if end < 0 else end]
         creates = list(_CREATE_UNIT_VAR_RE.finditer(body))
         if not creates:
@@ -1637,15 +1873,11 @@ def _unit_death_random_drops(
             # 处理器必须取注册语句之后最近的一个: 初始化函数里往往有几十处
             # TriggerAddAction (CreateNeutralHostile 41 处), 从函数头搜会
             # 把无关处理器配给每个单位 (o604/o605/o606 曾共用 196)
-            act = re.search(
-                r"TriggerAddAction\(\s*"
-                + re.escape(trigger_var)
-                + r"\s*,\s*function\s+(\w+)",
-                body[rm.start() :],
+            fn = _action_after_registration(
+                trigger_var, hm.start() + rm.start(), body, hm.start()
             )
-            if not act:
+            if not fn:
                 continue
-            fn = act.group(1)
             regs = [
                 (_fourcc(im.group(1), im.group(2)), int(im.group(3)))
                 for im in _RANDOM_DIST_ADD_RE.finditer(_fn_body(script, fn))
@@ -1654,7 +1886,7 @@ def _unit_death_random_drops(
             if not regs:
                 continue
             out.setdefault((code, fn), []).extend(regs)
-    return [(code, fn, regs) for (code, fn), regs in out.items()]
+    return tuple((code, fn, tuple(regs)) for (code, fn), regs in out.items())
 
 
 def _script_unit_random_drops(
@@ -1759,7 +1991,7 @@ def _script_direct_death_drops(
             lines.append("    " + gate)
             hits.append(lines)
         if hits:
-            out.append(f"{iname} [{code}]  ⚠ 脚本死亡位置直落 (关系表无此掉落记录):")
+            out.append(f"{iname} [{code}]  ⚠ 脚本死亡位置直落 (脚本证据):")
             out.append(f"  {label}: {cond_body}" if cond_body else f"  {label}")
             for hit_lines in hits:
                 out.extend(hit_lines)
@@ -1978,144 +2210,89 @@ def _item_slot_by_name(name: str) -> str:
 
 
 def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
-    q = query.lower()
-    lines = []
-    kinds = set()
-    first_code = ""
-    for r in _read_rows(pack, "掉落与获取关系.tsv"):
-        if len(r) < 7:
+    items = load_items(pack)
+    units = load_units(pack)
+    names = {**units, **{code: name for code, (name, _desc) in items.items()}}
+    blocks = _AcquisitionBlocks()
+    kinds: dict[str, set[str]] = {}
+    target_codes: dict[str, None] = {}
+    for row in _read_rows(pack, "掉落与获取关系.tsv"):
+        if len(row) < 7 or not _is_record_code(row[3]):
             continue
-        code, name = r[3], _clean(r[4])
-        if not (
-            q == code.lower() or (name and (q in name.lower() or name.lower() in q))
+        code, name = row[3], _clean(row[4])
+        if _match(query, code, name):
+            target_codes[code] = None
+            kinds.setdefault(code, set()).add(row[2])
+            blocks.record(
+                code, f"{name} [{code}]  {row[2]} <- {_relation_source_label(row)}"
+            )
+        if (
+            len(row) >= 8
+            and _is_record_code(row[6])
+            and _match(query, row[6], _clean(row[7]))
         ):
-            continue
-        kinds.add(r[2])
-        if not first_code:
-            first_code = code
+            blocks.record(
+                row[6], f"{_clean(row[7])}[{row[6]}] {row[2]} -> {name} [{code}]"
+            )
+    candidates = dict.fromkeys(
+        (
+            *blocks.first,
+            *target_codes,
+            *(code for code, name in names.items() if _match(query, code, name)),
+        )
+    )
+    if _is_record_code(query) and not candidates:
+        candidates[query] = None
+    script = load_script(pack)
+    for code in candidates:
+        death, usage = _acquisition_script_evidence(
+            pack, code, script, items, units, names
+        )
+        supplemental: list[str] = []
+        code_kinds = kinds.get(code, set())
+        if code_kinds and not any("掉落" in kind for kind in code_kinds):
+            if death:
+                supplemental.append(
+                    "⚠ 防呆: 关系表无 Boss/单位死亡掉落行, 但脚本死亡触发有直发证据(见下); NPC 随身携带仍不构成掉落证据"
+                )
+            else:
+                supplemental.append(
+                    "⚠ 防呆: 该物品无 Boss/单位死亡掉落记录(仅 "
+                    + "/".join(sorted(code_kinds))
+                    + ")——不得断言打怪掉落; NPC 随身携带不构成掉落证据"
+                )
+        blocks.supplement(code, [*supplemental, *death, *usage])
+    if blocks.records:
+        return blocks.render(limit)
+    unit_misses = [
+        f"[{code}] {name} 无死亡触发直落/奖池证据。"
+        for code, name in units.items()
+        if _match(query, code, name)
+    ]
+    if unit_misses:
+        return [
+            *_limit_result_blocks([[line] for line in unit_misses], limit),
+            "位置/获取查询用 where <词>。",
+        ]
+    hints = _tooltip_source_hints(pack, _hint_targets(pack, query))
+    if hints:
+        head = (
+            "⚠ 文案级配方/来源线索 (关系表与脚本奖池无记录"
+            + ("; 脚本加密" if _script_encrypted(pack) else "")
+            + "; 未脚本验证——合成/掉落触发以实际游戏为准):"
+        )
+        return [head, *_limit_result_blocks([["  " + hint] for hint in hints], limit)]
+    lines = ["未找到获取途径: " + query]
+    if items or units:
         lines.append(
-            name + " [" + code + "]  " + r[2] + " <- " + _relation_source_label(r)
+            f"  （本图物品表 {len(items)} 件 / 单位表 {len(units)} 种; 可换四码或关键词再查）"
         )
-        if limit and len(lines) >= limit:
-            break
-    if not lines:
-        # 来源侧: 查询词是来源 (可破坏物/商人/单位) 时给出来源侧关系行,
-        # 曾让「路障掉什么」直接落到「未找到获取途径」
-        src_hits: list[str] = []
-        for r in _read_rows(pack, "掉落与获取关系.tsv"):
-            if len(r) < 8:
-                continue
-            src_name = _clean(r[7])
-            if not _match(query, r[6], src_name):
-                continue
-            src_hits.append(
-                src_name
-                + "["
-                + r[6]
-                + "] "
-                + r[2]
-                + " -> "
-                + _clean(r[4])
-                + " ["
-                + r[3]
-                + "]"
-            )
-            if limit and len(src_hits) >= limit:
-                break
-        if src_hits:
-            return src_hits
-        cands = (
-            [query] if len(query) == 4 and query.isascii() and query.isalnum() else []
-        )
-        if not cands:
-            for ucode, uname in load_units(pack).items():
-                if q in uname.lower():
-                    cands.append(ucode)
-                if len(cands) >= 3:
-                    break
-        if not cands:
-            # 按物品名问「打谁掉」也要进死亡扫描 (I01F 按名查询拿不到直落证据的事故)
-            for icode, (iname, _idesc) in load_items(pack).items():
-                if q in iname.lower():
-                    cands.append(icode)
-                if len(cands) >= 3:
-                    break
-        all_units = load_units(pack)
-        for cand in cands:
-            got = _script_pool_drops(pack, cand)
-            if cand in all_units or cand.upper() in all_units:
-                # 物品维度直落扫描按物品码匹配 CreateItemLoc 参数,
-                # 单位做查询词(按名或直接敲单位码)都反不进去——
-                # 按单位表归属判定, 补单位维度反查
-                script = load_script(pack)
-                if script is not None:
-                    got = got + _script_unit_direct_drops(
-                        script, cand, load_items(pack), all_units
-                    )
-                    got = got + _script_unit_random_drops(
-                        script, cand, load_items(pack), all_units
-                    )
-            if got:
-                return got
-        for ucode, uname in load_units(pack).items():
-            if _match(query, ucode, uname):
-                return [
-                    "[" + ucode + "] " + uname + " 无死亡触发直落/奖池证据。",
-                    "位置/获取查询用 where <词>。",
-                ]
-        hints = _tooltip_source_hints(pack, _hint_targets(pack, query), limit)
-        if hints:
-            head = (
-                "⚠ 文案级配方/来源线索 (关系表与脚本奖池无记录"
-                + ("; 脚本加密" if _script_encrypted(pack) else "")
-                + "; 未脚本验证——合成/掉落触发以实际游戏为准):"
-            )
-            return [head] + ["  " + h for h in _bounded(hints, limit)]
-        items_n = len(load_items(pack))
-        units_n = len(load_units(pack))
-        hint = _code_home_hint(pack, query)
-        if items_n or units_n:
-            miss = [
-                "未找到获取途径: " + query,
-                f"  （本图物品表 {items_n} 件 / 单位表 {units_n} 种; 可换四码或关键词再查）",
-            ]
-            if hint:
-                miss.append(hint)
-            miss.append(
-                "  （若有预放置坐标/脚本位置，可用 near <x> <y> 按坐标反查周边掉落与单位）"
-            )
-            return miss
-        miss = ["未找到获取途径: " + query]
-        if hint:
-            miss.append(hint)
-        miss.append(
-            "  （若有预放置坐标/脚本位置，可用 near <x> <y> 按坐标反查周边掉落与单位）"
-        )
-        return miss
-    if not any("掉落" in k for k in kinds):
-        scan_code = (
-            query
-            if len(query) == 4 and query.isascii() and query.isalnum()
-            else first_code
-        )
-        script_evidence = (
-            _script_pool_drops(pack, scan_code)
-            if scan_code and len(scan_code) == 4
-            else []
-        )
-        if script_evidence:
-            lines.append(
-                "⚠ 防呆: 关系表无 Boss/单位死亡掉落行, 但脚本死亡触发有直发证据"
-                + "(见下); NPC 随身携带仍不构成掉落证据"
-            )
-            lines.extend(script_evidence)
-        else:
-            lines.append(
-                "⚠ 防呆: 该物品无 Boss/单位死亡掉落记录(仅 "
-                + "/".join(sorted(kinds))
-                + ")——不得断言打怪掉落; NPC 随身携带不构成掉落证据"
-            )
-    _limit_disclosure_note(lines, limit)
+    hint = _code_home_hint(pack, query)
+    if hint:
+        lines.append(hint)
+    lines.append(
+        "  （若有预放置坐标/脚本位置，可用 near <x> <y> 按坐标反查周边掉落与单位）"
+    )
     return lines
 
 
@@ -2124,15 +2301,12 @@ def _query_quest(pack: Path, query: str, limit: int) -> list[str]:
     path = pack / "脚本字符串索引.tsv"
     if path.exists():
         for line in _iter_tsv_lines(path):
-            if query in line and (
+            if query.casefold() in line.casefold() and (
                 "CreateQuestBJ" in line or "DisplayTimedTextToForce" in line
             ):
                 lines.append(_clean(line.rstrip("\n")))  # 整行, 不开窗
-                if limit and len(lines) >= limit:
-                    break
-    _limit_disclosure_note(lines, limit)
     if lines:
-        return lines
+        return _limit_result_blocks([[line] for line in lines], limit)
     if query:
         # 任务总量提示 + text 改道 (否定断言四维: 总量/换词/数据源)
         total = sum(
@@ -2158,36 +2332,39 @@ def _query_text(pack: Path, query: str, limit: int) -> list[str]:
             for line in _iter_tsv_lines(path):
                 if query in line:
                     lines.append(path.name + ": " + _clean(line.rstrip("\n")))  # 整行
-                    break
         except OSError:
             continue
-        if limit and len(lines) >= limit:
-            break
     if lines:
-        if limit and len(lines) >= limit:
-            lines.append(
-                f"  (已达 --limit {limit}, 结果可能不止——收窄关键词或去掉 --limit)"
-            )
-        return lines
+        note = _truncated_note(lines, limit)
+        return [*_bounded(lines, limit), *([note] if note else [])]
     return [
         "未找到文本: " + query + " (扫全部 *.tsv 索引行)",
         "  （可换更短关键词重试; 对象名/效果排查用 search <词> 更专——它按八表结构化匹配）",
     ]
 
 
-_CHAT_REG_RE = re.compile(
-    # 触发器变量不一定是 gg_trg_*: 战役脚本用局部/普通全局 (如 t) 注册,
-    # 旧正则只认 gg_trg_ 前缀, "YDWE Version" 这类具名指令因此漏检
-    r"TriggerRegisterPlayerChatEvent\(\s*([A-Za-z_]\w*)\s*,\s*"
-    r"([A-Za-z_]\w*(?:\((?:[^()]|\([^()]*\))*\))?)\s*,\s*"
-    r'"([^"]*)"\s*,\s*(true|false)\s*\)'
-)
-_ADD_ACTION_RE = re.compile(
-    r"TriggerAddAction\(\s*([A-Za-z_]\w*)\s*,\s*function\s+(\w+)"
-)
-_ADD_COND_RE = re.compile(
-    r"TriggerAddCondition\(\s*([A-Za-z_]\w*)\s*,\s*Condition\(function\s+(\w+)\)"
-)
+_CHAT_CALL_RE = re.compile(r"\b(TriggerRegisterPlayerChatEvent(?:BJ)?)\s*\(")
+
+
+def _chat_registrations(
+    script: str, *, lua: bool | None
+) -> Iterator[tuple[str, str, str, int]]:
+    """Read native/BJ chat registrations with balanced, complete arguments."""
+    for site in script_trigger_bindings(script, lua=lua).sites:
+        api = site.call.name.removeprefix("_G.")
+        if api not in {
+            "TriggerRegisterPlayerChatEvent",
+            "TriggerRegisterPlayerChatEventBJ",
+        }:
+            continue
+        args = site.arguments
+        if len(args) != 4:
+            continue
+        command_index = 1 if api.endswith("BJ") else 2
+        command = literal_string_value(args[command_index])
+        if command is not None:
+            yield args[0], command, args[command_index + 1], site.call.start
+
 
 _SCOPE_ADD_COND_RE = re.compile(
     r"TriggerAddCondition\(\s*([A-Za-z_]\w*)\s*,\s*Condition\(\s*function\s+(\w+)"
@@ -2212,7 +2389,7 @@ def _script_function_spans(script: str) -> tuple[list[int], list[str]]:
     if cached is None:
         starts: list[int] = []
         names: list[str] = []
-        for hm in _FN_HEAD_RE.finditer(script):
+        for hm in _FN_HEAD_RE.finditer(script_views(script).syntax):
             starts.append(hm.start())
             names.append(hm.group(1))
         cached = (starts, names)
@@ -2229,7 +2406,9 @@ def _function_scope_at(script: str, pos: int) -> tuple[str, str, int]:
     if i < 0:
         return "", script, 0
     name, start = names[i], starts[i]
-    end = script.find("endfunction", pos)
+    end = script_views(script).syntax.find("endfunction", start)
+    if end >= 0 and pos >= end + len("endfunction"):
+        return "", script, 0
     return name, script[start : len(script) if end < 0 else end], start
 
 
@@ -2254,48 +2433,115 @@ def _registration_maps(
     return conds, acts
 
 
+@lru_cache(maxsize=8)
+def _trigger_assignment_offsets(var: str, scope_body: str) -> tuple[int, ...]:
+    """Cache syntax positions, without limiting registrations or source length."""
+    syntax = script_views(scope_body).syntax
+    pattern = re.compile(r"\bset\s+" + re.escape(var) + r"\s*=")
+    return tuple(match.start() for match in pattern.finditer(syntax))
+
+
+def _registration_window(
+    var: str, pos: int, scope_body: str, scope_start: int
+) -> tuple[int, int]:
+    """A trigger's bindings end at its next assignment or the function end."""
+    offsets = _trigger_assignment_offsets(var, scope_body)
+    index = bisect.bisect_right(offsets, max(0, pos - scope_start))
+    start = offsets[index - 1] if index else 0
+    end = offsets[index] if index < len(offsets) else len(scope_body)
+    return start, end
+
+
 def _action_after_registration(
     var: str, pos: int, scope_body: str, scope_start: int
 ) -> str:
-    """同一作用域内, 注册位置之后最近的同变量 TriggerAddAction 函数名。"""
     rel = max(0, pos - scope_start)
-    m = re.search(
-        r"TriggerAddAction\(\s*" + re.escape(var) + r"\s*,\s*function\s+(\w+)",
-        scope_body[rel:],
+    _start, end = _registration_window(var, pos, scope_body, scope_start)
+    syntax = script_views(scope_body).syntax
+    match = re.search(
+        r"TriggerAddAction\s*\(\s*" + re.escape(var) + r"\s*,\s*function\s+(\w+)",
+        syntax[rel:end],
     )
-    return m.group(1) if m else ""
+    return match.group(1) if match else ""
 
 
 def _registration_events(
     var: str, pos: int, scope_body: str, scope_start: int
 ) -> set[str]:
-    """注册窗口内的 EVENT_*: 最近一次 set <var>=CreateTrigger() 到该触发器
-    TriggerAddAction 之间 (同一变量在巨型初始化函数里反复复用)。"""
-    rel = max(0, pos - scope_start)
-    head = scope_body[:rel]
-    creates = list(
-        re.finditer(r"set\s+" + re.escape(var) + r"\s*=\s*CreateTrigger\(\)", head)
-    )
-    start = creates[-1].start() if creates else 0
-    tail = scope_body[rel:]
-    act = re.search(
-        r"TriggerAddAction\(\s*" + re.escape(var) + r"\s*,\s*function\s+\w+", tail
-    )
-    end = rel + (act.end() if act else 400)
-    return set(re.findall(r"EVENT_\w+", scope_body[start:end]))
+    """Read every actual event call for this variable throughout its lifetime."""
+    start, end = _registration_window(var, pos, scope_body, scope_start)
+    syntax = script_views(scope_body).syntax
+    pattern = re.compile(r"\bTriggerRegister\w*\s*\(\s*" + re.escape(var) + r"\s*,")
+    events: set[str] = set()
+    for match in pattern.finditer(syntax, start, end):
+        call = _balanced_call(syntax, match.start())
+        events.update(re.findall(r"\bEVENT_\w+", call))
+    return events
 
 
 def load_script(pack_dir: Path) -> str | None:
-    """脚本可读文本/*.j 全文（\r 归一为 \n），无则 None。"""
+    """全部 JASS/Lua 脚本全文；一次查询内共用同一份读取结果。"""
+    key = str(pack_dir)
+    if _QUERY_SCRIPTS is not None and key in _QUERY_SCRIPTS:
+        return _QUERY_SCRIPTS[key]
+    sources = load_script_contexts(pack_dir)
+    result = "\n".join(text for _source, text, _lua in sources) if sources else None
+    if _QUERY_SCRIPTS is not None:
+        _QUERY_SCRIPTS[key] = result
+    return result
+
+
+def load_script_sources(pack_dir: Path) -> tuple[tuple[str, str], ...]:
+    """Read each source once while retaining its language and source boundary."""
+    key = str(pack_dir)
+    if _QUERY_SCRIPT_SOURCES is not None and key in _QUERY_SCRIPT_SOURCES:
+        return _QUERY_SCRIPT_SOURCES[key]
     d = pack_dir / "脚本可读文本"
     if not d.is_dir():
-        return None
-    for p in sorted(d.glob("*.j")):
+        return ()
+    sources: list[tuple[str, str]] = []
+    for p in sorted(
+        path for path in d.rglob("*") if path.suffix.lower() in (".j", ".lua", ".txt")
+    ):
+        file_key = (str(pack_dir), p.relative_to(pack_dir).as_posix())
+        if _QUERY_FILES is not None:
+            _QUERY_FILES.add(file_key)
         try:
-            return p.read_text(encoding="utf-8", errors="replace").replace("\r", "\n")
+            sources.append(
+                (
+                    p.relative_to(d).as_posix(),
+                    p.read_text(encoding="utf-8", errors="replace").replace("\r", "\n"),
+                )
+            )
+            _LOCKED_FILES.discard(file_key)
         except OSError:
-            continue
-    return None
+            _LOCKED_FILES.add(file_key)
+    result = tuple(sources)
+    if _QUERY_SCRIPT_SOURCES is not None:
+        _QUERY_SCRIPT_SOURCES[key] = result
+    return result
+
+
+def _pack_script_type(pack_dir: Path) -> str:
+    return script_type_from_report(
+        "\n".join("\t".join(row) for row in _read_rows(pack_dir, "地图信息.txt"))
+    )
+
+
+def load_script_contexts(pack_dir: Path) -> tuple[AnalysisScriptSource, ...]:
+    sources = load_script_sources(pack_dir)
+    declared = _pack_script_type(pack_dir)
+    entries: list[AnalysisScriptSource] = []
+    for source, text in sources:
+        lua = script_language(
+            source,
+            available_sources=(name for name, _text in sources),
+            declared_script_type=declared,
+        )
+        entries.append(
+            AnalysisScriptSource(source, analysis_script_text(source, text, lua), lua)
+        )
+    return tuple(entries)
 
 
 def _script_encrypted(pack_dir: Path) -> bool:
@@ -2316,53 +2562,33 @@ def _hint_targets(pack_dir: Path, query: str) -> set[str]:
     return {t for t in targets if t}
 
 
-def _tooltip_source_hints(pack_dir: Path, targets: set[str], limit: int) -> list[str]:
+def _tooltip_source_hints(pack_dir: Path, targets: set[str]) -> list[str]:
     """文案层获取线索兜底：其他对象说明文本提到目标物品名（配方/掉落来源）。
 
     关系表与脚本奖池都无记录时使用——输出必须带"文案级"标注（未脚本验证）。"""
     if not targets:
         return []
     out: list[str] = []
+    wanted = sorted(targets)
     for code, (name, desc) in load_items(pack_dir).items():
         if not desc or name in targets:
             continue
-        if next((t for t in sorted(targets) if t in desc), None) is None:
+        if next((t for t in wanted if t in desc), None) is None:
             continue
         excerpt = desc  # 说明全文
         out.append(f"{name} [{code}] 说明: {excerpt}")
-        if limit and len(out) >= limit:
-            break
     return out
 
 
-def _fn_body(script: str, fn: str) -> str:
-    i = script.find("function " + fn + " takes")
-    if i < 0:
-        return "(未找到函数体)"
-    j = script.find("endfunction", i)
-    body = script[i : (j + len("endfunction")) if j >= 0 else len(script)]
-    return " ".join(body.split())  # 满量: 函数体全文, 不设字符上限
-
-
-_RECT_DEF_RE = re.compile(
-    r"set\s+(gg_rct_\w+)\s*=\s*Rect\(\s*(-?\s?[\d.]+)\s*,\s*(-?\s?[\d.]+)\s*,"
-    r"\s*(-?\s?[\d.]+)\s*,\s*(-?\s?[\d.]+)\s*\)"
-)
-_CREATE_UNIT_RE = re.compile(
-    r"CreateUnit\s*\(\s*\w+\s*,\s*'(\w{4})'\s*,\s*(-?\s?[\d.]+)\s*,\s*(-?\s?[\d.]+)"
-)
-
-
-def _coord_columns(header: list[str]) -> tuple[int, int]:
-    """按表头名取 X/Y 列（防列位漂移）；无表头时退回 3/4。"""
+def _fn_body(script: str, fn: str, *, preserve_whitespace: bool = False) -> str:
+    starts, names = _script_function_spans(script)
     try:
-        return header.index("X"), header.index("Y")
+        start = starts[names.index(fn)]
     except ValueError:
-        return 3, 4
-
-
-def _num(s: str) -> float:
-    return float(s.replace(" ", ""))
+        return "(未找到函数体)"
+    end = script_views(script).syntax.find("endfunction", start)
+    body = script[start : end + len("endfunction") if end >= 0 else len(script)]
+    return body.strip() if preserve_whitespace else " ".join(body.split())
 
 
 def _source_drop_map(pack: Path) -> dict[str, str]:
@@ -2409,270 +2635,148 @@ def _source_shop_map(pack: Path) -> dict[str, str]:
     return shops
 
 
+def _query_near_result(pack: Path, query: str, limit: int) -> SpatialQueryResult:
+    """Return exact spatial data through the same sources as every pack query."""
+    from .pack_query_spatial import SpatialSources, query_near
+
+    return query_near(
+        pack, query, limit, cast(SpatialSources, cast(object, sys.modules[__name__]))
+    )
+
+
 def _query_near(pack: Path, query: str, limit: int) -> list[str]:
-    """坐标反查: near <x> <y> [radius=3000] —— 脚底/附近内容物。
-
-    表头驱动解析预放置表列位；Rect 负号带空格(- 5184.0)统一归一；装饰物聚类报告。"""
-    parts = query.split()
-    kind_filter = ""
-    if "--kind" in parts:
-        ki = parts.index("--kind")
-        if ki + 1 < len(parts):
-            kind_filter = parts[ki + 1]
-        parts = parts[:ki] + parts[ki + 2 :]
-    if len(parts) not in (2, 3):
-        return [
-            "用法: near <x> <y> [radius=3000] [--kind 单位/装饰/物品/脚本]",
-            "  （坐标来源: live 探针输出尾部 JSON 的 x/y, 或地图编辑器; 查脚底有什么/附近谁在掉什么）",
-        ]
-    try:
-        px, py = float(parts[0]), float(parts[1])
-        radius = float(parts[2]) if len(parts) == 3 else 3000.0
-    except ValueError:
-        return ["坐标与半径必须是数字: near <x> <y> [radius]"]
-    raw_radius = radius
-    radius = max(50.0, min(radius, 20000.0))
-    lines = [f"== 坐标 ({px:g}, {py:g}) 半径 {radius:g} =="]
-    if radius != raw_radius:
-        lines.append(
-            f"  (半径 {raw_radius:g} 超界已钳制到 {radius:g}; 有效范围 50~20000)"
-        )
-    drop_map = _source_drop_map(pack)
-    shop_map = _source_shop_map(pack)
-
-    def dist(x: float, y: float) -> float:
-        return math.hypot(x - px, y - py)
-
-    if kind_filter and kind_filter not in ("单位", "装饰", "物品", "脚本"):
-        return [f"未知 --kind {kind_filter} (可选: 单位/装饰/物品/脚本; 缺省=全部)"]
-    for rel, kind in (("预放置单位.tsv", "单位"), ("预放置装饰物.tsv", "装饰")):
-        if kind_filter and kind != kind_filter:
-            continue  # --kind 过滤: 只看指定类
-        rows = _read_rows(pack, rel)
-        if kind == "单位" and rows:
-            # 脚本 CreateUnit 放置 (yuekong 全部商店即此法) 合入坐标反查
-            width = max(len(rows[0]), 8)
-            for code, sx, sy, _kind in load_placements(pack):
-                if _kind != "unit":
-                    continue
-                row = [""] * width
-                row[1] = code
-                row[2] = code
-                row[4] = f"{sx:g}"
-                row[5] = f"{sy:g}"
-                rows.append(row)
-        rows = [r for r in rows if r]
-        if not rows:
-            continue
-        cx_i, cy_i = _coord_columns(rows[0])
-        entries: dict[tuple[str, str], list[tuple[float, float]]] = {}
-        nearest: list[tuple[float, str]] = []
-        for r in rows[1:]:
-            if len(r) <= max(cx_i, cy_i):
-                continue
-            try:
-                x, y = float(r[cx_i]), float(r[cy_i])
-            except ValueError:
-                continue
-            d = dist(x, y)
-            nearest.append((d, f"{r[2] if len(r) > 2 else r[1]} [{r[1]}]"))
-            if d <= radius:
-                key = (r[1], r[2] if len(r) > 2 else r[1])
-                entries.setdefault(key, []).append((x, y))
-        if kind == "单位":
-            hits = sorted(
-                ((k[0], k[1], xs) for k, xs in entries.items()),
-                key=lambda t: dist(
-                    sum(p[0] for p in t[2]) / len(t[2]),
-                    sum(p[1] for p in t[2]) / len(t[2]),
-                ),
-            )
-            note = _truncated_note(hits, limit)
-            for code, name, xs in _bounded(hits, limit):
-                cx = sum(p[0] for p in xs) / len(xs)
-                cy = sum(p[1] for p in xs) / len(xs)
-                drop = f"  掉: {drop_map[code]}" if code in drop_map else ""
-                sell = f"  卖: {shop_map[code]}" if code in shop_map else ""
-                lines.append(
-                    f"  {kind}: {name} [{code}] ×{len(xs)} @({cx:g},{cy:g}) 距{dist(cx, cy):.0f}{drop}{sell}"
-                )
-            if note:
-                lines.append(note)
-        else:
-            clusters: list[tuple[float, str, int, float, float]] = []
-            for (code, name), pts in entries.items():
-                remaining = list(pts)
-                while remaining:
-                    seed = remaining[0]
-                    group = [
-                        p
-                        for p in remaining
-                        if math.hypot(p[0] - seed[0], p[1] - seed[1]) < 1200
-                    ]
-                    remaining = [p for p in remaining if p not in group]
-                    gcx = sum(p[0] for p in group) / len(group)
-                    gcy = sum(p[1] for p in group) / len(group)
-                    clusters.append(
-                        (dist(gcx, gcy), f"{name} [{code}]", len(group), gcx, gcy)
-                    )
-            note_c = _truncated_note(clusters, limit)
-            clusters.sort()
-            for d, label, n, gcx, gcy in _bounded(clusters, limit):
-                code = label.rsplit("[", 1)[-1].rstrip("]") if "[" in label else ""
-                drop = f"  掉: {drop_map[code]}" if code in drop_map else ""
-                lines.append(
-                    f"  {kind}群: {label} ×{n} @({gcx:g},{gcy:g}) 距{d:.0f}{drop}"
-                )
-            if note_c:
-                lines.append(note_c)
-        if not entries and nearest:
-            nearest.sort()
-            for d, label in nearest:  # 半径外最近全部列出
-                lines.append(f"  (半径外最近{kind}: {label} 距{d:.0f})")
-
-    if kind_filter in ("单位", "装饰") and len(lines) > 1:
-        return lines  # --kind 过滤: 只要预放置段且非空
-    script_items = [
-        (code, x, y)
-        for code, x, y, kind in load_placements(pack)
-        if kind == "item" and dist(x, y) <= radius
-    ]
-    if script_items:
-        item_names = load_items(pack)
-        grouped: dict[str, int] = {}
-        for code, _x, _y in script_items:
-            grouped[code] = grouped.get(code, 0) + 1
-        for code, n in sorted(grouped.items(), key=lambda kv: (-kv[1], kv[0])):
-            nm = item_names.get(code, (code, ""))[0]
-            lines.append(f"  脚本物品: {nm} [{code}] ×{n} (脚本 CreateItem 放置)")
-    script = load_script(pack)
-    if script:
-        in_rect: list[str] = []
-        for m in _RECT_DEF_RE.finditer(script):
-            x1, y1, x2, y2 = (_num(m.group(i)) for i in range(2, 6))
-            if min(x1, x2) <= px <= max(x1, x2) and min(y1, y2) <= py <= max(y1, y2):
-                in_rect.append(m.group(1))
-        if in_rect:
-            lines.append("  所在矩形: " + ", ".join(in_rect))  # 全部
-        spawned = []
-        for m in _CREATE_UNIT_RE.finditer(script):
-            x, y = _num(m.group(2)), _num(m.group(3))
-            d = dist(x, y)
-            if d <= radius:
-                spawned.append((d, m.group(1), x, y))
-        note_s = _truncated_note(spawned, limit)
-        spawned.sort()
-        for d, code, x, y in _bounded(spawned, limit):
-            name = load_units(pack).get(code, code)
-            drop = f"  掉: {drop_map[code]}" if code in drop_map else ""
-            lines.append(f"  脚本单位: {name} [{code}] @({x:g},{y:g}) 距{d:.0f}{drop}")
-        if note_s:
-            lines.append(note_s)
-    if kind_filter and len(lines) == 1:
-        return [
-            f"坐标 ({px:g},{py:g}) 半径 {radius:g} 内无 {kind_filter} 类命中。",
-            "  （可去掉 --kind 看全部类; 或加大半径: near <x> <y> 20000 --kind "
-            + kind_filter
-            + "）",
-        ]
-    if not lines or len(lines) == 1:
-        return [
-            f"坐标 ({px:g},{py:g}) 半径 {radius:g} 内无预放置/脚本内容。",
-            "  （多半在可玩区域外——核对坐标; 或加大半径: near <x> <y> 20000）",
-        ]
-    return lines
+    """Compatibility text view of the complete spatial query."""
+    return list(_query_near_result(pack, query, limit).lines)
 
 
-_NEAR_ROW_RE = re.compile(
-    r"^\s*(单位|装饰|装饰群|脚本单位|脚本物品):\s*(.+?)\s*\[(\w+)\]"
-    r"(?:\s*×(\d+))?\s*@\((-?[\d.]+),(-?[\d.]+)\)(?:\s*距(\d+))?"
-)
 _FN_HEAD_RE = re.compile(
-    r"(?m)^(?:function|private function|public function|static function)\s+(\w+)\s+takes"
+    r"(?m)^[ \t]*(?:(?:private|public|static)\s+)*function\s+(\w+)\s+takes"
 )
 
 
-def _function_scope(script: str, pos: int) -> tuple[str, str]:
-    """包含 pos 的 JASS 函数 (函数名, 函数体文本); 找不到返回 ("", script)。
-
-    与 _function_scope_at 同一实现 (后者额外返回函数体起点用于位置配对)。
-    局部 trigger 变量跨函数重名, 处理器必须按注册位置配对。"""
-    name, body, _start = _function_scope_at(script, pos)
-    return name, body
+@dataclass
+class _CommandMatch:
+    variable: str
+    command: str
+    exact: str
+    actions: tuple[CallbackReference, ...]
+    conditions: tuple[CallbackReference, ...]
+    function: str
+    source: str
+    script: str
+    diagnostic: str = ""
+    count: int = 0
+    lua: bool | None = None
 
 
 def _query_cmd(pack: Path, query: str, limit: int) -> list[str]:
-    script = load_script(pack)
-    if script is None:
-        return ["未找到脚本 (脚本可读文本/*.j)——该包可能未导出可读脚本"]
-    # 每条注册按「所在函数」配对处理器: 同名局部变量跨函数不再串台。
-    # 精确命中优先于前缀命中 (cmd "-" 不应把 "-zs" 一并列出)。
-    exact_hits: dict[
-        tuple[str, str, str, str, str, str], tuple[str, str, str, str, str, int, str]
-    ] = {}
-    loose_hits: dict[
-        tuple[str, str, str, str, str, str], tuple[str, str, str, str, str, int, str]
-    ] = {}
-    for m in _CHAT_REG_RE.finditer(script):
-        var, cmd, exact = m.group(1), m.group(3), m.group(4)
-        if cmd == query:
-            bucket = exact_hits
-        elif len(cmd) > 1 and (query in cmd or cmd in query):
-            bucket = loose_hits
-        else:
-            continue
-        fn, scope = _function_scope(script, m.start())
-        act = _ADD_ACTION_RE.search(scope)
-        cond = _ADD_COND_RE.search(scope)
-        act_name = act.group(2) if act else ""
-        cond_name = cond.group(2) if cond else ""
-        key = (fn or var, var, cmd, exact, act_name, cond_name)
-        prev = bucket.get(key)
-        bucket[key] = (
-            var,
-            cmd,
-            exact,
-            act_name,
-            cond_name,
-            (prev[5] if prev else 0) + 1,
-            fn,
-        )
+    sources = load_script_contexts(pack)
+    if not sources:
+        return [
+            "未找到脚本 (脚本可读文本/*.j / *.lua / 自定义代码)——该包可能未导出可读脚本"
+        ]
+    exact_hits: dict[tuple[object, ...], _CommandMatch] = {}
+    loose_hits: dict[tuple[object, ...], _CommandMatch] = {}
+    empty = 0
+    for source, script, lua in sources:
+        bindings = script_trigger_bindings(script, lua=lua)
+        for var, cmd, exact, position in _chat_registrations(script, lua=lua):
+            empty += not bool(cmd)
+            if cmd == query:
+                bucket = exact_hits
+            elif len(cmd) > 1 and (query in cmd or cmd in query):
+                bucket = loose_hits
+            else:
+                continue
+            registration = bindings.by_start[position]
+            owner = bindings.structure.scopes.at(position)
+            fn = owner.name if owner is not None else ""
+            related = bindings.instances[registration.instance]
+            actions = tuple(
+                site.callback
+                for site in related
+                if site.call.name.removeprefix("_G.")
+                in {"TriggerAddAction", "TriggerAddActionBJ"}
+                and site.callback is not None
+            )
+            conditions = tuple(
+                site.callback
+                for site in related
+                if site.call.name.removeprefix("_G.")
+                in {"TriggerAddCondition", "TriggerAddConditionBJ"}
+                and site.callback is not None
+            )
+            key = (source, registration.instance, cmd, exact, actions, conditions)
+            found = bucket.setdefault(
+                key,
+                _CommandMatch(
+                    var,
+                    cmd,
+                    exact,
+                    actions,
+                    conditions,
+                    fn,
+                    source,
+                    script,
+                    registration.diagnostic,
+                    lua=lua,
+                ),
+            )
+            found.count += 1
     hits = exact_hits or loose_hits
     if not hits:
-        # 空串聊天事件 = 任意聊天都会触发的监听 (YDWE 系统指令常把参数
-        # 写在条件/动作里)。只答「未找到」会让玩家以为本图无聊天交互。
-        empty = sum(1 for m in _CHAT_REG_RE.finditer(script) if not m.group(3))
         if empty:
             return [
                 f"⚠ 未找到具名聊天指令: {query}",
-                f"  （本图另有 {empty} 处空串聊天事件——任意聊天都会触发,"
-                " 具体参数写在条件/动作里; 见 脚本触发注册索引「聊天事件」行）",
+                f"  （本图另有 {empty} 处空串聊天事件——任意聊天都会触发, 具体参数写在条件/动作里; 见 脚本触发注册索引「聊天事件」行）",
             ]
         return [
             "未找到聊天指令: " + query,
             "  （本图指令注册见 脚本触发注册索引.tsv 的「聊天事件」行; 空串监听=任意聊天触发）",
         ]
-    lines: list[str] = []
-    for var, cmd, exact, act_name, cond_name, count, fn in sorted(
-        hits.values(), key=lambda row: -row[5]
-    ):
-        if limit and len(lines) >= limit * 6:
-            break
-        lines.append(
-            f'指令 "{cmd}" ({"精确" if exact == "true" else "前缀"}, 注册{count}个玩家位) -> {var}'
+    blocks: list[list[str]] = []
+    for found in sorted(hits.values(), key=lambda value: -value.count):
+        match_kind = (
+            "精确"
+            if found.exact == "true"
+            else "前缀"
+            if found.exact == "false"
+            else "动态匹配: " + found.exact
         )
-        if fn:
-            lines.append("  注册函数: " + fn)
-        if cond_name:
-            lines.append("  条件: " + _fn_body(script, cond_name))
-        lines.append(
-            "  动作: " + _fn_body(script, act_name)
-            if act_name
-            else "  动作: (未找到 TriggerAddAction)"
-        )
-        lines.append("")
-    _limit_disclosure_note(lines, limit)
-    return lines
+        block = [
+            f'指令 "{found.command}" ({match_kind}, 注册{found.count}个玩家位) -> {found.variable}',
+            "  来源: " + found.source,
+        ]
+        if found.function:
+            block.append("  注册函数: " + found.function)
+        if found.diagnostic:
+            block.append("  关联诊断: " + found.diagnostic)
+        functions = script_functions(found.script, lua=found.lua)
+        for label, callbacks in (("条件", found.conditions), ("动作", found.actions)):
+            for callback, count in Counter(callbacks).items():
+                if count > 1:
+                    block.append(f"  {label}注册: 同一回调 {count} 次")
+                if callback.diagnostic:
+                    block.append(
+                        f"  {label}诊断: {callback.diagnostic}; 表达式: {callback.expression}"
+                    )
+                if not callback.functions:
+                    block.append(f"  {label}: {callback.expression}")
+                for function in callback.functions:
+                    block.append(
+                        f"  {label}: "
+                        + found.script[function.start : function.end].strip()
+                    )
+                    block.extend(
+                        format_function_graph(
+                            functions.graph(function), functions, definitions=True
+                        )
+                    )
+        if not found.actions:
+            block.append("  动作: (未找到 TriggerAddAction)")
+        block.append("")
+        blocks.append(block)
+    return _limit_result_blocks(blocks, limit)
 
 
 _GIVE_MECHS = ("UnitAddItem", "CreateItem")
@@ -2685,10 +2789,14 @@ _GIVE_DIGEST_MARKS = (
 _CONSUME_MARKS = ("GetItemTypeId", "UnitHasItemOfType", "GetItemOfType", "RemoveItem")
 
 
-def _ref_kind(mech: str, digest: str) -> str:
+def _ref_kind(mech: str, digest: str, *, context: str = "") -> str:
     """单条对象码引用的形态: give=给予/创建, consume=作为材料或触发媒介, other。
 
     机制列常为笼统的 ObjectCode，native 名在摘要里，两处都嗅。"""
+    if context.startswith(_CONSUME_MARKS):
+        return "consume"
+    if context.startswith((*_GIVE_MECHS, "CreateUnit", "CreateNUnits", "BlzCreate")):
+        return "give"
     if (
         mech.startswith(_GIVE_MECHS)
         or "CreateItem" in mech
@@ -2706,78 +2814,83 @@ def _query_refs(pack: Path, query: str, limit: int) -> list[str]:
         return [
             "未找到 脚本对象码出现索引.tsv（资料包未导出脚本索引——用 cli <地图> --pack 重导一次即有）"
         ]
-    q = query.lower()
-    give: list[tuple[str, str, str]] = []
-    consume: list[tuple[str, str, str]] = []
-    other: list[tuple[str, str, str]] = []
-    label = query
-    obj_kind = ""
-    for r in rows:
-        if len(r) < 11:
+    groups: dict[tuple[str, str], tuple[str, dict[str, list[str]]]] = {}
+    for row in rows:
+        if len(row) < 11:
             continue
-        code, kind, name, fn, mech, digest = r[3], r[5], _clean(r[6]), r[2], r[9], r[10]
-        if len(code) != 4 or not (
-            q == code.lower() or (name and (q in name.lower() or name.lower() in q))
-        ):
+        code, kind, name = row[3], row[5], _clean(row[6])
+        if not _is_record_code(code) or not _match(query, code, name):
             continue
-        if not (give or consume or other):
-            label = f"[{code}] {name}"
-            obj_kind = kind
-        entry = (r[1], fn, mech + " " + digest)  # 引用摘录全文
-        bucket = _ref_kind(mech, digest)
-        (
-            give if bucket == "give" else consume if bucket == "consume" else other
-        ).append(entry)
-    if not (give or consume or other):
+        _name, buckets = groups.setdefault(
+            (kind, code), (name, {"give": [], "consume": [], "other": []})
+        )
+        mech, digest = row[9], row[10]
+        source = row[0] + ":" if row[0] else ""
+        buckets[_ref_kind(mech, digest, context=row[8])].append(
+            f"    {source}行{row[1]} {row[2]}  {mech} {digest}"
+        )
+    if not groups:
         return [
             "未找到引用: " + query,
             "  （引用来自 对象字段.tsv 的单位/物品/技能列表与脚本 native 提码——对象若从未被引用, 此处即「孤立对象」信号）",
         ]
-    lines = [f"{label}  ({obj_kind})  共{len(give) + len(consume) + len(other)}处引用"]
-    lines.append(f"  给予/创建: {len(give)} 处")
-    lines.extend(f"    行{e[0]} {e[1]}  {e[2]}" for e in _bounded(give, limit))
-    if _t := _truncated_note(give, limit):
-        lines.append(_t)
-    lines.append(f"  作为材料/触发媒介(被检测或移除): {len(consume)} 处")
-    lines.extend(f"    行{e[0]} {e[1]}  {e[2]}" for e in _bounded(consume, limit))
-    if _t := _truncated_note(consume, limit):
-        lines.append(_t)
-    if other:
-        lines.append(f"  其他引用: {len(other)} 处")
-        lines.extend(f"    行{e[0]} {e[1]}  {e[2]}" for e in _bounded(other, limit))
-        if _t := _truncated_note(other, limit):
-            lines.append(_t)
-    if obj_kind == "物品" and give and not consume:
-        if _script_encrypted(pack):
-            lines.append(
-                "  ⚠ 脚本加密: 消耗引用不可读, '终止'结论不成立——"
-                "先用 pack-query drop <物品名> 查文案级配方线索"
-            )
-        else:
-            lines.append(
-                "  ⚠ 零消耗引用: 该物品没有任何'作为材料被检测/移除'的记录 -> 升级链在此终止"
-            )
-            lines.append(
-                "    (名字带[N/M]不证明存在下一级; 报'可升级'前必须有消耗它的配方证据)"
-            )
-    return lines
+    blocks: list[list[str]] = []
+    encrypted = _script_encrypted(pack)
+    for (kind, code), (name, buckets) in groups.items():
+        give, consume, other = buckets["give"], buckets["consume"], buckets["other"]
+        block = [
+            f"[{code}] {name}  ({kind})  共{len(give) + len(consume) + len(other)}处引用",
+            f"  给予/创建: {len(give)} 处",
+            *give,
+            f"  作为材料/触发媒介(被检测或移除): {len(consume)} 处",
+            *consume,
+        ]
+        if other:
+            block.extend([f"  其他引用: {len(other)} 处", *other])
+        if kind == "物品" and give and not consume:
+            if encrypted:
+                block.append(
+                    "  ⚠ 脚本加密: 消耗引用不可读, '终止'结论不成立——先用 pack-query drop <物品名> 查文案级配方线索"
+                )
+            else:
+                block.append(
+                    "  ⚠ 零消耗引用: 当前可读索引未发现该物品作为材料被检测/移除的记录，未确认后续升级。"
+                )
+                block.append(
+                    f"    获取/配方复核: recipe {code} / drop {code}；名字带[N/M]不证明存在下一级。"
+                )
+        blocks.append(block)
+    return _limit_result_blocks(blocks, limit)
 
 
-def _load_affixes(pack_dir: Path) -> dict[str, tuple[str, str]]:
-    """词缀表.tsv: 词缀名 → (倍率, 属性)。内存导出包可选文件。"""
-    out: dict[str, tuple[str, str]] = {}
-    for r in _read_rows(pack_dir, "词缀表.tsv"):
-        if len(r) >= 3 and r[0] != "词缀名":
-            out[r[0]] = (r[1], r[2])
-    return out
+def _load_affixes(pack_dir: Path) -> list[tuple[str, str, str]]:
+    """Retain distinct definitions even when several affixes share one name."""
+    return list(
+        dict.fromkeys(
+            (row[0], row[1], row[2])
+            for row in _read_rows(pack_dir, "词缀表.tsv")
+            if len(row) >= 3 and row[:3] != ["词缀名", "倍率", "属性"]
+        )
+    )
+
+
+def _registered_data_rows(pack_dir: Path) -> list[list[str]]:
+    """Accept exported headers and headerless legacy tables without losing row 1."""
+    return [
+        row
+        for row in _read_rows(pack_dir, "注册数据.tsv")
+        if len(row) >= 3
+        and not (
+            row[0] == "消息名" and row[1] in {"记录数", "序号"} and row[2] == "记录JSON"
+        )
+    ]
 
 
 def _load_registered_names(pack_dir: Path) -> dict[str, int]:
     """注册数据.tsv: 消息名 → 记录数。内存导出包可选文件。"""
     counts: dict[str, int] = {}
-    for r in _read_rows(pack_dir, "注册数据.tsv"):
-        if len(r) >= 3 and r[0] != "消息名":
-            counts[r[0]] = counts.get(r[0], 0) + 1
+    for row in _registered_data_rows(pack_dir):
+        counts[row[0]] = counts.get(row[0], 0) + 1
     return counts
 
 
@@ -2794,20 +2907,20 @@ def _query_affix(pack: Path, query: str, limit: int) -> list[str]:
             "重新导出: uv run python -X utf8 main.py live --dump-objects <目录>",
             "  （GUI 用户: 数据工具菜单 →「导出运行时对象包 (词缀/注册)」）",
         ]
-    lines: list[str] = []
-    for name, (mult, stat) in sorted(affixes.items()):
+    blocks: list[list[str]] = []
+    for name, mult, stat in sorted(affixes):
         if query and not _match(query, name, stat):
             continue
         unit = "点" if not stat.startswith("的") else ""
-        lines.append(f"[{name}] {stat or '(特效型)'}")
+        block = [f"[{name}] {stat or '(特效型)'}"]
         if stat:
-            lines.append(f"  公式: 词条等级 × {mult} {unit}{stat}")
-        if limit and len(lines) >= limit * 2:
-            break
-    _limit_disclosure_note(lines, limit)
-    if lines:
-        return lines
-    return [f"未找到词缀: {query}（本包词缀表共 {len(affixes)} 条）"]
+            block.append(f"  公式: 词条等级 × {mult} {unit}{stat}")
+        blocks.append(block)
+    return (
+        _limit_result_blocks(blocks, limit)
+        if blocks
+        else [f"未找到词缀: {query}（本包词缀表共 {len(affixes)} 条）"]
+    )
 
 
 def _query_registered(pack: Path, query: str, limit: int) -> list[str]:
@@ -2815,22 +2928,21 @@ def _query_registered(pack: Path, query: str, limit: int) -> list[str]:
 
     列出消息名与记录数; 带查询词时对记录 JSON 全文子串匹配并全文输出。
     """
-    rows = _read_rows(pack, "注册数据.tsv")
+    rows = _registered_data_rows(pack)
     if not rows:
         return [
-            "本包无 注册数据.tsv (非内存导出包, 或该图未捕获到云消息)。",
+            "本包无可读的注册数据记录 (注册数据.tsv 缺失、为空，或该图未捕获到云消息)。",
             "重新导出: uv run python -X utf8 main.py live --dump-objects <目录>",
             "  （GUI 用户: 数据工具菜单 →「导出运行时对象包 (词缀/注册)」）",
         ]
     counts: dict[str, int] = {}
-    matched: list[tuple[str, str]] = []
-    for r in rows[1:]:
-        if len(r) < 3:
-            continue
-        counts[r[0]] = counts.get(r[0], 0) + 1
-        if query and query in r[0]:
-            matched.append((r[0], r[2]))
-    lines: list[str] = []
+    matched: list[list[str]] = []
+    wanted = query.casefold()
+    for row in rows:
+        name, payload = row[0], row[2]
+        counts[name] = counts.get(name, 0) + 1
+        if wanted and (wanted in name.casefold() or wanted in payload.casefold()):
+            matched.append([f"== {name} ==", "  " + payload])
     if query:
         if not matched:
             return [
@@ -2838,59 +2950,22 @@ def _query_registered(pack: Path, query: str, limit: int) -> list[str]:
                 + "、".join(sorted(counts))
                 + "）"
             ]
-        for name, payload in matched[: limit or len(matched)]:
-            lines.append(f"== {name} ==")
-            lines.append("  " + payload)
-        return lines
-    lines.append(f"注册消息名 ({len(counts)} 种, 全量):")
-    for name in sorted(counts):
-        lines.append(f"  {name}: {counts[name]} 条")
-    return lines
+        return _limit_result_blocks(matched, limit)
+    blocks = [[f"  {name}: {counts[name]} 条"] for name in sorted(counts)]
+    coverage = "全量" if not limit or limit >= len(blocks) else f"显示 {limit} 种"
+    return [
+        f"注册消息名 ({len(counts)} 种, {coverage}):",
+        *_limit_result_blocks(blocks, limit),
+    ]
 
 
 def _query_search(pack: Path, query: str, limit: int) -> list[str]:
-    """search 全包统一搜索: 一个词不知道属于哪个命令时用。
-    扫 对象ID/物品,单位,技能,英雄,增益,科技.tsv 的名称列+ID列, 每表给出
-    命中数与首屏示例 (--limit 控制示例数, 总数始终全量统计)。"""
-    needle = _clean(query).casefold()
-    if not needle:
-        return ["未找到: 查询词为空"]
-    tables = (
-        "物品",
-        "单位",
-        "技能",
-        "英雄",
-        "增益",
-        "科技",
-        "装饰物",
-        "可破坏物",
+    """Search all object text with optional category scope and Boolean expressions."""
+    from .pack_query_search import SearchSources, query_search
+
+    return query_search(
+        pack, query, limit, cast(SearchSources, cast(object, sys.modules[__name__]))
     )
-    sample_cap = limit  # 0 = 全量 (默认); --limit N 显式首屏缩减
-    out: list[str] = []
-    for table in tables:
-        rows = _read_rows(pack, f"对象ID/{table}.tsv")
-        if not rows:
-            continue
-        hits: list[str] = []
-        for r in rows[1:]:
-            if len(r) < 5:
-                continue
-            code, name = r[1], _clean(r[4])
-            if needle in code.casefold() or needle in name.casefold():
-                hits.append(f"  [{code}] {name}")
-        if not hits:
-            continue
-        out.append(f"== {table} ({len(hits)} 个)==")
-        out.extend(hits[:sample_cap] if sample_cap > 0 else hits)
-        if sample_cap > 0 and len(hits) > sample_cap:
-            out.append(f"  …… 其余 {len(hits) - sample_cap} 条加大 limit 查看")
-    if not out:
-        return [
-            "未找到: " + query,
-            "  （search 只扫对象八表的名称/ID 列——改道: 合成 recipe / 获取途径 where"
-            " / 聊天指令 cmd / 任务 quest / 词缀 affixes / 触发消息 registered / 价格 price）",
-        ]
-    return out
 
 
 def _diff_field_changes(
@@ -2903,7 +2978,7 @@ def _diff_field_changes(
     wanted = set(ids)
 
     def collect(pack: Path) -> dict[str, dict[str, str]]:
-        rows = _read_rows(pack, "对象ID/对象字段.tsv")
+        rows = _read_rows(pack, "对象字段.tsv")
         if len(rows) <= 1:
             return {}
         header = rows[0]
@@ -3134,62 +3209,58 @@ def _query_doc(pack: Path, query: str, limit: int) -> list[str]:
     return out
 
 
-def _query_buffs(pack: Path, query: str, limit: int) -> list[str]:
-    """buffs 增益表清单/查询: buff 效果排查专用 (说明列=游戏内效果描述)。
-    query 空 = 全量列出; 有词 = 名称/ID/说明子串过滤。"""
-    del limit  # 满量清单不截断
-    rows = _read_rows(pack, "对象ID/增益.tsv")
+def _query_object_list(
+    pack: Path, query: str, table: str, missing: str, limit: int = 0
+) -> list[str]:
+    """List every valid legacy/current record and its complete description."""
+    rows = _read_rows(pack, f"对象ID/{table}.tsv")
     if len(rows) <= 1:
-        return ["本包无 增益.tsv (地图未自定义增益)"]
+        return [missing]
     needle = _clean(query).casefold()
     out: list[str] = []
-    for r in rows[1:]:
-        if len(r) < 7:
+    total = 0
+    for row in rows[1:]:
+        if len(row) < 5:
             continue
-        code, name, custom, note = r[1], _clean(r[4]), r[5].strip(), _clean(r[6])
-        if (
-            needle
-            and needle not in code.casefold()
-            and needle not in name.casefold()
-            and needle not in note.casefold()
-        ):
+        total += 1
+        code, name = row[1], _clean(row[4])
+        custom = row[5].strip() if len(row) > 5 else ""
+        note = _clean(row[6]) if len(row) > 6 else ""
+        if needle and not any(needle in text.casefold() for text in (code, name, note)):
             continue
-        origin = "自定义" if custom == "是" else "继承基础"
-        line = f"[{code}] {name} ({origin})"
-        if note:
-            line += f" — {note}"
-        out.append(line)
-    if not out:
-        return [
-            "未找到: " + query + " (名称/ID/效果三路过滤)",
-            "  （可换单词/四码重试; 或用 search <词> 跨八表找）",
-        ]
-    return out
+        origin = (
+            "自定义"
+            if custom == "是"
+            else "继承基础"
+            if custom == "否"
+            else "来源未记录"
+        )
+        out.append(f"[{code}] {name} ({origin})" + (f" — {note}" if note else ""))
+    if out:
+        note = _truncated_note(out, limit)
+        return [*_bounded(out, limit), *([note] if note else [])]
+    return [
+        "未找到: " + query + " (名称/ID/效果三路过滤)",
+        f"  本图{table}表共 {total} 项；可换名称或四码，或用 search <词> 跨八表查说明。",
+    ]
+
+
+def _query_buffs(pack: Path, query: str, limit: int) -> list[str]:
+    """Complete 增益 listing, including legacy rows without optional columns."""
+    return _query_object_list(
+        pack, query, "增益", "本包无 增益.tsv (地图未自定义增益)", limit
+    )
 
 
 def _query_heroes(pack: Path, query: str, limit: int) -> list[str]:
-    """heroes 英雄表清单/查询: 英雄专属排查 (英雄.tsv 缺失时提示走 单位 查询)。
-    query 空 = 全量; 有词 = 名称/ID 子串过滤。"""
-    del limit  # 满量清单不截断
-    rows = _read_rows(pack, "对象ID/英雄.tsv")
-    if len(rows) <= 1:
-        return ["本包无 英雄.tsv (英雄类单位通常并入 单位 表 — 用 search 查)"]
-    needle = _clean(query).casefold()
-    out: list[str] = []
-    for r in rows[1:]:
-        if len(r) < 5:
-            continue
-        code, name, custom = r[1], _clean(r[4]), r[5].strip()
-        if needle and needle not in code.casefold() and needle not in name.casefold():
-            continue
-        origin = "自定义" if custom == "是" else "继承基础"
-        out.append(f"[{code}] {name} ({origin})")
-    if not out:
-        return [
-            "未找到: " + query + " (名称/ID/效果三路过滤)",
-            "  （可换单词/四码重试; 或用 search <词> 跨八表找）",
-        ]
-    return out
+    """Complete 英雄 listing, including legacy rows without optional columns."""
+    return _query_object_list(
+        pack,
+        query,
+        "英雄",
+        "本包无 英雄.tsv (英雄类单位通常并入 单位 表 — 用 search 查)",
+        limit,
+    )
 
 
 def _code_home_hint(pack: Path, query: str) -> str:
@@ -3203,71 +3274,13 @@ def _code_home_hint(pack: Path, query: str) -> str:
 
 
 def _query_units(pack: Path, query: str, limit: int) -> list[str]:
-    """units 单位表清单/查询: 名称/ID/说明三路过滤, 说明剥色码。"""
-    del limit  # 满量纪律
-    rows = _read_rows(pack, "对象ID/单位.tsv")
-    if len(rows) <= 1:
-        return ["本包无 单位.tsv"]
-    needle = _clean(query).casefold()
-    out: list[str] = []
-    for r in rows[1:]:
-        if len(r) < 7:
-            continue
-        code, name, custom = r[1], _clean(r[4]), r[5].strip()
-        note = _clean(r[6])
-        if (
-            needle
-            and needle not in code.casefold()
-            and needle not in name.casefold()
-            and needle not in note.casefold()
-        ):
-            continue
-        origin = "自定义" if custom == "是" else "继承基础"
-        line = f"[{code}] {name} ({origin})"
-        if note:
-            head = note.split("|n")[0]  # 全文, 不截断
-            line += f" — {head}"
-        out.append(line)
-    if not out:
-        return [
-            "未找到: " + query + " (名称/ID/效果三路过滤)",
-            "  （可换单词/四码重试; 或用 search <词> 跨八表找）",
-        ]
-    return out
+    """Complete 单位 listing, including legacy rows without optional columns."""
+    return _query_object_list(pack, query, "单位", "本包无 单位.tsv", limit)
 
 
 def _query_skills(pack: Path, query: str, limit: int) -> list[str]:
-    """skills 技能表清单/查询: 技能效果排查专用 (说明列剥色码取首段。"""
-    del limit  # 满量纪律: 有多少收多少
-    rows = _read_rows(pack, "对象ID/技能.tsv")
-    if len(rows) <= 1:
-        return ["本包无 技能.tsv"]
-    needle = _clean(query).casefold()
-    out: list[str] = []
-    for r in rows[1:]:
-        if len(r) < 7:
-            continue
-        code, name, custom = r[1], _clean(r[4]), r[5].strip()
-        note = _clean(r[6])
-        if (
-            needle
-            and needle not in code.casefold()
-            and needle not in name.casefold()
-            and needle not in note.casefold()
-        ):
-            continue
-        origin = "自定义" if custom == "是" else "继承基础"
-        line = f"[{code}] {name} ({origin})"
-        if note:
-            head = note.split("|n")[0]  # 全文, 不截断
-            line += f" — {head}"
-        out.append(line)
-    if not out:
-        return [
-            "未找到: " + query + " (名称/ID/效果三路过滤)",
-            "  （可换单词/四码重试; 或用 search <词> 跨八表找）",
-        ]
-    return out
+    """Complete 技能 listing, including legacy rows without optional columns."""
+    return _query_object_list(pack, query, "技能", "本包无 技能.tsv", limit)
 
 
 def _query_stats(pack: Path, query: str, limit: int) -> list[str]:
@@ -3333,7 +3346,7 @@ def _query_stats(pack: Path, query: str, limit: int) -> list[str]:
 
             entries = _json.loads(history.read_text(encoding="utf-8"))
             out.append(
-                f"历史条数: {len(entries)} (374 起全量落盘; GUI 下拉展示最近 12 条, again 走独立记忆)"
+                f"历史条数: {len(entries)} (历史与 GUI 下拉均全量保留, again 走独立记忆)"
             )
         except OSError, ValueError:
             pass  # 记忆损坏不可读 — 总览其余段落照常, 条数行省略 (非关键披露)
@@ -3374,12 +3387,18 @@ def _load_last_query() -> dict[str, str] | None:
     path = _memo_dir() / _LAST_QUERY_FILE
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            return None
         pack, command, query = payload["pack"], payload["command"], payload["query"]
-        if not (
-            isinstance(pack, str)
-            and isinstance(command, str)
-            and isinstance(query, str)
+        if (
+            not (
+                isinstance(pack, str)
+                and isinstance(command, str)
+                and isinstance(query, str)
+            )
+            or command == "again"
         ):
+            # 拒绝旧 GUI 写下的自引用记忆, placeholder/stats/CLI 统一不消费。
             return None
         return {"pack": pack, "command": command, "query": query}
     except OSError, ValueError, KeyError:
@@ -3387,6 +3406,8 @@ def _load_last_query() -> dict[str, str] | None:
 
 
 def _store_last_query(pack: Path, command: str, query: str) -> None:
+    if command == "again":
+        return  # 重跑不是新查询; 不能覆盖被重跑的原始 pack/command/query。
     try:
         d = _memo_dir()
         d.mkdir(parents=True, exist_ok=True)
@@ -3405,7 +3426,7 @@ def _query_again(pack: Path, query: str, limit: int) -> list[str]:
     """again: 重跑最近一次成功查询 (pack/command/query 均从 memo 取)。"""
     del pack, query  # again 全从 memo 取, 入参仅作 dispatcher 签名统一
     last = _load_last_query()
-    if last is None:
+    if last is None or last["command"] == "again":
         return [
             "无最近查询记录 (again 记住上一次成功查询; 先跑任意一次普通查询)",
         ]
@@ -3461,130 +3482,36 @@ def _campaign_subpacks(pack: Path) -> list[Path]:
     if not sub.is_dir():
         return []
     return sorted(
-        p for p in sub.iterdir() if p.is_dir() and (p / "掉落与获取关系.tsv").exists()
+        p
+        for p in sub.iterdir()
+        if p.is_dir()
+        and (
+            (p / "掉落与获取关系.tsv").is_file()
+            or (p / "对象ID").is_dir()
+            or (p / "内容清单.json").is_file()
+            or (p / "脚本可读文本").is_dir()
+        )
     )
 
 
-def _emit_lines(lines: list[str], as_json: bool, section: str = "") -> None:
-    """结果行输出: 文本逐行, 或 --json 时输出 {section, lines} 单对象。"""
-    if not as_json:
-        if section:
-            print("== " + section + " ==")
-        for line in lines:
-            print(line)
-        return
-    print(json.dumps({"section": section, "lines": lines}, ensure_ascii=False))
+def execute_pack_query(options: PackQueryCliOptions) -> PackQueryResult:
+    """Run a query and return its result without changing process streams."""
+    from .pack_query_execution import QueryBackend, execute_query
+
+    return execute_query(
+        options, cast(QueryBackend, cast(object, sys.modules[__name__]))
+    )
 
 
 def run_pack_query_cli(options: PackQueryCliOptions) -> int:
-    """执行查询并计时；耗时行走 stderr (不污染 stdout 结果)。"""
-    import time
+    """Render the shared result; GUI callers use execute_pack_query directly."""
 
-    started = time.perf_counter()
-    # 锁死表跨查询保留 (记忆驱动跳重试); 披露每次都打 — 用户每次都该知道结果可能缺失
-    code = _run_query_inner(options)
-    for locked_pack, locked_rel in sorted(_LOCKED_FILES):
-        print(
-            f"[⚠ 数据文件被系统层锁死, 本次结果可能缺失: {locked_rel} — "
-            f"检查杀软隔离区/文件 ACL 后重导知识包: {locked_pack}]",
-            file=sys.stderr,
-        )
-    elapsed_ms = (time.perf_counter() - started) * 1000
-    if elapsed_ms > 500:
-        print(f"[耗时 {elapsed_ms:.0f}ms — 同包再查走热缓存会快很多]", file=sys.stderr)
-    else:
-        print(f"[耗时 {elapsed_ms:.0f}ms]", file=sys.stderr)
-    return code
-
-
-def _run_query_inner(options: PackQueryCliOptions) -> int:
-    """执行查询并打印结果；返回 0（有结果）或 2（无结果）。
-
-    战役容器包 (子地图/*/) 自动逐关查询并以「== 子地图 名 ==」分段——
-    容器 guide 只有容器级信息, 逐关数据都在子地图包里 (旧版直接答未找到)。"""
     configure_cli_output()
-    if options.command == "near" and options.near_kind:
-        # --kind 编入 query 串 (内部协议), _query_near 解析后摘除
-        options = replace(options, query=options.query + " --kind " + options.near_kind)
-    pack = Path(options.pack_dir)
-    if not pack.is_dir():
-        print("资料包目录不存在: " + options.pack_dir, file=sys.stderr)
-        return 2
-    if options.command == "diff":
-        other = options.pack_dir_b or options.query
-        lines = _query_diff(pack, options.query, options.limit, other)
-        _emit_lines(lines, options.as_json)
-        return (
-            0
-            if not lines or not lines[0].startswith(("未找到", "diff 需要", "第二个包"))
-            else 2
-        )
-    subs = _campaign_subpacks(pack)
-    if subs:
-        printed = False
-        # 容器自身也有对象表 (商店/物品定义在容器级) —— 先跑容器再把逐关
-        # 结果附后; 只聚合子地图会把 shop 商人 这类容器级查询吞成「无结果」
-        base_lines = _QUERIES[options.command](pack, options.query, options.limit)
-        if base_lines and not base_lines[0].startswith("未找到"):
-            _emit_lines(base_lines, options.as_json, section="容器级")
-            printed = True
-        for sub in subs:
-            lines = _QUERIES[options.command](sub, options.query, options.limit)
-            if not lines or lines[0].startswith("未找到"):
-                continue
-            _emit_lines(lines, options.as_json, section="子地图 " + sub.name)
-            printed = True
-        if not printed:
-            print("子地图均无结果: " + options.query)
-            print(
-                "  （容器级与全部子地图均未命中——商店/科技类数据虽可能在容器级, 本次已含容器级查询; 可换单位/物品名或四码再查）"
-            )
-            return 2
-        return 0
-    if options.command == "near" and options.as_json:
-        # near 结构化输出: entries 数组供脚本/AI 消费 (文本行照附)
-        lines = _query_near(pack, options.query, options.limit)
-        entries = []
-        for line in lines:
-            m = _NEAR_ROW_RE.match(line)
-            if m:
-                entries.append(
-                    {
-                        "kind": m.group(1),
-                        "name": m.group(2).strip(),
-                        "code": m.group(3),
-                        "count": int(m.group(4) or 1),
-                        "x": float(m.group(5)),
-                        "y": float(m.group(6)),
-                        "dist": int(m.group(7) or 0),
-                        "detail": line.strip(),
-                        "drops": (
-                            line.split("掉:", 1)[1].split("卖:", 1)[0].strip()
-                            if "掉:" in line
-                            else None
-                        ),
-                        "sell": line.split("卖:", 1)[-1].strip()
-                        if "卖:" in line
-                        else None,
-                    }
-                )
-        print(
-            json.dumps(
-                {"section": "near", "entries": entries, "lines": lines},
-                ensure_ascii=False,
-            )
-        )
-        return 0 if len(entries) else 2
-    if options.command == "again":
-        # again 的 pack 参数来自 memo, 当前 pack_dir 只作显示
-        lines = _query_again(pack, options.query, options.limit)
-        _emit_lines(lines, options.as_json)
-        return 0
-    lines = _QUERIES[options.command](pack, options.query, options.limit)
-    if not (options.command == "diff" or lines and lines[0].startswith("未找到")):
-        _store_last_query(pack, options.command, options.query)
-    _emit_lines(lines, options.as_json)
-    return 0 if not lines or not lines[0].startswith("未找到") else 2
+    result = execute_pack_query(options)
+    print(result.render(as_json=options.as_json))
+    for diagnostic in result.diagnostics:
+        print(diagnostic, file=sys.stderr)
+    return result.exit_code
 
 
 if __name__ == "__main__":

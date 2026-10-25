@@ -5,7 +5,6 @@ from __future__ import annotations
 import mmap
 import struct
 from dataclasses import dataclass
-from typing import Final
 
 from .mpq_constants import (
     HASH_FILE_KEY,
@@ -49,9 +48,6 @@ class MPQLayoutError(ValueError):
 
 
 type ArchiveBytes = bytes | mmap.mmap
-
-_HEADER_SCAN_LIMIT: Final = 64 * 1024 * 1024
-_MAX_TABLE_ENTRIES: Final = 1 << 21
 
 
 def normalize_classic_header_size(
@@ -103,12 +99,11 @@ def validate_classic_table_budget(
     block_offset: int,
     file_size: int,
 ) -> None:
-    """Reject table layouts whose readable entries exceed fixed memory budgets."""
-    if hash_count > _MAX_TABLE_ENTRIES:
-        raise MPQLayoutError(f"MPQ hash 表过大：{hash_count}")
-    readable_blocks = min(block_count, (file_size - block_offset) // 16)
-    if readable_blocks > _MAX_TABLE_ENTRIES:
-        raise MPQLayoutError(f"MPQ block 表过大：{readable_blocks}")
+    """Validate against the actual container rather than a table-count ceiling."""
+    if hash_count < 0 or hash_count > file_size // 16:
+        raise MPQLayoutError(f"MPQ hash 表越界：{hash_count}")
+    if block_count < 0 or not 0 <= block_offset <= file_size:
+        raise MPQLayoutError("MPQ block 表起点越界")
 
 
 def locate_mpq_layout(data: ArchiveBytes) -> MPQLayout:
@@ -118,17 +113,21 @@ def locate_mpq_layout(data: ArchiveBytes) -> MPQLayout:
 
     last_error: MPQLayoutError | None = None
     offset = 0
-    scan_end = min(len(data), _HEADER_SCAN_LIMIT)
-    while offset + MPQ_HEADER_SIZE_V1 <= scan_end:
-        magic = data[offset : offset + 4]
+    while True:
+        candidate = data.find(b"MPQ", offset)
+        if candidate < 0 or candidate + MPQ_HEADER_SIZE_V1 > len(data):
+            break
+        offset = candidate + 3
+        if candidate % MPQ_ALIGNMENT:
+            continue
+        magic = data[candidate : candidate + 4]
         if magic in (MPQ_HEADER_MAGIC, MPQ_USER_DATA_MAGIC):
             try:
                 if magic == MPQ_USER_DATA_MAGIC:
-                    return _layout_from_user_data(data, offset)
-                return _parse_main_header(data, offset)
+                    return _layout_from_user_data(data, candidate)
+                return _parse_main_header(data, candidate)
             except (ValueError, struct.error) as error:
                 last_error = MPQLayoutError(str(error))
-        offset += MPQ_ALIGNMENT
     if last_error is not None:
         raise last_error
     raise MPQLayoutError("没找到 MPQ 头（不是有效的 .w3x/.w3n？）")

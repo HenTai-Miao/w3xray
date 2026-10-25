@@ -6,9 +6,13 @@
 
 from __future__ import annotations
 
+from .script_recipes import Recipe as Recipe, scan_recipes as scan_recipes
+
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
+from bisect import bisect_right
+from functools import lru_cache
 from typing import Final
 
 from .script_mechanics import (
@@ -19,6 +23,8 @@ from .script_mechanics import (
     scan_script_features,
 )
 from .script_tokens import iter_native_call_chunks, script_code_text
+from .script_lexing import literal_string_value, script_views, script_literals
+from .save_call_context import extract_call_args
 
 _CHAT = re.compile(
     r'TriggerRegisterPlayerChatEvent\s*\(\s*([A-Za-z0-9_]+)\s*,[^,]+,\s*"((?:[^"\\]|\\.)*)"\s*,\s*(true|false)'
@@ -46,22 +52,35 @@ class ChatCommand:
     hint: str = ""
 
 
-def scan_chat_commands(script: str) -> list[ChatCommand]:
-    cmds: list[ChatCommand] = []
+def scan_chat_commands(script: str, *, lua: bool | None = None) -> list[ChatCommand]:
+    """Read real chat registrations, including Lua literal and nested arguments."""
+    views = script_views(script, lua=lua)
+    commands: list[ChatCommand] = []
     seen: set[tuple[str, bool]] = set()
-    for pat in (_CHAT, _CHAT_BJ):
-        for m in pat.finditer(script):
-            trig, cmd, exact = m.group(1), m.group(2), m.group(3) == "true"
-            key = (cmd, exact)
-            if key in seen:
-                continue
+    pattern = re.compile(r"\b(TriggerRegisterPlayerChatEvent(?:BJ)?)\s*\(")
+    for match in pattern.finditer(views.syntax):
+        args = extract_call_args(views, match.end())
+        command_index = 1 if match.group(1).endswith("BJ") else 2
+        if len(args) <= command_index + 1:
+            continue
+        command = literal_string_value(args[command_index])
+        exact_text = args[command_index + 1].strip()
+        if command is None or exact_text not in {"true", "false"}:
+            continue
+        exact = exact_text == "true"
+        key = (command, exact)
+        if key not in seen:
             seen.add(key)
-            cmds.append(ChatCommand(cmd, exact, trig, _find_hint(script, trig)))
-    # 按指令排序，空串/单字符靠后
-    cmds.sort(
+            trigger = args[0]
+            commands.append(
+                ChatCommand(
+                    command, exact, trigger, _find_hint(views.arguments, trigger)
+                )
+            )
+    commands.sort(
         key=lambda c: (len(c.command) == 0, not c.command.startswith("-"), c.command)
     )
-    return cmds
+    return commands
 
 
 def _find_hint(script: str, trigger: str) -> str:
@@ -85,21 +104,10 @@ def _find_hint(script: str, trigger: str) -> str:
     return ""
 
 
-@dataclass
-class Recipe:
-    ingredients: list[str]  # 材料物品码
-    result: str  # 成品物品码
-    func: str = ""
-    source: str = ""
-    line: int = 0
-    confidence: str = "已确认"
-    evidence: str = ""
-
-
-_FOURCC = re.compile(r"'([A-Za-z0-9]{4})'")
+_FOURCC = re.compile(r"'([^'\r\n]{4})'")
 _HEXCC = re.compile(r"\$([0-9A-Fa-f]{8})")
 # Lua 写法：FourCC("xxxx") / FourCC('xxxx')（双引号码不被 _FOURCC 捕获）
-_FOURCC_FN = re.compile(r"""FourCC\s*\(\s*["']([A-Za-z0-9]{4})["']\s*\)""")
+_FOURCC_FN = re.compile(r"\bFourCC\s*\(")
 # 整数形式的码：JASS 里 'hpea' 常写成 1752196449 或 0x68706561（借鉴 w3x2lni searchjass）
 _HEXINT = re.compile(r"0[xX]([0-9A-Fa-f]{8})\b")
 _DECINT = re.compile(r"(?<![\w.])(\d{10})(?![\w.])")
@@ -118,8 +126,20 @@ def _int_to_code(v: int) -> str | None:
 
 def _codes_in(s: str) -> list[str]:
     """取所有对象码：'xxxx' 文本码 + $XX/0xXX 十六进制 + FourCC("xxxx") + 十进制整数码。"""
-    out = list(_FOURCC.findall(s))
-    out += _FOURCC_FN.findall(s)
+    out = [
+        code for code in _FOURCC.findall(s) if all(ord(char) <= 255 for char in code)
+    ]
+    for match in _FOURCC_FN.finditer(s):
+        arguments = extract_call_args(s, match.end(), lua=True)
+        value = literal_string_value(arguments[0]) if len(arguments) == 1 else None
+        if (
+            value is not None
+            and len(value) == 4
+            and all(ord(char) <= 255 for char in value)
+        ):
+            raw = _FOURCC.fullmatch(arguments[0])
+            if raw is None or raw.group(1) != value:
+                out.append(value)
     for h in _HEXCC.findall(s):
         try:
             cc = bytes.fromhex(h).decode("latin-1")
@@ -139,61 +159,55 @@ def _codes_in(s: str) -> list[str]:
     return out
 
 
-_REMOVE = re.compile(r"RemoveItem|GetItemOfType|UnitRemoveItem|YDWEGetItemOfType")
-_ADD = re.compile(r"UnitAddItemById|CreateItemLoc|CreateItem\b|UnitAddItemByIdSwapped")
-_FUNCTION_START = re.compile(r"^\s*(?:local\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)\b")
-_FUNCTION_END = re.compile(r"^\s*endfunction\b")
-
-
-def scan_recipes(script: str, *, source: str = "") -> list[Recipe]:
-    """识别脚本里的物品合成：函数内被移除的物品=材料，被添加的物品=成品。
-
-    覆盖常见 YDWE/JASS 写法（RemoveItem 材料 + UnitAddItemById 成品）。
-    """
-    recipes: list[Recipe] = []
-    seen: set[tuple[str, int, tuple[str, ...], str]] = set()
-    current_function = ""
-    ingredients: list[str] = []
-    code_lines = script_code_text(script).split("\n")
-    source_lines = script.split("\n")
-    for line_number, (code_line, source_line) in enumerate(
-        zip(code_lines, source_lines, strict=True),
-        start=1,
-    ):
-        function = _FUNCTION_START.match(code_line)
-        if function is not None:
-            current_function = function.group(1)
-            ingredients = []
+@lru_cache(maxsize=8)
+def object_code_occurrences(
+    text: str, *, lua: bool | None = None
+) -> tuple[tuple[int, str], ...]:
+    """Retain actual source positions and multiplicity of readable object IDs."""
+    views = script_views(text, lua=lua)
+    stack: list[int] = []
+    closes: dict[int, int] = {}
+    for match in re.finditer(r"[()]", views.syntax):
+        if match.group() == "(":
+            stack.append(match.start())
+        elif stack:
+            closes[stack.pop()] = match.start()
+    rows: list[tuple[int, str]] = []
+    wrapped: list[tuple[int, int]] = []
+    for match in _FOURCC_FN.finditer(views.syntax):
+        end = closes.get(match.end() - 1)
+        if end is None:
             continue
-        if _FUNCTION_END.match(code_line) is not None:
-            current_function = ""
-            ingredients = []
+        args = extract_call_args(views, match.end())
+        value = literal_string_value(args[0]) if len(args) == 1 else None
+        if (
+            value is not None
+            and len(value) == 4
+            and all(ord(char) <= 255 for char in value)
+        ):
+            rows.append((match.start(), value))
+            wrapped.append((match.start(), end + 1))
+    starts = [start for start, _end in wrapped]
+    for literal in script_literals(text, lua=lua):
+        index = bisect_right(starts, literal.start) - 1
+        if index >= 0 and literal.start < wrapped[index][1]:
             continue
-        if _REMOVE.search(code_line) is not None:
-            ingredients.extend(_codes_in(code_line))
-            continue
-        if _ADD.search(code_line) is None:
-            continue
-        for result in _codes_in(code_line):
-            materials = [item for item in ingredients if item != result]
-            if len(materials) < 2:
-                continue
-            key = (source, line_number, tuple(sorted(materials)), result)
-            if key in seen:
-                continue
-            seen.add(key)
-            recipes.append(
-                Recipe(
-                    ingredients=materials,
-                    result=result,
-                    func=current_function,
-                    source=source,
-                    line=line_number,
-                    evidence=source_line,
-                ),
-            )
-        ingredients = []  # 结算后清空，下一配方重新积累
-    return recipes
+        if (
+            (literal.object_code or (lua is not True and text[literal.start] == "'"))
+            and len(literal.value) == 4
+            and all(ord(char) <= 255 for char in literal.value)
+        ):
+            rows.append((literal.start, literal.value))
+    for match in _HEXCC.finditer(views.syntax):
+        value = bytes.fromhex(match.group(1)).decode("latin-1")
+        if all(32 <= ord(char) < 127 for char in value):
+            rows.append((match.start(), value))
+    for pattern, base in ((_HEXINT, 16), (_DECINT, 10)):
+        for match in pattern.finditer(views.syntax):
+            value = _int_to_code(int(match.group(1), base))
+            if value:
+                rows.append((match.start(), value))
+    return tuple(sorted(rows))
 
 
 # native 名 → 对象分类，由 common.j 离线生成（build_jass_natives.py）。
@@ -231,7 +245,7 @@ def _native_cat(name: str) -> str | None:
     return NATIVE_OBJ_FUNCS.get(name, _FALLBACK_CAT.get(name))
 
 
-def scan_object_refs(script: str) -> dict[str, set[str]]:
+def scan_object_refs(script: str, *, lua: bool | None = None) -> dict[str, set[str]]:
     """从脚本按调用的 native 类型提取被引用的对象码，按分类归并。
 
     返回 {"单位"/"物品"/"技能"/"科技"/"可破坏物"/"增益": set(codes)}。
@@ -242,8 +256,8 @@ def scan_object_refs(script: str) -> dict[str, set[str]]:
     names_re = _NATIVE_RE
     if names_re is None:  # 无生成表：用最小回退名集
         names_re = re.compile(r"\b(" + "|".join(_FALLBACK_CAT) + r")\b")
-    code_script = script_code_text(script)
-    for call in iter_native_call_chunks(code_script, names_re):
+    code_script = script_code_text(script, lua=lua)
+    for call in iter_native_call_chunks(code_script, names_re, lua=lua):
         hits = names_re.findall(call.text)
         if not hits:
             continue
@@ -257,20 +271,21 @@ def scan_object_refs(script: str) -> dict[str, set[str]]:
         if not codes:
             continue
         out[next(iter(cats))].update(codes)
-    merge_implicit_object_refs(out, script)
+    merge_implicit_object_refs(out, code_script, lua=lua)
     return out
 
 
-def scan_all_referenced_codes(script: str) -> set[str]:
+def scan_all_referenced_codes(script: str, *, lua: bool | None = None) -> set[str]:
     """脚本里"可能是对象引用"的全部 4cc 码（用于孤立判定的根集合，宁滥勿缺）。
 
     = 所有 'xxxx' 文本码 + 各 native 行提到的码 + BJ 隐式码。order/数值已被 _codes_in 之外
     的 'xxxx' 字面量本身天然多为对象码；少量误收(命令串)对"根集合并集"无害(只会少判孤立)。
     """
     # _codes_in 覆盖 'xxxx' + FourCC("xxxx") + $hex + 十进制码（比单认 'xxxx' 更全）
-    codes = set(_codes_in(script_code_text(script)))
-    for s in scan_object_refs(script).values():
+    code_script = script_code_text(script, lua=lua)
+    codes = set(_codes_in(code_script))
+    for s in scan_object_refs(script, lua=lua).values():
         codes.update(s)
-    _feats, implicit = scan_script_features(script)
+    _feats, implicit = scan_script_features(code_script, lua=lua)
     codes.update(implicit)
     return codes

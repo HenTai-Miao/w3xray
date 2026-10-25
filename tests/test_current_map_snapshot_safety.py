@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+import importlib
 import os
 from pathlib import Path
 import time
@@ -173,7 +174,7 @@ def test_stale_cleanup_leaves_unowned_prefixed_directory_untouched(
     assert current.read_bytes() == b"stale"
 
 
-def test_session_start_cleanup_removes_bounded_abandoned_snapshots(
+def test_session_start_cleanup_removes_all_abandoned_owned_snapshots(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -191,8 +192,8 @@ def test_session_start_cleanup_removes_bounded_abandoned_snapshots(
     # When: session-start cleanup runs before any session snapshots are created.
     snapshot_module.cleanup_stale_current_map_snapshots()
 
-    # Then: only the removal budget is reclaimed and live/unrelated data survives.
-    assert sum(directory.exists() for directory in stale) == 3
+    # Then: every stale owned directory is reclaimed and live/unrelated data survives.
+    assert not any(directory.exists() for directory in stale)
     assert (fresh / "current.w3x").read_bytes() == b"stale"
     assert unrelated.is_dir()
 
@@ -222,6 +223,24 @@ def test_stale_cleanup_does_not_follow_prefixed_directory_symlink(
     assert sentinel.read_bytes() == b"do not delete"
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Windows directory junction")
+def test_stale_cleanup_never_follows_owned_looking_junction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = _isolated_snapshot_root(tmp_path, monkeypatch)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    target, sentinel = _stale_candidate(outside, "real", _OWNER_MARKER_CONTENT)
+    junction = root / f"{_SNAPSHOT_DIR_PREFIX}junction"
+    winapi = importlib.import_module("_winapi")
+    winapi.CreateJunction(str(target), str(junction))
+    assert junction.is_junction()
+    snapshot_module.cleanup_stale_current_map_snapshots()
+    assert sentinel.read_bytes() == b"stale"
+    assert (target / _OWNER_MARKER_NAME).read_bytes() == _OWNER_MARKER_CONTENT
+
+
 def test_stale_cleanup_does_not_follow_owner_marker_symlink(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -245,7 +264,7 @@ def test_stale_cleanup_does_not_follow_owner_marker_symlink(
     assert current.read_bytes() == b"stale"
 
 
-def test_stale_scan_does_not_fetch_entry_beyond_limit(
+def test_stale_scan_consumes_every_entry(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -268,8 +287,8 @@ def test_stale_scan_does_not_fetch_entry_beyond_limit(
     # When: session-start cleanup performs its bounded stale scan.
     snapshot_module.cleanup_stale_current_map_snapshots()
 
-    # Then: the 65th entry was never pulled from the iterator.
-    assert len(fetched) == 1024
+    # Then: unrelated entries cannot hide later owned snapshots.
+    assert len(fetched) == 1025
 
 
 def test_chmod_failure_removes_just_created_empty_directory(

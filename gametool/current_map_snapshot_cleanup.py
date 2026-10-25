@@ -1,9 +1,8 @@
-"""Ownership validation and bounded cleanup for current-map snapshots."""
+"""Ownership validation and complete cleanup of stale current-map snapshots."""
 
 from __future__ import annotations
 
 import errno
-from itertools import islice
 import os
 from pathlib import Path
 import stat
@@ -16,8 +15,6 @@ SNAPSHOT_DIR_PREFIX: Final = "gamexray-current-map-"
 _OWNER_MARKER_NAME: Final = ".gamexray-current-map-owner"
 _OWNER_MARKER_CONTENT: Final = b"GAMEXRAY_CURRENT_MAP_SNAPSHOT_V1\n"
 _STALE_AFTER_NS: Final = 24 * 60 * 60 * 1_000_000_000
-_MAX_STALE_SCAN_ENTRIES: Final = 1024
-_MAX_STALE_REMOVALS: Final = 512
 _FILE_OPEN_FLAGS: Final = (
     getattr(os, "O_BINARY", 0)
     | getattr(os, "O_CLOEXEC", 0)
@@ -65,30 +62,26 @@ def create_snapshot_directory(temp_root: Path) -> tuple[Path, DirectoryIdentity]
 
 
 def cleanup_stale_snapshots(temp_root: Path, now_ns: int) -> None:
-    """Attempt a bounded cleanup of old, positively owned directories."""
+    """Attempt cleanup of every old, positively owned directory."""
     cutoff_ns = now_ns - _STALE_AFTER_NS
     try:
         entries = os.scandir(temp_root)
     except OSError:
         return
-    attempted_removals = 0
     with entries:
-        for entry in islice(entries, _MAX_STALE_SCAN_ENTRIES):
+        for entry in entries:
             if not entry.name.startswith(SNAPSHOT_DIR_PREFIX):
                 continue
             try:
                 details = os.lstat(entry.path)
             except OSError:
                 continue
-            if not stat.S_ISDIR(details.st_mode) or details.st_mtime_ns > cutoff_ns:
+            if not _real_directory(details) or details.st_mtime_ns > cutoff_ns:
                 continue
             remove_owned_directory(
                 Path(entry.path),
                 (details.st_dev, details.st_ino),
             )
-            attempted_removals += 1
-            if attempted_removals >= _MAX_STALE_REMOVALS:
-                break
 
 
 def remove_owned_directory(directory: Path, expected: DirectoryIdentity) -> None:
@@ -98,7 +91,7 @@ def remove_owned_directory(directory: Path, expected: DirectoryIdentity) -> None
     except OSError:
         return
     if (
-        not stat.S_ISDIR(details.st_mode)
+        not _real_directory(details)
         or (details.st_dev, details.st_ino) != expected
         or not directory.name.startswith(SNAPSHOT_DIR_PREFIX)
         or not _private_to_current_user(details)
@@ -168,4 +161,11 @@ def _file_identity(details: os.stat_result) -> FileIdentity:
 def _private_to_current_user(details: os.stat_result) -> bool:
     return os.name != "posix" or (
         stat.S_IMODE(details.st_mode) & 0o077 == 0 and details.st_uid == os.geteuid()
+    )
+
+
+def _real_directory(details: os.stat_result) -> bool:
+    return stat.S_ISDIR(details.st_mode) and not (
+        (getattr(details, "st_file_attributes", 0) or 0)
+        & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
     )

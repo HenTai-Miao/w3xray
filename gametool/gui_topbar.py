@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .query_coordinates import coordinates_from_text
+
 import os
 import tkinter as tk
 from tkinter import messagebox
@@ -587,7 +589,7 @@ def _code_selected(app, box, prefix: str = "") -> None:
 
 
 def _near_selected_coords(app, box, radius: str = "") -> None:
-    """取选中/剪贴板的坐标, 打开包查询窗 near 模式反查 (radius 空则用默认半径)。"""
+    """Open a near query from one unambiguous, full-precision coordinate pair."""
     try:
         raw = box.get("sel.first", "sel.last").strip()
     except Exception:
@@ -597,24 +599,14 @@ def _near_selected_coords(app, box, radius: str = "") -> None:
             raw = box.clipboard_get().strip()
         except Exception:
             return
-    import re  # noqa: PLC0415
-
-    nums = re.findall(r"-?\d+(?:\.\d+)?", raw)
-    if len(nums) < 2:
+    point = coordinates_from_text(raw)
+    if point is None:
         return
-    # 多数字选区防误导: 模板行形态 "near x y" (或纯坐标对) 直接采纳;
-    # 其余 (全选长文本混入小地图标记等) 超过 4 个数字拒绝猜测 — 精确选中一行再反查
-    near_match = re.search(r"\bnear\s+(-?[\d.]+)\s+(-?[\d.]+)", raw)
-    if near_match:
-        nums = [near_match.group(1), near_match.group(2)]
-    elif len(nums) > 4:
-        return
-
     open_pack_query_dialog(
         app,
         lambda: getattr(app, "_last_pack_dir", None) or load_last_pack_dir(),
         app.on_export_pack,
-        prefill="near {} {}{}".format(nums[0], nums[1], f" {radius}" if radius else ""),
+        prefill=f"near {point[0]} {point[1]}" + (f" {radius}" if radius else ""),
         prefill_command="near",
     )
 

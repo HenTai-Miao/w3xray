@@ -475,7 +475,7 @@ def test_unit_death_random_dist_drops(pack):
         fn: regs
         for _code, fn, regs in _unit_death_random_drops(load_script(pack))  # pyright: ignore[reportArgumentType]
     }
-    assert handlers["Unit_ydweDropItems"] == [("I0YD", 70), ("I0YE", 30)]
+    assert handlers["Unit_ydweDropItems"] == (("I0YD", 70), ("I0YE", 30))
     unit_text = "\n".join(_query_drop(pack, "nctm", 30))
     assert "Unit_ydweDropItems" in unit_text
     assert "I0YD" in unit_text and "I0YE" in unit_text
@@ -628,7 +628,7 @@ def test_query_drop_script_direct_death_drop(pack):
         encoding="utf-8",
     )
     text = "\n".join(_query_drop(pack, "I0P3", 10))
-    assert "直落木剑 [I0P3]  ⚠ 脚本死亡位置直落 (关系表无此掉落记录):" in text
+    assert "直落木剑 [I0P3]  ⚠ 脚本死亡位置直落 (脚本证据):" in text
     assert (
         "死亡触发 Trig_boss -> 死亡直落语句: call CreateItemLoc('I0P3',udg_WPP[3])"
         in text
@@ -1389,7 +1389,7 @@ def test_query_diff_shows_field_level_changes(tmp_path) -> None:
             "物品\tI0A1\t1\tI0A1\t宝物甲\t是\t\n",
             encoding="utf-8",
         )
-        (obj / "对象字段.tsv").write_text(
+        (root / "对象字段.tsv").write_text(
             "分类\tID\t名称\t字段键\t字段名\t值\t来源\n"
             f"物品\tI0A1\t宝物甲\tigol\t金币\t{price}\tmap\n",
             encoding="utf-8",
@@ -1815,7 +1815,7 @@ def test_run_cli_json_output(pack, capsys):
 
 
 def test_run_cli_json_campaign_sectioned(tmp_path, capsys):
-    """--json 战役容器分段: 每段一个 JSON 对象, section 携带「子地图 名」。"""
+    """--json 战役容器是单个完整文档，sections 保留每个任务关。"""
     root = tmp_path / "campaign"
     sub = root / "子地图" / "001_x"
     sub.mkdir(parents=True)
@@ -1829,7 +1829,9 @@ def test_run_cli_json_campaign_sectioned(tmp_path, capsys):
     )
     out = capsys.readouterr().out
     assert rc == 0
-    payloads = [json.loads(line) for line in out.strip().splitlines()]
+    payload = json.loads(out)
+    assert payload["section"] == "战役"
+    payloads = payload["sections"]
     assert payloads[0]["section"] == "容器级" or payloads[0]["section"].startswith(
         "子地图"
     )

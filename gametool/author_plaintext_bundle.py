@@ -19,10 +19,8 @@ from .mpq import MPQArchive
 from .safe_output import safe_relative_path
 
 MANIFEST_NAME: Final = "gamexray-author-bundle.tsv"
-MAX_BUNDLE_FILE_SIZE: Final = 2 * 1024 * 1024 * 1024
-MAX_BUNDLE_TOTAL_SIZE: Final = 8 * 1024 * 1024 * 1024
-MAX_BUNDLE_FILES: Final = 100_000
-MAX_MANIFEST_SIZE: Final = 64 * 1024 * 1024
+MAX_BUNDLE_FILE_SIZE: Final[int | None] = None
+MAX_MANIFEST_SIZE: Final[int | None] = None
 _SHA256_RE: Final = re.compile(r"[0-9a-f]{64}")
 
 
@@ -180,12 +178,9 @@ def load_author_plaintext_bundle(
 
 
 def _parse_file_rows(root: Path, lines: list[str]) -> tuple[AuthorBundleFile, ...]:
-    if len(lines) > MAX_BUNDLE_FILES:
-        raise AuthorBundleError("too many plaintext files")
     payload_root: Path | None = None
     files: list[AuthorBundleFile] = []
     seen: set[str] = set()
-    total_size = 0
     for line in lines:
         parts = line.split("\t")
         if len(parts) != 3 or parts[0] != "file":
@@ -211,9 +206,6 @@ def _parse_file_rows(root: Path, lines: list[str]) -> tuple[AuthorBundleFile, ..
                 f"plaintext file unsafe: {parts[1]} ({exc.reason})"
             ) from exc
         size = identity.size
-        total_size += size
-        if size > MAX_BUNDLE_FILE_SIZE or total_size > MAX_BUNDLE_TOTAL_SIZE:
-            raise AuthorBundleError(f"plaintext size limit exceeded: {parts[1]}")
         if actual_hash != expected_hash:
             raise AuthorBundleError(f"file SHA256 mismatch: {parts[1]}")
         files.append(

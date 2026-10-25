@@ -39,11 +39,11 @@ def _make_pack(tmp_path, encrypted: bool = True) -> None:
 def test_hints_collected_and_encrypted_flag(tmp_path):
     _make_pack(tmp_path)
     assert _script_encrypted(tmp_path) is True
-    hints = _tooltip_source_hints(tmp_path, {"寂灭之力"}, 8)
+    hints = _tooltip_source_hints(tmp_path, {"寂灭之力"})
     assert any("不熄的火焰" in h and "I03B" in h for h in hints)
-    hints_x = _tooltip_source_hints(tmp_path, {"不死鸟天翔"}, 8)
+    hints_x = _tooltip_source_hints(tmp_path, {"不死鸟天翔"})
     assert any("不熄的火焰 x 4" in h for h in hints_x)
-    hints_b = _tooltip_source_hints(tmp_path, {"不熄的火焰"}, 8)
+    hints_b = _tooltip_source_hints(tmp_path, {"不熄的火焰"})
     assert any("地狱火掉落" in h and "传送：焰冰之地" in h for h in hints_b)
 
 

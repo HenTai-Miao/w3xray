@@ -10,11 +10,7 @@ SLK 记录：
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Final, override
-
-_MAX_COLUMNS: Final = 16_384
-_MAX_ROWS: Final = 1_000_000
-_MAX_CELLS: Final = 64_000_000
+from typing import override
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,7 +47,7 @@ def parse_slk(text: str) -> dict[str, dict[str, str]]:
                 except ValueError as exc:
                     raise SlkParseError(f"invalid SLK column: {rest}") from exc
                 else:
-                    if not 1 <= candidate <= _MAX_COLUMNS:
+                    if candidate < 1:
                         raise SlkParseError(f"SLK column out of bounds: {candidate}")
                     cur_x = candidate
             elif t == "Y":
@@ -60,7 +56,7 @@ def parse_slk(text: str) -> dict[str, dict[str, str]]:
                 except ValueError as exc:
                     raise SlkParseError(f"invalid SLK row: {rest}") from exc
                 else:
-                    if not 1 <= candidate <= _MAX_ROWS:
+                    if candidate < 1:
                         raise SlkParseError(f"SLK row out of bounds: {candidate}")
                     cur_y = candidate
             elif t == "K" and kind == "C":
@@ -70,8 +66,6 @@ def parse_slk(text: str) -> dict[str, dict[str, str]]:
         if val.startswith('"') and val.endswith('"'):
             val = val[1:-1]
         cells[(cur_y, cur_x)] = val
-        if len(cells) > _MAX_CELLS:
-            raise SlkParseError(f"SLK cell count exceeds {_MAX_CELLS}")
 
     # 第1行=列名，第1列=行键
     headers = {x: value for (y, x), value in cells.items() if y == 1}

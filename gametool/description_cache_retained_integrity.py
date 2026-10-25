@@ -28,11 +28,11 @@ from .description_cache_retained_siblings import capture_relevant_siblings
 from .description_cache_retained_tree_snapshot import RetainedScanBounds
 
 
-MAX_RETAINED_FILE_BYTES: Final = 1024 * 1024 * 1024
-MAX_RETAINED_TREE_BYTES: Final = 8 * 1024 * 1024 * 1024
-MAX_RETAINED_FILE_COUNT: Final = 1_000_000
-MAX_RETAINED_ENTRY_COUNT: Final = 1_250_000
-MAX_RETAINED_DEPTH: Final = 256
+MAX_RETAINED_FILE_BYTES: Final[int | None] = None
+MAX_RETAINED_TREE_BYTES: Final[int | None] = None
+MAX_RETAINED_FILE_COUNT: Final[int | None] = None
+MAX_RETAINED_ENTRY_COUNT: Final[int | None] = None
+MAX_RETAINED_DEPTH: Final[int | None] = None
 
 
 @dataclass(frozen=True, slots=True)

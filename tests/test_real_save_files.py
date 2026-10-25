@@ -245,7 +245,7 @@ def test_mpq_member_is_read_whatever_its_declared_size(
     read_calls = 0
 
     class OversizedBlock:
-        file_size = save_module.MAX_SAVE_FILE_SIZE + 1
+        file_size = 1024**3 + 1
 
     class FakeArchive:
         block_table = (OversizedBlock(),)

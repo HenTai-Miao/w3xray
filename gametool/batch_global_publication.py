@@ -39,7 +39,7 @@ from .safe_output import write_text_safely
 from .safe_output_models import SafeWriteStatus
 
 
-_MAX_POINTER_BYTES: Final = 64 * 1024
+_MAX_POINTER_BYTES: Final[int | None] = None
 
 
 def publish_global_generation(

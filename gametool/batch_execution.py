@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import multiprocessing
+from queue import Empty, Queue
 import struct
+from threading import Thread
 from time import monotonic
 from typing import Protocol, assert_never
 
@@ -32,7 +34,7 @@ from .load_context import MapLoadContext
 
 _POLL_SECONDS = 0.025
 _JOIN_SECONDS = 0.2
-_MAX_MESSAGE_BYTES = 64 * 1024 * 1024
+_MAX_MESSAGE_BYTES: int | None = None
 
 
 class _ProcessHandle(Protocol):
@@ -71,7 +73,7 @@ def execute_map_isolated(
     context: MapLoadContext,
     *,
     worker: MapWorker = process_one_map,
-    timeout_seconds: float,
+    timeout_seconds: float | None,
     max_memory_bytes: int | None,
     cancellation: CancellationSignal | None,
     dependency_fingerprint: str | None = None,
@@ -103,7 +105,9 @@ def execute_map_isolated(
         return _wait_for_child(
             process,
             receiver,
-            monotonic() + max(0.0, timeout_seconds),
+            None
+            if timeout_seconds is None
+            else monotonic() + max(0.0, timeout_seconds),
             cancellation,
         )
     finally:
@@ -158,57 +162,87 @@ def _child_entry(
 def _wait_for_child(
     process: _ProcessHandle,
     receiver: _Receiver,
-    deadline: float,
+    deadline: float | None,
     cancellation: CancellationSignal | None,
 ) -> MapExecutionOutcome:
-    while True:
-        if cancellation is not None and cancellation.is_set():
-            _stop_and_reap(process)
-            return MapExecutionCancelled()
-        remaining = deadline - monotonic()
-        if remaining <= 0:
-            _stop_and_reap(process)
-            return MapExecutionFailure("map_timeout", "map execution timed out")
-        if _receiver_has_payload(receiver, min(_POLL_SECONDS, remaining)):
-            outcome = _recv_child_payload(receiver, deadline)
-            if isinstance(outcome, MapExecutionFailure):
-                return outcome
-            if outcome:
-                return _execution_outcome(outcome)
-        if not process.is_alive():
-            process.join()
-            if _receiver_has_payload(receiver, _POLL_SECONDS):
-                outcome = _recv_child_payload(receiver, deadline)
+    received: Queue[bytes | MapExecutionFailure] = Queue(maxsize=1)
+    reader: Thread | None = None
+
+    def read_payload() -> None:
+        received.put(_recv_child_payload(receiver, deadline))
+
+    try:
+        while True:
+            if cancellation is not None and cancellation.is_set():
+                _stop_and_reap(process)
+                return MapExecutionCancelled()
+            remaining = None if deadline is None else deadline - monotonic()
+            if remaining is not None and remaining <= 0:
+                _stop_and_reap(process)
+                return MapExecutionFailure("map_timeout", "map execution timed out")
+            wait_seconds = (
+                _POLL_SECONDS if remaining is None else min(_POLL_SECONDS, remaining)
+            )
+            if reader is not None:
+                try:
+                    outcome = received.get(timeout=wait_seconds)
+                except Empty:
+                    continue
                 if isinstance(outcome, MapExecutionFailure):
                     return outcome
                 if outcome:
                     return _execution_outcome(outcome)
-            return MapExecutionFailure(
-                "child_process_exit",
-                f"child exited with code {process.exitcode}",
-            )
+                process.join(_JOIN_SECONDS)
+                return MapExecutionFailure(
+                    "child_process_exit", f"child exited with code {process.exitcode}"
+                )
+            has_payload = _receiver_has_payload(receiver, wait_seconds)
+            if not has_payload and not process.is_alive():
+                process.join()
+                has_payload = _receiver_has_payload(receiver, _POLL_SECONDS)
+                if not has_payload:
+                    return MapExecutionFailure(
+                        "child_process_exit",
+                        f"child exited with code {process.exitcode}",
+                    )
+            if has_payload:
+                reader = Thread(
+                    target=read_payload, name="gamexray-batch-receive", daemon=True
+                )
+                reader.start()
+                continue
+    finally:
+        if reader is not None:
+            reader.join(_JOIN_SECONDS)
 
 
 def _recv_child_payload(
-    receiver: _Receiver, deadline: float
+    receiver: _Receiver, deadline: float | None
 ) -> bytes | MapExecutionFailure:
-    """读取子进程回传; EOF=空管道, OSError=载荷超 _MAX_MESSAGE_BYTES。
-
-    超长载荷不是可重试错误 (管道已损坏), 诊断为 child_message_too_large
-    失败返回 (MapExecutionFailure 是 dataclass 不是异常, 不能 raise);
-    超时抖动 (剩余时间不足) 返回空字节交给外层超时路径收尾。
-    """
+    """Read a full frame; report EOF, transport errors, and explicit budgets."""
     try:
         return receiver.recv_bytes(_MAX_MESSAGE_BYTES)
+    except MemoryError:
+        return MapExecutionFailure(
+            "child_message_memory_error",
+            "insufficient memory while receiving child result",
+        )
+    except (ValueError, OverflowError) as exc:
+        return MapExecutionFailure(
+            "child_message_read_failed", f"child payload transport failed: {exc}"
+        )
     except EOFError:
         return b""
     except OSError as exc:
-        remaining = deadline - monotonic()
-        if remaining > _POLL_SECONDS:
+        remaining = None if deadline is None else deadline - monotonic()
+        if remaining is None or remaining > _POLL_SECONDS:
             return MapExecutionFailure(
-                "child_message_too_large",
-                f"child payload exceeded {_MAX_MESSAGE_BYTES // 1048576}MB "
-                f"transport cap: {exc}",
+                "child_message_read_failed"
+                if _MAX_MESSAGE_BYTES is None
+                else "child_message_too_large",
+                f"child payload transport failed: {exc}"
+                if _MAX_MESSAGE_BYTES is None
+                else f"child payload exceeded {_MAX_MESSAGE_BYTES // 1048576}MB transport cap: {exc}",
             )
         return b""
 
@@ -247,7 +281,13 @@ def _apply_memory_limit(max_memory_bytes: int | None) -> MapExecutionFailure | N
 
 
 def _execution_outcome(payload: bytes) -> MapExecutionOutcome:
-    message = decode_child_message(payload)
+    try:
+        message = decode_child_message(payload)
+    except MemoryError:
+        return MapExecutionFailure(
+            "child_message_memory_error",
+            "insufficient memory while decoding child result",
+        )
     match message:
         case ChildSuccess(result=result, peak_rss_bytes=peak):
             return MapExecutionSuccess(result, peak)

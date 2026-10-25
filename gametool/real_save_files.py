@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 # 唯一保留的是与 MPQ 解压层一致的分配炸弹护栏 (响亮报错, 不静默丢数据);
 # 存档是用户自己的数据, 累计预算/文件条数/内嵌MPQ文本预算/证据串截断全部删除。
-MAX_SAVE_FILE_SIZE: Final = 1024 * 1024 * 1024
+MAX_SAVE_FILE_SIZE: Final[int | None] = None
 _QUOTED_STRING_RE: Final = re.compile(r"['\"]([^'\"\r\n]{2,512})['\"]")
 _QUOTED_BYTES_RE: Final = re.compile(rb"['\"]([^'\"\x00\r\n]{2,512})['\"]")
 _KEY_ENCODINGS: Final = ("utf-8", "gb18030")
@@ -309,7 +309,7 @@ def _classify_text(path: Path, text: str | None) -> SaveFileKind:
 
 
 def _looks_like_mpq(payload: bytes) -> bool:
-    return payload[:1048576].find(b"MPQ\x1a") >= 0
+    return payload.find(b"MPQ\x1a") >= 0
 
 
 def _read_mpq_text(snapshot: bytes) -> tuple[str | None, str]:

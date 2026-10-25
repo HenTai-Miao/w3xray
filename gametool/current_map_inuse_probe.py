@@ -1,14 +1,14 @@
-"""Bounded file-in-use observations for the live Warcraft map on Windows."""
+"""Complete file-in-use observations for the live Warcraft map on Windows."""
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
+from functools import cache
 import os
 from pathlib import Path
 from typing import Final
 
 
-MAX_PROBED_PATHS: Final = 512
 GENERIC_READ: Final = 0x80000000
 GENERIC_WRITE: Final = 0x40000000
 OPEN_EXISTING: Final = 3
@@ -24,7 +24,7 @@ def probe_in_use_files(paths: Iterable[Path]) -> tuple[Path, ...]:
     """
     if os.name != "nt":
         return ()
-    probed: list[Path] = []
+    hits: list[Path] = []
     seen: set[str] = set()
     for path in paths:
         key = os.path.normcase(os.fspath(path))
@@ -33,13 +33,18 @@ def probe_in_use_files(paths: Iterable[Path]) -> tuple[Path, ...]:
         seen.add(key)
         if not path.is_file():
             continue
-        probed.append(path)
-        if len(probed) == MAX_PROBED_PATHS:
-            break
-    return tuple(path for path in probed if _is_in_use(path))
+        if _is_in_use(path):
+            hits.append(path)
+    return tuple(hits)
 
 
 def _is_in_use(path: Path) -> bool:
+    return _windows_probe()(path)
+
+
+@cache
+def _windows_probe() -> Callable[[Path], bool]:
+    """Configure system API calls once; every path is still probed afresh."""
     import ctypes
     import ctypes.wintypes as wt
 
@@ -55,16 +60,20 @@ def _is_in_use(path: Path) -> bool:
         wt.HANDLE,
     )
     kernel32.CloseHandle.argtypes = (wt.HANDLE,)
-    handle = kernel32.CreateFileW(
-        os.fspath(path),
-        GENERIC_READ | GENERIC_WRITE,
-        0,
-        None,
-        OPEN_EXISTING,
-        0,
-        None,
-    )
-    if handle in (None, _INVALID_HANDLE):
-        return kernel32.GetLastError() == ERROR_SHARING_VIOLATION
-    kernel32.CloseHandle(handle)
-    return False
+
+    def probe(path: Path) -> bool:
+        handle = kernel32.CreateFileW(
+            os.fspath(path),
+            GENERIC_READ | GENERIC_WRITE,
+            0,
+            None,
+            OPEN_EXISTING,
+            0,
+            None,
+        )
+        if handle in (None, _INVALID_HANDLE):
+            return kernel32.GetLastError() == ERROR_SHARING_VIOLATION
+        kernel32.CloseHandle(handle)
+        return False
+
+    return probe

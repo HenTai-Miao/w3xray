@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .script_sources import analysis_script_sources, script_language
+
 import re
 from dataclasses import dataclass
 from typing import Final
@@ -10,8 +12,7 @@ from .api import MapData
 from .presentation_safety import tsv_cell as _tsv
 from .resources import RESOURCE_EXTS
 from .script_scan import _codes_in
-from .script_sources import analysis_script_texts
-from .script_tokens import strip_line_comment as _strip_comment
+from .script_lexing import script_string_values, script_views
 
 _GLOBAL_DECL_RE: Final = re.compile(
     r"^\s*(?:(?:private|public)\s+)?"
@@ -47,8 +48,8 @@ class ScriptGlobalIndex:
 def build_script_global_index(md: MapData) -> ScriptGlobalIndex:
     """Return globals declared in JASS scripts with static value clues."""
     rows: list[ScriptGlobal] = []
-    for source, text in analysis_script_texts(md):
-        rows.extend(_globals_for_script(source, text))
+    for source, text, lua in analysis_script_sources(md):
+        rows.extend(_globals_for_script(source, text, lua=lua))
     return ScriptGlobalIndex(tuple(rows))
 
 
@@ -76,14 +77,21 @@ def format_script_global_index_tsv(index: ScriptGlobalIndex) -> str:
     return "\n".join(rows) + "\n"
 
 
-def _globals_for_script(source: str, text: str) -> list[ScriptGlobal]:
+def _globals_for_script(
+    source: str, text: str, *, lua: bool | None = None
+) -> list[ScriptGlobal]:
+    lua = script_language(source) if lua is None else lua
     rows: list[ScriptGlobal] = []
     inside = False
-    for line_no, raw_line in enumerate(text.splitlines(), start=1):
-        line = _strip_comment(raw_line).strip()
-        if not line:
+    views = script_views(text, lua=lua)
+    for line_no, (code, raw_line) in enumerate(
+        zip(views.syntax.splitlines(), views.arguments.splitlines(), strict=True),
+        start=1,
+    ):
+        if not code.strip():
             continue
-        marker = line.lower()
+        line = raw_line.strip()
+        marker = code.strip().lower()
         if not inside:
             inside = marker == "globals"
             continue
@@ -123,33 +131,7 @@ def _parse_global(source: str, line_no: int, line: str) -> ScriptGlobal | None:
 
 
 def _first_string(value: str) -> str:
-    index = 0
-    while index < len(value):
-        if value[index] != '"':
-            index += 1
-            continue
-        raw, _end = _read_quoted(value, index)
-        return _unescape(raw)
-    return ""
-
-
-def _read_quoted(text: str, start: int) -> tuple[str, int]:
-    chars: list[str] = []
-    index = start + 1
-    escaped = False
-    while index < len(text):
-        char = text[index]
-        if escaped:
-            chars.append("\\" + char)
-            escaped = False
-        elif char == "\\":
-            escaped = True
-        elif char == '"':
-            return "".join(chars), index + 1
-        else:
-            chars.append(char)
-        index += 1
-    return "".join(chars), len(text)
+    return next(script_string_values(value, lua=False, include_object_codes=False), "")
 
 
 def _purpose(
@@ -185,10 +167,6 @@ def _looks_like_save_key(name: str, value: str) -> bool:
     ):
         return True
     return "." in value and not _looks_like_resource_path(value)
-
-
-def _unescape(value: str) -> str:
-    return value.replace("\\\\", "\\").replace('\\"', '"').replace("\\'", "'")
 
 
 def _yes_no(value: bool) -> str:

@@ -20,10 +20,10 @@ from .trusted_icon_cache import TRUSTED_ICON_CACHE_MARKER, is_trusted_icon_cache
 
 
 _SHA256: Final = re.compile(r"[0-9a-f]{64}")
-_MAX_IDENTITY_FILE_BYTES: Final = 1024 * 1024 * 1024
+_MAX_IDENTITY_FILE_BYTES: Final[int | None] = None
 _TRUSTED_MANIFEST: Final = "可信图标缓存.tsv"
 _TRUSTED_EVIDENCE_DIRECTORY: Final = "地图图标证据"
-BATCH_EXTRACTION_REVISION: Final = 6
+BATCH_EXTRACTION_REVISION: Final = 17
 
 type EvidenceField = str | int
 type EvidenceRecord = tuple[EvidenceField, ...]

@@ -39,7 +39,7 @@ from .integrity_output import (
 from .safe_output import SafeWriteStatus
 
 
-_MAX_SNAPSHOT_BYTES: Final = 1024 * 1024 * 1024
+_MAX_SNAPSHOT_BYTES: Final[int | None] = None
 
 
 def run_integrity_cli(argv: tuple[str, ...]) -> int:

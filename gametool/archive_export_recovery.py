@@ -15,13 +15,12 @@ from .safe_output import (
 )
 
 _RESOURCE_NAME_RE = re.compile(
-    rb"(?i)([A-Za-z0-9_ .()\\/\-]{1,240}\."
+    rb"(?i)(?<![A-Za-z0-9_ .()\\/\-])([A-Za-z0-9_ .()\\/\-]+\."
     rb"(?:blp|mdx|mdl|wav|mp3|ogg|tga|dds|txt|slk|ttf|j|lua|doo|wtg|wct|"
     rb"w3u|w3t|w3a|w3q|w3b|w3d|w3h|w3r|w3c|w3s|wgc))"
 )
-_MAX_RECOVERY_SCAN_BYTES: Final = 1024 * 1024 * 1024
-_MAX_RECOVERY_EXPORT_BYTES: Final = 1024 * 1024 * 1024
-_MAX_RECOVERY_CANDIDATES: Final = 1_000_000
+_MAX_RECOVERY_SCAN_BYTES: Final[int | None] = None
+_MAX_RECOVERY_EXPORT_BYTES: Final[int | None] = None
 
 
 class _RecoveryBlock(Protocol):
@@ -53,19 +52,21 @@ def _export_recovered_named_files(
         candidates.update(_resource_name_variants(name))
     scanned_bytes = 0
     for _idx, block in archive.iter_blocks():
-        remaining_bytes = _MAX_RECOVERY_SCAN_BYTES - scanned_bytes
-        if remaining_bytes <= 0:
+        remaining_bytes = (
+            None
+            if _MAX_RECOVERY_SCAN_BYTES is None
+            else _MAX_RECOVERY_SCAN_BYTES - scanned_bytes
+        )
+        if remaining_bytes is not None and remaining_bytes <= 0:
             break
         declared_size = max(1, block.file_size)
-        if declared_size > remaining_bytes:
+        if remaining_bytes is not None and declared_size > remaining_bytes:
             continue
         data = archive.read_block_anon(block)
         scanned_bytes += max(declared_size, len(data) if data is not None else 0)
-        if not data or len(data) > remaining_bytes:
+        if not data or (remaining_bytes is not None and len(data) > remaining_bytes):
             continue
         candidates.update(_resource_name_candidates(data))
-        if len(candidates) >= _MAX_RECOVERY_CANDIDATES:
-            break
     by_hash: dict[tuple[int, int], list[str]] = {}
     for name in candidates:
         by_hash.setdefault(
@@ -77,8 +78,12 @@ def _export_recovered_named_files(
     for name_a, name_b, _locale, _platform, block_index in getattr(
         archive, "hash_table", []
     ):
-        remaining_bytes = _MAX_RECOVERY_EXPORT_BYTES - exported_bytes
-        if remaining_bytes <= 0:
+        remaining_bytes = (
+            None
+            if _MAX_RECOVERY_EXPORT_BYTES is None
+            else _MAX_RECOVERY_EXPORT_BYTES - exported_bytes
+        )
+        if remaining_bytes is not None and remaining_bytes <= 0:
             break
         if block_index in (0xFFFFFFFF, 0xFFFFFFFE) or block_index >= len(
             archive.block_table
@@ -89,7 +94,7 @@ def _export_recovered_named_files(
         hits = by_hash.get((name_a, name_b))
         if hits:
             declared_size = max(1, archive.block_table[block_index].file_size)
-            if declared_size > remaining_bytes:
+            if remaining_bytes is not None and declared_size > remaining_bytes:
                 manifest.append(
                     f"SKIP\tblock={block_index}\tname={hits[0]}\treason=size-limit",
                 )
@@ -117,7 +122,7 @@ def _export_recovered_named_files(
 
 def _resource_name_variants(name: str) -> set[str]:
     name = name.replace("\x00", "").strip().strip("\"'")
-    if not name or len(name) > 260:
+    if not name:
         return set()
     relative = safe_relative_path(name)
     if relative is None:
@@ -144,7 +149,7 @@ def _try_export_recovered_hit(
     manifest: list[str],
     block_index: int,
     hits: list[str],
-    remaining_bytes: int,
+    remaining_bytes: int | None,
     declared_size: int,
 ) -> tuple[int, int]:
     ordered = sorted(
@@ -157,8 +162,10 @@ def _try_export_recovered_hit(
     )
     consumed_bytes = 0
     for name in ordered:
-        available_bytes = remaining_bytes - consumed_bytes
-        if declared_size > available_bytes:
+        available_bytes = (
+            None if remaining_bytes is None else remaining_bytes - consumed_bytes
+        )
+        if available_bytes is not None and declared_size > available_bytes:
             manifest.append(
                 f"SKIP\tblock={block_index}\tname={name}\treason=size-limit"
             )
@@ -169,7 +176,7 @@ def _try_export_recovered_hit(
             consumed_bytes += declared_size
             continue
         consumed_bytes += max(declared_size, len(data))
-        if len(data) > available_bytes:
+        if available_bytes is not None and len(data) > available_bytes:
             manifest.append(
                 f"SKIP\tblock={block_index}\tname={name}\treason=size-limit"
             )

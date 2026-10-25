@@ -32,7 +32,7 @@ class BatchCliOptions:
     output_root: str = DEFAULT_BATCH_OUTPUT
     game_data_path: str | None = None
     retry_failed: bool = True
-    map_timeout_seconds: float = DEFAULT_MAP_TIMEOUT_SECONDS
+    map_timeout_seconds: float | None = DEFAULT_MAP_TIMEOUT_SECONDS
     max_memory_bytes: int | None = None
     minimum_free_bytes: int = DEFAULT_MINIMUM_FREE_BYTES
     description_cache_path: str | None = None
@@ -47,6 +47,7 @@ class BatchCliOptions:
             max_memory_bytes=self.max_memory_bytes,
             minimum_free_bytes=self.minimum_free_bytes,
             description_cache_path=self.description_cache_path,
+            isolate_maps=True,
         )
 
 
@@ -104,7 +105,7 @@ class _BatchCliValues:
     output_root: str = DEFAULT_BATCH_OUTPUT
     game_data_path: str | None = None
     retry_failed: bool = True
-    map_timeout_seconds: float = DEFAULT_MAP_TIMEOUT_SECONDS
+    map_timeout_seconds: float | None = DEFAULT_MAP_TIMEOUT_SECONDS
     max_memory_bytes: int | None = None
     minimum_free_bytes: int = DEFAULT_MINIMUM_FREE_BYTES
     description_cache_path: str | None = None

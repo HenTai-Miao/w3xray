@@ -24,7 +24,6 @@ from .mpq_constants import (
 MPQ_COMPRESSION_LZMA: Final = 0x12
 COMP_LZMA: Final = MPQ_COMPRESSION_LZMA
 _LZMA_HEADER_SIZE: Final = 14
-_MAX_LZMA_DICTIONARY_SIZE: Final = 64 * 1024 * 1024
 
 
 class MPQCompressionError(ValueError):
@@ -154,8 +153,6 @@ def _decode_lzma(data: bytes, output_size: int, mask: int) -> bytes:
     if prop >= 9 * 5 * 5:
         raise MPQCompressionError(mask, "invalid LZMA properties")
     dictionary_size = int.from_bytes(data[2:6], "little")
-    if dictionary_size > _MAX_LZMA_DICTIONARY_SIZE:
-        raise MPQCompressionError(mask, "LZMA dictionary exceeds safe limit")
     declared = int.from_bytes(data[6:14], "little")
     if declared > output_size:
         raise MPQCompressionError(mask, "LZMA declared size exceeds output contract")

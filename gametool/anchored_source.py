@@ -120,7 +120,7 @@ class AnchoredSourceRoot:
     ) -> None:
         self.close()
 
-    def read(self, relative: PurePosixPath, maximum: int) -> AnchoredRead:
+    def read(self, relative: PurePosixPath, maximum: int | None = None) -> AnchoredRead:
         display_path = self.path.joinpath(*relative.parts)
         _require_relative(relative, display_path)
         try:
@@ -141,7 +141,7 @@ class AnchoredSourceRoot:
         self,
         relative: PurePosixPath,
         display_path: Path,
-        maximum: int,
+        maximum: int | None,
     ) -> AnchoredRead:
         with ExitStack() as opened_descriptors:
             parent_descriptor = self.descriptor
@@ -182,19 +182,23 @@ class AnchoredSourceRoot:
             )
 
 
-def _read_once(descriptor: int, path: Path, maximum: int) -> bytes:
+def _read_once(descriptor: int, path: Path, maximum: int | None) -> bytes:
     _ = os.lseek(descriptor, 0, os.SEEK_SET)
     payload = bytearray()
+    expected_size = os.fstat(descriptor).st_size
+    ceiling = expected_size if maximum is None else min(expected_size, maximum)
     while True:
         chunk = os.read(
             descriptor,
-            min(_READ_CHUNK_BYTES, maximum + 1 - len(payload)),
+            min(_READ_CHUNK_BYTES, ceiling + 1 - len(payload)),
         )
         if not chunk:
             return bytes(payload)
         payload.extend(chunk)
-        if len(payload) > maximum:
+        if maximum is not None and len(payload) > maximum:
             raise AnchoredSourceError(path, f"size exceeds limit {maximum}")
+        if len(payload) > expected_size:
+            raise AnchoredSourceError(path, "source grew while reading")
 
 
 def _require_relative(relative: PurePosixPath, path: Path) -> None:
@@ -206,10 +210,10 @@ def _require_relative(relative: PurePosixPath, path: Path) -> None:
         raise AnchoredSourceError(path, "source path is not canonical relative text")
 
 
-def _require_regular(details: os.stat_result, path: Path, maximum: int) -> None:
+def _require_regular(details: os.stat_result, path: Path, maximum: int | None) -> None:
     if not stat.S_ISREG(details.st_mode):
         raise AnchoredSourceError(path, "source is not a regular file")
-    if details.st_size > maximum:
+    if maximum is not None and details.st_size > maximum:
         raise AnchoredSourceError(path, f"size exceeds limit {maximum}")
 
 

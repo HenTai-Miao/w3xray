@@ -6,6 +6,9 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 
+from .script_lexing import script_views
+from .script_sources import ScriptSourceHost, analysis_script_sources
+
 try:
     from .jass_natives import BJ_CODE_CONSTANTS, BJ_FEATURES, BJ_FUNC_CODES
 except ImportError:
@@ -57,8 +60,11 @@ class ScriptNeedMark:
     detail: str
 
 
-def scan_script_features(script: str) -> tuple[list[str], set[str]]:
+def scan_script_features(
+    script: str, *, lua: bool | None = None
+) -> tuple[list[str], set[str]]:
     """Return user-facing BJ feature labels and implicit object codes."""
+    script = script_views(script, lua=lua).syntax
     features: list[str] = []
     implicit: set[str] = set()
     seen: set[str] = set()
@@ -74,8 +80,11 @@ def scan_script_features(script: str) -> tuple[list[str], set[str]]:
     return features, implicit
 
 
-def scan_script_need_marks(script: str) -> tuple[ScriptNeedMark, ...]:
+def scan_script_need_marks(
+    script: str, *, lua: bool | None = None
+) -> tuple[ScriptNeedMark, ...]:
     """Detect BJ helpers that depend on Warcraft III runtime default pools."""
+    script = script_views(script, lua=lua).syntax
     marks: list[ScriptNeedMark] = []
     seen: set[str] = set()
     for fname, (label, detail) in _NEED_MARKS.items():
@@ -86,9 +95,12 @@ def scan_script_need_marks(script: str) -> tuple[ScriptNeedMark, ...]:
     return tuple(marks)
 
 
-def merge_implicit_object_refs(out: dict[str, set[str]], script: str) -> None:
+def merge_implicit_object_refs(
+    out: dict[str, set[str]], script: str, *, lua: bool | None = None
+) -> None:
     """Add classifiable implicit BJ object codes into scan_object_refs output."""
-    _features, implicit = scan_script_features(script)
+    script = script_views(script, lua=lua).syntax
+    _features, implicit = scan_script_features(script, lua=lua)
     try:
         from .base_objects import BASE_OBJECTS
     except ImportError:
@@ -105,9 +117,34 @@ def merge_implicit_object_refs(out: dict[str, set[str]], script: str) -> None:
             out["可破坏物"].add(code)
 
 
-def format_script_mechanism_report(script: str) -> str:
-    features, implicit = scan_script_features(script)
-    marks = scan_script_need_marks(script)
+def map_script_mechanisms(
+    md: ScriptSourceHost,
+) -> tuple[list[str], set[str], tuple[ScriptNeedMark, ...]]:
+    features: dict[str, None] = {}
+    implicit: set[str] = set()
+    marks: dict[str, ScriptNeedMark] = {}
+    for _source, text, lua in analysis_script_sources(md):
+        labels, codes = scan_script_features(text, lua=lua)
+        features.update((label, None) for label in labels)
+        implicit.update(codes)
+        for mark in scan_script_need_marks(text, lua=lua):
+            marks.setdefault(mark.label, mark)
+    return list(features), implicit, tuple(marks.values())
+
+
+def format_map_script_mechanism_report(md: ScriptSourceHost) -> str:
+    return _format_mechanisms(*map_script_mechanisms(md))
+
+
+def format_script_mechanism_report(script: str, *, lua: bool | None = None) -> str:
+    features, implicit = scan_script_features(script, lua=lua)
+    marks = scan_script_need_marks(script, lua=lua)
+    return _format_mechanisms(features, implicit, marks)
+
+
+def _format_mechanisms(
+    features: list[str], implicit: set[str], marks: tuple[ScriptNeedMark, ...]
+) -> str:
     lines = [
         f"脚本特征：{len(features)}",
         f"隐式对象码：{len(implicit)}",

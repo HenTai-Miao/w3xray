@@ -10,7 +10,6 @@ from typing import Final
 W3E_FILE: Final = "war3map.w3e"
 _MAGIC: Final = b"W3E!"
 _ID_SIZE: Final = 4
-_MAX_TILE_IDS: Final = 256
 _TILE_SIZE_V11: Final = 7
 _TILE_SIZE_V12: Final = 8
 _HEIGHT_BASE: Final = 8192
@@ -126,7 +125,7 @@ def _read_tileset(data: bytes, offset: int) -> str:
 
 
 def _read_tile_ids(data: bytes, offset: int, count: int) -> tuple[tuple[str, ...], int]:
-    if count < 0 or count > _MAX_TILE_IDS:
+    if count < 0:
         raise ValueError("W3E 纹理数量异常")
     end = offset + count * _ID_SIZE
     if end > len(data):

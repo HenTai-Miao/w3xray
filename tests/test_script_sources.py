@@ -218,6 +218,52 @@ def test_map_loading_records_partial_wct_diagnostic() -> None:
     ]
 
 
+def test_map_language_is_loaded_before_ambiguous_wct_analysis() -> None:
+    from gametool.w3i import W3iInfo
+
+    archive = _MemoryArchive(
+        {
+            "war3map.j": b"call DoNothing()",
+            "war3map.lua": b"DoNothing()",
+            "war3map.wct": _classic_wct("CreateItem(FourCC('I001'),8//2,3)"),
+        }
+    )
+
+    def declare_lua(
+        md: MapData, _archive: _MemoryArchive, _wts: dict[int, str]
+    ) -> None:
+        md.w3i = W3iInfo(script_type="Lua")
+
+    with patch("gametool.map_loader._add_w3i", side_effect=declare_lua) as read_info:
+        md = _load_map_impl(archive, "memory.w3x", 0, None, MapLoadContext())
+    assert "I001" in md.obj_index
+    assert read_info.call_count == 1
+
+
+def test_script_only_loader_retains_declared_language_for_commands() -> None:
+    from gametool import api
+    from gametool.w3i import W3iInfo
+
+    archive = _MemoryArchive(
+        {
+            "war3map.j": b"call DoNothing()",
+            "war3map.lua": b"DoNothing()",
+            "war3map.wct": _classic_wct(
+                "TriggerRegisterPlayerChatEvent(t,Player(8//2),[=[-read]=],true)"
+            ),
+        }
+    )
+
+    def declare_lua(
+        md: MapData, _archive: _MemoryArchive, _wts: dict[int, str]
+    ) -> None:
+        md.w3i = W3iInfo(script_type="Lua")
+
+    with patch.dict(api.__dict__, {"_add_w3i": declare_lua}):
+        md = api._script_only_map(archive, "memory.w3x")
+    assert [command.command for command in commands_from_map(md)] == ["-read"]
+
+
 def test_map_loading_parses_wts_from_original_mixed_encoding_bytes() -> None:
     # Given: one WTS containing independently encoded UTF-8 and GBK entries.
     raw_wts = "STRING 1\n{\n开始\n}\nSTRING 2\n{\n".encode()

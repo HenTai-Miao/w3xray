@@ -1,27 +1,19 @@
-"""Function-scoped script index for static map investigation."""
+"""Exact function ownership and source-local call indexes for JASS and Lua."""
 
 from __future__ import annotations
 
-import re
-from bisect import bisect_left, bisect_right
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from dataclasses import dataclass
-from types import MappingProxyType
-from typing import Final, cast, final
+import re
+from typing import cast, final
 
 from .map_data import MapData
 from .presentation_safety import tsv_cell as _tsv
 from .script_call_catalog import ScriptCall, build_script_call_catalog
-from .script_sources import analysis_script_texts
-from .script_tokens import script_code_text
+from .script_scopes import ScopeLookup, script_structure
+from .script_sources import analysis_script_sources, script_language
 
-_JASS_FUNCTION_RE: Final = re.compile(r"^\s*function\s+([A-Za-z_][A-Za-z0-9_]*)\b")
-_LUA_FUNCTION_RE: Final = re.compile(
-    r"^\s*(?:local\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*(?:[.:][A-Za-z_][A-Za-z0-9_]*)*)\s*\(",
-)
-_LUA_OPEN_RE: Final = re.compile(r"\b(function|then|do|repeat)\b")
-_LUA_CLOSE_RE: Final = re.compile(r"\b(end|until)\b")
-_PRIMARY_CALL_RE: Final = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
+_PRIMARY_CALL_RE = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,6 +28,11 @@ class ScriptFunction:
     object_codes: tuple[str, ...]
     called_functions: tuple[str, ...]
     summary: str
+    start_offset: int | None = None
+    end_offset: int | None = None
+    parent_offset: int | None = None
+    complete: bool = True
+    ambiguous_calls: int = 0
 
     @property
     def line_count(self) -> int:
@@ -54,80 +51,201 @@ class _FunctionRange:
     start_line: int
     end_line: int
     summary: str
-
-
-@dataclass(frozen=True, slots=True)
-class _PrimaryCallIndex:
-    by_source: Mapping[str, tuple[ScriptCall, ...]]
-    lines_by_source: Mapping[str, tuple[int, ...]]
-    counts_by_name: Mapping[str, int]
+    start_offset: int
+    end_offset: int
+    parent_offset: int | None
+    complete: bool
 
 
 @final
 class ScriptFunctionLookup:
-    """按来源分组的函数范围二分索引。
-
-    各扫描器原来对每个调用点线性遍历全部函数（O(调用数×函数数)），
-    大地图上单这一步就要数秒；函数范围按来源顺序不重叠，可二分定位。
-    """
-
-    __slots__ = ("_by_source",)
+    """Binary lookups of exact character scopes, with legacy line-only fallback."""
 
     def __init__(self, functions: Iterable[ScriptFunction]) -> None:
         grouped: dict[str, list[ScriptFunction]] = {}
         for item in functions:
             grouped.setdefault(item.source, []).append(item)
-        by_source: dict[str, tuple[tuple[int, ...], tuple[ScriptFunction, ...]]] = {}
-        for source, items in grouped.items():
-            ordered = tuple(sorted(items, key=_function_sort_key))
-            by_source[source] = (tuple(item.start_line for item in ordered), ordered)
-        self._by_source = MappingProxyType(by_source)
+        self._characters = {
+            source: ScopeLookup(
+                (item.start_offset, item.end_offset, item)
+                for item in values
+                if item.start_offset is not None and item.end_offset is not None
+            )
+            for source, values in grouped.items()
+        }
+        self._lines = {
+            source: ScopeLookup(
+                (item.start_line, item.end_line + 1, item) for item in values
+            )
+            for source, values in grouped.items()
+        }
 
-    def name_for(self, source: str, line: int) -> str:
-        """Return the enclosing function name for one script line."""
-        entry = self._by_source.get(source)
-        if entry is None:
-            return ""
-        starts, functions = entry
-        index = bisect_right(starts, line) - 1
-        while index >= 0:
-            item = functions[index]
-            if item.end_line >= line:
-                return item.name
-            index -= 1
-        return ""
+    def name_for(self, source: str, line: int, *, offset: int | None = None) -> str:
+        entry = (self._characters if offset is not None else self._lines).get(source)
+        item = (
+            entry.at(offset if offset is not None else line)
+            if entry is not None
+            else None
+        )
+        return item.name if item is not None else ""
 
 
 def build_function_lookup(functions: Iterable[ScriptFunction]) -> ScriptFunctionLookup:
-    """Wrap sorted function rows with the shared bisect lookup."""
     return ScriptFunctionLookup(functions)
 
 
+def _function_ranges(
+    source: str, text: str, *, lua: bool | None = None
+) -> Iterable[_FunctionRange]:
+    lua = script_language(source) if lua is None else lua
+    for item in script_structure(text, lua=lua).functions:
+        yield _FunctionRange(
+            item.name,
+            source,
+            item.start_line,
+            item.end_line,
+            text[item.start : item.body_start].strip(),
+            item.start,
+            item.end,
+            item.parent,
+            item.complete,
+        )
+
+
+def _is_primary_call(call: ScriptCall) -> bool:
+    if call.offset is not None:
+        return call.primary
+    match = _PRIMARY_CALL_RE.search(call.example)
+    return match is not None and match.group(1) == call.function
+
+
+def _inside(item: _FunctionRange, call: ScriptCall) -> bool:
+    if call.source != item.source:
+        return False
+    return (
+        item.start_offset <= call.offset < item.end_offset
+        if call.offset is not None
+        else item.start_line <= call.line <= item.end_line
+    )
+
+
 def build_script_function_index(md: MapData) -> ScriptFunctionIndex:
-    """Return function ranges with function-scoped call and object-code clues."""
     cached = getattr(md, "_script_function_index_cache", None)
     if cached is not None:
         return cast("ScriptFunctionIndex", cached)
-    calls = build_script_call_catalog(md).calls
-    call_index = _build_primary_call_index(calls)
     ranges = tuple(
         item
-        for source, text in analysis_script_texts(md)
-        for item in _function_ranges(source, text)
+        for source, text, lua in analysis_script_sources(md)
+        for item in _function_ranges(source, text, lua=lua)
     )
-    functions = tuple(_function_row(item, call_index) for item in ranges)
-    index = ScriptFunctionIndex(tuple(sorted(functions, key=_function_sort_key)))
+    grouped: dict[str, list[_FunctionRange]] = {}
+    by_position: dict[tuple[str, int], _FunctionRange] = {}
+    names: dict[tuple[str, str], dict[int | None, list[_FunctionRange]]] = {}
+    for item in ranges:
+        grouped.setdefault(item.source, []).append(item)
+        by_position[item.source, item.start_offset] = item
+        names.setdefault(
+            (item.source, item.name.replace(":", ".").removeprefix("_G.")), {}
+        ).setdefault(item.parent_offset, []).append(item)
+    exact = {
+        source: ScopeLookup(
+            (item.start_offset, item.end_offset, item) for item in values
+        )
+        for source, values in grouped.items()
+    }
+    lines = {
+        source: ScopeLookup(
+            (item.start_line, item.end_line + 1, item) for item in values
+        )
+        for source, values in grouped.items()
+    }
+    internal: dict[tuple[str, int], list[ScriptCall]] = {}
+    inbound: dict[tuple[str, int], int] = {}
+    ambiguous: dict[tuple[str, str, int | None], int] = {}
+    unresolved: dict[tuple[str, str], int] = {}
+    for call in build_script_call_catalog(md).calls:
+        lookup = (exact if call.offset is not None else lines).get(call.source)
+        owner = (
+            lookup.at(call.offset if call.offset is not None else call.line)
+            if lookup is not None
+            else None
+        )
+        if owner is not None and _is_primary_call(call):
+            internal.setdefault((owner.source, owner.start_offset), []).append(call)
+        name = call.function.replace(":", ".").removeprefix("_G.")
+        candidates = names.get((call.source, name))
+        if candidates is None:
+            continue
+        visible = (
+            owner.start_offset
+            if owner is not None and not call.function.startswith("_G.")
+            else None
+        )
+        while True:
+            targets = candidates.get(visible, ())
+            if targets:
+                if len(targets) == 1:
+                    target = targets[0]
+                    key = (target.source, target.start_offset)
+                    if owner is None or owner.start_offset != target.start_offset:
+                        inbound[key] = inbound.get(key, 0) + 1
+                else:
+                    key = (call.source, name, visible)
+                    ambiguous[key] = ambiguous.get(key, 0) + 1
+                break
+            if visible is None:
+                unresolved[call.source, name] = (
+                    unresolved.get((call.source, name), 0) + 1
+                )
+                break
+            visible = by_position[call.source, visible].parent_offset
+    result: list[ScriptFunction] = []
+    for item in ranges:
+        key = (item.source, item.start_offset)
+        calls = internal.get(key, ())
+        mechanisms = _unique_ordered(call.mechanism for call in calls)
+        explicit = tuple(value for value in mechanisms if value != "普通调用")
+        result.append(
+            ScriptFunction(
+                item.name,
+                item.source,
+                item.start_line,
+                item.end_line,
+                inbound.get(key, 0),
+                len(calls),
+                explicit or mechanisms,
+                tuple(sorted({code for call in calls for code in call.object_codes})),
+                _unique_ordered(call.function for call in calls),
+                item.summary,
+                item.start_offset,
+                item.end_offset,
+                item.parent_offset,
+                item.complete,
+                ambiguous.get(
+                    (
+                        item.source,
+                        item.name.replace(":", ".").removeprefix("_G."),
+                        item.parent_offset,
+                    ),
+                    0,
+                )
+                + unresolved.get(
+                    (item.source, item.name.replace(":", ".").removeprefix("_G.")), 0
+                ),
+            )
+        )
+    index = ScriptFunctionIndex(tuple(sorted(result, key=_function_sort_key)))
     try:
         md._script_function_index_cache = index
-    except AttributeError:  # 测试替身可能不是带槽的 MapData
+    except AttributeError:
         pass
     return index
 
 
 def format_script_function_index_tsv(index: ScriptFunctionIndex) -> str:
-    """Format function-scoped script clues as TSV."""
+    """Append exact offsets, parent and ambiguity diagnostics to legacy columns."""
     rows = [
-        "函数\t来源\t起始行\t结束行\t行数\t被调用次数\t内部调用数\t机制\t对象码\t调用函数\t摘要"
+        "函数\t来源\t起始行\t结束行\t行数\t被调用次数\t内部调用数\t机制\t对象码\t调用函数\t摘要\t起始偏移\t结束偏移\t父函数偏移\t范围完整性\t歧义调用数"
     ]
     for item in index.functions:
         rows.append(
@@ -144,138 +262,20 @@ def format_script_function_index_tsv(index: ScriptFunctionIndex) -> str:
                     _tsv("; ".join(item.object_codes)),
                     _tsv("; ".join(item.called_functions)),
                     _tsv(item.summary),
+                    str(item.start_offset) if item.start_offset is not None else "",
+                    str(item.end_offset) if item.end_offset is not None else "",
+                    str(item.parent_offset) if item.parent_offset is not None else "",
+                    "完整" if item.complete else "未闭合",
+                    str(item.ambiguous_calls),
                 )
             )
         )
     return "\n".join(rows) + "\n"
 
 
-def _function_ranges(source: str, text: str) -> Iterable[_FunctionRange]:
-    lines = text.splitlines()
-    code_lines = script_code_text(text).splitlines()
-    index = 0
-    while index < len(code_lines):
-        lua_match = _LUA_FUNCTION_RE.match(code_lines[index])
-        if lua_match is not None:
-            end_index = _lua_end_index(code_lines, index)
-            yield _FunctionRange(
-                name=lua_match.group(1),
-                source=source,
-                start_line=index + 1,
-                end_line=end_index + 1,
-                summary=lines[index].strip(),
-            )
-            index = end_index + 1
-            continue
-        jass_match = _JASS_FUNCTION_RE.match(code_lines[index])
-        if jass_match is not None:
-            end_index = _jass_end_index(code_lines, index)
-            yield _FunctionRange(
-                name=jass_match.group(1),
-                source=source,
-                start_line=index + 1,
-                end_line=end_index + 1,
-                summary=lines[index].strip(),
-            )
-            index = end_index + 1
-            continue
-        index += 1
-
-
-def _function_row(item: _FunctionRange, calls: _PrimaryCallIndex) -> ScriptFunction:
-    internal = _calls_inside(item, calls)
-    recursive_calls = sum(call.function == item.name for call in internal)
-    return ScriptFunction(
-        name=item.name,
-        source=item.source,
-        start_line=item.start_line,
-        end_line=item.end_line,
-        inbound_calls=calls.counts_by_name.get(item.name, 0) - recursive_calls,
-        internal_calls=len(internal),
-        mechanisms=_mechanism_summary(internal),
-        object_codes=tuple(
-            sorted({code for call in internal for code in call.object_codes})
-        ),
-        called_functions=_unique_ordered(call.function for call in internal),
-        summary=item.summary,
-    )
-
-
-def _build_primary_call_index(calls: Iterable[ScriptCall]) -> _PrimaryCallIndex:
-    grouped: dict[str, list[ScriptCall]] = {}
-    counts: dict[str, int] = {}
-    for call in calls:
-        if not _is_primary_call(call):
-            continue
-        grouped.setdefault(call.source, []).append(call)
-        counts[call.function] = counts.get(call.function, 0) + 1
-    by_source = {source: tuple(rows) for source, rows in grouped.items()}
-    return _PrimaryCallIndex(
-        MappingProxyType(by_source),
-        MappingProxyType(
-            {
-                source: tuple(call.line for call in rows)
-                for source, rows in by_source.items()
-            },
-        ),
-        MappingProxyType(counts),
-    )
-
-
-def _calls_inside(
-    item: _FunctionRange,
-    calls: _PrimaryCallIndex,
-) -> tuple[ScriptCall, ...]:
-    source_calls = calls.by_source.get(item.source, ())
-    source_lines = calls.lines_by_source.get(item.source, ())
-    start = bisect_left(source_lines, item.start_line)
-    end = bisect_right(source_lines, item.end_line)
-    return tuple(call for call in source_calls[start:end] if _inside(item, call))
-
-
-def _inside(item: _FunctionRange, call: ScriptCall) -> bool:
-    return call.source == item.source and item.start_line <= call.line <= item.end_line
-
-
-def _mechanism_summary(calls: tuple[ScriptCall, ...]) -> tuple[str, ...]:
-    values = _unique_ordered(call.mechanism for call in calls)
-    explicit = tuple(value for value in values if value != "普通调用")
-    return explicit or values
-
-
-def _is_primary_call(call: ScriptCall) -> bool:
-    match = _PRIMARY_CALL_RE.search(call.example)
-    return match is not None and match.group(1) == call.function
-
-
-def _jass_end_index(lines: list[str], start: int) -> int:
-    for index in range(start + 1, len(lines)):
-        if re.match(r"^\s*endfunction\b", lines[index]):
-            return index
-    return len(lines) - 1
-
-
-def _lua_end_index(lines: list[str], start: int) -> int:
-    depth = 1
-    for index in range(start + 1, len(lines)):
-        line = lines[index]
-        depth += len(_LUA_OPEN_RE.findall(line))
-        depth -= len(_LUA_CLOSE_RE.findall(line))
-        if depth <= 0:
-            return index
-    return len(lines) - 1
-
-
 def _unique_ordered(values: Iterable[str]) -> tuple[str, ...]:
-    seen: set[str] = set()
-    result: list[str] = []
-    for value in values:
-        if value in seen:
-            continue
-        seen.add(value)
-        result.append(value)
-    return tuple(result)
+    return tuple(dict.fromkeys(values))
 
 
-def _function_sort_key(item: ScriptFunction) -> tuple[str, int, str]:
-    return item.source, item.start_line, item.name
+def _function_sort_key(item: ScriptFunction) -> tuple[str, int, int, str]:
+    return item.source, item.start_line, item.start_offset or 0, item.name

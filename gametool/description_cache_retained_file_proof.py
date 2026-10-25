@@ -49,9 +49,9 @@ def prove_retained_regular_file(
     """Read one top-level regular artifact through its anchored sibling name."""
     if (
         expected.size is None
-        or expected.size > bounds.file_bytes
-        or expected.size > bounds.tree_bytes
-        or bounds.file_count < 1
+        or (bounds.file_bytes is not None and expected.size > bounds.file_bytes)
+        or (bounds.tree_bytes is not None and expected.size > bounds.tree_bytes)
+        or (bounds.file_count is not None and bounds.file_count < 1)
     ):
         return _failed_proof(TreeProofStatus.OVERSIZED)
     try:
@@ -92,7 +92,7 @@ def prove_retained_regular_file(
 def read_relative_retained_file(
     root_descriptor: int,
     expected: TreeEntryState,
-    maximum: int,
+    maximum: int | None,
     capture_payload: bool,
 ) -> RetainedFileRead:
     """Open one safe relative file exclusively through held directory fds."""
@@ -128,20 +128,24 @@ def read_relative_retained_file(
 
 def read_retained_file(
     descriptor: int,
-    maximum: int,
+    maximum: int | None,
     capture_payload: bool,
 ) -> RetainedFileRead:
     """Hash to EOF once, stopping without truncation at maximum plus one."""
     digest = hashlib.sha256()
     payload = bytearray() if capture_payload else None
     size = 0
+    expected_size = os.fstat(descriptor).st_size
+    ceiling = expected_size if maximum is None else min(expected_size, maximum)
     while True:
-        chunk = os.read(descriptor, min(_READ_BYTES, maximum + 1 - size))
+        chunk = os.read(descriptor, min(_READ_BYTES, ceiling + 1 - size))
         if not chunk:
             break
         size += len(chunk)
-        if size > maximum:
+        if maximum is not None and size > maximum:
             raise RetainedFileOversized
+        if size > expected_size:
+            raise RetainedFileUnstable
         digest.update(chunk)
         if payload is not None:
             payload.extend(chunk)

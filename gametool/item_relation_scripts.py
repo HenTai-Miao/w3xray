@@ -23,7 +23,10 @@ from .script_call_argument_index import (
     ScriptCallArgument,
     build_script_call_argument_index,
 )
-from .script_trigger_registration_index import build_script_trigger_registration_index
+from .script_sources import analysis_script_sources
+from .script_scopes import source_line_starts
+from .script_trigger_bindings import script_trigger_bindings
+from bisect import bisect_right
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +47,8 @@ class _CallGroup:
     call: str
     summary: str
     arguments: tuple[ScriptCallArgument, ...]
+    offset: int | None = None
+    primary: bool = True
 
     def at(self, position: int | None) -> ScriptCallArgument | None:
         if position is None:
@@ -87,9 +92,13 @@ def build_script_call_item_relations(md: MapData) -> tuple[ItemRelation, ...]:
 def _script_call_relations(md: MapData) -> tuple[ItemRelation, ...]:
     calls = _call_groups(build_script_call_argument_index(md).arguments)
     death_contexts = _death_contexts(md)
+    scopes = {
+        source: script_trigger_bindings(text, lua=lua).structure.scopes
+        for source, text, lua in analysis_script_sources(md)
+    }
     rows: list[ItemRelation] = []
     for call in calls:
-        signature = _SIGNATURES.get(call.call)
+        signature = _SIGNATURES.get(call.call.removeprefix("_G."))
         if signature is None or _is_nested_call(call):
             continue
         item_argument = call.at(signature.item_position)
@@ -98,7 +107,15 @@ def _script_call_relations(md: MapData) -> tuple[ItemRelation, ...]:
         item_id = item_argument.object_codes[0]
         direct = _is_direct_argument(item_argument.argument)
         confidence = RelationConfidence.CONFIRMED if direct else RelationConfidence.CLUE
-        contexts = death_contexts.get((call.source, call.function), ())
+        lookup = scopes.get(call.source)
+        owner = (
+            lookup.at(call.offset)
+            if lookup is not None and call.offset is not None
+            else None
+        )
+        contexts = death_contexts.get(
+            (call.source, owner.start if owner is not None else None), ()
+        )
         if contexts and confidence is RelationConfidence.CONFIRMED:
             confidence = RelationConfidence.INFERRED
         item, resolved = resolve_relation_object(md, item_id, "物品")
@@ -116,6 +133,7 @@ def _script_call_relations(md: MapData) -> tuple[ItemRelation, ...]:
                     source=call.source,
                     function=call.function,
                     line=call.line,
+                    offset=call.offset or 0,
                     location=_call_location(call, signature),
                     raw=_raw_evidence(call.summary, contexts),
                 ),
@@ -129,13 +147,23 @@ def _script_call_relations(md: MapData) -> tuple[ItemRelation, ...]:
 
 
 def _call_groups(arguments: tuple[ScriptCallArgument, ...]) -> tuple[_CallGroup, ...]:
-    grouped: dict[tuple[str, int, str, str, str], list[ScriptCallArgument]] = {}
+    grouped: dict[
+        tuple[str, int, str, str, str, int | None, bool], list[ScriptCallArgument]
+    ] = {}
     for row in arguments:
-        key = (row.source, row.line, row.function, row.call, row.summary)
+        key = (
+            row.source,
+            row.line,
+            row.function,
+            row.call,
+            row.summary,
+            row.call_offset,
+            row.primary,
+        )
         grouped.setdefault(key, []).append(row)
     result: list[_CallGroup] = []
     for key, raw_rows in grouped.items():
-        rows = sorted(raw_rows, key=lambda row: row.position)
+        rows = raw_rows
         # 同一物理行可能出现多个同名调用（压缩/单行脚本）：position 是
         # 调用内参数序号、每个调用都从 1 严格递增，position 回落（<= 前值）
         # 即新调用边界。此前遇到重叠位置会整组静默丢弃，压缩脚图的
@@ -144,35 +172,52 @@ def _call_groups(arguments: tuple[ScriptCallArgument, ...]) -> tuple[_CallGroup,
         prev = 0
         for row in rows:
             if batch and row.position <= prev:
-                result.append(_CallGroup(*key, tuple(batch)))
+                result.append(_CallGroup(*key[:5], tuple(batch), key[5], key[6]))
                 batch = []
             batch.append(row)
             prev = row.position
         if batch:
-            result.append(_CallGroup(*key, tuple(batch)))
+            result.append(_CallGroup(*key[:5], tuple(batch), key[5], key[6]))
     return tuple(result)
 
 
-def _death_contexts(md: MapData) -> Mapping[tuple[str, str], tuple[str, ...]]:
-    registrations = build_script_trigger_registration_index(md).registrations
-    events_by_handle: dict[tuple[str, str], list[str]] = {}
-    for row in registrations:
-        if row.registration_type == "事件" and "DEATH" in row.target:
-            context = f"{row.api} {row.target} @ 第 {row.line} 行"
-            events_by_handle.setdefault((row.source, row.handle), []).append(context)
-    contexts: dict[tuple[str, str], list[str]] = {}
-    for row in registrations:
-        if row.registration_type != "动作" or not row.target:
-            continue
-        values = events_by_handle.get((row.source, row.handle), ())
-        if values:
-            contexts.setdefault((row.source, row.target), []).extend(values)
+def _death_contexts(md: MapData) -> Mapping[tuple[str, int | None], tuple[str, ...]]:
+    contexts: dict[tuple[str, int | None], list[str]] = {}
+    for source, text, lua in analysis_script_sources(md):
+        bindings = script_trigger_bindings(text, lua=lua)
+        lines = source_line_starts(text)
+        for sites in bindings.instances.values():
+            if any(site.diagnostic for site in sites):
+                continue
+            values = [
+                f"{site.call.name} {event} @ 第 {bisect_right(lines, site.call.start)} 行"
+                for site in sites
+                for event in site.events
+                if "DEATH" in event
+            ]
+            if not values:
+                continue
+            for site in sites:
+                callback = site.callback
+                if (
+                    site.call.name.removeprefix("_G.")
+                    not in {"TriggerAddAction", "TriggerAddActionBJ"}
+                    or callback is None
+                ):
+                    continue
+                # A candidate set is evidence of ambiguity, never a definite death link.
+                if len(callback.functions) == 1 and not callback.diagnostic:
+                    contexts.setdefault(
+                        (source, callback.functions[0].start), []
+                    ).extend(values)
     return MappingProxyType(
         {key: tuple(dict.fromkeys(values)) for key, values in contexts.items()}
     )
 
 
 def _is_nested_call(call: _CallGroup) -> bool:
+    if call.offset is not None:
+        return not call.primary
     marker = re.search(rf"\b{re.escape(call.call)}\s*\(", call.summary)
     if marker is None:
         return False

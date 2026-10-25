@@ -39,7 +39,7 @@ class SupplementalFile:
     sha256: str
     size: int
     identity: FileIdentity
-    max_bytes: int
+    max_bytes: int | None
     source: BlockSource
 
     def read(self) -> bytes:

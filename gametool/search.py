@@ -11,12 +11,15 @@
   → （包含「敏捷」或「全属性」）且 精准「等级:E」。
 命中返回累加分数（越靠前/越贴边分越高），未命中返回 None；空查询返回 0。
 
-解析为 AST：词法(_lex) → 递归下降(_Parser) → 求分(_eval)。
+解析为 AST：词法(_lex) → 显式栈解析(_parse) → 迭代求分(_eval)。
 节点：('like', segs, anchored_start, anchored_end) | ('eq', needle)
-      | ('and', lhs, rhs) | ('or', lhs, rhs)
+      | ('and', [children]) | ('or', [children])
 """
 
 from __future__ import annotations
+
+from collections.abc import Iterable
+from typing import Any
 
 
 def _is_word_char(ch: str) -> bool:
@@ -152,19 +155,19 @@ def _lex(query: str):
         if not has_pct:
             needle = "".join(p[1] for p in parts)
             if needle:  # 裸词 → %词%（包含）
-                toks.append(("like", [needle.lower()], False, False))
+                toks.append(("like", [needle.casefold()], False, False))
             continue
         # 含 %：按 % 切成字面段
         segs, cur = [], []
         for p in parts:
             if p[0] == "pct":
                 if cur:
-                    segs.append("".join(cur).lower())
+                    segs.append("".join(cur).casefold())
                     cur = []
             else:
                 cur.append(p[1])
         if cur:
-            segs.append("".join(cur).lower())
+            segs.append("".join(cur).casefold())
         anchored_start = parts[0][0] != "pct"
         anchored_end = parts[-1][0] != "pct"
         toks.append(("like", segs, anchored_start, anchored_end))
@@ -180,9 +183,8 @@ def _lex(query: str):
 # 不配对 ')'，导致后续 token 错位、把深嵌套组之后的查询条件整段丢弃（过滤失效）。
 # 改用调度场：解析完全迭代，任意深嵌套都不爆栈，也绝不丢内容。
 #
-# AND/OR 节点用**扁平 n 元**列表 ('and', [kids]) / ('or', [kids])：合并(apply_op)时
-# 把同种运算符的子节点摊平，使 `a&&a&&…`、`((…))` 等结合性链路只产生一个扁平节点，
-# _eval 对其只迭代不深递归。
+# 解析先保留二元节点，再以单次迭代摊平同种运算符，避免每次合并都复制前缀。
+# AND 在首个失败项短路；OR 保留最佳分数，两者均不依赖 Python 递归深度。
 _PREC = {"and": 2, "or": 1}
 
 
@@ -198,9 +200,7 @@ def _parse(toks):
             return
         r = out.pop()
         left = out.pop()
-        kids = list(left[1]) if isinstance(left, tuple) and left[0] == op else [left]
-        kids += list(r[1]) if isinstance(r, tuple) and r[0] == op else [r]
-        out.append((op, kids))
+        out.append((op, (left, r)))
 
     def push_op(op):  # 左结合：弹出栈顶同/更高优先级运算符
         while ops and ops[-1] != "lp" and _PREC[ops[-1]] >= _PREC[op]:
@@ -248,48 +248,67 @@ def _parse(toks):
     node = out[0]
     for extra in out[1:]:  # 防御：多余残留操作数用 && 兜合(正常不会发生)
         node = ("and", [node, extra])
-    return node
+    return _flatten(node)
 
 
-def _eval(node, text: str, text_lower: str):
-    # 纯迭代：后序遍历 + id->分值缓存。AST 已扁平为 n 元 and/or，深度只来自
-    # &&/|| 交替嵌套；这里同样不用递归，与 _parse 一致，任意深嵌套都不爆栈
-    # （_eval 曾是递归，约 1000 层交替括号即 RecursionError，违背本模块设计承诺）。
+def _flatten(node):
+    """Flatten associative nodes in one pass rather than copying every prefix."""
+    if node is None or node[0] not in ("and", "or"):
+        return node
+    root = (node[0], [])
+    pending = [(child, root) for child in reversed(node[1])]
+    while pending:
+        child, parent = pending.pop()
+        if child[0] == parent[0]:
+            pending.extend((grandchild, parent) for grandchild in reversed(child[1]))
+        elif child[0] in ("and", "or"):
+            branch = (child[0], [])
+            parent[1].append(branch)
+            pending.extend((grandchild, branch) for grandchild in reversed(child[1]))
+        else:
+            parent[1].append(child)
+    return root
+
+
+def _eval(node, fields: tuple[tuple[str, str], ...]) -> int | None:
+    """Evaluate iteratively; a failed AND skips the rest, OR keeps the best score."""
     if node is None:
         return 0
-    order = []  # 前序：父在前、子在后
-    stack = [node]
-    while stack:
-        n = stack.pop()
-        order.append(n)
-        if n[0] in ("and", "or"):
-            stack.extend(n[1])  # 子节点稍后出栈 → 排在父之后
-    val = {}  # id(节点) -> 分值（None 表示未命中）
-    for n in reversed(order):  # 逆序 = 后序：先算子、再算父
-        tag = n[0]
-        if tag == "like":
-            val[id(n)] = _like_score(n[1], n[2], n[3], text_lower)
-        elif tag == "eq":
-            val[id(n)] = _eq_score(n[1], text)  # 区分大小写：用原文
+    frames: list[tuple[Any, int, int | None]] = [(node, 0, None)]
+    result = None
+    while frames:
+        current, index, accumulated = frames.pop()
+        tag = current[0]
+        if tag in ("like", "eq"):
+            result = None
+            for text, text_lower in fields:
+                score = (
+                    _like_score(current[1], current[2], current[3], text_lower)
+                    if tag == "like"
+                    else _eq_score(current[1], text)
+                )
+                if score is not None:
+                    result = score if result is None else max(result, score)
+            continue
+        if tag not in ("and", "or"):
+            result = None
+            continue
+        if index == 0:
+            accumulated = 0 if tag == "and" else None
         elif tag == "and":
-            total, miss = 0, False
-            for c in n[1]:
-                s = val[id(c)]
-                if s is None:
-                    miss = True
-                    break
-                total += s
-            val[id(n)] = None if miss else total
-        elif tag == "or":
-            best = None
-            for c in n[1]:
-                s = val[id(c)]
-                if s is not None and (best is None or s > best):
-                    best = s
-            val[id(n)] = best
-        else:
-            val[id(n)] = None
-    return val[id(node)]
+            if result is None:
+                continue
+            assert accumulated is not None
+            accumulated += result
+        elif result is not None:
+            accumulated = result if accumulated is None else max(accumulated, result)
+        children = current[1]
+        if index == len(children):
+            result = accumulated
+            continue
+        frames.append((current, index + 1, accumulated))
+        frames.append((children[index], 0, None))
+    return result
 
 
 class CompiledQuery:
@@ -305,11 +324,21 @@ class CompiledQuery:
         self._node = node
         self._empty = empty
 
-    def score(self, text: str):
+    @property
+    def is_empty(self) -> bool:
+        return self._empty
+
+    def score(self, text: str) -> int | None:
         """命中返回累加分数，未命中返回 None，空查询返回 0。"""
         if self._empty:
             return 0
-        return _eval(self._node, text, text.lower())
+        return _eval(self._node, ((text, text.casefold()),))
+
+    def score_fields(self, fields: Iterable[str]) -> int | None:
+        """Match each term within a field; AND terms may match different fields."""
+        if self._empty:
+            return 0
+        return _eval(self._node, tuple((text, text.casefold()) for text in fields))
 
 
 def compile_query(query: str) -> CompiledQuery:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .script_sources import analysis_script_sources, script_language
+
 import re
 from bisect import bisect_right
 from dataclasses import dataclass
@@ -11,20 +13,17 @@ from .map_data import MapData
 from .presentation_safety import tsv_cell as _tsv
 from .resources import RESOURCE_EXTS
 from .save_api_catalog import object_api_category, save_api_info
-from .save_call_context import extract_call_args, unescape_arg
+from .save_call_context import extract_call_args
 from .script_function_index import (
     ScriptFunctionLookup,
     build_function_lookup,
     build_script_function_index,
 )
 from .script_scan import _codes_in
-from .script_sources import analysis_script_texts
-from .script_tokens import is_lua_function_definition as _is_lua_function_definition
-from .script_tokens import script_code_text
+from .script_lexing import script_string_values, script_views
+from .script_scopes import script_structure, source_line_starts
 
 _CALL_RE: Final = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
-_FOURCC_RE: Final = re.compile(r"[A-Za-z0-9]{4}")
-_FOURCC_PREFIX_RE: Final = re.compile(r"\bFourCC\s*\(\s*$", re.IGNORECASE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +39,8 @@ class ScriptCallArgument:
     mechanism: str
     purpose: str
     summary: str
+    call_offset: int | None = None
+    primary: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,15 +52,24 @@ def build_script_call_argument_index(md: MapData) -> ScriptCallArgumentIndex:
     """Return each script call argument with save, resource and object-code clues."""
     functions = build_function_lookup(build_script_function_index(md).functions)
     rows: list[ScriptCallArgument] = []
-    for source, text in analysis_script_texts(md):
-        rows.extend(_arguments_for_script(source, text, functions))
+    for source, text, lua in analysis_script_sources(md):
+        rows.extend(_arguments_for_script(source, text, functions, lua=lua))
     return ScriptCallArgumentIndex(tuple(rows))
 
 
 def format_script_call_argument_index_tsv(index: ScriptCallArgumentIndex) -> str:
     """Format call arguments as TSV."""
-    rows = ["来源\t行号\t函数\t调用\t参数序号\t参数\t字符串\t对象码\t机制\t用途\t摘要"]
+    rows = [
+        "来源\t行号\t函数\t调用\t参数序号\t参数\t字符串\t对象码\t机制\t用途\t摘要\t调用偏移"
+    ]
+    seen: set[tuple[str, int]] = set()
     for item in index.arguments:
+        summary = item.summary
+        if item.call_offset is not None:
+            key = (item.source, item.call_offset)
+            if key in seen:
+                summary = ""
+            seen.add(key)
         rows.append(
             "\t".join(
                 (
@@ -73,7 +83,8 @@ def format_script_call_argument_index_tsv(index: ScriptCallArgumentIndex) -> str
                     _tsv("; ".join(item.object_codes)),
                     _tsv(item.mechanism),
                     _tsv(item.purpose),
-                    _tsv(item.summary),
+                    _tsv(summary),
+                    str(item.call_offset) if item.call_offset is not None else "",
                 )
             )
         )
@@ -81,31 +92,42 @@ def format_script_call_argument_index_tsv(index: ScriptCallArgumentIndex) -> str
 
 
 def _arguments_for_script(
-    source: str,
-    text: str,
-    functions: ScriptFunctionLookup,
+    source: str, text: str, functions: ScriptFunctionLookup, *, lua: bool | None = None
 ) -> list[ScriptCallArgument]:
+    lua = script_language(source) if lua is None else lua
     rows: list[ScriptCallArgument] = []
-    line_starts = _line_starts(text)
-    code_text = script_code_text(text)
-    for match in _CALL_RE.finditer(code_text):
-        if _is_lua_function_definition(code_text, match.start()):
-            continue
-        raw_args = extract_call_args(text, match.end())
-        code_args = extract_call_args(code_text, match.end())
-        line_no = bisect_right(line_starts, match.start())
-        call = match.group(1)
+    line_starts = source_line_starts(text)
+    views = script_views(text, lua=lua)
+    structure = script_structure(text, lua=lua)
+    for site in structure.calls:
+        raw_args = extract_call_args(views, site.open + 1)
+        own_code = structure.own_text(views.code, site.start, site.end, site.owner)
+        own_arguments = structure.own_text(
+            views.arguments, site.start, site.end, site.owner
+        )
+        code_args = extract_call_args(
+            own_code, site.open - site.start + 1, lua=lua, mask_strings=True
+        )
+        value_args = extract_call_args(
+            own_arguments, site.open - site.start + 1, lua=lua
+        )
+        line_no = bisect_right(line_starts, site.start)
+        call = site.name
         mechanism = _mechanism(call)
         rows.extend(
             _argument_rows(
                 source,
                 line_no,
-                functions.name_for(source, line_no),
+                functions.name_for(source, line_no, offset=site.start),
                 call,
                 mechanism,
                 raw_args,
                 code_args,
-                _line_fragment(text, match.start()),
+                text[site.start : site.end],
+                lua=lua,
+                value_args=value_args,
+                call_offset=site.start,
+                primary=site.primary,
             )
         )
     return rows
@@ -120,12 +142,23 @@ def _argument_rows(
     raw_args: tuple[str, ...],
     code_args: tuple[str, ...],
     summary: str,
+    *,
+    lua: bool | None = None,
+    value_args: tuple[str, ...] | None = None,
+    call_offset: int | None = None,
+    primary: bool = True,
 ) -> list[ScriptCallArgument]:
+    lua = script_language(source) if lua is None else lua
     rows: list[ScriptCallArgument] = []
     for index, raw_arg in enumerate(raw_args, start=1):
         code_arg = code_args[index - 1] if index <= len(code_args) else raw_arg
         object_codes = tuple(sorted(set(_codes_in(code_arg))))
-        string_value = _first_string(raw_arg)
+        value_arg = (
+            value_args[index - 1]
+            if value_args is not None and index <= len(value_args)
+            else raw_arg
+        )
+        string_value = _first_string(value_arg, lua=lua)
         rows.append(
             ScriptCallArgument(
                 source=source,
@@ -139,12 +172,15 @@ def _argument_rows(
                 mechanism=mechanism,
                 purpose=_purpose(call, mechanism, string_value, object_codes),
                 summary=summary,
+                call_offset=call_offset,
+                primary=primary,
             )
         )
     return rows
 
 
 def _mechanism(call: str) -> str:
+    call = call.removeprefix("_G.")
     api = save_api_info(call)
     if api is not None:
         return f"{api.mechanism}:{api.operation}"
@@ -171,44 +207,8 @@ def _purpose(
     return "普通参数"
 
 
-def _first_string(value: str) -> str:
-    index = 0
-    while index < len(value):
-        if value[index] not in {"'", '"'}:
-            index += 1
-            continue
-        quote = value[index]
-        raw, end = _read_quoted(value, index)
-        if not _is_object_code_quote(value, index, quote, raw):
-            return unescape_arg(raw)
-        index = end
-    return ""
-
-
-def _is_object_code_quote(text: str, start: int, quote: str, value: str) -> bool:
-    if not _FOURCC_RE.fullmatch(value):
-        return False
-    return quote == "'" or _FOURCC_PREFIX_RE.search(text[:start]) is not None
-
-
-def _read_quoted(text: str, start: int) -> tuple[str, int]:
-    quote = text[start]
-    chars: list[str] = []
-    index = start + 1
-    escaped = False
-    while index < len(text):
-        char = text[index]
-        if escaped:
-            chars.append("\\" + char)
-            escaped = False
-        elif char == "\\":
-            escaped = True
-        elif char == quote:
-            return "".join(chars), index + 1
-        else:
-            chars.append(char)
-        index += 1
-    return "".join(chars), len(text)
+def _first_string(value: str, *, lua: bool | None = None) -> str:
+    return next(script_string_values(value, lua=lua, include_object_codes=False), "")
 
 
 def _looks_like_resource_path(value: str) -> bool:

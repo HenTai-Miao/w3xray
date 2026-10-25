@@ -79,15 +79,27 @@ def test_json_toggle_outputs_json_line() -> None:
     assert "as_json" in sig.parameters
 
 
-def test_gui_success_writes_cli_again_memo() -> None:
-    """GUI 查询成功后 _worker 落 CLI again memo (源码断言: 调用 _store_last_query 且未找到不写)。"""
-    import inspect
+def test_gui_success_writes_cli_again_memo(tmp_path, monkeypatch) -> None:
+    """GUI and CLI share successful-query memory through one execution interface."""
+    from typing import cast
+    from gametool import pack_query_cli as queries
 
-    from gametool.gui_pack_query import _PackQueryWindow
-
-    src = inspect.getsource(_PackQueryWindow)
-    assert "_store_last_query" in src
-    assert 'not result.startswith("未找到")' in src
+    monkeypatch.setattr(queries, "_memo_dir", lambda: tmp_path / "memo")
+    (tmp_path / "text.tsv").write_text("query target\n", encoding="utf-8")
+    window = cast(
+        gui_pack_query._PackQueryWindow,
+        cast(object, SimpleNamespace(_pack_dir=str(tmp_path))),
+    )
+    text, _elapsed = gui_pack_query._PackQueryWindow._run_query(window, "text", "query")
+    assert "query target" in text
+    assert queries._load_last_query() == {
+        "pack": str(tmp_path),
+        "command": "text",
+        "query": "query",
+    }
+    gui_pack_query._PackQueryWindow._run_query(window, "text", "missing")
+    last = queries._load_last_query()
+    assert last is not None and last["query"] == "query"
 
 
 def test_stats_mode_in_panel() -> None:
@@ -145,8 +157,9 @@ def test_coords_clipboard_prefers_selected_block() -> None:
     from gametool.gui_pack_query import _PackQueryWindow
 
     src = inspect.getsource(_PackQueryWindow._coords_from_clipboard)
-    assert '"selected"' in src  # selected 块优先
-    assert "xs[-1]" in src  # 兜底仍在 (无 selected 时退最后一对)
+    assert (
+        "coordinates_from_text" in src
+    )  # 结构化 selected、精确坐标与歧义判断共用解析器
 
 
 def test_near_rerun_menu_method_exists() -> None:
@@ -198,15 +211,15 @@ def test_free_word_list_complete() -> None:
 
 
 def test_history_full_retention() -> None:
-    """历史全量落盘不截 (374): 旧 del [10:] 让 stats「历史条数」失真;
-    展示层下拉只取 12 条, 落盘/统计走全量。"""
+    """History persists and remains selectable without a display-only ceiling."""
     import inspect
 
     from gametool.gui_pack_query import _PackQueryWindow
 
     whole = inspect.getsource(_PackQueryWindow)
     assert "del _HISTORY[10:]" not in whole  # 落盘前截断禁再入仓
-    assert "_HISTORY[:12]" in whole  # 展示层限定仍显式 (可用性 vs 满量分工)
+    assert "_HISTORY[:12]" not in whole
+    assert 'values=[f"{c} {k}".strip() for c, k in _HISTORY]' in whole
 
 
 def test_diff_mode_wiring() -> None:

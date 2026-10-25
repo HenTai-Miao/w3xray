@@ -12,8 +12,6 @@ import sys
 import warnings
 from pathlib import Path
 
-MAX_REPORT = 20
-
 
 def scan(paths: list[str]) -> int:
     failures: list[tuple[str, str]] = []
@@ -34,10 +32,8 @@ def scan(paths: list[str]) -> int:
                 failures.append((str(py), f"SyntaxError: {exc}"))
     if failures:
         print(f"syntax-warnings: {len(failures)} file(s) failed", file=sys.stderr)
-        for name, message in failures[:MAX_REPORT]:
+        for name, message in failures:
             print(f"  {name}: {message}", file=sys.stderr)
-        if len(failures) > MAX_REPORT:
-            print(f"  … and {len(failures) - MAX_REPORT} more", file=sys.stderr)
         return 1
     print("syntax-warnings: all clean")
     return 0

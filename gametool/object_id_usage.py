@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+from .script_sources import analysis_script_sources, script_language
+
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from .script_scan import _codes_in, scan_all_referenced_codes, scan_object_refs
-from .script_sources import analysis_script_texts
 from .script_tokens import script_code_text
 
 if TYPE_CHECKING:
@@ -61,14 +62,16 @@ class ObjectIdUsageReport:
 def build_object_id_usage(md: MapData) -> ObjectIdUsageReport:
     """Return script-side object ID usage details keyed by rawcode."""
     entries: list[ObjectIdUsage] = []
-    for source, text in analysis_script_texts(md):
-        category_map = _category_map(text)
-        line_entries = tuple(_line_entries(source, text, category_map))
+    for source, text, lua in analysis_script_sources(md):
+        category_map = _category_map(text, lua=lua)
+        line_entries = tuple(_line_entries(source, text, category_map, lua=lua))
         entries.extend(line_entries)
         explicit_codes = {entry.code for entry in line_entries}
         entries.extend(_implicit_entries(source, category_map, explicit_codes))
         entries.extend(
-            _unclassified_entries(source, text, explicit_codes, set(category_map))
+            _unclassified_entries(
+                source, text, explicit_codes, set(category_map), lua=lua
+            )
         )
     return ObjectIdUsageReport(_dedupe(entries))
 
@@ -83,8 +86,11 @@ def _line_entries(
     source: str,
     text: str,
     category_map: Mapping[str, frozenset[str]],
+    *,
+    lua: bool | None = None,
 ) -> Iterable[ObjectIdUsage]:
-    code_text = script_code_text(text)
+    lua = script_language(source) if lua is None else lua
+    code_text = script_code_text(text, lua=lua)
     for line_no, line in enumerate(code_text.splitlines(), start=1):
         for code in sorted(set(_codes_in(line))):
             yield ObjectIdUsage(
@@ -118,8 +124,13 @@ def _unclassified_entries(
     text: str,
     explicit_codes: set[str],
     classified_codes: set[str],
+    *,
+    lua: bool | None = None,
 ) -> Iterable[ObjectIdUsage]:
-    for code in scan_all_referenced_codes(text) - explicit_codes - classified_codes:
+    lua = script_language(source) if lua is None else lua
+    for code in (
+        scan_all_referenced_codes(text, lua=lua) - explicit_codes - classified_codes
+    ):
         yield ObjectIdUsage(
             code=code,
             source=source,
@@ -129,9 +140,11 @@ def _unclassified_entries(
         )
 
 
-def _category_map(text: str) -> Mapping[str, frozenset[str]]:
+def _category_map(
+    text: str, *, lua: bool | None = None
+) -> Mapping[str, frozenset[str]]:
     by_code: dict[str, set[str]] = {}
-    for category, codes in scan_object_refs(text).items():
+    for category, codes in scan_object_refs(text, lua=lua).items():
         for code in codes:
             by_code.setdefault(code, set()).add(category)
     return {code: frozenset(categories) for code, categories in by_code.items()}

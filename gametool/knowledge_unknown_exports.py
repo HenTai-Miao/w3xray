@@ -21,8 +21,7 @@ from .script_protection import (
 if TYPE_CHECKING:
     from .api import MapData
 
-_MAX_UNKNOWN_EXPORT_BYTES: Final = 4 * 1024 * 1024 * 1024
-_MAX_UNKNOWN_MANIFEST_ROWS: Final = 5_000_000
+_MAX_UNKNOWN_EXPORT_BYTES: Final[int | None] = None
 
 
 class UnknownBlock(Protocol):
@@ -88,15 +87,17 @@ def write_unknown_files_from_archive(
     count = 0
     consumed_bytes = 0
     for index, block in archive.iter_blocks():
-        if len(rows) > _MAX_UNKNOWN_MANIFEST_ROWS:
-            break
         if index in named_blocks:
             continue
-        remaining_bytes = _MAX_UNKNOWN_EXPORT_BYTES - consumed_bytes
-        if remaining_bytes <= 0:
+        remaining_bytes = (
+            None
+            if _MAX_UNKNOWN_EXPORT_BYTES is None
+            else _MAX_UNKNOWN_EXPORT_BYTES - consumed_bytes
+        )
+        if remaining_bytes is not None and remaining_bytes <= 0:
             break
         declared_size = max(1, block.file_size)
-        if declared_size > remaining_bytes:
+        if remaining_bytes is not None and declared_size > remaining_bytes:
             rows.append(
                 _manifest_row(index, "Skipped", "", 0, block, "累计大小超过导出上限")
             )
@@ -106,7 +107,7 @@ def write_unknown_files_from_archive(
             raw = _block_raw_payload(archive, block)
             _record_encrypted_script(detections, index, "UnknownRaw", raw)
             consumed_bytes += max(declared_size, len(raw))
-            if len(raw) > remaining_bytes:
+            if remaining_bytes is not None and len(raw) > remaining_bytes:
                 rows.append(
                     _manifest_row(
                         index, "Skipped", "", 0, block, "累计大小超过导出上限"
@@ -119,7 +120,7 @@ def write_unknown_files_from_archive(
         else:
             _record_encrypted_script(detections, index, "Unknown", data)
             consumed_bytes += max(declared_size, len(data))
-            if len(data) > remaining_bytes:
+            if remaining_bytes is not None and len(data) > remaining_bytes:
                 rows.append(
                     _manifest_row(
                         index, "Skipped", "", 0, block, "累计大小超过导出上限"

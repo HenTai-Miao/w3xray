@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from .script_sources import analysis_script_sources, script_language
+
 import re
 from collections.abc import Iterable
+from bisect import bisect_right
 from dataclasses import dataclass
 from typing import Final
 
@@ -19,9 +22,9 @@ from .script_function_index import (
     build_function_lookup,
     build_script_function_index,
 )
-from .script_scan import _codes_in, scan_object_refs
-from .script_sources import analysis_script_texts
-from .script_tokens import script_code_text, strip_line_comment as _strip_comment
+from .script_scan import object_code_occurrences, scan_object_refs
+from .script_scopes import script_structure, source_line_starts
+from .script_lexing import script_views
 
 _JASS_SET_RE: Final = re.compile(
     r"^\s*set\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?:\[[^\]]+\])?\s*=",
@@ -50,6 +53,7 @@ class ScriptObjectCodeOccurrence:
     context: str
     mechanism: str
     summary: str
+    offset: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,8 +69,10 @@ def build_script_object_code_occurrence_index(
     calls = build_script_call_catalog(md).calls
     objects = _object_lookup(md)
     rows: list[ScriptObjectCodeOccurrence] = []
-    for source, text in analysis_script_texts(md):
-        rows.extend(_occurrences_for_script(source, text, functions, calls, objects))
+    for source, text, lua in analysis_script_sources(md):
+        rows.extend(
+            _occurrences_for_script(source, text, functions, calls, objects, lua=lua)
+        )
     return ScriptObjectCodeOccurrenceIndex(tuple(rows))
 
 
@@ -75,7 +81,7 @@ def format_script_object_code_occurrence_index_tsv(
 ) -> str:
     """Format script object-code occurrences as TSV."""
     rows = [
-        "来源\t行号\t函数\t对象码\t10进制\t分类\t名称\t对象来源\t上下文\t机制\t摘要\t英文名\t细类"
+        "来源\t行号\t函数\t对象码\t10进制\t分类\t名称\t对象来源\t上下文\t机制\t摘要\t英文名\t细类\t源码偏移"
     ]
     for item in index.occurrences:
         fine = BASE_CATEGORIES.get(item.code)
@@ -95,6 +101,7 @@ def format_script_object_code_occurrence_index_tsv(
                     _tsv(item.summary),
                     _tsv(BASE_NAMES_EN.get(item.code, "")),
                     _tsv("" if fine is None else fine[0]),
+                    str(item.offset),
                 )
             )
         )
@@ -107,55 +114,92 @@ def _occurrences_for_script(
     functions: ScriptFunctionLookup,
     calls: tuple[ScriptCall, ...],
     objects: dict[str, GameObject],
+    *,
+    lua: bool | None = None,
 ) -> list[ScriptObjectCodeOccurrence]:
-    code_lines = script_code_text(text).splitlines()
-    raw_lines = text.splitlines()
-    calls_by_line = _calls_by_line(source, calls)
-    categories = _script_categories(text)
-    is_lua = source.lower().endswith(".lua")
+    lua = script_language(source) if lua is None else lua
+    structure = script_structure(text, lua=lua)
+    views = script_views(text, lua=lua)
+    starts = source_line_starts(text)
+    categories = _script_categories(text, lua=lua)
+    by_offset = {
+        call.offset: call
+        for call in calls
+        if call.source == source and call.offset is not None
+    }
     rows: list[ScriptObjectCodeOccurrence] = []
-    for line_no, code_line in enumerate(code_lines, start=1):
-        for code in _codes_in(code_line):
-            context, mechanism = _context_for(
-                code_line, code, is_lua, calls_by_line.get(line_no, ())
+    occurrences = [
+        (offset, code, "") for offset, code in object_code_occurrences(text, lua=lua)
+    ]
+    occurrences.extend(
+        (match.start(), code, match.group())
+        for match in _IDENTIFIER_RE.finditer(views.syntax)
+        if (code := _CONSTANT_TO_CODE.get(match.group())) is not None
+    )
+    for offset, code, constant in sorted(occurrences):
+        line_no = bisect_right(starts, offset)
+        owner = structure.scopes.at(offset)
+        owner_start = owner.start if owner is not None else None
+        site = structure.call_scopes.at(offset)
+        ancestors: list[ScriptCall] = []
+        outer = None
+        while site is not None and site.owner == owner_start:
+            found = by_offset.get(site.start)
+            if found is not None:
+                ancestors.append(found)
+            outer = site
+            site = (
+                structure.call_scopes.at(site.start - 1)
+                if site.parent is not None
+                else None
             )
-            obj = objects.get(code)
-            rows.append(
-                ScriptObjectCodeOccurrence(
-                    source=source,
-                    line=line_no,
-                    function=functions.name_for(source, line_no),
-                    code=code,
-                    decimal=code_decimal(code),
-                    category=_category(code, obj, mechanism, categories),
-                    name=_name(code, obj),
-                    object_source=_object_source(obj),
-                    context=context,
-                    mechanism=mechanism,
-                    summary=_summary(raw_lines, line_no),
-                )
+        left = starts[line_no - 1]
+        endline = re.compile(r"[\r\n]").search(text, offset)
+        right = endline.start() if endline is not None else len(text)
+        if owner is not None:
+            left = max(
+                left, owner.body_start if offset >= owner.body_start else owner.start
             )
-        # Blz 系技能字段常量（如 ABILITY_RLF_HOLY_BOLT_DAMAGE）也是对象码引用：
-        # 按 common.j 常量反查字段码，作为"技能字段"出现行保留。
-        for field_code, constant in _field_constants_in(code_line):
-            context, mechanism = _context_for(
-                code_line, field_code, is_lua, calls_by_line.get(line_no, ())
+            right = min(right, owner.body_end if offset < owner.body_end else owner.end)
+        # Control and statement delimiters prevent a neighboring call on the
+        # same line from becoming this occurrence's evidence.
+        boundary_start = left
+        for boundary in re.finditer(
+            r";|\b(?:then|else|elseif|endif|endfunction|end)\b",
+            views.syntax[left:right],
+        ):
+            begin, finish = (
+                boundary_start + boundary.start(),
+                boundary_start + boundary.end(),
             )
-            rows.append(
-                ScriptObjectCodeOccurrence(
-                    source=source,
-                    line=line_no,
-                    function=functions.name_for(source, line_no),
-                    code=field_code,
-                    decimal=code_decimal(field_code),
-                    category="技能字段",
-                    name=label_for(field_code),
-                    object_source="common.j 常量",
-                    context=constant,
-                    mechanism=mechanism,
-                    summary=_summary(raw_lines, line_no),
-                )
+            if finish <= offset:
+                left = finish
+            elif begin > offset:
+                right = begin
+                break
+        snippet = views.code[left:right]
+        context, mechanism = _context_for(snippet, code, lua is True, tuple(ancestors))
+        if outer is not None and any(call.function != "FourCC" for call in ancestors):
+            summary = text[outer.start : outer.end]
+        else:
+            summary = text[left:right].strip()
+        obj = objects.get(code)
+        rows.append(
+            ScriptObjectCodeOccurrence(
+                source,
+                line_no,
+                functions.name_for(source, line_no, offset=offset),
+                code,
+                code_decimal(code),
+                "技能字段" if constant else _category(code, obj, mechanism, categories),
+                label_for(code) if constant else _name(code, obj),
+                "common.j 常量" if constant else _object_source(obj),
+                constant or context,
+                mechanism,
+                summary,
+                offset,
             )
+        )
     return rows
 
 
@@ -193,9 +237,9 @@ def _calls_by_line(
     return {line: tuple(items) for line, items in grouped.items()}
 
 
-def _script_categories(text: str) -> dict[str, str]:
+def _script_categories(text: str, *, lua: bool | None = None) -> dict[str, str]:
     by_code: dict[str, set[str]] = {}
-    for category, codes in scan_object_refs(text).items():
+    for category, codes in scan_object_refs(text, lua=lua).items():
         for code in codes:
             by_code.setdefault(code, set()).add(category)
     return {code: _category_label(categories) for code, categories in by_code.items()}
@@ -207,15 +251,15 @@ def _context_for(
     is_lua: bool,
     calls: tuple[ScriptCall, ...],
 ) -> tuple[str, str]:
+    call = _call_for_code(code, calls, prefer_non_fourcc=True)
+    if call is not None:
+        return call.function, call.mechanism
     assignment = _assignment_target(line, is_lua)
     if assignment:
         return assignment, "赋值"
     global_name = _global_name(line)
     if global_name:
         return global_name, "全局声明"
-    call = _call_for_code(code, calls, prefer_non_fourcc=True)
-    if call is not None:
-        return call.function, call.mechanism
     call = _call_for_code(code, calls, prefer_non_fourcc=False)
     if call is not None:
         return call.function, call.mechanism
@@ -247,7 +291,7 @@ def _call_for_code(
     prefer_non_fourcc: bool,
 ) -> ScriptCall | None:
     for call in calls:
-        if code not in call.object_codes:
+        if call.offset is None and code not in call.object_codes:
             continue
         if prefer_non_fourcc and call.function == "FourCC":
             continue
@@ -292,4 +336,4 @@ def _object_source(obj: GameObject | None) -> str:
 def _summary(lines: list[str], line_no: int) -> str:
     if line_no > len(lines):
         return ""
-    return _strip_comment(lines[line_no - 1]).strip()
+    return lines[line_no - 1].strip()

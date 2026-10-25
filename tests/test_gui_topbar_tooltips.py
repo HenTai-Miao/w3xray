@@ -48,7 +48,7 @@ def test_guide_near_reverse_guard() -> None:
     src = (Path(__file__).parents[1] / "gametool" / "gui_topbar.py").read_text(
         encoding="utf-8"
     )
-    assert "bnear" in src and "len(nums) > 4" in src  # 模板行直取 + 多数字守卫
+    assert "coordinates_from_text" in src  # 精确模板与多坐标拒猜测共用同一解析器
     assert 'radius: str = ""' in src  # 半径参数化 (guide 双档 320)
     assert 'box, "100")' in src  # 精细档菜单
 

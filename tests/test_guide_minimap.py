@@ -115,15 +115,15 @@ class TestScriptPositions:
         md.scripts = {
             "war3map.j": "set u = CreateUnit(p, 'n000', - 7910.0, 2596.0, 270.000)"
         }
-        assert script_unit_positions(md) == {"n000": (-7910.0, 2596.0)}
+        assert script_unit_positions(md) == {"n000": ((-7910.0, 2596.0),)}
 
-    def test_first_wins_per_code(self):
+    def test_every_position_per_code(self):
         md = MapData(path="m.w3x", name="m")
         md.scripts = {
             "war3map.j": "CreateUnit(p, 'n007', 3344.0, 1312.0, 90.0)\n"
             + "CreateUnit(p, 'n007', 1.0, 2.0, 90.0)"
         }
-        assert script_unit_positions(md) == {"n007": (3344.0, 1312.0)}
+        assert script_unit_positions(md) == {"n007": ((3344.0, 1312.0), (1.0, 2.0))}
 
 
 class TestExtraMarks:

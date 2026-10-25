@@ -66,7 +66,7 @@ def validate_mpq_candidate(
         f"protected_classic={str(protected_classic).lower()}",
         f"table_offsets_wrapped={str(table_offsets_wrapped).lower()}",
     )
-    if sector_shift > 20:
+    if sector_shift > 25:
         return (*fields, f"sector_shift={sector_shift}", "sector_shift_invalid")
     if hash_count <= 0 or hash_count & (hash_count - 1):
         return (*fields, "hash_count_not_power_of_two")

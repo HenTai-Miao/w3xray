@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from .base_names import BASE_NAMES, BASE_NAMES_EN
 from .map_info import format_map_info
 from .search import compile_query
+from .static_numbers import format_number
 from .theme import CARD, FONT, ROW_ALT
 
 if TYPE_CHECKING:
@@ -125,7 +126,7 @@ class DataRefreshMixin:
                     name,
                     unit.type_id,
                     unit.player,
-                    f"{unit.x:.0f}, {unit.y:.0f}",
+                    f"{format_number(unit.x)}, {format_number(unit.y)}",
                     hp,
                     mana,
                     unit.hero_level,
@@ -150,14 +151,14 @@ class DataRefreshMixin:
             drops = "  ".join(
                 f"{self._item_name(item)}×{count}%" for item, count in doodad.drops
             )
-            scale = f"{doodad.scale[0]:.2g}" if doodad.scale else "1"
+            scale = format_number(doodad.scale[0]) if doodad.scale else "1"
             self.doodad_tree.insert(
                 "",
                 "end",
                 values=(
                     name,
                     doodad.type_id,
-                    f"{doodad.x:.0f}, {doodad.y:.0f}",
+                    f"{format_number(doodad.x)}, {format_number(doodad.y)}",
                     scale,
                     doodad.life,
                     drops,

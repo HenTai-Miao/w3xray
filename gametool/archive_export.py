@@ -45,8 +45,8 @@ KNOWN_EXPORT_FILES = [
     "testconfig.wgc",
     "(listfile)",
 ]
-_MAX_NAMED_EXPORT_BYTES: Final = 4 * 1024 * 1024 * 1024
-_MAX_UNKNOWN_EXPORT_BYTES: Final = 4 * 1024 * 1024 * 1024
+_MAX_NAMED_EXPORT_BYTES: Final[int | None] = None
+_MAX_UNKNOWN_EXPORT_BYTES: Final[int | None] = None
 
 
 if TYPE_CHECKING:
@@ -174,7 +174,9 @@ def _export_all_impl(
             name,
             exported_blocks,
             sub_maps,
-            _MAX_NAMED_EXPORT_BYTES - named_bytes,
+            None
+            if _MAX_NAMED_EXPORT_BYTES is None
+            else _MAX_NAMED_EXPORT_BYTES - named_bytes,
         )
     _export_recovered_named_files(
         cast("RecoveryArchive", cast(object, archive)), out_dir, exported_blocks
@@ -212,7 +214,7 @@ def _export_named_file(
     name: str,
     exported_blocks: set[int],
     sub_maps: list[str],
-    remaining_bytes: int,
+    remaining_bytes: int | None,
 ) -> int:
     if not archive.has_file(name):
         return 0
@@ -221,14 +223,14 @@ def _export_named_file(
         reported_size = archive.declared_file_size(name)
         if reported_size is not None:
             declared_size = max(1, reported_size)
-    if declared_size > remaining_bytes:
+    if remaining_bytes is not None and declared_size > remaining_bytes:
         return 0
     try:
         data = archive.read_file(name)
     except KeyError, OSError, ValueError:
         return declared_size
     consumed_bytes = max(declared_size, len(data))
-    if len(data) > remaining_bytes:
+    if remaining_bytes is not None and len(data) > remaining_bytes:
         return consumed_bytes
     result = write_bytes_safely(out_dir, name, data)
     if result.status is not SafeWriteStatus.WRITTEN:
@@ -247,28 +249,28 @@ def _export_unknown_blocks(
     exported_blocks: set[int],
     raw_manifest: list[str],
     sub_maps: list[str],
-    max_bytes: int,
+    max_bytes: int | None,
 ) -> None:
     consumed_bytes = 0
     for index, block in archive.iter_blocks():
         if index in exported_blocks:
             continue
-        remaining_bytes = max_bytes - consumed_bytes
-        if remaining_bytes <= 0:
+        remaining_bytes = None if max_bytes is None else max_bytes - consumed_bytes
+        if remaining_bytes is not None and remaining_bytes <= 0:
             break
         declared_size = max(1, block.file_size)
-        if declared_size > remaining_bytes:
+        if remaining_bytes is not None and declared_size > remaining_bytes:
             continue
         data = archive.read_block_anon(block)
         if data is None:
             raw = _block_raw_payload(archive, block)
             consumed_bytes += max(declared_size, len(raw))
-            if len(raw) > remaining_bytes:
+            if remaining_bytes is not None and len(raw) > remaining_bytes:
                 continue
             _ = _export_raw_block(out_dir, index, block, raw, raw_manifest)
             continue
         consumed_bytes += max(declared_size, len(data))
-        if len(data) > remaining_bytes:
+        if remaining_bytes is not None and len(data) > remaining_bytes:
             continue
         ext = guess_extension(data)
         filename = "File%06d.%s" % (index, ext)

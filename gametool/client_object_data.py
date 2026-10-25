@@ -18,7 +18,7 @@ from .object_materialization import BaseObjectTable, merge_object_candidates
 
 # 客户端快照内容不变（同一份游戏导出数据反复解析是纯浪费），
 # 按全部输入文件的内容摘要做磁盘缓存；任何缓存异常都回退到现算。
-_SNAPSHOT_CACHE_TAG: Final = "gamexray-client-snapshot-v1"
+_SNAPSHOT_CACHE_TAG: Final = "gamexray-client-snapshot-v2"  # 完整浮点字段精度
 
 _RACES: Final[tuple[str, ...]] = (
     "Human",

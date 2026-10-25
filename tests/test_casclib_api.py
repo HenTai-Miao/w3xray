@@ -7,9 +7,7 @@ import ctypes
 import pytest
 
 from gametool.casclib_api import (
-    MAX_CASC_FILE_SIZE,
     CascFileNotFoundError,
-    CascFileTooLargeError,
     CascNativeError,
     CascPartialReadError,
     CtypesCascLibApi,
@@ -181,7 +179,7 @@ def test_open_file_distinguishes_missing_from_native_failure(
     assert caught.value.native_error_code == error_code  # pyright: ignore[reportAttributeAccessIssue]
 
 
-def test_zero_byte_read_passes_real_bytes_read_pointer() -> None:
+def test_zero_byte_read_returns_without_native_allocation() -> None:
     # Given: CascLib reports an empty file.
     dll = FakeNativeLibrary()
     dll.read_payload = b""
@@ -192,7 +190,7 @@ def test_zero_byte_read_passes_real_bytes_read_pointer() -> None:
 
     # Then: the native call still ran with DWORD* and returned empty bytes.
     assert data == b""
-    assert dll.read_calls == 1
+    assert dll.read_calls == 0
 
 
 def test_partial_read_is_not_silently_accepted() -> None:
@@ -208,7 +206,7 @@ def test_partial_read_is_not_silently_accepted() -> None:
     assert caught.value.native_error_code == 0
 
 
-def test_read_failure_and_oversize_are_distinct() -> None:
+def test_read_failure_and_invalid_size_are_distinct() -> None:
     # Given: a DLL with an explicit read failure and a bounded adapter.
     dll = FakeNativeLibrary()
     dll.read_ok = False
@@ -220,6 +218,6 @@ def test_read_failure_and_oversize_are_distinct() -> None:
         api.read_file(202, 4)
     assert caught.value.native_error_code == 1005
     calls = dll.read_calls
-    with pytest.raises(CascFileTooLargeError):
-        api.read_file(202, MAX_CASC_FILE_SIZE + 1)
+    with pytest.raises(ValueError, match="nonnegative"):
+        api.read_file(202, -1)
     assert dll.read_calls == calls

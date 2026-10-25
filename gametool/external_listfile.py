@@ -7,14 +7,14 @@ from dataclasses import dataclass
 from io import StringIO
 import os
 from pathlib import PureWindowsPath
+from pathlib import Path
 from typing import Final, Protocol
 
 from .war3_encoding import decode_warcraft_string
+from .bounded_file import read_bounded_regular_file
 
 
-MAX_EXTERNAL_LISTFILE_BYTES: Final = 512 * 1024 * 1024
-MAX_EXTERNAL_LISTFILE_ENTRIES: Final = 10_000_000
-MAX_EXTERNAL_LISTFILE_LINE_CHARS: Final = 65_536
+MAX_EXTERNAL_LISTFILE_BYTES: Final[int | None] = None
 
 
 class ExternalNameArchive(Protocol):
@@ -35,25 +35,20 @@ def read_external_listfile(path: str | None) -> tuple[str, ...]:
         return ()
     file_path = os.fspath(path)
     try:
-        with open(file_path, "rb") as handle:
-            payload = handle.read(MAX_EXTERNAL_LISTFILE_BYTES + 1)
+        payload, _identity = read_bounded_regular_file(
+            Path(file_path), MAX_EXTERNAL_LISTFILE_BYTES
+        )
     except OSError:
-        return ()
-    if len(payload) > MAX_EXTERNAL_LISTFILE_BYTES:
         return ()
     text = decode_warcraft_string(payload, allow_latin1=True)
     names: list[str] = []
     with StringIO(text, newline=None) as lines:
         for raw_line in lines:
             line = raw_line.rstrip("\r\n")
-            if len(line) > MAX_EXTERNAL_LISTFILE_LINE_CHARS:
-                return ()
             name = line.strip()
             is_slash_comment = name.startswith("//") and "/" not in name[2:]
             if not name or name.startswith("#") or is_slash_comment:
                 continue
-            if len(names) >= MAX_EXTERNAL_LISTFILE_ENTRIES:
-                return ()
             names.append(name)
     return tuple(names)
 

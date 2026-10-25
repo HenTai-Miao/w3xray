@@ -14,6 +14,8 @@
 
 from __future__ import annotations
 
+from .script_sources import analysis_script_sources
+
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -27,7 +29,18 @@ from .pack_query_cli import (
     use_item_loot_lines,
 )
 from .script_scan import scan_chat_commands
+from .script_trigger_acquisition import (
+    format_trigger_acquisitions,
+    trigger_acquisitions,
+)
 from .script_sources import analysis_script_texts
+from .query_coordinates import coordinates_from_text
+from .placement_positions import (
+    PositionGroups,
+    doodad_position_groups,
+    unit_position_groups,
+)
+from .static_numbers import format_number
 from .wts import map_wts_table, resolve
 
 if TYPE_CHECKING:
@@ -77,14 +90,19 @@ GUIDE_SECTION_TITLES: dict[str, str] = {
 
 def build_guide_sections(md: MapData) -> tuple[GuideSection, ...]:
     """按固定顺序组装攻略段落，证据缺失的段落直接省略。"""
+    positions = _placement_coords(md)
     candidates = (
         GuideSection("basic", GUIDE_SECTION_TITLES["basic"], _basic_lines(md)),
         GuideSection("commands", GUIDE_SECTION_TITLES["commands"], _command_lines(md)),
         GuideSection("quests", GUIDE_SECTION_TITLES["quests"], _quest_lines(md)),
         GuideSection("heroes", GUIDE_SECTION_TITLES["heroes"], _hero_lines(md)),
         GuideSection("recipes", GUIDE_SECTION_TITLES["recipes"], _recipe_lines(md)),
-        GuideSection("shops", GUIDE_SECTION_TITLES["shops"], _shop_lines(md)),
-        GuideSection("drops", GUIDE_SECTION_TITLES["drops"], _drop_lines(md)),
+        GuideSection(
+            "shops", GUIDE_SECTION_TITLES["shops"], _shop_lines(md, positions)
+        ),
+        GuideSection(
+            "drops", GUIDE_SECTION_TITLES["drops"], _drop_lines(md, positions)
+        ),
         GuideSection("loot", GUIDE_SECTION_TITLES["loot"], _loot_lines(md)),
         GuideSection("clues", GUIDE_SECTION_TITLES["clues"], _clue_lines(md)),
     )
@@ -120,10 +138,10 @@ def format_guide_report(md: MapData, section: str | None = None) -> str:
     # 尾部 near 模板: 报告里首个 @坐标 → 可直接复制执行的坐标反查 (near 联动)
     if section in (None, "shops", "drops"):
         for line in lines:
-            m = _COORD_IN_LINE.search(line)
-            if m:
+            point = coordinates_from_text(line) if "@" in line else None
+            if point:
                 lines.append("")
-                lines.append(f"- 坐标反查模板：near {m.group(1)} {m.group(2)}")
+                lines.append(f"- 坐标反查模板：near {point[0]} {point[1]}")
                 break
     if is_campaign and section is None:
         lines.append("")
@@ -154,8 +172,8 @@ def _command_lines(md: MapData) -> tuple[str, ...]:
     wts = map_wts_table(md)
     seen: set[tuple[str, bool]] = set()
     rows: list[str] = []
-    for _source, text in analysis_script_texts(md):
-        for command in scan_chat_commands(text):
+    for _source, text, lua in analysis_script_sources(md):
+        for command in scan_chat_commands(text, lua=lua):
             if not command.command:
                 continue
             key = (command.command, command.exact)
@@ -176,7 +194,7 @@ def _quest_lines(md: MapData) -> tuple[str, ...]:
     wts = map_wts_table(md)
     seen: set[tuple[str, str]] = set()
     rows: list[str] = []
-    for _source, text in analysis_script_texts(md):
+    for _source, text, lua in analysis_script_sources(md):
         for match in _QUEST_CALL.finditer(text):
             title = _resolve_text(match.group(1), wts)
             body = _resolve_text(match.group(2), wts)
@@ -229,30 +247,70 @@ def _recipe_lines(md: MapData) -> tuple[str, ...]:
     return tuple(rows)
 
 
-def _shop_lines(md: MapData) -> tuple[str, ...]:
+def _shop_lines(md: MapData, coords: PositionGroups | None = None) -> tuple[str, ...]:
     return _grouped_source_lines(
-        md, ItemRelationKind.SHOP_SELL, "、", coords=_placement_coords(md)
+        md,
+        ItemRelationKind.SHOP_SELL,
+        "、",
+        coords=_placement_coords(md) if coords is None else coords,
     )
 
 
-def _drop_lines(md: MapData) -> tuple[str, ...]:
+def _drop_lines(md: MapData, coords: PositionGroups | None = None) -> tuple[str, ...]:
     rows = list(
         _grouped_source_lines(
-            md, ItemRelationKind.UNIT_DROP, "；", coords=_placement_coords(md)
+            md,
+            ItemRelationKind.UNIT_DROP,
+            "；",
+            coords=_placement_coords(md) if coords is None else coords,
         )
     )
     # 可破坏物掉落 (箱子/路障) 是独立关系类型——迷失国度 75 行此类证据
     # 此前整类不进 drops 段, 玩家只看得到「怪物掉落」
-    rows.extend(_grouped_source_lines(md, ItemRelationKind.DESTRUCTABLE_DROP, "；"))
+    rows.extend(
+        _grouped_source_lines(
+            md,
+            ItemRelationKind.DESTRUCTABLE_DROP,
+            "；",
+            coords=doodad_position_groups(md),
+        )
+    )
     # 脚本死亡触发证据与关系表满量并列——guide drops 段曾只读掉落表,
     # BossFH 直落 I01F 类证据在玩家最常跑的出口缺席 (与 pack-query
     # drop 兜底同源正则, 语义一致: 掷骰不写保底, 奖池 N 选 1)。
     seen: set[str] = set(rows)
-    for _source, text in analysis_script_texts(md):
-        for line in script_death_drop_lines(text, lambda code: _code_name(md, code)):
+    for source, text, lua in analysis_script_sources(md):
+        evidence = (
+            format_trigger_acquisitions(
+                trigger_acquisitions(text, lua=True),
+                lambda code: _code_name(md, code),
+                source=source,
+                death=True,
+            )
+            if lua is True
+            else script_death_drop_lines(text, lambda code: _code_name(md, code))
+        )
+        if lua is True:
+            # Identical calls at different offsets remain separate evidence rows.
+            rows.extend(evidence)
+            seen.update(evidence)
+            continue
+        for line in evidence:
             if line not in seen:
                 seen.add(line)
                 rows.append(line)
+        rows.extend(
+            format_trigger_acquisitions(
+                tuple(
+                    record
+                    for record in trigger_acquisitions(text, lua=False)
+                    if record.graph is not None and (record.node or record.value_proof)
+                ),
+                lambda code: _code_name(md, code),
+                source=source,
+                death=True,
+            )
+        )
     return tuple(rows)
 
 
@@ -260,17 +318,42 @@ def _loot_lines(md: MapData) -> tuple[str, ...]:
     """开箱与兑换产出: 使用/拾取触发的数组池与直接发放 (与 where 同源, 满量)。"""
     rows: list[str] = []
     seen: set[str] = set()
-    for _source, text in analysis_script_texts(md):
-        lines = list(use_item_loot_lines(text, lambda code: _code_name(md, code)))
-        lines.extend(
-            _item_trigger_grant_lines(
-                text, [], lambda code: _code_name(md, code), label_all=True
+    for source, text, lua in analysis_script_sources(md):
+        if lua is True:
+            records = tuple(
+                record
+                for record in trigger_acquisitions(text, lua=True)
+                if record.input_items or record.kind in {"拾取", "使用"}
             )
-        )
+            lines = format_trigger_acquisitions(
+                records, lambda code: _code_name(md, code), source=source, death=False
+            )
+            rows.extend(lines)
+            seen.update(lines)
+            continue
+        else:
+            lines = list(use_item_loot_lines(text, lambda code: _code_name(md, code)))
+            lines.extend(
+                _item_trigger_grant_lines(
+                    text, [], lambda code: _code_name(md, code), label_all=True
+                )
+            )
         for line in lines:
             if line not in seen:
                 seen.add(line)
                 rows.append(line)
+        records = tuple(
+            record
+            for record in trigger_acquisitions(text, lua=False)
+            if record.graph is not None
+            and (record.node or record.value_proof)
+            and (record.input_items or record.kind in {"拾取", "使用"})
+        )
+        rows.extend(
+            format_trigger_acquisitions(
+                records, lambda code: _code_name(md, code), source=source, death=False
+            )
+        )
     return tuple(rows)
 
 
@@ -295,49 +378,74 @@ def _clue_lines(md: MapData) -> tuple[str, ...]:
     return tuple(rows)  # 线索全量: 匹配多少收多少, 不设条数上限
 
 
-_CODE_IN_KEY = re.compile(r"\((\w{4})\)$")
-_COORD_IN_LINE = re.compile(r"@\((-?[\d.]+),(-?[\d.]+)\)")
-
-
-def _placement_coords(md: MapData) -> dict[str, tuple[float, float]]:
-    """单位码 -> 第一处预放置坐标 (near 联动: 玩家复制命令即达)。"""
-    coords: dict[str, tuple[float, float]] = {}
-    for unit in md.units:
-        code = unit.type_id
-        if code and code not in coords:
-            coords[code] = (unit.x, unit.y)
-    return coords
+def _placement_coords(md: MapData) -> PositionGroups:
+    """Keep all preplaced and script coordinate evidence per unit code."""
+    return unit_position_groups(md)
 
 
 def _grouped_source_lines(
     md: MapData,
     kind: ItemRelationKind,
     separator: str,
-    coords: dict[str, tuple[float, float]] | None = None,
+    coords: PositionGroups | None = None,
 ) -> tuple[str, ...]:
-    grouped: dict[str, list[str]] = {}
-    seen_entries: dict[str, set[str]] = {}
+    grouped: dict[
+        tuple[str, str, str],
+        dict[tuple[float, float] | None, dict[tuple[object, ...], str]],
+    ] = {}
     for relation in md.item_relations.for_kind(kind):
         source = relation.source
         if source is None:
             continue
-        key = f"{_endpoint_name(source)}({source.object_id})"
+        key = (
+            source.category,
+            source.object_id,
+            f"{_endpoint_name(source)}({source.object_id})",
+        )
+        point = (
+            (relation.x, relation.y)
+            if relation.x is not None and relation.y is not None
+            else None
+        )
         chance = "" if relation.chance is None else f" {relation.chance}%"
-        entry = f"{_endpoint_name(relation.item)}{chance}"
-        # 同一来源的重复槽位（多栏出售/多组掉落）只展示一次。
-        if entry in seen_entries.setdefault(key, set()):
-            continue
-        seen_entries[key].add(entry)
-        grouped.setdefault(key, []).append(entry)
+        group = (
+            ""
+            if relation.group_index is None
+            else f"（掉落组{relation.group_index + 1}）"
+        )
+        entry = f"{_endpoint_name(relation.item)}{chance}{group}"
+        identity = (
+            relation.item.object_id,
+            relation.chance,
+            relation.group_index,
+            relation.entry_index,
+            relation.slot,
+        )
+        grouped.setdefault(key, {}).setdefault(point, {})[identity] = entry
+    preplaced = {(unit.type_id, unit.x, unit.y) for unit in md.units}
+    preplaced.update((doodad.type_id, doodad.x, doodad.y) for doodad in md.doodads)
     rows: list[str] = []
-    for source, items in grouped.items():
-        suffix = ""
-        if coords:
-            m = _CODE_IN_KEY.search(source)
-            if m and m.group(1) in coords:
-                x, y = coords[m.group(1)]
-                suffix = f"  @({x:g},{y:g})"
-        rows.append(f"- {source}：{separator.join(items)}{suffix}")  # 全量, 无截断
+    for (_category, code, source), by_point in grouped.items():
+        general = by_point.get(None, {})
+        points: dict[tuple[float, float], None] = {}
+        if general and coords:
+            points.update((point, None) for point in coords.get(code, ()))
+        points.update((point, None) for point in by_point if point is not None)
+        if not points:
+            rows.append(f"- {source}：{separator.join(general.values())}")
+            continue
+        for x, y in points:
+            items = {**general, **by_point.get((x, y), {})}
+            note = (
+                ""
+                if (code, x, y) in preplaced
+                else " [关系记录位置]"
+                if (x, y) in by_point
+                else " [脚本位置]"
+            )
+            rows.append(
+                f"- {source}：{separator.join(items.values())}  @({format_number(x)},{format_number(y)}){note}"
+            )
     return tuple(rows)
 
 

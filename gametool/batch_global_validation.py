@@ -38,8 +38,8 @@ from .description_cache import (
 )
 
 
-_MAX_MANIFEST_BYTES: Final = 256 * 1024 * 1024
-_MAX_PAYLOAD_BYTES: Final = 4 * 1024 * 1024 * 1024
+_MAX_MANIFEST_BYTES: Final[int | None] = None
+_MAX_PAYLOAD_BYTES: Final[int | None] = None
 _SUMMARY_NAME: Final = "批量提取汇总.tsv"
 _STATE_NAME: Final = "批量提取状态.json"
 _RETRY_NAME: Final = "失败与重试.tsv"
@@ -78,7 +78,7 @@ def validate_global_generation(
         payloads: dict[str, str] = {}
         for name in GLOBAL_PAYLOAD_NAMES:
             artifact = artifact_by_name[name]
-            if artifact.size > _MAX_PAYLOAD_BYTES:
+            if _MAX_PAYLOAD_BYTES is not None and artifact.size > _MAX_PAYLOAD_BYTES:
                 return None
             digest, identity = sha256_regular_file(
                 directory / name,

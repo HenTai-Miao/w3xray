@@ -32,7 +32,7 @@ class BoundedFileError(OSError):
 
 def read_bounded_regular_file(
     path: Path,
-    max_bytes: int,
+    max_bytes: int | None = None,
     *,
     expected: FileIdentity | None = None,
 ) -> tuple[bytes, FileIdentity]:
@@ -40,12 +40,17 @@ def read_bounded_regular_file(
     descriptor, identity = _open_regular_file(path, max_bytes, expected)
     payload = bytearray()
     try:
+        before = os.fstat(descriptor)
+        ceiling = identity.size if max_bytes is None else min(identity.size, max_bytes)
         while chunk := os.read(
-            descriptor, min(_READ_CHUNK_BYTES, max_bytes + 1 - len(payload))
+            descriptor, min(_READ_CHUNK_BYTES, ceiling + 1 - len(payload))
         ):
             payload.extend(chunk)
-            if len(payload) > max_bytes:
+            if max_bytes is not None and len(payload) > max_bytes:
                 raise BoundedFileError(path, f"size exceeds limit {max_bytes}")
+            if len(payload) > identity.size:
+                raise BoundedFileError(path, "file grew while reading")
+        _require_unchanged(path, descriptor, before, len(payload))
     except OSError as exc:
         if isinstance(exc, BoundedFileError):
             raise
@@ -64,11 +69,15 @@ def sha256_regular_file(
     digest = hashlib.sha256()
     total = 0
     try:
+        before = os.fstat(descriptor)
         while chunk := os.read(descriptor, _READ_CHUNK_BYTES):
             total += len(chunk)
             if max_bytes is not None and total > max_bytes:
                 raise BoundedFileError(path, f"size exceeds limit {max_bytes}")
+            if total > identity.size:
+                raise BoundedFileError(path, "file grew while hashing")
             digest.update(chunk)
+        _require_unchanged(path, descriptor, before, total)
     except OSError as exc:
         if isinstance(exc, BoundedFileError):
             raise
@@ -76,6 +85,36 @@ def sha256_regular_file(
     finally:
         os.close(descriptor)
     return digest.hexdigest(), identity
+
+
+def _require_unchanged(
+    path: Path, descriptor: int, before: os.stat_result, size: int
+) -> None:
+    after = os.fstat(descriptor)
+    named = os.lstat(path)
+    if (
+        size != before.st_size
+        or (
+            before.st_dev,
+            before.st_ino,
+            before.st_size,
+            before.st_mtime_ns,
+            before.st_ctime_ns,
+            before.st_mode,
+        )
+        != (
+            after.st_dev,
+            after.st_ino,
+            after.st_size,
+            after.st_mtime_ns,
+            after.st_ctime_ns,
+            after.st_mode,
+        )
+        or not stat.S_ISREG(named.st_mode)
+        or (named.st_dev, named.st_ino, named.st_size, named.st_mtime_ns)
+        != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+    ):
+        raise BoundedFileError(path, "file identity or metadata changed while reading")
 
 
 def _open_regular_file(
@@ -96,6 +135,7 @@ def _open_regular_file(
         | getattr(os, "O_BINARY", 0)
         | getattr(os, "O_CLOEXEC", 0)
         | getattr(os, "O_NOFOLLOW", 0)
+        | getattr(os, "O_NONBLOCK", 0)
     )
     try:
         descriptor = os.open(path, flags)

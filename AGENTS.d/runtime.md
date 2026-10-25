@@ -18,7 +18,7 @@ uv run main.py batch <maps-root> \
 
 - Sources are scanned recursively in stable order for `.w3x`, `.w3m`, and `.w3n`.
 - Source maps, legacy outputs/caches, and game-data roots are read-only. All writes stay below the selected new output/cache root.
-- Normal batch processing isolates one map at a time in a spawned child. Defaults: 900-second timeout, 536,870,912-byte free-space reserve, and no address-space limit unless `--max-memory-bytes` is supplied.
+- Normal batch CLI processing isolates one map at a time in a spawned child. Defaults: no map timeout, no extra free-space reserve, and no address-space limit. Cancellation and child reaping remain active; source size does not create a guessed expansion budget.
 - Optional boundaries are `--map-timeout-seconds`, `--max-memory-bytes`, and `--minimum-free-bytes`. First Ctrl-C requests a checkpointed cancellation; second Ctrl-C exits with 130.
 - Reuse requires exact source identity, dependency fingerprint, ownership marker, content manifest, file hashes, report schemas, and reconciled evidence counters. Failed results retry unless `--no-retry-failed` is supplied.
 - Report schemas may only evolve by appending trailing columns; the reader accepts declared shorter legacy headers (rows are right-padded), so publications from before an append remain verifiable. See `ACQUISITION_REPORT_LEGACY_HEADERS` / `read_report_rows_bytes` for the pattern.

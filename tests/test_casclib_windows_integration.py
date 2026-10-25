@@ -35,7 +35,7 @@ def test_real_install_reads_trigger_schema_and_icon() -> None:
                     entry.name_type is not CascNameType.FULL
                     and entry.is_local
                     and entry.size is not None
-                    and entry.size <= MAX_CASC_FILE_SIZE
+                    and (MAX_CASC_FILE_SIZE is None or entry.size <= MAX_CASC_FILE_SIZE)
                 ):
                     unknown = entry
                     break

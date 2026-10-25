@@ -37,13 +37,13 @@ from .mpq_files import list_archive_files
 from .object_candidates import OBJECT_EXTS, collect_object_candidates
 from .object_pipeline import populate_object_pipeline_from_context
 from .references import build_reference_graph
-from .script_sources import analysis_script_texts, collect_readable_scripts
+from .script_sources import analysis_script_sources, collect_readable_scripts
 from .supplemented_source import SupplementedPathArchiveSource
 from .wts import parse_wts, validate_wts_component
 
-_MAX_CAMPAIGN_CHILDREN: Final = 4096
-_MAX_CAMPAIGN_CHILD_BYTES: Final = 4 * 1024 * 1024 * 1024
-_MAX_CAMPAIGN_READ_BYTES: Final = 4 * 1024 * 1024 * 1024
+# Optional embedding budgets; ordinary map loading always visits every child.
+_MAX_CAMPAIGN_CHILD_BYTES: Final[int | None] = None
+_MAX_CAMPAIGN_READ_BYTES: Final[int | None] = None
 
 
 def load_map(
@@ -139,11 +139,11 @@ def _load_map_impl(
     populate_object_pipeline_from_context(md, candidates, base_objects, load_context)
 
     md.scripts.update(script_collection.texts)
-    script_sources = analysis_script_texts(md)
-    for _source, text in script_sources:
-        _add_script_refs(md, text, shared_index)
-
     _add_w3i(md, archive, wts)
+    script_sources = analysis_script_sources(md)
+    for _source, text, lua in script_sources:
+        _add_script_refs(md, text, shared_index, lua=lua)
+
     _add_w3f(md, archive, wts)
     _add_preplaced(md, archive)
     from .map_extras import (
@@ -164,8 +164,8 @@ def _load_map_impl(
         from .script_scan import scan_script_features
 
         features: list[str] = []
-        for _source, text in script_sources:
-            source_features, _ = scan_script_features(text)
+        for _source, text, lua in script_sources:
+            source_features, _ = scan_script_features(text, lua=lua)
             for feature in source_features:
                 if feature not in features:
                     features.append(feature)
@@ -198,7 +198,6 @@ def _load_map_impl(
             _depth,
             load_context,
             _load_map_impl,
-            max_children=_MAX_CAMPAIGN_CHILDREN,
             max_retained_bytes=_MAX_CAMPAIGN_CHILD_BYTES,
             max_read_bytes=_MAX_CAMPAIGN_READ_BYTES,
         )

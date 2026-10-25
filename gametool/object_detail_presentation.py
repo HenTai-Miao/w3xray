@@ -21,6 +21,7 @@ from .object_text_presentation import (
     format_complete_text_section as format_complete_text_section,
 )
 from .textobj import clean_text
+from .static_numbers import format_number
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,7 +103,10 @@ def back_reference_note(
         return ""
     if not placements:
         return "未预放置，游戏内由脚本/触发创建（位置由触发逻辑决定）"
-    parts = [f"玩家{player} ({x:g}, {y:g})" for player, x, y in placements]
+    parts = [
+        f"玩家{player} ({format_number(x)}, {format_number(y)})"
+        for player, x, y in placements
+    ]
     return f"预放置 {len(placements)} 处：{'、'.join(parts)}"
 
 

@@ -38,14 +38,13 @@ __all__ = (
     "write_object_pack",
 )
 
-# 区域扫描上限: war3 x86 单区域不会超过 256MB; 静态 snapshot() 的 32MB 上限
-# 会整区跳过大区域导致对象表丢失, 这里放宽 (满量纪律: 有多少收多少)。
-_MAX_REGION_BYTES = 0x10000000
+# Bound each native allocation, then consume every chunk of each readable region.
+_READ_CHUNK_BYTES = 16 * 1024 * 1024
 
 # 块头: \n\r\n[四码]\x00 (表首块可为区域开头 \r\n[四码]\x00)
 _BLOCK_HEADER = re.compile(rb"(?:\n\r\n|\A\r\n)\[([A-Za-z0-9@]{4})\x00")
 # 字段: \n<键>\x00<值>\x00 — 值不跨行; 多级值内层 \x00 由值段容纳
-_FIELD = re.compile(rb"\n([^\n\x00]{1,64})\x00([^\n]*?)\x00(?=\n|$)")
+_FIELD = re.compile(rb"\n([^\n\x00]+)\x00([^\n]*?)\x00(?=\n|$)")
 
 # ---------------------------------------------------------------------------
 # Lua 数据层 (云消息/词缀表) — 模式驱动, 无地图特定词表。
@@ -57,9 +56,9 @@ _FIELD = re.compile(rb"\n([^\n\x00]{1,64})\x00([^\n]*?)\x00(?=\n|$)")
 #   B) 词缀/词条定义: 「XX：提供（LV*N）YYY」/「XX：提供（LV*N）的YYY」形态的
 #      公式化描述行 —— 倍率与属性名从原文捕获, 不猜。
 
-_JSON_MSG = re.compile(rb'\{"page"[^\x00]{0,4000}?(?:\x00|\Z)')
+_JSON_MSG = re.compile(rb'\{\s*"page"\s*:')
 _AFFIX_PATTERN = re.compile(
-    "([\u4e00-\u9fff]{1,4})：提供\\|cff00ff00（LV\\*([\\d.]+)）\\|r(?:点|的)?([\\u4e00-\\u9fff/%/]*)"
+    "([\u4e00-\u9fff]+)：提供\\|cff00ff00（LV\\*([\\d.]+)）\\|r(?:点|的)?([\\u4e00-\\u9fff/%/]*)"
 )
 
 # 四码首字母 → 知识包分类。I/A/B/H/S/R/T 是稳定约定; 其余前缀 (含
@@ -114,7 +113,9 @@ def parse_slk_blocks(
     """
     blocks: dict[str, dict[str, str]] = {}
     duplicates = 0
-    for _base, data in regions:
+    from .memory_regions import contiguous_regions
+
+    for _base, data in contiguous_regions(regions):
         starts = list(_BLOCK_HEADER.finditer(data))
         if not starts:
             continue
@@ -151,15 +152,16 @@ def extract_registered_records(
     解析失败的片段跳过 (fail-open), 不中断全量收集。
     """
     by_name: dict[str, dict[str, list[object]]] = {}
-    seen_texts: set[bytes] = set()
-    for _base, data in regions:
+    seen_params: dict[str, set[str]] = {}
+    decoder = json.JSONDecoder()
+    from .memory_regions import contiguous_regions
+
+    for _base, data in contiguous_regions(regions):
         for match in _JSON_MSG.finditer(data):
-            raw = match.group(0).rstrip(b"\x00")
-            if raw in seen_texts:
-                continue
-            seen_texts.add(raw)
+            end = data.find(b"\x00", match.start())
+            raw = data[match.start() : end if end >= 0 else len(data)]
             try:
-                outer = json.loads(raw.decode("utf-8", "replace"))
+                outer, _end = decoder.raw_decode(raw.decode("utf-8", "replace"))
                 info = json.loads(outer.get("info", ""))
                 name = str(info.get("name", ""))
                 if not name:
@@ -169,19 +171,16 @@ def extract_registered_records(
                     continue
             except ValueError, TypeError, KeyError:
                 continue
-            bucket = by_name.setdefault(name, {"records": [], "count": []})  # type: ignore[assignment]
+            bucket = by_name.setdefault(name, {"records": []})
             # 每条记录的完整 params 列表; 同名不同 params 都保留 (不同实例)
             key = json.dumps(params, ensure_ascii=False, sort_keys=True)
-            count_list = bucket["count"]
-            assert isinstance(count_list, list)
-            if key in count_list:
+            keys = seen_params.setdefault(name, set())
+            if key in keys:
                 continue
-            count_list.append(key)
+            keys.add(key)
             records = bucket["records"]
             assert isinstance(records, list)
             records.append(params)
-    for bucket in by_name.values():
-        bucket.pop("count")
     return by_name
 
 
@@ -200,15 +199,16 @@ def extract_affix_definitions(
     # 直接在 bytes 上找「词名前边界」: 词名以 UTF-8 汉字三字节组开头。
     # 用 (?:^|[^\x80-\xbf]) 锚定三字节组首, 避免逐字节 probe 的 O(n²)。
     lead = re.compile(
-        rb"(?:\A|[^\x80-\xbf])(([\xe4-\xe9][\x80-\xbf]{2}){1,4})"
-        + "：提供".encode("utf-8")
+        rb"(?:\A|[^\x80-\xbf])(([\xe4-\xe9][\x80-\xbf]{2})+)" + "：提供".encode("utf-8")
     )
-    for _base, data in regions:
+    from .memory_regions import contiguous_regions
+
+    for _base, data in contiguous_regions(regions):
         for match in lead.finditer(data):
             name_bytes = match.group(1)
             tail_start = match.end()
             tail_end = data.find(b"\x00", tail_start)
-            tail = data[tail_start : tail_end if tail_end >= 0 else tail_start + 200]
+            tail = data[tail_start : tail_end if tail_end >= 0 else len(data)]
             try:
                 tail_text = tail.decode("utf-8")
             except UnicodeDecodeError:
@@ -322,7 +322,7 @@ def write_object_pack(
 def _region_action(state: int, protect: int, rs: int) -> str:
     """区域处置: read=读入 / skip=超护栏跳过(必须计数披露) / ignore=不感兴趣。"""
     if state == 0x1000 and protect in (2, 4, 5, 0x20, 0x40, 0x80):
-        return "skip" if rs > _MAX_REGION_BYTES else "read"
+        return "read"
     return "ignore"
 
 
@@ -330,7 +330,7 @@ def _skipped_regions_note(skipped: int) -> str:
     """跳过区域披露文案 — 0 计数也要显式写"无", 禁止静默省略字段。"""
     if skipped <= 0:
         return "无"
-    return f"{skipped} 个超大区域 (>256MB) 因单次分配护栏跳过读取"
+    return f"{skipped} 个内存片段未完整读取 (进程变化或页面不可读)"
 
 
 def _snapshot_regions(
@@ -338,8 +338,7 @@ def _snapshot_regions(
 ) -> tuple[list[tuple[int, bytes]], int, int]:
     """VirtualQueryEx + ReadProcessMemory 全量区域读取。
 
-    单区域超 _MAX_REGION_BYTES 时跳过读取 (防单次分配炸弹) 但计数返回,
-    调用方负责在出处/notes 中披露跳过详情 — 护栏不得静默。
+    可读区域全部分块读取；短读/不可读片段计数返回，调用方披露缺口。
     """
     k32 = ctypes.WinDLL("kernel32")
 
@@ -367,18 +366,23 @@ def _snapshot_regions(
         rs = mbi.RegionSize or 0x1000
         action = _region_action(mbi.State or 0, mbi.Protect or 0, rs)
         if action == "read":
-            buf = ctypes.create_string_buffer(rs)
-            got = ctypes.c_size_t()
-            if (
+            base = mbi.Base or 0
+            for offset in range(0, rs, _READ_CHUNK_BYTES):
+                requested = min(_READ_CHUNK_BYTES, rs - offset)
+                buf = ctypes.create_string_buffer(requested)
+                got = ctypes.c_size_t()
                 k32.ReadProcessMemory(
-                    handle, ctypes.c_void_p(mbi.Base or 0), buf, rs, ctypes.byref(got)
+                    handle,
+                    ctypes.c_void_p(base + offset),
+                    buf,
+                    requested,
+                    ctypes.byref(got),
                 )
-                and got.value
-            ):
-                regions.append((mbi.Base or 0, buf.raw[: got.value]))
-                total += got.value
-        elif action == "skip":
-            skipped += 1
+                if 0 < got.value <= requested:
+                    regions.append((base + offset, buf.raw[: got.value]))
+                    total += got.value
+                if got.value != requested:
+                    skipped += 1
         addr = (mbi.Base or 0) + rs
     return regions, total, skipped
 
@@ -495,7 +499,7 @@ def dump_live_objects(
     registered = extract_registered_records(regions)
     affixes = extract_affix_definitions(regions)
     skipped_note = _skipped_regions_note(skipped)
-    notes_line = f"超大区域跳过: {skipped_note}"
+    notes_line = f"内存读取缺口: {skipped_note}"
     files = write_object_pack(
         blocks,
         out_dir,
@@ -505,7 +509,7 @@ def dump_live_objects(
             "游戏版本": version.get("version"),
             "导出时间": time.strftime("%Y-%m-%d %H:%M:%S"),
             "扫描区域": f"{len(regions)} 区 / {total // 1048576}MB",
-            "超大区域跳过": skipped_note,
+            "内存读取缺口": skipped_note,
             "对象数": len(blocks),
             "重复块跳过": duplicates,
             "分类": json.dumps(categories, ensure_ascii=False),

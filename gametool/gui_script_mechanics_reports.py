@@ -4,16 +4,11 @@ from __future__ import annotations
 
 from .api import MapData
 from .gui_report_types import GuiReportBlock
-from .script_mechanics import scan_script_features, scan_script_need_marks
-from .script_sources import analysis_script_texts
+from .script_mechanics import map_script_mechanisms
 
 
 def build_script_mechanics_block(md: MapData) -> GuiReportBlock:
-    script = "\n".join(text for _name, text in analysis_script_texts(md))
-    if not script:
-        return GuiReportBlock("脚本机制", ())
-    features, implicit = scan_script_features(script)
-    marks = scan_script_need_marks(script)
+    features, implicit, marks = map_script_mechanisms(md)
     if not features and not implicit and not marks:
         return GuiReportBlock("脚本机制", ())
     lines = [

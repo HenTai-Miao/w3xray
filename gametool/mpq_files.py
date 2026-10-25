@@ -8,8 +8,6 @@ from typing import Final, Protocol
 
 from .external_listfile import (
     MAX_EXTERNAL_LISTFILE_BYTES,
-    MAX_EXTERNAL_LISTFILE_ENTRIES,
-    MAX_EXTERNAL_LISTFILE_LINE_CHARS,
 )
 from .extraction_diagnostics import (
     DiagnosticTarget,
@@ -22,9 +20,6 @@ from .war3_encoding import decode_warcraft_string
 
 
 _MAX_LISTFILE_BYTES: Final = MAX_EXTERNAL_LISTFILE_BYTES
-_MAX_LISTFILE_NAMES: Final = MAX_EXTERNAL_LISTFILE_ENTRIES
-_MAX_LISTFILE_LINE_CHARS: Final = MAX_EXTERNAL_LISTFILE_LINE_CHARS
-_MAX_ARCHIVE_NAME_CHARS: Final = 1024
 
 
 class FileListingArchive(Protocol):
@@ -178,22 +173,23 @@ def _add_listfile_names(
         return
     if isinstance(archive, DeclaredSizeArchive):
         declared_size = archive.declared_file_size("(listfile)")
-        if declared_size is not None and declared_size > _MAX_LISTFILE_BYTES:
+        if (
+            _MAX_LISTFILE_BYTES is not None
+            and declared_size is not None
+            and declared_size > _MAX_LISTFILE_BYTES
+        ):
             return
     try:
         payload = archive.read_file("(listfile)")
     except KeyError, OSError, ValueError:
         return
-    if len(payload) > _MAX_LISTFILE_BYTES:
+    if _MAX_LISTFILE_BYTES is not None and len(payload) > _MAX_LISTFILE_BYTES:
         return
     text = decode_warcraft_string(payload)
     with StringIO(text, newline=None) as lines:
-        for index, raw_line in enumerate(lines):
-            if index >= _MAX_LISTFILE_NAMES:
-                break
+        for raw_line in lines:
             line = raw_line.rstrip("\r\n")
-            if len(line) <= _MAX_LISTFILE_LINE_CHARS:
-                _add_name(archive, names, seen, line.strip(), verify=False)
+            _add_name(archive, names, seen, line.strip(), verify=False)
 
 
 def _add_import_names(
@@ -226,7 +222,7 @@ def _add_name(
     *,
     verify: bool,
 ) -> None:
-    if not name or len(name) > _MAX_ARCHIVE_NAME_CHARS:
+    if not name:
         return
     key = name.lower()
     if key in seen:

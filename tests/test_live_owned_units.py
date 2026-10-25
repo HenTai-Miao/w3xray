@@ -80,7 +80,9 @@ def test_read_unit_pos_rejects_garbage():
     blob = bytearray(0x300)
     struct.pack_into("<ff", blob, UNIT_POS_X_OFF, 1e12, -1e12)
     reader = MemoryReader([(0x10000000, bytes(blob))])
-    assert read_unit_pos(reader, 0x10000000) == (0.0, 0.0)
+    assert read_unit_pos(reader, 0x10000000) == struct.unpack(
+        "<ff", struct.pack("<ff", 1e12, -1e12)
+    )
 
 
 def test_read_unit_owner_missing_region():

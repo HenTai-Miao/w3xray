@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
-import inspect
+from itertools import chain, repeat
 import os
 from pathlib import Path
 import stat
@@ -118,8 +118,9 @@ def _wgc(map_path: str) -> bytes:
     )
 
 
-def test_default_roots_dedupe_existing_directories_before_root_cap(
+def test_default_roots_dedupe_and_keep_all_existing_directories(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Given: duplicates, a missing path, and 70 existing user roots.
     roots = tuple(tmp_path / f"root-{index}" for index in range(70))
@@ -127,11 +128,12 @@ def test_default_roots_dedupe_existing_directories_before_root_cap(
         root.mkdir()
     extras = (roots[0], roots[0] / ".", tmp_path / "missing", *roots[1:])
 
-    # When: roots are normalized for bounded discovery.
+    monkeypatch.setattr(discovery, "_known_map_roots", lambda _home: ())
+    # When: roots are normalized for complete discovery.
     discovered = discover_default_map_roots(extras)
 
-    # Then: only the first 64 unique existing directories remain.
-    assert discovered == tuple(root.resolve() for root in roots[:64])
+    # Then: all unique existing directories remain.
+    assert discovered == tuple(root.resolve() for root in roots)
 
 
 @pytest.mark.skipif(os.name != "posix", reason="requires POSIX /Volumes semantics")
@@ -202,7 +204,7 @@ def test_known_roots_include_windows_classic_install_directories(
     assert expected.issubset(roots)
 
 
-def test_hint_scan_stops_after_bounded_nested_directories(tmp_path: Path) -> None:
+def test_hint_scan_covers_deeply_nested_directories(tmp_path: Path) -> None:
     # Given: recent maps at the 16th and 17th nested directory levels.
     root = tmp_path / "maps"
     directory = root
@@ -216,38 +218,46 @@ def test_hint_scan_stops_after_bounded_nested_directories(tmp_path: Path) -> Non
     # When: hint discovery traverses the bounded root.
     resolution = _locate(root)
 
-    # Then: depth 16 is visible and depth 17 is never scanned.
-    assert tuple(item.path for item in resolution.candidates) == (inside.resolve(),)
+    # Then: both sides of the former depth boundary are visible.
+    assert {item.path for item in resolution.candidates} == {
+        inside.resolve(),
+        beyond.resolve(),
+    }
 
 
-def test_hint_scan_stops_at_directory_entry_budget(
+def test_hint_scan_finds_map_after_one_hundred_thousand_entries(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Given: one root containing 100,001 recent regular map entries.
+    # Given: a map occurs after 100,000 unrelated directory entries.
     root = tmp_path / "many"
     root.mkdir()
-    for index in range(100_001):
-        (root / f"map-{index:04}.w3x").touch()
+    target = root / "last.w3x"
+    target.touch()
+    (root / "notes.txt").touch()
     now_ns = time.time_ns()
     real_scandir = os.scandir
     scans: list[_CountingScandir] = []
 
-    def counting_scandir(path: Path) -> _CountingScandir:
-        entries = real_scandir(path)
-        scan = _CountingScandir(entries, entries.close)
+    with real_scandir(root) as entries:
+        by_name = {entry.name: entry for entry in entries}
+
+    def counting_scandir(_path: Path) -> _CountingScandir:
+        entries = iter(
+            chain(repeat(by_name["notes.txt"], 100_000), (by_name["last.w3x"],))
+        )
+        scan = _CountingScandir(entries, lambda: None)
         scans.append(scan)
         return scan
 
     monkeypatch.setattr(os, "scandir", counting_scandir)
 
-    # When: discovery scans with its global directory-entry budget.
-    resolution = _locate(root, now_ns=now_ns)
+    # When: discovery consumes every entry.
+    result = discovery._scan_hint_evidence((root,), now_ns)
 
-    # Then: the underlying iterator itself is never advanced past the budget.
-    assert resolution.status is ResolutionStatus.SUGGESTED
-    assert len(resolution.candidates) == 100_000
+    # Then: the late map is present and the iterator reaches EOF.
+    assert result.map_files == ((target, target.stat().st_mtime_ns),)
     assert len(scans) == 1
-    assert scans[0].next_calls == 100_000
+    assert scans[0].next_calls == 100_002
 
 
 def test_hint_scan_accepts_only_regular_map_files(tmp_path: Path) -> None:
@@ -376,12 +386,9 @@ def test_recent_wgc_resolves_windows_paths_from_config_root_and_warcraft_ancesto
     )
 
 
-def test_wgc_ancestor_iteration_is_lazy_and_bounded() -> None:
-    # Given: the discovery module source implementing Warcraft ancestor lookup.
-    source = inspect.getsource(discovery)
-
-    # When/Then: islice receives a lazy root-plus-parents chain, never a star tuple.
-    assert "islice(chain((root,), root.parents), _MAX_ANCESTORS_PER_ROOT)" in source
+def test_wgc_bases_include_roots_after_former_base_limit(tmp_path: Path) -> None:
+    roots = tuple(tmp_path / f"root-{index}" for index in range(600))
+    assert discovery._wgc_bases(tmp_path / "current.wgc", roots) == (tmp_path, *roots)
 
 
 def test_stale_wgc_reference_does_not_participate(tmp_path: Path) -> None:
@@ -398,23 +405,27 @@ def test_stale_wgc_reference_does_not_participate(tmp_path: Path) -> None:
     assert resolution.status is ResolutionStatus.NOT_FOUND
 
 
-def test_oversized_wgc_is_not_passed_to_the_parser(
+def test_large_wgc_is_passed_to_the_parser_in_full(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    # Given: a recent .wgc exceeds the bounded read limit.
+    # Given: a recent .wgc exceeds the former 64 MiB limit.
     root = tmp_path / "oversized"
     _write_at(root / "large.wgc", b"x" * (64 * 1024 * 1024 + 1), _NOW_NS)
 
-    def unexpected_parse(_payload: bytes) -> Never:
-        raise AssertionError("oversized .wgc must not be parsed")
+    sizes: list[int] = []
 
-    monkeypatch.setattr(discovery, "parse_game_configuration", unexpected_parse)
+    def record_parse(payload: bytes) -> Never:
+        sizes.append(len(payload))
+        raise ValueError("fixture has no valid WGC header")
+
+    monkeypatch.setattr(discovery, "parse_game_configuration", record_parse)
 
     # When: discovery inspects the configuration metadata.
     resolution = _locate(root)
 
-    # Then: the bounded file is ignored without invoking the parser.
+    # Then: byte length is fully retained; invalid format remains a separate issue.
     assert resolution.status is ResolutionStatus.NOT_FOUND
+    assert sizes == [64 * 1024 * 1024 + 1]
 
 
 @pytest.mark.skipif(_NONBLOCK_FLAG == 0, reason="requires nonblocking POSIX file open")
@@ -531,15 +542,14 @@ def test_in_use_probe_batches_root_candidates_within_provider_cap(
     # Then: each provider call stays within the probe's per-call cap and
     # together the calls cover every discovered map file.
     assert resolution.status is ResolutionStatus.NOT_FOUND
-    assert sizes and all(size <= discovery.MAX_PROBED_PATHS for size in sizes)
+    assert sizes and all(size <= discovery._IN_USE_BATCH_SIZE for size in sizes)
     assert sum(sizes) == 70
 
 
-def test_in_use_probe_covers_root_map_budget(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_in_use_probe_covers_all_root_maps_across_batches(
+    tmp_path: Path,
 ) -> None:
-    # Given: 600 stale root maps and a deliberately tiny probe budget.
-    monkeypatch.setattr(discovery, "_MAX_PROBED_ROOT_MAPS", 512)
+    # Given: 600 stale root maps exceed a single scheduling batch.
     root = tmp_path / "capped"
     root.mkdir()
     for index in range(600):
@@ -557,8 +567,8 @@ def test_in_use_probe_covers_root_map_budget(
     # When: discovery probes discovered root maps for live handles.
     _locate(root, in_use_provider=provider)
 
-    # Then: probing never exceeds the documented root-map budget.
-    assert len(probed) == 512
+    # Then: all maps are probed exactly once.
+    assert len(probed) == len(set(probed)) == 600
 
 
 def test_log_hint_supplies_last_opening_map_as_suggestion(tmp_path: Path) -> None:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .script_sources import analysis_script_sources, script_language
+
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -11,11 +13,15 @@ from .api import MapData
 from .presentation_safety import tsv_cell as _tsv
 from .resources import RESOURCE_EXTS
 from .save_api_catalog import save_api_info
-from .save_call_context import unescape_arg
-from .script_function_index import ScriptFunction, build_script_function_index
+from .script_function_index import (
+    ScriptFunctionLookup,
+    build_function_lookup,
+    build_script_function_index,
+)
+from .script_scopes import source_line_starts
 from .script_scan import _codes_in
-from .script_sources import analysis_script_texts
-from .script_tokens import script_code_text, strip_line_comment as _strip_comment
+from .script_lexing import script_string_values, script_views
+from .script_tokens import script_code_text
 
 _BRANCH_RE: Final = re.compile(
     r"^\s*(?P<branch>if|elseif)\s+(?P<condition>.+?)\s+then\b",
@@ -25,7 +31,6 @@ _CALL_RE: Final = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 _VAR_RE: Final = re.compile(
     r"\b(?:udg|bj|gg_trg|gg_unit|gg_item|gg_dest|gg_rct|gg_cam|gg_snd)_[A-Za-z0-9_]+\b",
 )
-_FOURCC_RE: Final = re.compile(r"[A-Za-z0-9]{4}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,10 +55,10 @@ class ScriptConditionBranchIndex:
 
 def build_script_condition_branch_index(md: MapData) -> ScriptConditionBranchIndex:
     """Return if/elseif conditions with save, variable and object-ID clues."""
-    functions = build_script_function_index(md).functions
+    functions = build_function_lookup(build_script_function_index(md).functions)
     rows: list[ScriptConditionBranch] = []
-    for source, text in analysis_script_texts(md):
-        rows.extend(_branches_for_script(source, text, functions))
+    for source, text, lua in analysis_script_sources(md):
+        rows.extend(_branches_for_script(source, text, functions, lua=lua))
     return ScriptConditionBranchIndex(tuple(rows))
 
 
@@ -84,17 +89,21 @@ def format_script_condition_branch_index_tsv(index: ScriptConditionBranchIndex) 
 def _branches_for_script(
     source: str,
     text: str,
-    functions: tuple[ScriptFunction, ...],
+    functions: ScriptFunctionLookup,
+    *,
+    lua: bool | None = None,
 ) -> list[ScriptConditionBranch]:
+    lua = script_language(source) if lua is None else lua
     rows: list[ScriptConditionBranch] = []
-    code_lines = script_code_text(text).splitlines()
-    raw_lines = text.splitlines()
+    code_lines = script_code_text(text, lua=lua).splitlines()
+    raw_lines = script_views(text, lua=lua).arguments.splitlines()
+    line_offsets = source_line_starts(text)
     for line_no, code_line in enumerate(code_lines, start=1):
         match = _BRANCH_RE.match(code_line)
         if match is None:
             continue
-        raw_line = _strip_comment(raw_lines[line_no - 1])
-        start, end = match.span("condition")
+        raw_line = raw_lines[line_no - 1]
+        start, end = match.start("condition"), match.end() - len("then")
         condition = raw_line[start:end].strip()
         code_condition = code_line[start:end]
         calls = _unique_ordered(
@@ -103,13 +112,19 @@ def _branches_for_script(
         variables = _unique_ordered(
             item.group(0) for item in _VAR_RE.finditer(code_condition)
         )
-        strings = _strings_in(condition)
+        strings = _strings_in(condition, lua=lua)
         object_codes = tuple(sorted(set(_codes_in(code_condition))))
         rows.append(
             ScriptConditionBranch(
                 source=source,
                 line=line_no,
-                function=_function_for(source, line_no, functions),
+                function=functions.name_for(
+                    source,
+                    line_no,
+                    offset=line_offsets[line_no - 1]
+                    + len(code_line)
+                    - len(code_line.lstrip()),
+                ),
                 branch=match.group("branch").lower(),
                 condition=condition,
                 calls=calls,
@@ -152,46 +167,10 @@ def _looks_like_resource_path(value: str) -> bool:
     return value.rsplit(".", 1)[-1].lower() in RESOURCE_EXTS
 
 
-def _strings_in(text: str) -> tuple[str, ...]:
-    values: list[str] = []
-    index = 0
-    while index < len(text):
-        char = text[index]
-        if char not in {"'", '"'}:
-            index += 1
-            continue
-        value, end = _read_quoted(text, index)
-        if not (char == "'" and _FOURCC_RE.fullmatch(value)):
-            values.append(unescape_arg(value))
-        index = end
-    return _unique_ordered(values)
-
-
-def _read_quoted(text: str, start: int) -> tuple[str, int]:
-    quote = text[start]
-    chars: list[str] = []
-    index = start + 1
-    escaped = False
-    while index < len(text):
-        char = text[index]
-        if escaped:
-            chars.append("\\" + char)
-            escaped = False
-        elif char == "\\":
-            escaped = True
-        elif char == quote:
-            return "".join(chars), index + 1
-        else:
-            chars.append(char)
-        index += 1
-    return "".join(chars), len(text)
-
-
-def _function_for(source: str, line: int, functions: tuple[ScriptFunction, ...]) -> str:
-    for item in functions:
-        if item.source == source and item.start_line <= line <= item.end_line:
-            return item.name
-    return ""
+def _strings_in(text: str, *, lua: bool | None = None) -> tuple[str, ...]:
+    return _unique_ordered(
+        script_string_values(text, lua=lua, include_object_codes=False)
+    )
 
 
 def _unique_ordered(values: Iterable[str]) -> tuple[str, ...]:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .script_sources import analysis_script_sources, script_language
+
 import re
 from dataclasses import dataclass
 from typing import Final
@@ -15,8 +17,9 @@ from .script_function_index import (
     build_script_function_index,
 )
 from .script_scan import _codes_in
-from .script_sources import analysis_script_texts
-from .script_tokens import script_code_text, strip_line_comment as _strip_comment
+from .script_lexing import script_string_values, script_views
+from .script_tokens import script_code_text
+from .script_scopes import source_line_starts
 
 _JASS_SET_RE: Final = re.compile(
     r"^\s*set\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?:\[(?P<index>[^\]]+)\])?\s*=\s*",
@@ -24,7 +27,6 @@ _JASS_SET_RE: Final = re.compile(
 _LUA_ASSIGN_RE: Final = re.compile(
     r"^\s*(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?:\[(?P<index>[^\]]+)\])?\s*=\s*",
 )
-_FOURCC_RE: Final = re.compile(r"[A-Za-z0-9]{4}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,8 +52,8 @@ def build_script_assignment_index(md: MapData) -> ScriptAssignmentIndex:
     """Return script variable assignments with value and purpose clues."""
     functions = build_function_lookup(build_script_function_index(md).functions)
     rows: list[ScriptAssignment] = []
-    for source, text in analysis_script_texts(md):
-        rows.extend(_assignments_for_script(source, text, functions))
+    for source, text, lua in analysis_script_sources(md):
+        rows.extend(_assignments_for_script(source, text, functions, lua=lua))
     return ScriptAssignmentIndex(tuple(rows))
 
 
@@ -79,22 +81,32 @@ def format_script_assignment_index_tsv(index: ScriptAssignmentIndex) -> str:
 
 
 def _assignments_for_script(
-    source: str,
-    text: str,
-    functions: ScriptFunctionLookup,
+    source: str, text: str, functions: ScriptFunctionLookup, *, lua: bool | None = None
 ) -> list[ScriptAssignment]:
+    lua = script_language(source) if lua is None else lua
     rows: list[ScriptAssignment] = []
-    code_lines = script_code_text(text).splitlines()
-    raw_lines = text.splitlines()
-    is_lua = source.lower().endswith(".lua")
+    code_lines = script_code_text(text, lua=lua).splitlines()
+    raw_lines = script_views(text, lua=lua).arguments.splitlines()
+    is_lua = lua is True
+    line_offsets = source_line_starts(text)
     for line_no, code_line in enumerate(code_lines, start=1):
         match = _assignment_match(code_line, is_lua)
         if match is None:
             continue
         raw_line = raw_lines[line_no - 1]
         value_start = code_line.find("=", match.start()) + 1
-        value = _strip_comment(raw_line)[value_start:].strip()
-        rows.append(_assignment_row(source, line_no, match, value, functions))
+        value = raw_line[value_start:].strip()
+        rows.append(
+            _assignment_row(
+                source,
+                line_no,
+                match,
+                value,
+                functions,
+                lua=lua,
+                offset=line_offsets[line_no - 1] + match.start("name"),
+            )
+        )
     return rows
 
 
@@ -116,57 +128,31 @@ def _assignment_row(
     match: re.Match[str],
     value: str,
     functions: ScriptFunctionLookup,
+    *,
+    lua: bool | None = None,
+    offset: int | None = None,
 ) -> ScriptAssignment:
+    lua = script_language(source) if lua is None else lua
     variable = match.group("name")
     index = (match.group("index") or "").strip()
-    string_value = _first_string(value)
+    string_value = _first_string(value, lua=lua)
     object_codes = tuple(sorted(set(_codes_in(value))))
     return ScriptAssignment(
         source=source,
         line=line_no,
-        function=functions.name_for(source, line_no),
+        function=functions.name_for(source, line_no, offset=offset),
         variable=variable,
         index=index,
         value=value,
         string_value=string_value,
         object_codes=object_codes,
         purpose=_purpose(variable, index, value, string_value, object_codes),
-        summary=_strip_comment(match.string).strip(),
+        summary=match.string.strip(),
     )
 
 
-def _first_string(value: str) -> str:
-    index = 0
-    while index < len(value):
-        if value[index] not in {"'", '"'}:
-            index += 1
-            continue
-        quote = value[index]
-        raw, end = _read_quoted(value, index)
-        if not (quote == "'" and _FOURCC_RE.fullmatch(raw)):
-            return _unescape(raw)
-        index = end
-    return ""
-
-
-def _read_quoted(text: str, start: int) -> tuple[str, int]:
-    quote = text[start]
-    chars: list[str] = []
-    index = start + 1
-    escaped = False
-    while index < len(text):
-        char = text[index]
-        if escaped:
-            chars.append("\\" + char)
-            escaped = False
-        elif char == "\\":
-            escaped = True
-        elif char == quote:
-            return "".join(chars), index + 1
-        else:
-            chars.append(char)
-        index += 1
-    return "".join(chars), len(text)
+def _first_string(value: str, *, lua: bool | None = None) -> str:
+    return next(script_string_values(value, lua=lua, include_object_codes=False), "")
 
 
 def _purpose(
@@ -202,7 +188,3 @@ def _looks_like_save_key(variable: str, value: str) -> bool:
     ):
         return True
     return "." in value and not _looks_like_resource_path(value)
-
-
-def _unescape(value: str) -> str:
-    return value.replace("\\\\", "\\").replace('\\"', '"').replace("\\'", "'")

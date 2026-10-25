@@ -237,8 +237,8 @@ def test_probe_uses_only_bounded_header_reads(tmp_path: Path) -> None:
     assert sum(read_sizes) <= 32 * ((2 * 1024 * 1024) // 512 + 1)
 
 
-def test_header_beyond_scan_window_is_ignored(tmp_path: Path) -> None:
-    # Given: a sparse file whose only MPQ header begins beyond the scan window.
+def test_header_beyond_the_old_scan_window_is_diagnosed(tmp_path: Path) -> None:
+    # A valid header remains discoverable even after a large wrapper.
     scan_limit = 64 * 1024 * 1024
     path = _write_chunks(
         tmp_path / "late-header.w3x",
@@ -249,8 +249,9 @@ def test_header_beyond_scan_window_is_ignored(tmp_path: Path) -> None:
     # When: bounded diagnosis scans the original file.
     diagnosis = diagnose_archive_open(str(path))
 
-    # Then: data beyond the bounded search window is not inspected.
-    assert diagnosis.kind is ArchiveDiagnosisKind.NO_HEADER
+    assert diagnosis.kind is ArchiveDiagnosisKind.READ_ERROR
+    assert f"candidate_offset={scan_limit}" in diagnosis.evidence
+    assert "structure=valid" in diagnosis.evidence
 
 
 def test_fifo_diagnosis_returns_without_waiting_for_writer(tmp_path: Path) -> None:

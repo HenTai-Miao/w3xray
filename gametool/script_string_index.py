@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from .script_sources import analysis_script_sources, script_language
+
 import re
+from bisect import bisect_right
 from dataclasses import dataclass
 from typing import Final
 
@@ -10,18 +13,17 @@ from .api import MapData
 from .presentation_safety import tsv_cell as _tsv
 from .resources import RESOURCE_EXTS
 from .save_api_catalog import save_api_info
+from .script_lexing import script_literals
+from .script_scopes import script_structure, source_line_starts
 from .script_function_index import (
     ScriptFunctionLookup,
     build_function_lookup,
     build_script_function_index,
 )
-from .script_sources import analysis_script_texts
 from .wts import map_wts_table
 
 _CALL_RE: Final = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 _TRIGSTR_RE: Final = re.compile(r"^TRIGSTR_(\d+)$", re.IGNORECASE)
-_FOURCC_RE: Final = re.compile(r"[A-Za-z0-9]{4}")
-_TOKEN_SCAN_RE: Final = re.compile(r"//|--|['\"]")
 _CHAT_CALLS: Final = {
     "TriggerRegisterPlayerChatEvent",
     "TriggerRegisterPlayerChatEventBJ",
@@ -46,6 +48,7 @@ class ScriptStringEntry:
     value: str
     resolved: str
     summary: str
+    offset: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,8 +58,8 @@ class ScriptStringIndex:
 
 @dataclass(frozen=True, slots=True)
 class _StringToken:
+    offset: int
     line: int
-    column: int
     value: str
     summary: str
 
@@ -66,14 +69,16 @@ def build_script_string_index(md: MapData) -> ScriptStringIndex:
     trigstr_table = _trigstr_table(md)
     functions = build_function_lookup(build_script_function_index(md).functions)
     entries: list[ScriptStringEntry] = []
-    for source, text in analysis_script_texts(md):
-        entries.extend(_entries_for_script(source, text, trigstr_table, functions))
+    for source, text, lua in analysis_script_sources(md):
+        entries.extend(
+            _entries_for_script(source, text, trigstr_table, functions, lua=lua)
+        )
     return ScriptStringIndex(tuple(entries))
 
 
 def format_script_string_index_tsv(index: ScriptStringIndex) -> str:
     """Format script string literals as TSV."""
-    rows = ["来源\t行号\t函数\t调用\t用途\t字符串\t解析文本\t摘要"]
+    rows = ["来源\t行号\t函数\t调用\t用途\t字符串\t解析文本\t摘要\t源码偏移"]
     for entry in index.entries:
         rows.append(
             "\t".join(
@@ -86,6 +91,7 @@ def format_script_string_index_tsv(index: ScriptStringIndex) -> str:
                     _tsv(entry.value),
                     _tsv(entry.resolved),
                     _tsv(entry.summary),
+                    str(entry.offset),
                 )
             )
         )
@@ -97,76 +103,56 @@ def _entries_for_script(
     text: str,
     trigstr_table: dict[str, str],
     functions: ScriptFunctionLookup,
+    *,
+    lua: bool | None = None,
 ) -> list[ScriptStringEntry]:
+    lua = script_language(source) if lua is None else lua
     rows: list[ScriptStringEntry] = []
-    for token in _iter_string_tokens(text):
-        call = _line_call(token.summary, token.column)
+    structure = script_structure(text, lua=lua)
+    for token in _iter_string_tokens(text, lua=lua):
+        site = structure.call_scopes.at(token.offset)
+        owner = structure.scopes.at(token.offset)
+        call = (
+            site.name
+            if site is not None
+            and site.owner == (owner.start if owner is not None else None)
+            else ""
+        )
         rows.append(
             ScriptStringEntry(
                 source=source,
                 line=token.line,
-                function=functions.name_for(source, token.line),
+                function=functions.name_for(source, token.line, offset=token.offset),
                 call=call,
                 purpose=_purpose(call, token.value),
                 value=token.value,
                 resolved=_resolve_string(token.value, trigstr_table),
                 summary=token.summary,
+                offset=token.offset,
             )
         )
     return rows
 
 
-def _iter_string_tokens(text: str) -> tuple[_StringToken, ...]:
-    """逐行提取字符串字面量。
-
-    原来逐字符前进并在每个位置做两次 startswith 注释判断（单图百万次）；
-    改为正则直接跳到下一个引号或注释标记，引号内的标记按原语义跳过。
-    """
+def _iter_string_tokens(
+    text: str, *, lua: bool | None = None
+) -> tuple[_StringToken, ...]:
+    """Keep complete literals, including multiline Lua long-bracket strings."""
     tokens: list[_StringToken] = []
-    for line_no, line in enumerate(text.splitlines(), start=1):
-        index = 0
-        summary: str | None = None
-        while True:
-            match = _TOKEN_SCAN_RE.search(line, index)
-            if match is None:
-                break
-            marker = match.group(0)
-            if marker in ("//", "--"):
-                break
-            value, end = _read_quoted(line, match.start())
-            if not (marker == "'" and _FOURCC_RE.fullmatch(value)):
-                if summary is None:
-                    summary = line.strip()
-                tokens.append(
-                    _StringToken(
-                        line=line_no,
-                        column=match.start(),
-                        value=_unescape(value),
-                        summary=summary,
-                    )
-                )
-            index = end
+    line_starts = source_line_starts(text)
+    for literal in script_literals(text, lua=lua):
+        if literal.object_code:
+            continue
+        line = bisect_right(line_starts, literal.start)
+        tokens.append(
+            _StringToken(
+                literal.start,
+                line,
+                literal.value,
+                text[literal.start : literal.end],
+            )
+        )
     return tuple(tokens)
-
-
-def _read_quoted(line: str, start: int) -> tuple[str, int]:
-    quote = line[start]
-    chars: list[str] = []
-    index = start + 1
-    escaped = False
-    while index < len(line):
-        char = line[index]
-        if escaped:
-            chars.append("\\" + char)
-            escaped = False
-        elif char == "\\":
-            escaped = True
-        elif char == quote:
-            return "".join(chars), index + 1
-        else:
-            chars.append(char)
-        index += 1
-    return "".join(chars), len(line)
 
 
 def _line_call(line: str, column: int) -> str:
@@ -216,7 +202,3 @@ def _resolve_string(value: str, trigstr_table: dict[str, str]) -> str:
 def _trigstr_table(md: MapData) -> dict[str, str]:
     table = map_wts_table(md)
     return {f"TRIGSTR_{sid:03d}": text for sid, text in table.items()}
-
-
-def _unescape(value: str) -> str:
-    return value.replace("\\\\", "\\").replace('\\"', '"').replace("\\'", "'")

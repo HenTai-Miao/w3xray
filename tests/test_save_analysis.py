@@ -92,7 +92,7 @@ class SaveAnalysisTest(unittest.TestCase):
             "war3map.j": "\n".join(
                 (
                     '// call StoreInteger(udg_cache, "fake", "key", 1)',
-                    '-- call SaveInteger(udg_hash, 1, StringHash("lua_fake"), 2)',
+                    '// call SaveInteger(udg_hash, 1, StringHash("lua_fake"), 2)',
                     'call BJDebugMsg("call SaveInteger(udg_hash, 1, StringHash(\\"fake\\"), 2)")',
                     "call BJDebugMsg(\"call UnitAddAbility(u, 'A999')\")",
                     'call StoreInteger(udg_cache, "real", "level", 1)',

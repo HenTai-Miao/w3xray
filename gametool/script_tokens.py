@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from dataclasses import dataclass
-from functools import lru_cache
 import re
 from typing import Final
+
+from .script_lexing import script_views
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,41 +24,12 @@ _IDENT_CHARS: Final = frozenset(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_"
 )
 _NAME_CHAIN_CHARS: Final = _IDENT_CHARS | frozenset(".:")
-_FOURCC_PREFIX_RE: Final = re.compile(r"FourCC\s*\(\s*$", re.IGNORECASE)
-_COMMENT_OR_QUOTE_RE: Final = re.compile(r"//|--|['\"]")
 _CALL_PAREN_RE: Final = re.compile(r"[()]")
 
 
-def strip_line_comment(line: str) -> str:
-    """Return ``line`` without its trailing ``//`` or ``--`` comment.
-
-    九个脚本索引模块原本各有一份逐字符副本，每个字符做两次 startswith
-    注释判断（单图数百万次）；这里用一次正则跳到下一个引号或注释标记，
-    引号内的标记按原语义跳过，未闭合引号整行返回。
-    """
-    index = 0
-    while True:
-        match = _COMMENT_OR_QUOTE_RE.search(line, index)
-        if match is None:
-            return line
-        if match.group(0) in ("//", "--"):
-            return line[: match.start()]
-        index = _skip_quoted_span(line, match.start())
-
-
-def _skip_quoted_span(line: str, start: int) -> int:
-    quote = line[start]
-    index = start + 1
-    size = len(line)
-    while index < size:
-        char = line[index]
-        if char == "\\":
-            index += 2
-            continue
-        if char == quote:
-            return index + 1
-        index += 1
-    return size
+def strip_line_comment(line: str, *, lua: bool | None = None) -> str:
+    """Remove comments according to the source language, retaining quoted text."""
+    return script_views(line, lua=lua).arguments.rstrip()
 
 
 def is_lua_function_definition(script: str, start: int) -> bool:
@@ -99,56 +71,24 @@ def _valid_name_chain(segment: str) -> bool:
     return True
 
 
-@lru_cache(maxsize=8)
-def _script_code_text_cached(script: str) -> str:
-    return _script_code_text_impl(script)
-
-
-def script_code_text(script: str) -> str:
-    """Blank comments and ordinary string contents while preserving offsets.
-
-    纯函数；一次地图加载内多个扫描器会对同一脚本重复剥离注释，用小缓存复用。
-    """
-    return _script_code_text_cached(script)
-
-
-def _script_code_text_impl(script: str) -> str:
-    out: list[str] = []
-    index = 0
-    size = len(script)
-    while index < size:
-        char = script[index]
-        if char == "/" and index + 1 < size and script[index + 1] == "/":
-            end = _line_comment_end(script, index)
-            out.append(_blank(script[index:end]))
-            index = end
-            continue
-        if char == "-" and index + 1 < size and script[index + 1] == "-":
-            end = _line_comment_end(script, index)
-            out.append(_blank(script[index:end]))
-            index = end
-            continue
-        if char == '"':
-            end = _quoted_end(script, index)
-            segment = script[index:end]
-            out.append(segment if _is_fourcc_quote(script, index) else _blank(segment))
-            index = end
-            continue
-        out.append(char)
-        index += 1
-    return "".join(out)
+def script_code_text(script: str, *, lua: bool | None = None) -> str:
+    """Return offset-preserving code evidence using the known source language."""
+    return script_views(script, lua=lua).code
 
 
 def iter_native_call_chunks(
     script: str,
     native_re: re.Pattern[str],
+    *,
+    lua: bool | None = None,
 ) -> Iterator[NativeCallChunk]:
     """Yield balanced native call chunks, including multiline calls."""
-    for match in native_re.finditer(script):
-        open_index = _call_open(script, match.end())
+    syntax = script_views(script, lua=lua).syntax
+    for match in native_re.finditer(syntax):
+        open_index = _call_open(syntax, match.end())
         if open_index is None:
             continue
-        end = _call_end(script, open_index)
+        end = _call_end(syntax, open_index)
         if end is None:
             continue
         yield NativeCallChunk(match.group(1), script[match.start() : end])
@@ -179,30 +119,3 @@ def _call_end(script: str, open_index: int) -> int | None:
             if depth == 0:
                 return match.end()
         index = match.end()
-
-
-def _line_comment_end(script: str, start: int) -> int:
-    end = script.find("\n", start)
-    return len(script) if end < 0 else end
-
-
-def _quoted_end(script: str, start: int) -> int:
-    index = start + 1
-    while index < len(script):
-        char = script[index]
-        if char == "\\":
-            index += 2
-            continue
-        if char == '"':
-            return index + 1
-        index += 1
-    return len(script)
-
-
-def _is_fourcc_quote(script: str, quote_index: int) -> bool:
-    prefix = script[max(0, quote_index - 24) : quote_index]
-    return _FOURCC_PREFIX_RE.search(prefix) is not None
-
-
-def _blank(segment: str) -> str:
-    return "".join("\n" if char == "\n" else " " for char in segment)

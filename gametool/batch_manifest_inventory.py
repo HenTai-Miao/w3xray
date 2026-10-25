@@ -20,8 +20,8 @@ from .bounded_file import read_bounded_regular_file, sha256_regular_file
 from .safe_output import safe_relative_path
 
 
-_MAX_REPORT_BYTES: Final = 4 * 1024 * 1024 * 1024
-_MAX_TOTAL_REPORT_BYTES: Final = 8 * 1024 * 1024 * 1024
+_MAX_REPORT_BYTES: Final[int | None] = None
+_MAX_TOTAL_REPORT_BYTES: Final[int | None] = None
 _METADATA_NAMES: Final = frozenset((CONTENT_MANIFEST_NAME, OWNERSHIP_MARKER_NAME))
 _REPORT_NAMES: Final = frozenset(REQUIRED_MAP_REPORTS)
 
@@ -77,9 +77,18 @@ def _inventory(
         identities.add(identity)
         try:
             if snapshot_reports and relative in _REPORT_NAMES:
-                remaining = _MAX_TOTAL_REPORT_BYTES - report_bytes
+                limits = [
+                    limit
+                    for limit in (
+                        _MAX_REPORT_BYTES,
+                        None
+                        if _MAX_TOTAL_REPORT_BYTES is None
+                        else _MAX_TOTAL_REPORT_BYTES - report_bytes,
+                    )
+                    if limit is not None
+                ]
                 content, file_identity = read_bounded_regular_file(
-                    path, min(_MAX_REPORT_BYTES, remaining)
+                    path, min(limits) if limits else None
                 )
                 report_bytes += len(content)
                 digest = hashlib.sha256(content).hexdigest()

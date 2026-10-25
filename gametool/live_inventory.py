@@ -32,6 +32,7 @@ import numpy as np
 from PIL import Image
 
 from .live_handle_chain import match_unit_entries
+from .static_numbers import format_number
 
 u32 = ctypes.windll.user32
 g32 = ctypes.windll.gdi32
@@ -250,6 +251,8 @@ def _token_integrity_level(process_handle):
 
 
 def snapshot(h, max_addr=0x7FFF0000):
+    from .memory_regions import contiguous_regions
+
     regions = []
     addr = 0x10000
     mbi = MBI()
@@ -260,27 +263,23 @@ def snapshot(h, max_addr=0x7FFF0000):
         ):
             break
         rs = mbi.Size or 0x1000
-        if (
-            mbi.State == 0x1000
-            and mbi.Prot in (2, 4, 5, 0x20, 0x40, 0x80)
-            and rs <= 32 * 1024 * 1024
-        ):
-            buf = ctypes.create_string_buffer(rs)
-            got = ctypes.c_size_t()
-            if (
+        if mbi.State == 0x1000 and mbi.Prot in (2, 4, 5, 0x20, 0x40, 0x80):
+            chunk_bytes = 16 * 1024 * 1024
+            base = mbi.Base or 0
+            for offset in range(0, rs, chunk_bytes):
+                requested = min(chunk_bytes, rs - offset)
+                buf = ctypes.create_string_buffer(requested)
+                got = ctypes.c_size_t()
                 k32.ReadProcessMemory(
-                    h, ctypes.c_void_p(mbi.Base or 0), buf, rs, ctypes.byref(got)
+                    h, ctypes.c_void_p(base + offset), buf, requested, ctypes.byref(got)
                 )
-                and got.value
-            ):
-                regions.append(((mbi.Base or 0), buf.raw[: got.value]))
-                total += got.value
-            else:
-                err = ctypes.get_last_error()
-                if err in (299, 5):  # ERROR_PARTIAL_COPY / ERROR_ACCESS_DENIED
+                if 0 < got.value <= requested:
+                    regions.append((base + offset, buf.raw[: got.value]))
+                    total += got.value
+                if got.value != requested:
                     _snapshot_partial["count"] += 1
         addr = (mbi.Base or 0) + rs
-    return regions, total
+    return list(contiguous_regions(regions)), total
 
 
 def save_snapshot(regions, out_dir):
@@ -359,7 +358,7 @@ def read_file_version(path):
     """VS_FIXEDFILEINFO -> 'a.b.c.d'; 失败返回 None。"""
     try:
         with open(path, "rb") as fh:
-            d = fh.read(64 * 1024 * 1024)
+            d = fh.read()
     except OSError:
         return None
     pos = d.find(b"\xbd\x04\xef\xfe")
@@ -898,6 +897,8 @@ def append_live_journal(rep):
         import traceback as _tb
 
         try:
+            from .cache_root import gamexray_cache_root
+
             _log = gamexray_cache_root() / "live" / "errors-v1.log"
             _log.parent.mkdir(parents=True, exist_ok=True)
             with _log.open("a", encoding="utf-8") as _fh:
@@ -1189,8 +1190,8 @@ def read_live(
                     "unit": unit_names.get(inv.code.encode("latin-1"), "?"),
                     "code": inv.code,
                     "addr": inv.unit_addr,
-                    "x": round(px, 1),
-                    "y": round(py, 1),
+                    "x": px,
+                    "y": py,
                     "items": [
                         {
                             "slot": i.slot,
@@ -1216,8 +1217,8 @@ def read_live(
                         "unit": unit_names.get(u.code.encode("latin-1"), "?"),
                         "code": u.code,
                         "addr": u.addr,
-                        "x": round(u.x, 1),
-                        "y": round(u.y, 1),
+                        "x": u.x,
+                        "y": u.y,
                     }
                     for u in listed
                 ]
@@ -1229,8 +1230,8 @@ def read_live(
                         "unit": unit_names.get(u.code.encode("latin-1"), "?"),
                         "code": u.code,
                         "addr": u.addr,
-                        "x": round(u.x, 1),
-                        "y": round(u.y, 1),
+                        "x": u.x,
+                        "y": u.y,
                     }
                     for u in all_rows
                 ]
@@ -1596,30 +1597,42 @@ def main(argv=None):
         print(f"== 玩家单位 (数量少的玩家号, 共{len(listed)}个) ==")
         for u in listed:
             print(
-                f"  P{u['owner']} {u['unit']} [{u['code']}] @ ({u['x']:.0f}, {u['y']:.0f})"
+                f"  P{u['owner']} {u['unit']} [{u['code']}] @ ({format_number(u['x'])}, {format_number(u['y'])})"
             )
     if rep.get("unit_matches"):
         for u in rep["unit_matches"]:
-            pos = f" @ ({u['x']:.0f}, {u['y']:.0f})" if u.get("x") is not None else ""
+            pos = (
+                f" @ ({format_number(u['x'])}, {format_number(u['y'])})"
+                if u.get("x") is not None
+                else ""
+            )
             print(f"匹配单位: {u['unit']} [{u['code']}]{pos}")
             for it in u["items"]:
                 print(f"  槽{it['slot']}: {it['name']} [{it['code']}]")
     elif rep.get("strategy_used") == "handle" and rep.get("selected_unit"):
         sel = rep["selected_unit"]
-        pos = f" @ ({sel['x']:.0f}, {sel['y']:.0f})" if sel.get("x") is not None else ""
+        pos = (
+            f" @ ({format_number(sel['x'])}, {format_number(sel['y'])})"
+            if sel.get("x") is not None
+            else ""
+        )
         label = "当前选中" if prows else "当前选中(归属未知)"
         print(f"{label}: {sel['unit']} [{sel['code']}]{pos}")
         for it in sel["items"]:
             print(f"  槽{it['slot']}: {it['name']} [{it['code']}]")
         if sel.get("x") is not None:
-            print(f"坐标反查模板：near {sel['x']:g} {sel['y']:g}")
+            print(
+                f"坐标反查模板：near {format_number(sel['x'])} {format_number(sel['y'])}"
+            )
         others = [u for u in rep.get("units", []) if u != sel]
         if others:
             print("其余带物品单位:")
             for u in others:
                 names_txt = "、".join(f"{i['name']}" for i in u["items"])
                 upos = (
-                    f" @ ({u['x']:.0f}, {u['y']:.0f})" if u.get("x") is not None else ""
+                    f" @ ({format_number(u['x'])}, {format_number(u['y'])})"
+                    if u.get("x") is not None
+                    else ""
                 )
                 print(f"  {u['unit']} [{u['code']}]{upos}: {names_txt}")
     all_rows = rep.get("all_units")
@@ -1636,7 +1649,9 @@ def main(argv=None):
     if all_rows:
         first_pos = next((u for u in all_rows if u.get("x") is not None), None)
         if first_pos is not None:
-            print(f"坐标反查模板：near {first_pos['x']:g} {first_pos['y']:g}")
+            print(
+                f"坐标反查模板：near {format_number(first_pos['x'])} {format_number(first_pos['y'])}"
+            )
     locate_cmd = campaign_locate_command(args.pack, rep)
     if locate_cmd:
         print("== 战役定位 (若当前为 .w3n 战役, 直接复制本行定位任务关) ==")

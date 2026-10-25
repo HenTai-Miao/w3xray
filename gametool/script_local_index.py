@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .script_sources import analysis_script_sources, script_language
+
 import re
 from dataclasses import dataclass
 from typing import Final
@@ -15,8 +17,9 @@ from .script_function_index import (
     build_script_function_index,
 )
 from .script_scan import _codes_in
-from .script_sources import analysis_script_texts
-from .script_tokens import script_code_text, strip_line_comment as _strip_comment
+from .script_lexing import script_string_values, script_views
+from .script_tokens import script_code_text
+from .script_scopes import source_line_starts
 
 _JASS_LOCAL_RE: Final = re.compile(
     r"^\s*local\s+(?P<type>[A-Za-z_][A-Za-z0-9_]*)\s+"
@@ -27,8 +30,6 @@ _LUA_LOCAL_RE: Final = re.compile(
     r"^\s*local\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?:\s*=\s*(?P<value>.*))?\s*$",
     re.IGNORECASE,
 )
-_FOURCC_RE: Final = re.compile(r"[A-Za-z0-9]{4}")
-_FOURCC_PREFIX_RE: Final = re.compile(r"\bFourCC\s*\(\s*$", re.IGNORECASE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,8 +55,8 @@ def build_script_local_index(md: MapData) -> ScriptLocalIndex:
     """Return local variable declarations with value and object-code clues."""
     functions = build_function_lookup(build_script_function_index(md).functions)
     rows: list[ScriptLocal] = []
-    for source, text in analysis_script_texts(md):
-        rows.extend(_locals_for_script(source, text, functions))
+    for source, text, lua in analysis_script_sources(md):
+        rows.extend(_locals_for_script(source, text, functions, lua=lua))
     return ScriptLocalIndex(tuple(rows))
 
 
@@ -83,24 +84,33 @@ def format_script_local_index_tsv(index: ScriptLocalIndex) -> str:
 
 
 def _locals_for_script(
-    source: str,
-    text: str,
-    functions: ScriptFunctionLookup,
+    source: str, text: str, functions: ScriptFunctionLookup, *, lua: bool | None = None
 ) -> list[ScriptLocal]:
+    lua = script_language(source) if lua is None else lua
     rows: list[ScriptLocal] = []
-    code_lines = script_code_text(text).splitlines()
-    raw_lines = text.splitlines()
-    is_lua = source.lower().endswith(".lua")
+    code_lines = script_code_text(text, lua=lua).splitlines()
+    raw_lines = script_views(text, lua=lua).arguments.splitlines()
+    is_lua = lua is True
+    line_offsets = source_line_starts(text)
     for line_no, code_line in enumerate(code_lines, start=1):
         match = _local_match(code_line, is_lua)
         if match is None:
             continue
-        raw_line = _strip_comment(raw_lines[line_no - 1])
+        raw_line = raw_lines[line_no - 1]
         value_start = code_line.find("=", match.start())
         initial = "" if value_start < 0 else raw_line[value_start + 1 :].strip()
         code_initial = "" if value_start < 0 else code_line[value_start + 1 :].strip()
         rows.append(
-            _local_row(source, line_no, match, initial, code_initial, functions)
+            _local_row(
+                source,
+                line_no,
+                match,
+                initial,
+                code_initial,
+                functions,
+                lua=lua,
+                offset=line_offsets[line_no - 1] + match.start("name"),
+            )
         )
     return rows
 
@@ -120,63 +130,31 @@ def _local_row(
     initial: str,
     code_initial: str,
     functions: ScriptFunctionLookup,
+    *,
+    lua: bool | None = None,
+    offset: int | None = None,
 ) -> ScriptLocal:
+    lua = script_language(source) if lua is None else lua
     name = match.group("name")
     value_type = match.groupdict().get("type") or ""
-    string_value = _first_string(initial)
+    string_value = _first_string(initial, lua=lua)
     object_codes = tuple(sorted(set(_codes_in(code_initial))))
     return ScriptLocal(
         source=source,
         line=line_no,
-        function=functions.name_for(source, line_no),
+        function=functions.name_for(source, line_no, offset=offset),
         name=name,
         value_type=value_type,
         initial=initial,
         string_value=string_value,
         object_codes=object_codes,
         purpose=_purpose(name, value_type, initial, string_value, object_codes),
-        summary=_strip_comment(match.string).strip(),
+        summary=match.string.strip(),
     )
 
 
-def _first_string(value: str) -> str:
-    index = 0
-    while index < len(value):
-        if value[index] not in {"'", '"'}:
-            index += 1
-            continue
-        quote = value[index]
-        raw, end = _read_quoted(value, index)
-        if not _is_object_code_quote(value, index, quote, raw):
-            return _unescape(raw)
-        index = end
-    return ""
-
-
-def _is_object_code_quote(text: str, start: int, quote: str, value: str) -> bool:
-    if not _FOURCC_RE.fullmatch(value):
-        return False
-    return quote == "'" or _FOURCC_PREFIX_RE.search(text[:start]) is not None
-
-
-def _read_quoted(text: str, start: int) -> tuple[str, int]:
-    quote = text[start]
-    chars: list[str] = []
-    index = start + 1
-    escaped = False
-    while index < len(text):
-        char = text[index]
-        if escaped:
-            chars.append("\\" + char)
-            escaped = False
-        elif char == "\\":
-            escaped = True
-        elif char == quote:
-            return "".join(chars), index + 1
-        else:
-            chars.append(char)
-        index += 1
-    return "".join(chars), len(text)
+def _first_string(value: str, *, lua: bool | None = None) -> str:
+    return next(script_string_values(value, lua=lua, include_object_codes=False), "")
 
 
 def _purpose(
@@ -210,7 +188,3 @@ def _looks_like_save_key(name: str, value: str) -> bool:
     ):
         return True
     return "." in value and not _looks_like_resource_path(value)
-
-
-def _unescape(value: str) -> str:
-    return value.replace("\\\\", "\\").replace('\\"', '"').replace("\\'", "'")

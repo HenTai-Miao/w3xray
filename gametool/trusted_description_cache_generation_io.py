@@ -23,8 +23,8 @@ from .trusted_description_cache_models import (
 )
 
 
-_MAX_METADATA_BYTES: Final = 4 * 1024 * 1024
-_MAX_PAYLOAD_BYTES: Final = 512 * 1024 * 1024
+_MAX_METADATA_BYTES: Final[int | None] = None
+_MAX_PAYLOAD_BYTES: Final[int | None] = None
 
 
 @dataclass(frozen=True, slots=True)

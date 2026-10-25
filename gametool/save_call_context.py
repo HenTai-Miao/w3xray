@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from .save_api_catalog import is_hashtable_key_api
+from .script_lexing import ScriptViews, literal_string_value, script_views
 
 _FILE_ARG_INDEX: Final = {
     "InitGameCache": 0,
@@ -56,7 +57,11 @@ class SaveCallContext:
     sync_prefix: str = ""
 
 
-_INTERESTING_RE: Final = re.compile(r"['\"(),]")
+_INTERESTING_RE: Final = re.compile(
+    r"//|--|['\"(),{}\[\]]|\b(?:function|if|for|while|do|repeat|end|until)\b"
+)
+_LONG_BRACKET_RE: Final = re.compile(r"\[(=*)\[")
+_LINE_COMMENT_END_RE: Final = re.compile(r"[\r\n]")
 _QUOTE_SCAN_BY_CHAR: Final = {
     "'": re.compile(r"\\.|'"),
     '"': re.compile(r'\\.|"'),
@@ -99,48 +104,107 @@ def _arg_at(args: tuple[str, ...], index: int | None) -> str:
     return clean_arg(args[index])
 
 
-def extract_call_args(line: str, start: int) -> tuple[str, ...]:
-    """Extract top-level comma-separated arguments from ``line[start:]``.
+def extract_call_args(
+    line: str | ScriptViews,
+    start: int,
+    *,
+    lua: bool | None = None,
+    mask_strings: bool = False,
+) -> tuple[str, ...]:
+    """Read balanced arguments, ignoring comments and opaque string contents.
 
-    这是全部脚本扫描里调用最多的热函数（单图几十万次）；逐字符的
-    Python 状态机会在每个字符上做列表追加，改成用预编译正则跳到
-    下一个引号/括号/逗号，普通字符段由 C 层扫描，参数用切片取出。
+    Lua table/index delimiters and anonymous-function blocks remain inside
+    their argument. The scan uses an explicit stack and has no depth ceiling.
     """
+    prepared = isinstance(line, ScriptViews)
+    if isinstance(line, ScriptViews):
+        lua = line.lua if lua is None else lua
+        original = line.arguments
+        line = line.code if mask_strings else original
+    else:
+        original = line
     args: list[str] = []
-    chunk_start = start
-    depth = 0
-    index = start
-    search = _INTERESTING_RE.search
-    while True:
-        match = search(line, index)
-        if match is None:
-            return ()
+    chunk_start = index = start
+    brackets: list[str] = []
+    blocks: list[str] = []
+
+    def argument(stop: int) -> tuple[str, bool]:
+        # A raw-string caller may have handed us a whole large script. Only
+        # materialize the current argument; its unrelated tail stays untouched.
+        fragment = original[chunk_start:stop]
+        if prepared:
+            return line[chunk_start:stop].strip(), bool(fragment.strip())
+        view = script_views(fragment, lua=lua)
+        return (
+            (view.code if mask_strings else view.arguments).strip(),
+            bool(view.arguments.strip()),
+        )
+
+    while (match := _INTERESTING_RE.search(line, index)) is not None:
         index = match.start()
-        char = line[index]
-        if char in "'\"":
+        token = match.group()
+        if token in {"//", "--"}:
+            if (token == "//" and lua is True) or (token == "--" and lua is False):
+                index = match.end()
+                continue
+            opening = (
+                _LONG_BRACKET_RE.match(line, match.end()) if token == "--" else None
+            )
+            if opening is not None:
+                close = "]" + opening.group(1) + "]"
+                end = line.find(close, opening.end())
+                if end < 0:
+                    return ()
+                index = end + len(close)
+            else:
+                end_of_line = _LINE_COMMENT_END_RE.search(line, match.end())
+                if end_of_line is None:
+                    return ()
+                index = end_of_line.end()
+            continue
+        if token in {"'", '"'}:
             index = _skip_quoted(line, index)
             continue
-        if char == "(":
-            depth += 1
-            index += 1
-            continue
-        if char == ")":
-            if depth == 0:
-                value = line[chunk_start:index].strip()
-                if value or args:
+        if token == "[" and lua is not False:
+            opening = _LONG_BRACKET_RE.match(line, index)
+            if opening is not None:
+                close = "]" + opening.group(1) + "]"
+                end = line.find(close, opening.end())
+                if end < 0:
+                    return ()
+                index = end + len(close)
+                continue
+        if token in {"(", "[", "{"}:
+            brackets.append({"(": ")", "[": "]", "{": "}"}[token])
+        elif token in {")", "]", "}"}:
+            if not brackets:
+                if token != ")" or blocks:
+                    return ()
+                value, present = argument(index)
+                if present or args:
                     args.append(value)
-                    return tuple(args)
+                return tuple(args)
+            if brackets.pop() != token:
                 return ()
-            depth -= 1
-            index += 1
-            continue
-        if char == ",":
-            if depth == 0:
-                args.append(line[chunk_start:index].strip())
+        elif token == ",":
+            if not brackets and not blocks:
+                args.append(argument(index)[0])
                 chunk_start = index + 1
-            index += 1
-            continue
-        index += 1
+        elif lua is True:
+            if token in {"function", "if", "for", "while", "repeat"}:
+                blocks.append(token)
+            elif token == "do":
+                if blocks and blocks[-1] in {"for", "while"}:
+                    blocks[-1] = "do"
+                else:
+                    blocks.append("do")
+            elif blocks and (
+                (token == "end" and blocks[-1] in {"function", "if", "do"})
+                or (token == "until" and blocks[-1] == "repeat")
+            ):
+                blocks.pop()
+        index = match.end()
+    return ()
 
 
 def _skip_quoted(line: str, start: int) -> int:
@@ -160,12 +224,27 @@ def _skip_quoted(line: str, start: int) -> int:
 def clean_arg(arg: str) -> str:
     """Return a readable argument value, unwrapping quoted/StringHash values."""
     value = arg.strip()
-    if value.startswith("StringHash("):
+    while value.startswith("StringHash("):
         nested = extract_call_args(value, len("StringHash("))
-        return clean_arg(nested[0]) if nested else value
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-        return unescape_arg(value[1:-1])
-    return value
+        if not nested:
+            return value
+        value = nested[0].strip()
+        # A direct chain needs one validation scan and one prefix walk, rather
+        # than rescanning the entire suffix once for every nested StringHash.
+        cursor = last_start = 0
+        while value.startswith("StringHash(", cursor):
+            last_start = cursor
+            cursor += len("StringHash(")
+            while cursor < len(value) and value[cursor].isspace():
+                cursor += 1
+        if cursor:
+            inner = extract_call_args(value, cursor)
+            if not inner:
+                closing = value.find(")", cursor)
+                return value[last_start : closing + 1] if closing >= 0 else value
+            value = inner[0].strip()
+    literal = literal_string_value(value)
+    return value if literal is None else literal
 
 
 def unescape_arg(text: str) -> str:

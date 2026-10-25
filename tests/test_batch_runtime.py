@@ -20,7 +20,7 @@ from gametool.batch_runtime import (
 )
 
 
-def test_disk_preflight_rejects_free_space_below_reserve_and_expansion(
+def test_disk_preflight_rejects_free_space_below_explicit_reserve(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -35,7 +35,7 @@ def test_disk_preflight_rejects_free_space_below_reserve_and_expansion(
     result = check_disk_preflight(
         str(tmp_path / "new-output"),
         source_size=400,
-        minimum_free_bytes=900,
+        minimum_free_bytes=1001,
     )
 
     # Then

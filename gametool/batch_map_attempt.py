@@ -87,7 +87,7 @@ def attempt_map(
             pass
         case unreachable:
             assert_never(unreachable)
-    if options.map_timeout_seconds is None:
+    if options.map_timeout_seconds is None and not options.isolate_maps:
         return _execute_direct(
             index,
             fingerprint,

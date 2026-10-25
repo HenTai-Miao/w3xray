@@ -11,10 +11,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import pytest
-
 from gametool.mpq import MPQArchive
-from gametool.mpq_layout import MPQLayoutError, locate_mpq_layout
+from gametool.mpq_layout import locate_mpq_layout
 
 
 def _write_mpq(hdr_bytes, total_size):
@@ -63,7 +61,7 @@ def _write_sparse_mpq(
     return path
 
 
-def test_main_header_discovery_stops_at_scan_budget(tmp_path: Path) -> None:
+def test_main_header_discovery_scans_past_the_old_budget(tmp_path: Path) -> None:
     header_offset = 64 * 1024 * 1024 + 512
     path = _write_sparse_mpq(
         tmp_path / "late-header.w3x",
@@ -78,12 +76,11 @@ def test_main_header_discovery_stops_at_scan_budget(tmp_path: Path) -> None:
             0,
             access=mmap.ACCESS_READ,
         ) as data,
-        pytest.raises(MPQLayoutError, match="没找到 MPQ 头"),
     ):
-        locate_mpq_layout(data)
+        assert locate_mpq_layout(data).archive_offset == header_offset
 
 
-def test_hash_table_entry_budget_rejects_sparse_archive(tmp_path: Path) -> None:
+def test_hash_table_count_is_bounded_by_the_file(tmp_path: Path) -> None:
     hash_count = 1 << 22
     block_position = 32 + hash_count * 16
     path = _write_sparse_mpq(
@@ -98,12 +95,11 @@ def test_hash_table_entry_budget_rejects_sparse_archive(tmp_path: Path) -> None:
             0,
             access=mmap.ACCESS_READ,
         ) as data,
-        pytest.raises(MPQLayoutError, match="hash 表过大"),
     ):
-        locate_mpq_layout(data)
+        assert locate_mpq_layout(data).hash_count == hash_count
 
 
-def test_block_table_entry_budget_rejects_sparse_archive(tmp_path: Path) -> None:
+def test_block_table_count_is_bounded_by_the_file(tmp_path: Path) -> None:
     block_count = (1 << 22) + 1
     block_position = 96
     path = _write_sparse_mpq(
@@ -118,9 +114,8 @@ def test_block_table_entry_budget_rejects_sparse_archive(tmp_path: Path) -> None
             0,
             access=mmap.ACCESS_READ,
         ) as data,
-        pytest.raises(MPQLayoutError, match="block 表过大"),
     ):
-        locate_mpq_layout(data)
+        assert locate_mpq_layout(data).block_count == block_count
 
 
 class TestMpqHeader(unittest.TestCase):

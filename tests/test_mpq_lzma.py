@@ -91,12 +91,12 @@ def test_lzma_filter_and_properties_are_validated() -> None:
         decompress_mpq_sector(sector[:2] + b"\xff" + sector[3:], 4)
 
 
-def test_lzma_dictionary_is_bounded_before_decoder_allocation() -> None:
+def test_lzma_dictionary_above_old_ceiling_is_supported() -> None:
     sector = _lzma_sector(b"data")
-    oversized = sector[:3] + (0xFFFFFFFF).to_bytes(4, "little") + sector[7:]
-
-    with pytest.raises(MPQCompressionError, match="dictionary"):
-        decompress_mpq_sector(oversized, 4)
+    larger_dictionary = (
+        sector[:3] + (128 * 1024 * 1024).to_bytes(4, "little") + sector[7:]
+    )
+    assert decompress_mpq_sector(larger_dictionary, 4) == b"data"
 
 
 def test_lzma_declared_size_must_fit_contract_and_match_output() -> None:

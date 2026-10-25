@@ -8,11 +8,6 @@ import json
 from pathlib import Path
 import shutil
 import sys
-from typing import Final
-
-
-_EXPANSION_FACTOR: Final = 3
-_MIN_EXPANSION_BYTES: Final = 64 * 1024 * 1024
 
 
 class BatchAction(StrEnum):
@@ -71,16 +66,12 @@ def check_disk_preflight(
     source_size: int,
     minimum_free_bytes: int,
 ) -> DiskPreflight:
-    """Require a reserve plus a conservative source expansion budget."""
+    """Check the caller's explicit reserve; writes report actual ENOSPC."""
     probe = Path(output_root)
     while not probe.exists() and probe.parent != probe:
         probe = probe.parent
     available = max(0, shutil.disk_usage(probe).free)
-    expansion = max(
-        _MIN_EXPANSION_BYTES,
-        max(0, source_size) * _EXPANSION_FACTOR,
-    )
-    required = max(0, minimum_free_bytes) + expansion
+    required = max(0, minimum_free_bytes)
     if available < required:
         return DiskPreflightInsufficient(available, required)
     return DiskPreflightReady(available, required)

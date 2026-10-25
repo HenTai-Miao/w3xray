@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .script_sources import analysis_script_sources
+
 import os
 import sys
 from collections.abc import Mapping
@@ -126,8 +128,8 @@ def commands_from_map(md: MapData) -> list[ChatCommand]:
 
     commands = []
     seen = set()
-    for _source, text in analysis_script_texts(md):
-        for command in scan_chat_commands(text):
+    for _source, text, lua in analysis_script_sources(md):
+        for command in scan_chat_commands(text, lua=lua):
             key = (command.command, command.exact)
             if key in seen:
                 continue
@@ -168,17 +170,20 @@ def recipes_from_map(md: MapData) -> list[Recipe]:
                 line=row.evidence.line,
                 confidence=row.confidence.value,
                 evidence=row.evidence.raw,
+                offset=row.evidence.offset,
+                unresolved_reason=row.unresolved_reason,
             )
             for row in indexed
         ]
 
     recipes = []
     seen = set()
-    for source, text in analysis_script_texts(md):
-        for recipe in scan_recipes_from_text(text, source=source):
+    for source, text, lua in analysis_script_sources(md):
+        for recipe in scan_recipes_from_text(text, source=source, lua=lua):
             key = (
                 recipe.source,
                 recipe.line,
+                recipe.offset,
                 tuple(sorted(recipe.ingredients)),
                 recipe.result,
             )
@@ -189,10 +194,9 @@ def recipes_from_map(md: MapData) -> list[Recipe]:
     return recipes
 
 
-def scan_commands(path: str) -> list[ChatCommand]:
-    """扫描地图脚本里的隐藏聊天指令（独立入口，会自行打开 MPQ）。"""
-    with MPQArchive(path) as archive:
-        collection = collect_readable_scripts(archive)
+def _script_only_map(archive: MapArchiveReader, path: str) -> MapData:
+    """Load readable scripts, strings and language without materializing objects."""
+    collection = collect_readable_scripts(archive)
     ui_strings = None
     if collection.wts_raw is not None:
         try:
@@ -200,19 +204,23 @@ def scan_commands(path: str) -> list[ChatCommand]:
         except UnicodeError, ValueError:
             ui_strings = {}
     md = MapData(
-        path=path,
-        name=path,
-        scripts=dict(collection.texts),
-        ui_strings=ui_strings,
+        path=path, name=path, scripts=dict(collection.texts), ui_strings=ui_strings
     )
+    _add_w3i(md, archive, ui_strings or {})
+    return md
+
+
+def scan_commands(path: str) -> list[ChatCommand]:
+    """Scan commands with the map's language context and close the archive."""
+    with MPQArchive(path) as archive:
+        md = _script_only_map(archive, path)
     return commands_from_map(md)
 
 
 def scan_recipes(path: str) -> list[Recipe]:
-    """识别地图脚本里的物品合成配方（独立入口，会自行打开 MPQ）。"""
+    """Scan recipes with the same script context as the normal map loader."""
     with MPQArchive(path) as archive:
-        collection = collect_readable_scripts(archive)
-    md = MapData(path=path, name=path, scripts=dict(collection.texts))
+        md = _script_only_map(archive, path)
     return recipes_from_map(md)
 
 

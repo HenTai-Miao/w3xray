@@ -9,7 +9,6 @@ import pytest
 
 from gametool import archive_export, knowledge_unknown_exports, map_loader
 from gametool.cli_options import CliOptions, _write_cli_packs
-from gametool.external_listfile import MAX_EXTERNAL_LISTFILE_BYTES
 
 from gametool.load_context import MapLoadContext
 from gametool.map_data import MapData
@@ -55,11 +54,11 @@ class _OversizedListfileArchive:
         return name == "(listfile)"
 
     def declared_file_size(self, _name: str) -> int:
-        return MAX_EXTERNAL_LISTFILE_BYTES + 1
+        return 512 * 1024 * 1024 + 1
 
     def read_file(self, _name: str) -> bytes:
         self.read_calls += 1
-        raise AssertionError("oversized listfile was read")
+        return b"war3map.j\n"
 
 
 class _OversizedCampaignArchive:
@@ -187,7 +186,7 @@ def test_campaign_child_pack_stays_anchored_to_requested_root(tmp_path: Path) ->
     assert tuple(outside.iterdir()) == ()
 
 
-def test_internal_listfile_size_is_checked_before_read() -> None:
+def test_internal_listfile_does_not_reject_large_declared_sizes() -> None:
     # Given: member metadata declares an internal listfile over the byte limit.
     archive = _OversizedListfileArchive()
 
@@ -195,7 +194,7 @@ def test_internal_listfile_size_is_checked_before_read() -> None:
     _ = list_archive_files(archive)  # pyright: ignore[reportArgumentType]
 
     # Then: the oversized body is never decompressed or decoded.
-    assert archive.read_calls == 0
+    assert archive.read_calls == 1
 
 
 def test_campaign_child_size_is_checked_before_read(
@@ -228,26 +227,23 @@ def test_unknown_block_uses_remaining_budget_before_read(
     assert archive.read_indexes == [0]
 
 
-def test_unknown_manifest_row_count_is_bounded(
+def test_unknown_manifest_preserves_every_rejected_block(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     # Given: many blocks are rejected by the byte limit.
     archive = _UnknownArchive(tuple(_Block(index, file_size=2) for index in range(5)))
     monkeypatch.setattr(knowledge_unknown_exports, "_MAX_UNKNOWN_EXPORT_BYTES", 1)
-    monkeypatch.setattr(
-        knowledge_unknown_exports,
-        "_MAX_UNKNOWN_MANIFEST_ROWS",
-        2,
-        raising=False,
-    )
 
     # When: the manifest is generated.
     knowledge_unknown_exports.write_unknown_files_from_archive(archive, str(tmp_path))  # pyright: ignore[reportArgumentType]
 
-    # Then: at most the configured number of data rows is retained.
+    # Then: every skipped block still has an attributable manifest row.
     lines = (tmp_path / "Unknown_manifest.tsv").read_text(encoding="utf-8").splitlines()
-    assert len(lines) == 3
+    assert len(lines) == 6
+    assert [line.split("\t")[0] for line in lines[1:]] == [
+        str(index) for index in range(5)
+    ]
 
 
 def _symlink_or_skip(link: Path, target: Path) -> None:

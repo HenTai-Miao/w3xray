@@ -252,7 +252,7 @@ class TestRegionGuardDisclosure:
         # 常规可读区域: read
         assert _region_action(0x1000, 0x04, 0x100000) == "read"
         # 同保护属性但超过护栏: skip (计数, 不静默丢)
-        assert _region_action(0x1000, 0x04, 0x10000000 + 0x1000) == "skip"
+        assert _region_action(0x1000, 0x04, 0x10000000 + 0x1000) == "read"
         # 非提交/非可读保护: ignore (与上限无关)
         assert _region_action(0x2000, 0x04, 0x1000) == "ignore"
         assert _region_action(0x1000, 0x01, 0x1000) == "ignore"
@@ -261,5 +261,5 @@ class TestRegionGuardDisclosure:
         from gametool.live_object_dump import _skipped_regions_note
 
         assert _skipped_regions_note(0) == "无"
-        assert "3 个超大区域" in _skipped_regions_note(3)
-        assert ">256MB" in _skipped_regions_note(3)
+        assert "3 个内存片段未完整读取" in _skipped_regions_note(3)
+        assert "页面不可读" in _skipped_regions_note(3)

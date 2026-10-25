@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+import re
 from types import MappingProxyType
-from typing import Final, Protocol
+from typing import Final, NamedTuple, Protocol
 
 from .map_archive_reader import MapArchiveReader
 from .extraction_diagnostics import DiagnosticTarget, read_component
@@ -13,7 +14,7 @@ from .war3_encoding import decode_warcraft_string
 from .wct import WctDiagnostic, WctScript, parse_wct
 
 
-class _ScriptHost(DiagnosticTarget, Protocol):
+class ScriptSourceHost(DiagnosticTarget, Protocol):
     """Structural surface of MapData used here (breaks map_data import cycle)."""
 
     @property
@@ -24,6 +25,58 @@ _TEXT_MEMBERS: Final = ("war3map.j", "war3map.lua", "war3map.wts")
 _BINARY_MEMBERS: Final = ("war3map.wtg", "war3map.wct")
 WCT_TEXT_NAME: Final = "war3map.wct(自定义代码).txt"
 _SCRIPT_PLACEHOLDER_CHARS: Final = "\x00\r\n\t "
+_WCT_HEADER: Final = re.compile(
+    r"(?m)^//(?= ===== (?:全局自定义脚本|触发器自定义脚本 #\d+) =====\r?$)"
+)
+_SCRIPT_TYPE_LINE: Final = re.compile(r"(?im)^脚本语言[:：]\s*(Lua|JASS)\s*$")
+
+
+class AnalysisScriptSource(NamedTuple):
+    source: str
+    text: str
+    lua: bool | None
+
+
+def script_language(
+    source: str,
+    *,
+    available_sources: Iterable[str] = (),
+    declared_script_type: str = "",
+) -> bool | None:
+    """Resolve language from direct file/map evidence; retain unknown context."""
+    name = source.replace("\\", "/").rsplit("/", 1)[-1].casefold()
+    if name.endswith(".lua"):
+        return True
+    if name.endswith(".j"):
+        return False
+    if name != WCT_TEXT_NAME.casefold():
+        return None
+    declared = {"lua": True, "jass": False}.get(declared_script_type.casefold())
+    if declared is not None:
+        return declared
+    choices = {
+        name.casefold().endswith(".lua")
+        for path in available_sources
+        if (name := path.replace("\\", "/").rsplit("/", 1)[-1]).casefold()
+        in {"war3map.j", "war3map.lua"}
+    }
+    return next(iter(choices)) if len(choices) == 1 else None
+
+
+def script_type_from_report(text: str) -> str:
+    match = _SCRIPT_TYPE_LINE.search(text)
+    return match.group(1) if match else ""
+
+
+def analysis_script_text(source: str, text: str, lua: bool | None) -> str:
+    """Adapt only tool-generated WCT headers without moving source offsets."""
+    if (
+        source.replace("\\", "/").rsplit("/", 1)[-1].casefold()
+        == WCT_TEXT_NAME.casefold()
+        and lua is True
+    ):
+        return _WCT_HEADER.sub("--", text)
+    return text
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,7 +92,7 @@ class ScriptCollection:
 def collect_readable_scripts(
     archive: MapArchiveReader,
     *,
-    md: _ScriptHost | None = None,
+    md: ScriptSourceHost | None = None,
 ) -> ScriptCollection:
     """Decode text members and publish WCT only through its readable virtual text."""
     texts: dict[str, str] = {}
@@ -75,7 +128,7 @@ def collect_readable_scripts(
 def _read_script_member(
     archive: MapArchiveReader,
     name: str,
-    md: _ScriptHost | None,
+    md: ScriptSourceHost | None,
 ) -> bytes | None:
     if md is not None:
         component = (
@@ -92,7 +145,9 @@ def _read_script_member(
         return None
 
 
-def _decode_script_member(raw: bytes, name: str, md: _ScriptHost | None) -> str | None:
+def _decode_script_member(
+    raw: bytes, name: str, md: ScriptSourceHost | None
+) -> str | None:
     if md is not None:
         component = "wts" if name == "war3map.wts" else "script"
         return read_component(
@@ -101,15 +156,28 @@ def _decode_script_member(raw: bytes, name: str, md: _ScriptHost | None) -> str 
     return decode_warcraft_string(raw)
 
 
-def analysis_script_texts(md: _ScriptHost) -> tuple[tuple[str, str], ...]:
+def analysis_script_texts(md: ScriptSourceHost) -> tuple[tuple[str, str], ...]:
     """Return sorted source-preserving texts accepted by script analyzers."""
-    return tuple(
-        (name, text)
-        for name, text in sorted(md.scripts.items())
-        if name.casefold().endswith((".j", ".lua", ".txt"))
-        and not name.casefold().endswith(".wts")
-        and is_substantive_script_text(text)
-    )
+    return tuple((source, text) for source, text, _lua in analysis_script_sources(md))
+
+
+def analysis_script_sources(md: ScriptSourceHost) -> tuple[AnalysisScriptSource, ...]:
+    """Return full texts with language context, preserving names and line numbers."""
+    declared = getattr(getattr(md, "w3i", None), "script_type", "")
+    declared = declared if isinstance(declared, str) else ""
+    entries: list[AnalysisScriptSource] = []
+    for name, text in sorted(md.scripts.items()):
+        if not name.casefold().endswith(
+            (".j", ".lua", ".txt")
+        ) or not is_substantive_script_text(text):
+            continue
+        lua = script_language(
+            name, available_sources=md.scripts, declared_script_type=declared
+        )
+        entries.append(
+            AnalysisScriptSource(name, analysis_script_text(name, text, lua), lua)
+        )
+    return tuple(entries)
 
 
 def is_substantive_script_text(text: str) -> bool:

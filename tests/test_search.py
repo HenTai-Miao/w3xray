@@ -62,7 +62,10 @@ class TestLike(unittest.TestCase):
         self.assertIsNotNone(fuzzy_score("%", "随便什么"))
 
     def test_earlier_match_scores_higher(self):
-        self.assertGreater(fuzzy_score("%abc%", "abcxx"), fuzzy_score("%abc%", "xxabc"))
+        earlier = fuzzy_score("%abc%", "abcxx")
+        later = fuzzy_score("%abc%", "xxabc")
+        assert earlier is not None and later is not None
+        self.assertGreater(earlier, later)
 
 
 class TestEq(unittest.TestCase):

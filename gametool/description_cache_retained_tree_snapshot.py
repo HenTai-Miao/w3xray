@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Generator
 import os
 import stat
 from typing import assert_never
@@ -15,16 +16,18 @@ from .description_cache_retained_integrity_models import (
 )
 from .description_cache_retained_siblings import kind_from_mode
 
+type _DirectoryRequest = tuple[int, str, str, int, os.stat_result]
+
 
 @dataclass(frozen=True, slots=True)
 class RetainedScanBounds:
     """Exact byte, count, and depth bounds supplied by the orchestrator."""
 
-    file_bytes: int
-    tree_bytes: int
-    file_count: int
-    entry_count: int
-    depth: int
+    file_bytes: int | None = None
+    tree_bytes: int | None = None
+    file_count: int | None = None
+    entry_count: int | None = None
+    depth: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -113,6 +116,30 @@ def _visit_directory(
     bounds: RetainedScanBounds,
     accumulator: _Accumulator,
 ) -> None:
+    # Drive suspended directory generators explicitly. No Python recursion is
+    # consumed by a deep tree; every held child descriptor still receives its
+    # before/after/name proof and closes when its generator completes.
+    stack = [_directory_entries(descriptor, prefix, depth, bounds, accumulator)]
+    try:
+        while stack:
+            try:
+                request = next(stack[-1])
+            except StopIteration:
+                stack.pop()
+                continue
+            stack.append(_visit_child_directory(*request, bounds, accumulator))
+    finally:
+        for cursor in reversed(stack):
+            cursor.close()
+
+
+def _directory_entries(
+    descriptor: int,
+    prefix: str,
+    depth: int,
+    bounds: RetainedScanBounds,
+    accumulator: _Accumulator,
+) -> Generator[_DirectoryRequest, None, None]:
     if accumulator.status in {
         TreeProofStatus.OVERSIZED,
         TreeProofStatus.UNSTABLE,
@@ -132,11 +159,14 @@ def _visit_directory(
     for name in names:
         relative = name if not prefix else f"{prefix}/{name}"
         child_depth = depth + 1
-        if child_depth > bounds.depth:
+        if bounds.depth is not None and child_depth > bounds.depth:
             _fail(accumulator, TreeProofStatus.OVERSIZED, relative)
             return
         accumulator.entry_count += 1
-        if accumulator.entry_count > bounds.entry_count:
+        if (
+            bounds.entry_count is not None
+            and accumulator.entry_count > bounds.entry_count
+        ):
             _fail(accumulator, TreeProofStatus.OVERSIZED, relative)
             return
         try:
@@ -154,22 +184,23 @@ def _visit_directory(
                 accumulator.file_count += 1
                 accumulator.size += details.st_size
                 if (
-                    details.st_size > bounds.file_bytes
-                    or accumulator.size > bounds.tree_bytes
-                    or accumulator.file_count > bounds.file_count
+                    (
+                        bounds.file_bytes is not None
+                        and details.st_size > bounds.file_bytes
+                    )
+                    or (
+                        bounds.tree_bytes is not None
+                        and accumulator.size > bounds.tree_bytes
+                    )
+                    or (
+                        bounds.file_count is not None
+                        and accumulator.file_count > bounds.file_count
+                    )
                 ):
                     _fail(accumulator, TreeProofStatus.OVERSIZED, relative)
                     return
             case CacheArtifactKind.DIRECTORY:
-                _visit_child_directory(
-                    descriptor,
-                    name,
-                    relative,
-                    child_depth,
-                    details,
-                    bounds,
-                    accumulator,
-                )
+                yield descriptor, name, relative, child_depth, details
             case CacheArtifactKind.SYMLINK | CacheArtifactKind.SPECIAL:
                 accumulator.status = TreeProofStatus.UNSAFE
                 if accumulator.problem_path is None:
@@ -194,7 +225,7 @@ def _visit_child_directory(
     expected: os.stat_result,
     bounds: RetainedScanBounds,
     accumulator: _Accumulator,
-) -> None:
+) -> Generator[_DirectoryRequest, None, None]:
     try:
         descriptor = os.open(
             name,
@@ -209,7 +240,7 @@ def _visit_child_directory(
         if _stable_stat(opened) != _stable_stat(expected):
             _fail(accumulator, TreeProofStatus.UNSTABLE, relative)
             return
-        _visit_directory(descriptor, relative, depth, bounds, accumulator)
+        yield from _directory_entries(descriptor, relative, depth, bounds, accumulator)
         after = os.fstat(descriptor)
         named = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
         if _stable_stat(after) != _stable_stat(expected) or _stable_stat(

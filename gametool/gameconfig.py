@@ -8,7 +8,6 @@ import struct
 
 from .war3_encoding import decode_warcraft_string
 
-_MAX_PLAYERS = 32
 _RACE_NAMES = {
     0x01: "人族",
     0x02: "兽族",
@@ -145,6 +144,10 @@ class _Reader:
         self._data = data
         self._pos = 0
 
+    @property
+    def remaining(self) -> int:
+        return len(self._data) - self._pos
+
     def i32(self) -> int:
         if self._pos + 4 > len(self._data):
             raise IndexError("i32 越界")
@@ -176,7 +179,8 @@ def parse_game_configuration(data: bytes) -> GameConfiguration:
         base_speed = reader.i32()
         map_path = reader.cstr()
         count = reader.i32()
-        if count < 0 or count > _MAX_PLAYERS:
+        # Seven integers plus a terminated AI path, including an empty path.
+        if count < 0 or count > reader.remaining // 29:
             raise ValueError(f"invalid .wgc player count: {count}")
         players = tuple(_read_player(reader) for _ in range(count))
         return GameConfiguration(version, flags, base_speed, map_path, players)

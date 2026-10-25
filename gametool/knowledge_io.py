@@ -119,7 +119,7 @@ def write_bytes(out_dir: str, name: str, data: bytes) -> SafeWriteResult:
 
 def safe_filename(name: str) -> str:
     """Return a filename safe on Windows and Unix-like filesystems."""
-    display_name = single_line_text(name, max_chars=240)
+    display_name = single_line_text(name)
     cleaned = "".join(
         "_" if char in '<>:"/\\|?*' else char for char in display_name
     ).strip(" .")

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .script_sources import analysis_script_sources, script_language
+
 import re
 from bisect import bisect_right
 from collections import Counter
@@ -13,8 +15,7 @@ from .presentation_safety import tsv_cell as _tsv
 from .save_api_catalog import object_api_category, save_api_info
 from .save_call_context import extract_call_args, structured_context, unescape_arg
 from .script_scan import _codes_in
-from .script_sources import analysis_script_texts
-from .script_tokens import script_code_text
+from .script_lexing import script_views
 
 _STRING_RE: Final = re.compile(r'"((?:[^"\\]|\\.)*)"')
 _CALL_RE: Final = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
@@ -82,8 +83,8 @@ def build_save_report(md: MapData) -> SaveReport:
     if cached is not None:
         return cast("SaveReport", cached)
     rows: list[SaveClue] = []
-    for source, text in analysis_script_texts(md):
-        rows.extend(_scan_script(source, text))
+    for source, text, lua in analysis_script_sources(md):
+        rows.extend(_scan_script(source, text, lua=lua))
     report = SaveReport(tuple(rows))
     try:
         md._save_report_cache = report
@@ -117,13 +118,15 @@ def format_save_report_tsv(report: SaveReport) -> str:
     return "\n".join(rows) + "\n"
 
 
-def _scan_script(source: str, text: str) -> list[SaveClue]:
+def _scan_script(source: str, text: str, *, lua: bool | None = None) -> list[SaveClue]:
+    lua = script_language(source) if lua is None else lua
     rows: list[SaveClue] = []
     line_starts = _line_starts(text)
-    code_text = script_code_text(text)
+    views = script_views(text, lua=lua)
+    code_text = views.syntax
     for match in _CALL_RE.finditer(code_text):
         name = match.group(1)
-        args = extract_call_args(text, match.end())
+        args = extract_call_args(views, match.end())
         line_no = bisect_right(line_starts, match.start())
         api_info = save_api_info(name)
         if api_info is not None:

@@ -10,8 +10,7 @@ from typing import Final
 SAVE_CONTAINER_SIGNATURE: Final = b"Warcraft III recorded game\x1a\x00"
 _HEADER_FIXED_BYTES: Final = 48
 _BLOCK_HEADER_BYTES: Final = 12
-MAX_SAVE_CONTAINER_BLOCKS: Final = 4096
-MAX_SAVE_CONTAINER_RAW_BYTES: Final = 128 * 1024 * 1024
+MAX_SAVE_CONTAINER_RAW_BYTES: Final[int | None] = None
 
 
 class SaveContainerError(ValueError):
@@ -67,8 +66,10 @@ def parse_save_container_header(payload: bytes) -> SaveContainerHeader:
     )
     if header_size < _HEADER_FIXED_BYTES or header_size > len(payload):
         raise SaveContainerError(f"bad header_size: {header_size}")
-    if block_count > MAX_SAVE_CONTAINER_BLOCKS:
-        raise SaveContainerError(f"block count exceeds limit: {block_count}")
+    if block_count > (len(payload) - header_size) // _BLOCK_HEADER_BYTES:
+        raise SaveContainerError(
+            f"block count exceeds available headers: {block_count}"
+        )
     return SaveContainerHeader(
         header_size=header_size,
         file_size=file_size,
@@ -82,7 +83,7 @@ def parse_save_container_header(payload: bytes) -> SaveContainerHeader:
 def unpack_save_container(
     payload: bytes,
     *,
-    max_raw_bytes: int = MAX_SAVE_CONTAINER_RAW_BYTES,
+    max_raw_bytes: int | None = MAX_SAVE_CONTAINER_RAW_BYTES,
 ) -> SaveContainerPayload:
     """Strictly decode one container: verified checksums, bounded expansion, no writes.
 
@@ -112,19 +113,25 @@ def unpack_save_container(
             raise SaveContainerError(
                 f"block {index} checksum mismatch: got {checksum:08x}, expected {expected:08x}"
             )
-        remaining = max_raw_bytes - len(raw)
-        if original_size > remaining:
+        if max_raw_bytes is not None and original_size > max_raw_bytes - len(raw):
             raise SaveContainerError(
                 f"block {index} declared size {original_size} exceeds raw budget {max_raw_bytes}"
             )
         try:
             decompressor = zlib.decompressobj(wbits=15)
-            chunk = decompressor.decompress(compressed, original_size)
+            # zlib treats max_length=0 as unlimited. The extra byte detects an
+            # understated original_size, including a falsely declared zero.
+            chunk = decompressor.decompress(compressed, original_size + 1)
         except zlib.error as exc:
             raise SaveContainerError(
                 f"block {index} zlib stream is corrupt: {exc}"
             ) from exc
-        if len(chunk) != original_size or decompressor.unconsumed_tail:
+        if (
+            len(chunk) != original_size
+            or decompressor.unconsumed_tail
+            or (not decompressor.eof and not compressed.endswith(b"\x00\x00\xff\xff"))
+            or decompressor.unused_data
+        ):
             raise SaveContainerError(
                 f"block {index} decompressed size does not match declared {original_size}"
             )
@@ -138,6 +145,10 @@ def unpack_save_container(
     if offset != len(payload):
         raise SaveContainerError(
             f"trailing bytes after blocks: {len(payload) - offset}"
+        )
+    if len(raw) != header.decompressed_size:
+        raise SaveContainerError(
+            f"container decompressed size does not match declared {header.decompressed_size}: {len(raw)}"
         )
     return SaveContainerPayload(header, tuple(blocks), bytes(raw))
 

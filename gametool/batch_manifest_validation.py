@@ -27,8 +27,8 @@ from .batch_report_validation import validate_report_summaries
 from .bounded_file import read_bounded_regular_file
 
 
-_MAX_MANIFEST_BYTES: Final = 512 * 1024 * 1024
-_MAX_MARKER_BYTES: Final = 64 * 1024
+_MAX_MANIFEST_BYTES: Final[int | None] = None
+_MAX_MARKER_BYTES: Final[int | None] = None
 _REPORT_NAMES: Final = frozenset(REQUIRED_MAP_REPORTS)
 
 

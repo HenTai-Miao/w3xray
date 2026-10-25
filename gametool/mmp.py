@@ -6,7 +6,6 @@ from collections import Counter
 from dataclasses import dataclass
 import struct
 
-_MAX_ICONS = 100_000
 _TYPE_LABELS = {
     0: "金矿",
     1: "中立建筑",
@@ -58,6 +57,10 @@ class _Reader:
         self._data = data
         self._pos = 0
 
+    @property
+    def remaining(self) -> int:
+        return len(self._data) - self._pos
+
     def i32(self) -> int:
         if self._pos + 4 > len(self._data):
             raise IndexError("i32 越界")
@@ -78,7 +81,7 @@ def parse_preview_icons(data: bytes) -> PreviewIconSummary:
     try:
         reader = _Reader(data)
         version = reader.i32()
-        count = _bounded(reader.i32())
+        count = _bounded(reader.i32(), reader.remaining)
         icons = tuple(_read_icon(reader) for _ in range(count))
         return PreviewIconSummary(version=version, icons=icons)
     except (struct.error, IndexError) as exc:
@@ -93,7 +96,8 @@ def _read_icon(reader: _Reader) -> PreviewIcon:
     return PreviewIcon(icon_type, x, y, color, alpha)
 
 
-def _bounded(value: int) -> int:
-    if value < 0 or value > _MAX_ICONS:
+def _bounded(value: int, remaining: int) -> int:
+    # Each icon occupies exactly four 32-bit fields; bytes determine the bound.
+    if value < 0 or value > remaining // 16:
         raise ValueError(f"invalid war3map.mmp icon count: {value}")
     return value

@@ -90,7 +90,7 @@ uv run --with basedpyright basedpyright --level error <paths>
 ## Required acceptance invariants
 
 1. Snapshot formatting/parsing is canonical; roots are unique/nonoverlapping; no symlink or special entry is followed; content and nanosecond mtime changes compare as differences.
-2. Retained-cache bounds are exact: 1 GiB/file, 8 GiB/tree, 1,000,000 files, 1,250,000 entries, and accepted depth 256; the first exceeded unit reports `oversized` without a partial digest.
+2. Retained-cache inspection defaults to full traversal without byte, count, or depth quotas and uses an explicit stack. Caller-supplied bounds remain exact: the first exceeded unit reports `oversized` without a partial digest; mutation and unsafe entries retain their independent diagnostics.
 3. Retained artifacts receive two complete tree intervals in two whole-set rounds. File/child mutation is `unstable`; active-root, top-level retained identity, or relevant sibling namespace replacement is a code-2 command boundary with no report.
 4. A `previous` directory validates only the five already captured owned payloads. Pathname cache loaders are never called; retained failed/recovery objects are never description sources.
 5. Codes 0/1 write canonical retained reports; 0 permits only valid-cache/ordinary partial evidence with no transient/malformed rows, 1 represents artifact violations, and 2 represents request/binding/namespace/report-write boundaries.
@@ -117,3 +117,6 @@ unchanged after both runs, and no stage/backup/transaction/retirement residue
 remained.
 
 Historical schema-4 measurements from 2026-07-15 remain evidence only: 39/39 processed then reused, 700,979 text rows, 13,442 relation rows, and 79,078 logical icon rows. Do not relabel those counts as schema-6 results.
+# Windows quality command coverage
+
+`gamexray-quality` keeps every maintained path. On Windows it batches by the actual quoted UTF-16 command length, including the NUL terminator and the installed Ruff/Node launcher's forwarded prefix; it does not cap file counts. Each tool reports batch counts and stops on the first failed batch. A single path that cannot fit is an explicit diagnostic, never a skipped file. The platform boundary is documented by [CreateProcessW](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw).

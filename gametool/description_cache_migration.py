@@ -33,9 +33,9 @@ from .description_cache_publication import publish_description_cache
 
 _STATE_NAME: Final = "批量提取状态.json"
 _REPORT_NAME: Final = "对象描述.tsv"
-_MAX_STATE_BYTES: Final = 512 * 1024 * 1024
-_MAX_CACHE_BYTES: Final = 4 * 1024 * 1024 * 1024
-_MAX_REPORT_BYTES: Final = 4 * 1024 * 1024 * 1024
+_MAX_STATE_BYTES: Final[int | None] = None
+_MAX_CACHE_BYTES: Final[int | None] = None
+_MAX_REPORT_BYTES: Final[int | None] = None
 
 
 def migrate_description_cache(
@@ -172,7 +172,7 @@ def _overlaps(first: Path, second: Path) -> bool:
     )
 
 
-def _read_stable(path: Path, maximum: int) -> bytes:
+def _read_stable(path: Path, maximum: int | None) -> bytes:
     try:
         first, identity = read_bounded_regular_file(path, maximum)
         second, _repeated = read_bounded_regular_file(

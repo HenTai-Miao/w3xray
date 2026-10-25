@@ -48,12 +48,11 @@ from .object_id_summary import format_object_id_usage_summary
 from .object_text_exports import format_object_text_tsv
 from .save_analysis import build_save_report, format_save_report_tsv
 from .knowledge_script_exports import (
-    all_script_text,
     format_script_index,
     write_readable_scripts,
 )
 from .knowledge_script_index_exports import write_script_index_exports
-from .script_mechanics import format_script_mechanism_report
+from .script_mechanics import format_map_script_mechanism_report
 from .trigger_exports import (
     format_trigger_eca_tsv,
     format_trigger_tree_tsv,
@@ -199,7 +198,7 @@ def write_knowledge_pack_contents(
         count += write_text(
             out_dir,
             "脚本机制线索.txt",
-            format_script_mechanism_report(all_script_text(md)),
+            format_map_script_mechanism_report(md),
         )
     if _allowed(gate, adapter, "triggers"):
         count += write_text(

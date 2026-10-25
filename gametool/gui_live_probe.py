@@ -6,6 +6,8 @@
 
 from __future__ import annotations
 
+from .query_coordinates import coordinates_from_text
+
 from collections.abc import Callable
 import os
 import pathlib
@@ -389,37 +391,10 @@ class LiveProbeWindow(ctk.CTkToplevel):
         self._output.configure(state="disabled")
 
     def _near_selected_coords(self) -> None:
-        """取选中/剪贴板的 x/y, 交给包查询窗 near 模式反查。"""
-        try:
-            raw = self._output.get("sel.first", "sel.last").strip()
-        except tk.TclError:
-            raw = ""
-        if not raw:
-            try:
-                raw = self.clipboard_get().strip()
-            except Exception:
-                return
-        import re
-
-        # JSON 形态显式取 selected 块坐标 (对齐查询窗 312 轮语义——尾部是 all_units,
-        # 取首对数靠「selected 恰好在前」的巧合而非结构语义)
-        sel_block = re.search(r'"selected"\s*:\s*\{[^{}]*\}', raw)
-        if sel_block:
-            mx = re.search(r'"x"\s*:\s*(-?[\d.]+)', sel_block.group(0))
-            my = re.search(r'"y"\s*:\s*(-?[\d.]+)', sel_block.group(0))
-            if mx and my:
-                if self._query_callback is not None:
-                    self._query_callback(f"near {mx.group(1)} {my.group(1)}")
-                return
-        nums = re.findall(r"-?\d+(?:\.\d+)?", raw)
-        if len(nums) < 2:
-            return
-        x, y = nums[0], nums[1]
-        if self._query_callback is not None:
-            self._query_callback(f"near {x} {y}")
+        """Use selected JSON or annotated coordinates, preserving exponent notation."""
+        self._near_rerun_selected("")
 
     def _near_rerun_selected(self, radius: str = "500") -> None:
-        """选中/剪贴板坐标以半径 500 再查 (对齐查询窗 315 收缩迭代语义)。"""
         try:
             raw = self._output.get("sel.first", "sel.last").strip()
         except tk.TclError:
@@ -429,13 +404,10 @@ class LiveProbeWindow(ctk.CTkToplevel):
                 raw = self.clipboard_get().strip()
             except Exception:
                 return
-        import re
-
-        nums = re.findall(r"-?\d+(?:\.\d+)?", raw)
-        if len(nums) < 2:
-            return
-        if self._query_callback is not None:
-            self._query_callback(f"near {nums[0]} {nums[1]} {radius}")
+        point = coordinates_from_text(raw)
+        if point is not None and self._query_callback is not None:
+            suffix = f" {radius}" if radius else ""
+            self._query_callback(f"near {point[0]} {point[1]}{suffix}")
 
     def _extract_code(self) -> str:
         """取输出区选中文本 (退剪贴板) 的四码, 无则空串。"""

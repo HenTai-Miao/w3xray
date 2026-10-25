@@ -15,7 +15,6 @@ STRUCTURE_FILES: Final = (
     "war3map.wpm",
     "war3map.shd",
 )
-_MAX_COUNT: Final = 1_000_000
 _MIN_STRING_LEN: Final = 2
 
 
@@ -75,7 +74,7 @@ def parse_counted_structure(data: bytes, magic: bytes) -> int | None:
     if len(data) < 12 or data[:4] != magic:
         return None
     count = struct.unpack_from("<i", data, 8)[0]
-    if count < 0 or count > _MAX_COUNT:
+    if count < 0:
         return None
     return count
 
@@ -100,7 +99,7 @@ def parse_wpm_summary(data: bytes) -> PathingSummary | None:
     if len(data) < 16 or data[:4] != b"MP3W":
         return None
     width, height = struct.unpack_from("<ii", data, 8)
-    if width <= 0 or height <= 0 or width > _MAX_COUNT or height > _MAX_COUNT:
+    if width <= 0 or height <= 0:
         return None
     cells = width * height
     end = 16 + cells

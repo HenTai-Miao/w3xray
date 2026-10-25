@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from .script_sources import analysis_script_sources, script_language
+
 import re
-from bisect import bisect_right
+from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -12,14 +14,11 @@ from typing import Final, cast
 from .map_data import MapData
 from .presentation_safety import tsv_cell as _tsv
 from .save_api_catalog import object_api_category, save_api_info
-from .save_call_context import extract_call_args, unescape_arg
-from .script_scan import _codes_in
-from .script_sources import analysis_script_texts
-from .script_tokens import is_lua_function_definition as _is_lua_function_definition
-from .script_tokens import script_code_text
+from .script_lexing import script_string_values, script_views
+from .script_scan import object_code_occurrences
+from .script_scopes import script_structure, source_line_starts
 
 _CALL_RE: Final = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
-_FOURCC_LITERAL_RE: Final = re.compile(r"[A-Za-z0-9]{4}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,6 +30,10 @@ class ScriptCall:
     object_codes: tuple[str, ...]
     string_args: tuple[str, ...]
     example: str
+    offset: int | None = None
+    end_offset: int | None = None
+    scope_offset: int | None = None
+    primary: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,8 +64,8 @@ def build_script_call_catalog(md: MapData) -> ScriptCallCatalog:
     if cached is not None:
         return cast("ScriptCallCatalog", cached)
     calls: list[ScriptCall] = []
-    for source, text in analysis_script_texts(md):
-        calls.extend(_scan_script_calls(source, text))
+    for source, text, lua in analysis_script_sources(md):
+        calls.extend(_scan_script_calls(source, text, lua=lua))
     catalog = ScriptCallCatalog(calls=tuple(calls), rows=_group_calls(calls))
     try:
         md._script_call_catalog_cache = catalog
@@ -92,27 +95,43 @@ def format_script_call_catalog_tsv(catalog: ScriptCallCatalog) -> str:
     return "\n".join(rows) + "\n"
 
 
-def _scan_script_calls(source: str, text: str) -> list[ScriptCall]:
+def _scan_script_calls(
+    source: str, text: str, *, lua: bool | None = None
+) -> list[ScriptCall]:
+    lua = script_language(source) if lua is None else lua
     rows: list[ScriptCall] = []
-    line_starts = _line_starts(text)
-    code_text = script_code_text(text)
-    for match in _CALL_RE.finditer(code_text):
-        if _is_lua_function_definition(code_text, match.start()):
-            continue
-        name = match.group(1)
-        args = extract_call_args(text, match.end())
-        code_args = extract_call_args(code_text, match.end())
-        object_codes = tuple(sorted(set(_codes_in(" ".join(code_args)))))
-        string_args = _string_args(args, object_codes)
+    line_starts = source_line_starts(text)
+    views = script_views(text, lua=lua)
+    structure = script_structure(text, lua=lua)
+    codes = object_code_occurrences(text, lua=lua)
+    positions = tuple(offset for offset, _code in codes)
+    for call in structure.calls:
+        name = call.name
+        arguments = structure.own_text(
+            views.arguments, call.open + 1, call.end - int(call.complete), call.owner
+        )
+        found: set[str] = set()
+        for offset, code in codes[
+            bisect_left(positions, call.start) : bisect_left(positions, call.end)
+        ]:
+            owner = structure.scopes.at(offset)
+            if (owner.start if owner is not None else None) == call.owner:
+                found.add(code)
+        object_codes = tuple(sorted(found))
+        string_args = _string_args((arguments,), object_codes)
         rows.append(
             ScriptCall(
                 function=name,
                 source=source,
-                line=bisect_right(line_starts, match.start()),
+                line=bisect_right(line_starts, call.start),
                 mechanism=_mechanism(name, object_codes),
                 object_codes=object_codes,
                 string_args=string_args,
-                example=_line_fragment(text, match.start()),  # 全文
+                example=text[call.start : call.end],
+                offset=call.start,
+                end_offset=call.end,
+                scope_offset=call.owner,
+                primary=call.primary,
             )
         )
     return rows
@@ -153,6 +172,7 @@ def _line_summary(items: list[ScriptCall]) -> tuple[str, ...]:
 
 
 def _mechanism(name: str, object_codes: tuple[str, ...]) -> str:
+    name = name.removeprefix("_G.")
     api = save_api_info(name)
     if api is not None:
         return f"{api.mechanism}:{api.operation}"
@@ -176,38 +196,7 @@ def _string_args(
 
 
 def _quoted_values(text: str) -> tuple[str, ...]:
-    values: list[str] = []
-    index = 0
-    while index < len(text):
-        char = text[index]
-        if char not in {"'", '"'}:
-            index += 1
-            continue
-        value, end = _read_quoted(text, index)
-        if char != "'" or not _FOURCC_LITERAL_RE.fullmatch(value):
-            values.append(unescape_arg(value))
-        index = end
-    return tuple(values)
-
-
-def _read_quoted(text: str, start: int) -> tuple[str, int]:
-    quote = text[start]
-    chars: list[str] = []
-    index = start + 1
-    escaped = False
-    while index < len(text):
-        char = text[index]
-        if escaped:
-            chars.append("\\" + char)
-            escaped = False
-        elif char == "\\":
-            escaped = True
-        elif char == quote:
-            return "".join(chars), index + 1
-        else:
-            chars.append(char)
-        index += 1
-    return "".join(chars), len(text)
+    return tuple(script_string_values(text))
 
 
 def _line_starts(text: str) -> list[int]:

@@ -78,8 +78,8 @@ def parse_reforged(
 def _read_type_counts(reader: WtgReader) -> dict[int, int]:
     counts: dict[int, int] = {}
     for item_type in _ITEM_TYPES:
-        counts[item_type] = reader.bounded_count("trigger item type")
-        deleted_count = reader.bounded_count("deleted trigger item")
+        counts[item_type] = reader.bounded_count("trigger item type", minimum_size=0)
+        deleted_count = reader.bounded_count("deleted trigger item", minimum_size=4)
         for _index in range(deleted_count):
             reader.i32()
     return counts
@@ -127,7 +127,7 @@ def _read_trigger(reader: WtgReader, object_type: int) -> TriggerHeader:
     initially_off = bool(reader.i32())
     run_on_init = bool(reader.i32())
     parent_id = reader.i32()
-    function_count = reader.bounded_count("trigger function")
+    function_count = reader.bounded_count("trigger function", minimum_size=0)
     return TriggerHeader(
         name,
         description,

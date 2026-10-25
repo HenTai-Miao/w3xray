@@ -29,9 +29,10 @@ def test_parse_batch_cli_uses_documented_default_output() -> None:
     assert options.output_root == DEFAULT_BATCH_OUTPUT
     assert options.game_data_path is None
     assert options.retry_failed
-    assert options.map_timeout_seconds > 0
+    assert options.map_timeout_seconds is None
     assert options.max_memory_bytes is None
-    assert options.minimum_free_bytes > 0
+    assert options.minimum_free_bytes == 0
+    assert options.to_batch_options().isolate_maps
 
 
 def test_parse_batch_cli_accepts_paths_and_retry_policy() -> None:

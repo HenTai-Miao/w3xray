@@ -10,8 +10,8 @@ from typing import Final, override
 
 DEFAULT_BATCH_OUTPUT: Final = "gamexray-batch-output"
 # 历史机器路径已禁用为默认值；默认落在当前目录 gamexray-batch-output，绝不指向历史根。
-DEFAULT_MAP_TIMEOUT_SECONDS: Final = 3600.0
-DEFAULT_MINIMUM_FREE_BYTES: Final = 2 * 1024 * 1024 * 1024
+DEFAULT_MAP_TIMEOUT_SECONDS: Final[float | None] = None
+DEFAULT_MINIMUM_FREE_BYTES: Final = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +26,7 @@ class BatchOptions:
     max_memory_bytes: int | None = None
     minimum_free_bytes: int = DEFAULT_MINIMUM_FREE_BYTES
     description_cache_path: str | None = None
+    isolate_maps: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +77,7 @@ def normalize_batch_options(options: BatchOptions) -> BatchOptions:
         max_memory_bytes=options.max_memory_bytes,
         minimum_free_bytes=options.minimum_free_bytes,
         description_cache_path=description_cache,
+        isolate_maps=options.isolate_maps,
     )
 
 

@@ -11,6 +11,9 @@ class DropReader(Protocol):
 
     p: int
 
+    @property
+    def remaining(self) -> int: ...
+
     def i32(self) -> int: ...
 
     def tag(self) -> str: ...
@@ -47,16 +50,14 @@ class DropSet:
     entries: tuple[DropEntry, ...]
 
 
-def read_drop_sets(
-    reader: DropReader, *, maximum_count: int = 256
-) -> tuple[DropSet, ...]:
-    """Read all nested item groups while retaining indexes and byte offsets."""
-    group_count = reader.i32()
-    _require_count("掉落集合数", group_count, maximum_count)
+def read_drop_sets(reader: DropReader, *, tail_bytes: int = 0) -> tuple[DropSet, ...]:
+    """Read groups without a heuristic cap, reserving the record's required tail."""
+    group_count = read_count(reader, "掉落集合数", 4, tail_bytes=tail_bytes)
     groups: list[DropSet] = []
     for group_index in range(group_count):
-        entry_count = reader.i32()
-        _require_count("掉落物品数", entry_count, maximum_count)
+        # Later groups need at least their own entry-count headers, even empty ones.
+        reserved = tail_bytes + 4 * (group_count - group_index - 1)
+        entry_count = read_count(reader, "掉落物品数", 8, tail_bytes=reserved)
         entries: list[DropEntry] = []
         for entry_index in range(entry_count):
             source_offset = reader.p
@@ -80,6 +81,19 @@ def flatten_drop_sets(drop_sets: tuple[DropSet, ...]) -> list[tuple[str, int]]:
     ]
 
 
-def _require_count(kind: str, count: int, maximum_count: int) -> None:
-    if count < 0 or count > maximum_count:
+def read_count(
+    reader: DropReader, kind: str, minimum_size: int, *, tail_bytes: int = 0
+) -> int:
+    """Bound work by available bytes, never by an empirical record count.
+
+    A count may use only bytes beyond the mandatory suffix and must fit even
+    when every entry has its shortest legal encoding. Validate before looping,
+    so negative or inflated signed counts cannot allocate or consume a tail.
+    """
+    if minimum_size <= 0 or tail_bytes < 0:
+        raise ValueError("Invalid count layout")
+    count = reader.i32()
+    available = reader.remaining - tail_bytes
+    if count < 0 or available < 0 or count > available // minimum_size:
         raise DropCountError(kind, count)
+    return count

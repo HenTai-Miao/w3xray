@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import threading
 from time import monotonic
+import pytest
 
 from gametool.batch_configuration import BatchOptions
 from gametool.batch_execution import (
@@ -28,12 +29,15 @@ from gametool.description_cache_models import DescriptionCache, DescriptionCache
 from gametool.load_context import MapLoadContext
 
 
-def test_success_returns_child_result_and_reaps_process(tmp_path: Path) -> None:
+@pytest.mark.parametrize("timeout_seconds", [2.0, None])
+def test_success_returns_child_result_and_reaps_process(
+    tmp_path: Path, timeout_seconds: float | None
+) -> None:
     # Given
     before = _active_child_ids()
 
     # When
-    outcome = _execute(tmp_path, _success_worker, timeout_seconds=2.0)
+    outcome = _execute(tmp_path, _success_worker, timeout_seconds=timeout_seconds)
 
     # Then
     assert isinstance(outcome, MapExecutionSuccess)
@@ -55,7 +59,10 @@ def test_timeout_terminates_and_reaps_child(tmp_path: Path) -> None:
     assert _active_child_ids() == before
 
 
-def test_cancellation_returns_explicit_cancelled_outcome(tmp_path: Path) -> None:
+@pytest.mark.parametrize("timeout_seconds", [2.0, None])
+def test_cancellation_returns_explicit_cancelled_outcome(
+    tmp_path: Path, timeout_seconds: float | None
+) -> None:
     # Given
     signal = threading.Event()
     timer = threading.Timer(0.02, signal.set)
@@ -66,7 +73,7 @@ def test_cancellation_returns_explicit_cancelled_outcome(tmp_path: Path) -> None
         outcome = _execute(
             tmp_path,
             _blocking_worker,
-            timeout_seconds=2.0,
+            timeout_seconds=timeout_seconds,
             cancellation=signal,
         )
     finally:
@@ -152,7 +159,7 @@ def _execute(
     tmp_path: Path,
     worker,
     *,
-    timeout_seconds: float,
+    timeout_seconds: float | None,
     cancellation: threading.Event | None = None,
 ):
     fingerprint = SourceFingerprint(str(tmp_path / "sample.w3x"), 3, 4, "a" * 64)
@@ -312,6 +319,78 @@ def test_oversize_payload_diagnosed_not_crash() -> None:
 
     # Then: 诊断为具名失败, 不是未捕获异常
     assert isinstance(outcome, MapExecutionFailure)
-    assert outcome.code == "child_message_too_large"
-    assert "64MB" in outcome.detail
+    assert outcome.code == "child_message_read_failed"
+    assert "transport failed" in outcome.detail
     assert receiver.calls >= 1
+
+
+@pytest.mark.parametrize("cancel", [True, False])
+def test_partial_payload_receive_remains_cancellable_and_times_out(
+    cancel: bool,
+) -> None:
+    released = threading.Event()
+    signal = threading.Event()
+
+    class ReceivingProcess(_AliveProcess):
+        def terminate(self) -> None:
+            super().terminate()
+            released.set()
+
+    class PartialReceiver:
+        expired = False
+
+        def poll(self, timeout: float = 0.0) -> bool:
+            return True
+
+        def recv_bytes(self, maxlength: int | None = None) -> bytes:
+            if cancel:
+                signal.set()
+            self.expired = not released.wait(1.5)
+            raise EOFError
+
+        def close(self) -> None:
+            released.set()
+
+    process = ReceivingProcess()
+    receiver = PartialReceiver()
+    outcome = _wait_for_child(
+        process, receiver, None if cancel else monotonic() + 0.2, signal
+    )
+    assert not receiver.expired
+    assert process.terminated
+    if cancel:
+        assert isinstance(outcome, MapExecutionCancelled)
+    else:
+        assert isinstance(outcome, MapExecutionFailure)
+        assert outcome.code == "map_timeout"
+
+
+@pytest.mark.parametrize("failure", [MemoryError, ValueError, OverflowError])
+def test_receive_failure_delivers_result_instead_of_waiting_forever(
+    failure: type[Exception],
+) -> None:
+    class FailedReceiver(_OversizePayloadReceiver):
+        def recv_bytes(self, maxlength: int | None = None) -> bytes:
+            raise failure("fixture receive failure")
+
+    outcome = _wait_for_child(
+        _AliveProcess(), FailedReceiver(), monotonic() + 0.5, None
+    )
+    assert isinstance(outcome, MapExecutionFailure)
+    assert outcome.code == (
+        "child_message_memory_error"
+        if failure is MemoryError
+        else "child_message_read_failed"
+    )
+
+
+def test_decode_memory_error_is_diagnosed(monkeypatch: pytest.MonkeyPatch) -> None:
+    from gametool import batch_execution
+
+    def exhausted(_payload: bytes) -> None:
+        raise MemoryError("fixture decode failure")
+
+    monkeypatch.setattr(batch_execution, "decode_child_message", exhausted)
+    result = batch_execution._execution_outcome(b"Sfixture")
+    assert isinstance(result, MapExecutionFailure)
+    assert result.code == "child_message_memory_error"

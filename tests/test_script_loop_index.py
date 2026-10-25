@@ -67,7 +67,7 @@ class ScriptLoopIndexTest(unittest.TestCase):
                     "    end",
                     "    repeat",
                     "        udg_Done = true",
-                    "    until GetUnitTypeId(udg_Hero) == 'H001'",
+                    "    until GetUnitTypeId(udg_Hero) == FourCC('H001')",
                     "end",
                 )
             ),
@@ -81,10 +81,10 @@ class ScriptLoopIndexTest(unittest.TestCase):
         self.assertIn("war3map.lua\t7\tTick\tfor\ti = 1, 3", text)
         self.assertIn("war3map.lua\t10\tTick\trepeat\t", text)
         self.assertIn(
-            "war3map.lua\t12\tTick\tuntil\tGetUnitTypeId(udg_Hero) == 'H001'",
+            "war3map.lua\t12\tTick\tuntil\tGetUnitTypeId(udg_Hero) == FourCC('H001')",
             text,
         )
-        self.assertIn("GetUnitTypeId\tudg_Hero\t\tH001\t对象ID循环条件", text)
+        self.assertIn("GetUnitTypeId; FourCC\tudg_Hero\t\tH001\t对象ID循环条件", text)
         self.assertNotIn("LoadInteger", text)
         self.assertNotIn('for i = 1, 3 do")', text)
 

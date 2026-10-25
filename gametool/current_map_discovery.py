@@ -1,11 +1,11 @@
-"""Bounded disk hints and orchestration for current-map resolution."""
+"""Complete disk discovery and evidence-based current-map resolution."""
 
 from __future__ import annotations
 
 from collections import deque
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from itertools import chain, islice
+from itertools import chain
 import os
 from pathlib import Path, PureWindowsPath
 import re
@@ -15,24 +15,17 @@ from typing import Final
 
 from . import current_map_models as models
 from . import current_map_process
-from .current_map_inuse_probe import MAX_PROBED_PATHS, probe_in_use_files
+from .bounded_file import FileIdentity, read_bounded_regular_file
+from .current_map_inuse_probe import probe_in_use_files
 from .current_map_process import OpenMapProbeReport, ProcessProbeReport
 from .gameconfig import parse_game_configuration
 
-_MAX_ROOTS: Final = 64
-_MAX_DEPTH: Final = 16
-_MAX_DIRECTORY_ENTRIES: Final = 100_000
-_MAX_WGC_BYTES: Final = 64 * 1024 * 1024
-_MAX_WGC_FILES: Final = 2048
-_MAX_WGC_BASES: Final = 512
-_MAX_ANCESTORS_PER_ROOT: Final = 64
 _HINT_WINDOW_NS: Final = 4 * 60 * 60 * 1_000_000_000
 _LOG_WINDOW_NS: Final = 15 * 60 * 1_000_000_000
 _LOG_RELPATH: Final = ("Documents", "Warcraft III", "Logs", "War3Log.txt")
-_MAX_LOG_BYTES: Final = 64 * 1024 * 1024
 _OPENING_MAP_MARKER: Final = re.compile(r"opening map - ", re.IGNORECASE)
 _MAP_SUFFIXES: Final = frozenset({".w3x", ".w3m", ".w3n"})
-_MAX_PROBED_ROOT_MAPS: Final = 50_000
+_IN_USE_BATCH_SIZE: Final = 512
 _HINT_EVIDENCE_KINDS: Final = frozenset(
     {
         models.EvidenceKind.RECENT_CACHE,
@@ -49,10 +42,10 @@ type _InUseProvider = Callable[[Iterable[Path]], tuple[Path, ...]]
 
 @dataclass(frozen=True, slots=True)
 class _RootScan:
-    """Bounded outcome of one map-root directory sweep.
+    """Complete outcome of one map-root directory sweep.
 
     ``evidence`` keeps only recency-windowed hints; ``map_files`` records
-    every regular map file seen during the same bounded walk so in-use
+    every regular map file seen during the same walk so in-use
     probing can also cover long-lived local maps whose modification time
     predates the hint window.
     """
@@ -62,7 +55,7 @@ class _RootScan:
 
 
 def discover_default_map_roots(extra_roots: Iterable[Path] = ()) -> tuple[Path, ...]:
-    """Return at most eight unique, existing, non-symlink map roots."""
+    """Return every unique, existing, non-symlink map root."""
     roots: list[Path] = []
     seen: set[str] = set()
     candidates = chain(extra_roots, _known_map_roots(Path.home()))
@@ -75,8 +68,6 @@ def discover_default_map_roots(extra_roots: Iterable[Path] = ()) -> tuple[Path, 
         if not _is_real_directory(root):
             continue
         roots.append(root)
-        if len(roots) == _MAX_ROOTS:
-            break
     return tuple(roots)
 
 
@@ -88,7 +79,7 @@ def locate_current_map(
     open_file_provider: _OpenFileProvider | None = None,
     in_use_provider: _InUseProvider | None = None,
 ) -> models.CurrentMapResolution:
-    """Collect bounded direct and hint evidence, then call the pure resolver."""
+    """Collect all direct and hint evidence, then call the pure resolver."""
     roots = discover_default_map_roots(extra_roots)
     process_report = (process_provider or current_map_process.probe_game_processes)()
     if not process_report.available:
@@ -127,13 +118,13 @@ def _in_use_evidence(
     root_map_files: tuple[tuple[Path, int], ...],
     provider: _InUseProvider,
 ) -> tuple[models.MapEvidence, ...]:
-    """Probe bounded map candidates newest-first for live file handles.
+    """Probe every map candidate newest-first for live file handles.
 
     Recency hints keep their head start, but every map file discovered
-    during the bounded root walk joins the queue: a long-lived local map
+    during the root walk joins the queue: a long-lived local map
     that was simply re-hosted carries an old modification time and would
     otherwise never be probed. Candidates are probed in provider-sized
-    batches and never exceed ``_MAX_PROBED_ROOT_MAPS`` paths.
+    batches, without limiting the total number of candidates.
     """
     candidates: dict[str, tuple[Path, int]] = {}
     for item in evidence:
@@ -145,10 +136,10 @@ def _in_use_evidence(
     for path, mtime_ns in root_map_files:
         candidates.setdefault(os.path.normcase(os.fspath(path)), (path, mtime_ns))
     ordered = sorted(candidates.values(), key=lambda item: (-item[1], str(item[0])))
-    paths = [item[0] for item in ordered[:_MAX_PROBED_ROOT_MAPS]]
+    paths = [item[0] for item in ordered]
     hits: list[Path] = []
-    for start in range(0, len(paths), MAX_PROBED_PATHS):
-        hits.extend(provider(paths[start : start + MAX_PROBED_PATHS]))
+    for start in range(0, len(paths), _IN_USE_BATCH_SIZE):
+        hits.extend(provider(paths[start : start + _IN_USE_BATCH_SIZE]))
     return tuple(
         models.MapEvidence(path, models.EvidenceKind.LIVE_FILE) for path in hits
     )
@@ -191,29 +182,34 @@ def _known_map_roots(home: Path) -> tuple[Path, ...]:
 
 
 def _scan_hint_evidence(roots: tuple[Path, ...], now_ns: int) -> _RootScan:
-    pending = deque((root, 0) for root in roots)
+    pending = deque(roots)
     evidence: set[models.MapEvidence] = set()
     map_files: list[tuple[Path, int]] = []
-    seen_entries = 0
-    parsed_configs = 0
-    while pending and seen_entries < _MAX_DIRECTORY_ENTRIES:
-        directory, depth = pending.popleft()
+    seen_directories: set[tuple[int, int]] = set()
+    while pending:
+        directory = pending.popleft()
         try:
+            directory_metadata = directory.lstat()
+            identity = (directory_metadata.st_dev, directory_metadata.st_ino)
+            if (
+                not _real_directory_metadata(directory_metadata)
+                or identity in seen_directories
+            ):
+                continue
+            seen_directories.add(identity)
             entries = os.scandir(directory)
         except OSError:
             continue
         with entries:
-            remaining = _MAX_DIRECTORY_ENTRIES - seen_entries
-            for entry in islice(entries, remaining):
-                seen_entries += 1
+            for entry in entries:
                 try:
                     metadata = entry.stat(follow_symlinks=False)
                 except OSError:
                     continue
                 mode = metadata.st_mode
                 if stat.S_ISDIR(mode):
-                    if depth < _MAX_DEPTH:
-                        pending.append((Path(entry.path), depth + 1))
+                    if _real_directory_metadata(metadata):
+                        pending.append(Path(entry.path))
                     continue
                 if not stat.S_ISREG(mode):
                     continue
@@ -229,8 +225,7 @@ def _scan_hint_evidence(roots: tuple[Path, ...], now_ns: int) -> _RootScan:
                                 mtime_ns=metadata.st_mtime_ns,
                             )
                         )
-                elif suffix == ".wgc" and parsed_configs < _MAX_WGC_FILES:
-                    parsed_configs += 1
+                elif suffix == ".wgc":
                     evidence.update(_wgc_reference_evidence(path, roots, now_ns))
     return _RootScan(tuple(evidence), tuple(map_files))
 
@@ -245,7 +240,7 @@ def _log_hint_evidence(
     The log is append-only history: a last entry written long ago describes a
     previous session's map, so only a log touched within the window counts.
     """
-    payload = _read_bounded_log(home.joinpath(*_LOG_RELPATH), now_ns)
+    payload = _read_recent_file(home.joinpath(*_LOG_RELPATH), now_ns, _LOG_WINDOW_NS)
     if payload is None:
         return ()
     lines = payload.decode("utf-8", errors="replace").splitlines()
@@ -253,29 +248,36 @@ def _log_hint_evidence(
         raw = _opening_map_path(line)
         if raw is None:
             continue
-        resolved = _resolve_log_hint(raw, roots)
-        if resolved is not None:
-            return (models.MapEvidence(resolved, models.EvidenceKind.GAME_LOG),)
+        # An unresolved newer session must not revive an older opening line.
+        return tuple(
+            models.MapEvidence(path, models.EvidenceKind.GAME_LOG)
+            for path in _resolve_log_hints(raw, roots)
+        )
     return ()
 
 
-def _read_bounded_log(path: Path, now_ns: int) -> bytes | None:
-    flags = (
-        os.O_RDONLY
-        | getattr(os, "O_BINARY", 0)
-        | getattr(os, "O_NOFOLLOW", 0)
-        | getattr(os, "O_NONBLOCK", 0)
-    )
+def _read_recent_file(path: Path, now_ns: int, window_ns: int) -> bytes | None:
+    """Read a complete, recent, stable regular file without following links."""
     try:
-        descriptor = os.open(path, flags)
-        with os.fdopen(descriptor, "rb") as stream:
-            metadata = os.fstat(stream.fileno())
-            age_ns = now_ns - metadata.st_mtime_ns
-            if not stat.S_ISREG(metadata.st_mode) or not 0 <= age_ns <= _LOG_WINDOW_NS:
-                return None
-            if metadata.st_size > _MAX_LOG_BYTES:
-                stream.seek(-_MAX_LOG_BYTES, os.SEEK_END)
-            return stream.read(_MAX_LOG_BYTES)
+        metadata = path.lstat()
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or not 0 <= now_ns - metadata.st_mtime_ns <= window_ns
+        ):
+            return None
+        payload, _ = read_bounded_regular_file(
+            path,
+            expected=FileIdentity(metadata.st_dev, metadata.st_ino, metadata.st_size),
+        )
+        after = path.lstat()
+        if (
+            metadata.st_dev,
+            metadata.st_ino,
+            metadata.st_mtime_ns,
+            metadata.st_size,
+        ) != (after.st_dev, after.st_ino, after.st_mtime_ns, after.st_size):
+            return None
+        return payload
     except OSError:
         return None
 
@@ -288,20 +290,21 @@ def _opening_map_path(line: str) -> str | None:
     return raw or None
 
 
-def _resolve_log_hint(raw: str, roots: tuple[Path, ...]) -> Path | None:
+def _resolve_log_hints(raw: str, roots: tuple[Path, ...]) -> tuple[Path, ...]:
     windows_path = PureWindowsPath(raw)
     normalized = raw.replace("\\", "/")
     if windows_path.drive or windows_path.root:
         candidate = Path(normalized)
-        return candidate if _is_regular_map_file(candidate) else None
+        return (candidate,) if _is_regular_map_file(candidate) else ()
     parts = _relative_windows_map_parts(raw)
     if parts is None:
-        return None
+        return ()
+    candidates: dict[str, Path] = {}
     for base in roots:
         candidate = _regular_descendant(base, parts)
         if candidate is not None:
-            return candidate
-    return None
+            candidates.setdefault(os.path.normcase(os.fspath(candidate)), candidate)
+    return tuple(candidates.values())
 
 
 def _wgc_reference_evidence(
@@ -328,28 +331,7 @@ def _wgc_reference_evidence(
 
 
 def _read_recent_wgc(path: Path, now_ns: int) -> bytes | None:
-    flags = (
-        os.O_RDONLY
-        | getattr(os, "O_BINARY", 0)
-        | getattr(os, "O_NOFOLLOW", 0)
-        | getattr(os, "O_NONBLOCK", 0)
-    )
-    try:
-        descriptor = os.open(path, flags)
-        with os.fdopen(descriptor, "rb") as stream:
-            metadata = os.fstat(stream.fileno())
-            regular = stat.S_ISREG(metadata.st_mode)
-            bounded = metadata.st_size <= _MAX_WGC_BYTES
-            if (
-                not regular
-                or not bounded
-                or not _is_recent(metadata.st_mtime_ns, now_ns)
-            ):
-                return None
-            payload = stream.read(_MAX_WGC_BYTES + 1)
-    except OSError:
-        return None
-    return payload if len(payload) <= _MAX_WGC_BYTES else None
+    return _read_recent_file(path, now_ns, _HINT_WINDOW_NS)
 
 
 def _relative_windows_map_parts(raw_path: str) -> tuple[str, ...] | None:
@@ -371,7 +353,7 @@ def _wgc_bases(config_path: Path, roots: tuple[Path, ...]) -> tuple[Path, ...]:
     for root in roots:
         candidates.extend(
             parent
-            for parent in islice(chain((root,), root.parents), _MAX_ANCESTORS_PER_ROOT)
+            for parent in chain((root,), root.parents)
             if "warcraft" in parent.name.casefold()
         )
     bases: list[Path] = []
@@ -382,8 +364,6 @@ def _wgc_bases(config_path: Path, roots: tuple[Path, ...]) -> tuple[Path, ...]:
             continue
         seen.add(key)
         bases.append(base)
-        if len(bases) == _MAX_WGC_BASES:
-            break
     return tuple(bases)
 
 
@@ -394,12 +374,12 @@ def _regular_descendant(base: Path, parts: tuple[str, ...]) -> Path | None:
     for index, part in enumerate(parts):
         current /= part
         try:
-            mode = current.lstat().st_mode
+            metadata = current.lstat()
         except OSError:
             return None
         final_part = index == len(parts) - 1
-        if (final_part and not stat.S_ISREG(mode)) or (
-            not final_part and not stat.S_ISDIR(mode)
+        if (final_part and not stat.S_ISREG(metadata.st_mode)) or (
+            not final_part and not _real_directory_metadata(metadata)
         ):
             return None
     return current
@@ -407,9 +387,16 @@ def _regular_descendant(base: Path, parts: tuple[str, ...]) -> Path | None:
 
 def _is_real_directory(path: Path) -> bool:
     try:
-        return stat.S_ISDIR(path.lstat().st_mode)
+        return _real_directory_metadata(path.lstat())
     except OSError:
         return False
+
+
+def _real_directory_metadata(metadata: os.stat_result) -> bool:
+    return stat.S_ISDIR(metadata.st_mode) and not (
+        (getattr(metadata, "st_file_attributes", 0) or 0)
+        & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0)
+    )
 
 
 def _is_regular_map_file(path: Path) -> bool:

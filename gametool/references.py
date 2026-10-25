@@ -16,11 +16,12 @@
 
 from __future__ import annotations
 
+from .script_sources import analysis_script_sources
+
 from collections.abc import Mapping
 
 import re
 
-from .script_sources import analysis_script_texts
 
 _LEVEL_LABEL_RE = re.compile(r" \(等级\d+\)$")  # 反向去重时剥掉标签里的"(等级N)"
 
@@ -232,9 +233,9 @@ def build_reference_graph(md) -> None:
     roots = set(referenced_by.keys())
     from .script_scan import scan_all_referenced_codes
 
-    for _source, script_text in analysis_script_texts(md):
+    for _source, script_text, lua in analysis_script_sources(md):
         # 全类 native 提码 + 所有 'xxxx' 字面量 + BJ 隐式码，孤立判定宁滥勿缺
-        roots.update(scan_all_referenced_codes(script_text))
+        roots.update(scan_all_referenced_codes(script_text, lua=lua))
     for u in getattr(md, "units", []) or []:
         roots.add(getattr(u, "type_id", ""))
     for d in getattr(md, "doodads", []) or []:

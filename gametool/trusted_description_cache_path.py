@@ -17,8 +17,8 @@ from .trusted_description_cache_models import (
 )
 
 
-_MAX_METADATA_BYTES: Final = 4 * 1024 * 1024
-_MAX_PAYLOAD_BYTES: Final = 512 * 1024 * 1024
+_MAX_METADATA_BYTES: Final[int | None] = None
+_MAX_PAYLOAD_BYTES: Final[int | None] = None
 
 
 def read_trusted_cache_path(root: Path) -> TrustedDescriptionCachePayloads:
@@ -74,7 +74,7 @@ def _require_exact_inventory(root: Path) -> None:
         raise TrustedDescriptionCacheError("owned cache is partial or has unsafe files")
 
 
-def _read_stable(path: Path, maximum: int) -> bytes:
+def _read_stable(path: Path, maximum: int | None) -> bytes:
     try:
         first, identity = read_bounded_regular_file(path, maximum)
         second, _repeated = read_bounded_regular_file(

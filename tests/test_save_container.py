@@ -9,7 +9,6 @@ from typing import Final
 import pytest
 
 from gametool.save_container import (
-    MAX_SAVE_CONTAINER_BLOCKS,
     looks_like_save_container,
     parse_save_container_header,
     unpack_save_container,
@@ -115,10 +114,10 @@ def test_out_of_range_header_size_is_rejected(header_size: int) -> None:
         unpack_save_container(bytes(corrupted))
 
 
-def test_block_count_over_limit_is_rejected() -> None:
+def test_block_count_beyond_available_headers_is_rejected() -> None:
     container = bytearray(_build_container(b"payload"))
     struct.pack_into(
-        "<I", container, len(SIGNATURE) + 16, MAX_SAVE_CONTAINER_BLOCKS + 1
+        "<I", container, len(SIGNATURE) + 16, len(container) // BLOCK_HEADER_BYTES + 1
     )
 
     with pytest.raises(ValueError, match="block count"):
@@ -162,3 +161,48 @@ def test_missing_block_header_is_rejected() -> None:
 
     with pytest.raises(ValueError):
         unpack_save_container(truncated)
+
+
+def test_more_than_4096_blocks_are_decoded_in_full() -> None:
+    raw = b"x" * 4097
+    payload = unpack_save_container(_build_container(raw, block_size=1))
+    assert payload.raw == raw
+    assert len(payload.blocks) == 4097
+
+
+def test_total_declared_size_must_match_all_blocks() -> None:
+    container = bytearray(_build_container(b"payload"))
+    struct.pack_into("<I", container, len(SIGNATURE) + 12, 8)
+    with pytest.raises(ValueError, match="container decompressed size"):
+        unpack_save_container(bytes(container))
+
+
+def test_zero_declared_block_size_cannot_expand_unboundedly() -> None:
+    container = bytearray(_build_container(b"x" * 100_000))
+    compressed = bytes(container[48 + BLOCK_HEADER_BYTES :])
+    struct.pack_into(
+        "<III",
+        container,
+        48,
+        len(compressed),
+        0,
+        _checksum(compressed, len(compressed), 0),
+    )
+    with pytest.raises(ValueError, match="declared 0"):
+        unpack_save_container(bytes(container))
+
+
+def test_sync_flush_marker_must_be_present_for_an_unfinished_stream() -> None:
+    container = bytearray(_build_container(b"payload"))
+    compressed = bytes(container[48 + BLOCK_HEADER_BYTES : -4])
+    struct.pack_into(
+        "<III",
+        container,
+        48,
+        len(compressed),
+        7,
+        _checksum(compressed, len(compressed), 7),
+    )
+    del container[-4:]
+    with pytest.raises(ValueError, match="declared"):
+        unpack_save_container(bytes(container))

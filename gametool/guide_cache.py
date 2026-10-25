@@ -33,7 +33,7 @@ __all__ = (
 # v7: 战役容器 (.w3n) 报告尾附逐关查询指引 (旧 v6 容器报告无解释)——
 # 旧 v6 整体退役。
 # v8: 容器 --section 空段改为输出同一指引 (旧 v7 空段什么都不印)——旧 v7 退役。
-GUIDE_CACHE_VERSION = "guide-v10"  # v10: shops/drops 来源行补 @预放置坐标 (near 联动)
+GUIDE_CACHE_VERSION = "guide-v24"  # v24: 完整 return 范围、静态返回值与产出证据
 
 
 def report_cache_path(map_path: str) -> Path | None:

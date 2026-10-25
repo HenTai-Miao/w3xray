@@ -88,14 +88,6 @@ UNIT_FIELD_LAYOUT: "dict[str, tuple[int, str]]" = {
     "inventory": (0x1F8, "背包列表指针 (Still4 表 ItemsListOffset 同值)"),
 }
 
-# owned_units 现为全量清单 (不再有部分视图告警的必要)。
-# 坐标合理上限由引擎几何量出, 不是拍脑袋数: 经典版引擎最大地图 480x480 格、
-# 每格 128 单位 -> 任何真实游戏坐标 |x|,|y| <= 61440; x2 覆盖出界停靠点与
-# 镜头边距余量。超限视为解析失败 (垃圾包装指针); inf 同样被此校验拦下。
-_ENGINE_MAX_TILES = 480
-_TILE_UNITS = 128
-_POS_SPAN_LIMIT = float(_ENGINE_MAX_TILES * _TILE_UNITS * 2)
-
 
 _FOURCC_RE = re.compile(r"[A-Za-z][0-9A-Za-z]{3}")
 
@@ -452,11 +444,8 @@ def profile_from_dict(d: dict[str, Any]) -> LiveBuildProfile:
     形状校验学自 trainer game_profile: 尺寸上限 / 逐字段类型严格化 /
     版本四段格式 — 导入时全部校验完, 坏档案在使用前被拒。
     """
-    import json as _json
     import re as _re
 
-    if len(_json.dumps(d, default=str)) > 2 * 1024 * 1024:
-        raise ValueError("档案超出 2MiB 尺寸上限 (疑似损坏或非档案文件)")
     v = int(d.get("schema_version", 1))
     if v != 1:
         raise ValueError(
@@ -585,10 +574,12 @@ class MemoryReader:
     """对 (基址, 字节) 区域列表的只读随机访问。"""
 
     def __init__(self, regions):
+        from .memory_regions import contiguous_regions
+
         pairs = [(int(base), bytes(data)) for base, data in regions if data]
         pairs.sort()
-        self._data = dict(pairs)
-        self._bases = [base for base, _ in pairs]
+        self._data = dict(contiguous_regions(pairs))
+        self._bases = sorted(self._data)
 
     def read(self, addr: int, size: int) -> bytes | None:
         index = bisect.bisect_right(self._bases, addr) - 1
@@ -658,7 +649,8 @@ class HandleSystem:
     @property
     def valid(self) -> bool:
         return bool(self.manager) and all(
-            t.base and 0 < t.bound < 0x200000 for t in self.tables
+            _HEAP_LO <= t.base < _HEAP_HI and 0 < t.bound <= (_HEAP_HI - t.base) // 8
+            for t in self.tables
         )
 
     def resolve(self, lo: int, hi: int) -> int | None:
@@ -791,11 +783,9 @@ def read_unit_pos(reader: MemoryReader, addr: int) -> tuple[float, float]:
     if not raw:
         return (0.0, 0.0)
     x, y = struct.unpack("<ff", raw)
-    # NaN 与任何比较都是 False, 会绕过跨度校验一路漏到排序的 round() 才炸
-    # (堆窗口开全后垃圾包装指针增多, 实证); inf 则被跨度校验正常拦下。
-    if math.isnan(x) or math.isnan(y):
-        return (0.0, 0.0)
-    if abs(x) > _POS_SPAN_LIMIT or abs(y) > _POS_SPAN_LIMIT:
+    # Coordinates are float32 fields. Reject non-finite values while retaining
+    # every finite off-map coordinate as evidence from the actual structure.
+    if not math.isfinite(x) or not math.isfinite(y):
         return (0.0, 0.0)
     return (x, y)
 
@@ -1229,21 +1219,26 @@ def _looks_like_handle_manager(
     ):
         base = reader.u32(hm + base_off)
         bound = reader.u32(hm + bound_off)
-        if not (_HEAP_LO <= base < _HEAP_HI) or not (0 < bound < 0x200000):
+        if not (_HEAP_LO <= base < _HEAP_HI) or not (
+            0 < bound <= (_HEAP_HI - base) // 8
+        ):
             return False
-        for index in range(min(bound, 128)):
-            if reader.u32(base + index * 8) != 0xFFFFFFFE:
-                continue
-            wrapper = reader.u32(base + index * 8 + 4)
-            if not (_HEAP_LO <= wrapper < _HEAP_HI):
-                continue
-            if reader.u32(wrapper + o.wrapper_alive_off) != 0:
-                continue
-            obj = reader.u32(wrapper + o.wrapper_obj_off)
-            if _HEAP_LO <= obj < _HEAP_HI:
-                hits += 1
-                if hits >= 2:
-                    return True
+        for region_base, data in reader.iter_regions():
+            start = max(0, (region_base - base + 7) // 8)
+            end = min(bound, (region_base + len(data) - base) // 8)
+            for index in range(start, end):
+                marker, wrapper = struct.unpack_from(
+                    "<II", data, base + index * 8 - region_base
+                )
+                if marker != 0xFFFFFFFE or not (_HEAP_LO <= wrapper < _HEAP_HI):
+                    continue
+                if reader.u32(wrapper + o.wrapper_alive_off) != 0:
+                    continue
+                obj = reader.u32(wrapper + o.wrapper_obj_off)
+                if _HEAP_LO <= obj < _HEAP_HI:
+                    hits += 1
+                    if hits >= 2:
+                        return True
     return False
 
 
@@ -1463,7 +1458,7 @@ def selected_unit(
     system: HandleSystem,
     o: LiveHandleOffsets,
     dll_base: int,
-    max_walk: int = 12,
+    max_walk: int | None = None,
 ) -> UnitInventory | None:
     """读当前选中单位 (选择链), 失败/未选中返回 None。"""
     vmctx = reader.u32(dll_base + o.vmctx_global_rva)
@@ -1477,9 +1472,11 @@ def selected_unit(
     if not (_HEAP_LO <= selmgr < _HEAP_HI):
         return None
     entry = reader.u32(selmgr + o.sel_entry_off)
-    for _ in range(max_walk):
+    seen: set[int] = set()
+    while entry not in seen and (max_walk is None or len(seen) < max_walk):
         if not (_HEAP_LO <= entry < _HEAP_HI):
             break
+        seen.add(entry)
         lo = reader.u32(entry + o.entry_pair_off)
         hi = reader.u32(entry + o.entry_pair_off + 4)
         unit = system.resolve(lo, hi)

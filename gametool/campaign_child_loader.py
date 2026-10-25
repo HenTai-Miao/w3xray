@@ -1,4 +1,4 @@
-"""Bounded loading of map archives embedded in a campaign."""
+"""Load every map archive embedded in a campaign, preserving diagnostics."""
 
 from __future__ import annotations
 
@@ -15,7 +15,6 @@ from .extraction_diagnostics import (
     DiagnosticSeverity,
     ExtractionDiagnostic,
     read_component,
-    record_component_parse_issue,
     record_diagnostic,
 )
 from .load_context import MapLoadContext
@@ -44,21 +43,12 @@ def load_campaign_children(
     load_context: MapLoadContext,
     load_child: ChildMapLoader,
     *,
-    max_children: int,
-    max_retained_bytes: int,
-    max_read_bytes: int,
+    max_retained_bytes: int | None = None,
+    max_read_bytes: int | None = None,
 ) -> None:
-    """Load campaign children within the caller-provided count and byte limits."""
-    if len(inner_maps) > max_children:
-        record_component_parse_issue(
-            parent,
-            "campaign-child",
-            parent.path,
-            f"campaign child count {len(inner_maps)} exceeds {max_children}",
-            stage="enumerate",
-        )
+    """Visit all children; byte budgets apply only when explicitly supplied."""
     budget = CampaignByteBudget(max_retained_bytes, max_read_bytes)
-    for inner in inner_maps[:max_children]:
+    for inner in inner_maps:
         source: BytesArchiveSource | None = None
         try:
             remaining_bytes = budget.remaining
@@ -81,7 +71,7 @@ def load_campaign_children(
             if data is None:
                 continue
             budget.reconcile_read(reserved_bytes, len(data))
-            if len(data) > remaining_bytes:
+            if remaining_bytes is not None and len(data) > remaining_bytes:
                 record_campaign_budget_issue(parent, inner)
                 continue
             source = BytesArchiveSource(inner, data)

@@ -11,9 +11,10 @@
 from __future__ import annotations
 
 import json
+import math
 import os
-import re
-from typing import TYPE_CHECKING
+from collections.abc import Mapping
+from typing import TYPE_CHECKING, cast
 
 __all__ = (
     "GuideMinimapError",
@@ -31,7 +32,14 @@ if TYPE_CHECKING:
 
     from .map_data import MapData
 
-from .script_sources import analysis_script_texts
+from .placement_positions import (
+    Point,
+    PositionGroups,
+    script_position_groups,
+    unit_position_groups,
+)
+from .static_numbers import format_number
+from .presentation_safety import single_line_text
 
 # 点位 = (名称, 世界X, 世界Y)
 Mark = tuple[str, float, float]
@@ -42,27 +50,9 @@ class GuideMinimapError(ValueError):
     """小地图标注图生成失败, message 面向命令行用户。"""
 
 
-# 与 pack_query_cli._CREATE_UNIT_RE 同一模式: 脚本 CreateUnit 字面量坐标
-_CREATE_UNIT_RE = re.compile(
-    r"CreateUnit\s*\(\s*\w+\s*,\s*'(\w{4})'\s*,\s*(-?\s?[\d.]+)\s*,\s*(-?\s?[\d.]+)"
-)
-
-
-def script_unit_positions(md: MapData) -> dict[str, tuple[float, float]]:
-    """war3mapUnits.doo 缺失 (全脚本放置) 的图: 从脚本 CreateUnit 字面量提取位置。
-
-    同一 fourcc 多次 CreateUnit 只留首次 (商店/NPC 通常只有一个固定放置点)。
-    """
-    positions: dict[str, tuple[float, float]] = {}
-    for _source, text in analysis_script_texts(md):
-        for match in _CREATE_UNIT_RE.finditer(text):
-            code = match.group(1)
-            if code not in positions:
-                positions[code] = (
-                    float(match.group(2).replace(" ", "")),
-                    float(match.group(3).replace(" ", "")),
-                )
-    return positions
+def script_unit_positions(md: MapData) -> PositionGroups:
+    """Return every distinct static creation location for each unit rawcode."""
+    return script_position_groups(md)
 
 
 def playable_bounds(md: MapData) -> Bounds | None:
@@ -78,7 +68,13 @@ def playable_bounds(md: MapData) -> Bounds | None:
         right - margin_right,
         top - margin_top,
     )
-    if playable[2] - playable[0] <= 0 or playable[3] - playable[1] <= 0:
+    if (
+        not all(math.isfinite(value) for value in playable)
+        or not math.isfinite(playable[2] - playable[0])
+        or not math.isfinite(playable[3] - playable[1])
+        or playable[2] - playable[0] <= 0
+        or playable[3] - playable[1] <= 0
+    ):
         return None
     return playable
 
@@ -102,11 +98,11 @@ def crop_to_playable(img: Image, bounds: Bounds) -> Image:
     img_aspect = img.width / img.height
     if abs(img_aspect - aspect) <= 0.01:
         return img
-    band_h = round(img.width / aspect)
+    band_h = max(1, round(img.width / aspect))
     if band_h < img.height:
         top = (img.height - band_h) // 2
         return img.crop((0, top, img.width, top + band_h))
-    band_w = round(img.height * aspect)
+    band_w = max(1, round(img.height * aspect))
     if band_w < img.width:
         left = (img.width - band_w) // 2
         return img.crop((left, 0, left + band_w, img.height))
@@ -114,7 +110,7 @@ def crop_to_playable(img: Image, bounds: Bounds) -> Image:
 
 
 def shop_marks(
-    md: MapData, positions: dict[str, tuple[float, float]]
+    md: MapData, positions: Mapping[str, Point | tuple[Point, ...]]
 ) -> tuple[Mark, ...]:
     """带 usei 货架且有放置坐标的单位 → (名, X, Y) 列表; 坐标来自 load_minimap_assets。"""
     marks: list[Mark] = []
@@ -127,11 +123,17 @@ def shop_marks(
         )
         if not has_shelf:
             continue
-        position = positions.get(obj.obj_id)
-        if position is None:
+        found = positions.get(obj.obj_id)
+        if not found:
             continue
         seen.add(obj.obj_id)
-        marks.append((obj.name or obj.obj_id, position[0], position[1]))
+        points = (
+            (cast(Point, found),)
+            if isinstance(found[0], (int, float))
+            else cast(tuple[Point, ...], found)
+        )
+        for x, y in points:
+            marks.append((obj.name or obj.obj_id, x, y))
     return tuple(marks)
 
 
@@ -149,15 +151,23 @@ def extra_marks_from_json(path: str) -> tuple[Mark, ...]:
             or not isinstance(entry[0], str)
             or not isinstance(entry[1], (int, float))
             or not isinstance(entry[2], (int, float))
+            or isinstance(entry[1], bool)
+            or isinstance(entry[2], bool)
         ):
             raise GuideMinimapError(f"自定义点位第 {index + 1} 项格式错误: {entry!r}")
-        marks.append((entry[0], float(entry[1]), float(entry[2])))
+        try:
+            x, y = float(entry[1]), float(entry[2])
+        except OverflowError as exc:
+            raise GuideMinimapError(f"自定义点位第 {index + 1} 项坐标不可表示") from exc
+        if not math.isfinite(x) or not math.isfinite(y):
+            raise GuideMinimapError(f"自定义点位第 {index + 1} 项坐标必须是有限数值")
+        marks.append((entry[0], x, y))
     return tuple(marks)
 
 
 def load_minimap_assets(
     md: MapData,
-) -> tuple[Image | None, dict[str, tuple[float, float]]]:
+) -> tuple[Image | None, PositionGroups]:
     """一次打开归档: 返回 (小地图图, 单位放置表)。
 
     load_map 默认不解析 doo 放置 (md.units 常为空), 这里直接读 war3mapUnits.doo;
@@ -165,12 +175,11 @@ def load_minimap_assets(
     """
     source = md.archive_source
     if source is None:
-        return None, {}
+        return None, unit_position_groups(md)
     from .blp import decode_blp
     from .doo import parse_units
 
-    # 证据优先级: war3mapUnits.doo 放置 > md.units (同源) > 脚本 CreateUnit 字面量
-    positions: dict[str, tuple[float, float]] = dict(script_unit_positions(md))
+    extra_units = []
     img = None
     with source.open() as archive:
         if archive.has_file("war3mapMap.blp"):
@@ -179,13 +188,12 @@ def load_minimap_assets(
                 img = decoded.convert("RGB")
         if archive.has_file("war3mapUnits.doo"):
             try:
-                for unit in parse_units(archive.read_file("war3mapUnits.doo")):
-                    positions[unit.type_id] = (unit.x, unit.y)
-            except Exception:
-                pass
-    for unit in md.units:
-        positions[unit.type_id] = (unit.x, unit.y)
-    return img, positions
+                extra_units = parse_units(archive.read_file("war3mapUnits.doo"))
+            except Exception as exc:
+                raise GuideMinimapError(
+                    f"预放置单位读取失败，无法确认全部点位: {exc}"
+                ) from exc
+    return img, unit_position_groups(md, extra_units)
 
 
 def _load_font(size: int):
@@ -225,31 +233,50 @@ def render_marks(
     """裁剪后的底图 ×scale 放大, 画经纬网格/编号圆点/右侧图例, 存 PNG。"""
     from PIL import Image, ImageDraw
 
+    if (
+        scale <= 0
+        or not all(math.isfinite(value) for value in bounds)
+        or bounds[2] <= bounds[0]
+        or bounds[3] <= bounds[1]
+        or not math.isfinite(bounds[2] - bounds[0])
+        or not math.isfinite(bounds[3] - bounds[1])
+    ):
+        raise GuideMinimapError("小地图需要有限、递增的世界边界和正数缩放")
+    if any(not math.isfinite(x) or not math.isfinite(y) for _name, x, y in marks):
+        raise GuideMinimapError("小地图点位包含无效坐标，无法绘制完整点位")
     upscaled = img.resize((img.width * scale, img.height * scale))
     width, height = upscaled.size
     draw = ImageDraw.Draw(upscaled)
-    span = bounds[2] - bounds[0]
+    span = max(bounds[2] - bounds[0], bounds[3] - bounds[1])
     step = 8192.0
     while span / step > 8:
         step *= 2
     while span / step < 3 and step > 1024:
         step //= 2
     gfont = _load_font(13)
-    gx = bounds[0] + step
-    while gx < bounds[2] - 1:
+    for tick in range(1, math.ceil((bounds[2] - bounds[0]) / step)):
+        gx = bounds[0] + tick * step
+        if not bounds[0] < gx < bounds[2]:
+            continue
         px, _ = world_to_pixel(gx, 0.0, bounds, width, height)
         draw.line([(px, 0), (px, height)], fill=(255, 255, 255), width=1)
-        draw.text((px + 3, 3), f"X{int(gx)}", fill=(255, 255, 160), font=gfont)
-        gx += step
-    gy = bounds[1] + step
-    while gy < bounds[3] - 1:
+        draw.text(
+            (px + 3, 3), f"X{format_number(gx)}", fill=(255, 255, 160), font=gfont
+        )
+    for tick in range(1, math.ceil((bounds[3] - bounds[1]) / step)):
+        gy = bounds[1] + tick * step
+        if not bounds[1] < gy < bounds[3]:
+            continue
         _, py = world_to_pixel(0.0, gy, bounds, width, height)
         draw.line([(0, py), (width, py)], fill=(255, 255, 255), width=1)
-        draw.text((3, py + 3), f"Y{int(gy)}", fill=(255, 255, 160), font=gfont)
-        gy += step
+        draw.text(
+            (3, py + 3), f"Y{format_number(gy)}", fill=(255, 255, 160), font=gfont
+        )
     sfont = _load_font(14)
     radius = max(9, width // 85)
     for index, (name, wx, wy) in enumerate(marks):
+        if not bounds[0] <= wx <= bounds[2] or not bounds[1] <= wy <= bounds[3]:
+            continue
         px, py = world_to_pixel(wx, wy, bounds, width, height)
         color = _PALETTE[index % len(_PALETTE)]
         draw.ellipse(
@@ -267,13 +294,34 @@ def render_marks(
             font=sfont,
         )
     legend_pad = 36
-    legend_w = 430
-    canvas_h = max(height, len(marks) * 34 + 145)
+    tfont = _load_font(22)
+    font18 = _load_font(18)
+    small = _load_font(14)
+    title = single_line_text(title)
+    captions = [
+        f"{index + 1}  {single_line_text(name)}   ({format_number(wx)}, {format_number(wy)})"
+        + (
+            "（范围外）"
+            if not bounds[0] <= wx <= bounds[2] or not bounds[1] <= wy <= bounds[3]
+            else ""
+        )
+        for index, (name, wx, wy) in enumerate(marks)
+    ]
+    footers = (
+        f"坐标范围: X {format_number(bounds[0])}~{format_number(bounds[2])}  Y {format_number(bounds[1])}~{format_number(bounds[3])}  上=北",
+        "圆点编号与右侧图例一一对应",
+        "静态点位：预放置、脚本创建位置与自定义点",
+    )
+    text_widths = [draw.textbbox((0, 0), title, font=tfont)[2]]
+    text_widths.extend(
+        draw.textbbox((0, 0), caption, font=font18)[2] + 28 for caption in captions
+    )
+    text_widths.extend(draw.textbbox((0, 0), line, font=small)[2] for line in footers)
+    legend_w = math.ceil(max(430, max(text_widths) + 2 * legend_pad + 8))
+    canvas_h = max(height, len(marks) * 34 + 18 + 48 + 8 + len(footers) * 26 + 24)
     canvas = Image.new("RGB", (width + legend_w, canvas_h), (16, 16, 20))
     canvas.paste(upscaled, (0, 0))
     legend = ImageDraw.Draw(canvas)
-    tfont = _load_font(22)
-    font18 = _load_font(18)
     cursor_y = 18
     legend.text((width + legend_pad, cursor_y), title, fill=(245, 245, 245), font=tfont)
     cursor_y += 48
@@ -287,17 +335,13 @@ def render_marks(
         )
         legend.text(
             (width + legend_pad + 28, cursor_y),
-            f"{index + 1}  {name}   ({int(wx)}, {int(wy)})",
+            captions[index],
             fill=(215, 215, 215),
             font=font18,
         )
         cursor_y += 34
     cursor_y += 8
-    small = _load_font(14)
-    for line in (
-        f"坐标范围: X {int(bounds[0])}~{int(bounds[2])}  Y {int(bounds[1])}~{int(bounds[3])}  上=北",
-        "圆点编号与右侧图例一一对应",
-    ):
+    for line in footers:
         legend.text(
             (width + legend_pad, cursor_y), line, fill=(150, 150, 150), font=small
         )

@@ -25,7 +25,7 @@ def read_owned_regular_file(
     name: str,
     named: os.stat_result,
     root: Path,
-    maximum: int,
+    maximum: int | None,
 ) -> bytes:
     """Double-read one held regular-file identity and its anchored name."""
     path = root / name
@@ -62,27 +62,31 @@ def read_owned_regular_file(
             os.close(descriptor)
 
 
-def _read_once(descriptor: int, path: Path, maximum: int) -> bytes:
+def _read_once(descriptor: int, path: Path, maximum: int | None) -> bytes:
     _ = os.lseek(descriptor, 0, os.SEEK_SET)
     payload = bytearray()
+    expected_size = os.fstat(descriptor).st_size
+    ceiling = expected_size if maximum is None else min(expected_size, maximum)
     while True:
         chunk = os.read(
             descriptor,
-            min(_READ_CHUNK_BYTES, maximum + 1 - len(payload)),
+            min(_READ_CHUNK_BYTES, ceiling + 1 - len(payload)),
         )
         if not chunk:
             return bytes(payload)
         payload.extend(chunk)
-        if len(payload) > maximum:
+        if maximum is not None and len(payload) > maximum:
             raise TrustedDescriptionCacheError(
                 f"owned file exceeds size limit {maximum}: {path}"
             )
+        if len(payload) > expected_size:
+            raise TrustedDescriptionCacheError(f"owned file grew while reading: {path}")
 
 
-def _require_regular(details: os.stat_result, path: Path, maximum: int) -> None:
+def _require_regular(details: os.stat_result, path: Path, maximum: int | None) -> None:
     if not stat.S_ISREG(details.st_mode):
         raise TrustedDescriptionCacheError(f"owned path is not a regular file: {path}")
-    if details.st_size > maximum:
+    if maximum is not None and details.st_size > maximum:
         raise TrustedDescriptionCacheError(
             f"owned file exceeds size limit {maximum}: {path}"
         )
@@ -92,7 +96,7 @@ def _require_file_state(
     details: os.stat_result,
     expected: _FileState,
     path: Path,
-    maximum: int,
+    maximum: int | None,
 ) -> None:
     _require_regular(details, path, maximum)
     if _file_state(details) != expected:

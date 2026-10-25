@@ -7,6 +7,7 @@ from typing import assert_never
 
 from .base_names import BASE_NAMES
 from .object_text_roles import classify_text_field
+from .static_numbers import format_number
 from .textobj import _sub_westring
 from .wts import resolve
 
@@ -16,7 +17,7 @@ def resolved_source_value(value: int | float | str, wts: Mapping[int, str]) -> s
     resolved = resolve(value, wts)
     match resolved:
         case float() as number:
-            formatted = str(int(number)) if number.is_integer() else f"{number:.9g}"
+            formatted = format_number(number)
         case int() as number:
             formatted = str(number)
         case str() as text:

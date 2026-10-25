@@ -14,7 +14,6 @@ from .mpq_storage import open_regular_binary
 
 _MAGIC: Final = b"MPQ\x1a"
 _ALIGNMENT: Final = 512
-_SCAN_LIMIT: Final = 64 * 1024 * 1024
 
 
 class ArchiveDiagnosisKind(StrEnum):
@@ -90,7 +89,7 @@ def _diagnose_readable(
     file_size: int,
     error: BaseException | None,
 ) -> ArchiveOpenDiagnosis:
-    scan_end = min(file_size, _SCAN_LIMIT)
+    scan_end = file_size
     first_damage: tuple[str, ...] | None = None
     first_unsupported: tuple[str, ...] | None = None
     war3_map = False

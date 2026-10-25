@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from .knowledge_io import tsv as _tsv
+from .static_numbers import format_number as _num
 from .w3world import Camera, Region, Sound
 
 
@@ -97,12 +98,6 @@ def _maybe_num(value: float | None) -> str:
     if value is None:
         return ""
     return _num(value)
-
-
-def _num(value: float) -> str:
-    if value == int(value):
-        return str(int(value))
-    return f"{value:.4g}"
 
 
 def _yes_no(value: bool) -> str:

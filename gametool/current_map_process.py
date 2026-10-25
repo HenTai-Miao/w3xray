@@ -1,11 +1,10 @@
-"""Bounded operating-system probes linked to Warcraft game processes."""
+"""Complete operating-system observations linked to Warcraft processes."""
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 import csv
 from dataclasses import dataclass
-from itertools import islice
 import os
 from pathlib import Path
 from typing import Final
@@ -14,8 +13,6 @@ from .current_map_models import EvidenceKind, GameProcess, MapEvidence
 from .current_map_probe_command import (
     COMMAND_OUTPUT_LIMIT,
     COMMAND_TIMEOUT_SECONDS,
-    MAX_COMMAND_CHARS,
-    MAX_PROBE_PIDS,
     ProbeIssue as ProbeIssue,
     ProbeParseError,
     is_map_path,
@@ -39,16 +36,12 @@ _POWERSHELL_SCRIPT: Final = (
     "Get-CimInstance Win32_Process|Select-Object ProcessId,Name,CommandLine|"
     "ConvertTo-Csv -NoTypeInformation"
 )
-_MAX_FDS_PER_PID: Final = 8192
-_MAX_ROOTS: Final = 64
-_MAX_ARGUMENT_OCCURRENCES: Final = 1024
-_MAX_EXPLICIT_TOKENS: Final = 4096
 _LOADFILE_FLAGS: Final = frozenset({"-loadfile", "--loadfile"})
 
 
 @dataclass(frozen=True, slots=True)
 class ProcessProbeReport:
-    """Bounded result of discovering Warcraft game processes."""
+    """Result of discovering every reported Warcraft game process."""
 
     processes: tuple[GameProcess, ...]
     available: bool
@@ -57,7 +50,7 @@ class ProcessProbeReport:
 
 @dataclass(frozen=True, slots=True)
 class OpenMapProbeReport:
-    """Bounded direct-map observations linked to supplied game processes."""
+    """Direct-map observations linked to supplied game processes."""
 
     evidence: tuple[MapEvidence, ...]
     available: bool
@@ -65,7 +58,7 @@ class OpenMapProbeReport:
 
 
 def probe_game_processes() -> ProcessProbeReport:
-    """Discover actual Warcraft game processes through a bounded platform tool."""
+    """Discover actual Warcraft game processes through a platform tool."""
     if os.name not in {"posix", "nt"}:
         return ProcessProbeReport((), False, ProbeIssue.UNSUPPORTED_PLATFORM)
     if os.name == "posix":
@@ -100,10 +93,8 @@ def probe_game_processes() -> ProcessProbeReport:
 
 
 def probe_open_map_files(processes: Iterable[GameProcess]) -> OpenMapProbeReport:
-    """Find map files opened by at most eight supplied game process IDs."""
-    selected = tuple(
-        islice((item for item in processes if item.pid > 0), MAX_PROBE_PIDS)
-    )
+    """Find map files opened by every supplied valid game process ID."""
+    selected = tuple(item for item in processes if item.pid > 0)
     if not selected:
         return OpenMapProbeReport((), True)
     if os.name != "posix":
@@ -145,12 +136,12 @@ def probe_proc_open_maps(
     processes: tuple[GameProcess, ...],
     proc_root: Path,
 ) -> OpenMapProbeReport:
-    """Inspect bounded Linux proc fd symlinks for supplied process IDs."""
+    """Inspect all Linux proc fd symlinks for supplied process IDs."""
     if not proc_root.is_dir():
         return OpenMapProbeReport((), False, ProbeIssue.TOOL_UNAVAILABLE)
     evidence: list[MapEvidence] = []
     denied = False
-    for process in processes[:MAX_PROBE_PIDS]:
+    for process in processes:
         fd_dir = proc_root / str(process.pid) / "fd"
         try:
             entries = os.scandir(fd_dir)
@@ -160,7 +151,7 @@ def probe_proc_open_maps(
             denied = True
             continue
         with entries:
-            for entry in islice(entries, _MAX_FDS_PER_PID):
+            for entry in entries:
                 try:
                     target = os.readlink(entry.path)
                 except PermissionError:
@@ -172,8 +163,6 @@ def probe_proc_open_maps(
                 if not path.is_absolute():
                     path = (fd_dir / path).resolve(strict=False)
                 if is_map_path(path):
-                    # 377: 旧 4096 evidence cap 静默截断已删 (与 lsof 侧同判) —
-                    # is_map_path 过滤后证据天然少量, _MAX_FDS_PER_PID 单层兑底
                     evidence.append(
                         MapEvidence(path, EvidenceKind.DIRECT_OPEN, process.pid)
                     )
@@ -186,22 +175,14 @@ def explicit_argument_evidence(
     processes: Iterable[GameProcess],
     roots: Iterable[Path],
 ) -> tuple[MapEvidence, ...]:
-    """Resolve bounded loadfile map arguments against bounded search roots."""
-    resolved_roots = tuple(
-        root.expanduser().resolve(strict=False) for root in islice(roots, _MAX_ROOTS)
-    )
+    """Resolve all loadfile map arguments against every supplied search root."""
+    resolved_roots = tuple(root.expanduser().resolve(strict=False) for root in roots)
     evidence: set[MapEvidence] = set()
-    examined = 0
-    for process in islice(processes, MAX_PROBE_PIDS):
-        if len(process.command_line) > MAX_COMMAND_CHARS:
-            continue
-        tokens = parse_command_tokens(process.command_line, limit=_MAX_EXPLICIT_TOKENS)
+    for process in processes:
+        tokens = parse_command_tokens(process.command_line)
         for index, token in enumerate(tokens):
             if token.casefold() not in _LOADFILE_FLAGS:
                 continue
-            if examined >= _MAX_ARGUMENT_OCCURRENCES:
-                return ordered_evidence(evidence)
-            examined += 1
             if index + 1 >= len(tokens):
                 continue
             raw_path = tokens[index + 1]
@@ -224,23 +205,19 @@ def explicit_argument_evidence(
                             process.pid,
                         )
                     )
-                if len(evidence) >= _MAX_ARGUMENT_OCCURRENCES:
-                    return ordered_evidence(evidence)
     return ordered_evidence(evidence)
 
 
 def posix_process_report(payload: bytes) -> ProcessProbeReport:
     try:
-        return ProcessProbeReport(parse_posix_processes(payload)[:MAX_PROBE_PIDS], True)
+        return ProcessProbeReport(parse_posix_processes(payload), True)
     except UnicodeDecodeError, ProbeParseError:
         return ProcessProbeReport((), False, ProbeIssue.MALFORMED_OUTPUT)
 
 
 def windows_process_report(payload: bytes) -> ProcessProbeReport:
     try:
-        return ProcessProbeReport(
-            parse_windows_processes(payload)[:MAX_PROBE_PIDS], True
-        )
+        return ProcessProbeReport(parse_windows_processes(payload), True)
     except UnicodeDecodeError, csv.Error, ProbeParseError:
         return ProcessProbeReport((), False, ProbeIssue.MALFORMED_OUTPUT)
 

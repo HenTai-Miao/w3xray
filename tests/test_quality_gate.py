@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import subprocess
+from importlib.machinery import ModuleSpec
 from pathlib import Path
 import tomllib
 
@@ -67,6 +68,7 @@ def test_quality_gate_disables_broken_github_annotations_for_basedpyright(
         return subprocess.CompletedProcess(argv, 0)
 
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setattr(quality_gate, "STRICT_PATHS", ("gametool/quality_gate.py",))
     monkeypatch.setattr(quality_gate.subprocess, "run", run)
     basedpyright = quality_gate.build_quality_commands(python_executable="python")[-1]
 
@@ -182,6 +184,7 @@ def test_quality_gate_stops_on_first_nonzero_command(
         return subprocess.CompletedProcess(argv, 0 if len(calls) == 1 else 9)
 
     monkeypatch.setattr(quality_gate.subprocess, "run", run)
+    monkeypatch.setattr(quality_gate, "STRICT_PATHS", ("gametool/quality_gate.py",))
     commands = quality_gate.build_quality_commands(python_executable="python")
 
     # When
@@ -221,3 +224,104 @@ def test_all_packaging_lanes_run_quality_after_sync_and_before_tests() -> None:
         quality_at = text.index("uv run gamexray-quality")
         tests_at = text.index("uv run gamexray-test")
         assert sync_at < quality_at < tests_at, path
+
+
+def test_windows_quality_batches_keep_every_path_and_quoted_unicode() -> None:
+    paths = tuple(f'目录 with spaces/😀{index:04d}\\".py' for index in range(1200))
+    command = quality_gate.QualityCommand(
+        "check", "ruff", ("python", "-m", "ruff", "check", *paths), path_start=4
+    )
+    batches = quality_gate._command_batches(command, windows_units=240)
+    assert len(batches) > 1
+    assert tuple(path for batch in batches for path in batch[4:]) == paths
+    assert all(quality_gate._windows_units(batch) <= 240 for batch in batches)
+
+
+def test_windows_quality_command_unit_boundary_includes_terminator() -> None:
+    command = quality_gate.QualityCommand(
+        "check",
+        "ruff",
+        ("python", "-m", "ruff", "check", "a.py", "😀.py"),
+        path_start=4,
+    )
+    length = quality_gate._windows_units(command.argv)
+    assert quality_gate._command_batches(command, windows_units=length) == (
+        command.argv,
+    )
+    assert len(quality_gate._command_batches(command, windows_units=length - 1)) == 2
+
+
+def test_windows_quality_single_oversized_path_fails_explicitly() -> None:
+    command = quality_gate.QualityCommand(
+        "check",
+        "ruff",
+        ("python", "-m", "ruff", "check", "a" * 500 + ".py"),
+        path_start=4,
+    )
+    with pytest.raises(ValueError, match="单个检查路径"):
+        quality_gate._command_batches(command, windows_units=240)
+
+
+def test_windows_quality_budget_includes_forwarded_node_command(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    based = tmp_path / ("long-install-" * 20) / "basedpyright" / "__init__.py"
+    node = tmp_path / ("long-node-" * 20) / "nodejs_wheel" / "executable.py"
+
+    def spec(name: str) -> ModuleSpec:
+        return ModuleSpec(
+            name, loader=None, origin=str(based if name == "basedpyright" else node)
+        )
+
+    monkeypatch.setattr(quality_gate.importlib.util, "find_spec", spec)
+    paths = tuple(f"tests/test_{index:06d}.py" for index in range(2000))
+    command = quality_gate.QualityCommand(
+        "type",
+        "basedpyright",
+        ("python", "-m", "basedpyright", "--level", "error", *paths),
+        path_start=5,
+    )
+    batches = quality_gate._command_batches(
+        command, windows_units=quality_gate._windows_limit(command)
+    )
+    assert len(batches) > 1
+    for batch in batches:
+        forwarded = (
+            str(node.parent / "node.exe"),
+            str(based.parent / "index.js"),
+            *batch[3:],
+        )
+        assert quality_gate._windows_units(batch) <= 32767
+        assert quality_gate._windows_units(forwarded) <= 32767
+    assert tuple(path for batch in batches for path in batch[5:]) == paths
+
+
+@pytest.mark.parametrize("failure", [0, 11])
+def test_quality_runner_executes_all_batches_or_stops_at_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: int,
+) -> None:
+    paths = tuple(f"tests/{index:05d}_" + "x" * 60 + ".py" for index in range(1200))
+    command = quality_gate.QualityCommand(
+        "check", "ruff", ("python", "-m", "ruff", "check", *paths), path_start=4
+    )
+    expected = quality_gate._command_batches(command, windows_units=32767)
+    calls: list[tuple[str, ...]] = []
+
+    def run(
+        argv: tuple[str, ...], *, check: bool, shell: bool, env: dict[str, str]
+    ) -> subprocess.CompletedProcess[str]:
+        assert not check and not shell
+        assert env["PYRIGHT_DISABLE_GITHUB_ACTIONS_OUTPUT"] == "1"
+        calls.append(argv)
+        return subprocess.CompletedProcess(argv, failure if len(calls) == 2 else 0)
+
+    original = quality_gate._command_batches
+    monkeypatch.setattr(
+        quality_gate,
+        "_command_batches",
+        lambda command, **kwargs: original(command, windows_units=32767),
+    )
+    monkeypatch.setattr(quality_gate.subprocess, "run", run)
+    assert quality_gate.run_quality_commands((command,)) == failure
+    assert calls == list(expected[:2] if failure else expected)

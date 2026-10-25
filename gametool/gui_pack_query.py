@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import os
 import pathlib
-import re
 import tkinter as tk
 from typing import TYPE_CHECKING
 
 import customtkinter as ctk
 
 from .theme import BG, CARD, FONT, SUBTLE, TEXT, TITLE_FONT
+from .query_coordinates import coordinates_from_text, radius_from_text
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -19,9 +19,7 @@ if TYPE_CHECKING:
 _LAST_KEYWORD = ""
 _LAST_MODE = "doc"
 _LAST_RESULT = ""
-_HISTORY: list[
-    tuple[str, str]
-] = []  # (模式, 关键词) 全量落盘; 下拉只展示最近 12 条 (374 轮: 旧落盘前截 10 → stats 历史条数失真)
+_HISTORY: list[tuple[str, str]] = []  # (模式, 关键词) 历史落盘与下拉均保留全量。
 _WINDOW_GEOMETRY: dict[str, str] = {}  # 窗口名 -> "WxH" (进程级)
 
 
@@ -166,9 +164,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         ).pack(fill="x", padx=12, pady=(0, 8))
 
         row = ctk.CTkFrame(self, fg_color="transparent")
-        _HISTORY_VALUES = [f"{c} {k}".strip() for c, k in _HISTORY[:12]] or [
-            "(无历史)"
-        ]  # 展示层取 12 条 (374: 落盘全量)
+        _HISTORY_VALUES = [f"{c} {k}".strip() for c, k in _HISTORY] or ["(无历史)"]
         self._history = ctk.CTkOptionMenu(
             row,
             values=_HISTORY_VALUES,
@@ -520,6 +516,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
     def _clear_history(self) -> None:
         _HISTORY.clear()
         _save_memo()
+        self._history.configure(values=["(无历史)"])
         self._history.set("(历史)")
 
     def _on_history_pick(self, value: str) -> None:
@@ -535,7 +532,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
 
     _PLACEHOLDERS = {
         "doc": "四码或名称…  (doc 必填)",
-        "search": "关键词…  (search 必填)",
+        "search": '关键词 / 物品:火焰 && 攻击 / ="精准词"',
         "list": "表名可空=全表…  (回车查)",
         "buffs": "关键词可空=全量…  (回车查)",
         "export": "四码或名称…  (export 必填)",
@@ -654,12 +651,12 @@ class _PackQueryWindow(ctk.CTkToplevel):
             raw = box.get("sel.first", "sel.last").strip()
         except tk.TclError:
             raw = ""
-        nums = re.findall(r"-?[\d.]+", raw)
-        if len(nums) < 2:
+        point = coordinates_from_text(raw)
+        if point is None:
             return
         self._switch_mode("near")  # 统一入口 (扩展排高亮清显跟随)
         self._keyword.delete(0, "end")
-        self._keyword.insert(0, nums[0] + " " + nums[1] + " " + radius)
+        self._keyword.insert(0, point[0] + " " + point[1] + " " + radius)
         self._run_clicked()
 
     def _near_rerun_from_selection(self, radius: str = "500") -> None:
@@ -669,37 +666,16 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self._near_rerun_from_box(self._pinned_box, radius)
 
     def _coords_from_clipboard(self) -> None:
-        """从剪贴板提取坐标填入关键词框。
-        支持两种形态: live 探针 JSON 片段 ("x": 150, "y": 150) 或裸「x y [radius]」。
-        """
+        """Read selected JSON or a precise coordinate pair without guessing."""
         try:
             raw = self.clipboard_get()
         except Exception:
             return
-        # 优先取 selected 块内坐标 — 探针 JSON 的 selected 在最前, 尾部是 all_units
-        # (旧取 xs[-1] 拿到的是全图末尾单位, 注释「通常=选中单位」不实)
-        sel_block = re.search(r'"selected"\s*:\s*\{[^{}]*\}', raw)
-        if sel_block:
-            block = sel_block.group(0)
-            mx = re.search(r'"x"\s*:\s*(-?[\d.]+)', block)
-            my = re.search(r'"y"\s*:\s*(-?[\d.]+)', block)
-            if mx and my:
-                self._keyword.delete(0, "end")
-                self._keyword.insert(0, mx.group(1) + " " + my.group(1))
-                return
-        xs = re.findall(r'"x"\s*:\s*(-?[\d.]+)', raw)
-        ys = re.findall(r'"y"\s*:\s*(-?[\d.]+)', raw)
-        if xs and ys:
-            x, y = xs[-1], ys[-1]  # 无 selected 块时退最后一对 (裸坐标列表)
-        else:
-            nums = re.findall(r"-?[\d.]+", raw)
-            if len(nums) < 2:
-                return
-            x, y = nums[0], nums[1]
-        radius = re.findall(r'"radius"\s*:\s*([\d.]+)|半径\s*([\d.]+)', raw)
-        parts = [x, y]
-        if radius and (radius[-1][0] or radius[-1][1]):
-            parts.append(radius[-1][0] or radius[-1][1])
+        point = coordinates_from_text(raw)
+        if point is None:
+            return
+        radius = radius_from_text(raw)
+        parts = [*point, *([radius] if radius is not None else [])]
         self._keyword.delete(0, "end")
         self._keyword.insert(0, " ".join(parts))
 
@@ -738,8 +714,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
             if entry in _HISTORY:
                 _HISTORY.remove(entry)
             _HISTORY.insert(0, entry)
-            # 374 轮: 落盘全量不截 — 旧 del [10:] 让 stats「历史条数」失真;
-            # 下拉展示层只取前 12 条 (构造处), 信息不丢
+            self._history.configure(values=[f"{c} {k}".strip() for c, k in _HISTORY])
+            self._history.set(f"{command} {keyword}".strip())
         _save_memo()
         if (
             command in ("doc", "export", "search", "locate", "near") and not keyword
@@ -766,14 +742,6 @@ class _PackQueryWindow(ctk.CTkToplevel):
 
         def _worker() -> None:
             result, elapsed = self._run_query(command, keyword, as_json)
-            # CLI again 共享记忆: GUI 成功查询也落 memo (未找到/异常不写)
-            if command != "diff" and result and not result.startswith("未找到"):
-                try:
-                    from .pack_query_cli import _store_last_query
-
-                    _store_last_query(pathlib.Path(self._pack_dir), command, keyword)
-                except Exception:
-                    pass  # 376: again 记忆失败不拦查询 — CLI 侧同函数自身已 fail-open
             done.append((result, elapsed))
 
         threading.Thread(target=_worker, daemon=True).start()
@@ -812,15 +780,9 @@ class _PackQueryWindow(ctk.CTkToplevel):
     ) -> tuple[str, str]:
         """线程内执行查询: 不碰任何 Tk 对象, 返回 (正文, 耗时行)。"""
         try:
-            from gametool.pack_query_cli import (
-                PackQueryCliOptions,
-                run_pack_query_cli,
-            )
+            from gametool.pack_query_cli import PackQueryCliOptions, execute_pack_query
         except ImportError as exc:  # pragma: no cover
             return (f"查询模块不可用: {exc}", "")
-        import contextlib
-        import io
-
         pack_b = ""
         if command == "diff":
             # 旧包来源: 关键词框填了用关键词 (CLI 同款语义), 否则用记忆的上次旧包
@@ -837,19 +799,16 @@ class _PackQueryWindow(ctk.CTkToplevel):
             pack_dir_b=pack_b,
             as_json=as_json,
         )
-        buffer = io.StringIO()
-        err_buffer = io.StringIO()
         try:
-            with (
-                contextlib.redirect_stdout(buffer),
-                contextlib.redirect_stderr(err_buffer),
-            ):
-                run_pack_query_cli(options)
-        except SystemExit as exc:  # run_pack_query_cli 返回码路径不打异常
-            return (buffer.getvalue() or f"(退出码 {exc.code})", "")
-        output = buffer.getvalue() or "(无输出)"
-        elapsed = err_buffer.getvalue().strip()
-        return (output, elapsed)
+            result = execute_pack_query(options)
+        except Exception as exc:
+            from .presentation_safety import format_user_exception
+
+            return ("查询失败: " + format_user_exception(exc), "")
+        return (
+            result.render(as_json=as_json) or "(无输出)",
+            "\n".join(result.diagnostics),
+        )
 
     def _pin_current(self) -> None:
         text = self._output.get("1.0", "end").strip()

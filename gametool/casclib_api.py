@@ -18,7 +18,8 @@ from .casclib_enumeration import (
 
 ERROR_FILE_NOT_FOUND: Final = 2
 ERROR_PROC_NOT_FOUND: Final = 127
-MAX_CASC_FILE_SIZE: Final = 2 * 1024 * 1024 * 1024
+MAX_CASC_FILE_SIZE: Final[int | None] = None
+_READ_CHUNK_BYTES: Final = 16 * 1024 * 1024
 
 
 class CascLibApi(Protocol):
@@ -207,29 +208,34 @@ class CtypesCascLibApi:
             ctypes.c_void_p(handle), ctypes.byref(size)
         ):
             raise self._error("CascGetFileSize64")
-        if size.value > MAX_CASC_FILE_SIZE:
+        if MAX_CASC_FILE_SIZE is not None and size.value > MAX_CASC_FILE_SIZE:
             raise CascFileTooLargeError(size=size.value, limit=MAX_CASC_FILE_SIZE)
         return size.value
 
     def read_file(self, handle: int, size: int) -> bytes:
-        if size > MAX_CASC_FILE_SIZE:
+        if MAX_CASC_FILE_SIZE is not None and size > MAX_CASC_FILE_SIZE:
             raise CascFileTooLargeError(size=size, limit=MAX_CASC_FILE_SIZE)
-        buffer = ctypes.create_string_buffer(size)
-        bytes_read = ctypes.c_uint32()
-        if not self._library.CascReadFile(
-            ctypes.c_void_p(handle),
-            buffer,
-            size,
-            ctypes.byref(bytes_read),
-        ):
-            raise self._error("CascReadFile")
-        if bytes_read.value != size:
-            raise CascPartialReadError(
-                expected=size,
-                actual=bytes_read.value,
-                native_error_code=self._native_error(),
-            )
-        return buffer.raw[: bytes_read.value]
+        if size < 0:
+            raise ValueError("CASC resource size must be nonnegative")
+        chunks: list[bytes] = []
+        total = 0
+        while total < size:
+            requested = min(_READ_CHUNK_BYTES, size - total)
+            buffer = ctypes.create_string_buffer(requested)
+            bytes_read = ctypes.c_uint32()
+            if not self._library.CascReadFile(
+                ctypes.c_void_p(handle), buffer, requested, ctypes.byref(bytes_read)
+            ):
+                raise self._error("CascReadFile")
+            if bytes_read.value != requested:
+                raise CascPartialReadError(
+                    expected=size,
+                    actual=total + bytes_read.value,
+                    native_error_code=self._native_error(),
+                )
+            chunks.append(buffer.raw)
+            total += bytes_read.value
+        return b"".join(chunks)
 
     def close_file(self, handle: int) -> None:
         if not self._library.CascCloseFile(ctypes.c_void_p(handle)):

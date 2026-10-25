@@ -87,16 +87,16 @@ def test_path_fallback_preserves_existing_file_on_write_failure(
     assert output.read_bytes() == b"before"
 
 
-def test_sparse_slk_coordinate_is_rejected_before_range_expansion() -> None:
-    # Given: one tiny SLK record declares a far-away column.
-    text = 'ID;P\nC;X20000;Y1;K"name"\nE\n'
+def test_sparse_slk_coordinates_do_not_expand_rectangular_ranges() -> None:
+    # Far-away coordinates still represent only the cells actually encoded.
+    text = (
+        'ID;P\nC;X1;Y1;K"ID"\nC;X20000;Y1;K"name"\n'
+        'C;X1;Y999999999;K"I001"\nC;X20000;Y999999999;K"farthest"\nE\n'
+    )
+    assert parse_slk(text) == {"I001": {"name": "farthest"}}
 
-    # When/Then: bounds are enforced before any rectangular iteration.
-    with pytest.raises(ValueError, match="SLK"):
-        parse_slk(text)
 
-
-def test_mpq_declared_output_size_is_bounded_before_reading() -> None:
+def test_mpq_stored_payload_must_supply_its_declared_size() -> None:
     # Given: a one-byte block claims an implausibly large uncompressed result.
     block = _Block(0, 1, 0x7FFF_FFFF, FLAG_EXISTS)
 

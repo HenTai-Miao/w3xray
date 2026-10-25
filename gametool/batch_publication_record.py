@@ -26,8 +26,8 @@ from .safe_output_models import SafeWriteStatus
 
 
 TRANSACTION_PREFIX: Final = ".gamexray-map-transaction-"
-_MAX_RECORD_BYTES: Final = 64 * 1024
-_MAX_MARKER_BYTES: Final = 64 * 1024
+_MAX_RECORD_BYTES: Final[int | None] = None
+_MAX_MARKER_BYTES: Final[int | None] = None
 _SHA256: Final = re.compile(r"[0-9a-f]{64}")
 _TRANSACTION_ID: Final = re.compile(r"[0-9a-f]{32}")
 

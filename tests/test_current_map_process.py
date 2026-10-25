@@ -24,14 +24,14 @@ from gametool.current_map_process import (
 
 
 def test_public_process_report_exposes_every_game_process() -> None:
-    # Given: valid ps output contains nine actual game processes.
-    payload = "\n".join(f"{pid} war3" for pid in range(601, 610)).encode()
+    # Given: valid ps output exceeds the former 128-process limit.
+    payload = "\n".join(f"{pid} war3" for pid in range(601, 850)).encode()
 
     # When: the POSIX boundary constructs its public process report.
     report = posix_process_report(payload)
 
-    # Then: every PID record is exposed (probe bound is 128).
-    assert tuple(item.pid for item in report.processes) == tuple(range(601, 610))
+    # Then: every PID record is exposed.
+    assert tuple(item.pid for item in report.processes) == tuple(range(601, 850))
 
 
 @pytest.mark.parametrize(
@@ -266,7 +266,7 @@ def test_resolves_unquoted_loadfile_but_ignores_ordinary_map_text(
     )
 
 
-def test_explicit_argument_probe_caps_nonexistent_path_checks(
+def test_explicit_argument_probe_checks_every_root(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -296,9 +296,9 @@ def test_explicit_argument_probe_caps_nonexistent_path_checks(
     # When: explicit arguments are checked against all bounded roots.
     evidence = explicit_argument_evidence(processes, roots)
 
-    # Then: every occurrence reaches at most 64 filesystem checks (roots bound).
+    # Then: every occurrence checks every supplied root.
     assert evidence == ()
-    assert calls == 80 * 64
+    assert calls == 80 * 70
 
 
 @pytest.mark.skipif(

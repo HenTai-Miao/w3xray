@@ -34,6 +34,8 @@ def _add_script_refs(
     md: MapData,
     script_text: str,
     shared_index: Mapping[tuple[str, str], GameObject] | None = None,
+    *,
+    lua: bool | None = None,
 ) -> None:
     """把脚本里引用、但对象数据缺失的 物品/单位 代码补进分类。
 
@@ -42,7 +44,7 @@ def _add_script_refs(
     """
     from .script_scan import scan_object_refs
 
-    refs = scan_object_refs(script_text)
+    refs = scan_object_refs(script_text, lua=lua)
     for cat, codes in refs.items():
         for code in sorted(codes):
             if (cat, code) in md.obj_identity_index:

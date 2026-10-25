@@ -8,10 +8,6 @@ from __future__ import annotations
 import struct
 from io import BytesIO
 
-# 单边像素上限：真实地图图标(64)/纹理/载入图远小于此。BLP 来自不可信地图，
-# 头里 width*height 直接驱动内存分配，必须设硬上限防解压炸弹(否则可被构造成 ~17GB)。
-_MAX_DIM = 16384
-
 
 def _palette_rgba(Image, pal, idx, alpha_data, width, height):
     """调色板(BGRA)+索引 → RGBA 图。
@@ -72,7 +68,7 @@ def _decode_blp1(data, Image):
     (compression, flags, width, height, _pic_type, _pic_subtype) = struct.unpack_from(
         "<IIIIII", data, 4
     )
-    if not (0 < width <= _MAX_DIM and 0 < height <= _MAX_DIM):
+    if width <= 0 or height <= 0:
         return None
     mip_offsets = struct.unpack_from("<16I", data, 28)
     mip_sizes = struct.unpack_from("<16I", data, 28 + 64)
@@ -81,11 +77,17 @@ def _decode_blp1(data, Image):
         # JPEG 内容：共享头 + 第0级数据 拼成完整 JPEG
         jpeg_hdr_size = struct.unpack_from("<I", data, 28 + 128)[0]
         hdr_start = 28 + 128 + 4
+        if hdr_start + jpeg_hdr_size > len(data):
+            return None
         shared = data[hdr_start : hdr_start + jpeg_hdr_size]
         off, size = mip_offsets[0], mip_sizes[0]
+        if off < hdr_start or size <= 0 or off + size > len(data):
+            return None
         jpeg = shared + data[off : off + size]
         try:
             img = Image.open(BytesIO(jpeg))
+            if img.size != (width, height):
+                return None
             img.load()
         except NotImplementedError, OSError, ValueError, struct.error:
             return None
@@ -105,6 +107,9 @@ def _decode_blp1(data, Image):
     pal = data[28 + 128 + 0 : 28 + 128 + 1024]  # 256*4 BGRA
     off = mip_offsets[0]
     n = width * height
+    required = n * (2 if flags == 8 else 1)
+    if compression != 1 or off < 28 + 128 + 1024 or off + required > len(data):
+        return None
     idx = data[off : off + n]
     alpha_data = data[off + n : off + n + n] if flags == 8 else None
     return _palette_rgba(Image, pal, idx, alpha_data, width, height)
@@ -117,7 +122,7 @@ def _decode_blp2(data, Image):
     if len(data) < 20:
         return None
     width, height = struct.unpack_from("<II", data, 12)
-    if not (0 < width <= _MAX_DIM and 0 < height <= _MAX_DIM):
+    if width <= 0 or height <= 0:
         return None
     encoding, alpha_depth = struct.unpack_from("<BB", data, 8)
     if encoding == 1:
@@ -125,17 +130,45 @@ def _decode_blp2(data, Image):
             return None
         (offset,) = struct.unpack_from("<I", data, 20)
         pixel_count = width * height
+        if alpha_depth not in (0, 1, 4, 8):
+            return None
+        alpha_bytes = (pixel_count * alpha_depth + 7) // 8
+        if offset < 20 + 128 + 1024 or offset + pixel_count + alpha_bytes > len(data):
+            return None
         palette = data[20 + 128 : 20 + 128 + 1024]
         indices = data[offset : offset + pixel_count]
-        alpha = (
-            data[offset + pixel_count : offset + pixel_count * 2]
-            if alpha_depth == 8
-            else None
+        alpha = _unpack_alpha(
+            data[offset + pixel_count : offset + pixel_count + alpha_bytes],
+            alpha_depth,
+            pixel_count,
         )
         return _palette_rgba(Image, palette, indices, alpha, width, height)
+    if encoding == 2:
+        if len(data) < 148:
+            return None
+        offset = struct.unpack_from("<I", data, 20)[0]
+        alpha_encoding = data[10]
+        block_bytes = 8 if alpha_depth == 0 or alpha_encoding == 0 else 16
+        required = ((width + 3) // 4) * ((height + 3) // 4) * block_bytes
+        if offset < 148 or offset + required > len(data):
+            return None
     try:
         image = Image.open(BytesIO(data))
         image.load()
         return image.convert("RGBA")
     except NotImplementedError, OSError, ValueError, struct.error:
         return None
+
+
+def _unpack_alpha(data: bytes, depth: int, count: int) -> bytes | None:
+    if depth == 0:
+        return None
+    if depth == 8:
+        return data
+    mask = (1 << depth) - 1
+    per_byte = 8 // depth
+    return bytes(
+        ((data[index // per_byte] >> ((index % per_byte) * depth)) & mask)
+        * (255 // mask)
+        for index in range(count)
+    )

@@ -25,12 +25,8 @@ from .supplemental_evidence import (
 
 CompatBundleError = SupplementalEvidenceError
 COMPAT_MANIFEST_NAME: Final = "gamexray-compat-bundle.tsv"
-MAX_COMPAT_MANIFEST_SIZE: Final = 64 * 1024 * 1024
-MAX_COMPAT_NAMES: Final = 1_000_000
-MAX_COMPAT_FILES: Final = 200_000
-MAX_COMPAT_KEYS: Final = 4_000_000
-MAX_COMPAT_FILE_SIZE: Final = 1024 * 1024 * 1024
-MAX_COMPAT_TOTAL_SIZE: Final = 8 * 1024 * 1024 * 1024
+MAX_COMPAT_MANIFEST_SIZE: Final[int | None] = None
+MAX_COMPAT_FILE_SIZE: Final[int | None] = None
 _SHA256_RE: Final = re.compile(r"[0-9a-f]{64}")
 _KEY_RE: Final = re.compile(r"[0-9A-Fa-f]{8}")
 
@@ -107,20 +103,20 @@ def _parse_rows(lines: list[str]) -> _Rows:
             raise CompatBundleError("empty manifest row")
         match parts[0]:
             case "name":
-                if len(parts) != 2 or len(names) >= MAX_COMPAT_NAMES:
-                    raise CompatBundleError("invalid or excessive name row")
+                if len(parts) != 2:
+                    raise CompatBundleError("invalid name row")
                 name = _parse_internal_path(parts[1])
                 _claim_path(name, paths)
                 names.append(name)
             case "file":
-                if len(parts) != 3 or len(files) >= MAX_COMPAT_FILES:
-                    raise CompatBundleError("invalid or excessive file row")
+                if len(parts) != 3:
+                    raise CompatBundleError("invalid file row")
                 name = _parse_internal_path(parts[1])
                 _claim_path(name, paths)
                 files.append((name, _parse_sha256(parts[2], "file SHA-256")))
             case "mpq_key":
-                if len(parts) != 5 or len(keys) >= MAX_COMPAT_KEYS:
-                    raise CompatBundleError("invalid or excessive mpq_key row")
+                if len(parts) != 5:
+                    raise CompatBundleError("invalid mpq_key row")
                 key = _parse_key(parts)
                 if key.block_index in blocks:
                     raise CompatBundleError(
@@ -161,7 +157,6 @@ def _load_files(
         raise CompatBundleError("payload root files/ is missing")
     resolved_root = payload_root.resolve()
     files: list[SupplementalFile] = []
-    total_size = 0
     for name, expected_sha256 in declarations:
         path = _resolve_payload_file(resolved_root, PurePosixPath(name).parts)
         try:
@@ -170,9 +165,6 @@ def _load_files(
             raise CompatBundleError(
                 f"plaintext file unsafe: {name} ({exc.reason})",
             ) from exc
-        total_size += identity.size
-        if total_size > MAX_COMPAT_TOTAL_SIZE:
-            raise CompatBundleError("plaintext total size limit exceeded")
         if actual_sha256 != expected_sha256:
             raise CompatBundleError(f"file SHA-256 mismatch: {name}")
         files.append(

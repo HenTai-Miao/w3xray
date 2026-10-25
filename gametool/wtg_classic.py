@@ -129,7 +129,7 @@ def _read_trigger(reader: WtgReader, version: int) -> TriggerHeader:
         is_initially_off=bool(reader.i32()),
         run_on_init=bool(reader.i32()),
         category_id=reader.i32(),
-        function_count=reader.bounded_count("trigger function"),
+        function_count=reader.bounded_count("trigger function", minimum_size=0),
     )
 
 

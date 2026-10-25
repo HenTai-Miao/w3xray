@@ -130,8 +130,8 @@ def test_near_coords_prefers_selected_block() -> None:
     """探针 near 直达: 剪贴板 JSON 优先取 selected 块坐标 (312 语义对齐)。"""
     import inspect
 
-    src = inspect.getsource(LiveProbeWindow._near_selected_coords)
-    assert '"selected"' in src
+    src = inspect.getsource(LiveProbeWindow._near_rerun_selected)
+    assert "coordinates_from_text" in src
 
 
 def test_probe_near_rerun_radius_guard() -> None:
