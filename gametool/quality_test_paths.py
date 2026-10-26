@@ -339,6 +339,7 @@ tests/test_query_diff_integrity.py
 tests/test_query_item_ability_evidence.py
 tests/test_query_object_field_details.py
 tests/test_query_tsv_bom.py
+tests/test_query_text_records.py
 tests/test_query_object_lists_complete.py
 tests/test_query_result_limits.py
 tests/test_query_evidence_complete.py

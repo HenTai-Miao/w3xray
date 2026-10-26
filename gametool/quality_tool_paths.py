@@ -390,6 +390,7 @@ gametool/pack_query_diff.py
 gametool/pack_query_item_abilities.py
 gametool/pack_query_field_evidence.py
 gametool/pack_query_object_details.py
+gametool/pack_query_text_records.py
 gametool/query_coordinates.py
 gametool/query_coordinate_json.py
 gametool/presentation_safety.py

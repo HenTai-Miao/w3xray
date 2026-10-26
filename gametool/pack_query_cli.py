@@ -131,21 +131,42 @@ _QUERY_OBJECT_WARNINGS: dict[str, list[str]] | None = None
 _LOCKED_FILES: set[tuple[str, str]] = set()
 
 
-def _iter_tsv_lines(path: Path):
+def _iter_tsv_lines(path: Path, *, newline: str | None = None):
     """带瞬态重试与锁死披露的行迭代 (脚本索引类 TSV 共用防线)。"""
     key = (str(path.parent), path.name)
     if _QUERY_FILES is not None:
         _QUERY_FILES.add(key)
     for _attempt in range(1 if key in _LOCKED_FILES else 3):
         try:
-            with path.open(encoding="utf-8-sig", errors="replace") as handle:
+            with path.open(
+                encoding="utf-8-sig", errors="replace", newline=newline
+            ) as handle:
+                before = os.fstat(handle.fileno())
                 lines = list(handle)
+                after = os.fstat(handle.fileno())
+            if _table_identity(before) != _table_identity(after) or _table_identity(
+                after
+            ) != _table_identity(path.stat()):
+                continue
             _LOCKED_FILES.discard(key)
             yield from lines
             return
         except OSError:
             time.sleep(0.05)
     _LOCKED_FILES.add(key)
+
+
+def _text_records(path: Path):
+    from .pack_query_text_records import tsv_records
+
+    try:
+        yield from tsv_records(_iter_tsv_lines(path, newline=""))
+    except csv.Error as error:
+        if _QUERY_OBJECT_WARNINGS is not None:
+            _QUERY_OBJECT_WARNINGS.setdefault(str(path.parent), []).append(
+                f"[⚠ {path.name} — TSV 记录解析失败: {error}；"
+                f"当前仅含已确认记录，请核对文件或重新导出。 来源: {path.parent}]"
+            )
 
 
 def _read_rows(pack_dir: Path, rel: str) -> list[list[str]]:
@@ -472,8 +493,12 @@ def _bounded(seq, limit: int):
 
 def _truncated_note(seq, limit: int) -> str:
     """截断披露行: --limit 生效且确有截断时提示还有多少 (空串=未截断)。"""
-    if limit and len(seq) > limit:
-        return f"  (已达 --limit {limit}, 其余 {len(seq) - limit} 条未显示——去掉 --limit 看全量)"
+    return _result_limit_note(len(seq), limit) if limit else ""
+
+
+def _result_limit_note(total: int, limit: int) -> str:
+    if limit and total > limit:
+        return f"  (已达 --limit {limit}, 其余 {total - limit} 条未显示——去掉 --limit 看全量)"
     return ""
 
 
@@ -2345,24 +2370,27 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
 
 
 def _query_quest(pack: Path, query: str, limit: int) -> list[str]:
-    lines = []
     path = pack / "脚本字符串索引.tsv"
+    total = matched = 0
+    lines: list[str] = []
     if path.exists():
-        for line in _iter_tsv_lines(path):
-            if query.casefold() in line.casefold() and (
-                "CreateQuestBJ" in line or "DisplayTimedTextToForce" in line
+        for record in _text_records(path):
+            if (
+                "CreateQuestBJ" not in record.text
+                and "DisplayTimedTextToForce" not in record.text
             ):
-                lines.append(_clean(line.rstrip("\n")))  # 整行, 不开窗
+                continue
+            total += 1
+            if record.matches(query, ignore_case=True):
+                matched += 1
+                if not limit or matched <= limit:
+                    lines.append(_clean(record.text))
     if lines:
-        return _limit_result_blocks([[line] for line in lines], limit)
+        note = _result_limit_note(matched, limit)
+        return [*lines, *([note] if note else [])]
     if query:
         # 任务总量提示 + text 改道 (否定断言四维: 总量/换词/数据源)
-        total = sum(
-            1
-            for line in _iter_tsv_lines(path)
-            if "CreateQuestBJ" in line or "DisplayTimedTextToForce" in line
-        )
-        hint = f"本图任务文本共 {total} 条" if total else "本图未捕获到任务文本"
+        hint = f"本次可确认任务文本共 {total} 条" if total else "本包未捕获到任务文本"
         return [
             "未找到任务文本: " + query,
             f"  （{hint}; 可用 text <词> 全文本索引兜底，或换更短关键词）",
@@ -2374,19 +2402,22 @@ def _query_quest(pack: Path, query: str, limit: int) -> list[str]:
 
 
 def _query_text(pack: Path, query: str, limit: int) -> list[str]:
-    lines = []
+    lines: list[str] = []
+    matched = 0
     for path in sorted(pack.glob("*.tsv")):
         try:
-            for line in _iter_tsv_lines(path):
-                if query in line:
-                    lines.append(path.name + ": " + _clean(line.rstrip("\n")))  # 整行
+            for record in _text_records(path):
+                if record.matches(query):
+                    matched += 1
+                    if not limit or matched <= limit:
+                        lines.append(path.name + ": " + _clean(record.text))
         except OSError:
             continue
     if lines:
-        note = _truncated_note(lines, limit)
-        return [*_bounded(lines, limit), *([note] if note else [])]
+        note = _result_limit_note(matched, limit)
+        return [*lines, *([note] if note else [])]
     return [
-        "未找到文本: " + query + " (扫全部 *.tsv 索引行)",
+        "未找到文本: " + query + " (扫全部 *.tsv 完整记录)",
         "  （可换更短关键词重试; 对象名/效果排查用 search <词> 更专——它按八表结构化匹配）",
     ]
 
@@ -3395,11 +3426,10 @@ def _campaign_subpacks(pack: Path) -> list[Path]:
         for p in sub.iterdir()
         if p.is_dir()
         and (
-            (p / "掉落与获取关系.tsv").is_file()
-            or (p / "对象字段.tsv").is_file()
-            or (p / "对象ID").is_dir()
+            (p / "对象ID").is_dir()
             or (p / "内容清单.json").is_file()
             or (p / "脚本可读文本").is_dir()
+            or any(table.is_file() for table in p.glob("*.tsv"))
         )
     )
 
