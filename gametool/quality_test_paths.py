@@ -336,6 +336,7 @@ tests/test_query_object_tables.py
 tests/test_query_field_tables.py
 tests/test_query_diff_complete.py
 tests/test_query_diff_integrity.py
+tests/test_query_item_ability_evidence.py
 tests/test_query_object_lists_complete.py
 tests/test_query_result_limits.py
 tests/test_query_evidence_complete.py

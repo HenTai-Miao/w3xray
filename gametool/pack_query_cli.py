@@ -70,6 +70,7 @@ from .script_sources import (
 )
 
 if TYPE_CHECKING:
+    from .pack_query_item_abilities import ItemAbilityIndex
     from .pack_query_diff import DiffQueryResult
     from .pack_query_execution import PackQueryResult
     from .pack_query_spatial import SpatialQueryResult
@@ -381,52 +382,20 @@ def load_item_tooltips(pack_dir: Path) -> dict[str, str]:
     return {code: text for code, (_prio, text) in best.items()}
 
 
-_ITEM_STAT_FIELDS = {
-    "Istr": "力量",
-    "Iagi": "敏捷",
-    "Iint": "智力",
-}
-# 二进制导出的等级字段带冒号（Istr:1），SLK 导出直接拼数字（Istr1）。
-_ITEM_STAT_FIELD_RE = re.compile(r"(Istr|Iagi|Iint)(?::\d+|\d+)?\Z")
+def _load_item_ability_evidence(pack_dir: Path) -> ItemAbilityIndex:
+    from .pack_query_item_abilities import item_ability_index
+
+    return item_ability_index(_field_rows(pack_dir), _field_object_codes, _clean)
 
 
 def load_item_equipped_effects(pack_dir: Path) -> dict[str, list[str]]:
-    """物品四码 -> 装备真实效果摘要（如 ["+11 力量"]）。
-
-    物品的实际加成由 iabi(携带技能) 指向的技能决定；提示文本可能是
-    按基础ID继承的模板（占位符未填、与真实效果完全不符）。只解读
-    地图自定义行的属性奖励字段（Istr/Iagi/Iint，中文标签
-    “力量/敏捷/智力奖励”，来源 war3map.*），等级后缀兼容二进制
-    （Istr:1）与 SLK（Istr1）两种导出形式；继承行的字段码是英文
-    原始码（base:DataC1 等），其数值列在不同技能家族指向不同属性，
-    不做解读——宁缺毋滥，漏报优于按错列猜数。
-    """
-    equipped: dict[str, list[str]] = {}
-    stat_rows: dict[str, dict[str, str]] = {}
-    for r in _field_rows(pack_dir):
-        if len(r) <= 5:
-            continue
-        if len(r) < 7 or len(r[1]) != 4:
-            continue
-        if r[0] == "物品" and r[3] == "iabi":
-            codes = _field_object_codes(r[5])
-            if codes:
-                equipped.setdefault(r[1], []).extend(codes)
-        elif r[0] == "技能":
-            stat = _ITEM_STAT_FIELD_RE.fullmatch(r[3])
-            if stat:
-                stat_rows.setdefault(r[1], {}).setdefault(stat.group(1), r[5])
-    effects: dict[str, list[str]] = {}
-    for item, abilities in equipped.items():
-        parts: list[str] = []
-        for ab in abilities:
-            for field, label in _ITEM_STAT_FIELDS.items():
-                val = stat_rows.get(ab, {}).get(field)
-                if val and val not in ("-", "'"):
-                    parts.append("+" + val + " " + label)
-        if parts:
-            effects[item] = parts
-    return effects
+    """物品四码 -> 关联技能属性字段摘要；完整字段由物品查询另外保留。"""
+    index = _load_item_ability_evidence(pack_dir)
+    return {
+        code: list(values)
+        for code in index.item_codes
+        if (values := index.summaries_for(code))
+    }
 
 
 _base_price_cache: dict[str, str] | None = None
@@ -985,7 +954,7 @@ def _query_item(pack: Path, query: str, limit: int) -> list[str]:
     bases = load_item_bases(pack)
     overrides = load_item_gold_overrides(pack)
     tooltips = load_item_tooltips(pack)
-    equipped_effects = load_item_equipped_effects(pack)
+    ability_index = _load_item_ability_evidence(pack)
     lines = []
     matches = [
         (code, name, desc)
@@ -1001,9 +970,9 @@ def _query_item(pack: Path, query: str, limit: int) -> list[str]:
                 "地图价" if code in overrides else ("继承基础 " + base if base else "")
             )
             lines.append("  金币: " + price + (" (" + src + ")" if src else ""))
-        # 装备真实效果（iabi 携带技能的属性字段，自定义行优先）。
-        if code in equipped_effects:
-            lines.append("  装备效果: " + ", ".join(equipped_effects[code]))
+        if effects := ability_index.summaries_for(code):
+            lines.append("  属性字段摘要: " + ", ".join(effects))
+        lines.extend(ability_index.render_item(code))
         # 真实提示文本（地图自定义 ides/utub）优先；继承模板描述仅作兜底。
         lines.append("  " + (tooltips.get(code, "") or desc))  # ides/utub 全文
     if note := _truncated_note(matches, limit):

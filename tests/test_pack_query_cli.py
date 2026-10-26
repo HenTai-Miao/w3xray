@@ -1196,7 +1196,7 @@ def test_run_cli_item_shows_equipped_effects(pack, capsys):
     rc = run_pack_query_cli(parse_pack_query_cli_options([str(pack), "item", "I0AA"]))
     out = capsys.readouterr().out
     assert rc == 0
-    assert "装备效果: +11 力量" in out
+    assert "属性字段摘要: +11 力量" in out
 
 
 def test_load_item_tooltips_prefers_ides(pack):
