@@ -333,6 +333,7 @@ tests/test_query_coordinate_json.py
 tests/test_query_search_complete.py
 tests/test_query_search_records.py
 tests/test_query_object_tables.py
+tests/test_query_field_tables.py
 tests/test_query_object_lists_complete.py
 tests/test_query_result_limits.py
 tests/test_query_evidence_complete.py

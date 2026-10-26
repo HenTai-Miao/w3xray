@@ -1289,6 +1289,7 @@ def test_query_diff_identical_packs_report_no_difference(
         tmp_path / "对象ID" / "单位.tsv",
         old / "对象ID" / "单位.tsv",
     )
+    shutil.copy(tmp_path / "对象字段.tsv", old / "对象字段.tsv")
     if (tmp_path / "掉落与获取关系.tsv").exists():
         shutil.copy(
             tmp_path / "掉落与获取关系.tsv",

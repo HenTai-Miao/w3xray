@@ -40,7 +40,7 @@ from typing import TYPE_CHECKING, cast
 
 from .cli_output import configure_cli_output
 from .csv_fields import full_csv_fields
-from .pack_query_objects import object_table, valid_object_code
+from .pack_query_objects import object_field_table, object_table, valid_object_code
 from .pack_query_options import PackQueryCliOptions, parse_query_limit
 from .pack_query_placement_index import IndexedPlacements, indexed_placements
 from .presentation_safety import single_line_text
@@ -198,11 +198,19 @@ def _table_identity(stat: os.stat_result) -> tuple[int, int, int, int]:
 
 
 def _object_rows(pack: Path, table: str) -> tuple[tuple[str, ...], ...]:
-    relative = "对象ID/" + table + ".tsv"
+    return _named_rows(pack, "对象ID/" + table + ".tsv", table)
+
+
+def _field_rows(pack: Path) -> tuple[tuple[str, ...], ...]:
+    return _named_rows(pack, "对象字段.tsv")
+
+
+def _named_rows(
+    pack: Path, relative: str, table: str = ""
+) -> tuple[tuple[str, ...], ...]:
     with _TABLE_READ_LOCK:
-        result = object_table(
-            table, tuple(tuple(row) for row in _read_rows(pack, relative))
-        )
+        raw = tuple(tuple(row) for row in _read_rows(pack, relative))
+        result = object_table(table, raw) if table else object_field_table(raw)
         if _QUERY_OBJECT_WARNINGS is not None and result.diagnostics:
             _QUERY_OBJECT_WARNINGS.setdefault(str(pack), []).extend(
                 f"[⚠ {relative} — {note} 来源: {pack}]" for note in result.diagnostics
@@ -253,7 +261,7 @@ def load_item_gold_overrides(pack_dir: Path) -> dict[str, str]:
     如按 SLK 导出物件的系列地图），两者同为物品金币成本字段。
     """
     out: dict[str, str] = {}
-    for r in _read_rows(pack_dir, "对象字段.tsv"):
+    for r in _field_rows(pack_dir):
         if len(r) <= 5:
             continue
         if (
@@ -264,6 +272,23 @@ def load_item_gold_overrides(pack_dir: Path) -> dict[str, str]:
         ):
             out[r[1]] = r[5].strip()
     return out
+
+
+def _field_object_codes(value: str) -> list[str]:
+    """Read rawcodes or the final name(code) suffix, preserving every list entry."""
+    codes: list[str] = []
+    for raw_token in value.split(","):
+        token = raw_token.strip()
+        if valid_object_code(token):
+            codes.append(token)
+        elif (
+            token.endswith(")")
+            and len(token) >= 6
+            and token[-6] == "("
+            and valid_object_code(token[-5:-1])
+        ):
+            codes.append(token[-5:-1])
+    return codes
 
 
 def load_shop_stocks(pack_dir: Path) -> list[tuple[str, str, list[str]]]:
@@ -280,26 +305,29 @@ def load_shop_stocks(pack_dir: Path) -> list[tuple[str, str, list[str]]]:
     custom: list[tuple[str, str, list[str]]] = []
     inherited: list[tuple[str, str, list[str]]] = []
     custom_units: set[str] = set()
-    for r in _read_rows(pack_dir, "对象字段.tsv"):
+    unit_names: dict[str, str] | None = None
+    for r in _field_rows(pack_dir):
         if len(r) <= 5:
             continue
-        if len(r) > 5 and r[3].removeprefix("base:") not in ("usei", "Sellitems"):
+        if r[0] not in ("单位", "英雄") or r[3].removeprefix(
+            "base:"
+        ).casefold() not in ("usei", "sellitems"):
             continue
-        codes = []
-        for raw_token in r[5].split(","):
-            token = raw_token.strip()
-            m = re.search(r"\(([A-Za-z0-9]{4})\)", token)
-            if m:
-                codes.append(m.group(1))
-            elif len(token) == 4:
-                codes.append(token)
-        if not codes:
-            continue
-        if r[3].startswith("base:"):
-            inherited.append((r[1], _clean(r[2]), codes))
-        else:
+        codes = _field_object_codes(r[5])
+        inherited_row = r[3].startswith("base:")
+        if not inherited_row:
             custom_units.add(r[1])
-            custom.append((r[1], _clean(r[2]), codes))
+        if not codes and (inherited_row or r[5].strip()):
+            continue
+        name = _clean(r[2])
+        if not name:
+            if unit_names is None:
+                unit_names = load_units(pack_dir)
+            name = unit_names.get(r[1], r[1])
+        if inherited_row:
+            inherited.append((r[1], name, codes))
+        else:
+            custom.append((r[1], name, codes))
     return custom + [row for row in inherited if row[0] not in custom_units]
 
 
@@ -313,7 +341,7 @@ def load_item_tooltips(pack_dir: Path) -> dict[str, str]:
     电子表格转义前缀单引号，展示前剥离。
     """
     best: dict[str, tuple[int, str]] = {}
-    for r in _read_rows(pack_dir, "对象字段.tsv"):
+    for r in _field_rows(pack_dir):
         if len(r) <= 5:
             continue
         if (
@@ -353,13 +381,13 @@ def load_item_equipped_effects(pack_dir: Path) -> dict[str, list[str]]:
     """
     equipped: dict[str, list[str]] = {}
     stat_rows: dict[str, dict[str, str]] = {}
-    for r in _read_rows(pack_dir, "对象字段.tsv"):
+    for r in _field_rows(pack_dir):
         if len(r) <= 5:
             continue
         if len(r) < 7 or len(r[1]) != 4:
             continue
         if r[0] == "物品" and r[3] == "iabi":
-            codes = [c.strip() for c in r[5].split(",") if len(c.strip()) == 4]
+            codes = _field_object_codes(r[5])
             if codes:
                 equipped.setdefault(r[1], []).extend(codes)
         elif r[0] == "技能":
@@ -431,7 +459,7 @@ def load_techs(pack_dir: Path) -> dict[str, tuple[str, str]]:
 def load_tech_fields(pack_dir: Path) -> dict[str, dict[str, str]]:
     """科技四码 -> {自定义字段键: 值}（不含 base: 继承行；gub1:N/greq:N 原样保留）。"""
     out: dict[str, dict[str, str]] = {}
-    for r in _read_rows(pack_dir, "对象字段.tsv"):
+    for r in _field_rows(pack_dir):
         if len(r) <= 5:
             continue
         if (
@@ -1028,6 +1056,8 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
         stocked.add(shop_code)
         block_start = len(lines)
         lines.append("== " + shop_name + " [" + shop_code + "]")
+        if not codes:
+            lines.append("  货架字段显式为空，未列出出售物品。")
         for c in codes:
             name = items.get(c, (c, ""))[0]
             price = _item_price(bases, c, overrides)
@@ -3003,7 +3033,7 @@ def _diff_field_changes(
     wanted = set(ids)
 
     def collect(pack: Path) -> dict[str, dict[str, str]]:
-        rows = _read_rows(pack, "对象字段.tsv")
+        rows = _field_rows(pack)
         if len(rows) <= 1:
             return {}
         header = rows[0]
