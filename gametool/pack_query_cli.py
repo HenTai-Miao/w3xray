@@ -53,6 +53,11 @@ from .pack_query_objects import (
 )
 from .pack_query_options import PackQueryCliOptions, parse_query_limit
 from .pack_query_placement_index import IndexedPlacements, indexed_placements
+from .pack_query_reference_records import (
+    ReferenceIndex,
+    ReferenceRecord,
+    reference_index,
+)
 from .presentation_safety import single_line_text
 from .static_numbers import format_number
 from .script_lexing import literal_string_value, script_views
@@ -249,6 +254,18 @@ def _named_rows(
 def _table_is_readable(pack: Path, relative: str) -> bool:
     with _TABLE_READ_LOCK:
         return (str(pack), relative) not in _LOCKED_FILES
+
+
+def _reference_index(pack: Path) -> ReferenceIndex:
+    relative = "脚本对象码出现索引.tsv"
+    result = reference_index(_read_rows(pack, relative))
+    if not _table_is_readable(pack, relative):
+        result = dataclass_replace(result, readable=False)
+    if _QUERY_OBJECT_WARNINGS is not None and result.diagnostics:
+        _QUERY_OBJECT_WARNINGS.setdefault(str(pack), []).extend(
+            f"[⚠ {relative} — {note} 来源: {pack}]" for note in result.diagnostics
+        )
+    return result
 
 
 def _named_table(pack: Path, relative: str, table: str = "") -> ObjectTable:
@@ -948,34 +965,52 @@ def _query_locate(pack: Path, query: str, limit: int) -> list[str]:
     脚本对象码出现索引.tsv, 「全部码都出现」的子图即候选任务关——
     容器包由 run_pack_query_cli 自动逐关分段 (== 子地图 名 ==)。"""
     del limit  # locate 满量列出全部引用数, 截断不适用
-    codes = [c.strip() for c in re.split(r"[;,，；\s]+", query) if c.strip()]
+    codes = list(
+        dict.fromkeys(c.strip() for c in re.split(r"[;,，；\s]+", query) if c.strip())
+    )
     if not codes:
         return ["用法: locate <码1;码2;...> (特征码交集, 全部码都出现才算命中)"]
-    rows = _read_rows(pack, "脚本对象码出现索引.tsv")
-    if not rows:
+    index = _reference_index(pack)
+    if not index.available:
         return [
             "未找到 脚本对象码出现索引.tsv（资料包未导出脚本索引——用 cli <地图> --pack 重导一次即有）"
         ]
-    counts: dict[str, int] = {c.lower(): 0 for c in codes}
-    for r in rows:
-        if len(r) < 4:
-            continue
-        key = r[3].lower()
-        if key in counts:
-            counts[key] += 1
-    missing = [c for c in codes if counts[c.lower()] == 0]
+    counts = Counter(record.code for record in index.records)
+    missing = [c for c in codes if counts[c] == 0]
+    suffix = " 处引用" if index.complete else " 处已确认引用（索引不完整）"
     if missing:
-        lines = ["未找到: 缺少 " + "、".join(missing) + "（特征码未全部出现）"]
+        lines = [
+            "未找到: "
+            + ("缺少 " if index.complete else "尚未确认 ")
+            + "、".join(missing)
+            + "（特征码未全部出现）"
+        ]
         # 部分命中仍有定位价值: 列出已出现码的引用数, 缩小候选范围
         for c in codes:
             if c not in missing:
                 lines.append(
-                    "  已命中 " + c + ": " + str(counts[c.lower()]) + " 处引用"
+                    "  已命中 "
+                    + c
+                    + ": "
+                    + ("" if index.complete else "至少")
+                    + str(counts[c])
+                    + suffix
                 )
+        if not index.complete:
+            lines.append(
+                "  索引不完整，不能据此排除任务关；用 text <码> 查原文或重新导出知识包。"
+            )
         return lines
     lines = ["命中全部 " + str(len(codes)) + " 个特征码: " + "、".join(codes)]
     for c in codes:
-        lines.append("  " + c + ": " + str(counts[c.lower()]) + " 处引用")
+        lines.append(
+            "  "
+            + c
+            + ": "
+            + ("" if index.complete else "至少")
+            + str(counts[c])
+            + suffix
+        )
     return lines
 
 
@@ -2895,46 +2930,67 @@ def _ref_kind(mech: str, digest: str, *, context: str = "") -> str:
 
 
 def _query_refs(pack: Path, query: str, limit: int) -> list[str]:
-    rows = _read_rows(pack, "脚本对象码出现索引.tsv")
-    if not rows:
+    index = _reference_index(pack)
+    if not index.available:
         return [
             "未找到 脚本对象码出现索引.tsv（资料包未导出脚本索引——用 cli <地图> --pack 重导一次即有）"
         ]
-    groups: dict[tuple[str, str], tuple[str, dict[str, list[str]]]] = {}
-    for row in rows:
-        if len(row) < 11:
-            continue
-        code, kind, name = row[3], row[5], _clean(row[6])
-        if not _is_record_code(code) or not _match(query, code, name):
-            continue
-        _name, buckets = groups.setdefault(
-            (kind, code), (name, {"give": [], "consume": [], "other": []})
+    all_groups: dict[tuple[str, str], list[ReferenceRecord]] = {}
+    for record in index.records:
+        all_groups.setdefault((record.category, record.code), []).append(record)
+    groups = {
+        key: records
+        for key, records in all_groups.items()
+        if not query
+        or any(
+            _match(query, key[1], _clean(alias))
+            for record in records
+            for alias in record.aliases
         )
-        mech, digest = row[9], row[10]
-        source = row[0] + ":" if row[0] else ""
-        buckets[_ref_kind(mech, digest, context=row[8])].append(
-            f"    {source}行{row[1]} {row[2]}  {mech} {digest}"
-        )
+    }
     if not groups:
+        if not index.complete:
+            return [
+                "未找到可确认引用: " + query,
+                "  索引不完整，不能判断孤立或后续升级；用 text <词> 查原文或重新导出知识包。",
+            ]
         return [
             "未找到引用: " + query,
             "  （引用来自 对象字段.tsv 的单位/物品/技能列表与脚本 native 提码——对象若从未被引用, 此处即「孤立对象」信号）",
         ]
     blocks: list[list[str]] = []
     encrypted = _script_encrypted(pack)
-    for (kind, code), (name, buckets) in groups.items():
+    for (kind, code), records in _bounded(list(groups.items()), limit):
+        name = _clean(records[0].name)
+        buckets: dict[str, list[str]] = {"give": [], "consume": [], "other": []}
+        classified: Counter[str] = Counter()
+        for record in records:
+            mech, digest = record.mechanism, record.summary
+            source = record.source + ":" if record.source else ""
+            classification = _ref_kind(mech, digest, context=record.context)
+            classified[classification] += 1
+            buckets[classification].extend(
+                [
+                    f"    {source}行{record.line} {record.function}  {mech} {digest}",
+                    *(f"      {label}: {value}" for label, value in record.evidence),
+                ]
+            )
         give, consume, other = buckets["give"], buckets["consume"], buckets["other"]
         block = [
-            f"[{code}] {name}  ({kind})  共{len(give) + len(consume) + len(other)}处引用",
-            f"  给予/创建: {len(give)} 处",
+            f"[{code}] {name}  ({kind})  {'共' if index.complete else '至少'}{len(records)}处引用",
+            f"  给予/创建: {classified['give']} 处",
             *give,
-            f"  作为材料/触发媒介(被检测或移除): {len(consume)} 处",
+            f"  作为材料/触发媒介(被检测或移除): {classified['consume']} 处",
             *consume,
         ]
         if other:
-            block.extend([f"  其他引用: {len(other)} 处", *other])
+            block.extend([f"  其他引用: {classified['other']} 处", *other])
         if kind == "物品" and give and not consume:
-            if encrypted:
+            if not index.complete:
+                block.append(
+                    "  ⚠ 索引不完整，消耗引用未知，不能据此排除后续升级；用 text <码> 查完整原文。"
+                )
+            elif encrypted:
                 block.append(
                     "  ⚠ 脚本加密: 消耗引用不可读, '终止'结论不成立——先用 pack-query drop <物品名> 查文案级配方线索"
                 )
@@ -2946,7 +3002,10 @@ def _query_refs(pack: Path, query: str, limit: int) -> list[str]:
                     f"    获取/配方复核: recipe {code} / drop {code}；名字带[N/M]不证明存在下一级。"
                 )
         blocks.append(block)
-    return _limit_result_blocks(blocks, limit)
+    lines = [line for block in blocks for line in block]
+    if note := _truncated_note(groups, limit):
+        lines.append(note)
+    return lines
 
 
 def _load_affixes(pack_dir: Path) -> list[tuple[str, str, str]]:
