@@ -393,6 +393,7 @@ gametool/pack_query_object_details.py
 gametool/pack_query_text_records.py
 gametool/pack_query_quest_records.py
 gametool/pack_query_reference_records.py
+gametool/pack_query_call_records.py
 gametool/query_coordinates.py
 gametool/query_coordinate_json.py
 gametool/presentation_safety.py

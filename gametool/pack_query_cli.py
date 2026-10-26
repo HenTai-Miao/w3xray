@@ -52,6 +52,11 @@ from .pack_query_objects import (
     valid_object_code,
 )
 from .pack_query_options import PackQueryCliOptions, parse_query_limit
+from .pack_query_call_records import (
+    CallArgumentIndex,
+    call_argument_index,
+    formula_argument_groups,
+)
 from .pack_query_placement_index import IndexedPlacements, indexed_placements
 from .pack_query_reference_records import (
     ReferenceIndex,
@@ -672,65 +677,38 @@ def _item_price(
     return prices.get(code.lower(), "")
 
 
-def _call_argument_rows(pack: Path) -> list[tuple[list[str], str, str]]:
-    """Read appended index columns by header while accepting headerless old packs."""
-    rows = _read_rows(pack, "脚本调用参数索引.tsv")
-    header = rows[0] if rows and rows[0][:2] == ["来源", "行号"] else []
-    summary_index = header.index("摘要") if "摘要" in header else -1
-    offset_index = header.index("调用偏移") if "调用偏移" in header else None
-    return [
-        (
-            row,
-            row[summary_index],
-            row[offset_index]
-            if offset_index is not None and offset_index < len(row)
-            else "",
+def _call_index_diagnostics(pack: Path, notes: Sequence[str]) -> None:
+    if _QUERY_OBJECT_WARNINGS is not None and notes:
+        _QUERY_OBJECT_WARNINGS.setdefault(str(pack), []).extend(
+            f"[⚠ 脚本调用参数索引.tsv — {note} 来源: {pack}]" for note in notes
         )
-        for row in (rows[1:] if header else rows)
-        if row and (summary_index < 0 or summary_index < len(row))
+
+
+def _call_argument_index(pack: Path) -> CallArgumentIndex:
+    index = call_argument_index(_read_rows(pack, "脚本调用参数索引.tsv"))
+    _call_index_diagnostics(pack, index.diagnostics)
+    return index
+
+
+def _call_argument_rows(pack: Path) -> list[tuple[list[str], str, str]]:
+    """Adapt declared source columns for existing formula/placement consumers."""
+    return [
+        (list(record.row), record.summary, record.offset)
+        for record in _call_argument_index(pack).records
     ]
 
 
 def _indexed_call_identity(
-    row: list[str], summary: str, offset: str
+    row: Sequence[str], summary: str, offset: str
 ) -> tuple[str, ...]:
     if offset:
         return row[0], offset
     return (*row[:2], summary) if len(row) > 2 else tuple(row)
 
 
-def _indexed_formula_arguments(rows: list[list[str]]) -> list[tuple[str, ...]]:
-    """Recover multiline calls from consecutive complete argument-index rows."""
-    groups: list[tuple[str, ...]] = []
-    args: list[str] = []
-    previous: tuple[str, ...] = ()
-    for row in rows:
-        key = (*row[:4], row[-1]) if len(row) >= 11 else ()
-        position = (
-            row[4].lstrip("0")
-            if key and row[3] == "YDWENewItemsFormula" and row[4].isdigit()
-            else ""
-        )
-        if key != previous or position != str(len(args) + 1):
-            if args:
-                groups.append(tuple(args))
-            args = []
-        previous = key
-        if position == str(len(args) + 1):
-            value = row[5]
-            # Undo only the exporter-added spreadsheet prefix on signed numbers.
-            value = (
-                re.sub(r"^(\s*)'(?=[+-])", r"\1", value)
-                if not value.rstrip().endswith("'")
-                else value
-            )
-            args.append(value)
-    if args:
-        groups.append(tuple(args))
-    return groups
-
-
-def load_formulas(pack_dir: Path) -> list[tuple[str, list[tuple[str, int]]]]:
+def load_formulas(
+    pack_dir: Path, *, diagnostics: list[str] | None = None
+) -> list[tuple[str, list[tuple[str, int]]]]:
     """Read source formulas plus legacy call summaries with exact quantities."""
     from .script_recipes import formula_from_arguments, scan_formulas
 
@@ -746,14 +724,20 @@ def load_formulas(pack_dir: Path) -> list[tuple[str, list[tuple[str, int]]]]:
     indexed_formulas = []
     available = tuple(source for source, _script, _lua in contexts)
     declared = _pack_script_type(pack_dir)
-    entries = _call_argument_rows(pack_dir)
-    rows = [row for row, _summary, _offset in entries]
+    index = _call_argument_index(pack_dir)
+    arguments, notes = formula_argument_groups(index)
+    _call_index_diagnostics(pack_dir, notes)
+    if diagnostics is not None:
+        diagnostics.extend((*index.diagnostics, *notes))
+        if not _table_is_readable(pack_dir, "脚本调用参数索引.tsv"):
+            diagnostics.append("调用参数索引读取失败，未用空结果证明无配方。")
     structured = [
         parsed
-        for args in _indexed_formula_arguments(rows)
+        for args in arguments
         if (parsed := formula_from_arguments(args)) is not None
     ]
-    for row, summary, offset in entries:
+    for record in index.records:
+        row, summary, offset = record.row, record.summary, record.offset
         if "YDWENewItemsFormula" not in summary:
             continue
         key = _indexed_call_identity(row, summary, offset)
@@ -1232,7 +1216,8 @@ def _query_synth(pack: Path, query: str, limit: int) -> list[str]:
         out.append(
             "[" + prod + "] " + pname + "  <-  " + mats + _recipe_evidence_note(r)
         )
-    for prod, pairs in load_formulas(pack):
+    formula_diagnostics: list[str] = []
+    for prod, pairs in load_formulas(pack, diagnostics=formula_diagnostics):
         key = (prod, tuple(sorted(pairs)))
         if key in seen_formulas:
             continue
@@ -1244,6 +1229,11 @@ def _query_synth(pack: Path, query: str, limit: int) -> list[str]:
         )
         out.append("[" + prod + "] " + prod_name + "  <-  " + need)
     if not out:
+        if formula_diagnostics:
+            return [
+                "未找到可确认合成配方：调用索引不完整。",
+                "可用 text <材料或成品> 查完整原文，或重新导出知识包后再查。",
+            ]
         return ["本包无合成配方"]
     return sorted(dict.fromkeys(out), key=str.casefold)
 
