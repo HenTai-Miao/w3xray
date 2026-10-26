@@ -1295,8 +1295,11 @@ def test_query_diff_identical_packs_report_no_difference(
 
 def test_query_buffs_lists_and_filters(tmp_path, pack, capsys) -> None:
     # Given: the pack fixture has no 增益.tsv.
-    run_pack_query_cli(parse_pack_query_cli_options((str(tmp_path), "buffs")))
-    assert capsys.readouterr().out.strip() == "本包无 增益.tsv (地图未自定义增益)"
+    assert (
+        run_pack_query_cli(parse_pack_query_cli_options((str(tmp_path), "buffs"))) == 2
+    )
+    missing = capsys.readouterr().out
+    assert "0 项" in missing and "对象字段.tsv" in missing and "near" in missing
 
     # When: a buff table exists and a keyword filters it.
     obj = tmp_path / "对象ID"
@@ -1321,8 +1324,8 @@ def test_query_buffs_lists_and_filters(tmp_path, pack, capsys) -> None:
 def test_query_heroes_missing_table_points_to_search(tmp_path, pack, capsys) -> None:
     run_pack_query_cli(parse_pack_query_cli_options((str(tmp_path), "heroes")))
     text = capsys.readouterr().out.strip()
-    assert "本包无 英雄.tsv" in text
-    assert "search" in text
+    assert "0 项" in text and "对象ID/英雄.tsv" in text
+    assert "search" in text and "units" in text
 
 
 def test_query_export_writes_markdown(tmp_path, pack, capsys) -> None:

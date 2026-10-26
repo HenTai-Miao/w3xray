@@ -5,20 +5,12 @@ from dataclasses import dataclass
 import re
 
 from .pack_query_objects import valid_object_code
+from .pack_query_field_evidence import ObjectField as AbilityField, field_record
 
 _ATTRIBUTES = {"Istr": "力量", "Iagi": "敏捷", "Iint": "智力"}
 _ATTRIBUTE = re.compile(r"(Istr|Iagi|Iint)(?::([0-9]+)|([0-9]+))?\Z")
 _NUMBER = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?\Z")
 _INHERITED_LINKS = {"base:iabi", "base:abillist", "base:技能"}
-
-
-@dataclass(frozen=True, slots=True)
-class AbilityField:
-    key: str
-    label: str
-    value: str
-    source: str
-    extras: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -144,18 +136,7 @@ class ItemAbilityIndex:
                 )
                 continue
             for row in ability.fields:
-                key = row.key or "（字段键未记录）"
-                label = " / " + row.label if row.label and row.label != row.key else ""
-                inherited_tag = (
-                    "（继承字段原文）" if row.key.casefold().startswith("base:") else ""
-                )
-                lines.append(
-                    f"    {key}{label}{inherited_tag}: {row.value or '（显式空值）'}  [来源: {row.source or '来源未记录'}]"
-                )
-                lines.extend(
-                    f"      {label}: {value or '（显式空值）'}"
-                    for label, value in row.extras
-                )
+                lines.extend(row.render_lines())
         return tuple(lines)
 
 
@@ -182,15 +163,8 @@ def item_ability_index(
             for code in link.codes:
                 referenced.setdefault(code, None)
         elif row[0] == "技能":
-            extras = tuple(
-                (
-                    header[index] if index < len(header) else f"扩展字段{index + 1}",
-                    value,
-                )
-                for index, value in enumerate(row[7:], 7)
-            )
             fields.setdefault(row[1], {}).setdefault(
-                AbilityField(row[3], clean(row[4]), row[5], row[6], extras), None
+                field_record(row, header, clean), None
             )
             if name := clean(row[2]):
                 names.setdefault(row[1], {}).setdefault(name, None)

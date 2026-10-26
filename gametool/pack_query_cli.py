@@ -3149,65 +3149,25 @@ def _query_doc(pack: Path, query: str, limit: int) -> list[str]:
     return out
 
 
-def _query_object_list(
-    pack: Path, query: str, table: str, missing: str, limit: int = 0
-) -> list[str]:
-    """List every valid legacy/current record and its complete description."""
-    rows = _object_rows(pack, table)
-    if len(rows) <= 1:
-        if _QUERY_OBJECT_WARNINGS is not None and any(
-            f"对象ID/{table}.tsv" in note
-            for note in _QUERY_OBJECT_WARNINGS.get(str(pack), ())
-        ):
-            return [
-                f"未找到可查询对象: {table}；请核对下方对象表诊断或重新导出知识包。"
-            ]
-        return [missing]
-    needle = _clean(query).casefold()
-    out: list[str] = []
-    total = 0
-    for row in rows[1:]:
-        if len(row) < 5:
-            continue
-        total += 1
-        code, name = row[1], _clean(row[4])
-        custom = row[5].strip() if len(row) > 5 else ""
-        note = _clean(row[6]) if len(row) > 6 else ""
-        if needle and not any(needle in text.casefold() for text in (code, name, note)):
-            continue
-        origin = (
-            "自定义"
-            if custom == "是"
-            else "继承基础"
-            if custom == "否"
-            else "来源未记录"
-        )
-        out.append(f"[{code}] {name} ({origin})" + (f" — {note}" if note else ""))
-    if out:
-        note = _truncated_note(out, limit)
-        return [*_bounded(out, limit), *([note] if note else [])]
-    return [
-        "未找到: " + query + " (名称/ID/效果三路过滤)",
-        f"  本图{table}表共 {total} 项；可换名称或四码，或用 search <词> 跨八表查说明。",
-    ]
+def _query_object_list(pack: Path, query: str, table: str, limit: int = 0) -> list[str]:
+    """Query full object identities and source-qualified field evidence."""
+    from .pack_query_object_details import ObjectDetailSources, query_object_details
+
+    return query_object_details(
+        pack,
+        query,
+        table,
+        limit,
+        cast(ObjectDetailSources, cast(object, sys.modules[__name__])),
+    )
 
 
 def _query_buffs(pack: Path, query: str, limit: int) -> list[str]:
-    """Complete 增益 listing, including legacy rows without optional columns."""
-    return _query_object_list(
-        pack, query, "增益", "本包无 增益.tsv (地图未自定义增益)", limit
-    )
+    return _query_object_list(pack, query, "增益", limit)
 
 
 def _query_heroes(pack: Path, query: str, limit: int) -> list[str]:
-    """Complete 英雄 listing, including legacy rows without optional columns."""
-    return _query_object_list(
-        pack,
-        query,
-        "英雄",
-        "本包无 英雄.tsv (英雄类单位通常并入 单位 表 — 用 search 查)",
-        limit,
-    )
+    return _query_object_list(pack, query, "英雄", limit)
 
 
 def _code_home_hint(pack: Path, query: str) -> str:
@@ -3222,12 +3182,12 @@ def _code_home_hint(pack: Path, query: str) -> str:
 
 def _query_units(pack: Path, query: str, limit: int) -> list[str]:
     """Complete 单位 listing, including legacy rows without optional columns."""
-    return _query_object_list(pack, query, "单位", "本包无 单位.tsv", limit)
+    return _query_object_list(pack, query, "单位", limit)
 
 
 def _query_skills(pack: Path, query: str, limit: int) -> list[str]:
     """Complete 技能 listing, including legacy rows without optional columns."""
-    return _query_object_list(pack, query, "技能", "本包无 技能.tsv", limit)
+    return _query_object_list(pack, query, "技能", limit)
 
 
 def _query_stats(pack: Path, query: str, limit: int) -> list[str]:
@@ -3434,6 +3394,7 @@ def _campaign_subpacks(pack: Path) -> list[Path]:
         if p.is_dir()
         and (
             (p / "掉落与获取关系.tsv").is_file()
+            or (p / "对象字段.tsv").is_file()
             or (p / "对象ID").is_dir()
             or (p / "内容清单.json").is_file()
             or (p / "脚本可读文本").is_dir()

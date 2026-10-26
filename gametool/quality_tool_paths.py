@@ -388,6 +388,8 @@ gametool/pack_query_search.py
 gametool/pack_query_objects.py
 gametool/pack_query_diff.py
 gametool/pack_query_item_abilities.py
+gametool/pack_query_field_evidence.py
+gametool/pack_query_object_details.py
 gametool/query_coordinates.py
 gametool/query_coordinate_json.py
 gametool/presentation_safety.py
