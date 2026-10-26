@@ -314,6 +314,11 @@ def load_destructables(pack_dir: Path) -> dict[str, str]:
     }
 
 
+def load_doodads(pack_dir: Path) -> dict[str, str]:
+    """装饰物四码 -> 名称，与同码可破坏物分开保留。"""
+    return {row[1]: _clean(row[4]) for row in _object_rows(pack_dir, "装饰物")}
+
+
 def load_item_bases(pack_dir: Path) -> dict[str, str]:
     """物品四码 -> 基础对象四码（对象ID/物品.tsv 第4列）。"""
     out: dict[str, str] = {}
@@ -1377,14 +1382,27 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
     placement_names = {"unit": units, "item": item_names, "destructable": destructables}
     blocks = _AcquisitionBlocks()
     sources = cast(SpatialSources, cast(object, sys.modules[__name__]))
-    for kind, code, raw_name, (x, y) in preplaced_objects(pack, sources):
-        name = names.get(code, _clean(raw_name))
-        if _match(query, code, name):
-            tag = "可破坏物" if code in destructables and kind == "装饰" else kind
+    preplaced_names = {
+        "单位": units,
+        "物品": item_names,
+        "可破坏物": destructables,
+        "装饰": load_doodads(pack),
+    }
+    preplaced_notes: list[str] = []
+    for kind, code, raw_name, (x, y) in preplaced_objects(
+        pack,
+        sources,
+        diagnostics=preplaced_notes,
+        source_identities=_source_drop_map(pack),
+    ):
+        name = preplaced_names.get(kind, {}).get(code, _clean(raw_name))
+        if _match(query, code, name) or _match(query, code, _clean(raw_name)):
             blocks.record(
                 code,
-                f"[{code}] {name} ({tag}) -> ({format_number(x)}, {format_number(y)}) [预放置]",
+                f"[{code}] {name} ({kind}) -> ({format_number(x)}, {format_number(y)}) [预放置]",
             )
+    if _QUERY_OBJECT_WARNINGS is not None and preplaced_notes:
+        _QUERY_OBJECT_WARNINGS.setdefault(str(pack), []).extend(preplaced_notes)
     for code, x, y, kind in load_placements(pack):
         name = placement_names[kind].get(code, code)
         if _match(query, code, name):

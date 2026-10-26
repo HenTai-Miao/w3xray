@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
+from collections.abc import Container, Iterator, Sequence
 from dataclasses import dataclass
 import math
 from pathlib import Path
 from typing import Protocol, TypedDict, runtime_checkable
 
 from .pack_query_regions import NearRegion, containing_regions
+from .pack_query_preplaced import preplaced_table, record_diagnostic
 from .pack_query_options import query_limit_error
 from .static_numbers import format_number
 from .script_sources import AnalysisScriptSource
@@ -46,6 +47,7 @@ class SpatialSources(Protocol):
     def load_items(self, pack: Path) -> dict[str, tuple[str, str]]: ...
     def load_units(self, pack: Path) -> dict[str, str]: ...
     def load_destructables(self, pack: Path) -> dict[str, str]: ...
+    def load_doodads(self, pack: Path) -> dict[str, str]: ...
     def load_placements(self, pack: Path) -> list[tuple[str, float, float, str]]: ...
     def load_script_sources(self, pack: Path) -> tuple[tuple[str, str], ...]: ...
     def load_script_contexts(self, pack: Path) -> tuple[AnalysisScriptSource, ...]: ...
@@ -59,14 +61,20 @@ class PlacementDiagnostics(Protocol):
 
 
 def preplaced_objects(
-    pack: Path, sources: SpatialSources
+    pack: Path,
+    sources: SpatialSources,
+    *,
+    diagnostics: list[str] | None = None,
+    source_identities: Container[tuple[str, str]] = (),
 ) -> Iterator[tuple[str, str, str, Point]]:
     """Share complete, header-driven placement reads across where and near."""
     item_names = {
         code: name for code, (name, _description) in sources.load_items(pack).items()
     }
     for relative, kind in (("预放置单位.tsv", "单位"), ("预放置装饰物.tsv", "装饰")):
-        yield from _placed_rows(pack, relative, kind, item_names, sources)
+        yield from _placed_rows(
+            pack, relative, kind, item_names, sources, diagnostics, source_identities
+        )
 
 
 def _placed_rows(
@@ -75,27 +83,48 @@ def _placed_rows(
     default_kind: str,
     item_names: dict[str, str],
     sources: SpatialSources,
+    diagnostics: list[str] | None = None,
+    source_identities: Container[tuple[str, str]] = (),
 ) -> Iterator[tuple[str, str, str, Point]]:
-    rows = sources._read_rows(pack, relative)
-    if not rows:
-        return
-    try:
-        x_column, y_column = rows[0].index("X"), rows[0].index("Y")
-    except ValueError:
-        x_column, y_column = 3, 4
-    for row in rows[1:]:
-        if len(row) <= max(x_column, y_column, 2):
-            continue
-        code, name = row[1], row[2] or row[1]
-        kind = "物品" if default_kind == "单位" and code in item_names else default_kind
-        if kind == "物品" and name == code:
-            name = item_names[code]
-        try:
-            point = (float(row[x_column]), float(row[y_column]))
-        except ValueError:
-            continue
-        if all(math.isfinite(value) for value in point):
-            yield kind, code, name, point
+    units = default_kind == "单位"
+    table = preplaced_table(sources._read_rows(pack, relative), units=units)
+    catalogs = (
+        {"单位": sources.load_units(pack), "物品": item_names}
+        if units
+        else {
+            "可破坏物": sources.load_destructables(pack),
+            "装饰物": sources.load_doodads(pack),
+        }
+    )
+    notes = list(table.diagnostics)
+    for record in table.records:
+        category = record.category
+        if category is None:
+            candidates = [
+                key
+                for key, names in catalogs.items()
+                if record.code in names or (key, record.code) in source_identities
+            ]
+            if len(candidates) > 1:
+                category = ""
+                notes.append(
+                    record_diagnostic(
+                        record.ordinal,
+                        record.raw,
+                        "对象表存在同码不同分类，保留坐标但未猜测分类",
+                    )
+                )
+            else:
+                category = (
+                    candidates[0] if candidates else ("单位" if units else "装饰物")
+                )
+        kind = "装饰" if category == "装饰物" else category or "类别未确认"
+        name = record.name or catalogs.get(category, {}).get(record.code, record.code)
+        if name == record.code:
+            name = catalogs.get(category, {}).get(record.code, name)
+        yield kind, record.code, name, record.point
+    if diagnostics is not None:
+        diagnostics.extend(f"[⚠ {relative} — {note} 来源: {pack}]" for note in notes)
 
 
 def cluster_points(
@@ -270,9 +299,16 @@ def query_near(
         grouped: dict[tuple[str, str, str], list[Point]] = {}
         nearest: dict[str, list[tuple[float, str]]] = {}
         for kind, code, name, point in _placed_rows(
-            pack, relative, default_kind, item_names, sources
+            pack,
+            relative,
+            default_kind,
+            item_names,
+            sources,
+            output.spatial_diagnostics,
+            drops,
         ):
-            if kind_filter and kind_filter != kind:
+            filter_kind = "装饰" if kind == "可破坏物" else kind
+            if kind_filter and kind_filter != filter_kind:
                 continue
             distance = output.distance(point)
             nearest.setdefault(kind, []).append((distance, f"{name} [{code}]"))
@@ -280,17 +316,21 @@ def query_near(
                 grouped.setdefault((kind, code, name), []).append(point)
         hits: list[tuple[float, str, str, str, tuple[Point, ...]]] = []
         for (kind, code, name), points in grouped.items():
-            groups = cluster_points(points) if kind == "装饰" else (tuple(points),)
+            groups = (
+                cluster_points(points)
+                if kind in ("装饰", "可破坏物")
+                else (tuple(points),)
+            )
             for group in groups:
                 hits.append((output.distance(_center(group)), kind, code, name, group))
         hits.sort(key=lambda hit: (hit[0], hit[1], hit[2], hit[3]))
         for _distance, kind, code, name, points in hits[:limit] if limit else hits:
             output.add(
-                "装饰群" if kind == "装饰" else kind,
+                "装饰群" if kind in ("装饰", "可破坏物") else kind,
                 name,
                 code,
                 points,
-                drops=drops.get(("可破坏物" if kind == "装饰" else kind, code)),
+                drops=drops.get((kind, code)),
                 sell=shops.get(code) if kind == "单位" else None,
             )
         output.limit_note(len(hits), limit)
@@ -355,12 +395,15 @@ def query_near(
             f"坐标 ({format_number(x)},{format_number(y)}) 半径 {format_number(radius)} 内无{detail}。",
             "  （核对坐标; 可去掉 --kind 看全部类，或加大半径参数: near <x> <y> <radius>）",
         ]
+    diagnostic_kinds = ["预放置"] if output.spatial_diagnostics else []
     if isinstance(sources, PlacementDiagnostics) and (
         notes := sources.load_placement_diagnostics(pack)
     ):
         output.spatial_diagnostics.extend(notes)
+        diagnostic_kinds.append("脚本")
+    if output.spatial_diagnostics:
         output.lines.append(
-            f"  ⚠ 另有 {len(notes)} 条脚本点位诊断（对象、坐标或来源未确认）；上述结果仅含已确认点位。"
+            f"  ⚠ 另有 {len(output.spatial_diagnostics)} 条{'/'.join(diagnostic_kinds)}点位诊断（分类、对象、坐标或来源未确认）；结果保留已确认坐标，未猜测未知分类。"
         )
-        output.lines.extend(notes)
+        output.lines.extend(output.spatial_diagnostics)
     return output.result()

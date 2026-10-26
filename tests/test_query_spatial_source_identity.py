@@ -156,8 +156,8 @@ def test_preplaced_items_and_destructables_never_inherit_unit_shop_stock(
     _write(
         tmp_path / "预放置单位.tsv",
         [
-            ["序号", "类型ID", "名称", "玩家", "X", "Y"],
-            ["1", "X001", "地面同码", "0", "0", "0"],
+            ["序号", "类型ID", "名称", "玩家", "X", "Y", "分类"],
+            ["1", "X001", "地面同码", "0", "0", "0", "物品"],
         ],
     )
     _write(
