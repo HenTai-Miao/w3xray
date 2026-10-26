@@ -49,7 +49,7 @@ class SpatialSources(Protocol):
     def load_placements(self, pack: Path) -> list[tuple[str, float, float, str]]: ...
     def load_script_sources(self, pack: Path) -> tuple[tuple[str, str], ...]: ...
     def load_script_contexts(self, pack: Path) -> tuple[AnalysisScriptSource, ...]: ...
-    def _source_drop_map(self, pack: Path) -> dict[str, str]: ...
+    def _source_drop_map(self, pack: Path) -> dict[tuple[str, str], str]: ...
     def _source_shop_map(self, pack: Path) -> dict[str, str]: ...
 
 
@@ -290,8 +290,8 @@ def query_near(
                 name,
                 code,
                 points,
-                drops=drops.get(code),
-                sell=shops.get(code),
+                drops=drops.get(("可破坏物" if kind == "装饰" else kind, code)),
+                sell=shops.get(code) if kind == "单位" else None,
             )
         output.limit_note(len(hits), limit)
         found_kinds = {kind for kind, _code, _name in grouped}
@@ -326,7 +326,12 @@ def query_near(
                 names.get(code, code),
                 code,
                 tuple(points),
-                drops=drops.get(code) if placement_kind != "item" else None,
+                drops=drops.get(
+                    (
+                        "可破坏物" if placement_kind == "destructable" else filter_kind,
+                        code,
+                    )
+                ),
                 sell=shops.get(code) if placement_kind == "unit" else None,
             )
         output.limit_note(len(ordered), limit)

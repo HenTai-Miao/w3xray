@@ -47,6 +47,7 @@ from .csv_fields import full_csv_fields
 from .pack_query_objects import (
     OBJECT_TABLES,
     ObjectTable,
+    object_category,
     object_field_table,
     object_table,
     valid_object_code,
@@ -2703,30 +2704,70 @@ def _fn_body(script: str, fn: str, *, preserve_whitespace: bool = False) -> str:
     return body.strip() if preserve_whitespace else " ".join(body.split())
 
 
-def _source_drop_map(pack: Path) -> dict[str, str]:
-    """来源ID -> 掉落物品清单 (关系表 掉落 行 + YDWE 每单位死亡随机模板)。
+_DROP_SOURCE_KINDS = {
+    "怪物直接掉落": "单位",
+    "单位掉落": "单位",
+    "unit_drop": "单位",
+    "可破坏物掉落": "可破坏物",
+    "destructable_drop": "可破坏物",
+    "destructible_drop": "可破坏物",
+}
+
+
+def _source_drop_map(pack: Path) -> dict[tuple[str, str], str]:
+    """(来源分类, ID) -> 完整掉落清单，禁止不同对象表的同码互相串用。
 
     脚本独有掉落 (关系表无行) 同样要进 near 的「掉:」注解——第三形态与
     drop/where/guide 同源, 否则脚底单位注解会漏报。"""
-    drops: dict[str, list[str]] = {}
-    codes_by_src: dict[str, set[str]] = {}
-    for r in _read_rows(pack, "掉落与获取关系.tsv"):
-        if len(r) < 8 or "掉落" not in r[2]:
+    drops: dict[tuple[str, str], list[str]] = {}
+    entries_by_src: dict[tuple[str, str], set[str]] = {}
+    codes_by_src: dict[tuple[str, str], set[str]] = {}
+    for ordinal, r in enumerate(_read_rows(pack, "掉落与获取关系.tsv"), 1):
+        if len(r) < 3:
             continue
-        src = r[6]
-        if not src:
+        kind = r[2].strip().casefold()
+        typed_category = _DROP_SOURCE_KINDS.get(kind, "")
+        if "掉落" not in kind and not typed_category:
             continue
+        category = object_category(r[5]) if len(r) > 5 else ""
+        if category == "英雄":
+            category = "单位"
+        reason = ""
+        if len(r) < 8:
+            reason = "掉落记录缺少来源字段"
+        elif category and typed_category and category != typed_category:
+            reason = "来源分类与掉落类型冲突"
+        elif not category:
+            category = typed_category
+        if not reason and category not in OBJECT_TABLES:
+            reason = "掉落来源分类未确认"
+        if not reason and (not valid_object_code(r[6]) or not valid_object_code(r[3])):
+            reason = "掉落来源或物品 ID 不是有效四字节对象码"
+        if reason:
+            if _QUERY_OBJECT_WARNINGS is not None:
+                _QUERY_OBJECT_WARNINGS.setdefault(str(pack), []).append(
+                    f"[⚠ 掉落与获取关系.tsv — 记录 {ordinal}: {reason}；"
+                    "保留原始证据，请核对来源分类/对象码或重新导出；"
+                    "可用 drop <码> / text <词> 继续查询。原始记录: "
+                    f"{json.dumps(r, ensure_ascii=False)} 来源: {pack}]"
+                )
+            continue
+        if category not in ("单位", "物品", "可破坏物"):
+            continue
+        identity = (category, r[6])
         entry = _clean(r[4]) + "[" + r[3] + "]"
-        lst = drops.setdefault(src, [])
-        if entry not in lst:
-            lst.append(entry)
-        codes_by_src.setdefault(src, set()).add(r[3])
+        entries = entries_by_src.setdefault(identity, set())
+        if entry not in entries:
+            entries.add(entry)
+            drops.setdefault(identity, []).append(entry)
+        codes_by_src.setdefault(identity, set()).add(r[3])
     script = load_script(pack)
     if script is not None:
         item_names = load_items(pack)
         for code, _fn, regs in _unit_death_random_drops(script):
-            known = codes_by_src.setdefault(code, set())
-            lst = drops.setdefault(code, [])
+            identity = ("单位", code)
+            known = codes_by_src.setdefault(identity, set())
+            lst = drops.setdefault(identity, [])
             for icode, _w in regs:
                 if icode in known:
                     continue
@@ -2735,7 +2776,7 @@ def _source_drop_map(pack: Path) -> dict[str, str]:
                 lst.append(
                     (iname if iname and iname != icode else "") + "[" + icode + "]"
                 )
-    return {code: "、".join(entries) for code, entries in drops.items()}
+    return {identity: "、".join(entries) for identity, entries in drops.items()}
 
 
 def _source_shop_map(pack: Path) -> dict[str, str]:

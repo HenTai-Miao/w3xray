@@ -43,7 +43,8 @@ _CATEGORIES = {
 _KNOWN_CATEGORIES = frozenset(_CATEGORIES.values())
 
 
-def _category(value: str) -> str:
+def object_category(value: str) -> str:
+    """Normalize a declared category without inferring it from an object code."""
     raw = value.strip()
     return _CATEGORIES.get(raw.casefold(), raw)
 
@@ -78,13 +79,13 @@ def object_field_table(raw: tuple[tuple[str, ...], ...]) -> ObjectTable:
 def _table(
     category: str, raw: tuple[tuple[str, ...], ...], *, fields: bool
 ) -> ObjectTable:
-    category = _category(category)
+    category = object_category(category)
     header = _FIELD_HEADER if fields else _HEADER
     aliases = _FIELD_ALIASES if fields else _ALIASES
     required = (0, 1, 3, 5) if fields else (1, 4)
 
     def valid_category(value: str) -> bool:
-        declared = _category(value)
+        declared = object_category(value)
         return declared in _KNOWN_CATEGORIES if fields else declared == category
 
     def legacy_record(row: tuple[str, ...]) -> bool:
@@ -194,7 +195,7 @@ def _table(
             return row[column] if column is not None and column < len(row) else ""
 
         code = cell(slots[1])
-        declared_category = _category(cell(slots[0]))
+        declared_category = object_category(cell(slots[0]))
         if (
             not valid_object_code(code)
             or any(
