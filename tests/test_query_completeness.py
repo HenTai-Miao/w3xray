@@ -338,8 +338,10 @@ def test_diff_reads_root_field_table_not_a_nested_decoy(
     text = "\n".join(pq._query_diff(new, "", 0, str(old)))
     assert "变更 1" in text
     assert "cost: 100 -> 200" in text
-    assert "added: (无) -> new" in text
-    assert "removed: old -> (删)" in text
+    # The short root record makes absence uncertain; shared values still compare.
+    assert "added:" not in text
+    assert "removed:" not in text
+    assert "字段表不完整" in text
     assert "decoy" not in text
     assert "unrelated:" not in text
 

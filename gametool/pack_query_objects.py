@@ -56,6 +56,11 @@ def valid_object_code(code: str) -> bool:
 class ObjectTable:
     rows: tuple[tuple[str, ...], ...]
     diagnostics: tuple[str, ...] = ()
+    readable: bool = True
+
+    @property
+    def complete(self) -> bool:
+        return self.readable and not self.diagnostics
 
 
 @lru_cache(maxsize=8)

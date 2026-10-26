@@ -11,13 +11,14 @@ import json
 import time
 from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
 from .pack_query_spatial import NearEntry, SpatialQueryResult
 from .pack_query_regions import NearRegion
 from .pack_query_options import query_limit_error
+from .pack_query_diff import ComparisonDiagnostic, DiffQueryResult
 
 if TYPE_CHECKING:
     from .pack_query_options import PackQueryCliOptions
@@ -44,6 +45,10 @@ class QueryBackend(Protocol):
     def _query_diff(
         self, pack: Path, query: str, limit: int, pack_b: str = ""
     ) -> list[str]: ...
+
+    def _query_diff_result(
+        self, pack: Path, query: str, limit: int, pack_b: str = ""
+    ) -> DiffQueryResult: ...
 
     def _query_near_result(
         self, pack: Path, query: str, limit: int
@@ -72,6 +77,9 @@ class PackQueryResult:
     campaign: bool = False
     diagnostics: tuple[str, ...] = ()
     checked_packs: tuple[str, ...] = ()
+    comparison_complete: bool | None = None
+    comparison_diagnostics: tuple[ComparisonDiagnostic, ...] = ()
+    has_changes: bool | None = None
 
     @property
     def extra_diagnostics(self) -> tuple[str, ...]:
@@ -99,6 +107,16 @@ class PackQueryResult:
             "exit_code": self.exit_code,
             "warnings": [note for note in self.diagnostics if note.startswith("[⚠")],
         }
+        if self.command == "diff":
+            payload.update(
+                comparison_complete=self.comparison_complete,
+                comparison_diagnostics=[
+                    asdict(note) for note in self.comparison_diagnostics
+                ],
+                has_changes=self.has_changes,
+                input_error=any(section.input_error for section in self.sections),
+                checked_packs=list(self.checked_packs),
+            )
         if self.command == "near":
             payload["entries"] = [
                 {**entry, **({"section": section.section} if self.campaign else {})}
@@ -237,7 +255,6 @@ def execute_query(
                     key=lambda section: (section.pack != result.pack, section.pack)
                 )
             result = replace(result, sections=tuple(sections), campaign=campaign)
-        root = Path(result.pack).resolve()
         diagnostics = (
             *dict.fromkeys(
                 note for notes in object_warnings.values() for note in notes
@@ -246,7 +263,6 @@ def execute_query(
                 f"[⚠ 数据文件读取失败, 本次结果可能缺失: {rel} — "
                 f"检查文件权限/编码或重新导出知识包: {pack}]"
                 for pack, rel in sorted(queries._LOCKED_FILES.intersection(touched))
-                if (Path(pack) / rel).resolve().is_relative_to(root)
             ),
         )
     return _timed_result(
@@ -299,11 +315,27 @@ def _collect_query(
     if options.command == "near" and options.near_kind:
         options = replace(options, query=options.query + " --kind " + options.near_kind)
     if options.command == "diff":
-        lines = queries._query_diff(
+        report = queries._query_diff_result(
             pack, options.query, options.limit, options.pack_dir_b or options.query
         )
-        return _message_lines(
-            options, lines, 0 if _has_result(options.command, lines) else 2
+        result = _message_lines(
+            options,
+            report.lines,
+            0
+            if not report.input_error and (report.complete or report.has_changes)
+            else 2,
+        )
+        return replace(
+            result,
+            sections=tuple(
+                replace(section, input_error=report.input_error)
+                for section in result.sections
+            ),
+            comparison_complete=report.complete,
+            comparison_diagnostics=report.diagnostics,
+            has_changes=report.has_changes,
+            checked_packs=report.checked_packs,
+            diagnostics=tuple(note.render() for note in report.diagnostics),
         )
     subs = queries._campaign_subpacks(pack) if options.command != "near" else []
     section = _run_section(

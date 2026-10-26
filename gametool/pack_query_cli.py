@@ -33,7 +33,11 @@ import sys
 import threading
 from collections import Counter
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass, field as dataclass_field
+from dataclasses import (
+    dataclass,
+    field as dataclass_field,
+    replace as dataclass_replace,
+)
 from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -42,6 +46,7 @@ from .cli_output import configure_cli_output
 from .csv_fields import full_csv_fields
 from .pack_query_objects import (
     OBJECT_TABLES,
+    ObjectTable,
     object_field_table,
     object_table,
     valid_object_code,
@@ -65,6 +70,7 @@ from .script_sources import (
 )
 
 if TYPE_CHECKING:
+    from .pack_query_diff import DiffQueryResult
     from .pack_query_execution import PackQueryResult
     from .pack_query_spatial import SpatialQueryResult
 
@@ -213,14 +219,25 @@ def _field_rows(pack: Path) -> tuple[tuple[str, ...], ...]:
 def _named_rows(
     pack: Path, relative: str, table: str = ""
 ) -> tuple[tuple[str, ...], ...]:
+    return _named_table(pack, relative, table).rows
+
+
+def _table_is_readable(pack: Path, relative: str) -> bool:
+    with _TABLE_READ_LOCK:
+        return (str(pack), relative) not in _LOCKED_FILES
+
+
+def _named_table(pack: Path, relative: str, table: str = "") -> ObjectTable:
     with _TABLE_READ_LOCK:
         raw = tuple(tuple(row) for row in _read_rows(pack, relative))
         result = object_table(table, raw) if table else object_field_table(raw)
+        if not _table_is_readable(pack, relative):
+            result = dataclass_replace(result, readable=False)
         if _QUERY_OBJECT_WARNINGS is not None and result.diagnostics:
             _QUERY_OBJECT_WARNINGS.setdefault(str(pack), []).extend(
                 f"[⚠ {relative} — {note} 来源: {pack}]" for note in result.diagnostics
             )
-    return result.rows
+    return result
 
 
 def load_items(pack_dir: Path) -> dict[str, tuple[str, str]]:
@@ -3029,7 +3046,13 @@ def _query_search(pack: Path, query: str, limit: int) -> list[str]:
 
 
 def _diff_field_changes(
-    old_pack: Path, new_pack: Path, table: str, ids: list[str]
+    old_pack: Path,
+    new_pack: Path,
+    table: str,
+    ids: list[str],
+    *,
+    old_complete: bool = True,
+    new_complete: bool = True,
 ) -> dict[str, list[str]]:
     """对变更对象算字段级差异 (基于两包 对象字段.tsv 的 字段键/值 对比。"""
     result: dict[str, list[str]] = {}
@@ -3072,9 +3095,11 @@ def _diff_field_changes(
             if ov == nv:
                 continue
             if ov is None:
-                lines.append(f"{key}: (无) -> {nv}")
+                if old_complete:
+                    lines.append(f"{key}: (无) -> {nv}")
             elif nv is None:
-                lines.append(f"{key}: {ov} -> (删)")
+                if new_complete:
+                    lines.append(f"{key}: {ov} -> (删)")
             else:
                 lines.append(f"{key}: {ov} -> {nv}")
         if lines:
@@ -3084,6 +3109,12 @@ def _diff_field_changes(
 
 def _query_diff(pack: Path, query: str, limit: int, pack_b: str = "") -> list[str]:
     """Compare all eight object tables and complete recipe groups."""
+    return list(_query_diff_result(pack, query, limit, pack_b).lines)
+
+
+def _query_diff_result(
+    pack: Path, query: str, limit: int, pack_b: str = ""
+) -> DiffQueryResult:
     from .pack_query_diff import DiffSources, query_diff
 
     return query_diff(
