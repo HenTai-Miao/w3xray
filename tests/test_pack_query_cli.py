@@ -1281,14 +1281,8 @@ def test_query_diff_identical_packs_report_no_difference(
 ) -> None:
     old = tmp_path / "same-pack"
     (old / "对象ID").mkdir(parents=True)
-    shutil.copy(
-        tmp_path / "对象ID" / "物品.tsv",
-        old / "对象ID" / "物品.tsv",
-    )
-    shutil.copy(
-        tmp_path / "对象ID" / "单位.tsv",
-        old / "对象ID" / "单位.tsv",
-    )
+    for table in (tmp_path / "对象ID").glob("*.tsv"):
+        shutil.copy(table, old / "对象ID" / table.name)
     shutil.copy(tmp_path / "对象字段.tsv", old / "对象字段.tsv")
     if (tmp_path / "掉落与获取关系.tsv").exists():
         shutil.copy(

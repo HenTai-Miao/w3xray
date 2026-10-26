@@ -7,6 +7,7 @@ from collections import Counter
 from dataclasses import dataclass
 from functools import lru_cache
 
+OBJECT_TABLES = ("物品", "单位", "技能", "英雄", "增益", "科技", "装饰物", "可破坏物")
 _HEADER = ("分类", "ID", "数值", "基础ID", "名称", "自定义", "说明")
 _ALIASES = (
     {"分类", "category"},

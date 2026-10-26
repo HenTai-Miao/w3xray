@@ -7,9 +7,10 @@ import re
 from typing import Protocol
 
 from .search import compile_query
+from .pack_query_objects import OBJECT_TABLES
 
 
-_TABLES = ("物品", "单位", "技能", "英雄", "增益", "科技", "装饰物", "可破坏物")
+_TABLES = OBJECT_TABLES
 _ALIASES = {
     **{table: table for table in _TABLES},
     "item": "物品",

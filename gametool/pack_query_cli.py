@@ -40,7 +40,12 @@ from typing import TYPE_CHECKING, cast
 
 from .cli_output import configure_cli_output
 from .csv_fields import full_csv_fields
-from .pack_query_objects import object_field_table, object_table, valid_object_code
+from .pack_query_objects import (
+    OBJECT_TABLES,
+    object_field_table,
+    object_table,
+    valid_object_code,
+)
 from .pack_query_options import PackQueryCliOptions, parse_query_limit
 from .pack_query_placement_index import IndexedPlacements, indexed_placements
 from .presentation_safety import single_line_text
@@ -3078,163 +3083,23 @@ def _diff_field_changes(
 
 
 def _query_diff(pack: Path, query: str, limit: int, pack_b: str = "") -> list[str]:
-    """diff 双包对比: 地图更新后新包 vs 旧包, 列出对象表新增/删除的物品与单位。
-    比较维度: 对象ID/物品.tsv 与 对象ID/单位.tsv 的 ID 集合 (行内容以 ID 为主键)。
-    query 可传子表名过滤 (物品/单位), 空 = 全部。"""
-    if not pack_b:
-        return ["diff 需要第二个包: pack-query <新包> diff <旧包目录>"]
-    old_pack = Path(pack_b)
-    if not old_pack.is_dir():
-        return ["第二个包目录不存在: " + pack_b]
-    tables = (
-        "物品",
-        "单位",
-        "技能",
-        "英雄",
+    """Compare all eight object tables and complete recipe groups."""
+    from .pack_query_diff import DiffSources, query_diff
+
+    return query_diff(
+        pack,
+        query,
+        limit,
+        pack_b,
+        cast(DiffSources, cast(object, sys.modules[__name__])),
     )
-    filter_table = query.strip() if query.strip() in tables else ""
-    out: list[str] = []
-    for table in tables:
-        if filter_table and table != filter_table:
-            continue
-        old_rows = _object_rows(old_pack, table)
-        new_rows = _object_rows(pack, table)
-        if not old_rows and not new_rows:
-            continue
-        old_by_id = {r[1]: r for r in old_rows[1:] if len(r) > 4}
-        new_by_id = {r[1]: r for r in new_rows[1:] if len(r) > 4}
-        added = [i for i in new_by_id if i not in old_by_id]
-        removed = [i for i in old_by_id if i not in new_by_id]
-        same_header = old_rows[0] == new_rows[0]
-        old_columns = sorted(enumerate(old_rows[0]), key=lambda entry: entry[1])
-        new_columns = sorted(enumerate(new_rows[0]), key=lambda entry: entry[1])
-
-        def values(
-            row: tuple[str, ...], columns: list[tuple[int, str]]
-        ) -> tuple[tuple[str, str | None], ...]:
-            return tuple(
-                (name, row[index] if index < len(row) else None)
-                for index, name in columns
-            )
-
-        changed = [
-            i
-            for i in new_by_id
-            if i in old_by_id
-            and (
-                new_by_id[i] != old_by_id[i]
-                if same_header
-                else values(new_by_id[i], new_columns)
-                != values(old_by_id[i], old_columns)
-            )
-        ]
-        # 字段级变化也算变更 (物品.tsv 行相同但对象字段.tsv 值不同)
-        field_changes = _diff_field_changes(
-            old_pack,
-            pack,
-            table,
-            [i for i in new_by_id if i in old_by_id and i not in changed],
-        )
-        for i, lines in field_changes.items():
-            if lines and i not in changed:
-                changed.append(i)
-        changed.sort()
-        if not added and not removed and not changed:
-            continue
-        out.append(
-            f"== {table}: 新增 {len(added)} / 删除 {len(removed)} / 变更 {len(changed)} =="
-        )
-        for i in added:
-            name = _clean(new_by_id[i][4]) if len(new_by_id[i]) > 4 else i
-            out.append(f"  + [{i}] {name}")
-        for i in removed:
-            name = _clean(old_by_id[i][4]) if len(old_by_id[i]) > 4 else i
-            out.append(f"  - [{i}] {name}")
-        shown = 0
-        cap = (
-            limit  # 0 = 不限量满量列出 (旧隐性默认 20 已删, 373 轮); 显式 --limit 才截
-        )
-        if cap <= 0:
-            cap = len(changed) + 1  # 不限量: 循环条件恒假等价写法 (cap>len(changed))
-        field_changes.update(
-            _diff_field_changes(
-                old_pack, pack, table, [i for i in changed if i not in field_changes]
-            )
-        )
-        for i in changed:
-            if shown >= cap:
-                out.append(f"  …… 其余 {len(changed) - shown} 条变更加大 limit 查看")
-                break
-            name = _clean(new_by_id[i][4]) if len(new_by_id[i]) > 4 else i
-            out.append(f"  ~ [{i}] {name}")
-            for line in field_changes.get(i, ()):
-                out.append("      " + line)
-            if i not in field_changes:
-                out.append("      (名称/行内容有变化, 字段明细请翻两包 对象字段.tsv)")
-            shown += 1
-
-    # 合成配方对比 (改材料/增删配方是 RPG 更新高频项)
-    def synth_map(p: Path) -> dict[str, str]:
-        result: dict[str, str] = {}
-        for r in _read_rows(p, "掉落与获取关系.tsv"):
-            if len(r) < 19 or r[2] != "合成":
-                continue
-            if _clean(r[18]):
-                result.setdefault(r[3], _clean(r[18]))
-        return result
-
-    old_synths = synth_map(old_pack)
-    new_synths = synth_map(pack)
-    synth_added = [k for k in new_synths if k not in old_synths]
-    synth_removed = [k for k in old_synths if k not in new_synths]
-    synth_changed = [
-        k for k in new_synths if k in old_synths and new_synths[k] != old_synths[k]
-    ]
-    if synth_added or synth_removed or synth_changed:
-        out.append(
-            f"== 合成: 新增 {len(synth_added)} / 删除 {len(synth_removed)} / 变更 {len(synth_changed)} =="
-        )
-        names = load_items(pack)
-        for k in synth_added:
-            nm = names.get(k, (k, ""))[0]
-            out.append(f"  + [{k}] {nm}  <-  {new_synths[k]}")
-        for k in synth_removed:
-            nm = names.get(k, (k, ""))[0]
-            out.append(f"  - [{k}] {nm}  <-  {old_synths[k]}")
-        for k in synth_changed:
-            nm = names.get(k, (k, ""))[0]
-            out.append(f"  ~ [{k}] {nm}")
-            out.append(f"      旧: {old_synths[k]}")
-            out.append(f"      新: {new_synths[k]}")
-    if not out:
-        return ["两包对象表无差异"]
-    # 头部插入统计摘要: 一眼看更新规模 (X 段 / Y 处变化)
-    sections = sum(1 for line in out if line.startswith("== "))
-    total_changes = sum(
-        int(part)
-        for line in out
-        if line.startswith("== ")
-        for part in line.replace("=", " ").split()
-        if part.isdigit()
-    )
-    out.insert(0, f"共 {sections} 个差异段, 合计 {total_changes} 项变化")
-    return out
 
 
 def _query_list(pack: Path, query: str, limit: int) -> list[str]:
     """list 按表列出全部对象 ID+名称 (供脚本/AI 消费的纯清单)。
     query 可传表名过滤 (物品/单位/技能/英雄/增益/科技), 空 = 全部表。"""
     del limit  # 满量清单不截断
-    tables = (
-        "物品",
-        "单位",
-        "技能",
-        "英雄",
-        "增益",
-        "科技",
-        "装饰物",
-        "可破坏物",
-    )
+    tables = OBJECT_TABLES
     want = query.strip()
     out: list[str] = []
     for table in tables:

@@ -556,7 +556,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         "refs": "码 → 脚本引用分类 (给予/消耗/其他——判升级链终点)",
         "affixes": "词缀词可空=全量…  (回车查)",
         "registered": "消息词可空=全部触发消息…  (回车查)",
-        "diff": "旧包目录路径…  (新包 vs 旧包: 新增/删除/变更; 可选词: 物品/单位/技能/英雄)",
+        "diff": "旧包目录路径…  (八类对象+完整配方对比；记忆旧包后可填表名或合成筛选)",
     }
 
     def _near_kind_file(self) -> pathlib.Path:
