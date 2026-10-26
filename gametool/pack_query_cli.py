@@ -9,7 +9,7 @@
     recipe <名字|四码>   相关合成配方（作为产物或材料，自动去重）
     where  <名字|四码>   单位/地面物品/可破坏物的放置坐标
     drop   <名字|四码>   获取途径（掉落/商店/触发奖励; 无记录时回落文案级配方/来源线索）
-    quest  <关键词>     任务注册文本与剧情对话
+    quest  [关键词]     任务、标题、条目与显示消息（空词全量列出）
     text   <关键词>     全包 TSV 全行搜索 (--limit N 显式缩减)
     price  <名字|四码>   金币价（igol 地图价优先, 基础ID继承）
     tech   <名字|四码>   科技卡（最大等级/每级金木费用/效果/前置, 自定义字段优先基础继承）
@@ -868,6 +868,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
             "synth",
             "skills",
             "units",
+            "quest",
         )
         and len(rest) == 2
     ):
@@ -880,8 +881,9 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
             + "> <查询词>"
             + ("  (near 用法: near <x> <y> [radius])" if command == "near" else "")
             + (
-                "  (affixes/registered/list/buffs/heroes/stats/synth/skills/units 查询词可省 = 全量列出; diff 用法: diff <旧包目录>)"
-                if command in ("affixes", "registered", "diff", "list", "buffs")
+                "  (affixes/registered/list/buffs/heroes/stats/synth/skills/units/quest 查询词可省 = 全量列出; diff 用法: diff <旧包目录>)"
+                if command
+                in ("affixes", "registered", "diff", "list", "buffs", "quest")
                 else ""
             )
         )
@@ -903,6 +905,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         "synth",
         "skills",
         "units",
+        "quest",
     ):
         raise PackQueryCliOptionError("查询词不能为空")
     return PackQueryCliOptions(
@@ -2370,34 +2373,38 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
 
 
 def _query_quest(pack: Path, query: str, limit: int) -> list[str]:
+    from .pack_query_quest_records import QuestRecordReader
+
     path = pack / "脚本字符串索引.tsv"
     total = matched = 0
     lines: list[str] = []
     if path.exists():
-        for record in _text_records(path):
-            if (
-                "CreateQuestBJ" not in record.text
-                and "DisplayTimedTextToForce" not in record.text
-            ):
-                continue
+        reader = QuestRecordReader(_text_records(path))
+        for record in reader:
             total += 1
             if record.matches(query, ignore_case=True):
                 matched += 1
                 if not limit or matched <= limit:
                     lines.append(_clean(record.text))
+        if _QUERY_OBJECT_WARNINGS is not None and reader.diagnostics:
+            _QUERY_OBJECT_WARNINGS.setdefault(str(pack), []).extend(
+                f"[⚠ {path.name} — {note} 来源: {pack}]" for note in reader.diagnostics
+            )
     if lines:
         note = _result_limit_note(matched, limit)
         return [*lines, *([note] if note else [])]
     if query:
         # 任务总量提示 + text 改道 (否定断言四维: 总量/换词/数据源)
-        hint = f"本次可确认任务文本共 {total} 条" if total else "本包未捕获到任务文本"
+        hint = f"本次可确认任务文本共 {total} 条"
         return [
             "未找到任务文本: " + query,
             f"  （{hint}; 可用 text <词> 全文本索引兜底，或换更短关键词）",
+            "  数据源: 脚本字符串索引.tsv；缺失或列不明时可重新导出知识包。",
         ]
     return [
-        "本图未捕获到任务文本 (无 CreateQuestBJ/DisplayTimedTextToForce 调用)。",
-        "  （脚本加密图的任务文本不可读; 或该图确实无任务系统——可用 text <词> 全文本索引兜底）",
+        "未找到任务文本: 本包当前没有可确认的任务或显示文本记录。",
+        "  本次可确认任务文本共 0 条；数据源: 脚本字符串索引.tsv。",
+        "  可用 text <词> 查完整原文，或核对来源诊断、重新导出知识包。",
     ]
 
 
