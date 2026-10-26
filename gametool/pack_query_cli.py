@@ -44,6 +44,7 @@ from typing import TYPE_CHECKING, cast
 
 from .cli_output import configure_cli_output
 from .csv_fields import full_csv_fields
+from .item_relation_models import RelationCompleteness, RelationConfidence
 from .pack_query_objects import (
     OBJECT_TABLES,
     ObjectTable,
@@ -936,6 +937,33 @@ def _match(query: str, code: str, name: str) -> bool:
     return (bool(c) and q == c) or (bool(n) and (q in n or n in q))
 
 
+def _relation_is_candidate(row: list[str]) -> bool:
+    return (len(row) > 23 and row[23] == RelationConfidence.CLUE.value) or (
+        len(row) > 24 and row[24] == RelationCompleteness.CONFLICT.value
+    )
+
+
+def _relation_kind_label(row: list[str]) -> str:
+    return ("候选 " if _relation_is_candidate(row) else "") + row[2]
+
+
+def _relation_state_label(row: list[str]) -> str:
+    confidence, state, reason = (
+        row[column] if len(row) > column else "" for column in (23, 24, 25)
+    )
+    if (
+        confidence in ("", RelationConfidence.CONFIRMED.value)
+        and state in ("", RelationCompleteness.COMPLETE.value)
+        and not reason
+    ):
+        return ""
+    return (
+        " （"
+        + "；".join(value for value in (confidence, state, reason) if value)
+        + "）"
+    )
+
+
 def _relation_source_label(r: list[str]) -> str:
     """关系行来源展示: 有来源对象用「分类 ID」, 脚本奖励行回落证据函数/行号。
 
@@ -1417,7 +1445,8 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
         code, name = row[3], _clean(row[4])
         if _match(query, code, name):
             blocks.record(
-                code, f"{name} [{code}]  {row[2]} <- {_relation_source_label(row)}"
+                code,
+                f"{name} [{code}]  {_relation_kind_label(row)} <- {_relation_source_label(row)}{_relation_state_label(row)}",
             )
         if (
             len(row) >= 8
@@ -1425,7 +1454,8 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
             and _match(query, row[6], _clean(row[7]))
         ):
             blocks.record(
-                row[6], f"来源 {_clean(row[7])}[{row[6]}]: {row[2]} -> {name} [{code}]"
+                row[6],
+                f"来源 {_clean(row[7])}[{row[6]}]: {_relation_kind_label(row)} -> {name} [{code}]{_relation_state_label(row)}",
             )
     # Inspect every matching code, even when another code already has records.
     candidates = dict.fromkeys(
@@ -2345,7 +2375,8 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
             target_codes[code] = None
             kinds.setdefault(code, set()).add(row[2])
             blocks.record(
-                code, f"{name} [{code}]  {row[2]} <- {_relation_source_label(row)}"
+                code,
+                f"{name} [{code}]  {_relation_kind_label(row)} <- {_relation_source_label(row)}{_relation_state_label(row)}",
             )
         if (
             len(row) >= 8
@@ -2353,7 +2384,8 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
             and _match(query, row[6], _clean(row[7]))
         ):
             blocks.record(
-                row[6], f"{_clean(row[7])}[{row[6]}] {row[2]} -> {name} [{code}]"
+                row[6],
+                f"{_clean(row[7])}[{row[6]}] {_relation_kind_label(row)} -> {name} [{code}]{_relation_state_label(row)}",
             )
     candidates = dict.fromkeys(
         (
@@ -2753,6 +2785,8 @@ def _source_drop_map(pack: Path) -> dict[tuple[str, str], str]:
         reason = ""
         if len(r) < 8:
             reason = "掉落记录缺少来源字段"
+        elif _relation_is_candidate(r):
+            reason = "关系标记为仅线索或冲突，未作为确定掉落注解"
         elif category and typed_category and category != typed_category:
             reason = "来源分类与掉落类型冲突"
         elif not category:

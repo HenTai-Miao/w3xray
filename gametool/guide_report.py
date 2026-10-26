@@ -22,7 +22,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from .base_names import BASE_CATEGORIES, BASE_NAMES
-from .item_relation_models import ItemRelation, ItemRelationKind, RelationObject
+from .item_relation_models import (
+    ItemRelation,
+    ItemRelationKind,
+    RelationObject,
+    RelationCompleteness,
+    RelationConfidence,
+)
 from .pack_query_cli import (
     _item_trigger_grant_lines,
     script_death_drop_lines,
@@ -263,6 +269,7 @@ def _drop_lines(md: MapData, coords: PositionGroups | None = None) -> tuple[str,
             ItemRelationKind.UNIT_DROP,
             "；",
             coords=_placement_coords(md) if coords is None else coords,
+            exclude_candidates=True,
         )
     )
     # 可破坏物掉落 (箱子/路障) 是独立关系类型——迷失国度 75 行此类证据
@@ -273,8 +280,30 @@ def _drop_lines(md: MapData, coords: PositionGroups | None = None) -> tuple[str,
             ItemRelationKind.DESTRUCTABLE_DROP,
             "；",
             coords=doodad_position_groups(md),
+            exclude_candidates=True,
         )
     )
+    for relation in md.item_relations.records:
+        if relation.kind not in (
+            ItemRelationKind.UNIT_DROP,
+            ItemRelationKind.DESTRUCTABLE_DROP,
+        ) or not _candidate_relation(relation):
+            continue
+        source = relation.source
+        label = (
+            "未记录来源"
+            if source is None
+            else f"{_endpoint_name(source)}({source.object_id})"
+        )
+        point = (
+            "坐标未记录"
+            if relation.x is None or relation.y is None
+            else f"({format_number(relation.x)}, {format_number(relation.y)})"
+        )
+        chance = "" if relation.chance is None else f"；原始概率/权重 {relation.chance}"
+        rows.append(
+            f"- 未确认预放置掉落线索：{label} @{point} -> {_endpoint_name(relation.item)}({relation.item.object_id}){chance}；{relation.confidence.value}/{relation.completeness.value}；{relation.unresolved_reason} {_evidence_tag(relation)} 实例{relation.instance_serial} / 偏移{relation.evidence.offset}"
+        )
     # 脚本死亡触发证据与关系表满量并列——guide drops 段曾只读掉落表,
     # BossFH 直落 I01F 类证据在玩家最常跑的出口缺席 (与 pack-query
     # drop 兜底同源正则, 语义一致: 掷骰不写保底, 奖池 N 选 1)。
@@ -388,12 +417,16 @@ def _grouped_source_lines(
     kind: ItemRelationKind,
     separator: str,
     coords: PositionGroups | None = None,
+    *,
+    exclude_candidates: bool = False,
 ) -> tuple[str, ...]:
     grouped: dict[
         tuple[str, str, str],
         dict[tuple[float, float] | None, dict[tuple[object, ...], str]],
     ] = {}
     for relation in md.item_relations.for_kind(kind):
+        if exclude_candidates and _candidate_relation(relation):
+            continue
         source = relation.source
         if source is None:
             continue
@@ -447,6 +480,13 @@ def _grouped_source_lines(
                 f"- {source}：{separator.join(items.values())}  @({format_number(x)},{format_number(y)}){note}"
             )
     return tuple(rows)
+
+
+def _candidate_relation(relation: ItemRelation) -> bool:
+    return (
+        relation.confidence is RelationConfidence.CLUE
+        or relation.completeness is RelationCompleteness.CONFLICT
+    )
 
 
 def _evidence_tag(relation: ItemRelation) -> str:

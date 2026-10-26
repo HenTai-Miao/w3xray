@@ -461,6 +461,7 @@ gametool/script_rectangle_analysis.py
 gametool/script_source_identity.py
 gametool/pack_query_placement_index.py
 gametool/pack_query_preplaced.py
+gametool/placement_identity.py
 gametool/pack_query_regions.py
 gametool/search.py
 gametool/single_instance.py
