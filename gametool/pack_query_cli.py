@@ -138,7 +138,7 @@ def _iter_tsv_lines(path: Path):
         _QUERY_FILES.add(key)
     for _attempt in range(1 if key in _LOCKED_FILES else 3):
         try:
-            with path.open(encoding="utf-8", errors="replace") as handle:
+            with path.open(encoding="utf-8-sig", errors="replace") as handle:
                 lines = list(handle)
             _LOCKED_FILES.discard(key)
             yield from lines
@@ -184,7 +184,9 @@ def _read_rows_locked(pack_dir: Path, rel: str) -> list[list[str]]:
                 _LOCKED_FILES.discard(cache_key)
                 return cached[1]
             with full_csv_fields():
-                with path.open(encoding="utf-8", newline="") as handle:
+                # Decode the file signature before CSV parses a quoted first
+                # cell; fingerprints above still include every original byte.
+                with path.open(encoding="utf-8-sig", newline="") as handle:
                     rows = list(csv.reader(handle, delimiter="\t"))
             if _table_identity(after) != _table_identity(path.stat()):
                 continue
