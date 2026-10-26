@@ -38,7 +38,7 @@ class KnowledgePackPreplacedTest(unittest.TestCase):
         rendered = format_preplaced_units_tsv(md)
 
         # Then: both groups remain visible instead of being flattened or omitted.
-        self.assertIn("\t技能\t掉落\t英文名\t细类\n", rendered)
+        self.assertIn("\t技能\t掉落\t英文名\t细类\t分类\t分类诊断\n", rendered)
         self.assertIn("组1[I001(I001):70%]；组2[I002(I002):100%]", rendered)
 
     def test_preplaced_doodad_export_keeps_nested_drop_groups(self):
@@ -79,7 +79,8 @@ class KnowledgePackPreplacedTest(unittest.TestCase):
         # Then: vanilla types gain the English name and fine category columns.
         self.assertIn("\tPaladin\t英雄", units_tsv)
         self.assertIn("英文名\t细类", doodads_tsv)
-        self.assertIn("\t\t\n", doodads_tsv)  # 装饰物无细类时两列留空对齐
+        columns = doodads_tsv.splitlines()[1].split("\t")
+        self.assertEqual(columns[11:13], ["", ""])  # 未知装饰物无细类时两列留空对齐
 
     def test_pack_exports_preplaced_units_doodads_and_drops(self):
         # Given: a map with parsed preplaced units and doodads.
