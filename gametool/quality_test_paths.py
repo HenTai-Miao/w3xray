@@ -6,7 +6,8 @@ from typing import Final
 
 
 TEST_STRICT_PATHS: Final = tuple(
-    """main.py
+    """conftest.py
+main.py
 tests/batch_axis_fixture.py
 tests/batch_cli_fixture.py
 tests/batch_global_evidence_fixture.py
@@ -233,6 +234,7 @@ tests/test_description_cache_publication_stage_location_states.py
 tests/test_description_cache_publication_validation.py
 tests/test_description_cache_retained_generations.py
 tests/test_dev_test.py
+tests/test_dev_test_cache_isolation.py
 tests/test_diagnostics.py
 tests/test_doo.py
 tests/test_doo_random_flags.py

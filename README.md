@@ -123,6 +123,8 @@ Windows 上如果 `uv run pytest -q` 报 `uv trampoline failed to canonicalize s
 用 `uv run gamexray-test` 或 `uv run python -m pytest -q`；这两种方式直接走 Python 模块入口，
 不经过 pytest 的 console-script 启动器。
 
+测试入口默认隔离运行时缓存：`gamexray-test` 在启动 pytest 前分配独立缓存，仓库内直接运行 pytest 也会在收集测试前建立会话缓存，并在退出时恢复原环境变量。测试的查询历史、收藏、最近包目录及最近查询等内容写入系统临时目录中的 `gamexray-test-cache-*`，不会复用调用方的缓存目录；临时产物保留供诊断。无法建立隔离缓存时直接报告错误，不回退到用户缓存。单独运行 CLI 验收脚本时可将 `gametool.dev_test.create_test_environment()` 返回的环境传给子进程。
+
 ## 重新打包 exe
 Windows 包必须先从固定源码构建 x64 CascLib；脚本会验证源码 SHA256，并生成 DLL 及其哈希。默认命令构建 onedir（exe + 同目录 `_internal/` 依赖）；加 `--onefile` 构建可直接分发的单文件 exe：
 ```powershell

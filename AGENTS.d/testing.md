@@ -120,3 +120,25 @@ Historical schema-4 measurements from 2026-07-15 remain evidence only: 39/39 pro
 # Windows quality command coverage
 
 `gamexray-quality` keeps every maintained path. On Windows it batches by the actual quoted UTF-16 command length, including the NUL terminator and the installed Ruff/Node launcher's forwarded prefix; it does not cap file counts. Each tool reports batch counts and stops on the first failed batch. A single path that cannot fit is an explicit diagnostic, never a skipped file. The platform boundary is documented by [CreateProcessW](https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw).
+
+## Runtime-cache isolation
+
+Prefer `uv run gamexray-test`. The runner creates a fresh `GAMEXRAY_CACHE_DIR` before launching pytest, including when `--noconftest` is forwarded. The repository-root `conftest.py` also isolates ordinary direct pytest sessions before test-module collection. It restores the previous environment on exit, distinguishing an absent variable, an empty value, and a configured path; repeated in-process sessions get distinct roots. Test and collection failures retain their exit status and receive the same protection.
+
+Caller overrides are not reused as test caches. Private cache directories are created under the system temporary directory, outside the repository and the caller's cache, and retained for diagnosis. If the temporary location is inside either protected root or cache allocation fails, stop with an explicit isolation error before running tests; do not fall back to the user's cache. The runner passes a copied environment to its child instead of changing the parent process.
+
+Standalone CLI acceptance must use the same boundary explicitly:
+
+```python
+import subprocess
+import sys
+from gametool.dev_test import create_test_environment
+
+subprocess.run(
+    [sys.executable, "main.py", "pack-query", pack_dir, "stats", "--json"],
+    env=create_test_environment(),
+    check=True,
+)
+```
+
+Keep any intentional cache-default/path tests in synthetic profiles and temporary roots. Never point a test at real query memo, favorites, geometry, last-pack, last-query, live-profile or client-snapshot assets. When checking preservation, compare complete file bytes and metadata before/after; a temporary validation record is not evidence of the user's prior value and must not be restored as one.
