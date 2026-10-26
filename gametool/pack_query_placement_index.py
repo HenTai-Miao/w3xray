@@ -111,12 +111,20 @@ def indexed_placements(
                     reason = f"来源候选组 {group}: {len(match.sources)} 个候选（见该组首次诊断），未猜测来源"
             diagnostics.append(site.label() + ": " + reason + "\n" + site.evidence())
             continue
+        source_label = next(iter(site.origins))[0]
+        if contexts and not source_label.strip():
+            diagnostics.append(
+                site.label()
+                + ": 来源未记录，无法确认是现有脚本镜像还是独立调用，未猜测额外实例或原生绑定；请补全来源，或用 text <码> 查完整原文。\n"
+                + site.evidence()
+            )
+            continue
         source = by_name[match.sources[0]] if match.sources else None
         lua = (
             source.lua
             if source is not None
             else script_language(
-                next(iter(site.origins))[0],
+                source_label,
                 available_sources=by_name,
                 declared_script_type=declared_script_type,
             )

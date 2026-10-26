@@ -346,6 +346,7 @@ tests/test_query_quest_calls.py
 tests/test_query_reference_tables.py
 tests/test_query_call_argument_tables.py
 tests/test_query_indexed_placement_evidence.py
+tests/test_query_placement_instances.py
 tests/test_query_object_lists_complete.py
 tests/test_query_result_limits.py
 tests/test_query_evidence_complete.py

@@ -789,8 +789,9 @@ def load_placements(pack_dir: Path) -> list[tuple[str, float, float, str]]:
         for placement in script_placements(text, lua=lua)
     ]
     report = _indexed_placement_report(pack_dir, contexts)
-    counts = Counter(source_rows) | Counter(report.placements)
-    return list(counts.elements())
+    # The index reader already removes source mirrors by their known identity.
+    # Equal numeric points from independent sources remain separate instances.
+    return [*source_rows, *report.placements]
 
 
 def load_placement_diagnostics(pack_dir: Path) -> list[str]:
