@@ -26,6 +26,10 @@ GUI触发器、场景放置、触发指令、合成配方、孤立对象、分�
 `uv run main.py` 仍可用。各模式均支持 `--help`，总览运行 `uv run gamexray --help`。
 完整使用步骤、实时探针核对、命令示例和验收范围见 [0.6.2 使用与验收说明](docs/usable-release-0.6.2.md)。
 
+六个外部 Warcraft III 工具的功能、读取与修改调用链、版本、数据目录及逐项适配结论，
+见 [2026-10-27 静态审计](docs/analysis/war3-tools-audit-2026-10-27.md)。
+审计将当前已具备能力、可新增设计、需要验证的适配和未确认项分别列出；候选功能尚未因审计而实现。
+
 ## 直接用（GitHub Releases）
 
 Windows x64 同时提供：

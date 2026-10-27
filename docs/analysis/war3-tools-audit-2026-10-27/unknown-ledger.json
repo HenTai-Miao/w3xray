@@ -1,0 +1,110 @@
+[
+  {
+    "id": "all_runtime",
+    "scope": "all six targets",
+    "status": "unobserved",
+    "question": "Can the original tools safely launch and work in the user's present game/session?",
+    "reason": "No target EXE, DLL, bytecode, JS, hook, input or game process was executed/accessed by this audit.",
+    "consequence": "No operational recommendation or tested-compatibility badge follows from a version string/profile."
+  },
+  {
+    "id": "function_environment",
+    "scope": "all local fingerprint matches",
+    "status": "noncomparable_external_bindings",
+    "question": "Do equal local bodies produce equal whole-program behavior?",
+    "reason": "Self methods, globals/imports, profiles, native handlers, environment and call reachability can differ.",
+    "consequence": "Code groups establish local implementation migration only; unmatched IDs stay unknown/refactored rather than removed."
+  },
+  {
+    "id": "hotkeys_game_save",
+    "scope": "target-1",
+    "status": "unknown",
+    "question": "Where and for how long does save_hotkeys persist game bindings?",
+    "reason": "Package Python does not establish final game-side persistence path or restoration on exit.",
+    "consequence": "Disabled/paused is not claimed to undo or stop the native override."
+  },
+  {
+    "id": "hotkeys_legacy",
+    "scope": "target-1",
+    "status": "unknown",
+    "question": "Which older builds work through legacy fallback?",
+    "reason": "Fallback code is not a matching per-build validation or runtime test.",
+    "consequence": "Only two explicit x64 profile declarations are enumerated; no classic support assertion."
+  },
+  {
+    "id": "legacy_trainer_builds",
+    "scope": "target-2",
+    "status": "unknown",
+    "question": "Which exact game builds does the repaired R8 trainer support?",
+    "reason": "Native table PROFILE_ID does not encode a supported-build matrix.",
+    "consequence": "Do not equate source comment v2.0/v2.6.4/R8 or product1.0.19 with game compatibility."
+  },
+  {
+    "id": "modern_unknown_build_discovery",
+    "scope": "target-3",
+    "status": "static_blocker",
+    "question": "Does unknown-build discovery initialize using bundled reference data?",
+    "reason": "All seven references carry digests matching profiles before four layouts.item fields were added, and fail the current canonical digest gate.",
+    "consequence": "Automatic support for arbitrary newer builds is not established; exact-profile early path is separate.",
+    "evidence": "target-3/scopes/discovery/profiles_summary.json"
+  },
+  {
+    "id": "modern_three_diagnostics",
+    "scope": "target-3",
+    "status": "missing_native_counterpart",
+    "question": "Are talent_probe/equipment_probe/cooldown_probe native diagnostic entrypoints available?",
+    "reason": "No matching marker/query export in bundled native bridge; other production markers match.",
+    "consequence": "Do not count these definitions as available product operations.",
+    "evidence": "target-3/scopes/native/native-interfaces.json"
+  },
+  {
+    "id": "modern_capacity",
+    "scope": "target-3",
+    "status": "unproved_game_bounds",
+    "question": "Do wire/list/traversal limits cover every encoded object?",
+    "reason": "MAX_SELECTED/objects/strings/nodes/request and frontend slices have different roles; no global proof converts all to actual game bounds.",
+    "consequence": "Full-coverage GameXRay implementations must preserve full sources/counts/diagnostics and discard arbitrary silent ceilings."
+  },
+  {
+    "id": "native4_effects",
+    "scope": "target-4",
+    "status": "partial_semantic_recovery_after_event_closure",
+    "question": "Do all serialized controls reach the claimed game effect?",
+    "reason": "137 controls and 22 declared events are complete; 60 checkboxes comprise 53 getter-to-WPM chains, 2 without ID use/zero events, 4 full effect paths unresolved, and 1 no-CD/no-mana callback that reads the no-defeat checkbox. 15/22 callbacks have static WPM reachability; 117164 prior undecoded bytes remain opaque and generated payload semantics remain partial.",
+    "consequence": "The serialized-event address-calculation unknown is closed. UI ownership, actual getter input, command submission and gameplay effect remain separate.",
+    "evidence": "target-4/crosscheck/README.md"
+  },
+  {
+    "id": "native5_unknown_config",
+    "scope": "target-5",
+    "status": "static_path_bypasses_setup",
+    "question": "Can config.ini enable unknown builds?",
+    "reason": "Both empty/nonempty unknown-version branches return through cleanup, bypassing normal setup; prior status can remain optimistic.",
+    "consequence": "No generic custom-version support claim.",
+    "evidence": "target-5/ui_versions.json"
+  },
+  {
+    "id": "native6_bindings",
+    "scope": "target-6",
+    "status": "declaration_only",
+    "question": "Do fixed Game.dll labels match a particular 1.24E runtime?",
+    "reason": "No matching Game.dll was analyzed; configured expected-byte patches are empty; AA symbols alone do not validate callee identity.",
+    "consequence": "AA call names/parameters are intended behavior; do not assert actual memory writes succeeded or exact runtime compatibility."
+  },
+  {
+    "id": "native_cross_compilation",
+    "scope": "targets-4/5/6 vs Python trainers",
+    "status": "semantic_concept_only",
+    "question": "Are similarly named elephant actions the same implementation?",
+    "reason": "Distinct frameworks/ABIs, game builds, bindings and unresolved native effects; no common code identity established.",
+    "consequence": "Compare effect families only; do not infer copied code, compatible offsets, or function equivalence."
+  },
+  {
+    "id": "license_network",
+    "scope": "all targets",
+    "status": "bounded_evidence",
+    "question": "Are licensing, authenticity and all possible network effects established?",
+    "reason": "First-party negative searches have defined scope; generic imports/linked libraries and component installers differ from product auth/update.",
+    "consequence": "No broad never-network/authenticity/redistribution-rights claim is made."
+  }
+]

@@ -1,5 +1,13 @@
 # trainer-parity: War3ReforgedTrainer 读路径设计对照矩阵
 
+> 历史分析记录。下文的模块数、阶段数、目录数量和实现状态对应当时样本与源码，
+> 不作为当前六个发行程序或当前 GameXRay 的覆盖证明。2026-10-27 已按
+> `main@ac18ec8` 重新核对全部 19 行实现状态，详见
+> [现源逐项复查](../docs/analysis/war3-tools-audit-2026-10-27/parity-current-check.md)
+> 和[六程序完整静态审计](../docs/analysis/war3-tools-audit-2026-10-27.md)。
+> 当前发现流水线为 5 阶段，档案导入没有旧文所述 2 MiB 上限，整数验证尚未覆盖
+> 所有偏移域；多区域顺序读取也不提供游戏状态的原子快照保证。以下旧记录保留溯源。
+
 四十一轮换层下钻 (只读静态分析: marshal 结构化元数据 + CArchive 资产,
 不做 co_code 字节码层) 的全景收口。每行: trainer 设计 → 我们对应物 → 状态。
 
