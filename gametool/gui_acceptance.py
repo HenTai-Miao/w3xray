@@ -7,6 +7,8 @@ from collections.abc import Callable
 import json
 from pathlib import Path
 from time import monotonic, sleep
+from traceback import format_exception
+from types import TracebackType
 from typing import override
 
 from .gui import App
@@ -31,9 +33,13 @@ def run_gui_acceptance(
     callback_errors: list[str] = []
 
     def record_callback_error(
-        exc_type: type[BaseException], exc: BaseException, traceback: object
+        exc_type: type[BaseException],
+        exc: BaseException,
+        traceback: TracebackType | None,
     ) -> None:
-        callback_errors.append(f"{exc_type.__name__}: {exc}")
+        callback_errors.append(
+            "".join(format_exception(exc_type, exc, traceback)).rstrip()
+        )
 
     app.report_callback_exception = record_callback_error
     app.withdraw()

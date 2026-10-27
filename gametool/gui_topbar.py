@@ -507,6 +507,16 @@ def _open_guide_window(app, text: str) -> None:
     import customtkinter as ctk
 
     win = ctk.CTkToplevel(app)
+    closed = False
+
+    def _guide_alive() -> bool:
+        if closed:
+            return False
+        try:
+            return bool(win.winfo_exists())
+        except tk.TclError:
+            return False  # The parent interpreter may already be shutting down.
+
     md = getattr(app, "map_data", None)
     map_name = getattr(md, "name", "") if md else ""
     source_path = md.path if md is not None else ""
@@ -516,26 +526,43 @@ def _open_guide_window(app, text: str) -> None:
     bind_geometry_memory(win, "guide", "860x640")
     win.transient(app)
     win.grab_set()
-    win.bind("<Escape>", lambda _e: win.destroy())
-    win.bind("<Control-f>", lambda _e: search_entry.focus_set() or "break")
+    win.bind(
+        "<Control-f>",
+        lambda _e=None: (
+            (search_entry.focus_set() or "break") if _guide_alive() else "break"
+        ),
+    )
     # CapsLock 大写态变体 (Tk 绑定大小写敏感)
-    win.bind("<Control-F>", lambda _e: search_entry.focus_set() or "break")
+    win.bind(
+        "<Control-F>",
+        lambda _e=None: (
+            (search_entry.focus_set() or "break") if _guide_alive() else "break"
+        ),
+    )
     win.bind(
         "<Control-a>",
-        lambda _e: (
-            box.tag_add("sel", "1.0", "end"),
-            box.mark_set("insert", "end"),
-            "break",
-        )[2],
+        lambda _e=None: (
+            (
+                box.tag_add("sel", "1.0", "end"),
+                box.mark_set("insert", "end"),
+                "break",
+            )[2]
+            if _guide_alive()
+            else "break"
+        ),
     )
     # CapsLock 大写态变体 (Tk 绑定大小写敏感)
     win.bind(
         "<Control-A>",
-        lambda _e: (
-            box.tag_add("sel", "1.0", "end"),
-            box.mark_set("insert", "end"),
-            "break",
-        )[2],
+        lambda _e=None: (
+            (
+                box.tag_add("sel", "1.0", "end"),
+                box.mark_set("insert", "end"),
+                "break",
+            )[2]
+            if _guide_alive()
+            else "break"
+        ),
     )
     search_row = ctk.CTkFrame(win, fg_color="transparent")
     search_row.pack(fill="x", padx=8, pady=(8, 0))
@@ -550,6 +577,8 @@ def _open_guide_window(app, text: str) -> None:
     state = {"start": "1.0"}
 
     def _find_next():
+        if not _guide_alive():
+            return
         needle = search_var.get().strip()
         if not needle:
             return
@@ -564,7 +593,7 @@ def _open_guide_window(app, text: str) -> None:
             box.tag_add("sel", pos, end)
             state["start"] = end
 
-    search_entry.bind("<Return>", lambda _e: _find_next())
+    search_entry.bind("<Return>", lambda _e=None: _find_next())
     bar = ctk.CTkFrame(win, fg_color="transparent")
     bar.pack(fill="x", padx=8, pady=(8, 0))
     section_buttons: dict[str, ctk.CTkButton] = {}
@@ -588,8 +617,12 @@ def _open_guide_window(app, text: str) -> None:
             fg_color="transparent",
             border_width=1,
             command=lambda t=title: (
-                _jump_to_section(box, t),
-                _mark_active(t),
+                (
+                    _jump_to_section(box, t),
+                    _mark_active(t),
+                )
+                if _guide_alive()
+                else None
             ),  # box 闭包 late-binding: 点击时已定义
         )
         btn.pack(side="left", padx=(0, 4))
@@ -604,11 +637,29 @@ def _open_guide_window(app, text: str) -> None:
         box.see(saved)
     destroy_window = win.destroy
 
-    def _close_guide() -> None:
+    def _close_guide(_event=None) -> None:
+        nonlocal closed
+        if not _guide_alive():
+            closed = True
+            return
+        closed = True
         try:
             _GUIDE_SCROLL[source_path] = box.index("insert")
         except tk.TclError:
             pass  # Parent teardown may already have destroyed the text widget.
+        # CTkToplevel schedules its titlebar icon on this window without saving
+        # the timer ID. Cancel only callbacks registered by this guide before
+        # Tk deletes those Tcl commands; the app's own queued work stays live.
+        owned_commands = set(getattr(win, "_tclCommands", ()) or ())
+        for after_id in win.tk.splitlist(win.tk.call("after", "info")):
+            try:
+                data = win.tk.call("after", "info", after_id)
+                script = win.tk.splitlist(data)[0]
+                commands = win.tk.splitlist(script)
+                if commands and commands[0] in owned_commands:
+                    win.after_cancel(after_id)
+            except tk.TclError:
+                pass  # A queued callback may already have completed.
         destroy_window()
 
     win.destroy = _close_guide
@@ -621,49 +672,67 @@ def _open_guide_window(app, text: str) -> None:
                 box.clipboard_clear(),
                 box.clipboard_append(box.get("sel.first", "sel.last")),
             )
-            if box.tag_ranges("sel")
+            if _guide_alive() and box.tag_ranges("sel")
             else None
         ),
     )
     guide_menu.add_command(
         label="复制全部",
         command=lambda: (
-            box.clipboard_clear(),
-            box.clipboard_append(box.get("1.0", "end")),
+            (
+                box.clipboard_clear(),
+                box.clipboard_append(box.get("1.0", "end")),
+            )
+            if _guide_alive()
+            else None
         ),
     )
     guide_menu.add_command(
         label="导出报告 (.md)",
-        command=lambda: _export_guide(app, box.get("1.0", "end")),
+        command=lambda: (
+            _export_guide(app, box.get("1.0", "end")) if _guide_alive() else None
+        ),
     )
     guide_menu.add_command(
         label="强制重算 (清缓存刷新报告)",
-        command=lambda: _show_guide(app, refresh=True),
+        command=lambda: _show_guide(app, refresh=True) if _guide_alive() else None,
     )
     guide_menu.add_separator()
     guide_menu.add_command(
         label="用选中/剪贴板码查包查询",
-        command=lambda: _code_selected(app, box),
+        command=lambda: _code_selected(app, box) if _guide_alive() else None,
     )
     guide_menu.add_command(
         label="用选中/剪贴板码 where 反查获取途径",
-        command=lambda: _code_selected(app, box, "where"),
+        command=lambda: _code_selected(app, box, "where") if _guide_alive() else None,
     )
     guide_menu.add_command(
         label="用选中/剪贴板码 drop 反查掉落",
-        command=lambda: _code_selected(app, box, "drop"),
+        command=lambda: _code_selected(app, box, "drop") if _guide_alive() else None,
     )
     guide_menu.add_separator()
     guide_menu.add_command(
         label="用选中/剪贴板坐标 near 再查 (半径 500)",
-        command=lambda: _near_selected_coords(app, box, "500"),
+        command=lambda: (
+            _near_selected_coords(app, box, "500") if _guide_alive() else None
+        ),
     )
     guide_menu.add_command(
         label="用选中坐标 near 再查 (半径 100, 更精细)",
-        command=lambda: _near_selected_coords(app, box, "100"),
+        command=lambda: (
+            _near_selected_coords(app, box, "100") if _guide_alive() else None
+        ),
     )
-    box.bind("<Button-3>", lambda e: guide_menu.tk_popup(e.x_root, e.y_root))
-    win.bind("<Escape>", lambda _e: win.destroy())
+
+    def _popup_guide_menu(event=None) -> None:
+        if _guide_alive():
+            guide_menu.tk_popup(
+                event.x_root if event is not None else box.winfo_pointerx(),
+                event.y_root if event is not None else box.winfo_pointery(),
+            )
+
+    box.bind("<Button-3>", _popup_guide_menu)
+    win.bind("<Escape>", _close_guide)
 
 
 def _code_selected(app, box, prefix: str = "") -> None:

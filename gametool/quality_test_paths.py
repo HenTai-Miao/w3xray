@@ -267,6 +267,7 @@ tests/test_guide_cache.py
 tests/test_guide_minimap.py
 tests/test_guide_positions_complete.py
 tests/test_guide_report.py
+tests/test_guide_window_callbacks.py
 tests/test_historical_icon_backfill.py
 tests/test_huffman.py
 tests/test_icon_candidate_bindings.py
