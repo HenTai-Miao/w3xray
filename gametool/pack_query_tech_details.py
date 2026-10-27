@@ -4,9 +4,9 @@ from collections.abc import Callable
 from decimal import Decimal, DecimalException, Inexact, MAX_EMAX, MIN_EMIN, localcontext
 import json
 from pathlib import Path
-import re
 from typing import Protocol
 
+from .pack_query_numeric_values import decimal_text as _text, decimal_value as _number
 from .pack_query_object_details import (
     ObjectDetailSources,
     ObjectRecord,
@@ -16,7 +16,6 @@ from .pack_query_object_details import (
 from .pack_query_objects import valid_object_code
 from .search import compile_query
 
-_NUMBER = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?\Z")
 _SCALARS = {
     "glvl": "最大等级",
     "gglb": "基础金",
@@ -40,26 +39,6 @@ def normalize_tech_level(value: str) -> str:
     ):
         raise ValueError("--level 需要正整数等级（不设数字上限）。")
     return value.lstrip("0")
-
-
-def _number(value: str) -> Decimal | None:
-    raw = value.strip().removeprefix("'").strip()
-    if _NUMBER.fullmatch(raw) is None:
-        return None
-    try:
-        with localcontext():
-            result = Decimal(raw)
-            return result if result.is_finite() else None
-    except DecimalException:
-        return None
-
-
-def _text(value: Decimal) -> str:
-    return (
-        str(value.to_integral_value())
-        if value == value.to_integral_value()
-        else str(value)
-    )
 
 
 def _scalar(

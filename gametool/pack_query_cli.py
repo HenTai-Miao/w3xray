@@ -11,7 +11,7 @@
     drop   <名字|四码>   获取途径（掉落/商店/触发奖励; 无记录时回落文案级配方/来源线索）
     quest  [关键词]     任务、标题、条目与显示消息（空词全量列出）
     text   <关键词>     全包 TSV 全行搜索 (--limit N 显式缩减)
-    price  <名字|四码>   金币价（igol 地图价优先, 基础ID继承）
+    price  [名称|四码|字段表达式]  完整金币字段证据（空词全量，来源与冲突诊断）
     tech   [名称|四码|字段表达式] [--level N]  完整科技证据、精确费用公式与指定等级费用
     cmd    <指令文字>    聊天指令效果链（注册->触发器->条件+动作函数体节选, 免手搓脚本）
     refs   <四码|名>     逐对象分类引用与来源；零消耗只说明当前可读索引未发现材料引用
@@ -91,6 +91,7 @@ from .script_sources import (
 
 if TYPE_CHECKING:
     from .pack_query_item_abilities import ItemAbilityIndex
+    from .pack_query_item_prices import ItemPriceIndex
     from .pack_query_diff import DiffQueryResult
     from .pack_query_execution import PackQueryResult
     from .pack_query_spatial import SpatialQueryResult
@@ -365,23 +366,20 @@ def load_item_bases(pack_dir: Path) -> dict[str, str]:
 
 
 def load_item_gold_overrides(pack_dir: Path) -> dict[str, str]:
-    """地图内逐物品金币覆写：对象字段.tsv 中的金币字段行。
+    """Compatibility values; explicit invalid/conflicting overrides remain empty."""
+    return {
+        code: price.value
+        for code, price in _load_item_price_index(pack_dir).prices.items()
+        if price.custom
+    }
 
-    字段键兼容 igol（w3u 对象导出）与 goldcost（SLK 数据导出，
-    如按 SLK 导出物件的系列地图），两者同为物品金币成本字段。
-    """
-    out: dict[str, str] = {}
-    for r in _field_rows(pack_dir):
-        if len(r) <= 5:
-            continue
-        if (
-            len(r) > 5
-            and r[0] == "物品"
-            and len(r[1]) == 4
-            and r[3].lower() in ("igol", "goldcost")
-        ):
-            out[r[1]] = r[5].strip()
-    return out
+
+def _load_item_price_index(pack: Path) -> ItemPriceIndex:
+    from .pack_query_item_prices import ItemPriceSources, load_item_price_index
+
+    return load_item_price_index(
+        pack, cast(ItemPriceSources, cast(object, sys.modules[__name__]))
+    )
 
 
 def _field_object_codes(value: str) -> list[str]:
@@ -612,14 +610,14 @@ def _query_tech(pack: Path, query: str, limit: int) -> list[str]:
 def _item_price(
     bases: dict[str, str], code: str, overrides: dict[str, str] | None = None
 ) -> str:
-    """物品商店价：地图 igol 覆写优先，其次按基础ID继承，再次物品本身即基础物品。"""
+    """Compatibility gold text; canonical base data is a static reference only."""
     if overrides and code in overrides:
         return overrides[code]
     prices = _base_prices()
     base = bases.get(code, "")
     if base and base in prices:
         return prices[base]
-    return prices.get(code.lower(), "")
+    return prices.get(code, "")
 
 
 def _call_index_diagnostics(pack: Path, notes: Sequence[str]) -> None:
@@ -830,6 +828,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
             "quest",
             "item",
             "tech",
+            "price",
         )
         and len(rest) == 2
     ):
@@ -842,7 +841,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
             + "> <查询词>"
             + ("  (near 用法: near <x> <y> [radius])" if command == "near" else "")
             + (
-                "  (affixes/registered/list/buffs/heroes/stats/synth/skills/units/quest/item/tech 查询词可省 = 全量列出; diff 用法: diff <旧包目录>)"
+                "  (affixes/registered/list/buffs/heroes/stats/synth/skills/units/quest/item/tech/price 查询词可省 = 全量列出; diff 用法: diff <旧包目录>)"
                 if command
                 in ("affixes", "registered", "diff", "list", "buffs", "quest")
                 else ""
@@ -871,6 +870,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         "quest",
         "item",
         "tech",
+        "price",
     ):
         raise PackQueryCliOptionError("查询词不能为空")
     return PackQueryCliOptions(
@@ -1000,48 +1000,11 @@ def _query_item(pack: Path, query: str, limit: int) -> list[str]:
 
 
 def _query_price(pack: Path, query: str, limit: int) -> list[str]:
-    items = load_items(pack)
-    bases = load_item_bases(pack)
-    overrides = load_item_gold_overrides(pack)
-    lines = []
-    matches = [
-        (code, name, desc)
-        for code, (name, desc) in items.items()
-        if _match(query, code, name)
-    ]
-    for code, name, desc in _bounded(matches, limit):
-        price = _item_price(bases, code, overrides)
-        base = bases.get(code, code.lower() if code.lower() in _base_prices() else "-")
-        src = "地图价" if code in overrides else "继承"
-        lines.append(
-            "["
-            + code
-            + "] "
-            + name
-            + "  金币: "
-            + (price or "-")
-            + "  ("
-            + src
-            + ", 基础: "
-            + base
-            + ")"
-        )
-    if note := _truncated_note(matches, limit):
-        lines.append(note)
-    if lines:
-        return lines
-    if not lines:
-        price = _base_prices().get(query.lower())
-        if price:
-            lines.append("基础物品 [" + query.lower() + "]  金币: " + price)
-    if lines:
-        return lines
-    if items:
-        return [
-            "未找到物品价格: " + query,
-            f"  （本图物品表共 {len(items)} 件; 可用 price <名称或四码> 查询）",
-        ]
-    return ["未找到物品价格: " + query]
+    from .pack_query_item_prices import ItemPriceSources, query_item_prices
+
+    return query_item_prices(
+        pack, query, limit, cast(ItemPriceSources, cast(object, sys.modules[__name__]))
+    )
 
 
 def _shop_position_label(row: Sequence[str]) -> tuple[str, str, bool]:
@@ -1073,13 +1036,12 @@ def _shop_position_label(row: Sequence[str]) -> tuple[str, str, bool]:
 
 
 def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
-    """按商店列出售清单与逐件真实价格（igol 地图价优先，回落基础继承价）。"""
-    items = load_items(pack)
-    bases = load_item_bases(pack)
-    overrides = load_item_gold_overrides(pack)
+    """List complete shelves alongside independently resolved static gold fields."""
+    prices = _load_item_price_index(pack)
     lines: list[str] = []
     blocks: list[tuple[str, int, int]] = []
     stocked: set[str] = set()
+    price_items: dict[str, dict[str, None]] = {}
     for shop_code, shop_name, codes in load_shop_stocks(pack):
         if not _match(query, shop_code, shop_name):
             continue
@@ -1089,11 +1051,19 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
         if not codes:
             lines.append("  货架字段显式为空，未列出出售物品。")
         for c in codes:
-            name = items.get(c, (c, ""))[0]
-            price = _item_price(bases, c, overrides)
-            tag = "地图价" if c in overrides else "继承"
+            name = prices.name_for(c)
+            price = prices.for_code(c)
+            price_items.setdefault(shop_code, {}).setdefault(c, None)
             lines.append(
-                "  " + name + "  " + (price or "?") + "金  (" + tag + " " + c + ")"
+                "  "
+                + name
+                + "  "
+                + (price.value or "未确认")
+                + "金  ("
+                + price.origin
+                + " "
+                + c
+                + ")"
             )
         lines.append("")
         blocks.append((shop_code, block_start, len(lines)))
@@ -1116,11 +1086,12 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
         lines.append("== " + name + " [" + code + "]  (商店制造)")
         for icode, iname in entries:
             lines.append("  制造 " + iname + " [" + icode + "]")
+            price_items.setdefault(code, {}).setdefault(icode, None)
         lines.append("")
         blocks.append((code, block_start, len(lines)))
     # 关系表「商店出售」行: 货架字段缺失时的另一证据源——战役容器商店
     # (h704 银月配方商) 只有关系行, 对象字段无自定义 usei, 曾答未找到
-    sell: dict[str, tuple[str, dict[str, None]]] = {}
+    sell: dict[str, tuple[str, dict[tuple[str, str], None]]] = {}
     for r in _acquisition_rows(pack):
         if len(r) < 8 or r[2] != "商店出售":
             continue
@@ -1128,19 +1099,21 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
         if not code:
             continue
         entry = sell.setdefault(code, (_clean(r[7]) or code, {}))
-        item = _clean(r[4]) + " [" + r[3] + "]"
-        entry[1].setdefault(item, None)
+        entry[1].setdefault((r[3], _clean(r[4])), None)
     for code, (name, entries) in sell.items():
         if code in stocked or not _match(query, code, name):
             continue
         block_start = len(lines)
         lines.append("== " + name + " [" + code + "]  (关系表出售)")
-        for item in entries:
-            lines.append("  " + item)
+        for icode, iname in entries:
+            lines.append("  " + iname + " [" + icode + "]")
+            price_items.setdefault(code, {}).setdefault(icode, None)
         lines.append("")
         blocks.append((code, block_start, len(lines)))
     if lines:
         selected_codes = {code for code, _start, _end in blocks}
+        shops = list(dict.fromkeys(code for code, _start, _end in blocks))
+        selected = set(_bounded(shops, limit))
         location_notes: dict[str, dict[str, None]] = {}
         for row in _acquisition_rows(pack):
             if (
@@ -1169,10 +1142,18 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
             lines.extend(notes)
             lines.append("")
             blocks.append((code, start, len(lines)))
+        for code, items in price_items.items():
+            if code not in selected:
+                continue
+            start = len(lines)
+            lines.append("  商店物品静态金币字段 [" + code + "]")
+            for item in items:
+                price = prices.for_code(item)
+                lines.append("  [" + item + "] 金币: " + price.summary())
+                lines.extend(price.detail_lines(include_fields=True))
+            blocks.append((code, start, len(lines)))
         if not limit:
             return lines
-        shops = list(dict.fromkeys(code for code, _start, _end in blocks))
-        selected = set(_bounded(shops, limit))
         output = [
             line
             for code, start, end in blocks
@@ -1826,6 +1807,8 @@ def _script_pool_drops(
     items = load_items(pack)
     units = load_units(pack)
     out: list[str] = []
+    price_index: ItemPriceIndex | None = None
+    described_prices: set[str] = set()
     for m in _DEATH_COND_BLOCK_RE.finditer(script):
         body = m.group(2)
         lower = body.lower()
@@ -1860,7 +1843,8 @@ def _script_pool_drops(
             out.append(
                 f"  死亡{chance}掉1件, 池 {pvar}[{pidx}] 共{len(entries)}件 (权重/总权重):"
             )
-            prices = load_item_gold_overrides(pack)
+            if price_index is None:
+                price_index = _load_item_price_index(pack)
             shelves_by_item: dict[str, list[str]] = {}
             for _sc, sname, stocks in load_shop_stocks(pack):
                 for c in stocks:
@@ -1890,17 +1874,14 @@ def _script_pool_drops(
                 slot = _item_slot_by_name(iname)
                 if slot:
                     tag += "·" + slot + "(名推断)"
-                p = prices.get(icode, "")
+                price = price_index.for_code(icode)
                 shelves = shelves_by_item.get(icode, [])
-                if p and p != "0":
-                    if not shelves:
-                        price_disp = "估值" + p + "金(无货架记录)"
-                    elif len(shelves) == 1:
-                        price_disp = "在售" + p + "金@" + shelves[0]
-                    else:
-                        price_disp = p + "金@" + "/".join(shelves)  # 全部货架
-                else:
-                    price_disp = "非卖品"
+                price_disp = (
+                    "静态金币" + price.value + "金" if price.value else "金币字段未确认"
+                )
+                price_disp += (
+                    "·货架@" + "/".join(shelves) if shelves else "(无货架记录)"
+                )
                 acq = acq_by_item.get(icode, [])
                 if acq:
                     price_disp += "·" + "/".join(acq)  # 全部获取途径
@@ -1909,6 +1890,9 @@ def _script_pool_drops(
                 out.append(
                     f"    - {iname} [{icode}]  {w:g}/{total:g}  {price_disp}{tag}"
                 )
+                if icode not in described_prices:
+                    described_prices.add(icode)
+                    out.extend(price.detail_lines(include_fields=True))
         out.append("")
     out.extend(_script_direct_death_drops(script, code, items, units))
     out.extend(_script_random_dist_item_drops(script, code, items, units))

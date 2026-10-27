@@ -568,8 +568,8 @@ def test_query_drop_script_pool_fallback(pack):
     assert "奖池怪 [nbos]  ⚠ 脚本死亡奖池" in text
     assert "必掉" in text
     assert "池 udg_WPool[2] 共2件" in text
-    assert "奖池甲 [I0P1]  15/45  非卖品" in text
-    assert "奖池乙 [I0P2]  30/45  非卖品" in text
+    assert "奖池甲 [I0P1]  15/45  金币字段未确认" in text
+    assert "奖池乙 [I0P2]  30/45  金币字段未确认" in text
     # 估值 vs 在售: goldcost 存在但无货架 → 估值+无货架 (连弩事故)
     # 有货架 → 逐店标注; 同名异码 → 价随码警告 (多店不同价事故)
     (pack / "对象字段.tsv").write_text(
@@ -588,10 +588,10 @@ def test_query_drop_script_pool_fallback(pack):
     )
     re_run = "\n".join(_query_drop(pack, "奖池怪", 10))
     assert (
-        "奖池甲 [I0P1]  15/45  在售450金@杂货铺·商店制造@铁匠铺·同名异码价随码·身体(名推断)"
+        "奖池甲 [I0P1]  15/45  静态金币450金·货架@杂货铺·商店制造@铁匠铺·同名异码价随码·身体(名推断)"
         in re_run
     )
-    assert "奖池乙 [I0P2]  30/45  600金@杂货铺/黑店·可合成" in re_run
+    assert "奖池乙 [I0P2]  30/45  静态金币600金·货架@杂货铺/黑店·可合成" in re_run
     # 名称推断的部位标注 (月光银狼池样例形态)
     from gametool.pack_query_cli import _item_slot_by_name
 
@@ -1040,9 +1040,9 @@ def test_parse_errors():
     with pytest.raises(PackQueryCliOptionError):
         parse_pack_query_cli_options(["pack", "nope", "x"])
     with pytest.raises(PackQueryCliOptionError):
-        parse_pack_query_cli_options(["pack", "price"])
+        parse_pack_query_cli_options(["pack", "cmd"])
     with pytest.raises(PackQueryCliOptionError):
-        parse_pack_query_cli_options(["pack", "price", ""])
+        parse_pack_query_cli_options(["pack", "cmd", ""])
     with pytest.raises(PackQueryCliOptionError):
         parse_pack_query_cli_options(["pack", "item", "x", "--limit"])
     with pytest.raises(PackQueryCliOptionError):

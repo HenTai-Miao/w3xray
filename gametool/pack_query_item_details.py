@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Protocol
 
 from .pack_query_item_abilities import AbilityEvidence, ItemAbilityIndex
+from .pack_query_item_prices import ItemPriceSources, item_price_index
 from .pack_query_object_details import (
-    ObjectDetailSources,
     ObjectRecord,
     load_object_records,
     render_object_record,
@@ -14,13 +14,9 @@ from .pack_query_object_details import (
 from .search import compile_query
 
 
-class ItemDetailSources(ObjectDetailSources, Protocol):
-    def load_item_gold_overrides(self, pack: Path) -> dict[str, str]: ...
+class ItemDetailSources(ItemPriceSources, Protocol):
     def load_item_tooltips(self, pack: Path) -> dict[str, str]: ...
     def _load_item_ability_evidence(self, pack: Path) -> ItemAbilityIndex: ...
-    def _item_price(
-        self, bases: dict[str, str], code: str, overrides: dict[str, str] | None = None
-    ) -> str: ...
 
 
 def _ability_search_fields(
@@ -73,25 +69,19 @@ def query_item_details(
                 else []
             ),
         ]
-    overrides = sources.load_item_gold_overrides(pack)
+    prices = item_price_index(index, sources._base_prices(), sources)
     tooltips = sources.load_item_tooltips(pack)
     output: list[str] = []
     for record in matches[:limit] if limit else matches:
-        code, base = record.row[1], record.row[3]
+        code = record.row[1]
         details = render_object_record(
             record, index.view, sources, include_description=False
         )
         output.append(details[0])
-        price = (
-            sources._item_price({code: base} if base else {}, code, overrides)
-            if not record.from_fields or code in overrides
-            else ""
-        )
-        if price:
-            origin = (
-                "地图价" if code in overrides else "继承基础 " + base if base else ""
-            )
-            output.append("  金币: " + price + (" (" + origin + ")" if origin else ""))
+        price = prices.for_code(code)
+        if price.has_evidence:
+            output.append("  金币: " + price.summary())
+            output.extend(price.detail_lines())
         if effects := abilities.summaries_for(code):
             output.append("  属性字段摘要: " + ", ".join(effects))
         if tooltip := tooltips.get(code):
