@@ -18,6 +18,8 @@
 # pyright: reportMissingImports=false
 import argparse
 from contextlib import ExitStack
+from dataclasses import asdict, replace
+from datetime import datetime, timezone
 import ctypes
 import ctypes.wintypes as wt
 import json
@@ -34,6 +36,15 @@ import numpy as np
 from PIL import Image
 
 from .live_handle_chain import match_unit_entries
+from .live_field_evidence import (
+    extract_item_fields,
+    extract_layout_fields,
+    extract_resource_fields,
+    extract_unit_fields,
+    observed_field,
+    reconcile_field_evidence,
+)
+from .live_profile_validation import LiveFieldLayout, field_layout_to_dict
 from .static_numbers import format_number
 
 u32 = ctypes.windll.user32
@@ -221,6 +232,26 @@ def verify_opened_process(handle, opened_path):
         return None  # 无法判定 ≠ 已变化, 不虚报
     if now.lower() != opened_path.lower():
         return f"进程身份已变 (开启时 {opened_path} → 访问时 {now}) — 本次读数可能来自已被替换的进程"
+    return None
+
+
+def _process_creation_time(handle) -> int | None:
+    """Read the actual opened process birth FILETIME without guessing an epoch."""
+    try:
+        get_times = k32.GetProcessTimes
+        get_times.argtypes = [wt.HANDLE, *([ctypes.POINTER(wt.FILETIME)] * 4)]
+        get_times.restype = wt.BOOL
+        created, exited, kernel, user = (wt.FILETIME() for _ in range(4))
+        if get_times(
+            handle,
+            ctypes.byref(created),
+            ctypes.byref(exited),
+            ctypes.byref(kernel),
+            ctypes.byref(user),
+        ):
+            return (created.dwHighDateTime << 32) | created.dwLowDateTime
+    except AttributeError, OSError, TypeError, ValueError:
+        pass
     return None
 
 
@@ -1029,15 +1060,80 @@ class _LiveReport(TypedDict):
     slots: list[Any]
     notes: list[str]
     selected_unit: Any
+    selected_units: list[Any]
+    selection_complete: bool
+    selection_diagnostics: list[str]
+    selection_evidence: dict[str, object]
+    captured_at: str
+    process_identity: dict[str, object] | None
+    capture_finished_at: str
+    capture_consistency: str
+    units_complete: bool
+    owned_units_complete: bool
+    all_units_complete: bool
+    resources_complete: bool
+    offset_profile: dict[str, object] | None
+    evidence: list[Any]
     units: list[Any]
     unit_matches: list[Any]
     owner_counts: "dict[int, int] | None"
     owned_units: "list[dict[str, object]] | None"
     all_units: "list[dict[str, object]] | None"
     resources: "list[dict[str, object]] | None"
+    player_resources: list[dict[str, object]] | None
+    player_resources_complete: bool
     player_rows: "list[str] | None"
     nick_raw: "str | None"
     input_error: bool
+
+
+def _finish_process_identity(
+    report: _LiveReport,
+    handle,
+    opened_path: str | None,
+    opened_creation_time: int | None,
+):
+    """Record what this opened handle proves before its owning scope closes it."""
+    legacy_warning = verify_opened_process(handle, opened_path)
+    current_path = _process_identity(handle)
+    current_creation_time = _process_creation_time(handle)
+    diagnostics: list[str] = []
+    state = "confirmed"
+    if legacy_warning:
+        diagnostics.append(legacy_warning)
+        state = "conflict"
+    if opened_path is None or current_path is None:
+        diagnostics.append("进程可执行路径未能完整读取，不能确认交付时身份一致")
+    elif opened_path.casefold() != current_path.casefold():
+        state = "conflict"
+        diagnostics.append(
+            f"进程身份已变 (开启时 {opened_path} → 访问时 {current_path}) — "
+            "本次读数可能来自已被替换的进程"
+        )
+    if opened_creation_time is None or current_creation_time is None:
+        diagnostics.append(
+            "进程创建时间未能完整读取，PID 与路径不能独立证明同一进程实例"
+        )
+    elif opened_creation_time != current_creation_time:
+        state = "conflict"
+        diagnostics.append(
+            f"进程创建时间已变 ({opened_creation_time} → {current_creation_time})"
+        )
+    if diagnostics and state != "conflict":
+        state = "unknown"
+    report["process_identity"] = {
+        "pid": report["pid"],
+        "executable_path": opened_path,
+        "verified_executable_path": current_path,
+        "creation_time": opened_creation_time,
+        "verified_creation_time": current_creation_time,
+        "creation_time_format": "windows-filetime-100ns-since-1601-utc",
+        "source": "opened-process-handle",
+        "state": state,
+        "diagnostics": diagnostics,
+    }
+    report["notes"].extend(diagnostics)
+    report["capture_finished_at"] = datetime.now(timezone.utc).isoformat()
 
 
 def _icons_memory_requests(
@@ -1161,6 +1257,144 @@ def _parse_resources_arg(parts):
     return values
 
 
+def _resource_report_entry(
+    row,
+    reader,
+    *,
+    build: str,
+    profile: str,
+    pointer_size: int,
+    qualification: str = "declared-layout-only",
+) -> dict[str, object]:
+    """Keep exact source values alongside the legacy rounded resource display."""
+    source = row.source or "只读资源记录（源扫描未提供字段定位出处）"
+    if row.gold_address is not None and row.lumber_address is not None:
+        root = row.gold_address
+        if row.storage_type == "f32":
+            fields = extract_resource_fields(
+                reader,
+                root,
+                gold_offset=0,
+                lumber_offset=row.lumber_address - root,
+                food_offset=row.food_address - root
+                if row.food_address is not None
+                else None,
+                build=build,
+                profile=profile,
+                source=source,
+                qualification=qualification,
+                pointer_size=pointer_size,
+            )
+        else:
+            layouts = [
+                LiveFieldLayout(
+                    "resource",
+                    key,
+                    row.storage_type,
+                    source,
+                    "confirmed",
+                    address - root,
+                    label=key + "（原始存储值）",
+                )
+                for key, address in (
+                    ("gold", row.gold_address),
+                    ("lumber", row.lumber_address),
+                    ("food", row.food_address),
+                    ("food_cap", row.food_cap_address),
+                )
+                if address is not None
+            ]
+            fields = extract_layout_fields(
+                reader,
+                root,
+                layouts,
+                scope="resource",
+                build=build,
+                profile=profile,
+                pointer_size=pointer_size,
+                qualification=qualification,
+            )
+    else:
+        fields = [
+            observed_field(
+                key=key,
+                label=key,
+                value=value,
+                value_type=row.storage_type,
+                source=source,
+                state="unknown",
+                address=address,
+                scope="resource",
+                build=build,
+                profile=profile,
+                diagnostics=(
+                    "源记录未提供可核验的字段地址；保留解析值，不补造地址或零值。",
+                ),
+            )
+            for key, value, address in (
+                ("gold", row.gold, row.gold_address),
+                ("lumber", row.lumber, row.lumber_address),
+                ("food", row.food, row.food_address),
+            )
+        ]
+    source_values = {
+        "gold": row.gold,
+        "lumber": row.lumber,
+        "food": row.food,
+        "food_cap": row.food_cap,
+    }
+    reconciled = []
+    for field in fields:
+        if (
+            row.storage_type == "f32"
+            and field.key == "food"
+            and field.value is not None
+        ):
+            field = replace(
+                field,
+                state="unknown",
+                diagnostics=(
+                    *field.diagnostics,
+                    "人口来自邻近数值启发式；字节可读尚不能独立确认人口语义。",
+                ),
+            )
+        if (
+            field.key in source_values
+            and source_values[field.key] is None
+            and field.value is not None
+        ):
+            field = replace(
+                field,
+                state="unknown",
+                diagnostics=(
+                    *field.diagnostics,
+                    "该候选值未通过源扫描的资源语义判据；仅保留原始字节数值。",
+                ),
+            )
+        reconciled.append(field.to_dict())
+    if row.storage_type == "i32":
+        for field in reconciled:
+            if field["key"] in {"gold", "lumber"}:
+                field["scale_denominator"] = 10
+    food_exact = (
+        next((entry["value"] for entry in reconciled if entry["key"] == "food"), None)
+        if row.food is not None
+        else None
+    )
+    return {
+        "addr": hex(row.addr),
+        "gold": round(row.gold) if row.gold is not None else None,
+        "lumber": round(row.lumber) if row.lumber is not None else None,
+        "food": row.food,
+        "food_cap": row.food_cap,
+        "gold_exact": row.gold,
+        "lumber_exact": row.lumber,
+        "food_exact": food_exact,
+        "source": source,
+        "evidence": reconciled,
+    }
+
+
 def read_live(
     pack_dir,
     strategy="auto",
@@ -1182,7 +1416,7 @@ def read_live(
     _snapshot_partial["count"] = 0
     try:
         with ExitStack() as process_scope:
-            return _read_live(
+            report = _read_live(
                 pack_dir,
                 strategy,
                 save_snapshot_dir,
@@ -1198,6 +1432,8 @@ def read_live(
                 pid,
                 process_scope=process_scope,
             )
+            report["capture_finished_at"] = datetime.now(timezone.utc).isoformat()
+            return report
     finally:
         _active_pid["pid"] = previous_pid
 
@@ -1227,12 +1463,28 @@ def _read_live(
         "slots": [],
         "notes": [],
         "selected_unit": None,
+        "selected_units": [],
+        "selection_complete": False,
+        "selection_diagnostics": ["本次尚未取得可验证的选择链"],
+        "selection_evidence": {},
+        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "process_identity": None,
+        "capture_finished_at": "",
+        "capture_consistency": "sequential-read",
+        "units_complete": False,
+        "owned_units_complete": False,
+        "all_units_complete": False,
+        "resources_complete": False,
+        "offset_profile": None,
+        "evidence": [],
         "units": [],
         "unit_matches": [],
         "owner_counts": None,
         "owned_units": None,
         "all_units": None,
         "resources": None,
+        "player_resources": None,
+        "player_resources_complete": False,
         "player_rows": None,
         "nick_raw": nick,
         "input_error": False,
@@ -1310,6 +1562,10 @@ def _read_live(
         opened_path = _process_identity(
             h
         )  # 身份基线 (防 PID 复用, 学 trainer GameSession)
+        opened_creation_time = _process_creation_time(h)
+        process_scope.callback(
+            _finish_process_identity, report, h, opened_path, opened_creation_time
+        )
         game_rid, self_rid = _integrity_rid(h), _integrity_rid(None)
         if game_rid and self_rid and self_rid < game_rid:
             report["notes"].append(
@@ -1368,15 +1624,82 @@ def _read_live(
             v_engine = str(ver.get("engine") or "classic")
             v_arch = str(ver.get("arch") or "x86")
             profile = hc.resolve_profile(v_str, v_engine, v_arch)
+            accepted_profile_override = False
             if profile_json:
                 # 显式档案优先 (与 --export-profile 闭环); 失败降级内置并明示。
                 loaded, note = load_profile_override(profile_json)
                 report["notes"].append(note)
                 if loaded is not None:
-                    profile = loaded
-            # 档案诊断面: exact/rva-table/template/reforged-pending 四档, notes 永远携带。
-            report["notes"].append(hc.describe_live_profile(v_str, v_engine, v_arch))
+                    if (loaded.version, loaded.engine, loaded.arch) != (
+                        v_str,
+                        v_engine,
+                        v_arch,
+                    ):
+                        report["notes"].append(
+                            "显式档案与本次进程版本/引擎/架构不符，回退内置档案: "
+                            f"{loaded.version}/{loaded.engine}/{loaded.arch} vs "
+                            f"{v_str}/{v_engine}/{v_arch}"
+                        )
+                    else:
+                        profile = loaded
+                        accepted_profile_override = True
+            if accepted_profile_override:
+                report["notes"].append(
+                    f"偏移档案: 外部 {profile.profile_id or profile.version} "
+                    f"({profile.source}); 导入声明不等于本次运行验证，字段保持仅声明状态"
+                )
+            else:
+                report["notes"].append(
+                    hc.describe_live_profile(v_str, v_engine, v_arch)
+                )
+            profile_id = profile.profile_id or f"war3-classic-{profile.version}"
+            evidence_profile = f"{hc.LIVE_PROFILE_ID}/{profile_id}/{profile.tier}"
+            if accepted_profile_override:
+                evidence_profile = f"external:{profile_id}/{profile.version}/{profile.tier}; source={profile.source}"
+            report["evidence"] = [
+                item.to_dict()
+                for item in extract_layout_fields(
+                    reader,
+                    dll_base,
+                    profile.field_layouts,
+                    scope="module",
+                    build=v_str,
+                    profile=evidence_profile,
+                    pointer_size=profile.pointer_size or (8 if v_arch == "x64" else 4),
+                    qualification="declared-layout-only",
+                )
+            ]
+            for layout in profile.field_layouts:
+                if layout.scope == "module":
+                    continue
+                unavailable = observed_field(
+                    key=layout.key,
+                    label=layout.label or layout.key,
+                    value=None,
+                    value_type=layout.value_type,
+                    source=layout.source,
+                    state="unavailable",
+                    scope=layout.scope,
+                    build=v_str,
+                    profile=evidence_profile,
+                    diagnostics=(
+                        "当前探针尚未独立确认该 scope 的根地址，无法读取此声明字段。",
+                    ),
+                ).to_dict()
+                unavailable["layout"] = field_layout_to_dict(layout)
+                report["evidence"].append(unavailable)
+            report["offset_profile"] = {
+                "data": hc.profile_to_dict(profile),
+                "origin": "external"
+                if accepted_profile_override
+                else "builtin-or-derived",
+                "requested_path": profile_json if accepted_profile_override else None,
+                "state": "declared-layout-only",
+            }
             offsets = profile.handle_chain
+            retained_trusted_builtin_chain = (
+                offsets is not None and not accepted_profile_override
+            )
             last_stage: list[str] = []  # 推导阶段追踪 (诊断带最后阶段)
             if offsets is not None and (profile.checks or profile.fingerprint):
                 disk_fp = None
@@ -1392,6 +1715,7 @@ def _read_live(
                         f" 差异为平台加载后所打 (放行; 明细: {'; '.join(patches)})"
                     )
                 if not ok:
+                    retained_trusted_builtin_chain = False
                     report["notes"].append(
                         "档案自校验失败 ("
                         + "; ".join(fails)
@@ -1399,6 +1723,7 @@ def _read_live(
                     )
                     offsets = None
             if offsets is None and profile.tier != "reforged-pending":
+                retained_trusted_builtin_chain = False
                 # 扫描窗口量出来, 不拍数字: 进程内镜像大小 (GetModuleInformation)
                 # -> 磁盘 PE size-of-image -> 兜底扫满用户态。
                 gd_raw = ver.get("game_dll")
@@ -1471,58 +1796,253 @@ def _read_live(
             item_names = load_names(pack_dir)
             unit_names = load_names(pack_dir, "单位")
 
-            def describe(inv):
-                px, py = hc.read_unit_pos(reader, inv.unit_addr)
+            evidence_source = offsets.source
+            if accepted_profile_override:
+                evidence_source = (
+                    f"外部档案 {profile_id}: {profile.source}; 链: {offsets.source}"
+                )
+            qualification = (
+                "confirmed"
+                if v_str == "1.27.0.52240"
+                and v_engine == "classic"
+                and v_arch == "x86"
+                and not accepted_profile_override
+                and retained_trusted_builtin_chain
+                else "declared-layout-only"
+            )
+            profile_data = hc.profile_to_dict(profile)
+            profile_data["handle_chain"] = asdict(offsets)
+            report["offset_profile"] = {
+                "data": profile_data,
+                "origin": "external"
+                if accepted_profile_override
+                else "builtin-or-derived",
+                "requested_path": profile_json if accepted_profile_override else None,
+                "state": qualification,
+            }
+
+            def unit_evidence(unit_addr):
+                evidence = extract_unit_fields(
+                    reader,
+                    unit_addr,
+                    offsets={
+                        "code": offsets.unit_type_off,
+                        "owner": hc.UNIT_OWNER_OFF,
+                        "x": hc.UNIT_POS_X_OFF,
+                        "y": hc.UNIT_POS_Y_OFF,
+                    },
+                    build=v_str,
+                    profile=evidence_profile,
+                    source=evidence_source,
+                    qualification=qualification,
+                )
+                extra = extract_layout_fields(
+                    reader,
+                    unit_addr,
+                    profile.field_layouts,
+                    scope="unit",
+                    build=v_str,
+                    profile=evidence_profile,
+                    pointer_size=profile.pointer_size or 4,
+                    qualification="declared-layout-only",
+                )
+                return reconcile_field_evidence([*evidence, *extra])
+
+            def describe(inv) -> dict[str, Any]:
+                combined_evidence = unit_evidence(inv.unit_addr)
+                fields = {
+                    e.key: e.value for e in combined_evidence if e.state == "confirmed"
+                }
+                items = []
+                for item in inv.items:
+                    item_evidence = extract_item_fields(
+                        reader,
+                        item.item_addr,
+                        code_offset=offsets.item_type_off,
+                        slot=item.slot,
+                        slot_address=item.slot_address,
+                        build=v_str,
+                        profile=evidence_profile,
+                        source=evidence_source,
+                        qualification=qualification,
+                    )
+                    item_evidence.extend(
+                        extract_layout_fields(
+                            reader,
+                            item.item_addr,
+                            profile.field_layouts,
+                            scope="item",
+                            build=v_str,
+                            profile=evidence_profile,
+                            pointer_size=profile.pointer_size or 4,
+                            qualification="declared-layout-only",
+                        )
+                    )
+                    items.append(
+                        {
+                            "slot": item.slot,
+                            "name": item_names.get(item.code.encode("latin-1"), "?"),
+                            "code": item.code,
+                            "addr": item.item_addr,
+                            "handle_pair": {
+                                "address": item.slot_address,
+                                "lo": item.handle_lo,
+                                "hi": item.handle_hi,
+                            },
+                            "handle_evidence": dict(item.handle_evidence),
+                            "evidence": [
+                                e.to_dict()
+                                for e in reconcile_field_evidence(item_evidence)
+                            ],
+                        }
+                    )
                 return {
                     "unit": unit_names.get(inv.code.encode("latin-1"), "?"),
                     "code": inv.code,
                     "addr": inv.unit_addr,
-                    "x": px,
-                    "y": py,
-                    "items": [
-                        {
-                            "slot": i.slot,
-                            "name": item_names.get(i.code.encode("latin-1"), "?"),
-                            "code": i.code,
-                            "addr": i.item_addr,
-                        }
-                        for i in inv.items
-                        if hc.is_fourcc(i.code)
+                    "owner": fields.get("owner"),
+                    "x": fields.get("x"),
+                    "y": fields.get("y"),
+                    "items": items,
+                    "inventory_complete": inv.complete and qualification == "confirmed",
+                    "items_complete": inv.complete and qualification == "confirmed",
+                    "inventory_diagnostics": list(inv.diagnostics),
+                    "inventory_evidence": [
+                        {**entry, "state": qualification}
+                        if entry.get("state") == "confirmed"
+                        else dict(entry)
+                        for entry in inv.slot_evidence
                     ],
+                    "evidence": [e.to_dict() for e in combined_evidence],
+                }
+
+            def describe_owned(unit) -> dict[str, object]:
+                evidence = unit_evidence(unit.addr)
+                fields = {
+                    entry.key: entry.value
+                    for entry in evidence
+                    if entry.state == "confirmed"
+                }
+                return {
+                    "owner": fields.get("owner"),
+                    "unit": unit_names.get(unit.code.encode("latin-1"), "?"),
+                    "code": unit.code,
+                    "addr": unit.addr,
+                    "x": fields.get("x"),
+                    "y": fields.get("y"),
+                    "evidence": [entry.to_dict() for entry in evidence],
                 }
 
             units = hc.walk_item_units(reader, system, offsets)
             report["units"] = [describe(u) for u in units]
+            selection = hc.selected_units(reader, system, offsets, dll_base)
+            report["selected_units"] = [describe(u) for u in selection.units]
+            report["selection_complete"] = (
+                selection.complete and qualification == "confirmed"
+            )
+            report["selection_diagnostics"] = list(selection.diagnostics)
+            if qualification != "confirmed":
+                report["selection_diagnostics"].append(
+                    "选择链布局/单位身份语义仅为声明或结构候选，尚未独立验证；"
+                    "字节遍历完成不证明当前选择语义完整"
+                )
+            report["selection_evidence"] = {
+                "source": evidence_source,
+                "state": qualification,
+                "kind": "local-async-selection",
+                "layout": selection.layout.to_dict()
+                if selection.layout is not None
+                else None,
+                "context": selection.context,
+                "entries": [entry.to_dict() for entry in selection.entries],
+                "primary": selection.primary_evidence.to_dict()
+                if selection.primary_evidence is not None
+                else None,
+            }
+            selection_by_address: dict[int, list[dict[str, object]]] = {}
+            for entry in selection.entries:
+                if entry.unit_address is not None:
+                    selection_by_address.setdefault(entry.unit_address, []).append(
+                        entry.to_dict()
+                    )
+            for selected in report["selected_units"]:
+                selected["selection_evidence"] = selection_by_address.get(
+                    selected["addr"], []
+                )
+            if selection.primary_unit is not None:
+                primary_address = selection.context.get("primary_unit")
+                matching_primary = next(
+                    (
+                        unit
+                        for unit in report["selected_units"]
+                        if unit["addr"] == primary_address
+                    ),
+                    None,
+                )
+                report["selected_unit"] = matching_primary or describe(
+                    selection.primary_unit
+                )
+                report["selected_unit"]["selection_membership_state"] = (
+                    "confirmed"
+                    if matching_primary is not None and selection.layout is not None
+                    else "conflict"
+                    if selection.layout is not None
+                    else "unknown"
+                )
+                if selection.primary_evidence is not None:
+                    report["selected_unit"].setdefault("selection_evidence", []).append(
+                        selection.primary_evidence.to_dict()
+                    )
+            if report["offset_profile"] is not None:
+                report["offset_profile"]["selection_layout"] = (
+                    selection.layout.to_dict() if selection.layout is not None else None
+                )
+            described_units = [*report["units"], *report["selected_units"]]
+            if described_units:
+                report["evidence"] = [
+                    entry
+                    for entry in report["evidence"]
+                    if entry.get("scope") != "unit"
+                ]
+            if any(unit["items"] for unit in described_units):
+                report["evidence"] = [
+                    entry
+                    for entry in report["evidence"]
+                    if entry.get("scope") != "item"
+                ]
+            player_context = selection.context.get("player_context")
+            if qualification == "confirmed" and player_context is not None:
+                report["evidence"] = [
+                    entry
+                    for entry in report["evidence"]
+                    if entry.get("scope") != "player"
+                ]
+                report["evidence"].extend(
+                    item.to_dict()
+                    for item in extract_layout_fields(
+                        reader,
+                        player_context,
+                        profile.field_layouts,
+                        scope="player",
+                        build=v_str,
+                        profile=evidence_profile,
+                        pointer_size=profile.pointer_size or 4,
+                        qualification="declared-layout-only",
+                    )
+                )
             owned: list[Any] | None = None
             if players:
                 owned = hc.walk_owned_units(reader, system, offsets)
                 counts, listed = hc.summarize_owners(owned)
-                report["owner_counts"] = counts
-                report["owned_units"] = [
-                    {
-                        "owner": u.owner,
-                        "unit": unit_names.get(u.code.encode("latin-1"), "?"),
-                        "code": u.code,
-                        "addr": u.addr,
-                        "x": u.x,
-                        "y": u.y,
-                    }
-                    for u in listed
-                ]
+                report["owner_counts"] = (
+                    counts if qualification == "confirmed" else None
+                )
+                report["owned_units"] = [describe_owned(unit) for unit in listed]
             if all_units:
                 all_rows = hc.walk_owned_units(reader, system, offsets)
-                report["all_units"] = [
-                    {
-                        "owner": u.owner,
-                        "unit": unit_names.get(u.code.encode("latin-1"), "?"),
-                        "code": u.code,
-                        "addr": u.addr,
-                        "x": u.x,
-                        "y": u.y,
-                    }
-                    for u in all_rows
-                ]
+                report["all_units"] = [describe_owned(unit) for unit in all_rows]
             if resources is not None:
+                resource_reader = reader
                 if resources == "auto":
                     import time as _time
 
@@ -1533,6 +2053,7 @@ def _read_live(
                     found, total_anchors = hc.rank_auto_rows(
                         hc.find_auto_resource_rows(readers)
                     )
+                    resource_reader = readers[-1]
                     report["notes"].append(
                         f"auto 锚点共 {total_anchors} 个, 按木/人口可信度排序全量输出"
                     )
@@ -1544,21 +2065,42 @@ def _read_live(
                             " 换局/搬移会自动失效重扫)"
                         )
                 report["resources"] = [
-                    {
-                        "addr": hex(r.addr),
-                        "gold": round(r.gold) if r.gold is not None else None,
-                        "lumber": round(r.lumber) if r.lumber is not None else None,
-                        "food": r.food,
-                    }
+                    _resource_report_entry(
+                        r,
+                        resource_reader,
+                        build=v_str,
+                        profile=evidence_profile,
+                        pointer_size=profile.pointer_size or 4,
+                    )
                     for r in found
                 ]
                 # 按玩家号的权威链直读 + 槽位英雄/昵称标注 (每次运行现取,
                 # 换局自动跟随新结构)。昵称来自 --nick 大厅号=名字。
                 try:
+
+                    def resource_u32(address):
+                        raw = reader.read(address, 4)
+                        return struct.unpack("<I", raw)[0] if raw is not None else None
+
                     chain_rows = hc.read_player_resources_chain(
-                        reader.u32, dll_base, str(ver.get("version"))
+                        resource_u32, dll_base, v_str
                     )
                     if chain_rows:
+                        report["player_resources"] = [
+                            {
+                                "owner": index,
+                                **_resource_report_entry(
+                                    row,
+                                    reader,
+                                    build=v_str,
+                                    profile=evidence_profile,
+                                    pointer_size=profile.pointer_size or 4,
+                                    qualification=qualification,
+                                ),
+                            }
+                            for index, row in enumerate(chain_rows)
+                        ]
+                    if chain_rows and qualification == "confirmed":
                         me_idx = hc.read_local_player_index(reader, dll_base, offsets)
                         pool = (
                             owned
@@ -1575,15 +2117,14 @@ def _read_live(
                         )
                         if lines:
                             report["player_rows"] = lines
+                    elif chain_rows:
+                        report["notes"].append(
+                            "当前链布局仅为声明；不把资源扫描值归属到玩家或本地操作者"
+                        )
                 except Exception as ex:
                     report["notes"].append(f"按玩家号标注失败: {ex}")
             if unit_query:
-                pool = list(report["units"])
-                sel = hc.selected_unit(reader, system, offsets, dll_base)
-                if sel is not None:
-                    sel_desc = describe(sel)
-                    report["selected_unit"] = sel_desc
-                    pool.append(sel_desc)
+                pool = [*report["units"], *report["selected_units"]]
                 dedup: dict[int, Any] = {}
                 for entry in pool:
                     dedup.setdefault(int(entry["addr"]), entry)
@@ -1596,12 +2137,20 @@ def _read_live(
                 report["notes"].append(
                     f"未找到单位 {unit_query}; 当前带物品单位: {names}"
                 )
-                return None
-            sel = hc.selected_unit(reader, system, offsets, dll_base)
-            if sel is not None:
-                report["selected_unit"] = describe(sel)
+                return []  # A resolved query miss must not choose another inventory.
+            if report["selected_unit"] is not None:
+                if (
+                    selection.layout is not None
+                    and report["selected_unit"]["selection_membership_state"]
+                    != "confirmed"
+                ):
+                    return []  # A stale/conflicting local leader must not supply another inventory.
                 report["slots"] = report["selected_unit"]["items"]
                 return report["slots"]
+            if report["selected_units"]:
+                return []  # A complete/partial known collection does not choose a substitute primary.
+            if selection.complete:
+                return []  # Confirmed no selection is distinct from a failed read.
             return None
         except Exception as ex:
             report["notes"].append(f"句柄链异常: {ex}")
@@ -1641,6 +2190,7 @@ def _read_live(
             hc1 = importlib.import_module("gametool.live_handle_chain")
             total_b = sum(len(d) for _, d in regions)
             reader = hc1.reader_from_snapshot((regions, total_b))
+            resource_reader = reader
             if resources == "auto":
                 readers = [reader]
                 for _ in range(2):  # 差分采样节奏 (非数据上限; 样本越多排名越稳)
@@ -1649,6 +2199,7 @@ def _read_live(
                 found, total_anchors = hc1.rank_auto_rows(
                     hc1.find_auto_resource_rows(readers)
                 )
+                resource_reader = readers[-1]
                 report["notes"].append(
                     f"auto 锚点共 {total_anchors} 个, 按木/人口可信度排序全量输出"
                 )
@@ -1660,12 +2211,13 @@ def _read_live(
                     )
             if found:
                 report["resources"] = [
-                    {
-                        "addr": hex(r.addr),
-                        "gold": round(r.gold) if r.gold is not None else None,
-                        "lumber": round(r.lumber) if r.lumber is not None else None,
-                        "food": r.food,
-                    }
+                    _resource_report_entry(
+                        r,
+                        resource_reader,
+                        build=str((ver or {}).get("version") or "unknown"),
+                        profile="version-independent-resource-scan",
+                        pointer_size=8 if (ver or {}).get("arch") == "x64" else 4,
+                    )
                     for r in found
                 ]
                 report["notes"].append(
@@ -1684,9 +2236,6 @@ def _read_live(
     if strategy in ("auto", "handle"):
         slots = try_handle()
         if slots is not None:
-            warn = verify_opened_process(h, opened_path)
-            if warn:
-                report["notes"].append(warn)
             report["strategy_used"] = "handle"
             return report
     # 资源兜底: 句柄链不可用 (reforged-pending/template) 时资源读取不该陪葬。
@@ -1695,24 +2244,15 @@ def _read_live(
     if strategy in ("auto", "chain"):
         slots = try_chain()
         if slots:
-            warn = verify_opened_process(h, opened_path)
-            if warn:
-                report["notes"].append(warn)
             report["strategy_used"] = "chain"
             report["slots"] = slots
             return report
     if strategy in ("auto", "icons"):
         slots = _read_icon_slots(report, pack_dir, verbose)
         if slots:
-            warn = verify_opened_process(h, opened_path)
-            if warn:
-                report["notes"].append(warn)
             report["strategy_used"] = "icons"
             report["slots"] = slots
             return report
-    warn = verify_opened_process(h, opened_path)
-    if warn:
-        report["notes"].append(warn)
     report["notes"].append(
         "本次未确认背包内容；请按上述进程/档案/图像诊断重探，不能据此判断背包为空"
     )
@@ -1728,12 +2268,15 @@ def campaign_locate_hint(rep: dict[str, Any]) -> str:
     去重满量, 返回 "码1;码2;…" —— 玩家直接在 pack-query locate 后
     使用; locate 端满量无上限 (del limit), 模板截断零收益。"""
     codes: list[str] = []
-    sel = rep.get("selected_unit") or {}
-    if sel.get("code"):
-        codes.append(str(sel["code"]))
-    for it in sel.get("items") or []:
-        if it.get("code"):
-            codes.append(str(it["code"]))
+    selected = rep.get("selected_units")
+    if selected is None:
+        selected = [rep.get("selected_unit") or {}]
+    for sel in selected:
+        if sel.get("code"):
+            codes.append(str(sel["code"]))
+        for it in sel.get("items") or []:
+            if it.get("code"):
+                codes.append(str(it["code"]))
     for u in rep.get("unit_matches") or []:
         if u.get("code"):
             codes.append(str(u["code"]))
@@ -1752,6 +2295,31 @@ def campaign_locate_command(pack: str, rep: dict[str, Any]) -> str:
     return 'pack-query "' + pack + '" locate ' + codes
 
 
+def _preflight_report_destination(path: str | None) -> None:
+    """Check an explicit destination before probing; the writer commits exclusively."""
+    if path is None:
+        return
+    from .live_report import validate_report_destination
+
+    validate_report_destination(path)
+
+
+def _save_requested_report(path: str | None, report: dict[str, Any]) -> bool:
+    if path is None:
+        return True
+    from .live_report import write_live_report
+
+    try:
+        saved = write_live_report(path, report)
+    except (OSError, ValueError) as exc:
+        message = f"实时报告保存失败: {type(exc).__name__}: {exc}"
+        report.setdefault("notes", []).append(message)
+        print(message, file=sys.stderr)
+        return False
+    print(f"实时报告已保存: {saved}")
+    return True
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=(__doc__ or __name__).splitlines()[0])
     ap.add_argument("--pack", required=True, help="导出的知识包目录")
@@ -1761,6 +2329,9 @@ def main(argv=None):
     ap.add_argument("--test-image", help="用截图代替窗口抓取 (仅 icons 策略)")
     ap.add_argument("--save-snapshot", help="保存内存快照目录 (离线分析用)")
     ap.add_argument("--load-snapshot", help="载入快照目录代替实时读取")
+    ap.add_argument(
+        "--report", metavar="JSON路径", help="显式保存本次完整只读报告到新文件"
+    )
     ap.add_argument("--unit", help="按单位名或四码过滤输出 (如 寒冰游侠 / H004 / 宝宝)")
     ap.add_argument(
         "--players",
@@ -1800,6 +2371,7 @@ def main(argv=None):
     )
     args = ap.parse_args(argv)
     try:
+        _preflight_report_destination(args.report)
         resource_request = _parse_resources_arg(args.resources)
     except ValueError as exc:
         ap.error(str(exc))
@@ -1831,8 +2403,25 @@ def main(argv=None):
             {"name": n, "item": i, "score": round(s, 3), "pos": list(pos), "size": sz}
             for s, i, n, pos, sz in picked
         ]
-        print(json.dumps({"slots": out}, ensure_ascii=False, indent=1))
-        return 0
+        now = datetime.now(timezone.utc).isoformat()
+        image_report = {
+            "strategy_used": "icons",
+            "pid": None,
+            "version": None,
+            "captured_at": now,
+            "capture_finished_at": now,
+            "capture_consistency": "image-read",
+            "process_identity": None,
+            "selected_unit": None,
+            "selected_units": [],
+            "selection_complete": False,
+            "selection_diagnostics": ["截图匹配不提供选择链证据"],
+            "slots": out,
+            "notes": [f"截图来源: {args.test_image}"],
+        }
+        saved = _save_requested_report(args.report, image_report)
+        print(json.dumps(image_report, ensure_ascii=False, indent=1))
+        return 0 if saved else 2
     rep = read_live(
         args.pack,
         args.strategy,
@@ -1848,6 +2437,7 @@ def main(argv=None):
         pid=args.pid,
     )
     append_live_journal(rep)
+    report_saved = _save_requested_report(args.report, rep)
     if rep.get("input_error"):
         print(json.dumps(rep, ensure_ascii=False, indent=1, default=str))
         return 2
@@ -1885,9 +2475,13 @@ def main(argv=None):
     if owned_units is not None:
         print(f"== 玩家单位 (全槽位, 共{len(owned_units)}个) ==")
         for u in owned_units:
-            print(
-                f"  P{u['owner']} {u['unit']} [{u['code']}] @ ({format_number(u['x'])}, {format_number(u['y'])})"
+            pos = (
+                f" @ ({format_number(u['x'])}, {format_number(u['y'])})"
+                if u.get("x") is not None and u.get("y") is not None
+                else ""
             )
+            owner = u["owner"] if u.get("owner") is not None else "?"
+            print(f"  P{owner} {u['unit']} [{u['code']}]{pos}")
     if rep.get("unit_matches"):
         for u in rep["unit_matches"]:
             pos = (
@@ -1898,48 +2492,86 @@ def main(argv=None):
             print(f"匹配单位: {u['unit']} [{u['code']}]{pos}")
             for it in u["items"]:
                 print(f"  槽{it['slot']}: {it['name']} [{it['code']}]")
-    elif rep.get("strategy_used") == "handle" and rep.get("selected_unit"):
-        sel = rep["selected_unit"]
-        pos = (
-            f" @ ({format_number(sel['x'])}, {format_number(sel['y'])})"
-            if sel.get("x") is not None
-            else ""
-        )
-        owner_known = sel.get("addr") is not None and any(
-            u.get("addr") == sel["addr"] for u in owned_units or []
-        )
-        label = "当前选中" if owner_known else "当前选中(归属未知)"
-        print(f"{label}: {sel['unit']} [{sel['code']}]{pos}")
-        for it in sel["items"]:
-            print(f"  槽{it['slot']}: {it['name']} [{it['code']}]")
-        if sel.get("x") is not None:
-            print(
-                f"坐标反查模板：near {format_number(sel['x'])} {format_number(sel['y'])}"
+    if rep.get("strategy_used") == "handle":
+        selected = rep.get("selected_units")
+        legacy_selection = selected is None
+        if selected is None:
+            selected = [rep["selected_unit"]] if rep.get("selected_unit") else []
+        complete_text = "完整" if rep.get("selection_complete") else "部分/未确认完整"
+        print(f"== 当前选择 ({len(selected)} 个确认实例, {complete_text}) ==")
+        if not selected and rep.get("selection_complete"):
+            print("  当前没有选中单位；这不表示场上没有单位。")
+        for index, sel in enumerate(selected, 1):
+            pos = (
+                f" @ ({format_number(sel['x'])}, {format_number(sel['y'])})"
+                if sel.get("x") is not None and sel.get("y") is not None
+                else ""
             )
-        others = [u for u in rep.get("units", []) if u != sel]
+            owner = f"P{sel['owner']}" if sel.get("owner") is not None else "归属未知"
+            addr = f" addr=0x{sel['addr']:X}" if sel.get("addr") is not None else ""
+            if legacy_selection:
+                owner_known = sel.get("addr") is not None and any(
+                    unit.get("addr") == sel["addr"] for unit in owned_units or []
+                )
+                label = "当前选中" if owner_known else "当前选中(归属未知)"
+            else:
+                label = f"当前选中 {index}"
+            print(f"{label}: {sel['unit']} [{sel['code']}] {owner}{pos}{addr}")
+            for it in sel["items"]:
+                item_addr = (
+                    f" addr=0x{it['addr']:X}" if it.get("addr") is not None else ""
+                )
+                print(f"  槽{it['slot']}: {it['name']} [{it['code']}]{item_addr}")
+            if not sel["items"]:
+                print(
+                    "  背包为空"
+                    if sel.get("items_complete", True)
+                    else "  背包未能完整读取"
+                )
+            for issue in sel.get("inventory_diagnostics", []):
+                print(f"  背包诊断: {issue}")
+            if sel.get("x") is not None and sel.get("y") is not None:
+                print(
+                    f"坐标反查模板：near {format_number(sel['x'])} {format_number(sel['y'])}"
+                )
+        selected_addresses = {u.get("addr") for u in selected}
+        others = [
+            u for u in rep.get("units", []) if u.get("addr") not in selected_addresses
+        ]
         if others:
             print("其余带物品单位:")
             for u in others:
                 names_txt = "、".join(f"{i['name']}" for i in u["items"])
                 upos = (
                     f" @ ({format_number(u['x'])}, {format_number(u['y'])})"
-                    if u.get("x") is not None
+                    if u.get("x") is not None and u.get("y") is not None
                     else ""
                 )
                 print(f"  {u['unit']} [{u['code']}]{upos}: {names_txt}")
+    for issue in rep.get("selection_diagnostics", []):
+        print(f"选择诊断: {issue}")
     all_rows = rep.get("all_units")
     if all_rows:
-        combo: dict[tuple[int, str], int] = {}
-        names: dict[tuple[int, str], str] = {}
+        combo: dict[tuple[int | None, str], int] = {}
+        names: dict[tuple[int | None, str], str] = {}
         for u in all_rows:
             key = (u["owner"], u["code"])
             combo[key] = combo.get(key, 0) + 1
             names[key] = u["unit"]
         print(f"== 全部单位 ({len(all_rows)}个, 按 所有者+四码 聚合) ==")
-        for (o2, c2), n2 in sorted(combo.items()):
-            print(f"  P{o2} {names[(o2, c2)]} [{c2}] ×{n2}")
+        for (o2, c2), n2 in sorted(
+            combo.items(),
+            key=lambda entry: (
+                entry[0][0] if entry[0][0] is not None else -1,
+                entry[0][1],
+            ),
+        ):
+            print(f"  P{o2 if o2 is not None else '?'} {names[(o2, c2)]} [{c2}] ×{n2}")
     if all_rows:
-        first_pos = next((u for u in all_rows if u.get("x") is not None), None)
+        first_pos = next(
+            (u for u in all_rows if u.get("x") is not None and u.get("y") is not None),
+            None,
+        )
         if first_pos is not None:
             print(
                 f"坐标反查模板：near {format_number(first_pos['x'])} {format_number(first_pos['y'])}"
@@ -1949,12 +2581,27 @@ def main(argv=None):
         print("== 战役定位 (若当前为 .w3n 战役, 直接复制本行定位任务关) ==")
         print("  " + locate_cmd)
     print(json.dumps(rep, ensure_ascii=False, indent=1, default=str))
+    if not report_saved:
+        return 2
     if rep["slots"]:
         return 0
     if rep["strategy_used"] == "handle" and (
         rep.get("selected_unit") is not None or rep.get("unit_matches")
     ):
-        return 0  # A confirmed empty inventory is a successful read.
+        selected = (
+            rep.get("unit_matches")
+            or rep.get("selected_units")
+            or [rep.get("selected_unit")]
+        )
+        if any(unit and unit.get("items_complete", True) for unit in selected):
+            return 0  # A confirmed empty inventory is a successful read.
+    if (
+        rep["strategy_used"] == "handle"
+        and rep.get("selection_complete")
+        and not args.unit
+        and rep.get("selected_unit") is None
+    ):
+        return 0  # A fully traversed empty selection is a successful read.
     if args.players and (
         owned_units is not None or rep.get("owner_counts") is not None
     ):

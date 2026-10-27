@@ -20,6 +20,8 @@ _COMMANDS = (
     "pack-query",
     "guide",
     "live",
+    "live-report",
+    "reference",
     "current",
     "batch",
     "integrity",

@@ -1882,15 +1882,17 @@ def test_again_without_history(tmp_path, capsys, monkeypatch):
     assert "无最近查询记录" in out
 
 
-def test_json_shape_smoke(tmp_path) -> None:
+def test_json_shape_smoke(pack) -> None:
     """--json 形态冒烟: 输出必为合法 JSON 且含 section/lines 两键。"""
     import json as _json
     import contextlib
     import os
 
-    pack = os.environ.get("GAMEXRAY_TEST_PACK")
-    if not pack or not pathlib.Path(pack).exists():
-        pytest.skip("需真包 (设 GAMEXRAY_TEST_PACK)")
+    explicit_pack = os.environ.get("GAMEXRAY_TEST_PACK")
+    if explicit_pack is not None:
+        if not explicit_pack or not pathlib.Path(explicit_pack).is_dir():
+            pytest.fail("GAMEXRAY_TEST_PACK 必须指向存在的资料包目录")
+        pack = pathlib.Path(explicit_pack)
     from gametool.pack_query_cli import PackQueryCliOptions, run_pack_query_cli
 
     for command, query in (("shop", "商"), ("text", "冰"), ("stats", "")):
@@ -1898,9 +1900,25 @@ def test_json_shape_smoke(tmp_path) -> None:
         with contextlib.redirect_stdout(buffer):
             run_pack_query_cli(
                 PackQueryCliOptions(
-                    pack_dir=pack, command=command, query=query, as_json=True
+                    pack_dir=str(pack), command=command, query=query, as_json=True
                 )
             )
         payload = _json.loads(buffer.getvalue())
         assert set(payload) >= {"section", "lines"}
         assert isinstance(payload["lines"], list)
+        assert payload["input_error"] is False
+
+
+@pytest.mark.parametrize("invalid_input", ("empty", "missing", "file"))
+def test_json_shape_smoke_rejects_invalid_explicit_pack(
+    tmp_path, monkeypatch, invalid_input
+):
+    path = tmp_path / "invalid-pack"
+    if invalid_input == "file":
+        path.write_text("not a directory", encoding="utf-8")
+    monkeypatch.setenv(
+        "GAMEXRAY_TEST_PACK", "" if invalid_input == "empty" else str(path)
+    )
+
+    with pytest.raises(pytest.fail.Exception, match="GAMEXRAY_TEST_PACK"):
+        test_json_shape_smoke(tmp_path)

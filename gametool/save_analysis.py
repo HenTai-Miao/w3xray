@@ -13,6 +13,12 @@ from typing import Final, cast
 from .api import MapData
 from .presentation_safety import tsv_cell as _tsv
 from .save_api_catalog import object_api_category, save_api_info
+from .save_codes import (
+    SaveCode,
+    SaveTextCarrier,
+    extract_save_codes,
+    extract_save_text_carriers,
+)
 from .save_call_context import extract_call_args, structured_context, unescape_arg
 from .script_scan import _codes_in
 from .script_lexing import script_views
@@ -33,6 +39,10 @@ class SaveClue:
     key: str = ""
     sync_prefix: str = ""
     object_codes: tuple[str, ...] = ()
+    offset: int | None = None
+    end: int | None = None
+    raw: str = ""
+    state: str = "static-declaration"
 
     @property
     def summary(self) -> str:
@@ -47,6 +57,8 @@ class SaveClue:
 @dataclass(frozen=True, slots=True)
 class SaveReport:
     rows: tuple[SaveClue, ...]
+    codes: tuple[SaveCode, ...] = ()
+    text_carriers: tuple[SaveTextCarrier, ...] = ()
 
     @property
     def total(self) -> int:
@@ -83,9 +95,27 @@ def build_save_report(md: MapData) -> SaveReport:
     if cached is not None:
         return cast("SaveReport", cached)
     rows: list[SaveClue] = []
+    codes: list[SaveCode] = []
+    carriers: list[SaveTextCarrier] = []
     for source, text, lua in analysis_script_sources(md):
         rows.extend(_scan_script(source, text, lua=lua))
-    report = SaveReport(tuple(rows))
+        codes.extend(extract_save_codes(text, source, lua=lua))
+        carriers.extend(extract_save_text_carriers(text, source, lua=lua))
+    for code in codes:
+        rows.append(
+            SaveClue(
+                code.source,
+                code.line,
+                "SaveCode",
+                code.carrier,
+                code.code,
+                offset=code.offset,
+                end=code.end,
+                raw=code.raw,
+                state=code.state,
+            )
+        )
+    report = SaveReport(tuple(rows), tuple(codes), tuple(carriers))
     try:
         md._save_report_cache = report
     except AttributeError:  # 测试替身可能不是带槽的 MapData
@@ -95,7 +125,7 @@ def build_save_report(md: MapData) -> SaveReport:
 
 def format_save_report_tsv(report: SaveReport) -> str:
     rows = [
-        "来源\t行号\t机制\t操作\t详情\t存档文件\t区段/父键\t键/子键\t同步前缀\t对象码\t摘要"
+        "来源\t行号\t机制\t操作\t详情\t存档文件\t区段/父键\t键/子键\t同步前缀\t对象码\t摘要\t状态\t字符偏移\t字符结束\t原始文本"
     ]
     for clue in report.rows:
         rows.append(
@@ -112,6 +142,10 @@ def format_save_report_tsv(report: SaveReport) -> str:
                     _tsv(clue.sync_prefix),
                     _tsv(",".join(clue.object_codes)),
                     _tsv(clue.summary),
+                    clue.state,
+                    str(clue.offset) if clue.offset is not None else "",
+                    str(clue.end) if clue.end is not None else "",
+                    _tsv(clue.raw),
                 )
             )
         )

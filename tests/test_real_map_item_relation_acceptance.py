@@ -79,7 +79,7 @@ _SKILL_KINDS: Final = frozenset(
     (ItemRelationKind.ITEM_ABILITY, ItemRelationKind.COOLDOWN_ABILITY)
 )
 
-pytestmark = pytest.mark.skipif(
+_requires_real_map_inputs = pytest.mark.skipif(
     not all(os.environ.get(name) for name in _ENV_NAMES),
     reason="set GAMEXRAY_MAPS_ROOT/GAMEXRAY_OLD_OUTPUT/GAMEXRAY_NEW_OUTPUT",
 )
@@ -117,6 +117,7 @@ def acceptance_context() -> AcceptanceContext:
     return AcceptanceContext(maps, old_by_digest, new_by_digest, state.results)
 
 
+@_requires_real_map_inputs
 def test_current_batch_covers_all_sources_and_required_artifacts(
     acceptance_context: AcceptanceContext,
 ) -> None:
@@ -138,6 +139,7 @@ def test_current_batch_covers_all_sources_and_required_artifacts(
         assert {path.name for path in output.iterdir()} >= _REQUIRED_ARTIFACTS
 
 
+@_requires_real_map_inputs
 def test_every_old_non_placeholder_raw_text_remains_current_evidence(
     acceptance_context: AcceptanceContext,
 ) -> None:
@@ -155,6 +157,7 @@ def test_every_old_non_placeholder_raw_text_remains_current_evidence(
     assert not missing, "\n".join(missing)
 
 
+@_requires_real_map_inputs
 def test_relation_rows_keep_stable_evidence_and_explicit_unresolved_state(
     acceptance_context: AcceptanceContext,
 ) -> None:
@@ -180,6 +183,7 @@ def test_relation_rows_keep_stable_evidence_and_explicit_unresolved_state(
     assert direct_doo_rows > 0
 
 
+@_requires_real_map_inputs
 def test_representative_maps_match_gui_query_and_exporter_counts(
     acceptance_context: AcceptanceContext,
 ) -> None:

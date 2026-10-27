@@ -56,6 +56,7 @@ _VALUE_OPTIONS = (
     "--profile-json",
     "--pid",
     "--dump-objects",
+    "--report",
 )
 _FLAG_OPTIONS = ("--all-units", "--players", "--elevated-hint")
 _TWO_VALUE_OPTIONS = ("--resources",)
@@ -81,6 +82,7 @@ class LiveCliOptions:
     pid: str | None = None
     elevated_hint: bool = False
     dump_objects: str | None = None
+    report: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,10 +178,11 @@ def parse_live_cli_options(argv: Sequence[str]) -> LiveCliOptions:
         pid=values.get("--pid"),
         elevated_hint="--elevated-hint" in flags,
         dump_objects=values.get("--dump-objects"),
+        report=values.get("--report"),
     )
 
 
-LIVE_PACK_CACHE_VERSION = "live-pack-v29"
+LIVE_PACK_CACHE_VERSION = "live-pack-v30"
 
 
 def live_pack_cache_dir(map_path: str) -> Path:
@@ -335,6 +338,7 @@ def _request_arguments(options: LiveCliOptions) -> list[str]:
         ("--profile-json", options.profile_json),
         ("--pid", options.pid),
         ("--dump-objects", options.dump_objects),
+        ("--report", options.report),
     ):
         if value is not None:
             args += [option, value]
@@ -417,7 +421,11 @@ def run_live_cli(options: LiveCliOptions) -> int:
     try:
         pid = _pid_value(options.pid)
         resource_args = _resource_arguments(options.resources)
-    except LiveCliOptionError as exc:
+        if options.report is not None:
+            from .live_report import validate_report_destination
+
+            validate_report_destination(options.report)
+    except (ValueError, OSError) as exc:
         print(str(exc), file=sys.stderr)
         return 2
     if options.elevated_hint:
@@ -426,6 +434,12 @@ def run_live_cli(options: LiveCliOptions) -> int:
         print("命令保留本次参数并使用 UTF-8 输出；执行后的窗口会保留读取结果。")
         return 0
     if options.dump_objects is not None:
+        if options.report is not None:
+            print(
+                "参数错误：--report 保存实时探针报告，不能与 --dump-objects 同用。",
+                file=sys.stderr,
+            )
+            return 2
         # 内存对象表全量导出: 不需要地图/资料包 (地图可能根本解析不了,
         # CAME 壳地图正是本模式的目标用户)。
         try:
@@ -491,6 +505,8 @@ def run_live_cli(options: LiveCliOptions) -> int:
         args += ["--profile-json", options.profile_json]
     if options.pid is not None:
         args += ["--pid", options.pid]
+    if options.report is not None:
+        args += ["--report", options.report]
     try:
         return live_main(args)
     except Exception as exc:

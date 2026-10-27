@@ -7,7 +7,10 @@
 已验证链 (1.27.0.52240, KK 平台 Game.dll @0x782C0000):
   选择: [dll+0xBE4238]=vmctx → +0x28(字)=本地玩家号
         → [vmctx+0x58+玩家号*4]=玩家上下文 → +0x34=选中管理器
-        → +0x1E0=当前选中条目 → +0xC/+0x10=句柄对
+        → +0x1E0=主选中单位指针 → 单位+0xC/+0x10=自身句柄对
+  多选: 1.27 本地异步集合尾/头/数量为管理器+0x1F0/+0x1F4/+0x1F8;
+        独立12字节节点 {前驱, 后继, 单位指针}, 补码头地址为结束哨兵。
+        单位首字段是vtable，绝不是选择链后继；同步根集合独立处理。
   句柄: [dll+0xBE40A8]=句柄管理器; 表A [hm+0xC]/上限[hm+0x1C] (bit31=0),
         表B [hm+0x2C]/上限[hm+0x3C] (bit31=1); 8 字节条目{标记,包装指针};
         包装: +0x18=世代(须等于句柄高字), +0x20=0 存活, +0x54=对象指针
@@ -29,7 +32,11 @@ import struct
 import time
 from collections.abc import Callable, Iterator
 from dataclasses import asdict, dataclass, field, replace
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .live_field_evidence import LiveFieldLayout
+    from .live_selection import NativeSelectionLayout, SelectionResult
 
 __all__ = (
     "BUILD_PROFILES",
@@ -65,6 +72,7 @@ __all__ = (
     "read_unit_pos",
     "resolve_profile",
     "selected_unit",
+    "selected_units",
     "summarize_owners",
     "walk_item_units",
     "walk_owned_units",
@@ -229,6 +237,10 @@ class LiveBuildProfile:
     # trainer 验证过的 v2 骨架 — 分域 checks/modules 开关/证据参考库
     # 分离 — 见 AGENTS.d/live.md, 重制版多 build 时启用)。
     schema_version: int = 1
+    field_layouts: tuple[LiveFieldLayout, ...] = ()
+    pointer_size: int | None = None
+    profile_id: str | None = None
+    status: str | None = None
 
 
 # 1.27.0.52240 (KK) 的 PE 三要素与 .text 自校验样本 —— 从本机 Game.dll
@@ -393,12 +405,13 @@ def profile_to_dict(profile: LiveBuildProfile) -> dict[str, Any]:
     """
     d: dict[str, Any] = {
         "schema_version": profile.schema_version,
-        "id": f"war3-classic-{profile.version}",
+        "id": profile.profile_id or f"war3-classic-{profile.version}",
         "game_version": profile.version,
         "engine": profile.engine,
         "arch": profile.arch,
         "tier": profile.tier,
-        "status": "validated" if profile.tier == "exact" else "unverified",
+        "status": profile.status
+        or ("validated" if profile.tier == "exact" else "unverified"),
         "source": profile.source,
     }
     if profile.fingerprint is not None:
@@ -424,6 +437,12 @@ def profile_to_dict(profile: LiveBuildProfile) -> dict[str, Any]:
             d[name] = v
     if profile.handle_chain is not None:
         d["handle_chain"] = asdict(profile.handle_chain)
+    if profile.field_layouts:
+        from .live_profile_validation import field_layout_to_dict
+
+        d["field_layouts"] = [field_layout_to_dict(v) for v in profile.field_layouts]
+    if profile.pointer_size is not None:
+        d["pointer_size"] = profile.pointer_size
     return d
 
 
@@ -444,7 +463,9 @@ def profile_from_dict(d: dict[str, Any]) -> LiveBuildProfile:
     形状校验学自 trainer game_profile: 尺寸上限 / 逐字段类型严格化 /
     版本四段格式 — 导入时全部校验完, 坏档案在使用前被拒。
     """
-    import re as _re
+    from .live_profile_validation import parse_field_layouts, validate_profile_data
+
+    d = validate_profile_data(d)
 
     v = int(d.get("schema_version", 1))
     if v != 1:
@@ -452,10 +473,6 @@ def profile_from_dict(d: dict[str, Any]) -> LiveBuildProfile:
             f"档案 schema v{v} 需要新版工具 (本工具支持 v1): {d.get('id', '?')}"
         )
     gv = str(d["game_version"])
-    if not _re.fullmatch(r"\d+\.\d+\.\d+\.\d+", gv):
-        raise ValueError(
-            f"档案 game_version 需要四段数字版本号 (a.b.c.d), 实得: {gv!r}"
-        )
     checks = tuple(
         ProfileCheck(
             rva=_strict_int(c["rva"], f"checks[{i}].rva"),
@@ -495,6 +512,12 @@ def profile_from_dict(d: dict[str, Any]) -> LiveBuildProfile:
         fingerprint=fingerprint,
         checks=checks,
         schema_version=v,
+        field_layouts=parse_field_layouts(
+            d.get("field_layouts", []), arch=str(d.get("arch", "x86"))
+        ),
+        pointer_size=d.get("pointer_size"),
+        profile_id=d.get("id"),
+        status=d.get("status"),
     )
 
 
@@ -655,21 +678,54 @@ class HandleSystem:
 
     def resolve(self, lo: int, hi: int) -> int | None:
         """句柄对 → 对象地址; 失败返回 None。"""
+        obj, _evidence, _diagnostics = self.resolve_evidence(lo, hi)
+        return obj
+
+    def resolve_evidence(
+        self, lo: int, hi: int
+    ) -> tuple[int | None, dict[str, int], tuple[str, ...]]:
+        """Resolve a handle without treating unreadable validation bytes as zero."""
         o = self._o
         r = self._r
         table = self.tables[(lo >> 0x1F) & 1]
         index = lo & 0x7FFFFFFF
+        evidence = {"handle_lo": lo, "handle_hi": hi, "table_index": index}
         if index >= table.bound:
-            return None
-        wrapper = r.u32(table.base + index * 8 + 4)
+            return None, evidence, (f"句柄表索引 {index} 超出声明边界 {table.bound}",)
+        slot = table.base + index * 8 + 4
+        evidence["wrapper_pointer_address"] = slot
+        raw = r.read(slot, 4)
+        if raw is None:
+            return None, evidence, (f"句柄包装指针不可读 @0x{slot:X}",)
+        wrapper = struct.unpack("<I", raw)[0]
+        evidence["wrapper_address"] = wrapper
         if not (_HEAP_LO <= wrapper < _HEAP_HI):
-            return None
-        if r.u32(wrapper + o.wrapper_gen_off) != hi:
-            return None
-        if r.u32(wrapper + o.wrapper_alive_off) != 0:
-            return None
-        obj = r.u32(wrapper + o.wrapper_obj_off)
-        return obj if _HEAP_LO <= obj < _HEAP_HI else None
+            return None, evidence, (f"句柄包装地址无效: 0x{wrapper:X}",)
+        values: dict[str, int] = {}
+        diagnostics: list[str] = []
+        for key, offset in (
+            ("generation", o.wrapper_gen_off),
+            ("alive", o.wrapper_alive_off),
+            ("object", o.wrapper_obj_off),
+        ):
+            address = wrapper + offset
+            evidence[key + "_address"] = address
+            raw = r.read(address, 4)
+            if raw is None:
+                diagnostics.append(f"句柄包装 {key} 不可读 @0x{address:X}")
+            else:
+                values[key] = struct.unpack("<I", raw)[0]
+                evidence[key] = values[key]
+        if "generation" in values and values["generation"] != hi:
+            diagnostics.append(
+                f"句柄世代不符: 期望 0x{hi:X}, 实得 0x{values['generation']:X}"
+            )
+        if "alive" in values and values["alive"] != 0:
+            diagnostics.append(f"句柄对象已失效: alive=0x{values['alive']:X}")
+        obj = values.get("object", 0)
+        if "object" in values and not (_HEAP_LO <= obj < _HEAP_HI):
+            diagnostics.append(f"句柄对象地址无效: 0x{obj:X}")
+        return (None if diagnostics else obj), evidence, tuple(diagnostics)
 
     def live_objects(self):
         """枚举句柄表中所有存活对象地址 (单位/物品/UI 混在一起)。
@@ -701,6 +757,10 @@ class SlotItem:
     slot: int
     item_addr: int
     code: str
+    slot_address: int | None = None
+    handle_lo: int | None = None
+    handle_hi: int | None = None
+    handle_evidence: tuple[tuple[str, int], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -710,31 +770,122 @@ class UnitInventory:
     unit_addr: int
     code: str
     items: tuple[SlotItem, ...] = field(default=())
+    complete: bool = True
+    diagnostics: tuple[str, ...] = ()
+    slot_evidence: tuple[dict[str, object], ...] = ()
 
 
 def read_inventory(
-    reader: MemoryReader, system: HandleSystem, o: LiveHandleOffsets, unit_addr: int
+    reader: MemoryReader,
+    system: HandleSystem,
+    o: LiveHandleOffsets,
+    unit_addr: int,
+    *,
+    declared_identity: bool = False,
 ) -> UnitInventory:
     """读单位 +0x1F8 背包的 6 个槽位; 类型四码不可读时视为非单位。"""
-    code = fourcc(reader.u32(unit_addr + o.unit_type_off))
-    if not is_fourcc(code):
-        return UnitInventory(unit_addr, "", ())
-    inv = reader.u32(unit_addr + o.unit_inv_off)
-    if not (_HEAP_LO <= inv < _HEAP_HI):
+    from .object_codes import valid_object_code
+
+    def valid_code(value: str) -> bool:
+        if declared_identity:
+            return valid_object_code(value) and value not in ("\0" * 4, "\xff" * 4)
+        return is_fourcc(value)
+
+    raw_code = reader.read(unit_addr + o.unit_type_off, 4)
+    if raw_code is None:
+        return UnitInventory(
+            unit_addr,
+            "",
+            (),
+            False,
+            (f"单位类型不可读 @0x{unit_addr + o.unit_type_off:X}",),
+        )
+    code = fourcc(struct.unpack("<I", raw_code)[0])
+    if not valid_code(code):
+        return UnitInventory(
+            unit_addr,
+            "",
+            (),
+            False,
+            (f"单位类型四码无效/空值: {code!r} @0x{unit_addr + o.unit_type_off:X}",),
+        )
+    raw_inv = reader.read(unit_addr + o.unit_inv_off, 4)
+    if raw_inv is None:
+        return UnitInventory(
+            unit_addr,
+            code,
+            (),
+            False,
+            (f"背包指针不可读 @0x{unit_addr + o.unit_inv_off:X}",),
+        )
+    inv = struct.unpack("<I", raw_inv)[0]
+    if inv == 0:
         return UnitInventory(unit_addr, code, ())
+    if not (_HEAP_LO <= inv < _HEAP_HI):
+        return UnitInventory(unit_addr, code, (), False, (f"背包地址无效: 0x{inv:X}",))
     items: list[SlotItem] = []
+    diagnostics: list[str] = []
+    slot_evidence: list[dict[str, object]] = []
     for slot in range(6):
         s = inv + o.inv_slots_off + o.inv_slot_stride * slot
-        lo = reader.u32(s)
-        hi = reader.u32(s + 4)
+        raw_pair = reader.read(s, 8)
+        slot_record: dict[str, object] = {
+            "slot": slot,
+            "address": s,
+            "inventory_address": inv,
+            "inventory_pointer_address": unit_addr + o.unit_inv_off,
+            "raw_bytes": raw_pair.hex() if raw_pair is not None else None,
+            "source": o.source,
+            "state": "unavailable",
+        }
+        slot_evidence.append(slot_record)
+        if raw_pair is None:
+            issue = f"背包槽{slot}句柄对不可读 @0x{s:X}"
+            diagnostics.append(issue)
+            slot_record["diagnostics"] = [issue]
+            continue
+        lo, hi = struct.unpack("<II", raw_pair)
+        slot_record["handle_lo"] = lo
+        slot_record["handle_hi"] = hi
         if (lo & hi) == 0xFFFFFFFF or (lo | hi) == 0:
+            slot_record.update(state="confirmed", empty=True)
             continue
-        item = system.resolve(lo, hi)
+        item, evidence, issues = system.resolve_evidence(lo, hi)
+        slot_record["resolution"] = evidence
         if item is None:
+            diagnostics.extend(f"背包槽{slot}: {issue}" for issue in issues)
+            slot_record.update(state="invalid", diagnostics=list(issues))
             continue
-        item_code = fourcc(reader.u32(item + o.item_type_off))
-        items.append(SlotItem(slot, item, item_code))
-    return UnitInventory(unit_addr, code, tuple(items))
+        slot_record["item_address"] = item
+        slot_record["item_type_address"] = item + o.item_type_off
+        raw_item_code = reader.read(item + o.item_type_off, 4)
+        slot_record["item_type_raw_bytes"] = (
+            raw_item_code.hex() if raw_item_code is not None else None
+        )
+        if raw_item_code is None:
+            issue = f"背包槽{slot}物品类型不可读 @0x{item + o.item_type_off:X}"
+            diagnostics.append(issue)
+            slot_record["diagnostics"] = [issue]
+            continue
+        item_code = fourcc(struct.unpack("<I", raw_item_code)[0])
+        slot_record["code"] = item_code
+        if not valid_object_code(item_code) or item_code in ("\0" * 4, "\xff" * 4):
+            issue = f"背包槽{slot}物品四码无效/空值: {item_code!r} @0x{item + o.item_type_off:X}"
+            diagnostics.append(issue)
+            slot_record.update(state="invalid", diagnostics=[issue])
+            continue
+        slot_record["state"] = "confirmed"
+        items.append(
+            SlotItem(slot, item, item_code, s, lo, hi, tuple(evidence.items()))
+        )
+    return UnitInventory(
+        unit_addr,
+        code,
+        tuple(items),
+        not diagnostics,
+        tuple(diagnostics),
+        tuple(slot_evidence),
+    )
 
 
 def walk_item_units(
@@ -753,9 +904,8 @@ def walk_item_units(
         if not (_HEAP_LO <= inv_addr < _HEAP_HI):
             continue
         inv = read_inventory(reader, system, o, obj)
-        valid = [i for i in inv.items if is_fourcc(i.code)]
-        if valid:
-            units.append(UnitInventory(obj, code, tuple(valid)))
+        if inv.items:
+            units.append(inv)
     units.sort(key=lambda u: -len(u.items))
     return units
 
@@ -831,6 +981,14 @@ class PlayerResources:
     lumber: float | None = None
     food: int | None = None
     food_cap: int | None = None
+    # Logical row equality remains addr/value based; provenance stays available
+    # as fields and in dataclasses.asdict without changing the existing API.
+    gold_address: int | None = field(default=None, compare=False)
+    lumber_address: int | None = field(default=None, compare=False)
+    food_address: int | None = field(default=None, compare=False)
+    food_cap_address: int | None = field(default=None, compare=False)
+    storage_type: str = field(default="f32", compare=False)
+    source: str = field(default="", compare=False)
 
 
 # 权威资源链 (来源: Still4/War3Trainer GameContext/GameTrainer, 1.20~1.28 全版本表;
@@ -901,10 +1059,24 @@ def read_player_resources_chain(read_u32, dll_base: int, version: str):
         lumber_i = _to_signed(read_u32(upper + base + 0x80))
         food_i = _to_signed(read_u32(upper + base + 0x200))
         cap_i = _to_signed(read_u32(upper + base + 0x180))
-        gold = gold_i / 10 if gold_i and 0 < gold_i < 40_000_000 else None
-        lumber = lumber_i / 10 if lumber_i and 0 < lumber_i < 40_000_000 else None
-        food = food_i if food_i is not None and 0 <= food_i < 300 else None
-        rows.append(PlayerResources(upper + base, gold, lumber, food, cap_i))
+        gold = gold_i / 10 if gold_i is not None else None
+        lumber = lumber_i / 10 if lumber_i is not None else None
+        food = food_i
+        rows.append(
+            PlayerResources(
+                upper + base,
+                gold,
+                lumber,
+                food,
+                cap_i,
+                gold_address=upper + base,
+                lumber_address=upper + base + 0x80,
+                food_address=upper + base + 0x200,
+                food_cap_address=upper + base + 0x180,
+                storage_type="i32",
+                source=f"经典资源链 {version}; 金/木原始有符号整数÷10",
+            )
+        )
     return rows
 
 
@@ -933,14 +1105,21 @@ def cached_resource_hit() -> bool:
 
 def _probe_food(reader: "MemoryReader", gold_addr: int, delta: int) -> "int | None":
     """尽力识别人口: 常见相对偏移处第一个数量级合理的 float。"""
+    return _probe_food_position(reader, gold_addr, delta)[0]
+
+
+def _probe_food_position(
+    reader: MemoryReader, gold_addr: int, delta: int
+) -> tuple[int | None, int | None]:
+    """Return the same heuristic result together with the bytes actually used."""
     for fo in (delta + 4, delta + 8, delta - 4, 4, 8):
         raw = reader.read(gold_addr + fo, 4)
         if not raw:
             continue
         fv = struct.unpack("<f", raw)[0]
         if _plausible_resource(fv) and round(fv) <= 1000:
-            return round(fv)
-    return None
+            return round(fv), gold_addr + fo
+    return None, None
 
 
 def _iter_float_slots(reader: "MemoryReader"):
@@ -1061,8 +1240,18 @@ def find_resource_layout(
             ):
                 ok = False
                 break
+            food, food_address = _probe_food_position(reader, g_addr, delta)
             replay.append(
-                PlayerResources(g_addr, gv, lv, _probe_food(reader, g_addr, delta))
+                PlayerResources(
+                    g_addr,
+                    gv,
+                    lv,
+                    food,
+                    gold_address=g_addr,
+                    lumber_address=g_addr + delta,
+                    food_address=food_address,
+                    source="HUD 报数校准候选（缓存地址已用本次快照复验）；人口为邻近值线索",
+                )
             )
         if ok:
             _resource_cache_hit = True
@@ -1094,8 +1283,18 @@ def find_resource_layout(
             continue
         gold_val = struct.unpack("<f", gold_raw)[0]
         lumber_val = struct.unpack("<f", lumber_raw)[0]
+        food, food_address = _probe_food_position(reader, g, best_delta)
         out.append(
-            PlayerResources(g, gold_val, lumber_val, _probe_food(reader, g, best_delta))
+            PlayerResources(
+                g,
+                gold_val,
+                lumber_val,
+                food,
+                gold_address=g,
+                lumber_address=lum_addr,
+                food_address=food_address,
+                source="HUD 报数校准同布局候选；人口为邻近值线索",
+            )
         )
     _resource_anchors = [(g, best_delta) for g in anchors] if out else None
     return out
@@ -1150,12 +1349,25 @@ def find_auto_resource_rows(
         if _plausible_resource(lumber_f) and lumber_f <= 100000:
             lumber = lumber_f
         food = None
+        food_address = None
         for fo in (8, 12):
             fv = struct.unpack_from("<f", blk, fo)[0]
             if _plausible_resource(fv) and round(fv) <= 100:
                 food = round(fv)
+                food_address = addr + fo
                 break
-        rows.append(PlayerResources(addr, v_final, lumber, food))
+        rows.append(
+            PlayerResources(
+                addr,
+                v_final,
+                lumber,
+                food,
+                gold_address=addr,
+                lumber_address=addr + 4,
+                food_address=food_address,
+                source="同进程多快照单调上涨候选；木材/人口为邻近布局线索，玩家归属未确认",
+            )
+        )
     rows.sort(key=lambda r: r.addr)
     return rows
 
@@ -1314,36 +1526,33 @@ def _selection_chain_valid(
     vmctx: int,
     require_inventory: bool = True,
 ) -> bool:
-    """端到端校验: 从候选 vmctx 走选中链, 解析出一个带合法四码的单位。
-
-    严格模式 (require_inventory) 额外要求该单位带背包对象, 并要求
-    vmctx+0x28 的本地玩家号落在 0..15 —— 用于排除结构巧合的假阳性。
-    """
-    if reader.u16(vmctx + o.player_idx_off) >= 16:
+    """Validate actual primary unit pointers; a unit's vtable is never a link."""
+    player_raw = reader.read(vmctx + o.player_idx_off, 2)
+    if player_raw is None or int.from_bytes(player_raw, "little") >= 16:
         return False
     for player in range(16):
         pctx = reader.u32(vmctx + o.pctx_array_off + player * 4)
         if not (_HEAP_LO <= pctx < _HEAP_HI):
             continue
-        selmgr = reader.u32(pctx + o.selmgr_off)
-        if not (_HEAP_LO <= selmgr < _HEAP_HI):
+        manager = reader.u32(pctx + o.selmgr_off)
+        if not (_HEAP_LO <= manager < _HEAP_HI):
             continue
-        entry = reader.u32(selmgr + o.sel_entry_off)
-        for _ in range(12):
-            if not (_HEAP_LO <= entry < _HEAP_HI):
-                break
-            lo = reader.u32(entry + o.entry_pair_off)
-            hi = reader.u32(entry + o.entry_pair_off + 4)
-            unit = system.resolve(lo, hi)
-            if unit is not None and is_fourcc(
-                fourcc(reader.u32(unit + o.unit_type_off))
-            ):
-                if require_inventory:
-                    inv = reader.u32(unit + o.unit_inv_off)
-                    if not (_HEAP_LO <= inv < _HEAP_HI):
-                        continue
-                return True
-            entry = reader.u32(entry)
+        unit = reader.u32(manager + o.sel_entry_off)
+        if not (_HEAP_LO <= unit < _HEAP_HI):
+            continue
+        pair = reader.read(unit + o.entry_pair_off, 8)
+        if pair is None:
+            continue
+        lo, hi = struct.unpack("<II", pair)
+        if system.resolve(lo, hi) != unit:
+            continue
+        if not is_fourcc(fourcc(reader.u32(unit + o.unit_type_off))):
+            continue
+        if require_inventory:
+            inventory = reader.u32(unit + o.unit_inv_off)
+            if not (_HEAP_LO <= inventory < _HEAP_HI):
+                continue
+        return True
     return False
 
 
@@ -1518,6 +1727,17 @@ def derive_offsets(
     return None
 
 
+def _native_selection_layout(o: LiveHandleOffsets) -> NativeSelectionLayout | None:
+    """An external/derived recipe never borrows role/layout proof by similarity."""
+    from .live_selection import LOCAL_SELECTION_LAYOUT_127
+
+    return (
+        LOCAL_SELECTION_LAYOUT_127
+        if o is HANDLE_CHAIN_OFFSETS.get("1.27.0.52240")
+        else None
+    )
+
+
 def selected_unit(
     reader: MemoryReader,
     system: HandleSystem,
@@ -1525,29 +1745,51 @@ def selected_unit(
     dll_base: int,
     max_walk: int | None = None,
 ) -> UnitInventory | None:
-    """读当前选中单位 (选择链), 失败/未选中返回 None。"""
-    vmctx = reader.u32(dll_base + o.vmctx_global_rva)
-    if not (_HEAP_LO <= vmctx < _HEAP_HI):
+    """Legacy primary unit only; never enumerate or follow its first DWORD."""
+    if max_walk is not None and max_walk <= 0:
         return None
-    player = reader.u16(vmctx + o.player_idx_off)
-    pctx = reader.u32(vmctx + o.pctx_array_off + player * 4)
-    if not (_HEAP_LO <= pctx < _HEAP_HI):
-        return None
-    selmgr = reader.u32(pctx + o.selmgr_off)
-    if not (_HEAP_LO <= selmgr < _HEAP_HI):
-        return None
-    entry = reader.u32(selmgr + o.sel_entry_off)
-    seen: set[int] = set()
-    while entry not in seen and (max_walk is None or len(seen) < max_walk):
-        if not (_HEAP_LO <= entry < _HEAP_HI):
-            break
-        seen.add(entry)
-        lo = reader.u32(entry + o.entry_pair_off)
-        hi = reader.u32(entry + o.entry_pair_off + 4)
-        unit = system.resolve(lo, hi)
-        if unit is not None:
-            inv = read_inventory(reader, system, o, unit)
-            if inv.code:
-                return inv
-        entry = reader.u32(entry)
-    return None
+    from .live_selection import collect_selected_units
+
+    selection = collect_selected_units(
+        reader,
+        system,
+        o,
+        dll_base,
+        heap_lo=_HEAP_LO,
+        heap_hi=_HEAP_HI,
+        read_inventory=lambda address: read_inventory(
+            reader, system, o, address, declared_identity=True
+        ),
+        layout=_native_selection_layout(o),
+        primary_only=True,
+    )
+    return selection.primary_unit
+
+
+def selected_units(
+    reader: MemoryReader,
+    system: HandleSystem,
+    o: LiveHandleOffsets,
+    dll_base: int,
+    *,
+    layout: NativeSelectionLayout | None = None,
+) -> SelectionResult[UnitInventory]:
+    """Read the complete current selection with all structural diagnostics."""
+    from .live_selection import collect_selected_units
+
+    # Imported/derived recipes do not borrow this verified container by similarity.
+    if layout is None:
+        layout = _native_selection_layout(o)
+
+    return collect_selected_units(
+        reader,
+        system,
+        o,
+        dll_base,
+        heap_lo=_HEAP_LO,
+        heap_hi=_HEAP_HI,
+        read_inventory=lambda address: read_inventory(
+            reader, system, o, address, declared_identity=True
+        ),
+        layout=layout,
+    )

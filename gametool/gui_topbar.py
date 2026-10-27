@@ -7,7 +7,7 @@ from .query_object_codes import code_from_text
 
 import os
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import filedialog, messagebox
 
 import customtkinter as ctk
 
@@ -120,6 +120,17 @@ def build_topbar(app) -> None:
     app.data_tools_menu.add_command(
         label="分析真实存档文件", command=app.on_analyze_real_save_file
     )
+    app.data_tools_menu.add_command(
+        label="字段 / 对象 / 版本目录", command=lambda: _open_reference_catalog(app)
+    )
+    app.data_tools_menu.add_command(
+        label="打开 / 比较实时报告（离线）",
+        command=lambda: _open_live_probe(app, auto_start=False),
+    )
+    app.data_tools_menu.add_command(
+        label="打开本地资料包查询（离线）",
+        command=lambda: _open_local_pack_query(app),
+    )
     app.data_tools_menu.add_separator()
     app.data_tools_menu.add_command(
         label="打开最近资料包目录", command=lambda: _open_last_pack(app)
@@ -213,7 +224,7 @@ def build_topbar(app) -> None:
         **secondary_button_style(),
     )
     _attach_tooltip(
-        app.data_tools_button, "导出/存档分析/运行时对象/最近资料包/键盘速查"
+        app.data_tools_button, "本地资料包查询/离线报告/导出/存档分析/键盘速查"
     )
     app.data_tools_button.pack(side="left", padx=(0, 4))
     actions = ctk.CTkFrame(bar, fg_color="transparent")
@@ -262,27 +273,136 @@ def _popup_data_tools(app) -> None:
     )
 
 
-def _open_live_probe(app) -> None:
+def _open_live_probe(app, *, auto_start: bool = True) -> None:
     source = getattr(app, "map_data", None)
+    offline_pack: str | None = None
 
     def pack_dir_provider():
-        return app.current_map_pack_dir(source)
+        return app.current_map_pack_dir(source) if source is not None else offline_pack
 
     def query(code: str) -> None:
+        nonlocal offline_pack
         prefix, separator, keyword = code.partition(" ")
-        has_command = bool(separator) and prefix in {"near", "where", "drop"}
-        app.on_pack_query(
-            prefill=keyword if has_command else code,
-            prefill_command=prefix if has_command else "doc",
-            source_map=source,
-        )
+        has_command = bool(separator) and prefix in {
+            "near",
+            "where",
+            "drop",
+            "item",
+            "units",
+            "heroes",
+            "skills",
+            "buffs",
+            "tech",
+        }
+        prefill = keyword if has_command else code
+        command = prefix if has_command else "doc"
+        if source is not None:
+            app.on_pack_query(
+                prefill=prefill,
+                prefill_command=command,
+                source_map=source,
+            )
+        else:
+            chosen = _open_local_pack_query(
+                app,
+                prefill=prefill,
+                prefill_command=command,
+                pack_dir=offline_pack,
+            )
+            if chosen is not None:
+                offline_pack = chosen
 
     open_live_probe_dialog(
         app,
         pack_dir_provider(),
         query_callback=query,
         pack_dir_provider=pack_dir_provider,
+        auto_start=auto_start,
     )
+
+
+def _open_local_pack_query(
+    app,
+    *,
+    prefill: str = "",
+    prefill_command: str = "",
+    pack_dir: str | None = None,
+) -> str | None:
+    """Open an explicitly chosen local pack without borrowing a loaded map."""
+    from .gui_export_actions import load_last_pack_dir, save_last_pack_dir
+    from .gui_pack_query import open_pack_query_dialog
+    from .presentation_safety import format_user_exception
+
+    target = pack_dir
+    if target is None:
+        previous = getattr(app, "_last_pack_dir", None)
+        if not previous:
+            try:
+                previous = load_last_pack_dir()
+            except OSError, UnicodeError:
+                previous = ""  # fail-open: memo errors cannot block local queries.
+        try:
+            target = filedialog.askdirectory(
+                parent=app,
+                title="选择本地资料包（无需打开原地图）",
+                initialdir=previous if previous and os.path.isdir(previous) else None,
+            )
+        except (OSError, tk.TclError) as exc:
+            messagebox.showerror(
+                "资料包查询",
+                f"无法选择资料包：{format_user_exception(exc)}\n请重新选择本地目录。",
+                parent=app,
+            )
+            return None
+        if not target:
+            return None
+    if not os.path.isdir(target):
+        messagebox.showerror(
+            "资料包查询",
+            f"资料包目录不存在或不可访问：{target}\n"
+            "请从「数据工具 → 打开本地资料包查询（离线）」重新选择目录。",
+            parent=app,
+        )
+        return None
+
+    def unavailable() -> None:
+        messagebox.showerror(
+            "资料包查询",
+            f"资料包目录已不可用：{target}\n请重新选择本地目录后查询。",
+            parent=app,
+        )
+
+    try:
+        open_pack_query_dialog(
+            app,
+            lambda: target,
+            unavailable,
+            prefill=prefill,
+            prefill_command=prefill_command,
+        )
+    except (OSError, ValueError, tk.TclError) as exc:
+        messagebox.showerror(
+            "资料包查询",
+            f"无法打开资料包查询：{format_user_exception(exc, paths=(target,))}\n"
+            "可重新选择目录；旧版或部分资料包的来源诊断会在查询结果中保留。",
+            parent=app,
+        )
+        return None
+    app._last_pack_dir = target
+    try:
+        save_last_pack_dir(target)
+    except OSError, UnicodeError:
+        pass  # fail-open: keep the explicit session binding when disk is read-only.
+    return target
+
+
+def _open_reference_catalog(app) -> None:
+    """Browse existing reference data, optionally alongside the current map pack."""
+    from .gui_reference_catalog import open_reference_catalog_dialog
+
+    source = getattr(app, "map_data", None)
+    pack_dir = app.current_map_pack_dir(source) if source is not None else None
+    open_reference_catalog_dialog(app, pack_dir=pack_dir)
 
 
 _GUIDE_SCROLL: dict[str, str] = {}  # map_path -> 关闭时滚动位置

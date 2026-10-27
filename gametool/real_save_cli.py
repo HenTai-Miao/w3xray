@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import sys
 
@@ -20,6 +21,12 @@ def run_real_save_cli(argv: tuple[str, ...]) -> int:
     parser.add_argument("--save", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--author-bundle", type=Path)
+    parser.add_argument(
+        "--format",
+        choices=("tsv", "json"),
+        default="tsv",
+        help="完整来源/记录/偏移证据格式 (默认 tsv)",
+    )
     args = parser.parse_args(argv)
     context = MapLoadContext(
         author_bundle_path=str(args.author_bundle)
@@ -32,7 +39,10 @@ def run_real_save_cli(argv: tuple[str, ...]) -> int:
         result = write_text_safely(
             str(args.output.parent),
             args.output.name,
-            format_real_save_report_tsv(report),
+            json.dumps(report.to_dict(), ensure_ascii=False, indent=2, allow_nan=False)
+            + "\n"
+            if args.format == "json"
+            else format_real_save_report_tsv(report),
         )
     except (OSError, ValueError) as exc:
         print(f"真实存档分析失败：{type(exc).__name__}: {exc}", file=sys.stderr)

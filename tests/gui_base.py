@@ -10,6 +10,7 @@
 """
 
 import atexit
+from collections.abc import Callable
 import time
 import unittest
 
@@ -115,10 +116,20 @@ class GuiTestCase(unittest.TestCase):
                 box.configure(state="normal")
                 box.delete("1.0", "end")
                 box.configure(state="disabled")
+        # 共享窗口的列宽不能让前一张地图改变后续增长断言的基线。
+        for tree in app.col_trees.values():
+            tree.column("#0", width=80)
+        app.cmd_tree.column("hint", width=420)
         # 材料列宽会被 test_ingredient_column_grows 读作基线，还原到初始 620
         app.rec_tree.column("ingredients", width=620)
 
-    def pump_events_until(self, condition, *, timeout: float = 2.0) -> None:
+    def pump_events_until(
+        self,
+        condition,
+        *,
+        timeout: float = 2.0,
+        diagnostics: Callable[[], str] | None = None,
+    ) -> None:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             self.app.update()
@@ -127,11 +138,13 @@ class GuiTestCase(unittest.TestCase):
         self.app.update()
         if condition():
             return
-        self.fail("GUI 后台任务未在超时时间内完成")
+        detail = f"\n{diagnostics()}" if diagnostics is not None else ""
+        self.fail(f"GUI 后台任务未在超时时间内完成{detail}")
 
-    def show_app(self) -> None:
+    def show_app(self, *, diagnostics: Callable[[], str] | None = None) -> None:
         """Map the shared window and wait for a usable cross-platform geometry."""
         self.app.deiconify()
         self.pump_events_until(
             lambda: bool(self.app.winfo_ismapped()) and self.app.winfo_width() >= 900,
+            diagnostics=diagnostics,
         )

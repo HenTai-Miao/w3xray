@@ -4,6 +4,7 @@
   裸词（不含 `%`）按 `%词%`（包含）处理。SQL `LIKE` 语义，**不做子序列**匹配。
 - `="x"` 精准：必须原样连续出现，**区分大小写**，ASCII 端点按词边界
   （`="等级:E"` 不会命中 `等级:EX`）；引号内一切字符（空格/`&`/`|`/`%`）都当字面量。
+  引号内 `""` 表示一个字面量双引号，反斜杠保留原样。
 - `&&` 且、`||` 或、`( )` 分组；`&&` 优先级高于 `||`；相邻词缺运算符时默认 `&&`。
 - 反斜杠转义：`\\%` `\\&` `\\|` `\\(` `\\)` `\\\\` 表示对应字面量。
 
@@ -89,6 +90,15 @@ def _like_score(segs, anchored_start: bool, anchored_end: bool, text: str):
 _NORMALIZE = str.maketrans({"“": '"', "”": '"', "｜": "|", "（": "(", "）": ")"})
 
 
+def encode_literal_query(value: str) -> str:
+    """Encode a case-sensitive literal without making payload bytes operators.
+
+    Exact literals use doubled quotes, as CSV does. Backslashes are ordinary
+    payload inside the literal, so no escape-decoding pass changes a FourCC.
+    """
+    return '="' + value.replace('"', '""') + '"'
+
+
 # ---- 词法：把查询切成 token 流 ----
 # token: ('and',) ('or',) ('lp',) ('rp',)
 #        ('like', segs, anchored_start, anchored_end) ('eq', needle)
@@ -120,10 +130,15 @@ def _lex(query: str):
         if ch == "=" and i + 1 < n and query[i + 1] == '"':
             j = i + 2
             buf = []
-            while j < n and query[j] != '"':  # 引号内一切字面量
+            while j < n:
+                if query[j] == '"':
+                    if j + 1 < n and query[j + 1] == '"':
+                        buf.append('"')
+                        j += 2
+                        continue
+                    j += 1
+                    break
                 buf.append(query[j])
-                j += 1
-            if j < n:  # 跳过闭合引号（未闭合则到行尾）
                 j += 1
             toks.append(("eq", "".join(buf)))
             i = j

@@ -24,6 +24,10 @@ from .script_function_index import (
     build_script_function_index,
     format_script_function_index_tsv,
 )
+from .script_forward_calls import (
+    build_forward_call_report,
+    format_forward_call_report_tsv,
+)
 from .script_global_index import (
     build_script_global_index,
     format_script_global_index_tsv,
@@ -64,6 +68,11 @@ def write_script_index_exports(md: MapData, out_dir: str) -> int:
         out_dir,
         "脚本函数索引.tsv",
         format_script_function_index_tsv(build_script_function_index(md)),
+    )
+    count += write_text(
+        out_dir,
+        "脚本前向引用.tsv",
+        format_forward_call_report_tsv(build_forward_call_report(md)),
     )
     count += write_text(
         out_dir,

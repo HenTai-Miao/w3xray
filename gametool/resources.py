@@ -7,7 +7,11 @@ from dataclasses import dataclass
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Final, Protocol, cast
 
-from .script_sources import analysis_script_texts
+from .script_sources import analysis_script_sources
+from .resource_types import (
+    RESOURCE_EXTS as RESOURCE_EXTS,
+    resource_kind as _resource_kind,
+)
 
 
 class _ResourceHost(Protocol):
@@ -32,57 +36,8 @@ class _ResourceObject(Protocol):
     def fields(self) -> Iterable[tuple[str, str]]: ...
 
 
-_IMAGE_EXTS: Final = {
-    "blp",
-    "dds",
-    "tga",
-    "png",
-    "jpg",
-    "jpeg",
-    "bmp",
-}
-_MODEL_EXTS: Final = {
-    "mdx",
-    "mdl",
-}
-_AUDIO_EXTS: Final = {
-    "wav",
-    "mp3",
-    "ogg",
-}
-_FONT_EXTS: Final = {
-    "ttf",
-    "otf",
-}
-_UI_TEXT_EXTS: Final = {
-    "txt",
-    "ini",
-    "fdf",
-    "toc",
-}
-_TABLE_EXTS: Final = {
-    "slk",
-}
-_CONFIG_EXTS: Final = {
-    "json",
-    "plist",
-    "skin",
-}
-_AI_EXTS: Final = {
-    "ai",
-}
-RESOURCE_EXTS: Final = (
-    _IMAGE_EXTS
-    | _MODEL_EXTS
-    | _AUDIO_EXTS
-    | _FONT_EXTS
-    | _UI_TEXT_EXTS
-    | _TABLE_EXTS
-    | _CONFIG_EXTS
-    | _AI_EXTS
-)
 _PATH_RE: Final = re.compile(
-    r"(?i)([A-Za-z0-9_ .()\\/\-]{1,240}\."
+    r"(?i)([A-Za-z0-9_ .()\\/\-]+\."
     r"(?:blp|dds|tga|png|jpe?g|bmp|mdx|mdl|wav|mp3|ogg|ttf|otf|txt|ini|fdf|toc|"
     r"slk|json|plist|skin|ai))"
 )
@@ -121,11 +76,22 @@ def build_resource_report(md: _ResourceHost) -> ResourceReport:
     cached = getattr(md, "_resource_report_cache", None)
     if cached is not None:
         return cast("ResourceReport", cached)
+    # Keep this pure reference mirror on the same complete source-value proof
+    # as archive discovery. The local import keeps kind/path-only callers
+    # independent of script preparation and does not open an archive.
+    from .resource_candidates import script_resource_candidates
+
     refs: dict[str, list[ResourceRef]] = {}
     for obj in _all_objects(md):
         _collect_object_refs(refs, obj)
-    for script_name, text in analysis_script_texts(md):  # pyright: ignore[reportArgumentType] - 结构兼容
-        _collect_text_refs(refs, f"脚本 {script_name}", "字符串字面量", text)
+    for script_name, text, lua in analysis_script_sources(md):  # pyright: ignore[reportArgumentType] - 结构兼容
+        for candidate in script_resource_candidates(script_name, text, lua=lua):
+            if candidate.state == "candidate":
+                _add_ref(
+                    refs,
+                    candidate.path,
+                    ResourceRef(f"脚本 {script_name}", "完整字符串字面量"),
+                )
 
     archive_assets = tuple(
         sorted(
@@ -152,6 +118,9 @@ def build_resource_report(md: _ResourceHost) -> ResourceReport:
 
 def find_resource_paths(text: str) -> tuple[str, ...]:
     """Return normalized resource-like paths found in a text body."""
+    whole = text.strip().strip('"').strip("'")
+    if whole and not any(char in whole for char in "\r\n\t\"'") and _is_asset(whole):
+        return (_normalize(whole),)
     paths: list[str] = []
     seen: set[str] = set()
     for match in _PATH_RE.finditer(text):
@@ -215,21 +184,4 @@ def _is_asset(path: str) -> bool:
 
 
 def _kind_for(path: str) -> str:
-    ext = path.rsplit(".", 1)[-1] if "." in path else ""
-    if ext in _IMAGE_EXTS:
-        return "图像"
-    if ext in _MODEL_EXTS:
-        return "模型"
-    if ext in _AUDIO_EXTS:
-        return "音频"
-    if ext in _FONT_EXTS:
-        return "字体"
-    if ext in _UI_TEXT_EXTS:
-        return "UI/文本"
-    if ext in _TABLE_EXTS:
-        return "SLK表"
-    if ext in _CONFIG_EXTS:
-        return "配置"
-    if ext in _AI_EXTS:
-        return "AI脚本"
-    return "资源"
+    return _resource_kind(path)

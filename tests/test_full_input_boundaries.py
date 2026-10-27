@@ -27,6 +27,7 @@ from gametool.live_handle_chain import (
     MemoryReader,
     HandleSystem,
     selected_unit,
+    selected_units,
     _looks_like_handle_manager,
 )
 from gametool.live_object_dump import extract_registered_records, parse_slk_blocks
@@ -35,6 +36,7 @@ from gametool.pack_query_placements import script_placements
 from tests.test_blp import _build_blp2_palette
 from tests.test_casclib_api import FakeNativeLibrary
 from tests.test_live_handle_chain import DLL_BASE, _build_memory
+from tests.test_live_selection_complete import _selection_memory
 
 
 def test_unrestricted_file_read_still_uses_small_chunks(
@@ -238,20 +240,34 @@ def test_adjacent_memory_ranges_preserve_split_json_and_object_fields() -> None:
     assert MemoryReader([(100, b"ab"), (102, b"cd")]).read(101, 3) == b"bcd"
 
 
-def test_selected_unit_walk_reaches_tail_and_stops_on_cycles() -> None:
-    regions, _hero, _other, offsets = _build_memory()
-    regions = [(base, data) for base, data in regions if base != 0x1B700000]
-    chain = bytearray(32 * 20)
-    for index in range(20):
-        struct.pack_into("<I", chain, index * 32, 0x1B700000 + ((index + 1) % 20) * 32)
-    struct.pack_into("<II", chain, 19 * 32 + offsets.entry_pair_off, 0x80000007, 0x5001)
-    reader = MemoryReader([*regions, (0x1B700000, bytes(chain))])
+def test_native_selection_reaches_tail_and_stops_on_cycles() -> None:
+    # Keep the confirmed unit after the former twelve-node ceiling. Earlier
+    # unreadable unit pointers must not erase it, and a physical cycle must stop.
+    handles = [(0x80000100 + index, 0x6000 + index) for index in range(19)]
+    handles.append((0x80000007, 0x5001))
+    data, _reader, _system, hero, _other, offsets = _selection_memory(
+        handles, cycle=True
+    )
+    manager = bytearray(data[0x1B600000])
+    struct.pack_into("<I", manager, offsets.sel_entry_off, hero)
+    data[0x1B600000] = bytes(manager)
+    reader = MemoryReader(list(data.items()))
     system = HandleSystem(reader, DLL_BASE, offsets)
-    selected = selected_unit(reader, system, offsets, DLL_BASE)
-    assert selected is not None and selected.code == "H004"
-    assert selected_unit(reader, system, offsets, DLL_BASE, max_walk=12) is None
-    struct.pack_into("<II", chain, 19 * 32 + offsets.entry_pair_off, 0, 0)
-    empty_reader = MemoryReader([*regions, (0x1B700000, bytes(chain))])
+    selection = selected_units(reader, system, offsets, DLL_BASE)
+    assert [unit.unit_addr for unit in selection.units] == [hero]
+    assert len(selection.entries) == 20 and selection.entries[-1].unit_address == hero
+    assert selection.entries[-1].raw_node_bytes is not None
+    assert not selection.complete
+    assert any("循环" in note for note in selection.diagnostics)
+
+    # The primary field is independent of all collection nodes. The legacy
+    # walk argument must never turn the unit's vtable into a list successor.
+    primary = selected_unit(reader, system, offsets, DLL_BASE, max_walk=12)
+    assert primary is not None and primary.unit_addr == hero
+    invalid_primary = bytearray(data[hero])
+    struct.pack_into("<II", invalid_primary, offsets.entry_pair_off, 0, 0)
+    data[hero] = bytes(invalid_primary)
+    empty_reader = MemoryReader(list(data.items()))
     assert (
         selected_unit(
             empty_reader,

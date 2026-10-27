@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
+import pytest
+
+from tests import conftest as capability_markers
 from tests.conftest import requires_posix_provenance
 
 
@@ -26,6 +30,51 @@ def test_windows_capability_filter_is_limited_to_posix_provenance_suites() -> No
         Path("tests/test_safe_output_publication_atomicity.py"),
     ):
         assert requires_posix_provenance(path)
+
+
+def test_windows_capability_filter_preserves_exact_portable_function_boundary() -> None:
+    path = Path("tests/test_integrity_cli.py")
+    portable = "test_integrity_cli_returns_two_for_inexact_requests"
+
+    assert not requires_posix_provenance(path, portable)
+    assert requires_posix_provenance(path)
+    assert requires_posix_provenance(
+        path, "test_integrity_cli_snapshots_then_verifies_exact_roots"
+    )
+    assert requires_posix_provenance(path, "test_future_parser_without_proof")
+    assert requires_posix_provenance(path, portable + "_extended")
+    assert requires_posix_provenance(
+        Path("tests/test_integrity_new_backend.py"), portable
+    )
+
+
+@pytest.mark.parametrize("platform", ("nt", "posix"))
+def test_windows_collection_preserves_portable_parameters_and_native_boundary(
+    platform: str,
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = pytest.Module.from_parent(
+        request.session, path=_ROOT / "tests" / "test_integrity_cli.py"
+    )
+    original = "test_integrity_cli_returns_two_for_inexact_requests"
+    portable = pytest.Function.from_parent(
+        module,
+        name=original + "[argv0]",
+        originalname=original,
+        callobj=lambda: None,
+    )
+    native = pytest.Function.from_parent(
+        module,
+        name="test_integrity_cli_snapshots_then_verifies_exact_roots",
+        callobj=lambda: None,
+    )
+    monkeypatch.setattr(capability_markers, "os", SimpleNamespace(name=platform))
+
+    capability_markers.pytest_collection_modifyitems([portable, native])
+
+    assert not tuple(portable.iter_markers("skip"))
+    assert bool(tuple(native.iter_markers("skip"))) is (platform == "nt")
 
 
 def test_windows_process_helper_quotes_powershell_51_argument_lists() -> None:

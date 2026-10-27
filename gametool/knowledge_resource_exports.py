@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import replace
 
 from .game_data_source import GameDataSource, open_game_data_source
 from .knowledge_assets import export_resource_bodies, format_asset_body_manifest
@@ -13,11 +14,14 @@ from .resource_content_refs import (
     format_resource_content_references_tsv,
 )
 from .resource_inventory import (
+    ResourceInventory,
+    ResourceInventoryItem,
     build_resource_inventory,
     format_resource_inventory_summary,
     format_resource_inventory_tsv,
 )
-from .resources import build_resource_report
+from .resources import build_resource_report, resource_kind
+from .resource_candidates import format_resource_candidate_report_tsv
 
 
 def write_resources(
@@ -29,6 +33,21 @@ def write_resources(
     content_refs = build_resource_content_references(md)
     report = build_resource_report(md)
     inventory = build_resource_inventory(md, content_refs.items)
+    # Source literals prove references; only current archive reads prove existence.
+    by_path = {item.path: item for item in inventory.items}
+    for path in content_refs.candidates.confirmed_paths:
+        key = path.replace("/", "\\").lower()
+        previous = by_path.get(key)
+        sources = tuple(
+            dict.fromkeys((*(previous.sources if previous else ()), "当前归档实读确认"))
+        )
+        if previous is not None:
+            by_path[key] = replace(previous, status="存在/已引用", sources=sources)
+        else:
+            by_path[key] = ResourceInventoryItem(
+                key, resource_kind(key), "存在/已引用", sources
+            )
+    inventory = ResourceInventory(tuple(by_path[key] for key in sorted(by_path)))
     rows = ["路径\t类型\t引用来源\t引用字段"]
     for node in report.nodes:
         for ref in node.refs:
@@ -51,6 +70,11 @@ def write_resources(
         out_dir,
         "资源内容引用.tsv",
         format_resource_content_references_tsv(content_refs),
+    )
+    count += write_text(
+        out_dir,
+        "隐式资源候选.tsv",
+        format_resource_candidate_report_tsv(content_refs.candidates),
     )
     count += write_text(
         out_dir, "资源资产索引.tsv", format_resource_inventory_tsv(inventory)

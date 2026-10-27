@@ -77,12 +77,18 @@ def _build_memory():
     HERO = 0x20000000  # H004
     OTHER = 0x20001000  # N02A
     EMPTY_U = 0x20002000  # h00X (空背包)
-    for addr, code, inv in (
-        (HERO, b"H004", INV_SEL),
-        (OTHER, b"N02A", INV_FULL),
-        (EMPTY_U, b"h00X", INV_EMPTY),
+    for index, (addr, code, inv) in enumerate(
+        (
+            (HERO, b"H004", INV_SEL),
+            (OTHER, b"N02A", INV_FULL),
+            (EMPTY_U, b"h00X", INV_EMPTY),
+        )
     ):
         body = bytearray(0x200)
+        struct.pack_into("<I", body, 0, DLL_BASE + 0x970764)  # unit vtable, never next
+        struct.pack_into(
+            "<II", body, o.entry_pair_off, 0x80000007 + index, 0x5001 + index
+        )
         struct.pack_into("<I", body, 0x30, code_dword(code))
         struct.pack_into("<I", body, 0x1F8, inv)
         seg(addr, bytes(body))
@@ -90,6 +96,8 @@ def _build_memory():
     # --- 包装对象: +0x18 世代, +0x20 存活标志, +0x54 对象 ---
     def wrapper(addr, gen, obj):
         body = bytearray(0x60)
+        if obj in (HERO, OTHER, EMPTY_U):
+            struct.pack_into("<I", body, 0xC, 0x2B61676C)
         struct.pack_into("<I", body, 0x18, gen)
         struct.pack_into("<I", body, 0x20, 0)
         struct.pack_into("<I", body, 0x54, obj)
@@ -149,14 +157,15 @@ def _build_memory():
 
     SELMGR = 0x1B600000
     sm = bytearray(0x200)
-    struct.pack_into("<I", sm, o.sel_entry_off, 0x1B700000)
+    struct.pack_into("<I", sm, o.sel_entry_off, HERO)
+    header = SELMGR + 0x1F0
+    terminal = (~header) & 0xFFFFFFFF
+    struct.pack_into("<III", sm, 0x1F0, 0x1B700000, 0x1B700000, 1)
     seg(SELMGR, bytes(sm))
 
     ENTRY = 0x1B700000
-    ent = bytearray(0x20)
-    struct.pack_into("<I", ent, 0, 0)  # 链表结束
-    struct.pack_into("<I", ent, o.entry_pair_off, 0x80000007)
-    struct.pack_into("<I", ent, o.entry_pair_off + 4, 0x5001)
+    ent = bytearray(12)
+    struct.pack_into("<III", ent, 0, header, terminal, HERO)
     seg(ENTRY, bytes(ent))
 
     regions = [(base, bytes(blob)) for base, blob in blobs.items()]

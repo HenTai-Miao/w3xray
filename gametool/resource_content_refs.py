@@ -1,40 +1,19 @@
-"""Second-level resource references found inside readable asset bodies."""
+"""Second-level resource references with complete source/read diagnostics."""
 
 from __future__ import annotations
 
-import os
-import struct
-from contextlib import nullcontext
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, ContextManager, Final, Protocol
+from typing import TYPE_CHECKING
 
-from .campaign_sources import open_map_source
-from .presentation_safety import tsv_cell as _tsv
-from .resources import find_resource_paths, resource_kind
-from .war3_encoding import decode_warcraft_string
+from .batch_tsv import format_tsv_rows
+from .resource_candidates import (
+    ResourceCandidateReport,
+    build_resource_candidate_report,
+)
+from .resources import resource_kind
 
 if TYPE_CHECKING:
     from .api import MapData
-
-_TEXT_BODY_EXTS: Final = {
-    "txt",
-    "ini",
-    "wts",
-    "fdf",
-    "toc",
-    "slk",
-    "json",
-    "plist",
-    "skin",
-    "ai",
-    "mdl",
-}
-
-
-class _ReadableSource(Protocol):
-    def read_file(self, name: str) -> bytes: ...
-
-    def close(self) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,122 +22,95 @@ class ResourceContentReference:
     target_path: str
     target_kind: str
     detail: str
+    state: str = ""
+    line: int = 0
+    offset: int = 0
+    end_offset: int = 0
+    raw: str = ""
+    source_fingerprint: str = ""
+    diagnostics: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
 class ResourceContentReferenceReport:
     items: tuple[ResourceContentReference, ...]
+    candidates: ResourceCandidateReport = ResourceCandidateReport(())
 
 
-class _DirectorySource:
-    def __init__(self, root: str) -> None:
-        self._root = os.path.realpath(root)
-        self._files = _index_directory(self._root)
-
-    def read_file(self, name: str) -> bytes:
-        path = self._files.get(_normalize_path(name))
-        if path is None:
-            raise KeyError(name)
-        with open(path, "rb") as handle:
-            return handle.read()
-
-    def close(self) -> None:
-        return
-
-
-def build_resource_content_references(md: "MapData") -> ResourceContentReferenceReport:
-    """Scan readable config/UI bodies for paths to other assets."""
-    source_context = _open_source(md)
-    if source_context is None:
-        return ResourceContentReferenceReport(())
-    refs: list[ResourceContentReference] = []
-    seen: set[tuple[str, str]] = set()
-    try:
-        with source_context as source:
-            for path in _text_body_paths(tuple(getattr(md, "all_files", ()) or ())):
-                _scan_one_body(source, path, refs, seen)
-    except OSError, ValueError, struct.error:
-        return ResourceContentReferenceReport(())
-    return ResourceContentReferenceReport(tuple(refs))
+def build_resource_content_references(md: MapData) -> ResourceContentReferenceReport:
+    """Follow every readable declared resource body, sharing archive verification."""
+    report = build_resource_candidate_report(md)
+    refs = tuple(
+        ResourceContentReference(
+            item.source.replace("/", "\\").lower(),
+            item.path.replace("/", "\\").lower(),
+            resource_kind(item.path),
+            "素材/配置文本内容",
+            item.state,
+            item.line,
+            item.offset,
+            item.end_offset,
+            item.raw,
+            item.source_fingerprint,
+            item.diagnostics,
+        )
+        for item in report.items
+        if item.source_kind == "asset-body"
+        and item.path.replace("/", "\\").lower()
+        != item.source.replace("/", "\\").lower()
+    )
+    return ResourceContentReferenceReport(refs, report)
 
 
 def format_resource_content_references_tsv(
     report: ResourceContentReferenceReport,
 ) -> str:
-    """Format second-level resource references as TSV."""
-    rows = ["来源文件\t引用路径\t引用类型\t说明"]
-    for item in report.items:
-        rows.append(
-            "\t".join(
-                (
-                    _tsv(item.source_path),
-                    _tsv(item.target_path),
-                    _tsv(item.target_kind),
-                    _tsv(item.detail),
-                )
-            )
+    """Retain complete cells, duplicate occurrences, provenance and failures."""
+    rows = [
+        (
+            "来源文件",
+            "引用路径",
+            "引用类型",
+            "说明",
+            "状态",
+            "行",
+            "偏移",
+            "结束偏移",
+            "原始证据",
+            "来源指纹",
+            "诊断",
         )
-    return "\n".join(rows) + "\n"
-
-
-def _scan_one_body(
-    source: _ReadableSource,
-    path: str,
-    refs: list[ResourceContentReference],
-    seen: set[tuple[str, str]],
-) -> None:
-    try:
-        raw = source.read_file(path)  # 全文扫描; 大文件由 MPQ 解压层护栏兜底
-    except KeyError, OSError, ValueError, struct.error:
-        return
-    text = decode_warcraft_string(raw, allow_latin1=True)
-    for target in find_resource_paths(text):
-        if target == path:
-            continue
-        key = (path, target)
-        if key in seen:
-            continue
-        seen.add(key)
-        refs.append(
-            ResourceContentReference(
-                path, target, resource_kind(target), "素材/配置文本内容"
-            )
+    ]
+    rows.extend(
+        (
+            item.source_path,
+            item.target_path,
+            item.target_kind,
+            item.detail,
+            item.state,
+            str(item.line),
+            str(item.offset),
+            str(item.end_offset),
+            item.raw,
+            item.source_fingerprint,
+            "\n".join(item.diagnostics),
         )
-
-
-def _text_body_paths(names: tuple[str, ...]) -> tuple[str, ...]:
-    paths = {
-        _normalize_path(name) for name in names if _extension(name) in _TEXT_BODY_EXTS
-    }
-    return tuple(sorted(paths))
-
-
-def _open_source(md: MapData) -> ContextManager[_ReadableSource] | None:
-    if md.path and os.path.isdir(md.path):
-        return nullcontext(_DirectorySource(md.path))
-    try:
-        return open_map_source(md)
-    except OSError, ValueError, struct.error:
-        return None
-
-
-def _index_directory(root: str) -> dict[str, str]:
-    files: dict[str, str] = {}
-    for current, _dirnames, names in os.walk(root):
-        for name in names:
-            full_path = os.path.realpath(os.path.join(current, name))
-            if os.path.commonpath([root, full_path]) != root:
-                continue
-            files[_normalize_path(os.path.relpath(full_path, root))] = full_path
-    return files
-
-
-def _extension(path: str) -> str:
-    return path.rsplit(".", 1)[-1].lower() if "." in path else ""
-
-
-def _normalize_path(path: str) -> str:
-    normalized = path.strip().strip('"').strip("'").replace("/", "\\").lower()
-    while "\\\\" in normalized:
-        normalized = normalized.replace("\\\\", "\\")
-    return normalized
+        for item in report.items
+    )
+    rows.extend(
+        (
+            item.source,
+            "",
+            "",
+            "来源诊断",
+            "diagnostic",
+            "",
+            "",
+            "",
+            "",
+            "",
+            item.stage + ": " + item.detail,
+        )
+        for item in report.candidates.diagnostics
+    )
+    return format_tsv_rows(rows)

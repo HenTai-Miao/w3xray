@@ -9,9 +9,11 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Final
 
 from .script_sources import analysis_script_texts
+from .script_forward_calls import build_forward_call_report
 
 if TYPE_CHECKING:
     from .api import MapData
+    from .script_forward_calls import ForwardCallEvidence
 
 
 class DiagnosticSeverity(StrEnum):
@@ -26,6 +28,7 @@ class ScriptDiagnostic:
     title: str
     detail: str
     scripts: tuple[str, ...]
+    evidence: ForwardCallEvidence | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,6 +125,25 @@ def build_script_diagnostics(md: MapData) -> ScriptDiagnosticReport:
                 "发现 GetLocalPlayer 分支内调用 CreateUnit/SetUnit*/SetPlayerState 等同步状态修改函数，"
                 "这类写法通常会导致联机异步或掉线。",
                 mutation_scripts,
+            )
+        )
+    for evidence in build_forward_call_report(md).items:
+        if evidence.state != "forward" and not (
+            evidence.state == "unknown" and evidence.binding != "external"
+        ):
+            continue
+        items.append(
+            ScriptDiagnostic(
+                DiagnosticSeverity.WARNING,
+                f"script.jass.{evidence.state}.{evidence.source}.{evidence.offset}",
+                "JASS 直接前向引用"
+                if evidence.state == "forward"
+                else "JASS 调用绑定未确定",
+                f"{evidence.location} · {evidence.form} {evidence.callee} · "
+                f"所属函数 {evidence.owner} · 绑定 {evidence.binding} · "
+                f"{evidence.diagnostic} · 声明: {'; '.join(evidence.declarations) or '未见'}",
+                (evidence.source,),
+                evidence,
             )
         )
     return ScriptDiagnosticReport(tuple(items))

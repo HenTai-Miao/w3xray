@@ -5,9 +5,8 @@ from __future__ import annotations
 import re
 
 from .script_assignments import expression_key, script_assignments
-from .script_lexing import script_views
 from .script_scopes import ScopeLookup, ScriptStructure
-from .script_control_ranges import ControlRange, control_ranges
+from .script_control_ranges import ControlRange, control_ranges, prepare_control_source
 
 _IDENT = re.compile(r"[A-Za-z_]\w*")
 _LOCAL = re.compile(r"\blocal\s+(?!function\b)")
@@ -20,7 +19,8 @@ class ScriptSymbols:
         self, text: str, structure: ScriptStructure, *, lua: bool | None
     ) -> None:
         self.text, self.lua, self.structure = text, lua, structure
-        self.views = script_views(text, lua=lua)
+        self.control_source = prepare_control_source(text, structure, lua)
+        self.views = self.control_source.views
         self.functions = {item.start: item for item in structure.functions}
         self.locals: dict[tuple[int | None, str], list[int]] = {}
         self.parameters: dict[int, tuple[str, ...]] = {}
@@ -77,6 +77,7 @@ class ScriptSymbols:
                 self.functions.get(owner) if owner is not None else None,
                 self.structure,
                 self.lua,
+                prepared=self.control_source,
             )
             cached = (
                 ranges,

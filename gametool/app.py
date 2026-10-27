@@ -23,6 +23,8 @@ def top_level_help() -> str:
         f"  pack-query <包>…        查询知识包 ({len(_COMMANDS)} 子命令; --json 结构化输出)\n"
         "  guide <地图>            一份逐关速查报告\n"
         "  live                    运行中游戏只读探针 (--dump-objects 导出对象表)\n"
+        "  live-report             离线查看/比较实时报告 (inspect / diff)\n"
+        "  reference               字段、对象与版本参考目录 (可指定知识包)\n"
         "  current                 定位正在使用的地图\n"
         "  batch <目录>            批量导出 (schema-6; 显式指定 --output)\n"
         "  integrity               根快照/校验/retained-cache 审计\n"
@@ -68,6 +70,7 @@ def _command_help(command: str) -> str | None:
             "  --test-image <截图>               离线图标匹配\n"
             "  --save-snapshot / --load-snapshot <目录>\n"
             "  --profile-json / --export-profile <JSON>\n"
+            "  --report <新JSON文件>              保存完整结构化报告供离线比较\n"
             "  --dump-objects <新目录>            导出全量对象表\n"
             "  --elevated-hint                   显示提权启动参考\n"
             "未指定地图时自动定位；多进程时必须指定 --pid。"
@@ -169,6 +172,14 @@ def main() -> None:
         from gametool.casc_cli import run_casc_cli
 
         raise SystemExit(run_casc_cli(tuple(sys.argv[2:])))
+    if len(sys.argv) >= 2 and sys.argv[1] == "live-report":
+        from gametool.live_report_cli import run_live_report_cli
+
+        raise SystemExit(run_live_report_cli(tuple(sys.argv[2:])))
+    if len(sys.argv) >= 2 and sys.argv[1] == "reference":
+        from gametool.reference_cli import run_reference_cli
+
+        raise SystemExit(run_reference_cli(tuple(sys.argv[2:])))
     if len(sys.argv) >= 2 and sys.argv[1] == "save":
         from gametool.real_save_cli import run_real_save_cli
 

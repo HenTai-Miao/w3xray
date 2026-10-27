@@ -11,8 +11,6 @@ import unittest
 
 from gametool.icons import _open_game_mpq, _GAME_MPQ_CACHE, IconResolver
 
-_WAR3 = r"C:\Program Files (x86)\Warcraft III\war3\war3.mpq"
-
 
 def _write_min_mpq():
     hdr = struct.pack("<4sIIHHIIII", b"MPQ\x1a", 0x20, 0, 0, 3, 32, 96, 4, 1)
@@ -26,13 +24,21 @@ def _write_min_mpq():
 
 
 class TestGameMpqCache(unittest.TestCase):
-    @unittest.skipUnless(os.path.exists(_WAR3), "需要真实 war3.mpq")
     def test_same_path_returns_same_instance(self):
-        a = _open_game_mpq(_WAR3)
-        b = _open_game_mpq(_WAR3)
-        self.assertIsNotNone(a)
-        self.assertIs(a, b)  # 第二次命中缓存，复用同一实例
-        self.assertIn(_WAR3, _GAME_MPQ_CACHE)
+        path = _write_min_mpq()
+        try:
+            a = _open_game_mpq(path)
+            b = _open_game_mpq(path)
+            self.assertIsNotNone(a)
+            self.assertIs(a, b)  # 第二次命中缓存，复用同一实例
+            self.assertIn(path, _GAME_MPQ_CACHE)
+        finally:
+            archive = _GAME_MPQ_CACHE.pop(path, None)
+            try:
+                if archive is not None:
+                    archive.close()
+            finally:
+                os.remove(path)
 
 
 class TestIconResolverLifecycle(unittest.TestCase):

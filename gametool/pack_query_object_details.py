@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from .object_codes import decode_object_id_query
 from .pack_query_field_evidence import ObjectFields, object_field_indexes
 from .pack_query_objects import ObjectTable
 from .search import compile_query
@@ -126,7 +127,8 @@ def render_object_record(
 def query_object_details(
     pack: Path, query: str, table: str, limit: int, sources: ObjectDetailSources
 ) -> list[str]:
-    expression = sources._clean(query).strip()
+    selected_id = decode_object_id_query(query.strip())
+    expression = "" if selected_id is not None else sources._clean(query).strip()
     compiled = compile_query(expression)
     if expression and compiled.is_empty:
         return [
@@ -138,8 +140,12 @@ def query_object_details(
     matches = [
         record
         for record in records
-        if not expression
-        or compiled.score_fields(record.search_fields(sources)) is not None
+        if (
+            record.row[1] == selected_id
+            if selected_id is not None
+            else not expression
+            or compiled.score_fields(record.search_fields(sources)) is not None
+        )
     ]
     partial = not index.complete
     if not matches:

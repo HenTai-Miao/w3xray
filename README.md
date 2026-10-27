@@ -12,10 +12,14 @@ GUI触发器、场景放置、触发指令、合成配方、孤立对象、分�
 
 > 用途：研究地图、学习地图制作。不含改存档 / 过反作弊 / 开图等作弊功能。
 
-## 0.6.2 使用入口
+## 0.7.0 使用入口
 
 日常使用直接运行 Windows 发行目录里的 `GameXRay 游戏档案透视器.exe`，保留同目录的
 `_internal` 文件夹。无需安装 Python，也无需先运行测试或开发工具。
+
+地图/战役解析、知识包查询、参考目录、已保存报告比较及存档静态分析均可离线使用，
+无需联网、启动游戏或安装魔兽客户端。本地游戏数据可补充基础资源；缺失的数据保留来源诊断。
+实时探针需要运行中的游戏，并与离线工作流分开启动。
 
 1. 点击「打开地图/战役」，选择 `.w3x`、`.w3m` 或 `.w3n`。
 2. 在对象编辑器、场景放置、掉落/获取等页查看内容；战役可切换关卡。
@@ -24,29 +28,31 @@ GUI触发器、场景放置、触发指令、合成配方、孤立对象、分�
 
 源码运行统一使用 `uv run gamexray`，或 `uv run python -m gametool`；原来的
 `uv run main.py` 仍可用。各模式均支持 `--help`，总览运行 `uv run gamexray --help`。
-完整使用步骤、实时探针核对、命令示例和验收范围见 [0.6.2 使用与验收说明](docs/usable-release-0.6.2.md)。
+选中集合、字段证据、离线报告比较、字段与版本目录的完整步骤见
+[0.7.0 只读工作台使用说明](docs/usable-release-0.7.0.md)。
+地图导出和已有查询的操作说明另见 [0.6.2 使用与验收说明](docs/usable-release-0.6.2.md)。
 
 六个外部 Warcraft III 工具的功能、读取与修改调用链、版本、数据目录及逐项适配结论，
 见 [2026-10-27 静态审计](docs/analysis/war3-tools-audit-2026-10-27.md)。
-审计将当前已具备能力、可新增设计、需要验证的适配和未确认项分别列出；候选功能尚未因审计而实现。
+该审计固定于 0.6.2 源码基线；0.7.0 的具体落地范围见上述使用说明，未验证的运行时布局仍单列状态。
 
 ## 直接用（GitHub Releases）
 
 Windows x64 同时提供：
 
-- `gamexray-v0.6.2-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
-- `gamexray-v0.6.2-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
+- `gamexray-v0.7.0-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
+- `gamexray-v0.7.0-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
 
 两者功能相同；遇到杀软误报或启动问题时优先使用 ZIP 版。
 
 macOS 提供两个未签名、未公证的 onedir ZIP，请按 Mac 处理器选择并完整解压：
 
-- `gamexray-v0.6.2-macos-arm64.zip`：Apple Silicon（M1/M2/M3/M4/M5）。
-- `gamexray-v0.6.2-macos-x64.zip`：Intel Mac。
+- `gamexray-v0.7.0-macos-arm64.zip`：Apple Silicon（M1/M2/M3/M4/M5）。
+- `gamexray-v0.7.0-macos-x64.zip`：Intel Mac。
 
 Linux 提供：
 
-- `gamexray-v0.6.2-linux-x64.tar.gz`：Linux x86-64，解压后运行 `./GameXRay 游戏档案透视器/GameXRay 游戏档案透视器`。
+- `gamexray-v0.7.0-linux-x64.tar.gz`：Linux x86-64，解压后运行 `./GameXRay 游戏档案透视器/GameXRay 游戏档案透视器`。
 
 macOS/Linux 包支持地图与战役的静态提取；Windows 专用的 CascLib 游戏客户端原生后端不包含在这两类包中。macOS 首次运行可能出现 Gatekeeper 未验证开发者提示。
 
@@ -56,6 +62,10 @@ uv run main.py                 # 启动图形界面
 uv run main.py cli <地图路径>   # 命令行快速查看分类统计
 uv run main.py cli <地图路径> --pack <输出目录> --profile "-triggers,-world"  # 按类目开关导出知识包
 uv run main.py live <地图路径> --dump-objects <输出目录>  # 运行中游戏内存只读导出对象表
+uv run main.py live <地图路径> --report <新的JSON文件>  # 保存完整实时报告
+uv run main.py live-report diff <旧报告.json> <新报告.json> --json  # 离线比较
+uv run main.py reference --kind versions --json         # 档案支持与来源
+uv run main.py reference --pack <资料包> --kind fields   # 字段说明与完整证据
 uv run main.py current         # 获取游戏进程正在使用的地图并解析只读快照
 uv run main.py cli <配置.wgc>   # 命令行查看 World Editor AI 测试配置
 uv run main.py casc --help      # CASC Root 全量清单 / 单文件导出

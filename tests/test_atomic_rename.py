@@ -15,7 +15,7 @@ from gametool.atomic_rename import (
 )
 
 
-pytestmark = pytest.mark.skipif(
+_REQUIRES_ATOMIC_DIRECTORY_RENAME = pytest.mark.skipif(
     not (sys.platform == "darwin" or sys.platform.startswith("linux")),
     reason="host has no supported atomic directory no-replace primitive",
 )
@@ -24,6 +24,7 @@ _DIRECTORY_FLAGS = (
 )
 
 
+@_REQUIRES_ATOMIC_DIRECTORY_RENAME
 def test_atomic_rename_moves_directory_to_absent_anchored_name(
     tmp_path: Path,
 ) -> None:
@@ -44,6 +45,7 @@ def test_atomic_rename_moves_directory_to_absent_anchored_name(
     assert (tmp_path / "target" / "sentinel").read_text(encoding="utf-8") == "source"
 
 
+@_REQUIRES_ATOMIC_DIRECTORY_RENAME
 def test_atomic_rename_never_replaces_existing_anchored_directory(
     tmp_path: Path,
 ) -> None:
@@ -74,6 +76,7 @@ def test_atomic_rename_never_replaces_existing_anchored_directory(
     assert (target / "sentinel").read_text(encoding="utf-8") == "target"
 
 
+@_REQUIRES_ATOMIC_DIRECTORY_RENAME
 def test_atomic_exchange_swaps_two_anchored_directories_without_absence(
     tmp_path: Path,
 ) -> None:

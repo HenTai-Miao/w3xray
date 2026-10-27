@@ -74,9 +74,24 @@ def test_direct_resource_api_snapshots_verifies_and_normalizes(resource_api, str
     hc.verify_profile.assert_called_once()
     live.verify_opened_process.assert_called_once_with(123, "war3.exe")
     assert "fixture identity warning" in report["notes"]
-    assert report["resources"] == [
-        {"addr": "0x1000", "gold": 169, "lumber": 808, "food": 4}
-    ]
+    rows = report["resources"]
+    assert rows is not None and len(rows) == 1
+    row = rows[0]
+    assert {key: row[key] for key in ("addr", "gold", "lumber", "food")} == {
+        "addr": "0x1000",
+        "gold": 169,
+        "lumber": 808,
+        "food": 4,
+    }
+    assert row["gold_exact"] == 169.0
+    assert row["lumber_exact"] == 808.0
+    fields = {field["key"]: field for field in row["evidence"]}
+    assert fields["gold"]["value"] == 169.0
+    assert fields["lumber"]["value"] == 808.0
+    # This synthetic legacy row supplies no real field addresses. Preserve its
+    # values without manufacturing confirmed address evidence for the extension.
+    assert fields["gold"]["state"] == "unknown"
+    assert fields["gold"]["address"] is None
     assert report["strategy_used"] == "handle"
     live.k32.CloseHandle.assert_called_once_with(123)
 

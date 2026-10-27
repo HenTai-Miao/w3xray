@@ -6,7 +6,7 @@ on:
       source_ref:
         description: Git ref to build and package
         required: true
-        default: v0.6.2
+        default: v0.7.0
 
 permissions:
   contents: read
@@ -67,62 +67,44 @@ jobs:
           uv sync --dev
           uv run gamexray-quality
           uv run python -c 'import tkinter; print(tkinter.TkVersion)'
+      - name: Prepare test evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          EvidenceDir="artifacts/${{ matrix.platform }}-${{ matrix.arch }}-tests"
+          mkdir -p "$EvidenceDir"
+          git rev-parse HEAD > "$EvidenceDir/source-sha.txt"
+          uv run python -c 'import json, platform, sys, tkinter; print(json.dumps({"python": sys.version, "platform": platform.platform(), "machine": platform.machine(), "tk": tkinter.TkVersion, "tcl": tkinter.TclVersion}))' \
+            > "$EvidenceDir/runtime.json"
       - name: Run full test suite on macOS
         if: runner.os == 'macOS'
         shell: bash
-        env:
-          TARGET_ARCH: ${{ matrix.arch }}
         run: |
-          PytestArgs=(-q)
-          if [[ "$TARGET_ARCH" == 'arm64' ]]; then
-            # The hosted ARM desktop never gives this hidden pane the test's
-            # required geometry; Intel covers both persistence assertions.
-            PytestArgs+=(
-              --deselect
-              tests/test_gui_pane_state.py::TestPaneState::test_object_editor_pane_positions_restore_from_named_config
-              --deselect
-              tests/test_gui_pane_state.py::TestPaneState::test_object_editor_pane_positions_save_on_drag_release
-            )
-          fi
-          for Attempt in 1 2; do
-            if uv run gamexray-test "${PytestArgs[@]}"; then
-              exit 0
-            fi
-            if [[ "$Attempt" == '2' ]]; then
-              exit 1
-            fi
-            printf 'Test suite failed; retrying the complete suite in a fresh process.\n'
-          done
+          set -euo pipefail
+          EvidenceDir="artifacts/${{ matrix.platform }}-${{ matrix.arch }}-tests"
+          trap 'printf "%s\n" "$?" > "$EvidenceDir/exit-code.txt"' EXIT
+          uv run gamexray-test -q -ra --junitxml "$EvidenceDir/pytest.xml" \
+            2>&1 | tee "$EvidenceDir/pytest.log"
       - name: Run full test suite on Linux
         if: runner.os == 'Linux'
         shell: bash
         run: |
+          set -euo pipefail
+          EvidenceDir="artifacts/${{ matrix.platform }}-${{ matrix.arch }}-tests"
+          trap 'printf "%s\n" "$?" > "$EvidenceDir/exit-code.txt"' EXIT
           test -d /dev/shm
           test -w /dev/shm
-          PytestArgs=(
-            -q
-            --basetemp /dev/shm/gamexray-pytest
-            # Tk 9 resolves this Windows-only font as "fixed" on Linux. The
-            # remaining GUI suite and packaged GUI acceptance stay mandatory.
-            --deselect
-            tests/test_gui_scroll.py::TestColumnAutosize::test_object_column_grows_for_long_name
-            # The hosted Xvfb desktop never maps the first hidden object pane
-            # at the geometry required by these two sash assertions. Intel
-            # macOS covers both; packaged Linux GUI acceptance still visits it.
-            --deselect
-            tests/test_gui_pane_state.py::TestPaneState::test_object_editor_pane_positions_restore_from_named_config
-            --deselect
-            tests/test_gui_pane_state.py::TestPaneState::test_object_editor_pane_positions_save_on_drag_release
-          )
-          for Attempt in 1 2; do
-            if xvfb-run -a uv run gamexray-test "${PytestArgs[@]}"; then
-              exit 0
-            fi
-            if [[ "$Attempt" == '2' ]]; then
-              exit 1
-            fi
-            printf 'Test suite failed; retrying the complete suite in a fresh process.\n'
-          done
+          xvfb-run -a uv run gamexray-test -q -ra \
+            --basetemp /dev/shm/gamexray-pytest \
+            --junitxml "$EvidenceDir/pytest.xml" \
+            2>&1 | tee "$EvidenceDir/pytest.log"
+      - name: Upload test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gamexray-${{ matrix.platform }}-${{ matrix.arch }}-tests
+          path: artifacts/${{ matrix.platform }}-${{ matrix.arch }}-tests/
+          if-no-files-found: warn
       - name: Build onedir executable
         shell: bash
         env:

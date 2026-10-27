@@ -5,6 +5,40 @@ def valid_object_code(code: str) -> bool:
     return len(code) == 4 and all(ord(char) <= 255 for char in code)
 
 
+def encode_object_id_query(code: str) -> str:
+    """Select one exact case-sensitive FourCC, independently of search syntax."""
+    if not valid_object_code(code):
+        raise ValueError("对象 ID 选择器需要完整四字节 Latin-1 身份")
+    return 'id:="' + code.replace('"', '""') + '"'
+
+
+def decode_object_id_query(query: str) -> str | None:
+    """Recognize a whole canonical ID selector; preserve every payload byte.
+
+    Doubled double quotes encode one quote. Backslashes, whitespace, Warcraft
+    color markers and Boolean punctuation have no special meaning here. Other
+    query spellings keep their existing search/name semantics.
+    """
+    if not query.startswith('id:="'):
+        return None
+    chars: list[str] = []
+    position = 5
+    while position < len(query):
+        char = query[position]
+        if char == '"':
+            if position + 1 < len(query) and query[position + 1] == '"':
+                chars.append('"')
+                position += 2
+                continue
+            if position != len(query) - 1:
+                return None
+            code = "".join(chars)
+            return code if valid_object_code(code) else None
+        chars.append(char)
+        position += 1
+    return None
+
+
 def unquote_legacy_object_code(value: str) -> str:
     """Decode a known legacy quote only in a declared four-byte identity role."""
     if len(value) == 5:

@@ -42,18 +42,28 @@ class TestColumnAutosize(GuiTestCase):
     def test_object_column_grows_for_long_name(self):
         tv = self.app.col_trees["物品"]
         base = int(tv.column("#0", "width"))  # pyright: ignore[reportAttributeAccessIssue]
-        long_name = "超级无敌究极霸天虎传说之剑·永恒星辰·限定版×" * 3
+        # Keep CJK evidence while ensuring the fixture is wider than the minimum
+        # even on Tk installations whose fallback font lacks CJK glyphs.
+        long_name = ("超级无敌究极霸天虎传说之剑·永恒星辰·限定版×" + "W" * 20) * 3
+        font = self.app._measure_font()
+        text_width = font.measure(f" {long_name}")
+        diagnostics = (
+            f"font={font.actual()!r}, base={base}, text_width={text_width}, "
+            f"tk={self.app.tk.call('info', 'patchlevel')}, "
+            f"windowing_system={self.app.tk.call('tk', 'windowingsystem')}"
+        )
+        self.assertGreater(text_width, max(base, 120), diagnostics)
         self.app.map_data = MapData(
             path="x", name="x", objects={"物品": [_obj(long_name)]}
         )
         self.app.icons = None
         self.app._refresh_list()
         self.pump_events_until(lambda: len(tv.get_children()) == 1)
-        self.assertGreater(
-            int(tv.column("#0", "width")),  # pyright: ignore[reportAttributeAccessIssue]
-            base,
-            "物品列宽未随长名字增长",  # pyright: ignore[reportAttributeAccessIssue]
-        )
+        row = tv.get_children()[0]
+        self.assertEqual(tv.item(row, "text"), f" {long_name}", diagnostics)
+        width = int(tv.column("#0", "width"))
+        self.assertGreater(width, base, f"物品列宽未随长名字增长；{diagnostics}")
+        self.assertGreaterEqual(width, text_width + 46, diagnostics)
 
     def test_cmd_hint_column_grows_for_long_hint(self):
         base = int(self.app.cmd_tree.column("hint", "width"))

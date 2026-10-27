@@ -28,10 +28,12 @@ tests/object_text_priority_fixture.py
 tests/quality_audit_gap_paths.py
 tests/real_map_text_acceptance.py
 tests/retained_integrity_fixture.py
+tests/save_structure_fixture.py
 tests/source_parent_swap_fixture.py
 tests/symlink_capability.py
 tests/test_acceptance_runner.py
 tests/test_acquisition_record_schema.py
+tests/test_adoption_entrypoints.py
 tests/test_anchored_source.py
 tests/test_api_split.py
 tests/test_archive_diagnostics.py
@@ -209,7 +211,9 @@ tests/test_gui_icon_gaps.py
 tests/test_gui_info.py
 tests/test_gui_item_relations.py
 tests/test_gui_layout.py
+tests/test_gui_live_evidence.py
 tests/test_gui_live_probe.py
+tests/test_gui_live_selected_workflow.py
 tests/test_gui_loader.py
 tests/test_gui_loader_runner.py
 tests/test_gui_object_filter_runner.py
@@ -217,6 +221,7 @@ tests/test_gui_object_presentation.py
 tests/test_gui_pack_query_memo.py
 tests/test_gui_pane_state.py
 tests/test_gui_preplaced.py
+tests/test_gui_reference_catalog.py
 tests/test_gui_reports.py
 tests/test_gui_scroll.py
 tests/test_gui_source_browser_worker.py
@@ -274,6 +279,7 @@ tests/test_knowledge_pack_script_variable_usage_index.py
 tests/test_knowledge_pack_world.py
 tests/test_knowledge_results.py
 tests/test_live_cli.py
+tests/test_live_field_evidence.py
 tests/test_live_handle_chain.py
 tests/test_live_icon_paths.py
 tests/test_live_inventory_chain.py
@@ -281,11 +287,16 @@ tests/test_live_inventory_names_roundtrip.py
 tests/test_live_object_dump.py
 tests/test_live_owned_units.py
 tests/test_live_profile.py
+tests/test_live_profile_validation.py
+tests/test_live_report.py
+tests/test_live_report_cli.py
 tests/test_live_resource_layout.py
+tests/test_live_selection_complete.py
 tests/test_live_unit_query.py
 tests/test_load_context_compat.py
 tests/test_load_options.py
 tests/test_lua_trigger_acquisition_complete.py
+tests/test_map_analysis_evidence_exports.py
 tests/test_map_data_compat.py
 tests/test_map_directory.py
 tests/test_map_relation_loading.py
@@ -375,6 +386,7 @@ tests/test_real_session_script_coverage.py
 tests/test_recipe_evidence.py
 tests/test_recipe_parsing_complete.py
 tests/test_recipe_scroll.py
+tests/test_reference_catalog.py
 tests/test_reference_extraction_parity.py
 tests/test_reference_id_reports.py
 tests/test_references.py
@@ -401,6 +413,7 @@ tests/test_release_query_workflows.py
 tests/test_release_readiness.py
 tests/test_release_script_evidence.py
 tests/test_requirement_coverage_dynamic.py
+tests/test_resource_candidates.py
 tests/test_resource_inventory.py
 tests/test_resources.py
 tests/test_safe_output.py
@@ -408,11 +421,17 @@ tests/test_save_analysis.py
 tests/test_save_call_context.py
 tests/test_save_codes.py
 tests/test_save_container.py
+tests/test_save_container_evidence.py
+tests/test_save_gamecache.py
+tests/test_save_review_regressions.py
+tests/test_save_structure_integration.py
+tests/test_save_text_carriers.py
 tests/test_scene_bounds.py
 tests/test_script_assignment_index.py
 tests/test_script_call_argument_index.py
 tests/test_script_call_catalog.py
 tests/test_script_condition_branch_index.py
+tests/test_script_forward_calls.py
 tests/test_script_function_boundaries.py
 tests/test_script_function_graph_complete.py
 tests/test_script_function_index.py
@@ -422,6 +441,7 @@ tests/test_script_global_geometry_identity.py
 tests/test_script_global_index.py
 tests/test_script_language_context.py
 tests/test_script_lexing_complete.py
+tests/test_script_literal_decoding.py
 tests/test_script_local_index.py
 tests/test_script_loop_index.py
 tests/test_script_lua_builtins_complete.py
@@ -445,6 +465,7 @@ tests/test_script_trigger_bindings_complete.py
 tests/test_script_trigger_registration_index.py
 tests/test_script_variable_usage_index.py
 tests/test_search.py
+tests/test_search_literal_queries.py
 tests/test_security_boundaries.py
 tests/test_security_closeout.py
 tests/test_security_output_safety.py

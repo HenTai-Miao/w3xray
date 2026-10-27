@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from collections.abc import Mapping
 import re
+from types import MappingProxyType
 
-from .script_lexing import script_views
+from .script_lexing import ScriptViews, script_views
 from .script_scopes import FunctionSpan, ScriptStructure
 
 _CONTROL = re.compile(
@@ -24,6 +26,34 @@ class ControlRange:
     kind: str = "if"
 
 
+@dataclass(frozen=True, slots=True)
+class PreparedControlSource:
+    """One immutable source/structure/language binding for owner range scans."""
+
+    text: str
+    structure: ScriptStructure
+    lua: bool | None
+    views: ScriptViews = field(init=False)
+    functions: Mapping[int, FunctionSpan] = field(init=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "views", script_views(self.text, lua=self.lua))
+        object.__setattr__(
+            self,
+            "functions",
+            MappingProxyType(
+                {function.start: function for function in self.structure.functions}
+            ),
+        )
+
+
+def prepare_control_source(
+    text: str, structure: ScriptStructure, lua: bool | None
+) -> PreparedControlSource:
+    """Prepare the full source once; callers never supply unbound lexical views."""
+    return PreparedControlSource(text, structure, lua)
+
+
 @dataclass
 class _Control:
     kind: str
@@ -39,11 +69,26 @@ def control_ranges(
     function: FunctionSpan | None,
     structure: ScriptStructure,
     lua: bool | None,
+    *,
+    prepared: PreparedControlSource | None = None,
 ) -> tuple[ControlRange, ...]:
+    if prepared is not None:
+        if (
+            prepared.text is not text
+            or prepared.structure is not structure
+            or prepared.views.lua is not lua
+            or function is not None
+            and prepared.functions.get(function.start) is not function
+        ):
+            raise ValueError(
+                "prepared control source identity/language/function mismatch"
+            )
+        syntax = prepared.views.syntax
+    else:
+        syntax = script_views(text, lua=lua).syntax
     base = function.body_start if function is not None else 0
     end = function.body_end if function is not None else len(text)
     owner = function.start if function is not None else None
-    syntax = script_views(text, lua=lua).syntax
     if lua is True and _LUA_OPEN.search(syntax, base, end) is None:
         return ()
     if lua is False and _JASS_OPEN.search(syntax, base, end) is None:

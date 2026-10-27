@@ -13,7 +13,7 @@ def test_posix_workflow_targets_release_tag_on_supported_runners() -> None:
     workflow = _WORKFLOW.read_text(encoding="utf-8")
 
     assert "workflow_dispatch:" in workflow
-    assert "default: v0.6.2" in workflow
+    assert "default: v0.7.0" in workflow
     assert "ref: ${{ inputs.source_ref }}" in workflow
     assert "persist-credentials: false" in workflow
     assert "SOURCE_REF_INPUT: ${{ inputs.source_ref }}" in workflow
@@ -39,11 +39,6 @@ def test_posix_workflow_tests_accepts_and_archives_onedir_package() -> None:
         "uv run gamexray-test",
         "xvfb-run -a uv run gamexray-test",
         "--basetemp /dev/shm/gamexray-pytest",
-        "for Attempt in 1 2",
-        "retrying the complete suite in a fresh process",
-        "tests/test_gui_pane_state.py::TestPaneState::test_object_editor_pane_positions_restore_from_named_config",
-        "tests/test_gui_pane_state.py::TestPaneState::test_object_editor_pane_positions_save_on_drag_release",
-        "tests/test_gui_scroll.py::TestColumnAutosize::test_object_column_grows_for_long_name",
         'test -f "$PythonLibDir/libtcl9.0.so"',
         'test -f "$PythonLibDir/libtcl9tk9.0.so"',
         'export LD_LIBRARY_PATH="$PythonLibDir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"',
@@ -71,15 +66,47 @@ def test_posix_workflow_tests_accepts_and_archives_onedir_package() -> None:
     assert "--no-gui" not in workflow
 
 
-def test_linux_geometry_exclusions_keep_packaged_gui_acceptance_mandatory() -> None:
+def test_posix_suites_run_once_without_exclusions_and_keep_failure_evidence() -> None:
     workflow = _WORKFLOW.read_text(encoding="utf-8")
-    linux_tests = workflow.split(
-        "      - name: Run full test suite on Linux\n",
-        maxsplit=1,
-    )[1].split("      - name: Build onedir executable\n", maxsplit=1)[0]
 
-    assert linux_tests.count("tests/test_gui_pane_state.py::") == 2
-    assert "xvfb-run -a uv run gamexray-test" in linux_tests
+    for platform in ("macOS", "Linux"):
+        step = workflow.split(
+            f"      - name: Run full test suite on {platform}\n",
+            maxsplit=1,
+        )[1].split("\n      - name: ", maxsplit=1)[0]
+        assert step.count("uv run gamexray-test") == 1
+        assert "set -euo pipefail" in step
+        assert '--junitxml "$EvidenceDir/pytest.xml"' in step
+        assert '2>&1 | tee "$EvidenceDir/pytest.log"' in step
+        assert "trap " in step
+        assert '"$?" > "$EvidenceDir/exit-code.txt"' in step
+        for excluded in (
+            "--deselect",
+            "--ignore",
+            "--last-failed",
+            "--collect-only",
+            "--lf",
+            " -k ",
+            " -m ",
+            "tests/",
+            "for Attempt",
+            "retrying",
+            "continue-on-error",
+            "|| true",
+        ):
+            assert excluded not in step
+        assert "uv run gamexray-test -q -ra" in step
+        if platform == "Linux":
+            assert "xvfb-run -a uv run gamexray-test" in step
+            assert "--basetemp /dev/shm/gamexray-pytest" in step
+
+    upload = workflow.split("      - name: Upload test evidence\n", maxsplit=1)[
+        1
+    ].split("\n      - name: ", maxsplit=1)[0]
+    assert "if: always()" in upload
+    assert "uses: actions/upload-artifact@v4" in upload
+    assert "name: gamexray-${{ matrix.platform }}-${{ matrix.arch }}-tests" in upload
+    assert "path: artifacts/${{ matrix.platform }}-${{ matrix.arch }}-tests/" in upload
     assert 'xvfb-run -a "$Executable"' in workflow
 
 
@@ -88,9 +115,9 @@ def test_readme_lists_macos_and_linux_release_assets() -> None:
     release_section = readme.split("## 开发运行（uv）", maxsplit=1)[0]
 
     for asset in (
-        "gamexray-v0.6.2-macos-arm64.zip",
-        "gamexray-v0.6.2-macos-x64.zip",
-        "gamexray-v0.6.2-linux-x64.tar.gz",
+        "gamexray-v0.7.0-macos-arm64.zip",
+        "gamexray-v0.7.0-macos-x64.zip",
+        "gamexray-v0.7.0-linux-x64.tar.gz",
     ):
         assert asset in release_section
     assert "Apple Silicon" in release_section

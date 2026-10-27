@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Protocol
 
+from .object_codes import decode_object_id_query
 from .pack_query_item_abilities import AbilityEvidence, ItemAbilityIndex
 from .pack_query_item_prices import ItemPriceSources, item_price_index
 from .pack_query_object_details import (
@@ -34,7 +35,8 @@ def _ability_search_fields(
 def query_item_details(
     pack: Path, query: str, limit: int, sources: ItemDetailSources
 ) -> list[str]:
-    expression = sources._clean(query).strip()
+    selected_id = decode_object_id_query(query.strip())
+    expression = "" if selected_id is not None else sources._clean(query).strip()
     compiled = compile_query(expression)
     if expression and compiled.is_empty:
         return [
@@ -55,7 +57,12 @@ def query_item_details(
     matches = [
         record
         for record in index.records
-        if not expression or compiled.score_fields(search_fields(record)) is not None
+        if (
+            record.row[1] == selected_id
+            if selected_id is not None
+            else not expression
+            or compiled.score_fields(search_fields(record)) is not None
+        )
     ]
     if not matches:
         return [

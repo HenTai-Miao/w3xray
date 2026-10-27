@@ -60,7 +60,7 @@ from .pack_query_options import (
     parse_query_limit,
 )
 from .pack_query_script_coverage import ScriptCoverage, build_script_coverage
-from .object_codes import field_object_codes
+from .object_codes import decode_object_id_query, field_object_codes
 from .pack_query_call_records import (
     CallArgumentIndex,
     call_argument_index,
@@ -892,6 +892,8 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
 
 
 def _match(query: str, code: str, name: str) -> bool:
+    if (selected_id := decode_object_id_query(query.strip())) is not None:
+        return code == selected_id
     q = query.casefold()
     c = code.casefold()
     n = name.casefold()
@@ -1414,6 +1416,7 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
 def _query_where_result(pack: Path, query: str, limit: int) -> TextQueryResult:
     from .pack_query_spatial import SpatialSources, preplaced_objects
 
+    selected_id = decode_object_id_query(query.strip())
     items = load_items(pack)
     units = load_units(pack)
     destructables = load_destructables(pack)
@@ -1476,8 +1479,9 @@ def _query_where_result(pack: Path, query: str, limit: int) -> TextQueryResult:
             *(code for code, name in names.items() if _match(query, code, name)),
         )
     )
-    if _is_record_code(query) and not candidates:
-        candidates[query] = None
+    literal = selected_id if selected_id is not None else query
+    if _is_record_code(literal) and not candidates:
+        candidates[literal] = None
     script = load_script(pack)
     for code in candidates:
         death, usage = _acquisition_script_evidence(
@@ -2374,6 +2378,7 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
 
 
 def _query_drop_result(pack: Path, query: str, limit: int) -> TextQueryResult:
+    selected_id = decode_object_id_query(query.strip())
     coverage = _script_coverage(pack)
     items = load_items(pack)
     units = load_units(pack)
@@ -2408,8 +2413,9 @@ def _query_drop_result(pack: Path, query: str, limit: int) -> TextQueryResult:
             *(code for code, name in names.items() if _match(query, code, name)),
         )
     )
-    if _is_record_code(query) and not candidates:
-        candidates[query] = None
+    literal = selected_id if selected_id is not None else query
+    if _is_record_code(literal) and not candidates:
+        candidates[literal] = None
     script = load_script(pack)
     for code in candidates:
         death, usage = _acquisition_script_evidence(
@@ -2852,6 +2858,9 @@ def _script_encrypted(pack_dir: Path) -> bool:
 
 def _hint_targets(pack_dir: Path, query: str) -> set[str]:
     """查询词 -> 文案层提示的目标名集合（四码先解名, 与原词并入）。"""
+    selected_id = decode_object_id_query(query.strip())
+    if selected_id is not None:
+        query = selected_id
     targets = {query}
     if len(query) == 4:
         name = load_items(pack_dir).get(query, ("", ""))[0]
@@ -3533,10 +3542,13 @@ def _query_heroes(pack: Path, query: str, limit: int) -> list[str]:
 
 def _code_home_hint(pack: Path, query: str) -> str:
     """码在技能/增益表中时给出专属命令提示, 否则返回空串。"""
-    code = query.strip()
+    selected_id = decode_object_id_query(query.strip())
+    code = selected_id if selected_id is not None else query.strip()
     for table, cmd in (("技能", "skills"), ("增益", "buffs"), ("英雄", "heroes")):
         for r in _object_rows(pack, table)[1:]:
-            if len(r) > 4 and (r[1] == code or _clean(r[4]) == code):
+            if len(r) > 4 and (
+                r[1] == code or selected_id is None and _clean(r[4]) == code
+            ):
                 return f"(该码属 {table} — 用 {cmd} {code} 查)"
     return ""
 

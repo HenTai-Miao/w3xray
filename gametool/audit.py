@@ -51,7 +51,7 @@ class AuditReport:
 
 
 def build_audit_report(md: MapData) -> AuditReport:
-    """基于已解析 MapData 构建审计报告；不重新打开 MPQ，不修改 md。"""
+    """构建只读审计；隐式资源候选通过当前、身份受约束的归档实读确认。"""
     objects = _all_objects(md)
     items: list[AuditItem] = []
     items.append(_inventory_item(objects))
@@ -209,18 +209,47 @@ def _gameplay_constant_items(md: MapData) -> tuple[AuditItem, ...]:
 
 def _resource_items(md: MapData) -> tuple[AuditItem, ...]:
     from .resources import build_resource_report
+    from .resource_candidates import build_resource_candidate_report
 
     report = build_resource_report(md)
-    if not report.unreferenced_assets:
-        return ()
-    return (
-        AuditItem(
-            AuditSeverity.WARNING,
-            "resources.unreferenced",
-            "发现未引用素材",
-            f"内部素材中有 {len(report.unreferenced_assets)} 个未被对象字段或脚本字面量引用。",
-        ),
+    items: list[AuditItem] = []
+    if report.unreferenced_assets:
+        items.append(
+            AuditItem(
+                AuditSeverity.WARNING,
+                "resources.unreferenced",
+                "发现未引用素材",
+                f"内部素材中有 {len(report.unreferenced_assets)} 个未被对象字段或脚本字面量引用。",
+            )
+        )
+    candidates = build_resource_candidate_report(md)
+    known = {path.replace("/", "\\").casefold() for path in md.all_files}
+    discovered = tuple(
+        path for path in candidates.confirmed_paths if path.casefold() not in known
     )
+    if discovered:
+        items.append(
+            AuditItem(
+                AuditSeverity.INFO,
+                "resources.discovered",
+                "实读确认隐式资源",
+                f"当前归档实读确认 {len(discovered)} 个未登记资源: "
+                + "；".join(discovered),
+            )
+        )
+    if candidates.diagnostics:
+        items.append(
+            AuditItem(
+                AuditSeverity.WARNING,
+                "resources.discovery_diagnostics",
+                "资源候选来源诊断",
+                "\n".join(
+                    f"{item.source} / {item.stage}: {item.detail}"
+                    for item in candidates.diagnostics
+                ),
+            )
+        )
+    return tuple(items)
 
 
 def _script_diagnostic_items(md: MapData) -> tuple[AuditItem, ...]:
