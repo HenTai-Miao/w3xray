@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from gametool import resource_candidates as candidates
+from gametool import resource_candidate_sources as directory_sources
 from gametool.audit import build_audit_report
 from gametool.archive_source import PathArchiveSource
 from gametool.batch_tsv import decode_tsv_cell
@@ -462,6 +463,49 @@ def test_directory_reads_detect_aliases_and_changed_files(
     monkeypatch.setattr(source, "_entries", {"actual.blp": (file, other)})
     with pytest.raises(ResourcePathConflict, match="Actual.blp.*other.blp"):
         source.read_file("actual.blp")
+
+
+@pytest.mark.parametrize("delivery", ["verify", "reread"])
+def test_same_size_rewrites_are_detected_when_metadata_observations_are_frozen(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, delivery: str
+) -> None:
+    file = tmp_path / "Actual.blp"
+    original, changed = b"original", b"changed!"
+    assert len(original) == len(changed)
+    file.write_bytes(original)
+    real_identity = directory_sources._identity
+    initial_named = real_identity(file)
+    with file.open("rb") as handle:
+        initial_opened = directory_sources._descriptor_identity(handle)
+
+    def frozen_identity(path: Path):
+        return initial_named if path == file else real_identity(path)
+
+    # Hosted Windows filesystems may postpone same-size write timestamps.
+    # Freeze observability exactly, while all payload reads remain real I/O.
+    monkeypatch.setattr(directory_sources, "_identity", frozen_identity)
+    monkeypatch.setattr(
+        directory_sources, "_descriptor_identity", lambda _handle: initial_opened
+    )
+    source = ResourceDirectorySource(str(tmp_path))
+    assert source.read_file("actual.blp") == original
+    source.verify_source()
+    file.write_bytes(changed)
+    assert (
+        file.read_bytes() == changed
+        and directory_sources._identity(file) == initial_named
+    )
+    with file.open("rb") as handle:
+        assert directory_sources._descriptor_identity(handle) == initial_opened
+
+    with pytest.raises(OSError, match="changed"):
+        if delivery == "verify":
+            source.verify_source()
+        else:
+            source.read_file("actual.blp")
+    # A failed second read must not replace the first successful snapshot.
+    with pytest.raises(OSError, match="changed"):
+        source.verify_source()
 
 
 def test_directory_nested_discovery_is_read_only(tmp_path: Path) -> None:

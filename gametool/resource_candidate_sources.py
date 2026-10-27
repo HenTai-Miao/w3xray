@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+import hashlib
+from io import BufferedReader
 import os
 from pathlib import Path
 import stat
-from typing import BinaryIO, Protocol, runtime_checkable
+from typing import BinaryIO, Protocol, cast, runtime_checkable
 
 from .safe_output import safe_relative_path
 from .mpq_storage import open_regular_binary
@@ -48,6 +50,24 @@ def _stat_identity(details: os.stat_result) -> _Identity:
     )
 
 
+def _content_fingerprint(handle: BinaryIO) -> tuple[bytes, int]:
+    """Hash the complete stream with bounded working memory, never a byte quota."""
+    digest = hashlib.sha256()
+    byte_count = 0
+    buffer = bytearray(1024 * 1024)
+    view = memoryview(buffer)
+    # open_regular_binary owns os.fdopen(..., "rb"), hence a buffered reader.
+    reader = cast(BufferedReader, handle)
+    while True:
+        amount = reader.readinto(buffer)
+        if amount is None:
+            raise OSError("resource source read unavailable before delivery")
+        if not amount:
+            return digest.digest(), byte_count
+        digest.update(view[:amount])
+        byte_count += amount
+
+
 class ResourceDirectorySource:
     """Index all names; refuse case aliases and changed source snapshots."""
 
@@ -56,7 +76,7 @@ class ResourceDirectorySource:
         self._require_ancestors(self.root)
         self._root_identity = _identity(self.root)
         self._entries = self._index()
-        self._reads: dict[Path, tuple[_Identity, _Identity]] = {}
+        self._reads: dict[Path, tuple[_Identity, _Identity, bytes]] = {}
 
     def _index(self) -> dict[str, tuple[Path, ...]]:
         entries: dict[str, list[Path]] = {}
@@ -109,7 +129,12 @@ class ResourceDirectorySource:
                 raise OSError(f"resource source changed while reading: {path}")
         if _identity(path) != before or len(data) != before[2]:
             raise OSError(f"resource source changed while reading: {path}")
-        self._reads[path] = before, opened
+        witness = before, opened, hashlib.sha256(data).digest()
+        first = self._reads.get(path)
+        if first is not None and witness != first:
+            raise OSError(f"resource source changed since first read: {path}")
+        if first is None:
+            self._reads[path] = witness
         return data
 
     def verify_source(self) -> None:
@@ -119,14 +144,33 @@ class ResourceDirectorySource:
             or self._index() != self._entries
         ):
             raise OSError("resource directory membership or root identity changed")
-        for path, (expected_named, expected_opened) in self._reads.items():
+        for path, (
+            expected_named,
+            expected_opened,
+            expected_digest,
+        ) in self._reads.items():
             self._require_ancestors(path)
             if _identity(path) != expected_named:
                 raise OSError(f"resource source changed before delivery: {path}")
             handle, _size = open_regular_binary(str(path))
             with handle:
-                if _descriptor_identity(handle) != expected_opened:
+                if (
+                    _descriptor_identity(handle) != expected_opened
+                    or _size != expected_opened[2]
+                ):
                     raise OSError(f"resource source changed before delivery: {path}")
+                digest, byte_count = _content_fingerprint(handle)
+                if (
+                    _descriptor_identity(handle) != expected_opened
+                    or byte_count != expected_opened[2]
+                    or digest != expected_digest
+                ):
+                    raise OSError(
+                        f"resource source content changed before delivery: {path}"
+                    )
+            self._require_ancestors(path)
+            if _identity(path) != expected_named:
+                raise OSError(f"resource source changed before delivery: {path}")
 
     @staticmethod
     def _require_ancestors(path: Path) -> None:
