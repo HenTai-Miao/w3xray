@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Final
 
 from .extraction_completeness import build_extraction_completeness_report
 from .knowledge_item_requirement_rows import ITEM_INTELLIGENCE_REQUIREMENTS
+from .knowledge_profile_coverage import apply_profile_coverage
 from .knowledge_requirement_models import ExtractionCapabilities, RequirementCoverage
 from .presentation_safety import tsv_cell as _tsv
 
@@ -236,9 +237,12 @@ def format_requirement_coverage(
     else:
         resolved = capabilities
     rows = ["需求\t状态\t主要产物\t辅助产物\t说明"]
-    rows.extend(_format_row(row) for row in build_dynamic_rows(md, resolved))
+    coverage = (
+        *build_dynamic_rows(md, resolved),
+        *evaluate_requirement_rows(_ROWS, md, completeness),
+    )
     rows.extend(
-        _format_row(row) for row in evaluate_requirement_rows(_ROWS, md, completeness)
+        _format_row(row) for row in apply_profile_coverage(coverage, resolved.profile)
     )
     return "\n".join(rows) + "\n"
 

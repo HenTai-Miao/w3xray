@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .query_coordinates import coordinates_from_text
+from .query_object_codes import code_from_text
 
 import os
 import tkinter as tk
@@ -25,8 +26,6 @@ from .theme import (
 
 
 from .gui_live_probe import open_live_probe_dialog
-from .gui_pack_query import open_pack_query_dialog
-from .gui_export_actions import load_last_pack_dir
 from .gui_profile_settings import open_extraction_profile_dialog  # 提取开关设置对话框
 
 
@@ -154,11 +153,7 @@ def build_topbar(app) -> None:
         width=68,
         height=26,
         font=(FONT, 11),
-        command=lambda: open_pack_query_dialog(
-            app,
-            lambda: getattr(app, "_last_pack_dir", None) or load_last_pack_dir(),
-            app.on_export_pack,
-        ),
+        command=app.on_pack_query,
         **secondary_button_style(),
     )
     _attach_tooltip(
@@ -172,26 +167,7 @@ def build_topbar(app) -> None:
         width=68,
         height=26,
         font=(FONT, 11),
-        command=lambda: open_live_probe_dialog(
-            app,
-            getattr(app, "_last_pack_dir", None) or load_last_pack_dir(),
-            query_callback=lambda code: open_pack_query_dialog(
-                app,
-                lambda: getattr(app, "_last_pack_dir", None) or load_last_pack_dir(),
-                app.on_export_pack,
-                prefill=code,
-                # near 坐标直达 near 模式, 其余按四码走 doc
-                prefill_command=(
-                    "near"
-                    if code.startswith("near ")
-                    else "where"
-                    if code.startswith("where ")
-                    else "drop"
-                    if code.startswith("drop ")
-                    else "doc"
-                ),
-            ),
-        ),
+        command=lambda: _open_live_probe(app),
         **secondary_button_style(),
     )
     _attach_tooltip(
@@ -286,7 +262,28 @@ def _popup_data_tools(app) -> None:
     )
 
 
-_GUIDE_CACHE: dict[str, str] = {}  # map_path -> 全量报告文本 (进程级, 秒开重开窗口)
+def _open_live_probe(app) -> None:
+    source = getattr(app, "map_data", None)
+
+    def pack_dir_provider():
+        return app.current_map_pack_dir(source)
+
+    def query(code: str) -> None:
+        prefix = code.partition(" ")[0]
+        app.on_pack_query(
+            prefill=code,
+            prefill_command=prefix if prefix in {"near", "where", "drop"} else "doc",
+            source_map=source,
+        )
+
+    open_live_probe_dialog(
+        app,
+        pack_dir_provider(),
+        query_callback=query,
+        pack_dir_provider=pack_dir_provider,
+    )
+
+
 _GUIDE_SCROLL: dict[str, str] = {}  # map_path -> 关闭时滚动位置
 
 
@@ -303,41 +300,38 @@ def _render_minimap(app) -> None:
     from .gui_worker_registry import GuiWorkerTicket
 
     def work(ticket: GuiWorkerTicket) -> None:
-        import contextlib
-        import io
-
-        from .guide_cli import GuideCliOptions, run_guide_cli
+        from .api import tmp_extract_dir
+        from .guide_minimap import write_guide_minimap
         from .presentation_safety import format_user_exception
 
-        out = os.path.splitext(map_path)[0] + "-minimap.png"
-        buffer = io.StringIO()
+        out = ""
         try:
-            with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
-                rc = run_guide_cli(
-                    GuideCliOptions(
-                        map_path=map_path,
-                        section=None,
-                        refresh=False,
-                        minimap_marks=out,
-                    )
-                )
+            output_dir = tmp_extract_dir(md.name, "小地图")
+            out = os.path.join(output_dir, "minimap.png")
+            log = "\n".join(write_guide_minimap(md, out))
+            rc = 0
         except Exception as exc:  # BROAD_EXCEPT_OK - GUI worker boundary.
             rc, log = 2, format_user_exception(exc, paths=(out, map_path))
-        else:
-            log = buffer.getvalue()
 
         def finish():
+            if getattr(app, "map_data", None) is not md:
+                return
             app.minimap_button.configure(state="normal")
             if rc == 0 and os.path.exists(out):
                 app.status.configure(text="小地图已生成: " + out)
-                os.startfile(out)
+                try:
+                    os.startfile(out)
+                except AttributeError, OSError:
+                    messagebox.showinfo(
+                        "小地图已生成", f"小地图已保存到临时目录：\n{out}"
+                    )
             else:
                 app.status.configure(text="小地图生成失败")
-                messagebox.showerror("小地图", log[-2000:] or "生成失败")
+                messagebox.showerror("小地图", log or "生成失败")
 
         _ = app._post_gui_worker(ticket, finish)
 
-    _ = app._start_gui_worker("render-minimap", work, replace=True)
+    _ = app._start_gui_map_worker("render-minimap", md, work, replace=True)
 
 
 def _show_guide(app, *, refresh: bool = False) -> None:
@@ -346,10 +340,9 @@ def _show_guide(app, *, refresh: bool = False) -> None:
     if not md or not getattr(md, "path", ""):
         messagebox.showinfo("攻略速查", "请先打开地图")
         return
-    map_path = md.path
-    cached = _GUIDE_CACHE.get(map_path)
-    if cached and not refresh:
-        _open_guide_window(app, cached)
+    cached = getattr(app, "_guide_report_cache", None)
+    if cached and cached[0] is md and not refresh:
+        _open_guide_window(app, cached[1])
         app.status.configure(text="攻略速查（缓存）已就绪")
         return
     app.status.configure(text="正在整理攻略速查 …")
@@ -358,42 +351,31 @@ def _show_guide(app, *, refresh: bool = False) -> None:
     from .gui_worker_registry import GuiWorkerTicket
 
     def work(ticket: GuiWorkerTicket) -> None:
-        import contextlib
-        import io
+        from .guide_report import format_guide_report
 
-        from .guide_cli import GuideCliOptions, run_guide_cli
-
-        buffer = io.StringIO()
         try:
-            with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
-                rc = run_guide_cli(
-                    GuideCliOptions(
-                        map_path=map_path,
-                        section=None,
-                        refresh=refresh,
-                        minimap_marks=None,
-                    )
-                )
+            log = format_guide_report(md)
+            rc = 0
         except Exception as exc:  # BROAD_EXCEPT_OK - GUI worker boundary.
             from .presentation_safety import format_user_exception
 
-            rc, log = 2, format_user_exception(exc, paths=(map_path,))
-        else:
-            log = buffer.getvalue()
+            rc, log = 2, format_user_exception(exc, paths=(md.path,))
 
         def finish():
+            if getattr(app, "map_data", None) is not md:
+                return
             app.guide_button.configure(state="normal")
             if rc == 0 and log.strip():
-                _GUIDE_CACHE[map_path] = log
+                app._guide_report_cache = (md, log)
                 app.status.configure(text="攻略速查已就绪")
                 _open_guide_window(app, log)
             else:
                 app.status.configure(text="攻略速查失败")
-                messagebox.showerror("攻略速查", log[-2000:] or "生成失败")
+                messagebox.showerror("攻略速查", log or "生成失败")
 
         _ = app._post_gui_worker(ticket, finish)
 
-    _ = app._start_gui_worker("show-guide", work, replace=True)
+    _ = app._start_gui_map_worker("show-guide", md, work, replace=True)
 
 
 def _open_guide_window(app, text: str) -> None:
@@ -406,6 +388,7 @@ def _open_guide_window(app, text: str) -> None:
     win = ctk.CTkToplevel(app)
     md = getattr(app, "map_data", None)
     map_name = getattr(md, "name", "") if md else ""
+    source_path = md.path if md is not None else ""
     win.title(f"攻略速查 — {map_name}" if map_name else "攻略速查")
     from .gui_pack_query import bind_geometry_memory
 
@@ -491,24 +474,24 @@ def _open_guide_window(app, text: str) -> None:
         btn.pack(side="left", padx=(0, 4))
         section_buttons[title] = btn
     box = ctk.CTkTextbox(win, font=("Consolas", 12), wrap="none")
+    setattr(box, "_query_source_map", md)
     box.pack(fill="both", expand=True, padx=8, pady=8)
     box.insert("1.0", text)
-    saved = _GUIDE_SCROLL.get(md.path if (md := getattr(app, "map_data", None)) else "")
+    saved = _GUIDE_SCROLL.get(source_path)
     if saved:
         box.mark_set("insert", saved)
         box.see(saved)
-    win.bind(
-        "<Destroy>",
-        lambda _e: _GUIDE_SCROLL.update(
-            {
-                (
-                    getattr(app, "map_data", None).path  # pyright: ignore[reportOptionalMemberAccess]
-                    if getattr(app, "map_data", None)
-                    else ""
-                ): box.index("insert")
-            }
-        ),
-    )
+    destroy_window = win.destroy
+
+    def _close_guide() -> None:
+        try:
+            _GUIDE_SCROLL[source_path] = box.index("insert")
+        except tk.TclError:
+            pass  # Parent teardown may already have destroyed the text widget.
+        destroy_window()
+
+    win.destroy = _close_guide
+    win.protocol("WM_DELETE_WINDOW", _close_guide)
     guide_menu = tk.Menu(win, tearoff=0)
     guide_menu.add_command(
         label="复制选中",
@@ -534,7 +517,7 @@ def _open_guide_window(app, text: str) -> None:
     )
     guide_menu.add_command(
         label="强制重算 (清缓存刷新报告)",
-        command=lambda: (_GUIDE_CACHE.clear(), _show_guide(app, refresh=True)),
+        command=lambda: _show_guide(app, refresh=True),
     )
     guide_menu.add_separator()
     guide_menu.add_command(
@@ -565,26 +548,21 @@ def _open_guide_window(app, text: str) -> None:
 def _code_selected(app, box, prefix: str = "") -> None:
     """取选中/剪贴板的四码, 打开包查询窗 (prefix 空则 doc 直达)。"""
     try:
-        raw = box.get("sel.first", "sel.last").strip()
+        raw = box.get("sel.first", "sel.last")
     except Exception:
         raw = ""
     if not raw:
         try:
-            raw = box.clipboard_get().strip()
+            raw = box.clipboard_get()
         except Exception:
             return
-    import re  # noqa: PLC0415
-
-    matches = re.findall(r"[A-Z][0-9A-Z]{3}", raw)
-    if len(matches) != 1:
+    code = code_from_text(raw)
+    if code is None:
         return  # 多匹配拒猜测 (对齐探针 309)
-    code = matches[0]
-    open_pack_query_dialog(
-        app,
-        lambda: getattr(app, "_last_pack_dir", None) or load_last_pack_dir(),
-        app.on_export_pack,
+    app.on_pack_query(
         prefill=(f"{prefix} {code}" if prefix else code),
         prefill_command=(prefix if prefix else "doc"),
+        source_map=getattr(box, "_query_source_map", None),
     )
 
 
@@ -602,12 +580,10 @@ def _near_selected_coords(app, box, radius: str = "") -> None:
     point = coordinates_from_text(raw)
     if point is None:
         return
-    open_pack_query_dialog(
-        app,
-        lambda: getattr(app, "_last_pack_dir", None) or load_last_pack_dir(),
-        app.on_export_pack,
+    app.on_pack_query(
         prefill=f"near {point[0]} {point[1]}" + (f" {radius}" if radius else ""),
         prefill_command="near",
+        source_map=getattr(box, "_query_source_map", None),
     )
 
 

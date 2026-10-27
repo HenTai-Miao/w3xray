@@ -27,7 +27,7 @@ import hashlib
 import os
 import sys
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .cache_root import gamexray_cache_root
@@ -161,6 +161,7 @@ def parse_live_cli_options(argv: Sequence[str]) -> LiveCliOptions:
             raise LiveCliOptionError(f"参数缺少路径值：{option}")
         values[option] = argv[value_index]
         index += 2
+    _pid_value(values.get("--pid"))
     return LiveCliOptions(
         map_path=map_path,
         pack_dir=values.get("--pack"),
@@ -181,7 +182,7 @@ def parse_live_cli_options(argv: Sequence[str]) -> LiveCliOptions:
     )
 
 
-LIVE_PACK_CACHE_VERSION = "live-pack-v27"
+LIVE_PACK_CACHE_VERSION = "live-pack-v28"
 
 
 def live_pack_cache_dir(map_path: str) -> Path:
@@ -198,30 +199,89 @@ def live_pack_cache_dir(map_path: str) -> Path:
 def _ensure_pack_dir(options: LiveCliOptions) -> str:
     """返回资料包目录；按地图首次使用时自动导出到缓存。"""
     if options.pack_dir is not None:
+        if not Path(options.pack_dir).is_dir():
+            raise LiveCliOptionError(f"资料包目录不存在：{options.pack_dir}")
         return options.pack_dir
     if options.map_path is None:  # pragma: no cover - parse 已保证
         raise LiveCliOptionError("缺少地图路径")
-    pack_dir = live_pack_cache_dir(options.map_path)
-    if (pack_dir / "对象字段.tsv").exists():
-        return str(pack_dir)
+    from .live_pack_cache import (
+        allocate_live_pack,
+        complete_live_pack_publication,
+        find_complete_live_pack,
+        live_pack_source,
+    )
+
+    source = live_pack_source(options.map_path)
+    base = live_pack_cache_dir(options.map_path)
+    cached = find_complete_live_pack(base, source, LIVE_PACK_CACHE_VERSION)
+    if cached is not None:
+        if live_pack_source(options.map_path) != source:
+            raise LiveCliOptionError("地图文件在资料包复用期间改变，请重试")
+        return str(cached)
+    pack_dir = allocate_live_pack(base)
     from .api import load_map
-    from .knowledge_pack import write_knowledge_pack
+    from .extraction_profile import ExtractionProfile
+    from .knowledge_io import safe_filename
+    from .knowledge_pack import write_knowledge_pack_report
+    from .knowledge_results import KnowledgeWriteReport, KnowledgeWriteStatus
     from .load_context import build_map_load_context
 
     print(f"首次分析地图，正在导出知识包 -> {pack_dir}")
     map_data = load_map(options.map_path, load_context=build_map_load_context())
-    written = write_knowledge_pack(map_data, str(pack_dir))
-    print(f"知识包就绪：{written} 个文件")
+    try:
+        profile = ExtractionProfile()
+        report = write_knowledge_pack_report(map_data, str(pack_dir), profile=profile)
+        items = list(report.items)
+        if report.status is KnowledgeWriteStatus.COMPLETE:
+            for index, child in enumerate(map_data.sub_maps, start=1):
+                prefix = f"子地图/{index:03d}_{safe_filename(child.name)}"
+                child_report = write_knowledge_pack_report(
+                    child,
+                    str(pack_dir / prefix),
+                    publication_root=str(pack_dir),
+                    profile=profile,
+                )
+                items.extend(
+                    replace(item, path=f"{prefix}/{item.path}")
+                    for item in child_report.items
+                )
+        report = KnowledgeWriteReport(tuple(items))
+        if (
+            report.status is not KnowledgeWriteStatus.COMPLETE
+            or not report.written_count
+        ):
+            failure = report.first_failure
+            detail = (
+                f"{failure.path}: {failure.error}"
+                if failure is not None
+                else "未写入文件"
+            )
+            raise LiveCliOptionError(
+                f"资料包未完整写入：{detail}；本次结果保留于 {pack_dir}，重试将使用新目录"
+            )
+        if live_pack_source(options.map_path) != source:
+            raise LiveCliOptionError(
+                f"地图文件在导出期间改变；本次结果保留于 {pack_dir}，请重试"
+            )
+        complete_live_pack_publication(
+            pack_dir, source, LIVE_PACK_CACHE_VERSION, report
+        )
+    finally:
+        map_data.close()
+    print(f"知识包就绪：{report.written_count} 个文件")
     return str(pack_dir)
 
 
-def _int_or_none(text: str | None) -> int | None:
+def _pid_value(text: str | None) -> int | None:
     if text is None:
         return None
     try:
-        return int(text)
-    except ValueError:
-        return None
+        value = int(text)
+    except ValueError as exc:
+        raise LiveCliOptionError("--pid 必须是正整数") from exc
+    if value < 1:
+        raise LiveCliOptionError("--pid 必须是正整数")
+    return value
 
 
 def _auto_map_path() -> str | None:
@@ -251,8 +311,6 @@ def _resolve_auto_map(options: LiveCliOptions) -> LiveCliOptions:
     path = _auto_map_path()
     if path is None:
         return options
-    from dataclasses import replace
-
     print(f"未指定地图: 自动定位正在使用的图 -> {path}")
     return replace(options, map_path=path)
 
@@ -260,12 +318,21 @@ def _resolve_auto_map(options: LiveCliOptions) -> LiveCliOptions:
 def run_live_cli(options: LiveCliOptions) -> int:
     """准备资料包并运行多策略背包读取；失败返回 2。"""
     configure_cli_output()
+    try:
+        pid = _pid_value(options.pid)
+    except LiveCliOptionError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
     if options.dump_objects is not None:
         # 内存对象表全量导出: 不需要地图/资料包 (地图可能根本解析不了,
         # CAME 壳地图正是本模式的目标用户)。
-        from .live_object_dump import dump_live_objects
+        try:
+            from .live_object_dump import dump_live_objects
 
-        result = dump_live_objects(options.dump_objects, _int_or_none(options.pid))
+            result = dump_live_objects(options.dump_objects, pid)
+        except Exception as exc:
+            print(f"实时对象导出失败：{type(exc).__name__}: {exc}", file=sys.stderr)
+            return 2
         return 0 if result.objects else 2
     if options.elevated_hint:
         target = options.map_path or options.pack_dir or "<地图路径>"
@@ -278,15 +345,6 @@ def run_live_cli(options: LiveCliOptions) -> int:
         )
         print("注意: 重定向到文件时同样保持 PYTHONIOENCODING=utf-8，避免 GBK 乱码。")
         return 0
-    try:
-        from .live_inventory import main as live_main
-    except Exception:
-        print(
-            "缺少运行依赖 numpy/pillow，请用："
-            "uv run --with numpy --with pillow python main.py live ...",
-            file=sys.stderr,
-        )
-        return 2
     options = _resolve_auto_map(options)
     if options.map_path is None and options.pack_dir is None:
         print(
@@ -300,6 +358,15 @@ def run_live_cli(options: LiveCliOptions) -> int:
         pack_dir = _ensure_pack_dir(options)
     except Exception as exc:
         print(f"无法准备资料包：{type(exc).__name__}: {exc}", file=sys.stderr)
+        return 2
+    try:
+        from .live_inventory import main as live_main
+    except Exception:
+        print(
+            "缺少运行依赖 numpy/pillow，请用："
+            "uv run --with numpy --with pillow python main.py live ...",
+            file=sys.stderr,
+        )
         return 2
     args = ["--pack", pack_dir, "--strategy", options.strategy]
     if options.players:

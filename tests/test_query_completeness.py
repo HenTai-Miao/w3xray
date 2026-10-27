@@ -367,12 +367,14 @@ def _headless_gui_run(
     results: list[str] = []
     window = SimpleNamespace(
         _pack_dir=str(pack),
+        _query_generation=0,
         _keyword=SimpleNamespace(get=lambda: keyword),
         _var_json=SimpleNamespace(get=lambda: as_json),
         _history=SimpleNamespace(configure=lambda **_kw: None, set=lambda _v: None),
         _output=SimpleNamespace(delete=lambda *_a: None, insert=lambda *_a: None),
         _find_state={"start": "1.0"},
         configure=lambda **_kw: None,
+        winfo_exists=lambda: True,
         after=lambda _delay, callback: callback(),
         _finish=lambda text, _elapsed: results.append(text),
     )

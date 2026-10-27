@@ -47,6 +47,8 @@ class DistCliOptions:
     dry_run: bool = False
     clean: bool = True
     format: DistFormat = DistFormat.ONEDIR
+    dist_path: Path | None = None
+    work_path: Path | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -157,7 +159,21 @@ def expected_artifact_path(
 def parse_cli_options(argv: Sequence[str]) -> DistCliOptions:
     """Parse the tiny dist-builder CLI."""
     options = DistCliOptions()
-    for argument in argv:
+    index = 0
+    while index < len(argv):
+        argument = argv[index]
+        if argument in {"--distpath", "--workpath"}:
+            index += 1
+            if index >= len(argv) or not argv[index] or argv[index].startswith("--"):
+                raise DistArgumentError(argument=f"{argument} 需要目录路径")
+            path = Path(argv[index]).expanduser().absolute()
+            options = (
+                replace(options, dist_path=path)
+                if argument == "--distpath"
+                else replace(options, work_path=path)
+            )
+            index += 1
+            continue
         match (
             argument
         ):  # [OK: MATCH_OK] - unknown CLI strings become DistArgumentError.
@@ -173,6 +189,7 @@ def parse_cli_options(argv: Sequence[str]) -> DistCliOptions:
                 raise DistHelpRequested()
             case unknown:
                 raise DistArgumentError(argument=unknown)
+        index += 1
     return options
 
 
@@ -183,7 +200,12 @@ def run_dist_build(config: DistBuildConfig, *, dry_run: bool = False) -> int:
     validate_casclib_dist_assets(config.project_root)
     command = build_pyinstaller_command(config)
     print("构建命令:")
-    print(f"  {shlex.join(command)}")
+    rendered_command = (
+        "& " + subprocess.list2cmdline(command)
+        if platform.system() == "Windows"
+        else shlex.join(command)
+    )
+    print(f"  {rendered_command}")
     if dry_run:
         print("dry-run: 未执行 PyInstaller。")
         return 0
@@ -205,11 +227,14 @@ def help_text() -> str:
     return "\n".join(
         (
             "用法: uv run gamexray-dist [--dry-run] [--no-clean] [--onefile]",
+            "                         [--distpath <目录>] [--workpath <目录>]",
             "",
             "选项:",
             "  --dry-run   只打印 PyInstaller 命令，不执行构建",
             "  --no-clean  不传递 PyInstaller --clean",
             "  --onefile   构建单文件可执行程序（默认为 onedir）",
+            "  --distpath  显式指定发行产物目录（可放在仓库外）",
+            "  --workpath  显式指定临时构建目录（可放在仓库外）",
             "  -h, --help  显示帮助",
             "",
             "说明: PyInstaller 不是跨平台编译器；Windows .exe 需要在 Windows 上构建。",
@@ -226,6 +251,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             default_dist_config(),
             clean=options.clean,
             format=options.format,
+        )
+        config = replace(
+            config,
+            dist_path=options.dist_path or config.dist_path,
+            work_path=options.work_path or config.work_path,
         )
         return run_dist_build(config, dry_run=options.dry_run)
     except DistHelpRequested:

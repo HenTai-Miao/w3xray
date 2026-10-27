@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Protocol
 
 from .pack_query_spatial import NearEntry, SpatialQueryResult
 from .pack_query_regions import NearRegion
-from .pack_query_options import query_limit_error
+from .pack_query_options import EMPTY_QUERY_COMMANDS, query_limit_error
 from .pack_query_diff import ComparisonDiagnostic, DiffQueryResult
 
 if TYPE_CHECKING:
@@ -54,6 +54,16 @@ class QueryBackend(Protocol):
         self, pack: Path, query: str, limit: int
     ) -> SpatialQueryResult: ...
 
+    def _query_cmd_result(
+        self, pack: Path, query: str, limit: int
+    ) -> TextQueryResult: ...
+
+
+@dataclass(frozen=True, slots=True)
+class TextQueryResult:
+    lines: tuple[str, ...]
+    has_matches: bool
+
 
 @dataclass(frozen=True, slots=True)
 class QuerySection:
@@ -65,6 +75,7 @@ class QuerySection:
     regions_total: int = 0
     spatial_diagnostics: tuple[str, ...] = ()
     input_error: bool = False
+    has_matches: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,8 +116,13 @@ class PackQueryResult:
             "command": self.command,
             "query": self.query,
             "exit_code": self.exit_code,
+            "input_error": any(section.input_error for section in self.sections),
             "warnings": [note for note in self.diagnostics if note.startswith("[⚠")],
         }
+        if any(section.has_matches is not None for section in self.sections):
+            payload["has_matches"] = any(
+                _section_has_result(self.command, section) for section in self.sections
+            )
         if self.command == "diff":
             payload.update(
                 comparison_complete=self.comparison_complete,
@@ -312,6 +328,19 @@ def _collect_query(
         return _message(options, "资料包目录不存在: " + options.pack_dir, 2)
     if options.command not in queries._QUERIES:
         return _message(options, "未知子命令: " + options.command, 2)
+    if not options.query.strip() and options.command not in EMPTY_QUERY_COMMANDS | {
+        "near",
+        "diff",
+    }:
+        result = _message(
+            options, options.command + " 需要查询词；可输入名称或四码。", 2
+        )
+        return replace(
+            result,
+            sections=tuple(
+                replace(section, input_error=True) for section in result.sections
+            ),
+        )
     if options.command == "near" and options.near_kind:
         options = replace(options, query=options.query + " --kind " + options.near_kind)
     if options.command == "diff":
@@ -346,7 +375,6 @@ def _collect_query(
         options.query,
         options.limit,
     )
-    lines = section.lines
     if options.command == "near" and section.input_error:
         return PackQueryResult(str(pack), options.command, options.query, (section,), 2)
     if options.command == "near":
@@ -356,7 +384,7 @@ def _collect_query(
     )
     if subs:
         sections: list[QuerySection] = []
-        if _has_result(options.command, lines, section.entries, section.regions) or (
+        if _section_has_result(options.command, section) or (
             options.command == "near" and section.spatial_diagnostics
         ):
             sections.append(replace(section, section="容器级"))
@@ -369,12 +397,9 @@ def _collect_query(
                 options.query,
                 options.limit,
             )
-            if _has_result(
-                options.command,
-                sub_section.lines,
-                sub_section.entries,
-                sub_section.regions,
-            ) or (options.command == "near" and sub_section.spatial_diagnostics):
+            if _section_has_result(options.command, sub_section) or (
+                options.command == "near" and sub_section.spatial_diagnostics
+            ):
                 sections.append(sub_section)
         if not sections:
             return replace(
@@ -388,10 +413,7 @@ def _collect_query(
                 ),
                 checked_packs=checked,
             )
-        success = any(
-            _has_result(options.command, row.lines, row.entries, row.regions)
-            for row in sections
-        )
+        success = any(_section_has_result(options.command, row) for row in sections)
         if remember and success:
             queries._store_last_query(pack, options.command, options.query)
         return PackQueryResult(
@@ -403,7 +425,7 @@ def _collect_query(
             campaign=True,
             checked_packs=checked,
         )
-    success = _has_result(options.command, lines, section.entries, section.regions)
+    success = _section_has_result(options.command, section)
     if success and remember:
         queries._store_last_query(pack, options.command, options.query)
     return PackQueryResult(
@@ -414,6 +436,14 @@ def _collect_query(
         0 if success else 2,
         checked_packs=checked,
     )
+
+
+def _section_has_result(command: str, section: QuerySection) -> bool:
+    if section.input_error:
+        return False
+    if section.has_matches is not None:
+        return section.has_matches
+    return _has_result(command, section.lines, section.entries, section.regions)
 
 
 def _has_result(
@@ -432,6 +462,11 @@ def _has_result(
 def _run_section(
     queries: QueryBackend, command: str, title: str, pack: Path, query: str, limit: int
 ) -> QuerySection:
+    if command == "cmd":
+        result = queries._query_cmd_result(pack, query, limit)
+        return QuerySection(
+            title, str(pack), result.lines, has_matches=result.has_matches
+        )
     if command == "near":
         result = queries._query_near_result(pack, query, limit)
         return QuerySection(

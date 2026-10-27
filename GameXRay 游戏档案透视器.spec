@@ -54,7 +54,10 @@ common_exe_options = {
     'upx': False,
     'upx_exclude': [],
     'runtime_tmpdir': None,
-    'console': False,
+    # CLI 继承终端或重定向时必须有真实 stdout/stderr；双击 GUI 时隐藏
+    # bootloader 自己创建的控制台，已有终端保持可见。
+    'console': True,
+    'hide_console': 'hide-early' if sys.platform == 'win32' else None,
     'disable_windowed_traceback': False,
     'argv_emulation': False,
     'target_arch': None,

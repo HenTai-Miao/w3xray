@@ -10,6 +10,7 @@ from .author_plaintext_bundle import load_author_plaintext_bundle
 from .bounded_file import BoundedFileError, sha256_regular_file
 from .compat_bundle import load_compat_bundle
 from .mpq import MPQArchive
+from .mpq_storage import MPQSourceIdentity, MPQStorageError, SourceIdentityArchive
 from .supplemental_evidence import (
     SupplementalEvidence,
     SupplementalEvidenceError,
@@ -29,6 +30,7 @@ def open_map_archive(
     author_bundle_path: str | None = None,
     compat_bundle_path: str | None = None,
     archive_factory: ArchiveFactory = MPQArchive,
+    expected_source_identity: MPQSourceIdentity | None = None,
 ) -> Iterator[SupplementBase]:
     """Open the existing MPQ reader, adding only verified static evidence."""
     evidence = load_supplemental_evidence(
@@ -50,7 +52,16 @@ def open_map_archive(
     else:
         archive = SupplementedArchive(path, base, evidence)
     try:
+        if isinstance(archive, SourceIdentityArchive):
+            if (
+                expected_source_identity is not None
+                and archive.source_identity != expected_source_identity
+            ):
+                raise MPQStorageError(path, "source identity changed since map loading")
+            archive.verify_source()
         yield archive
+        if isinstance(archive, SourceIdentityArchive):
+            archive.verify_source()
     finally:
         archive.close()
 

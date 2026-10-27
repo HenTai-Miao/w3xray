@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import ContextManager
 
 from .map_archive_open import open_map_archive
 from .mpq import MPQArchive
+from .mpq_storage import MPQSourceIdentity
 from .supplemented_archive import SupplementBase
 
 
@@ -17,6 +18,9 @@ class SupplementedPathArchiveSource:
     path: str
     author_bundle_path: str | None = None
     compat_bundle_path: str | None = None
+    expected_identity: MPQSourceIdentity | None = field(
+        default=None, compare=False, repr=False
+    )
 
     def open(self) -> ContextManager[SupplementBase]:
         """Open one independent reader and close it on every exit path."""
@@ -25,6 +29,7 @@ class SupplementedPathArchiveSource:
             author_bundle_path=self.author_bundle_path,
             compat_bundle_path=self.compat_bundle_path,
             archive_factory=MPQArchive,
+            expected_source_identity=self.expected_identity,
         )
 
     def close(self) -> None:

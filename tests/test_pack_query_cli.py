@@ -1039,10 +1039,8 @@ def test_parse_ok():
 def test_parse_errors():
     with pytest.raises(PackQueryCliOptionError):
         parse_pack_query_cli_options(["pack", "nope", "x"])
-    with pytest.raises(PackQueryCliOptionError):
-        parse_pack_query_cli_options(["pack", "cmd"])
-    with pytest.raises(PackQueryCliOptionError):
-        parse_pack_query_cli_options(["pack", "cmd", ""])
+    assert parse_pack_query_cli_options(["pack", "cmd"]).query == ""
+    assert parse_pack_query_cli_options(["pack", "cmd", ""]).query == ""
     with pytest.raises(PackQueryCliOptionError):
         parse_pack_query_cli_options(["pack", "item", "x", "--limit"])
     with pytest.raises(PackQueryCliOptionError):

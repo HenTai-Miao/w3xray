@@ -13,6 +13,7 @@ from typing import ContextManager, Protocol, override
 
 from .map_archive_reader import MapArchiveReader
 from .mpq import MPQArchive
+from .mpq_storage import MPQSourceIdentity
 
 
 class ArchiveSource(Protocol):
@@ -42,10 +43,20 @@ class PathArchiveSource:
     """Open independent MPQ readers from an on-disk map path."""
 
     path: str
+    expected_identity: MPQSourceIdentity | None = field(
+        default=None, compare=False, repr=False
+    )
 
     def open(self) -> MPQArchive:
         """Open a new MPQ reader; the reader owns its own context lifecycle."""
-        return MPQArchive(self.path)
+        archive = MPQArchive(self.path)
+        try:
+            if self.expected_identity is not None:
+                archive.require_source_identity(self.expected_identity)
+        except OSError:
+            archive.close()
+            raise
+        return archive
 
     def close(self) -> None:
         """Release no state because path-backed sources own no open archive."""

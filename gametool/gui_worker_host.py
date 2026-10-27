@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+import logging
 import threading
 from tkinter import TclError
 from typing import ParamSpec, TYPE_CHECKING, Final
@@ -13,8 +14,11 @@ from .gui_worker_registry import (
     GuiWorkerTarget,
     GuiWorkerTicket,
 )
+from .gui_map_resources import GuiMapResources
+from .map_data import MapData
 
 _GUI_POST_POLL_MS: Final = 20
+_LOGGER = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
 
@@ -25,6 +29,7 @@ if TYPE_CHECKING:
         _gui_posts: dict[int, _PendingGuiPost] = {}
         _gui_post_poll_id: str | None = None
         _gui_post_stopped: bool = False
+        _gui_map_resources: GuiMapResources = GuiMapResources()
 
         _P = ParamSpec("_P")
 
@@ -55,6 +60,7 @@ class GuiWorkerHostMixin(_TkAfterHost):
 
     def _init_gui_worker_host(self) -> None:
         self._gui_workers = GuiWorkerRegistry()
+        self._gui_map_resources = GuiMapResources()
         self._gui_post_lock = threading.Lock()
         self._gui_post_next = 1
         self._gui_posts = {}
@@ -72,6 +78,34 @@ class GuiWorkerHostMixin(_TkAfterHost):
         replace: bool,
     ) -> GuiWorkerTicket:
         return self._gui_workers.start(group, target, replace=replace)
+
+    def _start_gui_map_worker(
+        self,
+        group: str,
+        md: MapData,
+        target: GuiWorkerTarget,
+        *,
+        replace: bool,
+    ) -> GuiWorkerTicket:
+        release = self._gui_map_resources.acquire(md)
+
+        def work(ticket: GuiWorkerTicket) -> None:
+            try:
+                target(ticket)
+            finally:
+                release()
+
+        try:
+            return self._start_gui_worker(group, work, replace=replace)
+        except Exception:  # BROAD_EXCEPT_OK - worker startup must release its borrowed map before propagating failure.
+            release()
+            raise
+
+    def _remember_gui_maps(self, maps) -> None:
+        self._gui_map_resources.remember(maps)
+
+    def _sync_gui_maps(self, retained) -> None:
+        self._gui_map_resources.synchronize(retained)
 
     def _post_gui_worker(
         self,
@@ -110,6 +144,7 @@ class GuiWorkerHostMixin(_TkAfterHost):
                 self._gui_post_poll_id = None
         lingering = self._gui_workers.shutdown(timeout_seconds)
         self._cleanup_gui_posts(None)
+        self._gui_map_resources.close()
         return lingering
 
     def _cancel_gui_worker_group(self, group: str) -> None:
@@ -122,7 +157,10 @@ class GuiWorkerHostMixin(_TkAfterHost):
             self._gui_post_poll_id = None
             post_ids = tuple(sorted(self._gui_posts))
         for post_id in post_ids:
-            self._deliver_gui_post(post_id)
+            try:
+                self._deliver_gui_post(post_id)
+            except Exception:  # BROAD_EXCEPT_OK - one failed view must not stop all GUI result delivery.
+                _LOGGER.exception("GUI worker result delivery failed")
         with self._gui_post_lock:
             stopped = self._gui_post_stopped
         if stopped:
@@ -164,7 +202,10 @@ class GuiWorkerHostMixin(_TkAfterHost):
 
 def _run_cleanup(cleanup: Callable[[], None] | None) -> None:
     if cleanup is not None:
-        cleanup()
+        try:
+            cleanup()
+        except Exception:  # BROAD_EXCEPT_OK - reclaim every pending payload even if one resource cannot close.
+            _LOGGER.exception("GUI worker payload cleanup failed")
 
 
 __all__ = ("GuiWorkerHostMixin",)

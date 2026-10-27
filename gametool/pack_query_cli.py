@@ -54,7 +54,11 @@ from .pack_query_objects import (
     object_table,
     valid_object_code,
 )
-from .pack_query_options import PackQueryCliOptions, parse_query_limit
+from .pack_query_options import (
+    EMPTY_QUERY_COMMANDS,
+    PackQueryCliOptions,
+    parse_query_limit,
+)
 from .object_codes import field_object_codes
 from .pack_query_call_records import (
     CallArgumentIndex,
@@ -93,7 +97,7 @@ if TYPE_CHECKING:
     from .pack_query_item_abilities import ItemAbilityIndex
     from .pack_query_item_prices import ItemPriceIndex
     from .pack_query_diff import DiffQueryResult
-    from .pack_query_execution import PackQueryResult
+    from .pack_query_execution import PackQueryResult, TextQueryResult
     from .pack_query_spatial import SpatialQueryResult
 
 __all__ = (
@@ -102,6 +106,7 @@ __all__ = (
     "parse_pack_query_cli_options",
     "execute_pack_query",
     "run_pack_query_cli",
+    "pack_query_help",
 )
 
 _COMMANDS = (
@@ -706,6 +711,7 @@ def _indexed_placement_report(
             for row, summary, offset in _call_argument_rows(pack_dir)
         ),
         _pack_script_type(pack_dir),
+        authoritative_sources=_has_original_script_sources(pack_dir),
     )
 
 
@@ -741,7 +747,7 @@ def load_placement_diagnostics(pack_dir: Path) -> list[str]:
     ] + list(_indexed_placement_report(pack_dir, contexts).diagnostics)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True)
 class PackQueryCliOptionError(ValueError):
     """pack-query 参数错误，message 面向命令行用户。"""
 
@@ -749,6 +755,51 @@ class PackQueryCliOptionError(ValueError):
 
     def __str__(self) -> str:
         return single_line_text(self.detail)
+
+
+def pack_query_help() -> str:
+    """Shared help for source, installed and packaged command entry points."""
+    return """用法: pack-query <资料包目录> <子命令> [查询词] [选项]
+
+默认完整查询全部匹配记录。--limit N 显式缩减完整记录，0/all/全部表示全量。
+--json 输出一个完整 JSON 文档；--help/-h 查看本帮助。
+
+对象与字段（查询词可省略，空词列出全部）:
+  item / price          完整物品证据 / 金币字段及来源
+  units / heroes        单位 / 英雄对象与全部字段
+  skills / buffs        技能 / 增益对象与全部字段
+  tech [--level N]      科技及精确费用，可指定任意正整数等级
+  shop                  商店出售、制造、全部货架与位置
+
+获取途径与脚本:
+  recipe <名称或四码>    产物或材料的全部合成配方
+  synth                 全图配方（查询词可省略）
+  where <名称或四码>     获取途径、放置坐标与来源证据
+  drop <名称或四码>      掉落、奖池及触发奖励证据
+  cmd [聊天指令]         完整注册、条件与动作链；空词列出全部监听
+  quest [关键词]         任务、标题、条目与显示消息；空词全量列出
+  refs [名称或四码]      逐对象脚本引用与来源；空词列出全部引用对象
+  locate <码1;码2;...>    战役各子地图中的特征码交集
+  near <x> <y> [半径]    坐标附近对象与区域；可用 --kind 单位/装饰/物品/脚本
+
+检索与工具:
+  search <表达式>        八类对象、说明及字段；支持分类前缀和 &&、||、%、括号
+  text [关键词]          所有根 TSV 的完整文本记录；空词全量列出
+  doc <名称或四码>       完整对象描述
+  export <名称或四码>    导出对象描述 Markdown
+  affixes [关键词]       词缀证据；空词全量列出
+  registered [关键词]    注册消息证据；空词全量列出
+  list [表名]            对象表（空词全部表）
+  stats                  包总览及查询记忆
+  diff <旧包目录>        对比当前包与旧包；--against <旧包目录> 后可用查询词筛选
+  again                  重跑最近一次成功查询，保留原包与空查询词
+
+示例:
+  pack-query "地图资料包" item
+  pack-query "地图资料包" search "物品:火焰 && 攻击"
+  pack-query "战役资料包" near 100 -200 500 --json
+  pack-query "地图资料包" cmd --limit all
+"""
 
 
 def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
@@ -798,28 +849,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         rest = rest[:index] + rest[index + 2 :]
     if command == "near" and len(rest) in (4, 5):
         rest = [*rest[:2], " ".join(rest[2:])]
-    if (
-        command
-        in (
-            "near",
-            "affixes",
-            "again",
-            "registered",
-            "diff",
-            "list",
-            "buffs",
-            "heroes",
-            "stats",
-            "synth",
-            "skills",
-            "units",
-            "quest",
-            "item",
-            "tech",
-            "price",
-        )
-        and len(rest) == 2
-    ):
+    if command in EMPTY_QUERY_COMMANDS | {"near", "diff"} and len(rest) == 2:
         # near 的缺参由空间查询层给出结构化用法；其余可省词命令全量列出。
         rest = [*rest, ""]
     if len(rest) != 3:
@@ -829,7 +859,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
             + "> <查询词>"
             + ("  (near 用法: near <x> <y> [radius])" if command == "near" else "")
             + (
-                "  (affixes/registered/list/buffs/heroes/stats/synth/skills/units/quest/item/tech/price 查询词可省 = 全量列出; diff 用法: diff <旧包目录>)"
+                "  (affixes/registered/list/buffs/heroes/stats/synth/skills/units/quest/item/tech/price/cmd/shop/text/refs 查询词可省 = 全量列出; diff 用法: diff <旧包目录>)"
                 if command
                 in ("affixes", "registered", "diff", "list", "buffs", "quest")
                 else ""
@@ -842,24 +872,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         raise PackQueryCliOptionError(
             "未知子命令: " + command + " (可选: " + ",".join(_COMMANDS) + ")"
         )
-    if not query.strip() and command not in (
-        "near",
-        "affixes",
-        "again",
-        "registered",
-        "diff",
-        "list",
-        "buffs",
-        "heroes",
-        "stats",
-        "synth",
-        "skills",
-        "units",
-        "quest",
-        "item",
-        "tech",
-        "price",
-    ):
+    if not query.strip() and command not in EMPTY_QUERY_COMMANDS | {"near", "diff"}:
         raise PackQueryCliOptionError("查询词不能为空")
     return PackQueryCliOptions(
         pack_dir=pack_dir,
@@ -2607,30 +2620,90 @@ def load_script_sources(pack_dir: Path) -> tuple[tuple[str, str], ...]:
     key = str(pack_dir)
     if _QUERY_SCRIPT_SOURCES is not None and key in _QUERY_SCRIPT_SOURCES:
         return _QUERY_SCRIPT_SOURCES[key]
-    d = pack_dir / "脚本可读文本"
+    original = _has_original_script_sources(pack_dir)
+    d = pack_dir / ("脚本原始文本" if original else "脚本可读文本")
     if not d.is_dir():
+        if original:
+            _script_read_problem(pack_dir, d)
         return ()
+    paths = _script_source_paths(pack_dir, d)
+    if original:
+        present = {path.relative_to(d) for path in paths}
+        for readable in _script_source_paths(pack_dir, pack_dir / "脚本可读文本"):
+            relative = readable.relative_to(pack_dir / "脚本可读文本")
+            if relative not in present:
+                _script_read_problem(pack_dir, d / relative)
+        if not paths:
+            _script_read_problem(pack_dir, d)
     sources: list[tuple[str, str]] = []
-    for p in sorted(
-        path for path in d.rglob("*") if path.suffix.lower() in (".j", ".lua", ".txt")
-    ):
+    for p in paths:
         file_key = (str(pack_dir), p.relative_to(pack_dir).as_posix())
         if _QUERY_FILES is not None:
             _QUERY_FILES.add(file_key)
-        try:
-            sources.append(
-                (
-                    p.relative_to(d).as_posix(),
-                    p.read_text(encoding="utf-8", errors="replace").replace("\r", "\n"),
-                )
-            )
-            _LOCKED_FILES.discard(file_key)
-        except OSError:
+        for _attempt in range(3):
+            try:
+                # The exported original has the same character offsets as the
+                # indexes. Universal-newline conversion would move CRLF sites.
+                with p.open(
+                    encoding="utf-8",
+                    errors="strict" if original else "replace",
+                    newline="",
+                ) as handle:
+                    before = os.fstat(handle.fileno())
+                    text = handle.read()
+                    after = os.fstat(handle.fileno())
+                if _table_identity(before) != _table_identity(after) or _table_identity(
+                    after
+                ) != _table_identity(p.stat()):
+                    continue
+                if not original:
+                    # Legacy readable packs relied on CR-only normalization.
+                    # Only the new original-source boundary promises offsets.
+                    text = text.replace("\r\n", "\n").replace("\r", "\n")
+                sources.append((p.relative_to(d).as_posix(), text))
+                _LOCKED_FILES.discard(file_key)
+                break
+            except OSError, UnicodeError:
+                continue
+        else:
             _LOCKED_FILES.add(file_key)
     result = tuple(sources)
     if _QUERY_SCRIPT_SOURCES is not None:
         _QUERY_SCRIPT_SOURCES[key] = result
     return result
+
+
+def _has_original_script_sources(pack: Path) -> bool:
+    try:
+        (pack / "脚本原始文本").lstat()
+    except FileNotFoundError:
+        return False
+    except OSError:
+        pass  # An inaccessible original is still an authoritative boundary.
+    return True
+
+
+def _script_read_problem(pack: Path, path: Path) -> None:
+    key = str(pack), path.relative_to(pack).as_posix()
+    if _QUERY_FILES is not None:
+        _QUERY_FILES.add(key)
+    _LOCKED_FILES.add(key)
+
+
+def _script_source_paths(pack: Path, root: Path) -> list[Path]:
+    if not root.is_dir():
+        return []
+
+    def failed(error: OSError) -> None:
+        path = Path(error.filename) if isinstance(error.filename, str) else root
+        _script_read_problem(pack, path)
+
+    return sorted(
+        directory / name
+        for directory, _directories, names in root.walk(on_error=failed)
+        for name in names
+        if Path(name).suffix.lower() in (".j", ".lua", ".txt")
+    )
 
 
 def _pack_script_type(pack_dir: Path) -> str:
@@ -2823,11 +2896,20 @@ class _CommandMatch:
 
 
 def _query_cmd(pack: Path, query: str, limit: int) -> list[str]:
+    return list(_query_cmd_result(pack, query, limit).lines)
+
+
+def _query_cmd_result(pack: Path, query: str, limit: int) -> TextQueryResult:
+    from .pack_query_execution import TextQueryResult
+
     sources = load_script_contexts(pack)
     if not sources:
-        return [
-            "未找到脚本 (脚本可读文本/*.j / *.lua / 自定义代码)——该包可能未导出可读脚本"
-        ]
+        return TextQueryResult(
+            (
+                "未找到脚本 (脚本可读文本/*.j / *.lua / 自定义代码)——该包可能未导出可读脚本",
+            ),
+            False,
+        )
     exact_hits: dict[tuple[object, ...], _CommandMatch] = {}
     loose_hits: dict[tuple[object, ...], _CommandMatch] = {}
     empty = 0
@@ -2835,7 +2917,7 @@ def _query_cmd(pack: Path, query: str, limit: int) -> list[str]:
         bindings = script_trigger_bindings(script, lua=lua)
         for var, cmd, exact, position in _chat_registrations(script, lua=lua):
             empty += not bool(cmd)
-            if cmd == query:
+            if not query or cmd == query:
                 bucket = exact_hits
             elif len(cmd) > 1 and (query in cmd or cmd in query):
                 bucket = loose_hits
@@ -2879,14 +2961,20 @@ def _query_cmd(pack: Path, query: str, limit: int) -> list[str]:
     hits = exact_hits or loose_hits
     if not hits:
         if empty:
-            return [
-                f"⚠ 未找到具名聊天指令: {query}",
-                f"  （本图另有 {empty} 处空串聊天事件——任意聊天都会触发, 具体参数写在条件/动作里; 见 脚本触发注册索引「聊天事件」行）",
-            ]
-        return [
-            "未找到聊天指令: " + query,
-            "  （本图指令注册见 脚本触发注册索引.tsv 的「聊天事件」行; 空串监听=任意聊天触发）",
-        ]
+            return TextQueryResult(
+                (
+                    f"⚠ 未找到具名聊天指令: {query}",
+                    f"  （本图另有 {empty} 处空串聊天事件——任意聊天都会触发, 具体参数写在条件/动作里; 见 脚本触发注册索引「聊天事件」行）",
+                ),
+                False,
+            )
+        return TextQueryResult(
+            (
+                "未找到聊天指令: " + query,
+                "  （本图指令注册见 脚本触发注册索引.tsv 的「聊天事件」行; 空串监听=任意聊天触发）",
+            ),
+            False,
+        )
     blocks: list[list[str]] = []
     for found in sorted(hits.values(), key=lambda value: -value.count):
         match_kind = (
@@ -2929,7 +3017,7 @@ def _query_cmd(pack: Path, query: str, limit: int) -> list[str]:
             block.append("  动作: (未找到 TriggerAddAction)")
         block.append("")
         blocks.append(block)
-    return _limit_result_blocks(blocks, limit)
+    return TextQueryResult(tuple(_limit_result_blocks(blocks, limit)), True)
 
 
 _GIVE_MECHS = ("UnitAddItem", "CreateItem")
@@ -3451,7 +3539,7 @@ def _store_last_query(pack: Path, command: str, query: str) -> None:
         d.mkdir(parents=True, exist_ok=True)
         (d / _LAST_QUERY_FILE).write_text(
             json.dumps(
-                {"pack": str(pack), "command": command, "query": query},
+                {"pack": str(pack.resolve()), "command": command, "query": query},
                 ensure_ascii=False,
             ),
             encoding="utf-8",

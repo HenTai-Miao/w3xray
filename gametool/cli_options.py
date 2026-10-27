@@ -41,6 +41,22 @@ class CliOptionError(ValueError):
         return single_line_text(self.detail)
 
 
+def cli_help() -> str:
+    """Describe every supported map-extraction option before opening inputs."""
+    return (
+        "用法: gamexray cli <地图.w3x|地图.w3m|战役.w3n|配置.wgc> [选项]\n"
+        "  --pack <新目录>             导出完整知识包\n"
+        "  --listfile <文件>           补充 MPQ 内部文件名\n"
+        "  --game-data <目录>          只读客户端/可信图标来源\n"
+        "  --author-bundle <目录>      只读作者资源包\n"
+        "  --profile <提取类别>        逗号分隔类别，-类别 表示关闭\n"
+        "  -h, --help                  显示帮助\n"
+        "示例: gamexray cli map.w3x --pack <新目录>\n"
+        "      gamexray cli map.w3x --pack <新目录> --profile objects,units,-triggers\n"
+        "源地图只读；未指定 --pack 时仅输出解析摘要。"
+    )
+
+
 def parse_cli_options(argv: Sequence[str]) -> CliOptions:
     """Parse arguments following the `cli` subcommand."""
     if not argv:
@@ -82,6 +98,10 @@ def parse_cli_options(argv: Sequence[str]) -> CliOptions:
             case "--author-bundle":
                 author_bundle_path = value
             case "--profile":
+                try:
+                    parse_profile_arg(value)
+                except ValueError as exc:
+                    raise CliOptionError(str(exc)) from exc
                 profile_text = value
             case _:
                 raise CliOptionError(f"不支持的参数：{option}")
@@ -99,6 +119,13 @@ def parse_cli_options(argv: Sequence[str]) -> CliOptions:
 def run_cli(options: CliOptions) -> int:
     """Load one map, print its summary, and optionally write a knowledge pack."""
     configure_cli_output()
+    if options.profile_text:
+        try:
+            parse_profile_arg(options.profile_text)
+        except ValueError as exc:
+            print(f"CLI 参数错误：{single_line_text(str(exc))}", file=sys.stderr)
+            print("运行 gamexray cli --help 查看提取类别用法。", file=sys.stderr)
+            return 2
     # 首次分析一张大图时物化是主要开销；默认吃满可用核（用户可显式覆盖）。
     os.environ.setdefault("GAMEXRAY_MATERIALIZE_WORKERS", str(os.cpu_count() or 1))
     if options.map_path.lower().endswith(".wgc"):
@@ -207,6 +234,8 @@ def _write_cli_packs(
         game_data_path=options.game_data_path,
         profile=profile,
     )
+    if parent.status is KnowledgeWriteStatus.FAILED and parent.written_count == 0:
+        return parent
     items = list(parent.items)
     for index, child in enumerate(map_data.sub_maps, start=1):
         directory = f"{index:03d}_{safe_filename(child.name)}"

@@ -58,5 +58,6 @@ def test_guide_code_menu_multi_match_guard() -> None:
     src = (Path(__file__).parents[1] / "gametool" / "gui_topbar.py").read_text(
         encoding="utf-8"
     )
-    assert "len(matches) != 1" in src  # 多匹配拒猜测 (309 语义)
+    assert "code_from_text(raw)" in src  # 多面板共用完整四码与多匹配拒猜测边界
+    assert "if code is None:" in src
     assert '_code_selected(app, box, "drop")' in src  # 三键菜单

@@ -104,13 +104,9 @@ def _run_batch_locked(
     diagnostics = list(startup_diagnostics(previous.diagnostics, recovery, len(paths)))
     # 暴雪赛季目录会把相同地图原样复发布（Season1/Season9 大量字节级重复）。
     # 状态契约要求源身份唯一，重复内容只处理首个；跳过的后续源记录诊断。
-    # 恢复状态下已处理的身份也要种进来，否则续跑时跨目录重复会再次入状态。
+    # 这里只接受本轮已完成指纹校验的源；旧状态的路径可能已改名、移走或
+    # 换成其他内容，不能据此跳过仍在当前扫描中的地图。
     processed_identities: dict[tuple[str, int], str] = {}
-    if previous.state is not None:
-        for prior in previous.state.results:
-            processed_identities[(prior.source.sha256, prior.source.size)] = (
-                prior.source.path
-            )
     if on_progress is not None:
         on_progress(
             build_batch_progress(

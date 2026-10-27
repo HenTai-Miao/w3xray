@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import re
 import tkinter as tk
 from typing import TYPE_CHECKING
 
@@ -11,6 +12,8 @@ import customtkinter as ctk
 
 from .theme import BG, CARD, FONT, SUBTLE, TEXT, TITLE_FONT
 from .query_coordinates import coordinates_from_text, radius_from_text
+from .query_object_codes import code_from_text
+from .pack_query_options import EMPTY_QUERY_COMMANDS
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -53,7 +56,7 @@ def _save_memo() -> None:
         (base_path / "geometry.json").write_text(
             json.dumps(_WINDOW_GEOMETRY, ensure_ascii=False), encoding="utf-8"
         )
-    except OSError:
+    except OSError, UnicodeError:
         pass  # fail-open: 记忆失败不影响查询
 
 
@@ -65,16 +68,41 @@ def _load_memo() -> None:
     base = _memo_dir()
     if not base:
         return
-    try:
-        base_path = Path(base)
-        history = json.loads((base_path / "history.json").read_text(encoding="utf-8"))
-        _HISTORY[:] = [tuple(x) for x in history]
-        pinned = json.loads((base_path / "pinned.json").read_text(encoding="utf-8"))
-        _PINNED[:] = [tuple(x) for x in pinned]
-        geo = json.loads((base_path / "geometry.json").read_text(encoding="utf-8"))
-        _WINDOW_GEOMETRY.update(geo)
-    except OSError, ValueError:
-        pass  # fail-open: 缺文件/坏格式当空白
+
+    def load(name: str) -> object:
+        try:
+            return json.loads((Path(base) / name).read_text(encoding="utf-8"))
+        except OSError, ValueError:
+            return None  # 每种资产独立恢复，坏历史不阻断收藏与窗口尺寸。
+
+    def pairs(payload: list[object]) -> list[tuple[str, str]]:
+        return [
+            (row[0], row[1])
+            for row in payload
+            if isinstance(row, list)
+            and len(row) == 2
+            and all(isinstance(value, str) for value in row)
+        ]
+
+    history = load("history.json")
+    if isinstance(history, list):
+        _HISTORY[:] = [
+            (command, keyword)
+            for command, keyword in pairs(history)
+            if command in _PackQueryWindow._PLACEHOLDERS
+        ]
+    pinned = load("pinned.json")
+    if isinstance(pinned, list):
+        _PINNED[:] = pairs(pinned)
+    geo = load("geometry.json")
+    if isinstance(geo, dict):
+        _WINDOW_GEOMETRY.update(
+            (name, value)
+            for name, value in geo.items()
+            if isinstance(name, str)
+            and isinstance(value, str)
+            and re.fullmatch(r"[1-9]\d*x[1-9]\d*(?:[+-]\d+[+-]\d+)?", value)
+        )
 
 
 def _remember_geometry(win, name: str) -> None:
@@ -82,9 +110,10 @@ def _remember_geometry(win, name: str) -> None:
     try:
         if int(win.winfo_width()) <= 1:
             return  # 从未渲染: 别用默认尺寸污染已保存的记忆
+        geometry = win.geometry()
     except Exception:
-        pass  # 376: Tk 窗口已销毁/未就绪 — 保留旧记忆, fail-open
-    _WINDOW_GEOMETRY[name] = win.geometry()
+        return  # Tk 窗口已销毁/未就绪时保留旧记忆。
+    _WINDOW_GEOMETRY[name] = geometry
 
 
 def apply_saved_geometry(win, name: str, fallback: str) -> None:
@@ -135,12 +164,11 @@ class _PackQueryWindow(ctk.CTkToplevel):
     ) -> None:
         super().__init__(master)
         self._pack_dir = pack_dir
+        self._query_generation = 0
         _load_memo()
         pack_label = os.path.basename(pack_dir.rstrip("/")) or "资料包查询"
         self.title(f"资料包查询 — {pack_label}")
-        remembered = _WINDOW_GEOMETRY.get("pack-query")
-        self.geometry(remembered or "760x560")
-        self.bind("<Destroy>", lambda _e: _remember_geometry(self, "pack-query"))
+        bind_geometry_memory(self, "pack-query", "760x560")
         self.configure(fg_color=BG)
         self.transient(master)
         self.grab_set()
@@ -466,11 +494,10 @@ class _PackQueryWindow(ctk.CTkToplevel):
         # CapsLock 大写态变体 (Tk 绑定大小写敏感)
         self.bind_all("<Control-P>", lambda _e: self._pinned_box.focus_set() or "break")
 
-        if prefill:
-            self.after(120, lambda: self._run(prefill_command or "doc"))
+        if prefill or prefill_command:
+            self.after(120, lambda: self._run_initial(prefill_command or "doc"))
         elif not _LAST_RESULT:
-            self.after(120, lambda: self._run("stats"))
-            self.after(120, lambda: self._run("doc"))
+            self.after(120, lambda: self._run_initial("stats"))
 
         menu = tk.Menu(self, tearoff=0)
         menu.add_command(
@@ -552,8 +579,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
         "price": "名称/四码/字段条件… 空词=完整金币字段、来源和冲突证据",
         "quest": "任务/消息词 → 标题、正文、条目与显示消息；空词=全量",
         "cmd": "指令词 → 注册/条件/动作链全文 (空词看注册清单)",
-        "text": "任意词 → 全 tsv 索引行兜底 (search 未中时最后一张网)",
-        "refs": "码 → 脚本引用分类 (给予/消耗/其他——判升级链终点)",
+        "text": "任意词 → 全 tsv 完整记录兜底；空词=全量原文",
+        "refs": "码 → 脚本引用分类与来源；空词=全部引用对象",
         "affixes": "词缀词可空=全量…  (回车查)",
         "registered": "消息词可空=全部触发消息…  (回车查)",
         "diff": "旧包目录路径…  (八类对象+完整配方对比；记忆旧包后可填表名或合成筛选)",
@@ -603,6 +630,10 @@ class _PackQueryWindow(ctk.CTkToplevel):
         else:
             self._mode_extra.set("<<none>>")
             self._mode_extra2.set(command)
+        if command == "near":
+            self._near_kind.pack(side="left", padx=(8, 0))
+        else:
+            self._near_kind.pack_forget()
         if command == "again":
             # placeholder 动态显示最近一次查询 (用户不用猜记忆里有什么)
             from .pack_query_cli import _load_last_query  # noqa: PLC0415
@@ -622,27 +653,21 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 self._keyword.configure(
                     placeholder_text=f"上次旧包: {last_against}  (回车重用, 或填新路径)"
                 )
-        if command == "near":
-            self._near_kind.pack(side="left", padx=(8, 0))
-        else:
-            self._near_kind.pack_forget()
         self._keyword.focus_set()
 
     def _code_rerun(self, prefix: str, box=None) -> None:
         """选中码以指定语义重查 (where=获取途径, drop=掉落; 对齐探针 306 直达)。"""
         box = box if box is not None else self._output
         try:
-            raw = box.get("sel.first", "sel.last").strip()
+            raw = box.get("sel.first", "sel.last")
         except tk.TclError:
             raw = ""
-        import re as _re
-
-        matches = _re.findall(r"[A-Z][0-9A-Z]{3}", raw)
-        if len(matches) != 1:
+        code = code_from_text(raw)
+        if code is None:
             return  # 多匹配拒猜测 (对齐探针 309)
         self._switch_mode(prefix)
         self._keyword.delete(0, "end")
-        self._keyword.insert(0, matches[0])
+        self._keyword.insert(0, code)
         self._run_clicked()
 
     def _near_rerun_from_box(self, box, radius: str) -> None:
@@ -687,8 +712,15 @@ class _PackQueryWindow(ctk.CTkToplevel):
     def _run_clicked(self) -> None:
         self._run(self._mode.get())
 
+    def _run_initial(self, command: str) -> None:
+        if self.winfo_exists() and self._query_generation == 0:
+            self._switch_mode(command)
+            self._run(command)
+
     def _run(self, command: str) -> None:
         global _LAST_KEYWORD, _LAST_MODE
+        self._query_generation = getattr(self, "_query_generation", 0) + 1
+        generation = self._query_generation
         _LAST_KEYWORD = self._keyword.get().strip()  # pyright: ignore[reportConstantRedefinition]
         _LAST_MODE = command  # pyright: ignore[reportConstantRedefinition]
         keyword = self._keyword.get().strip()
@@ -698,22 +730,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             if kind != "全部":
                 keyword = (keyword + " --kind " + kind).strip()
         # 免词清单 = 本窗可空词执行的模式 (affixes/registered/again/stats 等总览型全在内)
-        if keyword or command in (
-            "stats",
-            "list",
-            "buffs",
-            "skills",
-            "units",
-            "heroes",
-            "synth",
-            "quest",
-            "item",
-            "tech",
-            "price",
-            "affixes",
-            "registered",
-            "again",
-        ):
+        if keyword or command in EMPTY_QUERY_COMMANDS:
             entry = (command, keyword)
             if entry in _HISTORY:
                 _HISTORY.remove(entry)
@@ -721,9 +738,9 @@ class _PackQueryWindow(ctk.CTkToplevel):
             self._history.configure(values=[f"{c} {k}".strip() for c, k in _HISTORY])
             self._history.set(f"{command} {keyword}".strip())
         _save_memo()
-        if (
-            command in ("doc", "export", "search", "locate", "near") and not keyword
-        ) or (command == "diff" and not keyword and not self._diff_against()):
+        if (command not in EMPTY_QUERY_COMMANDS | {"diff", "near"} and not keyword) or (
+            command == "diff" and not keyword and not self._diff_against()
+        ):
             self._output.delete("1.0", "end")
             self._find_state["start"] = "1.0"
             self._output.insert(
@@ -732,6 +749,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 if command != "diff"
                 else "diff 需要旧包目录: 在关键词框填旧包路径 (新包=当前窗包)",
             )
+            self.configure(cursor="")
             return
         self._output.delete("1.0", "end")
         self._find_state["start"] = "1.0"
@@ -745,18 +763,26 @@ class _PackQueryWindow(ctk.CTkToplevel):
         as_json = self._var_json.get()
 
         def _worker() -> None:
-            result, elapsed = self._run_query(command, keyword, as_json)
+            if self._query_generation != generation:
+                return
+            try:
+                result, elapsed = self._run_query(command, keyword, as_json)
+            except Exception as exc:
+                from .presentation_safety import format_user_exception
+
+                result, elapsed = "查询失败: " + format_user_exception(exc), ""
             done.append((result, elapsed))
 
         threading.Thread(target=_worker, daemon=True).start()
 
         def _poll() -> None:
+            if not self.winfo_exists() or self._query_generation != generation:
+                return
             if done:
                 result, elapsed = done[0]
                 self._finish(result, elapsed)
                 return
-            if self.winfo_exists():
-                self.after(60, _poll)
+            self.after(60, _poll)
 
         self.after(60, _poll)
 
@@ -805,14 +831,14 @@ class _PackQueryWindow(ctk.CTkToplevel):
         )
         try:
             result = execute_pack_query(options)
+            return (
+                result.render(as_json=as_json) or "(无输出)",
+                "\n".join(result.extra_diagnostics),
+            )
         except Exception as exc:
             from .presentation_safety import format_user_exception
 
             return ("查询失败: " + format_user_exception(exc), "")
-        return (
-            result.render(as_json=as_json) or "(无输出)",
-            "\n".join(result.extra_diagnostics),
-        )
 
     def _pin_current(self) -> None:
         text = self._output.get("1.0", "end").strip()

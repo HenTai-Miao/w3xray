@@ -58,7 +58,12 @@ from .mpq_layout import (
     read_mpq_tables,
 )
 from .mpq_names import HashEntry, encoded_name_candidates, select_hash_entry
-from .mpq_storage import MPQBackingStore, open_mpq_backing
+from .mpq_storage import (
+    MPQBackingStore,
+    MPQSourceIdentity,
+    MPQStorageError,
+    open_mpq_backing,
+)
 
 _decompress_sector = decompress_mpq_sector
 _sparse_decompress = sparse_decompress
@@ -129,7 +134,27 @@ class MPQArchive:
         return self
 
     def __exit__(self, *exc):
-        self.close()
+        try:
+            if not exc or exc[0] is None:
+                self.verify_source()
+        finally:
+            self.close()
+
+    @property
+    def source_identity(self) -> MPQSourceIdentity | None:
+        return self._backing.source_identity
+
+    def verify_source(self) -> None:
+        """Prove that the original source still names this archive snapshot."""
+        self._backing.verify_source()
+
+    def require_source_identity(self, expected: MPQSourceIdentity) -> None:
+        """Bind a reopened reader to the source used by the loaded map."""
+        if self.source_identity != expected:
+            raise MPQStorageError(
+                self.path, "source identity changed since map loading"
+            )
+        self.verify_source()
 
     # ---- 头与表 ----
     def _parse_header(self):
@@ -240,6 +265,7 @@ class MPQArchive:
                     break
                 stale = self._payload_cache.pop(stale_key)
                 self._payload_cache_bytes -= len(stale)
+                total -= len(stale)
         if len(payload) <= _PAYLOAD_CACHE_BUDGET:
             self._payload_cache[cache_key] = payload
             self._payload_cache_bytes += len(payload)

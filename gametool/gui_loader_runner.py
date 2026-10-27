@@ -22,6 +22,7 @@ from .gui_loader import (
 )
 from .gui_loader_host import BackgroundLoaderHost, CampaignEntry
 from .gui_worker_registry import GuiWorkerTicket
+from .gui_map_resources import close_gui_maps
 
 
 class BackgroundLoaderMixin(BackgroundLoaderHost):
@@ -38,14 +39,14 @@ class BackgroundLoaderMixin(BackgroundLoaderHost):
         game_data_path = self.game_data_path
         author_bundle_path = self.author_bundle_path
         description_cache_path = getattr(self, "description_cache_path", None)
-        external_names = read_external_listfile(self.external_listfile_path)
+        external_listfile_path = self.external_listfile_path
         self._start_loader_job(
             status=f"正在解析 {os.path.basename(path)} …",
             build_payload=lambda: load_path_payload(
                 path,
                 load_options=options,
                 game_data_path=game_data_path,
-                external_names=external_names,
+                external_names=read_external_listfile(external_listfile_path),
                 author_bundle_path=author_bundle_path,
                 description_cache_path=description_cache_path,
             ),
@@ -63,6 +64,7 @@ class BackgroundLoaderMixin(BackgroundLoaderHost):
             ),
             error_status="切换失败",
             source_path=None,
+            borrowed_map=md,
         )
 
     def _start_campaign_load(self, index: int) -> None:
@@ -73,14 +75,14 @@ class BackgroundLoaderMixin(BackgroundLoaderHost):
         game_data_path = self.game_data_path
         author_bundle_path = self.author_bundle_path
         description_cache_path = getattr(self, "description_cache_path", None)
-        external_names = read_external_listfile(self.external_listfile_path)
+        external_listfile_path = self.external_listfile_path
         self._start_loader_job(
             status=f"正在解析战役 {camp['name']} …",
             build_payload=lambda: load_campaign_payload(
                 index,
                 path,
                 game_data_path=game_data_path,
-                external_names=external_names,
+                external_names=read_external_listfile(external_listfile_path),
                 author_bundle_path=author_bundle_path,
                 description_cache_path=description_cache_path,
             ),
@@ -95,18 +97,22 @@ class BackgroundLoaderMixin(BackgroundLoaderHost):
         build_payload: Callable[[], LoaderPayload],
         error_status: str,
         source_path: str | None,
+        borrowed_map: MapData | None = None,
     ) -> None:
         self.status.configure(text=status)
-        _ = self._start_gui_worker(
-            "loader",
-            lambda ticket: self._run_loader_job(
+
+        def work(ticket: GuiWorkerTicket) -> None:
+            self._run_loader_job(
                 ticket,
                 build_payload,
                 error_status,
                 source_path,
-            ),
-            replace=True,
-        )
+            )
+
+        if borrowed_map is None:
+            _ = self._start_gui_worker("loader", work, replace=True)
+        else:
+            _ = self._start_gui_map_worker("loader", borrowed_map, work, replace=True)
 
     def _run_loader_job(
         self,
@@ -165,11 +171,14 @@ class BackgroundLoaderMixin(BackgroundLoaderHost):
     ) -> None:
         camp = self._campaign_by_index_or_path(index, path)
         if camp is None:
+            close_gui_maps(md for _, md in views)
             return
+        self._remember_gui_maps(md for _, md in views)
         camp["loaded"] = True
         camp["views"] = views
         self._refresh_campaign_tree()
         self.status.configure(text=f"战役 {camp['name']}：{sub_map_count} 张子图")
+        self._release_unused_gui_maps()
 
     def _campaign_by_index_or_path(
         self,
@@ -188,15 +197,21 @@ class BackgroundLoaderMixin(BackgroundLoaderHost):
 
 def _discard_loader_payload(payload: LoaderPayload) -> None:
     match payload:
-        case LoadedMap(resolver=resolver):
+        case LoadedMap(
+            resolver=resolver, active=active, views=views, owns_map_data=owned
+        ):
             if resolver is not None:
                 try:
                     resolver.close()
                 except (
                     Exception
                 ):  # BROAD_EXCEPT_OK - third-party resolver close is best effort.
-                    return
-        case LoadedCampaign() | LoaderError():
+                    traceback.print_exc()
+            if owned:
+                close_gui_maps((active, *(md for _, md in views or ())))
+        case LoadedCampaign(views=views):
+            close_gui_maps(md for _, md in views)
+        case LoaderError():
             return
         case unreachable:
             assert_never(unreachable)

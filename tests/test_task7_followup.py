@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import nullcontext
+import sys
 from unittest.mock import patch
 
 from tests.test_script_sources import _MemoryArchive, _classic_wct
@@ -10,7 +11,7 @@ from gametool.api import MapData, commands_from_map, scan_commands
 from gametool.load_context import MapLoadContext
 from gametool.map_loader import _load_map_impl
 from gametool.script_string_index import build_script_string_index
-from gametool.wts import map_wts_table
+from gametool.wts import map_wts_table, parse_wts_component
 
 
 def test_map_loading_isolates_malformed_source_object_reference_state() -> None:
@@ -85,14 +86,20 @@ def test_map_wts_table_returns_empty_for_missing_legacy_text() -> None:
     assert map_wts_table(MapData("x.w3x", "x")) == {}
 
 
-def test_map_wts_table_rejects_oversized_legacy_string_id() -> None:
-    # Given: the published fallback contains an integer identifier beyond the
-    # interpreter's bounded conversion limit.
-    malformed = "STRING " + "9" * 5000 + "\n{\nvalue\n}\n"
-    md = MapData("x.w3x", "x", scripts={"war3map.wts": malformed})
+def test_map_wts_table_preserves_complete_legacy_string_id() -> None:
+    # Given: a complete encoded WTS block has a decimal ID whose spelling exceeds
+    # Python's integer text conversion quota, with no malformed schema or body.
+    text = "STRING " + "9" * 5000 + "\n{\nvalue\n}\n"
+    md = MapData("x.w3x", "x", scripts={"war3map.wts": text})
+    expected_key = 10**5000 - 1
+    quota = sys.get_int_max_str_digits()
 
-    # When / Then: malformed compatibility input degrades to no string table.
-    assert map_wts_table(md) == {}
+    # When / Then: both strict byte parsing and the legacy text fallback preserve
+    # the complete numeric identity and body without changing global limits.
+    assert parse_wts_component(text.encode("ascii")) == {expected_key: "value"}
+    assert map_wts_table(md) == {expected_key: "value"}
+    assert md.scripts["war3map.wts"] == text
+    assert sys.get_int_max_str_digits() == quota
 
 
 def test_commands_from_map_survives_malformed_legacy_wts() -> None:

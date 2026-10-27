@@ -10,6 +10,7 @@ import os
 from tkinter import filedialog
 
 from .game_data_inventory import supports_inventory
+from .map_data import MapData
 from .game_data_source import (
     discover_game_data_path,
     open_game_data_source,
@@ -22,6 +23,8 @@ _LOGGER = logging.getLogger(__name__)
 class GuiLifecycleMixin:
     """Own app-level config, open-file action, and shutdown flow."""
 
+    _guide_report_cache: tuple[MapData, str] | None = None
+
     if TYPE_CHECKING:
         import customtkinter as ctk
         import tkinter as tk
@@ -33,6 +36,7 @@ class GuiLifecycleMixin:
 
         from .gui_icon_cache import _IconResolverLike
         from .gui_icon_evidence_loader import PreparedIconResolver
+        from .gui_loader_host import CampaignEntry
         from .script_scan import ChatCommand
         from .map_data import MapData
         from .script_scan import Recipe
@@ -58,6 +62,9 @@ class GuiLifecycleMixin:
         _shutdown_current_map_gui: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _shutdown_gui_worker_host: Callable[..., Sequence[str]]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _shutdown_object_filter_runner: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _remember_gui_maps: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _sync_gui_maps: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _invalidate_current_map_pack: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _start_path_load: Callable[[str], None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         destroy: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         geometry: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
@@ -65,6 +72,7 @@ class GuiLifecycleMixin:
         mode: str  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _campaign_views: object | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _campaign_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _dir_campaigns: list[CampaignEntry]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         map_data: MapData | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         icons: _IconResolverLike | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入 (协议见 gui_icon_cache)
         _pil_icon_cache: dict[tuple[str, int], Image.Image | None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
@@ -74,15 +82,12 @@ class GuiLifecycleMixin:
         author_bundle_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
 
     def _config_path(self) -> str:
-        return os.path.join(os.path.expanduser("~"), ".w3x_extractor.json")
+        return os.environ.get("GAMEXRAY_GUI_CONFIG_PATH") or os.path.join(
+            os.path.expanduser("~"), ".w3x_extractor.json"
+        )
 
     def _save_config(self, **values) -> None:
-        cfg = {}
-        try:
-            with open(self._config_path(), "r", encoding="utf-8") as file:
-                cfg = json.load(file)
-        except OSError, json.JSONDecodeError:
-            cfg = {}
+        cfg = self._load_config()
         cfg.update(values)
         try:
             with open(self._config_path(), "w", encoding="utf-8") as file:
@@ -93,8 +98,9 @@ class GuiLifecycleMixin:
     def _load_config(self):
         try:
             with open(self._config_path(), "r", encoding="utf-8") as file:
-                return json.load(file)
-        except OSError, json.JSONDecodeError:
+                cfg = json.load(file)
+                return cfg if isinstance(cfg, dict) else {}
+        except OSError, UnicodeError, json.JSONDecodeError:
             return {}
 
     def _restore_last_dir(self) -> None:
@@ -192,6 +198,9 @@ class GuiLifecycleMixin:
             self._refresh_description_cache_state()
 
     def _on_close(self) -> None:
+        retained = self._retained_gui_maps()
+        if retained:
+            self._remember_gui_maps(retained)
         dialog = getattr(self, "_casc_browser_dialog", None)
         if dialog is not None and dialog.winfo_exists():
             dialog.close()
@@ -212,7 +221,27 @@ class GuiLifecycleMixin:
                     "failed to close icon resolver during shutdown", exc_info=True
                 )
         self._shutdown_current_map_gui()
+        self.map_data = None
+        self._campaign_views = None
+        self._dir_campaigns = []
+        self.icons = None
+        self._guide_report_cache = None
         self.destroy()
+
+    def _retained_gui_maps(self) -> tuple[MapData, ...]:
+        retained: list[MapData] = []
+        active = getattr(self, "map_data", None)
+        if active is not None:
+            retained.append(active)
+        views = getattr(self, "_campaign_views", None)
+        if isinstance(views, (list, tuple)):
+            retained.extend(md for _, md in views if isinstance(md, MapData))
+        for camp in getattr(self, "_dir_campaigns", ()):
+            retained.extend(md for _, md in camp.get("views") or ())
+        return tuple(retained)
+
+    def _release_unused_gui_maps(self) -> None:
+        self._sync_gui_maps(self._retained_gui_maps())
 
     def on_open(self) -> None:
         path = filedialog.askopenfilename(
@@ -232,18 +261,34 @@ class GuiLifecycleMixin:
         views: list[tuple[str, MapData]] | None = None,
         campaign_path: str | None = None,
     ) -> None:
+        self._remember_gui_maps((md, *(view for _, view in views or ())))
         if views:
             self._set_campaign_views(views, campaign_path)
-        else:
+        elif campaign_path is None:
             self.mode = "battle"
             self.mode_seg.set("对战图")
             self._campaign_views = None
             self._campaign_path = None
             self._populate_left()
+        else:
+            self.mode = "campaign"
+            self.mode_seg.set("战役图")
+            self._campaign_path = campaign_path
+            self._campaign_views = next(
+                (
+                    camp.get("views")
+                    for camp in self._dir_campaigns
+                    if camp["path"] == campaign_path
+                ),
+                None,
+            )
+            self._populate_left()
         self._render_map(md, commands, recipes, resolver)
 
     def _render_map(self, md, cmds, recipes, resolver) -> None:
+        self._remember_gui_maps((md,) if self.map_data is None else (self.map_data, md))
         self.map_data = md
+        self._invalidate_current_map_pack(md)
         old = self.icons
         if old is not None and old is not resolver and hasattr(old, "close"):
             try:
@@ -270,6 +315,8 @@ class GuiLifecycleMixin:
             f"{len(self.recipes)} 合成 · "
             + "  ".join(f"{category}{count}" for category, count in counts.items())
         )
+        self._guide_report_cache = None
+        self._release_unused_gui_maps()
 
 
 def _source_label(prefix: str, path: str | None) -> str:

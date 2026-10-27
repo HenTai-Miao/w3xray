@@ -7,7 +7,6 @@ master 由调用方 (App) 传入, 避开 mixin 类型不被 tkinter 接受的问
 from __future__ import annotations
 
 import tkinter as tk
-from typing import TYPE_CHECKING
 
 import customtkinter as ctk
 
@@ -20,9 +19,6 @@ from .extraction_profile import (
     save_profile,
 )
 from .theme import BG, BORDER, CARD, FONT, PANEL, SUBTLE, TEXT, TITLE_FONT
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
 
 
 class ExtractionProfileDialog(ctk.CTkToplevel):
@@ -132,6 +128,6 @@ class ExtractionProfileDialog(ctk.CTkToplevel):
         self.destroy()
 
 
-def open_extraction_profile_dialog(get_master: Callable[[], object]) -> None:
+def open_extraction_profile_dialog(master: tk.Misc) -> None:
     """入口: 由 GUI 顶层按钮调用, 传 App 自身 (tk master)。"""
-    ExtractionProfileDialog(get_master())
+    ExtractionProfileDialog(master)

@@ -17,6 +17,7 @@ from __future__ import annotations
 import math
 import struct
 import sys
+from dataclasses import dataclass
 
 from .doo_drops import flatten_drop_sets, read_count, read_drop_sets
 from .doo_models import Doodad, Unit
@@ -26,6 +27,21 @@ _DOODAD_MIN_SIZE = 50  # 空掉落表，含 serial；重制版另加 4 字节 sk
 _UNIT_MIN_SIZE = 107  # TFT：空掉落/背包/技能，randomFlag=-1。
 _ROC_UNIT_MIN_SIZE = 87  # RoC：比 TFT 少英雄三围和颜色/传送门。
 _SPECIAL_DOODAD_SIZE = 16
+
+
+@dataclass(frozen=True, slots=True)
+class PlacementParseReport[PlacementT]:
+    """Recovered placements plus the source's structural completeness issues."""
+
+    records: tuple[PlacementT, ...]
+    issues: tuple[str, ...] = ()
+
+
+def _header_issues(data: bytes) -> tuple[str, ...]:
+    version, subversion = struct.unpack_from("<ii", data, 4)
+    if (version, subversion) not in {(7, 9), (8, 11)}:
+        return (f"unsupported placement version: {version}/{subversion}",)
+    return ()
 
 
 class _Reader:
@@ -131,28 +147,37 @@ def parse_doodads(data: bytes) -> list[Doodad]:
     经典与重制版同为 version 8/sub 11，但重制版每条多一个 4 字节皮肤码，无法靠版本区分。
     故两种布局都试，主表与特殊物尾表均吻合才确认布局；都不完整则返回读得更多的部分。
     """
+    report = parse_doodads_report(data)
+    if report.issues:
+        print("[doo] war3map.doo: " + "; ".join(report.issues), file=sys.stderr)
+    return list(report.records)
+
+
+def parse_doodads_report(data: bytes) -> PlacementParseReport[Doodad]:
+    """Retain partial main-table records without losing special-tail diagnostics."""
     if len(data) < 16 or data[:4] != b"W3do":
-        return []
-    try:
-        count = struct.unpack_from("<i", data, 12)[0]
-    except struct.error:
-        return []
+        return PlacementParseReport((), ("invalid placement header",))
+    count = struct.unpack_from("<i", data, 12)[0]
     if count < 0:
-        return []
+        return PlacementParseReport((), (f"invalid placement count: {count}",))
+    issues = _header_issues(data)
     # 不预拒绝截断文件的主表 count：逐条最低长度检查会按字节终止，保留已读实例。
     best: list[Doodad] = []
     for skin in (False, True):  # 先经典后重制
         result, full = _attempt_doodads(data, count, skin)
         if full:
-            return result
+            return PlacementParseReport(tuple(result), issues)
         if len(result) > len(best):
             best = result
-    print(
-        "[doo] war3map.doo 两种布局均未完整解析，保留 %d/%d 个装饰物"
-        % (len(best), count),
-        file=sys.stderr,
+    return PlacementParseReport(
+        tuple(best),
+        (
+            *issues,
+            f"recovered {len(best)} of {count} placements; no complete classic/reforged "
+            "layout (main table or special-doodad tail is invalid/truncated "
+            "or has trailing bytes)",
+        ),
     )
-    return best
 
 
 def _read_unit(r: _Reader, skin: bool, v7: bool = False) -> Unit:
@@ -264,14 +289,20 @@ def parse_units(data: bytes) -> list[Unit]:
     经典与重制版同为 version 8/sub 11，但重制版每条多一个 4 字节皮肤码（无法靠版本区分）。
     两种布局都试，取完整读完所有 count 且恰到 EOF 的那个；否则保留读得更多的部分并告警。
     """
+    report = parse_units_report(data)
+    if report.issues:
+        print("[doo] war3mapUnits.doo: " + "; ".join(report.issues), file=sys.stderr)
+    return list(report.records)
+
+
+def parse_units_report(data: bytes) -> PlacementParseReport[Unit]:
+    """Retain recovered units and prove the chosen layout reaches exact EOF."""
     if len(data) < 16 or data[:4] != b"W3do":
-        return []
-    try:
-        count = struct.unpack_from("<i", data, 12)[0]
-    except struct.error:
-        return []
+        return PlacementParseReport((), ("invalid placement header",))
+    count = struct.unpack_from("<i", data, 12)[0]
     if count < 0:
-        return []
+        return PlacementParseReport((), (f"invalid placement count: {count}",))
+    issues = _header_issues(data)
     # 不预拒绝截断文件的主表 count：逐条最低长度检查会按字节终止，保留已读实例。
     # 版本 7 = 经典 RoC（缺英雄三围 + 自定义颜色/传送门）；版本 8 = TFT。按版本号选布局，
     # 皮肤(重制版)仍两种都试取能读完的那个。版本 7 与版本 8 都覆盖到再扩展。
@@ -281,12 +312,14 @@ def parse_units(data: bytes) -> list[Unit]:
     for skin in (False, True):  # 先经典后重制
         result, full = _attempt_units(data, count, skin, v7)
         if full:
-            return result
+            return PlacementParseReport(tuple(result), issues)
         if len(result) > len(best):
             best = result
-    print(
-        "[doo] war3mapUnits.doo 两种布局均未完整解析，保留 %d/%d 个单位"
-        % (len(best), count),
-        file=sys.stderr,
+    return PlacementParseReport(
+        tuple(best),
+        (
+            *issues,
+            f"recovered {len(best)} of {count} placements; no complete classic/reforged "
+            "layout reaches EOF (unit table is truncated or has trailing bytes)",
+        ),
     )
-    return best

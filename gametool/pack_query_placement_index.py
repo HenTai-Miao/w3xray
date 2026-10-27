@@ -54,6 +54,8 @@ def indexed_placements(
     contexts: tuple[AnalysisScriptSource, ...],
     rows: tuple[IndexedCallRow, ...],
     declared_script_type: str = "",
+    *,
+    authoritative_sources: bool = False,
 ) -> IndexedPlacements:
     """Reuse source contexts for mirrors; retain independent legacy index calls."""
     if not rows:
@@ -120,6 +122,13 @@ def indexed_placements(
             )
             continue
         source = by_name[match.sources[0]] if match.sources else None
+        if authoritative_sources and source is None:
+            diagnostics.append(
+                site.label()
+                + ": 来源原始脚本缺失或读取失败，无法验证原生绑定，未将索引补成独立确认点位；请核对脚本原始文本目录或重新导出。\n"
+                + site.evidence()
+            )
+            continue
         lua = (
             source.lua
             if source is not None

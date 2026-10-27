@@ -378,16 +378,19 @@ def test_cli_missing_near_coordinates_reaches_shared_typed_usage(
 
 def test_other_keyword_commands_keep_their_required_query(tmp_path: Path) -> None:
     with pytest.raises(queries.PackQueryCliOptionError):
-        queries.parse_pack_query_cli_options([str(tmp_path), "cmd", "--json"])
+        queries.parse_pack_query_cli_options([str(tmp_path), "recipe", "--json"])
+    listing = queries.parse_pack_query_cli_options([str(tmp_path), "cmd", "--json"])
+    assert listing.command == "cmd" and listing.query == "" and listing.as_json
 
 
 def test_nonspatial_json_does_not_gain_spatial_status_fields(tmp_path: Path) -> None:
     _pack(tmp_path, _KNOWN[0])
     result = queries.execute_pack_query(PackQueryCliOptions(str(tmp_path), "stats", ""))
     data = json.loads(result.render(as_json=True))
+    # Shared request validation is distinct from spatial result status.
+    assert data["input_error"] is False
     assert not {
         "spatial_diagnostics",
         "has_matches",
-        "input_error",
         "checked_packs",
     }.intersection(data)

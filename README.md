@@ -12,23 +12,37 @@ GUI触发器、场景放置、触发指令、合成配方、孤立对象、分�
 
 > 用途：研究地图、学习地图制作。不含改存档 / 过反作弊 / 开图等作弊功能。
 
+## 0.6.1 使用入口
+
+日常使用直接运行 Windows 发行目录里的 `GameXRay 游戏档案透视器.exe`，保留同目录的
+`_internal` 文件夹。无需安装 Python，也无需先运行测试或开发工具。
+
+1. 点击「打开地图/战役」，选择 `.w3x`、`.w3m` 或 `.w3n`。
+2. 在对象编辑器、场景放置、掉落/获取等页查看内容；战役可切换关卡。
+3. 点击「资料包查询」查询物品、技能、商店、合成、任务、获取位置和坐标附近的内容。
+4. 需要保存时导出到新的空目录。命令行也遵守这一规则，避免不同地图的旧文件混入新结果。
+
+源码运行统一使用 `uv run gamexray`，或 `uv run python -m gametool`；原来的
+`uv run main.py` 仍可用。各模式均支持 `--help`，总览运行 `uv run gamexray --help`。
+完整使用步骤、命令示例和验收范围见 [0.6.1 使用与验收说明](docs/usable-release-0.6.1.md)。
+
 ## 直接用（GitHub Releases）
 
 Windows x64 同时提供：
 
-- `gamexray-v0.6.0-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
-- `gamexray-v0.6.0-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
+- `gamexray-v0.6.1-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
+- `gamexray-v0.6.1-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
 
 两者功能相同；遇到杀软误报或启动问题时优先使用 ZIP 版。
 
 macOS 提供两个未签名、未公证的 onedir ZIP，请按 Mac 处理器选择并完整解压：
 
-- `gamexray-v0.6.0-macos-arm64.zip`：Apple Silicon（M1/M2/M3/M4/M5）。
-- `gamexray-v0.6.0-macos-x64.zip`：Intel Mac。
+- `gamexray-v0.6.1-macos-arm64.zip`：Apple Silicon（M1/M2/M3/M4/M5）。
+- `gamexray-v0.6.1-macos-x64.zip`：Intel Mac。
 
 Linux 提供：
 
-- `gamexray-v0.6.0-linux-x64.tar.gz`：Linux x86-64，解压后运行 `./GameXRay 游戏档案透视器/GameXRay 游戏档案透视器`。
+- `gamexray-v0.6.1-linux-x64.tar.gz`：Linux x86-64，解压后运行 `./GameXRay 游戏档案透视器/GameXRay 游戏档案透视器`。
 
 macOS/Linux 包支持地图与战役的静态提取；Windows 专用的 CascLib 游戏客户端原生后端不包含在这两类包中。macOS 首次运行可能出现 Gatekeeper 未验证开发者提示。
 
@@ -47,14 +61,15 @@ uv run main.py batch <地图目录> --output <新输出目录> --game-data <客�
 uv run gamexray-test             # 运行测试（Windows 下避开 pytest.exe trampoline）
 ```
 
-## Schema 5 批量证据与完整性命令
+## Schema 6 批量证据与完整性命令
 
-schema 5 / extraction revision 5 使用显式输入，不搜索或改写旧结果。典型迁移、批处理和
+schema 6 使用显式输入，不搜索或改写旧结果。提取修订号随输出语义更新，旧结果保留，
+复用时校验其依赖。典型迁移、批处理和
 前后完整性检查命令为：
 
 ```bash
 uv run main.py description-cache migrate --legacy-output <schema-1-root> --legacy-cache <schema-2-cache.tsv> --output <owned-cache-root>
-uv run main.py batch <maps-root> --output <v5-root> --game-data <client-or-trusted-icon-root> --description-cache <owned-cache-root>
+uv run main.py batch <maps-root> --output <v6-root> --game-data <client-or-trusted-icon-root> --description-cache <owned-cache-root>
 uv run main.py integrity snapshot --root maps=<maps-root> --root legacy-v1=<root> --root legacy-v2=<root> --root legacy-v4=<root> --output <before.json>
 uv run main.py integrity verify --snapshot <before.json>
 uv run main.py integrity retained-cache --active-root <owned-cache-root> --output <retained-cache-report.json>

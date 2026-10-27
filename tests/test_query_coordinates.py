@@ -127,9 +127,7 @@ def test_probe_rerun_uses_annotation_instead_of_code_digits() -> None:
     assert calls == ["near 1e-7 -2e3 100"]
 
 
-def test_guide_rerun_uses_shared_precise_coordinate_selection(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_guide_rerun_uses_shared_precise_coordinate_selection() -> None:
     from gametool import gui_topbar
 
     calls: list[str] = []
@@ -137,8 +135,7 @@ def test_guide_rerun_uses_shared_precise_coordinate_selection(
     def opened(*_args: object, **kwargs: object) -> None:
         calls.append(str(kwargs["prefill"]))
 
-    monkeypatch.setattr(gui_topbar, "open_pack_query_dialog", opened)
-    app = SimpleNamespace(on_export_pack=lambda: None)
+    app = SimpleNamespace(on_pack_query=opened)
     gui_topbar._near_selected_coords(
         app, _Box("单位 [n123] ×8 @(1e-7,-2e3) 距50"), "100"
     )
@@ -155,7 +152,6 @@ def test_guide_rerun_uses_shared_precise_coordinate_selection(
 )
 def test_ambiguous_handoff_preserves_input_and_never_queries_any_gui_surface(
     raw: str,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from gametool.gui_pack_query import _PackQueryWindow
     from gametool.gui_live_probe import LiveProbeWindow
@@ -180,13 +176,10 @@ def test_ambiguous_handoff_preserves_input_and_never_queries_any_gui_surface(
     LiveProbeWindow._near_rerun_selected(
         cast(LiveProbeWindow, cast(object, probe)), "100"
     )
-    monkeypatch.setattr(
-        gui_topbar,
-        "open_pack_query_dialog",
-        lambda *_args, **_kwargs: calls.append("open"),
-    )
     gui_topbar._near_selected_coords(
-        SimpleNamespace(on_export_pack=lambda: None), _Box(raw), "100"
+        SimpleNamespace(on_pack_query=lambda **_kwargs: calls.append("open")),
+        _Box(raw),
+        "100",
     )
     assert entry.text == "preserved" and not calls
 

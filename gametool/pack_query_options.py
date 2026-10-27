@@ -5,6 +5,30 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
+EMPTY_QUERY_COMMANDS = frozenset(
+    {
+        "affixes",
+        "again",
+        "registered",
+        "list",
+        "buffs",
+        "heroes",
+        "stats",
+        "synth",
+        "skills",
+        "units",
+        "quest",
+        "item",
+        "tech",
+        "price",
+        "cmd",
+        "shop",
+        "text",
+        "refs",
+    }
+)
+
+
 def query_limit_error(limit: object) -> str:
     """Validate the caller's explicit record count without any numeric ceiling."""
     return (

@@ -8,7 +8,9 @@ from pathlib import Path
 import sys
 from typing import override
 
+from .casc_browser import casc_export_relative_name
 from .casc_inventory import write_casc_inventory
+from .casc_source import CascUnsupportedError
 from .game_data_inventory import (
     GameDataInventorySource,
     GameDataInventoryView,
@@ -35,7 +37,7 @@ def run_casc_cli(argv: tuple[str, ...]) -> int:
         if args.command == "inventory":
             return _run_inventory(args)
         return _run_extract(args)
-    except (OSError, ValueError) as exc:
+    except (OSError, ValueError, CascUnsupportedError) as exc:
         print(f"CASC 操作失败：{type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
 
@@ -85,7 +87,8 @@ def _run_inventory(args: argparse.Namespace) -> int:
 
 
 def _run_extract(args: argparse.Namespace) -> int:
-    relative = safe_relative_path(args.entry)
+    export_name = casc_export_relative_name(args.entry)
+    relative = safe_relative_path(export_name) if export_name is not None else None
     if relative is None:
         raise CascCliError("unsafe CASC entry name")
     relative_name = (

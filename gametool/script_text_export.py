@@ -7,6 +7,7 @@ import re
 from typing import TYPE_CHECKING, Final
 
 from .script_sources import analysis_script_texts
+from .script_string_references import trigstr_reference_id
 from .wts import map_wts_table
 
 if TYPE_CHECKING:
@@ -34,7 +35,7 @@ def resolve_trigstr_literals(text: str, table: dict[int, str]) -> str:
     """Resolve quoted TRIGSTR_N literals while preserving unresolved tokens."""
 
     def replace(match: re.Match[str]) -> str:
-        sid = int(match.group(1))
+        sid = trigstr_reference_id(match.group(1))
         value = table.get(sid)
         if value is None:
             return match.group(0)

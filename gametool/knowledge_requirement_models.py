@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from .external_listfile import ExternalListfileReport
 
 if TYPE_CHECKING:
+    from .extraction_profile import ExtractionProfile
     from .knowledge_results import KnowledgeWriteReport
 
 
@@ -29,3 +30,4 @@ class ExtractionCapabilities:
     archive_diagnosis_kind: str = ""
     write_report: KnowledgeWriteReport | None = None
     game_data_inventory_view: str = ""
+    profile: ExtractionProfile | None = None

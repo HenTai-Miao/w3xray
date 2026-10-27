@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import tempfile
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, cast
 
@@ -43,6 +44,8 @@ from .presentation_safety import single_line_text
 from .placement_identity import PlacementObjectIndex
 from .item_relation_field_variants import relation_field_variants, split_relation_codes
 from .item_relation_models import ItemRelationKind
+from .safe_output import write_chunks_safely
+from .safe_output_models import SafeWriteStatus
 
 # 点位 = (名称, 世界X, 世界Y)
 Mark = tuple[str, float, float]
@@ -375,7 +378,23 @@ def render_marks(
             (width + legend_pad, cursor_y), line, fill=(150, 150, 150), font=small
         )
         cursor_y += 26
-    canvas.save(out_path)
+    image_format = Image.registered_extensions().get(
+        os.path.splitext(out_path)[1].lower()
+    )
+    if image_format is None:
+        raise GuideMinimapError("小地图标注图输出需要支持的图片扩展名，例如 .png")
+    # 编码与发布分别完成，编码失败或磁盘写入失败不能破坏已有标注图。
+    with tempfile.TemporaryFile() as encoded:
+        canvas.save(encoded, format=image_format)
+        encoded.seek(0)
+        absolute = os.path.abspath(out_path)
+        result = write_chunks_safely(
+            os.path.dirname(absolute),
+            os.path.basename(absolute),
+            iter(lambda: encoded.read(1024 * 1024), b""),
+        )
+    if result.status is not SafeWriteStatus.WRITTEN:
+        raise GuideMinimapError(result.error or result.status.value)
 
 
 def write_guide_minimap(

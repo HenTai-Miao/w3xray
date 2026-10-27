@@ -115,7 +115,17 @@ def run_guide_cli(options: GuideCliOptions) -> int:
     """加载地图并打印攻略速查；缓存命中时跳过解析；失败返回 2。"""
     configure_cli_output()
     # 首次分析一张大图时物化是主要开销；默认吃满可用核（用户可显式覆盖）。
-    os.environ.setdefault("GAMEXRAY_MATERIALIZE_WORKERS", str(os.cpu_count() or 1))
+    added_worker_setting = "GAMEXRAY_MATERIALIZE_WORKERS" not in os.environ
+    if added_worker_setting:
+        os.environ["GAMEXRAY_MATERIALIZE_WORKERS"] = str(os.cpu_count() or 1)
+    try:
+        return _run_guide_cli(options)
+    finally:
+        if added_worker_setting:
+            os.environ.pop("GAMEXRAY_MATERIALIZE_WORKERS", None)
+
+
+def _run_guide_cli(options: GuideCliOptions) -> int:
     cache_path = report_cache_path(options.map_path)
     # --minimap-marks 需要完整 MapData (底图/对象表/w3i), 有它就不走缓存早退。
     if not options.refresh and options.minimap_marks is None:
@@ -131,33 +141,43 @@ def run_guide_cli(options: GuideCliOptions) -> int:
         diagnosis = diagnose_archive_open(options.map_path, exc)
         print(f"无法解析地图：{diagnosis.message}", file=sys.stderr)
         return 2
-    # 缓存永远存完整报告，避免 --section 查询把残缺结果留给后续全量查询。
-    full_report = format_guide_report(map_data, None)
-    store_cached_report(cache_path, full_report)
-    _print_report_lines(full_report, options.section, options.map_path)
-    if options.minimap_marks is not None:
-        requested = options.minimap_marks
-        stem = os.path.splitext(os.path.basename(options.map_path))[0]
-        extra_json: str | None = None
-        if requested.lower().endswith(".json"):
-            extra_json = requested
-            out_path = stem + "-minimap.png"
-        elif requested:
-            out_path = requested
-        else:
-            out_path = stem + "-minimap.png"
+    try:
         try:
-            from .guide_minimap import write_guide_minimap
+            # 缓存永远存完整报告，避免 --section 查询把残缺结果留给后续全量查询。
+            full_report = format_guide_report(map_data, None)
+            store_cached_report(cache_path, full_report)
+            _print_report_lines(full_report, options.section, options.map_path)
+            if options.minimap_marks is not None:
+                requested = options.minimap_marks
+                stem = os.path.splitext(os.path.basename(options.map_path))[0]
+                extra_json: str | None = None
+                if requested.lower().endswith(".json"):
+                    extra_json = requested
+                    out_path = stem + "-minimap.png"
+                elif requested:
+                    out_path = requested
+                else:
+                    out_path = stem + "-minimap.png"
+                try:
+                    from .guide_minimap import write_guide_minimap
 
-            for line in write_guide_minimap(map_data, out_path, extra_json):
-                print(single_line_text(line))
-        except Exception as exc:
-            print(f"小地图标注图生成失败：{exc}", file=sys.stderr)
-            hint = _minimap_error_hint(options.map_path)
-            if hint:
-                print(hint, file=sys.stderr)
-            return 2
-    return 0
+                    for line in write_guide_minimap(map_data, out_path, extra_json):
+                        print(single_line_text(line))
+                except Exception as exc:
+                    print(
+                        f"小地图标注图生成失败：{single_line_text(str(exc))}",
+                        file=sys.stderr,
+                    )
+                    hint = _minimap_error_hint(options.map_path)
+                    if hint:
+                        print(hint, file=sys.stderr)
+                    return 2
+            return 0
+        finally:
+            map_data.close()
+    except Exception as exc:
+        print(f"攻略生成失败：{single_line_text(str(exc))}", file=sys.stderr)
+        return 2
 
 
 def _minimap_error_hint(map_path: str) -> str:

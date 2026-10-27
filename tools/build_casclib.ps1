@@ -1,3 +1,7 @@
+param(
+    [string]$EvidencePath
+)
+
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
@@ -10,6 +14,10 @@ $TempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("gamexray-casclib-" + [
 $ArchivePath = Join-Path $TempRoot "CascLib.tar.gz"
 $SourceDir = Join-Path $TempRoot "CascLib-$Commit"
 $BuildDir = Join-Path $TempRoot "build-vs2022-x64"
+if (-not $EvidencePath) {
+    $EvidencePath = Join-Path ([System.IO.Path]::GetTempPath()) ("gamexray-casclib-build-" + [Guid]::NewGuid().ToString("N") + ".json")
+}
+$EvidencePath = [System.IO.Path]::GetFullPath($EvidencePath)
 
 # 优先用 PATH 上的 cmake；缺失时探测 Visual Studio 自带的 CMake
 # （<版本>\<edition>\Common7\... 布局，VS2019/2022/18 通用），
@@ -33,7 +41,25 @@ try {
     # Windows PowerShell 5.1 的 HttpWebRequest 默认不含 TLS 1.2，GitHub 会直接断连。
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     New-Item -ItemType Directory -Path $TempRoot | Out-Null
-    Invoke-WebRequest -Uri $SourceUrl -OutFile $ArchivePath -UseBasicParsing
+    # Windows PowerShell 的 WebRequest 在部分系统代理下会长时间卡住。
+    # 优先使用系统 curl，并在未显式配置环境代理时继承 Windows 的代理选择。
+    $CurlLookup = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if ($null -ne $CurlLookup) {
+        $DownloadArgs = @("--silent", "--show-error", "--fail", "--location", "--connect-timeout", "30", "--max-time", "180")
+        if (-not $env:HTTPS_PROXY -and -not $env:ALL_PROXY) {
+            $DownloadUri = [System.Uri]$SourceUrl
+            $SystemProxy = [System.Net.WebRequest]::DefaultWebProxy
+            if ($null -ne $SystemProxy -and -not $SystemProxy.IsBypassed($DownloadUri)) {
+                $ProxyUri = $SystemProxy.GetProxy($DownloadUri)
+                $DownloadArgs += @("--proxy", $ProxyUri.AbsoluteUri)
+            }
+        }
+        & $CurlLookup.Source @DownloadArgs --output $ArchivePath $SourceUrl
+        if ($LASTEXITCODE -ne 0) { throw "Failed to download the pinned CascLib source archive" }
+    }
+    else {
+        Invoke-WebRequest -Uri $SourceUrl -OutFile $ArchivePath -UseBasicParsing -TimeoutSec 180
+    }
 
     $ActualSourceHash = (Get-FileHash -Algorithm SHA256 -Path $ArchivePath).Hash.ToLowerInvariant()
     if ($ActualSourceHash -ne $SourceSha256) {
@@ -74,11 +100,48 @@ try {
     $DllHash = (Get-FileHash -Algorithm SHA256 -Path $OutputDll).Hash.ToLowerInvariant()
     Set-Content -LiteralPath (Join-Path $OutputDir "CascLib.dll.sha256") `
         -Value $DllHash -Encoding ascii -NoNewline
+
+    # 保留本次本机构建的完整身份；不把临时源码目录的存在误称为出处证明。
+    $CmakeVersion = (& $CmakeCommand --version | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0) { throw "Unable to record CMake version" }
+    $CacheLines = Get-Content -LiteralPath (Join-Path $BuildDir "CMakeCache.txt")
+    $Toolchain = [ordered]@{}
+    foreach ($Line in $CacheLines) {
+        if ($Line -match '^(CMAKE_(?:GENERATOR|GENERATOR_INSTANCE|GENERATOR_PLATFORM|GENERATOR_TOOLSET|C_COMPILER|CXX_COMPILER|VS_MSBUILD_COMMAND|VS_PLATFORM_TOOLSET|VS_WINDOWS_TARGET_PLATFORM_VERSION)):[^=]+=(.*)$') {
+            $Toolchain[$Matches[1]] = $Matches[2]
+        }
+    }
+    $Evidence = [ordered]@{
+        schema_version = 1
+        built_at_utc = [DateTime]::UtcNow.ToString("o")
+        source_commit = $Commit
+        source_url = $SourceUrl
+        source_sha256 = $ActualSourceHash
+        architecture = "x64"
+        configuration = "Release"
+        cmake_executable = $CmakeCommand
+        cmake_version = $CmakeVersion
+        toolchain = $Toolchain
+        options = @("CASC_UNICODE=ON", "CASC_BUILD_SHARED_LIB=ON", "CASC_BUILD_STATIC_LIB=OFF", "CASC_BUILD_TESTS=OFF")
+        dll_path = $OutputDll
+        dll_size = (Get-Item -LiteralPath $OutputDll).Length
+        dll_sha256 = $DllHash
+    }
+    $EvidenceParent = Split-Path -Parent $EvidencePath
+    New-Item -ItemType Directory -Path $EvidenceParent -Force | Out-Null
+    [System.IO.File]::WriteAllText($EvidencePath, ($Evidence | ConvertTo-Json -Depth 5), [System.Text.UTF8Encoding]::new($false))
     Write-Host "Built $OutputDll"
     Write-Host "SHA256 $DllHash"
+    Write-Host "Build evidence $EvidencePath"
 }
 finally {
     if (Test-Path -LiteralPath $TempRoot) {
+        $ResolvedTempRoot = (Resolve-Path -LiteralPath $TempRoot).Path
+        $ResolvedTempParent = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd('\') + '\'
+        if (-not $ResolvedTempRoot.StartsWith($ResolvedTempParent, [System.StringComparison]::OrdinalIgnoreCase) -or
+            -not (Split-Path -Leaf $ResolvedTempRoot).StartsWith("gamexray-casclib-", [System.StringComparison]::Ordinal)) {
+            throw "Refusing to remove an unexpected CascLib temporary root: $ResolvedTempRoot"
+        }
         Remove-Item -LiteralPath $TempRoot -Recurse -Force
     }
 }

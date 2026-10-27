@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from .query_coordinates import coordinates_from_text
+from .query_object_codes import code_from_text
 
 from collections.abc import Callable
 import os
@@ -27,9 +28,11 @@ class LiveProbeWindow(ctk.CTkToplevel):
         master,
         pack_dir: str | None,
         query_callback: "Callable[[str], None] | None" = None,
+        pack_dir_provider: Callable[[], str | None] | None = None,
     ) -> None:
         super().__init__(master)
         self._pack_dir = pack_dir
+        self._pack_dir_provider = pack_dir_provider
         self._query_callback = query_callback
         pack_name = pathlib.Path(pack_dir).name if pack_dir else ""
         self.title(
@@ -281,7 +284,11 @@ class LiveProbeWindow(ctk.CTkToplevel):
         self._output.insert("1.0", "探针中 … (读内存 + 自动定位资料包)")
         self._output.configure(state="disabled")
 
-        pack_dir = self._pack_dir
+        pack_dir = (
+            self._pack_dir_provider()
+            if self._pack_dir_provider is not None
+            else self._pack_dir
+        )
         want_players = self._var_players.get()
         want_all = self._var_all_units.get()
         want_resources = self._var_resources.get()
@@ -412,25 +419,22 @@ class LiveProbeWindow(ctk.CTkToplevel):
     def _extract_code(self) -> str:
         """取输出区选中文本 (退剪贴板) 的四码, 无则空串。"""
         try:
-            code = self._output.get("sel.first", "sel.last").strip()
+            code = self._output.get("sel.first", "sel.last")
         except tk.TclError:
             code = ""
         if not code:
             try:
-                code = self.clipboard_get().strip()
+                code = self.clipboard_get()
             except Exception:
                 return ""
-        # 四码或含四码的片段都行: 提取前一个 [A-Z][0-9A-Z]{3} 形态
-        import re
-
-        matches = re.findall(r"[A-Z][0-9A-Z]{3}", code)
-        if not matches:
-            return ""
-        if len(matches) > 1:
+        parsed = code_from_text(code)
+        if parsed is None:
             # 全选/长选区含多个码 — 猜一个会误导 (JSON 尾部首个码是随机条目)
-            self._copy_hint.configure(text="选区含多个码——请精确选中一个")
+            self._copy_hint.configure(
+                text="选区含多个码或未明确标注四码——请精确选中一个"
+            )
             return ""
-        return matches[0]
+        return parsed
 
     def _query_selected_code(self) -> None:
         """取选中/剪贴板四码, 交给包查询窗 doc 模式。"""
@@ -485,7 +489,11 @@ def open_live_probe_dialog(
     master,
     pack_dir: str | None = None,
     query_callback: "Callable[[str], None] | None" = None,
+    pack_dir_provider: Callable[[], str | None] | None = None,
 ) -> None:
-    if pack_dir is None:
-        pack_dir = os.environ.get("GAMEXRAY_LAST_PACK", "") or None
-    LiveProbeWindow(master, pack_dir, query_callback=query_callback)
+    LiveProbeWindow(
+        master,
+        pack_dir,
+        query_callback=query_callback,
+        pack_dir_provider=pack_dir_provider,
+    )

@@ -46,7 +46,7 @@ CATEGORY_SKILLS: Final = "skills"  # 技能/增益表
 CATEGORY_TRIGGERS: Final = "triggers"  # 触发器/ECA/聊天指令/脚本机制
 CATEGORY_RELATIONS: Final = "relations"  # 掉落与获取/装备技能关系
 CATEGORY_WORLD: Final = "world"  # 区域/镜头/声音/地形
-CATEGORY_PREPLACED: Final = "preplaced"  # 预放置单位/装饰物
+CATEGORY_PREPLACED: Final = "preplaced"  # 预放置装饰物；单位由 units 控制
 CATEGORY_SCRIPTS: Final = "scripts"  # 脚本可读文本/脚本索引
 CATEGORY_RESOURCES: Final = "resources"  # 图标/模型等资源导出
 CATEGORY_BASIC: Final = "basic"  # 地图信息/清单/审计等基础报告
@@ -72,7 +72,7 @@ CATEGORY_LABELS: Final = {
     CATEGORY_TRIGGERS: "触发器与指令（ECA/聊天指令/机制线索）",
     CATEGORY_RELATIONS: "掉落与获取/装备关系",
     CATEGORY_WORLD: "世界数据（区域/镜头/声音/地形）",
-    CATEGORY_PREPLACED: "预放置（单位/装饰物坐标）",
+    CATEGORY_PREPLACED: "预放置（装饰物坐标）",
     CATEGORY_SCRIPTS: "脚本文本（可读脚本与索引）",
     CATEGORY_RESOURCES: "资源导出（图标等）",
     CATEGORY_BASIC: "基础报告（地图信息/清单/审计）",

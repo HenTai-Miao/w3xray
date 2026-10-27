@@ -110,7 +110,7 @@ class _Reader:
     def cstr(self) -> str:
         end = self.d.find(b"\x00", self.p)
         if end < 0:
-            end = len(self.d)
+            raise IndexError("unterminated W3I string")
         b = self.d[self.p : end]
         self.p = end + 1
         return decode_warcraft_string(b)

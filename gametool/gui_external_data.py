@@ -42,6 +42,7 @@ class ExternalDataToolsMixin:
         _reload_active_source: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _save_config: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _start_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _start_gui_map_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
 
     author_bundle_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
     description_cache_path: str | None  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
@@ -175,4 +176,4 @@ class ExternalDataToolsMixin:
                     lambda: messagebox.showerror("存档分析失败", message),
                 )
 
-        _ = self._start_gui_worker("real-save-analysis", work, replace=True)
+        _ = self._start_gui_map_worker("real-save-analysis", md, work, replace=True)

@@ -183,7 +183,7 @@ def test_code_rerun_menu_methods() -> None:
     from gametool.gui_pack_query import _PackQueryWindow
 
     src = inspect.getsource(_PackQueryWindow._code_rerun)
-    assert "len(matches) != 1" in src  # 多匹配拒猜测
+    assert "code_from_text(raw)" in src  # 多匹配拒猜测与四字节身份共用
     assert "self._switch_mode(prefix)" in src  # 统一切换入口
     assert "box if box is not None" in src  # 收藏区同款 (box 参数化)
 
@@ -193,8 +193,10 @@ def test_free_word_list_complete() -> None:
     import inspect
 
     from gametool.gui_pack_query import _PackQueryWindow
+    from gametool.pack_query_options import EMPTY_QUERY_COMMANDS
 
     src = inspect.getsource(_PackQueryWindow._run)
+    assert "EMPTY_QUERY_COMMANDS" in src
     for mode in (
         "stats",
         "list",
@@ -207,7 +209,7 @@ def test_free_word_list_complete() -> None:
         "registered",
         "again",
     ):
-        assert f'"{mode}",' in src, mode
+        assert mode in EMPTY_QUERY_COMMANDS, mode
 
 
 def test_history_full_retention() -> None:

@@ -119,6 +119,8 @@ def _parse_one_object(
         if version >= 3:
             _ = r.u32()  # setsFlag 位掩码，只读提取无需用到
         num_mods = r.i32()
+        if num_mods < 0:
+            raise ValueError(f"negative modification count {num_mods} @ {r.p - 4}")
         for _ in range(num_mods):
             field_id = r.tag()
             var_type = r.i32()

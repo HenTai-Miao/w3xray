@@ -49,10 +49,12 @@ from .object_text_exports import format_object_text_tsv
 from .save_analysis import build_save_report, format_save_report_tsv
 from .knowledge_script_exports import (
     format_script_index,
+    write_original_scripts,
     write_readable_scripts,
 )
 from .knowledge_script_index_exports import write_script_index_exports
 from .script_mechanics import format_map_script_mechanism_report
+from .script_string_references import trigstr_reference_id
 from .trigger_exports import (
     format_trigger_eca_tsv,
     format_trigger_tree_tsv,
@@ -96,6 +98,7 @@ def write_knowledge_pack_contents(
         external_listfile=md.external_listfile,
         archive_diagnosis_kind=completeness.archive_diagnosis_kind,
         game_data_inventory_view=inventory_view,
+        profile=effective_profile,
     )
     count = 0
     if _allowed(gate, adapter, "basic"):
@@ -158,7 +161,9 @@ def write_knowledge_pack_contents(
             format_relation_completeness(md.item_relations),
         )
     ui_report = build_ui_text_report(md)
-    eca_wts = {int(item.trigstr[8:]): item.text for item in ui_report.strings}
+    eca_wts = {
+        trigstr_reference_id(item.trigstr[8:]): item.text for item in ui_report.strings
+    }
     eca_object_names = {
         code: obj.name for code, obj in md.obj_index.items() if obj.name
     }
@@ -225,13 +230,14 @@ def write_knowledge_pack_contents(
         count += write_text(out_dir, "世界镜头.tsv", format_cameras_tsv(md.cameras))
     if _allowed(gate, adapter, "world"):
         count += write_text(out_dir, "世界声音.tsv", format_sounds_tsv(md.sounds))
-    if _allowed(gate, adapter, "preplaced"):
+    if _allowed(gate, adapter, "units"):
         count += write_text(out_dir, "预放置单位.tsv", format_preplaced_units_tsv(md))
     if _allowed(gate, adapter, "preplaced"):
         count += write_text(
             out_dir, "预放置装饰物.tsv", format_preplaced_doodads_tsv(md)
         )
     if _allowed(gate, adapter, "scripts"):
+        count += write_original_scripts(md, os.path.join(out_dir, "脚本原始文本"))
         count += write_readable_scripts(md, os.path.join(out_dir, "脚本可读文本"))
     return count, capabilities
 

@@ -16,6 +16,17 @@ def write_readable_scripts(md: MapData, out_dir: str) -> int:
     return write_script_exports(build_readable_script_exports(md), out_dir)
 
 
+def write_original_scripts(md: MapData, out_dir: str) -> int:
+    """Retain the same source texts and character offsets used by script indexes."""
+    return write_script_exports(
+        (
+            ReadableScriptExport(source, text)
+            for source, text in analysis_script_texts(md)
+        ),
+        out_dir,
+    )
+
+
 def write_script_exports(
     scripts: Iterable[ReadableScriptExport],
     out_dir: str,

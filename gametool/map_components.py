@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import struct
 from collections.abc import Mapping
 
 from .base_names import BASE_NAMES, BASE_NAMES_EN
@@ -172,7 +171,7 @@ def _add_preplaced(md: MapData, archive: MapArchiveReader) -> None:
     对象定义（w3u/w3t…）只说"有哪些"，.doo 才说"摆在哪、归谁、初始多少血/金"。
     单条记录损坏不拖垮整图（doo.parse_* 内部已逐条容错）。
     """
-    from .doo import parse_doodads, parse_units
+    from .doo import parse_doodads_report, parse_units_report
 
     if archive.has_file("war3map.doo"):
         payload = read_component(
@@ -183,9 +182,9 @@ def _add_preplaced(md: MapData, archive: MapArchiveReader) -> None:
             stage="read",
         )
         if payload is not None:
-            md.doodads = parse_doodads(payload)
-            issue = _placement_parse_issue(payload, len(md.doodads))
-            if issue is not None:
+            doodad_report = parse_doodads_report(payload)
+            md.doodads = list(doodad_report.records)
+            for issue in doodad_report.issues:
                 record_component_parse_issue(md, "preplaced", "war3map.doo", issue)
     if archive.has_file("war3mapUnits.doo"):
         payload = read_component(
@@ -196,21 +195,7 @@ def _add_preplaced(md: MapData, archive: MapArchiveReader) -> None:
             stage="read",
         )
         if payload is not None:
-            md.units = parse_units(payload)
-            issue = _placement_parse_issue(payload, len(md.units))
-            if issue is not None:
+            unit_report = parse_units_report(payload)
+            md.units = list(unit_report.records)
+            for issue in unit_report.issues:
                 record_component_parse_issue(md, "preplaced", "war3mapUnits.doo", issue)
-
-
-def _placement_parse_issue(data: bytes, recovered: int) -> str | None:
-    if len(data) < 16 or data[:4] != b"W3do":
-        return "invalid placement header"
-    version, subversion = struct.unpack_from("<ii", data, 4)
-    if (version, subversion) not in {(7, 9), (8, 11)}:
-        return f"unsupported placement version: {version}/{subversion}"
-    declared = struct.unpack_from("<i", data, 12)[0]
-    if declared < 0 or declared > len(data):
-        return f"invalid placement count: {declared}"
-    if recovered != declared:
-        return f"recovered {recovered} of {declared} placements"
-    return None

@@ -119,6 +119,11 @@ def _read_sectors(
         )
         if len(sector) < expected:
             sector = decompress_mpq_block(sector, expected, block.flags)
+        if len(sector) != expected:
+            raise MPQBlockError(
+                f"MPQ sector {index} decoded size {len(sector)} "
+                f"does not match declared size {expected}"
+            )
         out.extend(sector)
     return bytes(out[: block.file_size])
 
@@ -146,6 +151,11 @@ def read_mpq_block(
         buffer = _decrypt(raw, resolved_key) if resolved_key is not None else raw
         if compressed and block.comp_size < block.file_size:
             buffer = decompress_mpq_block(buffer, block.file_size, block.flags)
+        if len(buffer) < block.file_size:
+            raise MPQBlockError(
+                f"MPQ decoded size {len(buffer)} is shorter than "
+                f"declared file size {block.file_size}"
+            )
         return buffer[: block.file_size]
     if not compressed:
         return _read_uncompressed(storage, block, raw, resolved_key)

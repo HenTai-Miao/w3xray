@@ -14,6 +14,7 @@ from .presentation_safety import tsv_cell as _tsv
 from .resources import RESOURCE_EXTS
 from .save_api_catalog import save_api_info
 from .script_lexing import script_literals
+from .script_string_references import trigstr_reference_id
 from .script_scopes import script_structure, source_line_starts
 from .script_function_index import (
     ScriptFunctionLookup,
@@ -101,7 +102,7 @@ def format_script_string_index_tsv(index: ScriptStringIndex) -> str:
 def _entries_for_script(
     source: str,
     text: str,
-    trigstr_table: dict[str, str],
+    trigstr_table: dict[int, str],
     functions: ScriptFunctionLookup,
     *,
     lua: bool | None = None,
@@ -192,13 +193,12 @@ def _looks_like_resource_path(value: str) -> bool:
     return ext in RESOURCE_EXTS
 
 
-def _resolve_string(value: str, trigstr_table: dict[str, str]) -> str:
+def _resolve_string(value: str, trigstr_table: dict[int, str]) -> str:
     match = _TRIGSTR_RE.fullmatch(value)
     if match is None:
         return ""
-    return trigstr_table.get(f"TRIGSTR_{int(match.group(1)):03d}", "")
+    return trigstr_table.get(trigstr_reference_id(match.group(1)), "")
 
 
-def _trigstr_table(md: MapData) -> dict[str, str]:
-    table = map_wts_table(md)
-    return {f"TRIGSTR_{sid:03d}": text for sid, text in table.items()}
+def _trigstr_table(md: MapData) -> dict[int, str]:
+    return map_wts_table(md)

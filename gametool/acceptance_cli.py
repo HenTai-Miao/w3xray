@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import os
+from contextlib import contextmanager
+from collections.abc import Iterator
 from pathlib import Path
 
 from .acceptance_runner import (
@@ -12,6 +14,29 @@ from .acceptance_runner import (
     run_acceptance,
     write_acceptance_report,
 )
+from .dev_test import create_test_environment
+
+
+@contextmanager
+def _private_acceptance_environment() -> Iterator[None]:
+    """Keep acceptance memo and GUI configuration away from caller assets."""
+    environment = create_test_environment()
+    names = ("GAMEXRAY_CACHE_DIR", "GAMEXRAY_GUI_CONFIG_PATH")
+    saved = {
+        name: os.environ.get(name) for name in (*names, "GAMEXRAY_MATERIALIZE_WORKERS")
+    }
+    try:
+        for name in names:
+            os.environ[name] = environment.get(
+                name, str(Path(environment["GAMEXRAY_CACHE_DIR"]) / "gui-config.json")
+            )
+        yield
+    finally:
+        for name, value in saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
 
 
 def run_acceptance_cli(argv: tuple[str, ...]) -> int:
@@ -36,7 +61,8 @@ def run_acceptance_cli(argv: tuple[str, ...]) -> int:
         run_gui=not args.no_gui,
         require_windows=args.require_windows,
     )
-    report = run_acceptance(config)
+    with _private_acceptance_environment():
+        report = run_acceptance(config)
     write_acceptance_report(report, report_path)
     for check in report.checks:
         print(f"[{check.status.value.upper()}] {check.name}: {check.detail}")

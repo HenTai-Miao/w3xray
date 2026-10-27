@@ -34,6 +34,7 @@ from .map_components import (
 from .map_data import GameObject, MapData
 from .mpq import MPQArchive
 from .mpq_files import list_archive_files
+from .mpq_storage import MPQSourceIdentity, SourceIdentityArchive
 from .object_candidates import OBJECT_EXTS, collect_object_candidates
 from .object_pipeline import populate_object_pipeline_from_context
 from .references import build_reference_graph
@@ -64,7 +65,12 @@ def load_map(
         archive_factory=MPQArchive,
     ) as archive:
         md = _load_map_impl(archive, path, _depth, shared_index, load_context)
-        md.archive_source = _root_archive_source(path, load_context)
+        identity = (
+            archive.source_identity
+            if isinstance(archive, SourceIdentityArchive)
+            else None
+        )
+        md.archive_source = _root_archive_source(path, load_context, identity)
         if isinstance(archive, InventoryArchive):
             md.extraction_ledger = build_archive_inventory(
                 archive,
@@ -208,13 +214,15 @@ def _load_map_impl(
 def _root_archive_source(
     path: str,
     context: MapLoadContext,
+    identity: MPQSourceIdentity | None = None,
 ) -> PathArchiveSource | SupplementedPathArchiveSource:
     if context.author_bundle_path is None and context.compat_bundle_path is None:
-        return PathArchiveSource(path)
+        return PathArchiveSource(path, expected_identity=identity)
     return SupplementedPathArchiveSource(
         path,
         context.author_bundle_path,
         context.compat_bundle_path,
+        expected_identity=identity,
     )
 
 

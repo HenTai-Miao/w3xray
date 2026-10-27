@@ -179,6 +179,9 @@ def explicit_argument_evidence(
     resolved_roots = tuple(root.expanduser().resolve(strict=False) for root in roots)
     evidence: set[MapEvidence] = set()
     for process in processes:
+        argument_roots = tuple(
+            dict.fromkeys((*process_install_roots(process), *resolved_roots))
+        )
         tokens = parse_command_tokens(process.command_line)
         for index, token in enumerate(tokens):
             if token.casefold() not in _LOADFILE_FLAGS:
@@ -190,7 +193,7 @@ def explicit_argument_evidence(
             candidates = (
                 (argument,)
                 if argument.is_absolute()
-                else tuple(root / argument for root in resolved_roots)
+                else tuple(root / argument for root in argument_roots)
             )
             for candidate in candidates:
                 try:
@@ -206,6 +209,42 @@ def explicit_argument_evidence(
                         )
                     )
     return ordered_evidence(evidence)
+
+
+def process_install_roots(process: GameProcess) -> tuple[Path, ...]:
+    """Return install bases proved by the process's absolute game executable.
+
+    Classic installs may live on any drive. Modern clients put the executable
+    inside ``_retail_/x86_64``; those known layout parents also supply map
+    directories and relative ``-loadfile`` bases. A relative executable or a
+    path embedded in an unrelated argument supplies no guessed install root.
+    """
+    tokens = parse_command_tokens(process.command_line, limit=2)
+    if not tokens:
+        return ()
+    executable = tokens[0]
+    if (
+        Path(executable).name.casefold()
+        in {"wine", "wine64", "wine-preloader", "wine64-preloader"}
+        and len(tokens) > 1
+    ):
+        executable = tokens[1]
+    path = Path(executable.replace("\\", os.sep))
+    if not path.is_absolute() or path.name.casefold().removesuffix(".exe") not in {
+        "war3",
+        "warcraft iii",
+    }:
+        return ()
+    roots = [path.parent]
+    if roots[-1].name.casefold() in {"x86", "x86_64"}:
+        roots.append(roots[-1].parent)
+    if roots[-1].name.casefold() in {
+        "_retail_",
+        "_classic_",
+        "warcraft iii frozen throne",
+    }:
+        roots.append(roots[-1].parent)
+    return tuple(roots)
 
 
 def posix_process_report(payload: bytes) -> ProcessProbeReport:

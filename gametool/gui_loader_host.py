@@ -40,6 +40,19 @@ if TYPE_CHECKING:
             replace: bool,
         ) -> GuiWorkerTicket: ...
 
+        def _start_gui_map_worker(
+            self,
+            group: str,
+            md: MapData,
+            target: GuiWorkerTarget,
+            *,
+            replace: bool,
+        ) -> GuiWorkerTicket: ...
+
+        def _remember_gui_maps(self, maps) -> None: ...
+
+        def _release_unused_gui_maps(self) -> None: ...
+
         def _post_gui_worker(
             self,
             ticket: GuiWorkerTicket,

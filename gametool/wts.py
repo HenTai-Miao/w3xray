@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from decimal import Decimal
 from typing import Final, Protocol
 
 from .extraction_diagnostics import ComponentParseError
+from .script_string_references import trigstr_reference_id
 from .war3_encoding import decode_warcraft_string
 
 
@@ -48,7 +50,7 @@ def parse_wts(data: bytes) -> dict[int, str]:
         m = _HEADER.search(data, i)
         if not m:
             break
-        sid = int(m.group(1))
+        sid = trigstr_reference_id(m.group(1).decode("ascii"))
         opening = _find_structural_line(data, m.end(), b"{")
         if opening is None:  # 兜底：找不到独占行 { 时退回首个 {
             brace = data.find(b"{", m.end())
@@ -118,7 +120,10 @@ def parse_wts_component(data: bytes) -> dict[int, str]:
 
 def validate_wts_component(data: bytes, table: dict[int, str]) -> dict[int, str]:
     """Reject a tolerant WTS result that omitted declared string blocks."""
-    expected = {int(match.group(1)) for match in _HEADER.finditer(data)}
+    expected = {
+        trigstr_reference_id(match.group(1).decode("ascii"))
+        for match in _HEADER.finditer(data)
+    }
     normalized = (
         data.removeprefix(b"\xef\xbb\xbf").replace(b"\r\n", b"\n").replace(b"\r", b"\n")
     )
@@ -130,7 +135,7 @@ def validate_wts_component(data: bytes, table: dict[int, str]) -> dict[int, str]
     missing = expected.difference(table)
     if missing:
         first = min(missing)
-        raise ComponentParseError(f"incomplete WTS block: STRING {first}")
+        raise ComponentParseError(f"incomplete WTS block: STRING {Decimal(first)}")
     return table
 
 

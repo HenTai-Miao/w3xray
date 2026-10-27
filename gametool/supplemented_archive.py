@@ -10,6 +10,7 @@ from typing import Protocol
 from .extraction_ledger import BlockSource
 from .map_archive_reader import MapArchiveReader
 from .mpq_layout import _Block
+from .mpq_storage import MPQSourceIdentity, SourceIdentityArchive
 from .supplemental_evidence import SupplementalEvidence, SupplementalEvidenceError
 
 
@@ -64,6 +65,17 @@ class SupplementedArchive:
     def container_readable(self) -> bool:
         """Whether the base MPQ tables were successfully inventoried."""
         return self._base is not None
+
+    @property
+    def source_identity(self) -> MPQSourceIdentity | None:
+        if isinstance(self._base, SourceIdentityArchive):
+            return self._base.source_identity
+        return None
+
+    def verify_source(self) -> None:
+        """Keep the base reader's source proof across the supplemental overlay."""
+        if isinstance(self._base, SourceIdentityArchive):
+            self._base.verify_source()
 
     @property
     def author_bundle_files(self) -> tuple[str, ...]:

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 import json
+import hashlib
 from pathlib import Path
 import platform
 import sys
@@ -14,6 +15,7 @@ from time import perf_counter
 from typing import override
 
 from .acceptance_batch import check_batch_publication
+from .acceptance_queries import check_query_workflow
 from .api import load_map
 from .casclib_api import (
     CascFileNotFoundError,
@@ -65,6 +67,13 @@ class AcceptanceReport:
             "python": self.python,
             "executable": self.executable,
             "overall_status": self.overall_status.value,
+            "coverage_complete": bool(self.checks)
+            and all(check.status is AcceptanceStatus.PASS for check in self.checks),
+            "skipped_checks": [
+                check.name
+                for check in self.checks
+                if check.status is AcceptanceStatus.SKIP
+            ],
             "checks": [
                 {
                     "name": check.name,
@@ -110,6 +119,12 @@ def run_acceptance(config: AcceptanceConfig) -> AcceptanceReport:
         _run_check(
             "knowledge_pack_export",
             lambda: _check_knowledge_pack(config.map_path, config.output_dir),
+        )
+    )
+    checks.append(
+        _run_check(
+            "pack_query_workflow",
+            lambda: check_query_workflow(config.output_dir / "knowledge-pack"),
         )
     )
     checks.append(
@@ -185,9 +200,12 @@ def _check_bundled_casclib() -> str:
 
 def _check_map(path: Path) -> str:
     md = load_map(str(path))
-    if not md.scripts:
-        raise AcceptanceCheckError("地图未加载出脚本")
-    return f"{md.name}; files={len(md.all_files)}; objects={sum(md.category_counts().values())}"
+    try:
+        if not md.scripts:
+            raise AcceptanceCheckError("地图未加载出脚本")
+        return f"{md.name}; files={len(md.all_files)}; objects={sum(md.category_counts().values())}"
+    finally:
+        md.close()
 
 
 def _campaign_check(path: Path | None) -> AcceptanceCheck:
@@ -200,34 +218,60 @@ def _campaign_check(path: Path | None) -> AcceptanceCheck:
 
 def _check_campaign(path: Path) -> str:
     md = load_map(str(path))
-    if not md.sub_maps:
-        raise AcceptanceCheckError("战役没有可切换子图")
-    names = ", ".join(sub.name for sub in md.sub_maps)
-    return f"shared={sum(md.category_counts().values())}; submaps={len(md.sub_maps)}; {names}"
+    try:
+        if not md.sub_maps:
+            raise AcceptanceCheckError("战役没有可切换子图")
+        names = ", ".join(sub.name for sub in md.sub_maps)
+        return f"shared={sum(md.category_counts().values())}; submaps={len(md.sub_maps)}; {names}"
+    finally:
+        md.close()
 
 
 def _check_knowledge_pack(map_path: Path, output_dir: Path) -> str:
     md = load_map(str(map_path))
-    pack_dir = output_dir / "knowledge-pack"
-    report = write_knowledge_pack_report(md, str(pack_dir))
-    manifest = pack_dir / "资料包目录.tsv"
-    if not manifest.is_file():
-        raise AcceptanceCheckError("资料包没有生成 资料包目录.tsv")
-    if report.status is not KnowledgeWriteStatus.COMPLETE:
-        raise AcceptanceCheckError(
-            f"资料包部分或全部失败：成功 {report.written_count}，失败 {report.failed_count}",
-        )
-    return f"files={report.written_count}; path={pack_dir}"
+    try:
+        pack_dir = output_dir / "knowledge-pack"
+        report = write_knowledge_pack_report(md, str(pack_dir))
+        manifest = pack_dir / "资料包目录.tsv"
+        if not manifest.is_file():
+            raise AcceptanceCheckError("资料包没有生成 资料包目录.tsv")
+        if report.status is not KnowledgeWriteStatus.COMPLETE:
+            raise AcceptanceCheckError(
+                f"资料包部分或全部失败：成功 {report.written_count}，失败 {report.failed_count}",
+            )
+        return f"files={report.written_count}; path={pack_dir}"
+    finally:
+        md.close()
 
 
 def _check_repeat_load(map_path: Path, repeat_count: int) -> str:
     if repeat_count < 1:
         raise AcceptanceCheckError("重复次数必须大于 0")
     totals: list[int] = []
+    snapshots: list[str] = []
     for _index in range(repeat_count):
         md = load_map(str(map_path))
-        totals.append(len(md.all_files) + len(md.scripts))
-    if len(set(totals)) != 1:
+        try:
+            totals.append(len(md.all_files) + len(md.scripts))
+            snapshot = json.dumps(
+                {
+                    "files": md.all_files,
+                    "scripts": md.scripts,
+                    "objects": {
+                        category: [
+                            (obj.obj_id, obj.name, obj.field_values, obj.fields)
+                            for obj in objects
+                        ]
+                        for category, objects in md.objects.items()
+                    },
+                },
+                ensure_ascii=True,
+                sort_keys=True,
+            )
+            snapshots.append(hashlib.sha256(snapshot.encode("utf-8")).hexdigest())
+        finally:
+            md.close()
+    if len(set(totals)) != 1 or len(set(snapshots)) != 1:
         raise AcceptanceCheckError(f"重复加载结果不一致：{totals}")
     return f"repeat={repeat_count}; stable_total={totals[0]}"
 
@@ -294,13 +338,20 @@ def _check_casc(war3_dir: Path) -> str:
 def _gui_check(config: AcceptanceConfig) -> AcceptanceCheck:
     if not config.run_gui:
         return AcceptanceCheck("gui_tabs", AcceptanceStatus.SKIP, "--no-gui", 0)
-    return _run_check("gui_tabs", lambda: _run_gui(config.map_path))
+    return _run_check(
+        "gui_tabs",
+        lambda: _run_gui(
+            config.map_path, config.output_dir / "knowledge-pack", config.campaign_path
+        ),
+    )
 
 
-def _run_gui(map_path: Path) -> str:
+def _run_gui(
+    map_path: Path, pack_path: Path | None = None, campaign_path: Path | None = None
+) -> str:
     from .gui_acceptance import run_gui_acceptance
 
-    return run_gui_acceptance(map_path)
+    return run_gui_acceptance(map_path, pack_path, campaign_path)
 
 
 def _elapsed(started: float) -> int:

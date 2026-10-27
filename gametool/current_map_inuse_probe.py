@@ -64,7 +64,7 @@ def _windows_probe() -> Callable[[Path], bool]:
     def probe(path: Path) -> bool:
         handle = kernel32.CreateFileW(
             os.fspath(path),
-            GENERIC_READ | GENERIC_WRITE,
+            GENERIC_READ,
             0,
             None,
             OPEN_EXISTING,

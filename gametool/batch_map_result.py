@@ -7,6 +7,7 @@ from .batch_icon_export import IconExportRecord, IconKind
 from .batch_item_reports import BatchItemReports
 from .batch_models import MapBatchResult, SourceFingerprint
 from .batch_status import BatchAxes, derive_legacy_map_state
+from .extraction_diagnostics import DiagnosticSeverity
 from .icon_evidence_counts import icon_gap_identity, icon_integrity_counts
 from .icon_evidence_index import IconEvidenceIndex
 from .icon_evidence_models import IconDiagnosticFlag
@@ -45,6 +46,17 @@ def build_map_result(
     )
     if not first_error and missing:
         first_error = f"missing descriptions: {missing}"
+    if not first_error:
+        first_error = next(
+            (
+                f"{md.path}: {item.component}: {item.source}: {item.message}"
+                for md in item_reports.maps
+                for item in md.diagnostics
+                if item.severity
+                in (DiagnosticSeverity.WARNING, DiagnosticSeverity.ERROR)
+            ),
+            "",
+        )
     return MapBatchResult(
         source=fingerprint,
         display_name=display_name,

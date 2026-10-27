@@ -29,6 +29,7 @@ def create_test_environment() -> dict[str, str]:
     cache = tempfile.mkdtemp(prefix="gamexray-test-cache-", dir=temporary)
     env = dict(os.environ)
     env["GAMEXRAY_CACHE_DIR"] = str(Path(cache).resolve())
+    env["GAMEXRAY_GUI_CONFIG_PATH"] = str(Path(cache).resolve() / "gui-config.json")
     return env
 
 

@@ -118,7 +118,7 @@ def _scan_script_calls(
             if (owner.start if owner is not None else None) == call.owner:
                 found.add(code)
         object_codes = tuple(sorted(found))
-        string_args = _string_args((arguments,), object_codes)
+        string_args = _string_args((arguments,), object_codes, lua=lua)
         rows.append(
             ScriptCall(
                 function=name,
@@ -185,18 +185,18 @@ def _mechanism(name: str, object_codes: tuple[str, ...]) -> str:
 
 
 def _string_args(
-    args: tuple[str, ...], object_codes: tuple[str, ...]
+    args: tuple[str, ...], object_codes: tuple[str, ...], *, lua: bool | None = None
 ) -> tuple[str, ...]:
     code_set = set(object_codes)
     return _unique_ordered(
         value
-        for value in _quoted_values(" ".join(args))
+        for value in _quoted_values(" ".join(args), lua=lua)
         if value and value not in code_set
     )
 
 
-def _quoted_values(text: str) -> tuple[str, ...]:
-    return tuple(script_string_values(text))
+def _quoted_values(text: str, *, lua: bool | None = None) -> tuple[str, ...]:
+    return tuple(script_string_values(text, lua=lua))
 
 
 def _line_starts(text: str) -> list[int]:

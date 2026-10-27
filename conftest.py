@@ -10,17 +10,20 @@ from gametool.dev_test import create_test_environment
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    previous = os.environ.get("GAMEXRAY_CACHE_DIR")
+    keys = ("GAMEXRAY_CACHE_DIR", "GAMEXRAY_GUI_CONFIG_PATH")
+    previous = {key: os.environ.get(key) for key in keys}
     try:
         env = create_test_environment()
     except OSError as error:
         raise pytest.UsageError(f"无法创建隔离测试缓存: {error}") from error
 
     def restore_environment() -> None:
-        if previous is None:
-            os.environ.pop("GAMEXRAY_CACHE_DIR", None)
-        else:
-            os.environ["GAMEXRAY_CACHE_DIR"] = previous
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
     config.add_cleanup(restore_environment)
-    os.environ["GAMEXRAY_CACHE_DIR"] = env["GAMEXRAY_CACHE_DIR"]
+    for key in keys:
+        os.environ[key] = env[key]

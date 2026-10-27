@@ -5,7 +5,7 @@ from __future__ import annotations
 import traceback
 from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final, Protocol
 
 from .api import MapData, commands_from_map, load_map, recipes_from_map
@@ -16,6 +16,7 @@ from .gui_icon_evidence_loader import (
     safe_default_icon_resolver,
     safe_custom_icon_resolver,
 )
+from .gui_map_resources import close_gui_maps
 from .icons import IconResolver
 from .load_context import MapLoadContext, build_map_load_context
 from .load_options import (
@@ -58,6 +59,7 @@ class LoadedMap:
     resolver: PreparedIconResolver | None
     views: list[tuple[str, MapData]] | None
     campaign_path: str | None
+    owns_map_data: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,15 +106,19 @@ def load_path_payload(
         views = None
         campaign_path = None
     active = views[0][1] if views else md
-    if prepare is not None:
-        return prepare(active, campaign_path, views, load_options=load_options)
-    return prepare_map_view(
-        active,
-        campaign_path,
-        views,
-        load_options=load_options,
-        game_data_path=game_data_path,
-    )
+    try:
+        if prepare is not None:
+            return prepare(active, campaign_path, views, load_options=load_options)
+        return prepare_map_view(
+            active,
+            campaign_path,
+            views,
+            load_options=load_options,
+            game_data_path=game_data_path,
+        )
+    except Exception:  # BROAD_EXCEPT_OK - a failed GUI preparation cannot orphan its newly owned map source.
+        close_gui_maps((md,))
+        raise
 
 
 def switch_map_payload(
@@ -125,14 +131,16 @@ def switch_map_payload(
 ) -> LoadedMap:
     """Prepare an already-loaded campaign sub-map."""
     if prepare is not None:
-        return prepare(md, campaign_path, None, load_options=load_options)
-    return prepare_map_view(
-        md,
-        campaign_path,
-        None,
-        load_options=load_options,
-        game_data_path=game_data_path,
-    )
+        payload = prepare(md, campaign_path, None, load_options=load_options)
+    else:
+        payload = prepare_map_view(
+            md,
+            campaign_path,
+            None,
+            load_options=load_options,
+            game_data_path=game_data_path,
+        )
+    return replace(payload, owns_map_data=False)
 
 
 def load_campaign_payload(

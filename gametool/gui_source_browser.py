@@ -42,6 +42,8 @@ class SourceBrowserMixin:
         _save_config: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _post_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _start_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _remember_gui_maps: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _release_unused_gui_maps: Callable[..., None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _start_campaign_load: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _start_map_switch: Callable[[MapData, str | None], None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _start_path_load: Callable[[str], None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
@@ -103,7 +105,8 @@ class SourceBrowserMixin:
                     lambda: self._fill_battle(items),
                 )
 
-        _ = self._start_gui_worker("source-scan", work, replace=True)
+        group = "source-scan-campaign" if mode == "campaign" else "source-scan"
+        _ = self._start_gui_worker(group, work, replace=True)
 
     def _fill_battle(self, items) -> None:
         self._dir_maps = items
@@ -112,12 +115,18 @@ class SourceBrowserMixin:
         self.status.configure(text=f"对战图目录：找到 {len(items)} 张")
 
     def _fill_campaign(self, items) -> None:
+        self._remember_gui_maps(
+            md
+            for campaign in self._dir_campaigns
+            for _, md in campaign.get("views") or ()
+        )
         self._dir_campaigns = items
         if self.mode == "campaign":
             self._populate_left()
         self.status.configure(
             text=f"战役目录：找到 {len(items)} 个（点战役展开看子地图）"
         )
+        self._release_unused_gui_maps()
 
     def _populate_left(self) -> None:
         if not self.left_brow.winfo_manager():
@@ -240,7 +249,7 @@ class SourceBrowserMixin:
             md_payload = payload if isinstance(payload, MapData) else None
             if md_payload is None:
                 return
-            self._campaign_path = next(
+            campaign_path = next(
                 (
                     str(c["path"])
                     for c in self._dir_campaigns
@@ -249,7 +258,7 @@ class SourceBrowserMixin:
                 ),
                 None,
             )
-            self._start_map_switch(md_payload, self._campaign_path)
+            self._start_map_switch(md_payload, campaign_path)
         elif kind == "campaign" and not self._dir_campaigns[
             int(payload) if not isinstance(payload, int) else payload
         ].get("loaded"):
@@ -267,6 +276,12 @@ class SourceBrowserMixin:
         views: list[tuple[str, MapData]] | None,
         path: str | None = None,
     ) -> None:
+        self._remember_gui_maps(
+            md
+            for campaign in self._dir_campaigns
+            for _, md in campaign.get("views") or ()
+        )
+        self._remember_gui_maps(md for _, md in views or ())
         self._campaign_views = views
         self._campaign_path = path
         if views:

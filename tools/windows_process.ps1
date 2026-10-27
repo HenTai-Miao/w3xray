@@ -18,6 +18,7 @@ function ConvertTo-WindowsCommandLine {
     param(
         [Parameter(Mandatory = $true)]
         [AllowEmptyCollection()]
+        [AllowEmptyString()]
         [string[]]$ArgumentList
     )
 

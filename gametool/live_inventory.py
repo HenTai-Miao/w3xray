@@ -17,6 +17,7 @@
 
 # pyright: reportMissingImports=false
 import argparse
+from contextlib import ExitStack
 import ctypes
 import ctypes.wintypes as wt
 import json
@@ -81,9 +82,10 @@ class MBI(ctypes.Structure):
 
 def mem_setup():
     k32.GetCurrentProcess.restype = wt.HANDLE
-    k32.OpenProcessToken.argtypes = [wt.HANDLE, wt.DWORD, ctypes.POINTER(wt.HANDLE)]
+    adv.OpenProcessToken.argtypes = [wt.HANDLE, wt.DWORD, ctypes.POINTER(wt.HANDLE)]
     k32.OpenProcess.restype = wt.HANDLE
     k32.OpenProcess.argtypes = [wt.DWORD, wt.BOOL, wt.DWORD]
+    k32.CloseHandle.argtypes = [wt.HANDLE]
     k32.VirtualQueryEx.argtypes = [
         wt.HANDLE,
         ctypes.c_void_p,
@@ -130,13 +132,18 @@ def find_war3_pids():
 
 def open_process(pid):
     h_tok = wt.HANDLE()
-    k32.OpenProcessToken(k32.GetCurrentProcess(), 0x28, ctypes.byref(h_tok))
-    luid = LUID()
-    adv.LookupPrivilegeValueW(None, "SeDebugPrivilege", ctypes.byref(luid))
-    adv.AdjustTokenPrivileges(
-        h_tok, False, ctypes.byref(TOKEN_PRIV(1, luid, 2)), 0, None, None
-    )
-    return k32.OpenProcess(0x1FFFFF, False, pid)
+    if adv.OpenProcessToken(k32.GetCurrentProcess(), 0x28, ctypes.byref(h_tok)):
+        try:
+            luid = LUID()
+            if adv.LookupPrivilegeValueW(None, "SeDebugPrivilege", ctypes.byref(luid)):
+                adv.AdjustTokenPrivileges(
+                    h_tok, False, ctypes.byref(TOKEN_PRIV(1, luid, 2)), 0, None, None
+                )
+        finally:
+            k32.CloseHandle(h_tok)
+    # PROCESS_QUERY_INFORMATION | PROCESS_VM_READ: no write, injection,
+    # termination or suspension rights are needed for a read-only probe.
+    return k32.OpenProcess(0x0410, False, pid)
 
 
 # TokenIntegrityLevel RID → 人话 (学自 trainer 的方向性权限预检):
@@ -218,15 +225,32 @@ def verify_opened_process(handle, opened_path):
 
 def _integrity_rid(process_handle):
     """读取进程 token 完整性 RID; 无法判定返回 None (fail-open)。"""
+    tok = wt.HANDLE()
     try:
         adv32 = ctypes.WinDLL("advapi32", use_last_error=True)
-        tok = wt.HANDLE()
-        proc = process_handle if process_handle else k32.GetCurrentProcess()
+        adv32.OpenProcessToken.argtypes = [
+            wt.HANDLE,
+            wt.DWORD,
+            ctypes.POINTER(wt.HANDLE),
+        ]
+        adv32.GetTokenInformation.argtypes = [
+            wt.HANDLE,
+            wt.DWORD,
+            ctypes.c_void_p,
+            wt.DWORD,
+            ctypes.POINTER(wt.DWORD),
+        ]
+        adv32.GetSidSubAuthorityCount.argtypes = [ctypes.c_void_p]
+        adv32.GetSidSubAuthority.argtypes = [ctypes.c_void_p, wt.DWORD]
+        proc = k32.GetCurrentProcess() if process_handle is None else process_handle
         if not adv32.OpenProcessToken(proc, 0x0008, ctypes.byref(tok)):  # TOKEN_QUERY
             return None
         ret_len = wt.DWORD()
         # TokenIntegrityLevel = 25 (winnt.h)
-        if not adv32.GetTokenInformation(tok, 25, None, 0, ctypes.byref(ret_len)):
+        # A zero-buffer query normally returns FALSE/ERROR_INSUFFICIENT_BUFFER;
+        # its required length, followed by the real read, determines success.
+        adv32.GetTokenInformation(tok, 25, None, 0, ctypes.byref(ret_len))
+        if ret_len.value < ctypes.sizeof(ctypes.c_void_p):
             return None
         buf = ctypes.create_string_buffer(ret_len.value)
         if not adv32.GetTokenInformation(
@@ -238,10 +262,15 @@ def _integrity_rid(process_handle):
             return None
         adv32.GetSidSubAuthorityCount.restype = ctypes.POINTER(ctypes.c_ubyte)
         cnt = adv32.GetSidSubAuthorityCount(ctypes.c_void_p(sid)).contents.value
+        if not cnt:
+            return None
         adv32.GetSidSubAuthority.restype = ctypes.POINTER(ctypes.c_ulong)
         return adv32.GetSidSubAuthority(ctypes.c_void_p(sid), cnt - 1).contents.value
     except Exception:
         return None
+    finally:
+        if tok.value:
+            k32.CloseHandle(tok)
 
 
 def _token_integrity_level(process_handle):
@@ -927,6 +956,49 @@ def read_live(
     profile_json=None,
     pid=None,
 ):
+    """Read one fresh probe and release all of its process handles on every exit."""
+    previous_pid = _active_pid["pid"]
+    _active_pid["pid"] = None
+    _snapshot_partial["count"] = 0
+    try:
+        with ExitStack() as process_scope:
+            return _read_live(
+                pack_dir,
+                strategy,
+                save_snapshot_dir,
+                load_snapshot_dir,
+                verbose,
+                unit_query,
+                players,
+                all_units,
+                resources,
+                nick,
+                export_profile,
+                profile_json,
+                pid,
+                process_scope=process_scope,
+            )
+    finally:
+        _active_pid["pid"] = previous_pid
+
+
+def _read_live(
+    pack_dir,
+    strategy="auto",
+    save_snapshot_dir=None,
+    load_snapshot_dir=None,
+    verbose=True,
+    unit_query=None,
+    players=False,
+    all_units=False,
+    resources=None,
+    nick=None,
+    export_profile=None,
+    profile_json=None,
+    pid=None,
+    *,
+    process_scope,
+):
     """resources: (金币, 木材) 元组为报数校准; "auto" 为自动差分 (免报数)。"""
     report: _LiveReport = {
         "strategy_used": None,
@@ -979,13 +1051,14 @@ def read_live(
         if not h:
             report["notes"].append("OpenProcess 失败 (需管理员)")
             return report
+        process_scope.callback(k32.CloseHandle, h)
         opened_path = _process_identity(
             h
         )  # 身份基线 (防 PID 复用, 学 trainer GameSession)
         game_rid, self_rid = _integrity_rid(h), _integrity_rid(None)
         if game_rid and self_rid and self_rid < game_rid:
             report["notes"].append(
-                f"权限不足 (写上提会被系统拒绝): 游戏 "
+                f"权限不足 (只读访问可能被系统拒绝): 游戏 "
                 f"{_INTEGRITY_NAMES.get(game_rid, hex(game_rid))} / 工具 "
                 f"{_INTEGRITY_NAMES.get(self_rid, hex(self_rid))} — "
                 "请以与游戏相同的权限重新启动工具"
@@ -1413,7 +1486,7 @@ def read_live(
 
     if strategy in ("auto", "handle"):
         slots = try_handle()
-        if slots:
+        if slots is not None:
             warn = verify_opened_process(h, opened_path)
             if warn:
                 report["notes"].append(warn)
@@ -1647,6 +1720,10 @@ def main(argv=None):
     print(json.dumps(rep, ensure_ascii=False, indent=1, default=str))
     if rep["slots"]:
         return 0
+    if rep["strategy_used"] == "handle" and (
+        rep.get("selected_unit") is not None or rep.get("unit_matches")
+    ):
+        return 0  # A confirmed empty inventory is a successful read.
     if args.players and rep.get("owner_counts") is not None:
         return 0
     if args.all_units and rep.get("all_units") is not None:

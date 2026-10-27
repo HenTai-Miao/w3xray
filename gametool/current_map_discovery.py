@@ -80,11 +80,17 @@ def locate_current_map(
     in_use_provider: _InUseProvider | None = None,
 ) -> models.CurrentMapResolution:
     """Collect all direct and hint evidence, then call the pure resolver."""
-    roots = discover_default_map_roots(extra_roots)
     process_report = (process_provider or current_map_process.probe_game_processes)()
     if not process_report.available:
         return models.CurrentMapResolution(models.ResolutionStatus.UNAVAILABLE, ())
     processes = process_report.processes
+    process_roots = (
+        root / child
+        for process in processes
+        for root in current_map_process.process_install_roots(process)
+        for child in ("Maps", "Campaigns")
+    )
+    roots = discover_default_map_roots(chain(extra_roots, process_roots))
     evidence: list[models.MapEvidence] = []
 
     if processes:

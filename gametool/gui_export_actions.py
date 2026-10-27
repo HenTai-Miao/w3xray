@@ -10,12 +10,13 @@ from typing import TYPE_CHECKING, assert_never
 from .api import export_all_files, export_loaded_map_files, tmp_extract_dir
 from .gui_worker_registry import GuiWorkerTicket
 from .knowledge_io import safe_filename, write_text
-from .knowledge_pack import format_box_id_text, write_knowledge_pack_report
-from .extraction_profile import load_profile
+from .knowledge_pack import format_box_id_text, write_knowledge_pack_family_report
+from .extraction_profile import ExtractionProfile, load_profile
 from .knowledge_results import KnowledgeWriteReport, KnowledgeWriteStatus
 from .knowledge_script_exports import write_script_exports
 from .presentation_safety import format_user_exception
 from .script_text_export import build_readable_script_exports
+from .map_data import MapData
 
 
 @dataclass(frozen=True, slots=True)
@@ -24,6 +25,19 @@ class PackExportPresentation:
     status_text: str
     message: str
     is_error: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _CurrentMapPack:
+    source: MapData
+    directory: str
+
+
+@dataclass(frozen=True, slots=True)
+class _PendingPackQuery:
+    source: MapData
+    prefill: str
+    command: str
 
 
 def build_pack_export_presentation(
@@ -63,6 +77,10 @@ def build_pack_export_presentation(
 
 
 class ExportActionsMixin:
+    _current_map_pack: _CurrentMapPack | None = None
+    _pending_pack_query: _PendingPackQuery | None = None
+    _pack_export_source: MapData | None = None
+
     if TYPE_CHECKING:
         import customtkinter as ctk
         from collections.abc import Callable
@@ -77,6 +95,7 @@ class ExportActionsMixin:
         _last_pack_dir: str | None = None
         _post_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         _start_gui_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
+        _start_gui_map_worker: Callable[..., object]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
         update_idletasks: Callable[[], None]  # pyright: ignore[reportUninitializedInstanceVariable] - mixin 宿主注入
 
     def _need_map(self) -> "MapData | None":
@@ -85,6 +104,61 @@ class ExportActionsMixin:
             messagebox.showinfo("提示", "请先打开一张地图")
             return None
         return self.map_data
+
+    def _invalidate_current_map_pack(self, md: MapData | None) -> None:
+        binding = self._current_map_pack
+        if binding is not None and binding.source is not md:
+            self._current_map_pack = None
+        pending = self._pending_pack_query
+        if pending is not None and pending.source is not md:
+            self._pending_pack_query = None
+
+    def current_map_pack_dir(self, source_map: MapData | None = None) -> str | None:
+        """Return only this loaded map instance's successfully published pack."""
+        md = self.map_data
+        self._invalidate_current_map_pack(md)
+        if md is None or (source_map is not None and source_map is not md):
+            return None
+        binding = self._current_map_pack
+        if binding is None or not os.path.isdir(binding.directory):
+            return None
+        return binding.directory
+
+    def on_pack_query(
+        self,
+        prefill: str = "",
+        prefill_command: str = "",
+        *,
+        source_map: MapData | None = None,
+    ) -> None:
+        """Open the current map's query, exporting it first when needed."""
+        md = self._need_map()
+        if md is None:
+            return
+        if source_map is not None and source_map is not md:
+            self.status.configure(text="地图已切换，请从当前地图重新发起查询")
+            return
+        request = _PendingPackQuery(md, prefill, prefill_command)
+        if self.current_map_pack_dir(md) is not None:
+            self._open_current_map_query(request)
+            return
+        self._pending_pack_query = request
+        self.on_export_pack()
+
+    def _open_current_map_query(self, request: _PendingPackQuery) -> None:
+        from .gui_pack_query import open_pack_query_dialog
+
+        if self.map_data is not request.source:
+            return
+        open_pack_query_dialog(
+            self,
+            lambda: self.current_map_pack_dir(request.source),
+            lambda: self.on_pack_query(
+                request.prefill, request.command, source_map=request.source
+            ),
+            prefill=request.prefill,
+            prefill_command=request.command,
+        )
 
     def _open_dir(self, out, n, kind):
         self.status.configure(text=f"已导出 {n} 个{kind}到临时目录 {out}")
@@ -109,6 +183,10 @@ class ExportActionsMixin:
             return
         messagebox.showinfo(presentation.title, presentation.message)
 
+    def _show_export_error(self, message: str) -> None:
+        self.status.configure(text="导出失败")
+        messagebox.showerror("导出失败", message)
+
     def on_export_all(self):
         md = self._need_map()
         if md is None:
@@ -116,6 +194,7 @@ class ExportActionsMixin:
         campaign_path = self._campaign_path
         path = campaign_path or md.path
         is_campaign_child = campaign_path is not None and md.path != campaign_path
+        external_listfile_path = self.external_listfile_path
         self.status.configure(text="正在解包全部文件到临时目录 …")
         self.update_idletasks()
 
@@ -124,12 +203,12 @@ class ExportActionsMixin:
                 if is_campaign_child:
                     out = export_loaded_map_files(
                         md,
-                        external_listfile_path=self.external_listfile_path,
+                        external_listfile_path=external_listfile_path,
                     )
                 else:
                     out = export_all_files(
                         path,
-                        external_listfile_path=self.external_listfile_path,
+                        external_listfile_path=external_listfile_path,
                     )
                 n = sum(len(fs) for _, _, fs in os.walk(out))
                 _ = self._post_gui_worker(
@@ -142,23 +221,22 @@ class ExportActionsMixin:
                 error_text = format_user_exception(exc, paths=(path, md.path))
                 _ = self._post_gui_worker(
                     ticket,
-                    lambda message=error_text: messagebox.showerror(
-                        "导出失败", message
-                    ),
+                    lambda message=error_text: self._show_export_error(message),
                 )
 
-        _ = self._start_gui_worker("export-all", work, replace=True)
+        _ = self._start_gui_map_worker("export-all", md, work, replace=True)
 
     def on_export_scripts(self):
         md = self._need_map()
         if md is None:
             return
-        out = tmp_extract_dir(md.name, "脚本", clean=True)
-        scripts = build_readable_script_exports(md)
         self.status.configure(text="正在导出脚本 …")
 
         def work(ticket: GuiWorkerTicket) -> None:
+            out = ""
             try:
+                out = tmp_extract_dir(md.name, "脚本", clean=True)
+                scripts = build_readable_script_exports(md)
                 n = write_script_exports(scripts, out)
                 _ = self._post_gui_worker(
                     ticket,
@@ -170,25 +248,23 @@ class ExportActionsMixin:
                 error_text = format_user_exception(exc, paths=(out, md.path))
                 _ = self._post_gui_worker(
                     ticket,
-                    lambda message=error_text: messagebox.showerror(
-                        "导出失败", message
-                    ),
+                    lambda message=error_text: self._show_export_error(message),
                 )
 
-        _ = self._start_gui_worker("export-scripts", work, replace=True)
+        _ = self._start_gui_map_worker("export-scripts", md, work, replace=True)
 
     def on_export_ids(self):
         md = self._need_map()
         if md is None:
             return
-        out = tmp_extract_dir(md.name, "ID列表", clean=True)
-        objects = {c: list(v) for c, v in md.objects.items()}
         self.status.configure(text="正在导出ID列表 …")
 
         def work(ticket: GuiWorkerTicket) -> None:
+            out = ""
             try:
+                out = tmp_extract_dir(md.name, "ID列表", clean=True)
                 n = 0
-                for cat, objs in objects.items():
+                for cat, objs in md.objects.items():
                     if ticket.cancellation.is_set():
                         return
                     name = f"{safe_filename(cat)}ID.txt"
@@ -203,69 +279,108 @@ class ExportActionsMixin:
                 error_text = format_user_exception(exc, paths=(out, md.path))
                 _ = self._post_gui_worker(
                     ticket,
-                    lambda message=error_text: messagebox.showerror(
-                        "导出失败", message
-                    ),
+                    lambda message=error_text: self._show_export_error(message),
                 )
 
-        _ = self._start_gui_worker("export-ids", work, replace=True)
+        _ = self._start_gui_map_worker("export-ids", md, work, replace=True)
 
     def on_export_pack(self):
         md = self._need_map()
         if md is None:
             return
+        self._invalidate_current_map_pack(md)
+        if self._pack_export_source is md:
+            return
+        self._pack_export_source = md
+        automatic = (
+            self._pending_pack_query is not None
+            and self._pending_pack_query.source is md
+        )
         # 首次导出大图时物化是主要开销；默认吃满可用核（用户可显式覆盖）。
         os.environ.setdefault("GAMEXRAY_MATERIALIZE_WORKERS", str(os.cpu_count() or 1))
-        out = tmp_extract_dir(md.name, "资料包", clean=True)
-        md = self._need_map()
-        if md is None:
-            return
-        profile_summary = load_profile().summary()
-        self.status.configure(text=f"正在整理地图资料包 …（{profile_summary}）")
+        game_data_path = self.game_data_path
+        self.status.configure(text="正在整理地图资料包 …")
 
         def work(ticket: GuiWorkerTicket) -> None:
+            out = ""
             try:
-                report = write_knowledge_pack_report(
+                out = tmp_extract_dir(md.name, "资料包", clean=True)
+                profile = ExtractionProfile() if automatic else load_profile()
+                full_profile = not profile.disabled_categories()
+                report = write_knowledge_pack_family_report(
                     md,
                     out,
-                    game_data_path=self.game_data_path,
-                    profile=load_profile(),
+                    game_data_path=game_data_path,
+                    profile=profile,
                 )
-                self._last_pack_dir = out
-                save_last_pack_dir(out)
+
+                def finish() -> None:
+                    self._pack_export_source = None
+                    if report.written_count > 0:
+                        self._last_pack_dir = out
+                        save_last_pack_dir(out)
+                        if self.map_data is md and full_profile:
+                            self._current_map_pack = _CurrentMapPack(md, out)
+                    request = self._pending_pack_query
+                    if request is not None and request.source is md:
+                        if self.map_data is md and report.written_count > 0:
+                            if not full_profile:
+                                self.on_export_pack()
+                                return
+                            self._pending_pack_query = None
+                            presentation = build_pack_export_presentation(out, report)
+                            self.status.configure(text=presentation.status_text)
+                            self._open_current_map_query(request)
+                            if report.failed_count:
+                                messagebox.showwarning(
+                                    presentation.title, presentation.message
+                                )
+                            return
+                        self._pending_pack_query = None
+                    if not automatic or self.map_data is md:
+                        self._show_pack_result(out, report)
+
                 _ = self._post_gui_worker(
                     ticket,
-                    lambda: self._show_pack_result(out, report),
+                    finish,
                 )
             except (
                 Exception
             ) as exc:  # BROAD_EXCEPT_OK - GUI worker boundary reports export failures.
                 error_text = format_user_exception(exc, paths=(out, md.path))
+
+                def failed(message: str = error_text) -> None:
+                    self._pack_export_source = None
+                    request = self._pending_pack_query
+                    if request is not None and request.source is md:
+                        self._pending_pack_query = None
+                    if not automatic or self.map_data is md:
+                        self._show_export_error(message)
+
                 _ = self._post_gui_worker(
                     ticket,
-                    lambda message=error_text: messagebox.showerror(
-                        "导出失败", message
-                    ),
+                    failed,
                 )
 
-        _ = self._start_gui_worker("export-pack", work, replace=True)
+        _ = self._start_gui_map_worker("export-pack", md, work, replace=True)
 
     def on_dump_runtime_objects(self):
         """live --dump-objects: 从运行中游戏读词缀/注册数据到内存导出包。"""
-        pack_dir = self._last_pack_dir or load_last_pack_dir()
+        pack_dir = self.current_map_pack_dir()
         if not pack_dir or not os.path.isdir(pack_dir):
             messagebox.showinfo(
                 "需要资料包",
-                "先「导出资料包」拿到知识包目录，再导出运行时对象。",
+                "先「导出资料包」拿到当前地图的知识包目录，再导出运行时对象。",
             )
             return
-        out = tmp_extract_dir("runtime-objects", "运行时对象包", clean=True)
         self.status.configure(text="正在从运行中游戏读取词缀/注册数据 …")
 
         def work(ticket: GuiWorkerTicket) -> None:
+            out = ""
             try:
                 from .live_object_dump import dump_live_objects
 
+                out = tmp_extract_dir("runtime-objects", "运行时对象包", clean=True)
                 result = dump_live_objects(out)
                 if result.objects == 0:
                     note = "；".join(result.notes) or "未捕获到对象"
@@ -288,9 +403,7 @@ class ExportActionsMixin:
                 error_text = format_user_exception(exc, paths=(out,))
                 _ = self._post_gui_worker(
                     ticket,
-                    lambda message=error_text: messagebox.showerror(
-                        "导出失败", message
-                    ),
+                    lambda message=error_text: self._show_export_error(message),
                 )
 
         _ = self._start_gui_worker("dump-runtime", work, replace=True)
@@ -306,7 +419,7 @@ def _last_pack_memo_path() -> str:
 
 
 def load_last_pack_dir() -> str:
-    """读取最近一次导出的资料包目录 (GUI 重启后包查询仍可用)。fail-open。"""
+    """读取最近导出的目录，供显式打开最近资料包使用。fail-open。"""
     path = _last_pack_memo_path()
     if not path:
         return ""

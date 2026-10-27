@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Final
 
 from .api import MapData
 from .presentation_safety import tsv_cell as _tsv
 from .script_sources import analysis_script_texts
+from .script_string_references import trigstr_reference_id
 from .wts import map_wts_table
 
 _TRIGSTR_RE: Final = re.compile(r"\bTRIGSTR_(\d+)\b", re.IGNORECASE)
@@ -92,7 +94,8 @@ def _iter_references(md: MapData, table: dict[int, str]):
         for line_no, line in enumerate(text.splitlines(), start=1):
             seen: set[str] = set()
             for match in _TRIGSTR_RE.finditer(line):
-                trigstr = _trigstr_id(int(match.group(1)))
+                sid = trigstr_reference_id(match.group(1))
+                trigstr = _trigstr_id(sid)
                 if trigstr in seen:
                     continue
                 seen.add(trigstr)
@@ -100,10 +103,10 @@ def _iter_references(md: MapData, table: dict[int, str]):
                     source=source,
                     line=line_no,
                     trigstr=trigstr,
-                    text=table.get(int(match.group(1)), ""),
+                    text=table.get(sid, ""),
                     context=line.strip(),  # 整行上下文
                 )
 
 
 def _trigstr_id(sid: int) -> str:
-    return f"TRIGSTR_{sid:03d}"
+    return "TRIGSTR_" + str(Decimal(sid)).zfill(3)

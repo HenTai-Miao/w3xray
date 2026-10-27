@@ -6,6 +6,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Final
 
+from .extraction_diagnostics import DiagnosticSeverity
 from .item_relation_exports import (
     format_equipment_skills_tsv,
     format_item_acquisition_tsv,
@@ -17,6 +18,7 @@ from .item_relation_models import (
     RelationCompleteness,
 )
 from .map_data import GameObject, MapData
+from .knowledge_diagnostics import format_component_diagnostics_tsv
 from .object_text_exports import format_object_text_tsv
 from .object_text_models import ObjectTextIndex, ObjectTextState
 from .object_text_names import normalized_name, trusted_source_kind
@@ -68,6 +70,10 @@ class BatchItemReports:
             ("掉落与获取关系.tsv", format_item_acquisition_tsv(self.item_relations)),
             ("装备技能关系.tsv", format_equipment_skills_tsv(self.item_relations)),
             ("关系完整性.txt", format_relation_completeness(self.item_relations)),
+            (
+                "组件诊断.tsv",
+                format_component_diagnostics_tsv(self.maps[0], include_children=True),
+            ),
         )
 
 
@@ -121,9 +127,24 @@ def _source_coverage_gap_count(maps: tuple[MapData, ...]) -> int:
     analysis_maps = tuple(
         item for item in maps if not item.path.casefold().endswith(".w3n")
     )
+    container_gaps = sum(
+        _has_component_gaps(item)
+        for item in maps
+        if item.path.casefold().endswith(".w3n")
+    )
     if not analysis_maps:
-        return int(bool(maps))
-    return sum(not _has_substantive_source(item) for item in analysis_maps)
+        return max(int(bool(maps)), container_gaps)
+    return container_gaps + sum(
+        not _has_substantive_source(item) or _has_component_gaps(item)
+        for item in analysis_maps
+    )
+
+
+def _has_component_gaps(md: MapData) -> bool:
+    return any(
+        item.severity in (DiagnosticSeverity.WARNING, DiagnosticSeverity.ERROR)
+        for item in md.diagnostics
+    )
 
 
 def _has_substantive_source(md: MapData) -> bool:

@@ -101,10 +101,27 @@ class CascBrowserModel:
 
 
 def _export_relative_name(entry: CascEntry) -> str:
-    if (
-        entry.name_type is CascNameType.FULL
-        and safe_relative_path(entry.name) is not None
-    ):
-        return entry.name
-    fallback = entry.name if safe_relative_path(entry.name) is not None else entry.ckey
+    relative = casc_export_relative_name(entry.name)
+    if entry.name_type is CascNameType.FULL and relative is not None:
+        return relative
+    fallback = relative if relative is not None else entry.ckey
     return f"UnknownCASC/{fallback}"
+
+
+def casc_export_relative_name(name: str) -> str | None:
+    """Map CASC module separators to directories, preserving storage read names.
+
+    Native modular clients use names such as ``war3.w3mod:UI\\file.txt``.
+    Colons cannot be ordinary Windows path components, so each proved module
+    boundary becomes a directory. Other colon spellings remain invalid rather
+    than becoming drive paths or alternate data streams.
+    """
+    parts = name.replace("\\", "/").split(":")
+    if any(
+        not part.rsplit("/", 1)[-1].casefold().endswith(".w3mod") for part in parts[:-1]
+    ):
+        return None
+    if any(not part for part in parts):
+        return None
+    relative = safe_relative_path("/".join(parts))
+    return None if relative is None else str(relative)
