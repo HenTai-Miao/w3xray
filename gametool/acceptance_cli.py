@@ -40,11 +40,16 @@ def _private_acceptance_environment() -> Iterator[None]:
 
 
 def run_acceptance_cli(argv: tuple[str, ...]) -> int:
-    """Parse acceptance arguments, run all lanes, and persist JSON evidence."""
+    """Parse requested acceptance checks and persist their JSON evidence."""
     parser = argparse.ArgumentParser(prog="gamexray acceptance")
     parser.add_argument("--map", required=True, type=Path)
     parser.add_argument("--campaign", type=Path)
-    parser.add_argument("--war3-dir", type=Path, default=_environment_war3_dir())
+    parser.add_argument(
+        "--war3-dir",
+        type=_war3_dir,
+        default=_environment_war3_dir(),
+        help="可选：真实 CASC 安装目录；未提供时不请求此检查",
+    )
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--repeat", type=_positive_int, default=5)
@@ -66,6 +71,13 @@ def run_acceptance_cli(argv: tuple[str, ...]) -> int:
     write_acceptance_report(report, report_path)
     for check in report.checks:
         print(f"[{check.status.value.upper()}] {check.name}: {check.detail}")
+    for check in report.not_requested:
+        print(f"[NOT_REQUESTED] {check.name}: {check.reason}")
+    print(
+        "COVERAGE requested: "
+        f"complete={str(report.requested_coverage_complete).lower()}; "
+        f"real_casc_verified={str(report.real_casc_verified).lower()}"
+    )
     print(f"REPORT {report_path}")
     return 0 if report.overall_status is AcceptanceStatus.PASS else 1
 
@@ -77,6 +89,14 @@ def _positive_int(value: str) -> int:
     return parsed
 
 
+def _war3_dir(value: str) -> Path:
+    if not value.strip():
+        raise argparse.ArgumentTypeError(
+            "--war3-dir requires a non-empty directory path"
+        )
+    return Path(value)
+
+
 def _environment_war3_dir() -> Path | None:
     value = os.getenv("GAMEXRAY_WAR3_DIR")
-    return Path(value) if value else None
+    return Path(value) if value and value.strip() else None

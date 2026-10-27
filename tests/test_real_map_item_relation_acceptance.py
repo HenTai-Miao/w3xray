@@ -12,24 +12,17 @@ from typing import Final
 import pytest
 
 from gametool.acceptance_batch import require_authoritative_batch
-from gametool.batch_models import BATCH_SCHEMA_VERSION, MapBatchResult
-from gametool.item_relation_exports import (
-    format_equipment_skills_tsv,
-    format_item_acquisition_tsv,
-)
+from gametool.batch_models import MapBatchResult
 from gametool.item_relation_models import (
     ItemRelationKind,
     RelationCompleteness,
     RelationConfidence,
 )
-from gametool.item_relation_query import filter_item_relations
-from gametool.map_loader import load_map
 
 from tests.real_map_text_acceptance import (
     TsvTable,
     legacy_report_value,
     legacy_text_report_value,
-    missing_legacy_text,
     read_tsv,
     read_tsv_text,
 )
@@ -79,11 +72,6 @@ _SKILL_KINDS: Final = frozenset(
     (ItemRelationKind.ITEM_ABILITY, ItemRelationKind.COOLDOWN_ABILITY)
 )
 
-_requires_real_map_inputs = pytest.mark.skipif(
-    not all(os.environ.get(name) for name in _ENV_NAMES),
-    reason="set GAMEXRAY_MAPS_ROOT/GAMEXRAY_OLD_OUTPUT/GAMEXRAY_NEW_OUTPUT",
-)
-
 
 @dataclass(frozen=True, slots=True)
 class AcceptanceContext:
@@ -115,106 +103,6 @@ def acceptance_context() -> AcceptanceContext:
         result.source.sha256: directory for result, directory in authority.publications
     }
     return AcceptanceContext(maps, old_by_digest, new_by_digest, state.results)
-
-
-@_requires_real_map_inputs
-def test_current_batch_covers_all_sources_and_required_artifacts(
-    acceptance_context: AcceptanceContext,
-) -> None:
-    # Given: current-schema state and the read-only source directory.
-    context = acceptance_context
-
-    # When: publication identities and per-map files are enumerated.
-    source_paths = {str(path.resolve()) for path in context.maps}
-    published_paths = {
-        str(Path(result.source.path).resolve()) for result in context.results
-    }
-
-    # Then: every one of the 39 sources has one complete artifact set.
-    assert BATCH_SCHEMA_VERSION == 6
-    assert len(context.maps) == len(context.results) == 39
-    assert source_paths == published_paths
-    assert set(context.old_by_digest) == set(context.new_by_digest)
-    for output in context.new_by_digest.values():
-        assert {path.name for path in output.iterdir()} >= _REQUIRED_ARTIFACTS
-
-
-@_requires_real_map_inputs
-def test_every_old_non_placeholder_raw_text_remains_current_evidence(
-    acceptance_context: AcceptanceContext,
-) -> None:
-    # Given: legacy reports and matching current outputs are joined by source digest.
-    context = acceptance_context
-
-    # When: every legacy raw tip and description is compared with v2 raw evidence.
-    missing: list[str] = []
-    for digest, old_output in context.old_by_digest.items():
-        old = read_tsv(old_output / "对象描述.tsv")
-        new = read_tsv(context.new_by_digest[digest] / "对象完整描述.tsv")
-        missing.extend(missing_legacy_text(digest, old, new))
-
-    # Then: no legacy value disappears, including its historical escaped form.
-    assert not missing, "\n".join(missing)
-
-
-@_requires_real_map_inputs
-def test_relation_rows_keep_stable_evidence_and_explicit_unresolved_state(
-    acceptance_context: AcceptanceContext,
-) -> None:
-    # Given: every v2 acquisition and skill table is parseable as standard TSV.
-    direct_doo_rows = 0
-    for output in acceptance_context.new_by_digest.values():
-        acquisition = read_tsv(output / "掉落与获取关系.tsv")
-        skills = read_tsv(output / "装备技能关系.tsv")
-        assert set(acquisition.header) >= _ACQUISITION_REQUIRED
-        assert set(skills.header) >= _SKILL_REQUIRED
-
-        # When/Then: each relation retains stable identity and static provenance.
-        _assert_relation_rows(acquisition, "证据文件")
-        _assert_relation_rows(skills, "字段来源")
-        for row in acquisition.rows:
-            if acquisition.value(row, "关系类型") in {
-                ItemRelationKind.UNIT_DROP.value,
-                ItemRelationKind.DESTRUCTABLE_DROP.value,
-            } and acquisition.value(row, "证据文件").casefold().endswith(".doo"):
-                direct_doo_rows += 1
-                assert acquisition.value(row, "掉落组")
-                assert acquisition.value(row, "组内序号")
-    assert direct_doo_rows > 0
-
-
-@_requires_real_map_inputs
-def test_representative_maps_match_gui_query_and_exporter_counts(
-    acceptance_context: AcceptanceContext,
-) -> None:
-    # Given: smallest, largest, and most script-reward-heavy source maps.
-    context = acceptance_context
-    smallest = min(context.results, key=lambda result: result.source.size)
-    largest = max(context.results, key=lambda result: result.source.size)
-    script_heavy = max(context.results, key=_script_reward_count)
-    assert _script_reward_count(script_heavy) > 0
-
-    # When: each representative map is loaded through the real static pipeline.
-    for result in {smallest, largest, script_heavy}:
-        md = load_map(result.source.path)
-        try:
-            visible = filter_item_relations(md.item_relations.records, "")
-            acquisition = read_tsv_text(format_item_acquisition_tsv(md.item_relations))
-            skills = read_tsv_text(format_equipment_skills_tsv(md.item_relations))
-            published_acquisition = read_tsv(
-                context.new_by_digest[result.source.sha256] / "掉落与获取关系.tsv"
-            )
-            published_skills = read_tsv(
-                context.new_by_digest[result.source.sha256] / "装备技能关系.tsv"
-            )
-
-            # Then: GUI, formatter, persisted tables, and index expose the same rows.
-            assert len(visible) == len(md.item_relations.records)
-            assert len(acquisition.rows) == len(published_acquisition.rows)
-            assert len(skills.rows) == len(published_skills.rows)
-            assert len(acquisition.rows) + len(skills.rows) == len(visible)
-        finally:
-            md.close()
 
 
 def test_tsv_text_reader_preserves_physical_newlines() -> None:

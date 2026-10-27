@@ -24,8 +24,9 @@ from .batch_runtime import (
     DiskPreflightInsufficient,
     DiskPreflightReady,
     check_disk_preflight,
-    current_peak_rss_bytes,
+    maximum_peak_rss_bytes,
 )
+from .windows_worker_memory import read_peak_rss
 from .batch_status import PublicationResult, derive_batch_axes, derive_legacy_map_state
 from .load_context import MapLoadContext
 
@@ -87,7 +88,11 @@ def attempt_map(
             pass
         case unreachable:
             assert_never(unreachable)
-    if options.map_timeout_seconds is None and not options.isolate_maps:
+    if (
+        options.map_timeout_seconds is None
+        and options.max_memory_bytes is None
+        and not options.isolate_maps
+    ):
         return _execute_direct(
             index,
             fingerprint,
@@ -111,13 +116,20 @@ def attempt_map(
         case MapExecutionSuccess(result=result, peak_rss_bytes=peak):
             published = replace(
                 result,
-                peak_rss_bytes=max(result.peak_rss_bytes, peak),
+                peak_rss_bytes=maximum_peak_rss_bytes(result.peak_rss_bytes, peak),
             )
             return MapAttempt(published, BatchAction.PROCESSED, "processed")
-        case MapExecutionFailure(code=code, detail=detail, peak_rss_bytes=peak):
-            return _failed(fingerprint, code, detail, dependency, peak)
-        case MapExecutionCancelled(detail=detail, peak_rss_bytes=peak):
-            return _cancelled(fingerprint, detail, dependency, peak)
+        case MapExecutionFailure(
+            code=code,
+            detail=detail,
+            peak_rss_bytes=peak,
+            resource_diagnostics=diagnostics,
+        ):
+            return _failed(fingerprint, code, detail, dependency, peak, diagnostics)
+        case MapExecutionCancelled(
+            detail=detail, peak_rss_bytes=peak, resource_diagnostics=diagnostics
+        ):
+            return _cancelled(fingerprint, detail, dependency, peak, diagnostics)
         case unreachable:
             assert_never(unreachable)
 
@@ -139,19 +151,25 @@ def _execute_direct(
     try:
         result = worker(index, fingerprint, options, context)
     except MemoryError as exc:
+        peak = read_peak_rss()
         return _failed(
             fingerprint,
             "map_memory_error",
             str(exc),
             dependency,
-            current_peak_rss_bytes(),
+            peak.peak_rss_bytes,
+            peak.diagnostics,
         )
     except (OSError, ValueError, KeyError, IndexError, struct.error) as exc:
         detail = f"{type(exc).__name__}: {exc}"
         return _failed(fingerprint, "map_processing_error", detail, dependency)
+    peak = read_peak_rss()
     result = replace(
         result,
-        peak_rss_bytes=max(result.peak_rss_bytes, current_peak_rss_bytes()),
+        peak_rss_bytes=maximum_peak_rss_bytes(
+            result.peak_rss_bytes, peak.peak_rss_bytes
+        ),
+        resource_diagnostics=(*result.resource_diagnostics, *peak.diagnostics),
     )
     return MapAttempt(result, BatchAction.PROCESSED, "processed")
 
@@ -161,7 +179,8 @@ def _failed(
     code: str,
     detail: str,
     dependency: str = "",
-    peak_rss_bytes: int = 0,
+    peak_rss_bytes: int | None = None,
+    resource_diagnostics: tuple[str, ...] = (),
 ) -> MapAttempt:
     result = _terminal_result(
         fingerprint,
@@ -171,6 +190,7 @@ def _failed(
         detail,
         dependency,
         peak_rss_bytes,
+        resource_diagnostics,
     )
     return MapAttempt(result, BatchAction.FAILED, code, detail)
 
@@ -179,7 +199,8 @@ def _cancelled(
     fingerprint: SourceFingerprint,
     detail: str,
     dependency: str = "",
-    peak_rss_bytes: int = 0,
+    peak_rss_bytes: int | None = None,
+    resource_diagnostics: tuple[str, ...] = (),
 ) -> MapAttempt:
     result = _terminal_result(
         fingerprint,
@@ -189,6 +210,7 @@ def _cancelled(
         detail,
         dependency,
         peak_rss_bytes,
+        resource_diagnostics,
     )
     return MapAttempt(
         result,
@@ -206,7 +228,8 @@ def _terminal_result(
     code: str,
     detail: str,
     dependency: str,
-    peak_rss_bytes: int,
+    peak_rss_bytes: int | None,
+    resource_diagnostics: tuple[str, ...],
 ) -> MapBatchResult:
     axes = derive_batch_axes(
         publication,
@@ -254,7 +277,8 @@ def _terminal_result(
         unresolved_endpoint_count=0,
         client_unavailable_icon_count=0,
         dependency_fingerprint=dependency,
-        peak_rss_bytes=max(0, peak_rss_bytes),
+        peak_rss_bytes=maximum_peak_rss_bytes(peak_rss_bytes),
+        resource_diagnostics=resource_diagnostics,
     )
 
 

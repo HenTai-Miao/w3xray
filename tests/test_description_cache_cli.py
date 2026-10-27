@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 import sys
 
@@ -11,13 +10,11 @@ import pytest
 import main as entrypoint
 from tests.description_cache_migration_fixture import (
     write_legacy_inputs,
-    write_mutated_inputs,
 )
 from gametool import description_cache_cli as cli
 from gametool.description_cache_migration import DescriptionCacheMigrationOptions
 from gametool.trusted_description_cache import (
     TrustedDescriptionCacheError,
-    load_trusted_description_cache,
 )
 
 
@@ -95,40 +92,6 @@ def test_description_cache_cli_returns_two_without_traceback_for_parse_error(
     assert "参数错误" in captured.err
     assert "Traceback" not in captured.err
     assert captured.out == ""
-
-
-@pytest.mark.skipif(
-    os.name == "nt",
-    reason="trusted-cache migration requires POSIX provenance primitives",
-)
-def test_description_cache_cli_returns_zero_for_structurally_valid_partial_migration(
-    tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    # Given: one structurally valid candidate lacks semantic proof.
-    legacy_output, legacy_cache = write_mutated_inputs(tmp_path, "readable")
-    output = tmp_path / "trusted"
-
-    # When
-    code = cli.run_description_cache_cli(
-        (
-            "migrate",
-            "--legacy-output",
-            str(legacy_output),
-            "--legacy-cache",
-            str(legacy_cache),
-            "--output",
-            str(output),
-        )
-    )
-
-    # Then
-    captured = capsys.readouterr()
-    assert code == 0
-    assert "接受 0" in captured.out
-    assert "拒绝 1" in captured.out
-    assert captured.err == ""
-    assert not load_trusted_description_cache(output).cache.entries
 
 
 def test_description_cache_cli_returns_two_without_traceback_for_preflight_error(
@@ -255,13 +218,14 @@ def test_description_cache_cli_returns_two_for_trust_error(
     assert "Traceback" not in captured.err
 
 
-def test_main_dispatches_description_cache_without_starting_gui(
+def test_main_rejects_retired_description_cache_without_starting_gui(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Given
-    legacy_output, legacy_cache = write_legacy_inputs(tmp_path)
-    output = tmp_path / "trusted"
+    # Given: retired public arguments must not reach migration or inspect inputs.
+    legacy_output = tmp_path / "unread-legacy"
+    legacy_cache = tmp_path / "unread-cache.tsv"
+    output = tmp_path / "unwritten-trusted"
     received: list[tuple[str, ...]] = []
     monkeypatch.setattr(
         cli,
@@ -284,5 +248,6 @@ def test_main_dispatches_description_cache_without_starting_gui(
     # When / Then
     with pytest.raises(SystemExit) as caught:
         entrypoint.main()
-    assert caught.value.code == 7
-    assert received == [argv[2:]]
+    assert caught.value.code == 2
+    assert received == []
+    assert not output.exists()

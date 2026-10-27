@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 from .batch_models import (
     BatchState,
@@ -46,7 +46,8 @@ class _ResultJson(TypedDict):
     dependency_fingerprint: str
     manifest_sha256: str
     published_bytes: int
-    peak_rss_bytes: int
+    peak_rss_bytes: int | None
+    resource_diagnostics: NotRequired[list[str]]
     valid_icon_reference_count: int
     resolved_icon_reference_count: int
     filtered_icon_field_count: int
@@ -85,7 +86,7 @@ def parse_batch_state_json(text: str) -> BatchState:
 
 
 def _result_json(result: MapBatchResult) -> _ResultJson:
-    return _ResultJson(
+    payload = _ResultJson(
         source=_SourceJson(
             path=result.source.path,
             size=result.source.size,
@@ -133,6 +134,10 @@ def _result_json(result: MapBatchResult) -> _ResultJson:
         client_unavailable_icon_count=result.client_unavailable_icon_count,
         source_coverage_gap_count=result.source_coverage_gap_count,
     )
+    # Preserve canonical bytes for legacy schema-six generations and manifests.
+    if result.resource_diagnostics:
+        payload["resource_diagnostics"] = list(result.resource_diagnostics)
+    return payload
 
 
 def _result_key(result: MapBatchResult) -> tuple[str, str]:

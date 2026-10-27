@@ -6,19 +6,7 @@ from typing import Final
 
 
 INTEGRITY_STRICT_PATHS: Final = tuple(
-    """tests/test_integrity_cli.py
-tests/test_integrity_cli_retained_cache.py
-tests/test_integrity_output_identity_races.py
-tests/test_integrity_output_safety.py
-tests/test_integrity_physical_aliases.py
-tests/test_integrity_platform_boundaries.py
-tests/test_integrity_report_history.py
-tests/test_integrity_report_history_preexchange_races.py
-tests/test_integrity_report_history_races.py
-tests/test_integrity_snapshot.py
-tests/test_integrity_snapshot_races.py
-tests/test_integrity_utf8_boundaries.py
-gametool/integrity_cli.py
+    """gametool/integrity_cli.py
 gametool/integrity_cli_options.py
 gametool/integrity_output.py
 gametool/integrity_output_naming.py
@@ -38,7 +26,20 @@ gametool/integrity_snapshot_io.py
 gametool/integrity_snapshot_models.py
 gametool/integrity_snapshot_tree.py
 gametool/integrity_utf8.py
-gametool/quality_integrity_paths.py""".split()
+gametool/quality_integrity_paths.py
+retired_contract_tests/posix/test_integrity_cli_retained_cache.py
+retired_contract_tests/posix/test_integrity_output_identity_races.py
+retired_contract_tests/posix/test_integrity_output_safety.py
+retired_contract_tests/posix/test_integrity_physical_aliases.py
+retired_contract_tests/posix/test_integrity_report_history_preexchange_races.py
+retired_contract_tests/posix/test_integrity_report_history_races.py
+retired_contract_tests/posix/test_integrity_snapshot_races.py
+tests/test_integrity_cli.py
+tests/test_integrity_platform_boundaries.py
+tests/test_integrity_report_history.py
+tests/test_integrity_snapshot.py
+tests/test_integrity_utf8_boundaries.py
+""".splitlines()
 )
 
 

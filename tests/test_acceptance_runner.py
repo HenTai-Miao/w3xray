@@ -47,12 +47,15 @@ def test_core_acceptance_executes_map_campaign_export_and_repeat_load(
     assert statuses["knowledge_pack_export"] == "pass"
     assert statuses["batch_publication"] == "pass"
     assert statuses["repeat_load"] == "pass"
-    assert statuses["real_windows_casc"] == "skip"
+    assert "real_windows_casc" not in statuses
+    assert "real_windows_casc" in {check.name for check in report.not_requested}
+    assert report.requested_coverage_complete is True
+    assert report.real_casc_verified is False
     assert report.overall_status.value == "pass"
     assert (tmp_path / "knowledge-pack" / "资料包目录.tsv").is_file()
 
 
-def test_portable_acceptance_skips_bundled_casclib(tmp_path: Path) -> None:
+def test_portable_acceptance_does_not_request_bundled_casclib(tmp_path: Path) -> None:
     # Given: a portable acceptance run that does not require Windows.
     module = importlib.import_module("gametool.acceptance_runner")
     config = module.AcceptanceConfig(
@@ -67,9 +70,11 @@ def test_portable_acceptance_skips_bundled_casclib(tmp_path: Path) -> None:
     # When: the acceptance runner executes every configured lane.
     report = module.run_acceptance(config)
 
-    # Then: the packaged CascLib lane is explicitly skipped.
+    # Then: the unrequested packaged CascLib lane is disclosed without executing.
     statuses = {check.name: check.status.value for check in report.checks}
-    assert statuses["bundled_casclib"] == "skip"
+    assert "bundled_casclib" not in statuses
+    assert "bundled_casclib" in {check.name for check in report.not_requested}
+    assert report.requested_coverage_complete is True
 
 
 def test_windows_acceptance_loads_bundled_casclib(
@@ -121,7 +126,11 @@ def test_main_acceptance_mode_writes_machine_readable_report(tmp_path: Path) -> 
         command,
         capture_output=True,
         encoding="utf-8",
-        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
+        env={
+            **os.environ,
+            "PYTHONIOENCODING": "cp1252",
+            "GAMEXRAY_WAR3_DIR": "",
+        },
         check=False,
     )
 
@@ -160,7 +169,11 @@ def test_main_acceptance_mode_loads_and_visits_all_gui_tabs(tmp_path: Path) -> N
         command,
         capture_output=True,
         encoding="utf-8",
-        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
+        env={
+            **os.environ,
+            "PYTHONIOENCODING": "cp1252",
+            "GAMEXRAY_WAR3_DIR": "",
+        },
         check=False,
     )
 

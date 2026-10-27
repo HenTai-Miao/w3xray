@@ -66,6 +66,7 @@ def observe_attempt(
         peak_rss_bytes=result.peak_rss_bytes,
         published_bytes=result.published_bytes,
         diagnostic_code=attempt.code,
+        resource_diagnostics=result.resource_diagnostics,
     )
     diagnostic = BatchDiagnostic(
         sequence=sequence,
@@ -78,6 +79,7 @@ def observe_attempt(
         elapsed_ms=progress.elapsed_ms,
         peak_rss_bytes=progress.peak_rss_bytes,
         published_bytes=progress.published_bytes,
+        resource_diagnostics=progress.resource_diagnostics,
     )
     return progress, diagnostic
 
@@ -98,7 +100,7 @@ def _starting_diagnostic(
         0,
         total,
         0,
-        0,
+        None,
         0,
     )
 

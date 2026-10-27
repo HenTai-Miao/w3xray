@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from gametool import dist_build
 from gametool.casclib_api import default_dll_path
 
 from gametool.casclib_dist import CascLibDistError, validate_casclib_dist_assets
@@ -21,6 +22,7 @@ from gametool.dist_build import (
     BUILD_MODE_ENV,
     DistBuildConfig,
     DistFormat,
+    DistPlatformError,
     build_pyinstaller_command,
     default_dist_config,
     expected_artifact_path,
@@ -316,3 +318,89 @@ def test_spec_supports_onedir_and_onefile_from_one_analysis() -> None:
     assert "CascLib.dll" in spec
     assert "third_party/CascLib/LICENSE" in spec
     assert "collect_all('customtkinter')" in spec
+
+
+@pytest.mark.parametrize("system", ("Darwin", "Linux", "FreeBSD", ""))
+@pytest.mark.parametrize("dist_format", (DistFormat.ONEDIR, DistFormat.ONEFILE))
+def test_expected_artifact_path_refuses_non_windows_distribution(
+    tmp_path: Path, system: str, dist_format: DistFormat
+) -> None:
+    config = replace(default_dist_config(tmp_path), format=dist_format)
+
+    with pytest.raises(DistPlatformError, match="仅支持 Windows"):
+        expected_artifact_path(config, system=system)
+
+
+@pytest.mark.parametrize("system", ("Darwin", "Linux", "FreeBSD"))
+@pytest.mark.parametrize("dry_run", (False, True))
+@pytest.mark.parametrize("dist_format", (DistFormat.ONEDIR, DistFormat.ONEFILE))
+def test_non_windows_build_refuses_before_inputs_or_output_changes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    system: str,
+    dry_run: bool,
+    dist_format: DistFormat,
+) -> None:
+    config = replace(default_dist_config(tmp_path), format=dist_format)
+    asset = tmp_path / "caller-asset.json"
+    asset.write_bytes(b'{"keep":"exact"}\r\n')
+    before = (asset.read_bytes(), asset.stat().st_mtime_ns)
+
+    def unexpected(*_args: object, **_kwargs: object) -> None:
+        pytest.fail(
+            "unsupported distribution must stop before asset checks or execution"
+        )
+
+    monkeypatch.setattr(dist_build.platform, "system", lambda: system)
+    monkeypatch.setattr(dist_build, "validate_casclib_dist_assets", unexpected)
+    monkeypatch.setattr(dist_build.subprocess, "run", unexpected)
+
+    with pytest.raises(DistPlatformError, match="仅支持 Windows"):
+        run_dist_build(config, dry_run=dry_run)
+
+    assert list(tmp_path.iterdir()) == [asset]
+    assert (asset.read_bytes(), asset.stat().st_mtime_ns) == before
+    assert not config.dist_path.exists()
+    assert not config.work_path.exists()
+
+
+@pytest.mark.parametrize("system", ("Darwin", "Linux", "FreeBSD"))
+@pytest.mark.parametrize("dry_run", (False, True))
+def test_non_windows_dist_cli_reports_platform_before_project_discovery(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    system: str,
+    dry_run: bool,
+) -> None:
+    output = tmp_path / "output"
+    work = tmp_path / "work"
+
+    def unexpected() -> None:
+        pytest.fail("unsupported distribution must not discover project inputs")
+
+    monkeypatch.setattr(dist_build.platform, "system", lambda: system)
+    monkeypatch.setattr(dist_build, "default_dist_config", unexpected)
+    arguments = ["--distpath", str(output), "--workpath", str(work), "--onefile"]
+    if dry_run:
+        arguments.append("--dry-run")
+
+    assert dist_build.main(arguments) == 2
+
+    result = capsys.readouterr()
+    assert "仅支持 Windows" in result.err
+    assert system in result.err
+    assert not result.out
+    assert not output.exists()
+    assert not work.exists()
+
+
+def test_non_windows_dist_help_is_available_without_project_discovery(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(dist_build.platform, "system", lambda: "Linux")
+
+    assert dist_build.main(("--help",)) == 0
+    output = capsys.readouterr()
+    assert "仅支持 Windows" in output.out
+    assert not output.err

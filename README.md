@@ -2,6 +2,8 @@
 
 > **X-ray game archives.** 当前支持 Warcraft III 地图/战役；通过 `gametool/games/` 适配层可插拔扩展更多游戏。
 
+当前只维护 Windows 版，发行目标为 Windows x64，提供目录版和单文件版。
+
 从零实现的**游戏档案透视工具**；Warcraft III 地图 MPQ 解析为纯 Python，并包含基于 CascLib 3.0 的 Windows 原生 CASC 后端。
 核心管线只认通用提取类目（对象/单位/技能/触发器/关系/世界/预放置/脚本/资源/基础），游戏专属规则全部隔离在适配层——**新增游戏 = 新增一个适配器模块，不改核心代码**。
 带图形界面，可对地图里的 **单位 / 物品 / 技能 / 科技 / 可破坏物 / 装饰物 / 增益**
@@ -36,7 +38,7 @@ GUI触发器、场景放置、触发指令、合成配方、孤立对象、分�
 见 [2026-10-27 静态审计](docs/analysis/war3-tools-audit-2026-10-27.md)。
 该审计固定于 0.6.2 源码基线；0.7.0 的具体落地范围见上述使用说明，未验证的运行时布局仍单列状态。
 
-## 直接用（GitHub Releases）
+## Windows 发行包
 
 Windows x64 同时提供：
 
@@ -44,17 +46,6 @@ Windows x64 同时提供：
 - `gamexray-v0.7.0-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
 
 两者功能相同；遇到杀软误报或启动问题时优先使用 ZIP 版。
-
-macOS 提供两个未签名、未公证的 onedir ZIP，请按 Mac 处理器选择并完整解压：
-
-- `gamexray-v0.7.0-macos-arm64.zip`：Apple Silicon（M1/M2/M3/M4/M5）。
-- `gamexray-v0.7.0-macos-x64.zip`：Intel Mac。
-
-Linux 提供：
-
-- `gamexray-v0.7.0-linux-x64.tar.gz`：Linux x86-64，解压后运行 `./GameXRay 游戏档案透视器/GameXRay 游戏档案透视器`。
-
-macOS/Linux 包支持地图与战役的静态提取；Windows 专用的 CascLib 游戏客户端原生后端不包含在这两类包中。macOS 首次运行可能出现 Gatekeeper 未验证开发者提示。
 
 ## 开发运行（uv）
 ```bash
@@ -75,18 +66,13 @@ uv run main.py batch <地图目录> --output <新输出目录> --game-data <客�
 uv run gamexray-test             # 运行测试（Windows 下避开 pytest.exe trampoline）
 ```
 
-## Schema 6 批量证据与完整性命令
+## Schema 6 批量资料包与证据
 
 schema 6 使用显式输入，不搜索或改写旧结果。提取修订号随输出语义更新，旧结果保留，
-复用时校验其依赖。典型迁移、批处理和
-前后完整性检查命令为：
+复用时校验其依赖。Windows 批处理可以读取本地游戏数据和已有可信描述缓存：
 
 ```bash
-uv run main.py description-cache migrate --legacy-output <schema-1-root> --legacy-cache <schema-2-cache.tsv> --output <owned-cache-root>
 uv run main.py batch <maps-root> --output <v6-root> --game-data <client-or-trusted-icon-root> --description-cache <owned-cache-root>
-uv run main.py integrity snapshot --root maps=<maps-root> --root legacy-v1=<root> --root legacy-v2=<root> --root legacy-v4=<root> --output <before.json>
-uv run main.py integrity verify --snapshot <before.json>
-uv run main.py integrity retained-cache --active-root <owned-cache-root> --output <retained-cache-report.json>
 ```
 
 每张已发布地图必须包含 `图标未解析.tsv`，逐项保留规范路径、主原因、诊断标志和对象引用；
@@ -100,17 +86,9 @@ GUI 快捷键与弹窗惯例在应用内随时可查：数据工具菜单 →「
 `图标缺口统计.txt` 汇总原因/命名空间/扩展名/对象分类/地图，`三轴状态汇总.tsv` 则分别记录
 发布结果、档案完整性和知识证据完整性。候选不会自动填补当前地图，也不会改变缺口权威记录。
 
-`integrity retained-cache` 把有意保留的 `previous`、失败 stage/output 和 recovery 证据，与仍在
-发布命名空间中的 stage/backup 临时违规分开报告。它只做有界、no-follow、双轮完整性证明，
-不会把保留对象自动加载为描述来源，也不会删除、修复或重命名任何对象。
-
-重复使用同一 `--output` 写入完整性快照或保留缓存报告时，新报告保持原路径；旧报告的
-原 inode 移入输出父目录下的 `.gamexray-integrity-history/<输出文件名 SHA-256>/`
-不可变历史代。每代只包含 `report.json` 和 `历史清单.json`，清单绑定原输出文件名、
-字节数和 SHA-256；既有历史代永不自动删除或覆盖。普通地图/资源写出仍只使用通用原子
-替换语义，不会自动创建这个历史目录。完整性报告不能使用历史根名称或目标文件系统中
-与其物理等价的别名；交换前失败只清理身份仍可证明的新报告 stage，交换结果不可信时
-则保留当前、旧版和并发对象，不做猜测性删除。
+当前 Windows 版已撤下依赖其他系统底层能力的完整性快照和描述缓存迁移入口。
+已有可信缓存仍可读取；本地实时报告可用 `live-report inspect/diff` 检查和比较，
+知识包之间可用 `pack-query <新包> diff <旧包>` 比较。
 
 完整批次发布权威状态后，只会退休通过严格所有权与清单验证、同源且不再被状态引用的旧显示名
 目录，不会删除未知目录或符号链接。下列数字仅是 2026-07-15 的历史 schema 4 / revision 4
@@ -154,6 +132,9 @@ Windows 上如果 `uv run pytest -q` 报 `uv trampoline failed to canonicalize s
 
 测试入口默认隔离运行时缓存：`gamexray-test` 在启动 pytest 前分配独立缓存，仓库内直接运行 pytest 也会在收集测试前建立会话缓存，并在退出时恢复原环境变量。测试的查询历史、收藏、最近包目录及最近查询等内容写入系统临时目录中的 `gamexray-test-cache-*`，不会复用调用方的缓存目录；临时产物保留供诊断。无法建立隔离缓存时直接报告错误，不回退到用户缓存。单独运行 CLI 验收脚本时可将 `gametool.dev_test.create_test_environment()` 返回的环境传给子进程。
 
+默认回归只收集当前 Windows 产品测试，失败、跳过、xfail 或 xpass 都会使门禁失败。真实符号链接安全测试需要具备创建链接的权限；本机维护任务使用已验证的管理员执行会话完成整套验收。仍有效的文件、来源、缓存和发布保护均保留在默认回归。
+退役 POSIX 后端的完整原测试体保存在 `retired_contract_tests/posix`，范围清单校验原函数 AST，不混入 Windows 产品验收。历史 39 图与真实 CASC 安装属于显式真实输入验收：`uv run gamexray-test --suite real-data --lane historical` 或 `--lane casc`；缺少对应输入时返回 2，既不跳过也不计为通过。详细输入参数见 `AGENTS.d/testing.md`。
+
 ## 重新打包 exe
 Windows 包必须先从固定源码构建 x64 CascLib；脚本会验证源码 SHA256，并生成 DLL 及其哈希。默认命令构建 onedir（exe + 同目录 `_internal/` 依赖）；加 `--onefile` 构建可直接分发的单文件 exe：
 ```powershell
@@ -166,7 +147,7 @@ DLL 和生成的哈希是本地构建产物，不提交到 Git。Windows 打包�
 ```bash
 uv run gamexray-dist --dry-run
 ```
-说明：PyInstaller 不是跨平台编译器；在 macOS/Linux 上运行同一命令会生成当前平台的可执行文件，不会生成 Windows `.exe`。
+构建入口仅接受 Windows；其他系统会在创建产物前明确拒绝。
 
 真实 Windows 魔兽安装的一键验收（构建 CascLib、全套测试、打包、再由打包 EXE
 执行地图/战役/GUI/CASC/导出/重复加载）运行：
@@ -199,7 +180,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
   uv run build_base_names.py --merge-from-casc "C:/Program Files (x86)/Warcraft III"  # 只补缺失对象，现有条目逐字保留
   ```
 - **配套生成器**：`build_base_catalog.py --objectdata-dir <war3-objectdata 快照>` 并入英文名/细类表（`BASE_NAMES_EN`/`BASE_CATEGORIES`），也可 `--casc-root <安装根目录>` 用本机 CASC 的 SLK 补细类（preserve-and-fill，现有条目一律保留）；`build_field_labels.py --meta-dir <MetaData 目录> [--common-j <Reforged common.j>]` 重建字段适用性/值域/常量表（标签为保留式合并）。英文名覆盖有已知上限：中文区客户端只安装 zhCN 语言包（enUS 条目在 Root 清单存在但内容未下载），而 war3-objectdata 快照（无论锁定版还是 master）都不含物品技能变体码（`AA12` 一类）的英文——这类码有中文名和细类、暂无英文名，属数据源硬限制。
-- **重制版（1.30+，CASC，散文件回退）**：游戏数据改为 CASC。Windows 发行包已接入 CascLib 后端，可按已知路径读取，也可流式枚举 Root 的全部条目；无原路径的条目以 FileDataID/CKey/EKey 保留。无 CascLib 时可回退到带 `gamexray-casc-paths.tsv` 的 idx/data 非加密 BLTE 读取；所有平台也可读取 CascView/casc-extract 导出的散文件目录（zhCN 语言包的冒号命名空间会按嵌套文件夹布局解析）。本次 macOS 环境不能代替真实 Windows 魔兽安装验收，刷新内置数据仍可用散文件目录：
+- **重制版（1.30+，CASC，散文件回退）**：游戏数据改为 CASC。Windows 发行包已接入 CascLib 后端，可按已知路径读取，也可流式枚举 Root 的全部条目；无原路径的条目以 FileDataID/CKey/EKey 保留。无 CascLib 时可回退到带 `gamexray-casc-paths.tsv` 的 idx/data 非加密 BLTE 读取；也可读取 CascView/casc-extract 导出的本地散文件目录（zhCN 语言包的冒号命名空间会按嵌套文件夹布局解析）。刷新内置数据可使用这些本地文件：
   1. 用 [CascView](http://www.zezula.net/en/casc/main.html)（GUI）或 `wc3tools/casc-extract`（CLI，如 `casc-extract war3.w3mod:units/*` ）把游戏 `units/` 下的 `*Strings.txt`/`*Func.txt`/`*Data.slk` 与 `ui/WorldEdit*Strings.txt` 导到一个文件夹。
   2. `uv run build_base_names.py --from-dir <该文件夹>`，按打印的「找到/未找到」清单确认覆盖。
 
@@ -207,7 +188,7 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
 - **WTG 头和目录**：不需要游戏数据即可读取分类、变量、触发器头和启用状态。
 - **WTG ECA 函数体**：需要与地图版本匹配的 `TriggerData.txt` 才能按函数签名安全展开；缺 schema 时保留头部并报告未展开入口，不猜参数字节。
 - **ECA 本地化语义**：在 `TriggerData.txt` 基础上还需要 `TriggerStrings.txt`；缺少它时仍保留函数名和参数原值。
-- **原生 CASC**：Windows 已实现固定版本 CascLib 的已知路径读取和完整 Root 枚举。Root 没保存原路径时，浏览器保留 CascLib 返回的 `FileDataID/CKey/EKey` 稳定标识，仍可读取/导出，不伪造路径。散文件目录和显式 path-map 是跨平台回退。仓库包含需 `GAMEXRAY_WAR3_DIR` 的 Windows 真机验收；本次 macOS 验证仍不冒充真实安装通过。
+- **原生 CASC**：Windows 已实现固定版本 CascLib 的已知路径读取和完整 Root 枚举。Root 没保存原路径时，浏览器保留 CascLib 返回的 `FileDataID/CKey/EKey` 稳定标识，仍可读取/导出，不伪造路径。散文件目录和显式 path-map 提供本地回退。真实 CASC 安装验收使用 `GAMEXRAY_WAR3_DIR`；Classic MPQ 安装使用对应的本地 MPQ 读取后端。
 - **保护/加密地图**：只做有界开档诊断、可恢复静态块提取和 `UnknownRaw` 原始负载保留；不执行内嵌 loader，不做运行时内存 dump、调试器或平台保护绕过。作者可提供带源地图 SHA256 和逐文件 SHA256 的明文补充包，让完全不可开的容器继续分析作者给出的 `war3map.j/lua/w3*` 文件。
 - **真实存档文件**：可对用户指定的文件/目录做只读清单、格式识别、SHA256、Preload/JASS/JSON/INI/MPQ 可读文本、存档键和对象 ID 交叉分析；不调用平台 API，不解密不透明平台数据，不修改源文件。
 - **全量解析与导出**：战役子图、条目清单、SLK 坐标、MPQ/存档成员、listfile、补充包、批处理报告与描述缓存均无默认条数或字节配额。解析按真实文件与声明格式校验，读取过程核对文件身份与变动；CASC 和 live 内存区域分块读取，不以单区域大小跳过。批处理 CLI 保留子进程隔离、取消和原子发布，默认无时限、无额外磁盘预留，资源预算可显式指定。BLP 根据实际像素负载验证并支持 1/4/8 位透明度。详见[全量解析与查询说明](docs/full-data-parsing-query.md)。
@@ -256,8 +237,8 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
 ## 能力状态
 - **完整（有自动化证据）**：单张 `.w3x/.w3m` 和战役 `.w3n` 的静态 MPQ 提取；二进制对象、GBK Func/Strings、SLK 按 rawcode 合并；JASS/Lua/WCT、WTG/W3F、世界数据、资源和四类 ID 报告；逐组件诊断与逐文件写入结果。独立 StormLib fixture 同时覆盖四类对象、WTS、JASS+Lua、WTG/WCT 和 W3F 声明子图，战役 CLI 会自动发布每张已加载子图的独立资料包。
 - **部分（输入决定上限）**：缺 `TriggerData.txt` 时 WTG 只保留头和未展开诊断；缺 `TriggerStrings.txt` 时 ECA 无编辑器本地化句子；损坏或匿名 MPQ 只发布可确认内容、诊断和 `UnknownRaw`；path-map/散文件客户端源只能枚举已知路径。
-- **运行时范围外**：不执行地图 loader、平台 API 或游戏进程代码，不做内存 dump、反调试/反作弊绕过、数据级运行时解密，也不解密或修改不透明玩家存档。
-- **外部验收 SKIP**：本次开发环境不是带真实 Warcraft III 安装的 Windows 主机。Windows 打包与真安装工作流已经存在，但只有 hosted/self-hosted 产生的验收 JSON 才能记为 PASS；本地 macOS 测试不替代该证据。
+- **运行时范围外**：不执行地图 loader、平台 API 或游戏进程代码，不做反调试/反作弊绕过、数据级运行时解密，也不解密或修改不透明玩家存档。
+- **Windows 发行验收**：发布前必须由新生成的 EXE 验证地图、战役、知识包、查询、批处理、GUI 和重复加载。实际 Classic MPQ、CASC 与实时读取按对应输入分别记录证据；具体结论以本次发行目录中的验收报告为准。
 
 ## 功能
 - **提取开关**：GUI 顶栏「提取设置」或 CLI `--profile "objects,units,-triggers"`（`-` 前缀=关闭，`all`=全开），按 10 个通用类目自由开关导出内容——不需要的类目完全不产出，大幅提速；全开时与历史全量导出逐文件一致。开关持久化保存，GUI/CLI 共享。

@@ -77,12 +77,18 @@ def run_batch_cli(options: BatchCliOptions) -> int:
 
 def _print_batch_progress(progress: BatchProgress) -> None:
     eta = "未知" if progress.eta_seconds is None else f"{progress.eta_seconds:.2f}s"
-    rss_mib = progress.peak_rss_bytes / (1024 * 1024)
+    rss = (
+        "未知"
+        if progress.peak_rss_bytes is None or progress.peak_rss_bytes <= 0
+        else f"{progress.peak_rss_bytes / (1024 * 1024):.2f} MiB"
+    )
     print(
         single_line_text(
             f"进度 {progress.completed}/{progress.total} "
             f"{progress.action.value} "
             f"耗时 {progress.elapsed_ms / 1000:.2f}s "
-            f"RSS {rss_mib:.2f} MiB ETA {eta}"
+            f"RSS {rss} ETA {eta}"
         )
     )
+    for diagnostic in progress.resource_diagnostics:
+        print(single_line_text(f"资源诊断：{diagnostic}"), file=sys.stderr)

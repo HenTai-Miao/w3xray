@@ -27,8 +27,6 @@ def top_level_help() -> str:
         "  reference               字段、对象与版本参考目录 (可指定知识包)\n"
         "  current                 定位正在使用的地图\n"
         "  batch <目录>            批量导出 (schema-6; 显式指定 --output)\n"
-        "  integrity               根快照/校验/retained-cache 审计\n"
-        "  description-cache       显式迁移可信描述缓存\n"
         "  casc …                  CASC 客户端浏览/导出\n"
         "  save / savecodes        存档容器/存档码读取\n"
         "  wgc / gameconfig <文件>  读取游戏配置\n"
@@ -92,24 +90,35 @@ def _command_help(command: str) -> str | None:
             "  --no-retry-failed              不重试之前失败的地图\n"
             "递归处理全部 .w3x/.w3m/.w3n；默认无单图超时或额外内存上限。"
         ),
-        "integrity": (
-            "用法: gamexray integrity <snapshot|verify|retained-cache> [选项]\n"
-            "  snapshot --root LABEL=PATH [--root LABEL=PATH…] --output <报告.json>\n"
-            "  verify --snapshot <报告.json>\n"
-            "  retained-cache --active-root <缓存目录> --output <报告.json>\n"
-            "返回 0=通过，1=发现差异，2=输入/平台/文件系统边界；"
-            "需要 POSIX 目录描述符的操作在 Windows 保留证据并返回 2。"
-        ),
-        "description-cache": (
-            "用法: gamexray description-cache migrate --legacy-output <历史输出>\n"
-            "  --legacy-cache <历史缓存.tsv> --output <新可信缓存目录>\n"
-            "显式迁移；历史输入只读。Windows 缺少所需 POSIX 能力时返回 2。"
-        ),
         "wgc": "用法: gamexray wgc <游戏配置.wgc>\n读取配置摘要；文件错误返回 2。",
         "gameconfig": (
             "用法: gamexray gameconfig <游戏配置.wgc>\n读取配置摘要；文件错误返回 2。"
         ),
     }.get(command)
+
+
+def _retired_cli_error(command: str) -> NoReturn:
+    """Reject removed public modes before help routing, input access, or GUI."""
+    print(f"Windows 版已移除 {command} 的公开命令入口。", file=sys.stderr)
+    if command == "integrity":
+        print(
+            "查看实时报告：gamexray live-report inspect <报告.json>\n"
+            "比较实时报告：gamexray live-report diff <旧报告.json> <新报告.json>",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            "已有可信描述缓存仍可通过数据工具的“选择可信描述缓存”读取，或使用：\n"
+            "gamexray batch <地图目录> --output <新输出目录> "
+            "--description-cache <可信缓存目录>",
+            file=sys.stderr,
+        )
+    print(
+        "比较知识包：gamexray pack-query <新包目录> diff <旧包目录>\n"
+        "运行 gamexray --help 查看当前可用命令。",
+        file=sys.stderr,
+    )
+    raise SystemExit(2)
 
 
 def _cli_options_error(prefix: str, exc: Exception) -> NoReturn:
@@ -126,6 +135,8 @@ def main() -> None:
     """Dispatch legacy game-config, map CLI, or GUI startup modes."""
     multiprocessing.freeze_support()
     configure_cli_output()
+    if len(sys.argv) >= 2 and sys.argv[1] in {"integrity", "description-cache"}:
+        _retired_cli_error(sys.argv[1])
     if len(sys.argv) >= 2 and sys.argv[1] == "--version":
         from gametool import __version__
 
@@ -144,14 +155,6 @@ def main() -> None:
     if sys.argv[1:] == ["pack-query"]:
         print(_command_help("pack-query"))
         raise SystemExit(0)
-    if len(sys.argv) >= 2 and sys.argv[1] == "integrity":
-        from gametool.integrity_cli import run_integrity_cli
-
-        raise SystemExit(run_integrity_cli(tuple(sys.argv[2:])))
-    if len(sys.argv) >= 2 and sys.argv[1] == "description-cache":
-        from gametool.description_cache_cli import run_description_cache_cli
-
-        raise SystemExit(run_description_cache_cli(tuple(sys.argv[2:])))
     if len(sys.argv) >= 2 and sys.argv[1] == "batch":
         from gametool.batch_cli import (
             BatchCliOptionError,

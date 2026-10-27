@@ -1,5 +1,35 @@
 # Testing and Acceptance
 
+## Current Windows supported regression
+
+The maintained product is Windows x64. `uv run gamexray-test` and ordinary repository pytest collect `tests/` through the explicit `testpaths` setting. This is the complete supported Windows product scope, including the original portable contracts, real Windows link/junction safety, and the Windows counterparts of shared publication/source-reading invariants.
+
+Every skip, xfail, xpass, collection error, and test failure is a nonzero gate. No result is changed into a pass. A new capability gap stays a failed gate until it is exercised or explicitly reviewed; filenames and words in test names never grant an exclusion. Windows link tests require a runner that can actually create the links (the hosted Windows runner or an already authorized local environment); the application itself does not acquire new privileges for tests.
+
+The runner allocates private runtime caches before collection, even with `--noconftest`, and installs the strict scope plugin explicitly. Each session writes a complete `TEST-SCOPE` JSON record under a new private temporary root: selected and passed nodeids, unexpected outcomes, exact retired contracts, real input checks not requested, and the scope-manifest hash. A Windows scope pass does not certify an unrequested real CASC installation or historical dataset.
+
+```powershell
+uv run gamexray-test
+uv run python -m pytest -q
+```
+
+POSIX-only native bodies were physically moved to `retired_contract_tests/posix/`; they remain complete independent backend contracts rather than supported Windows operations. `retired_contract_tests/scope-manifest.json` records original nodeids, reasons, destinations, full original function AST hashes, and required Windows equivalents. Two capability-preflight rejection tests remain in the Windows suite and prove that unsupported capabilities cause zero transaction effects. Generic schemas, codecs, comparison, source proof, identity checks, and cache readers remain covered on Windows.
+
+An independent inspection of the retired native library requires its actual native runtime and an explicit scope; a Windows invocation fails before pytest rather than fabricating skips or passes. These contracts do not constitute macOS/Linux product or distribution support.
+
+```text
+uv run gamexray-test --suite retired-posix
+```
+
+Real original-input acceptance lives in `real_data_acceptance/`, outside default product collection. Request the specific lane explicitly. Missing inputs return 2 before pytest; invalid Classic MPQ data cannot substitute for CASC. Once selected, the original assertions run unchanged and any failure/skip remains a hard failure. Historical map/output counts and provenance must never be replaced with synthetic data to manufacture a green result.
+
+```powershell
+uv run gamexray-test --suite real-data --lane casc --war3-dir <original-CASC-root>
+uv run gamexray-test --suite real-data --lane historical --maps-root <original-maps> --old-output <original-old-output> --new-output <original-new-output>
+```
+
+The explicitly selected real-data lane may also obtain the same named paths from `GAMEXRAY_WAR3_DIR` or `GAMEXRAY_MAPS_ROOT/GAMEXRAY_OLD_OUTPUT/GAMEXRAY_NEW_OUTPUT`. Default Windows regression never selects those lanes merely because an environment variable exists. Refer to the two physical scope READMEs and the manifest when reviewing a scope change. Removing a Windows-valid assertion or swallowing a protective error is not a scope change.
+
 ## Automated gates
 
 Task 10 focused behavior and integration gate:
@@ -28,7 +58,7 @@ uv run python -m pytest -q \
   tests/test_safe_output_publication_cleanup_races.py \
   tests/test_durable_io.py \
   tests/test_release_metadata.py \
-  tests/test_posix_package_assets.py \
+  tests/test_windows_only_distribution.py \
   tests/test_quality_gate.py \
   tests/test_batch_dependencies.py \
   tests/test_batch_e2e.py \
@@ -46,10 +76,7 @@ Repository gate:
 uv run gamexray-test
 ```
 
-On Windows, `tests/conftest.py` marks only suites that require POSIX dir-fd,
-no-follow traversal, or atomic exchange as capability skips. Core batch,
-trusted-cache reading, GUI, package construction, and packaged acceptance stay
-mandatory; `tests/test_windows_acceptance_assets.py` guards that boundary.
+The historical platform-prefix skip rule has been removed. Native-only contracts now have their own physical scope, while core batch, trusted-cache readers, GUI, package construction and packaged acceptance remain mandatory in the Windows suite. The dated measurements below describe the earlier repository state; their skip counts are historical evidence, not permission to skip current Windows coverage.
 
 Verified on 2026-07-19 after wave-five independent-review closure: 2,118
 passed, 18 skipped, and 1 subtest passed.

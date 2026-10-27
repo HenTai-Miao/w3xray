@@ -1,10 +1,9 @@
-"""Project-local PyInstaller dist builder."""
+"""Project-local Windows PyInstaller dist builder."""
 
 from __future__ import annotations
 
 import os
 import platform
-import shlex
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -81,6 +80,22 @@ class DistArgumentError(ValueError):
         return f"不支持的参数：{self.argument}"
 
 
+@dataclass(frozen=True, slots=True)
+class DistPlatformError(RuntimeError):
+    """Raised before a distribution build on an unsupported host."""
+
+    system: str
+
+    def __str__(self) -> str:
+        return f"发行构建仅支持 Windows；当前平台：{self.system or '未知'}"
+
+
+def _require_windows(system: str | None = None) -> None:
+    current_system = platform.system() if system is None else system
+    if current_system != "Windows":
+        raise DistPlatformError(system=current_system)
+
+
 class DistHelpRequested(Exception):
     """Raised internally when the user asks for CLI help."""
 
@@ -138,7 +153,8 @@ def build_pyinstaller_command(
 def expected_artifact_path(
     config: DistBuildConfig, *, system: str | None = None
 ) -> Path:
-    """Return the executable path users should launch after a successful build."""
+    """Return the Windows executable path after a successful build."""
+    _require_windows(system)
     match config.format:
         case DistFormat.ONEFILE:
             app_dir = config.dist_path
@@ -146,14 +162,7 @@ def expected_artifact_path(
             app_dir = config.dist_path / APP_NAME
         case unreachable:
             assert_never(unreachable)
-    current_system = system or platform.system()
-    match current_system:  # [OK: MATCH_OK] - platform names are an open string set.
-        case "Windows":
-            return app_dir / f"{APP_NAME}.exe"
-        case "Darwin" | "Linux":
-            return app_dir / APP_NAME
-        case _:
-            return app_dir / APP_NAME
+    return app_dir / f"{APP_NAME}.exe"
 
 
 def parse_cli_options(argv: Sequence[str]) -> DistCliOptions:
@@ -194,17 +203,14 @@ def parse_cli_options(argv: Sequence[str]) -> DistCliOptions:
 
 
 def run_dist_build(config: DistBuildConfig, *, dry_run: bool = False) -> int:
-    """Run PyInstaller for the configured project."""
+    """Run PyInstaller for the configured Windows project."""
+    _require_windows()
     if not config.spec_path.is_file():
         raise DistSpecMissingError(spec_path=config.spec_path)
     validate_casclib_dist_assets(config.project_root)
     command = build_pyinstaller_command(config)
     print("构建命令:")
-    rendered_command = (
-        "& " + subprocess.list2cmdline(command)
-        if platform.system() == "Windows"
-        else shlex.join(command)
-    )
+    rendered_command = "& " + subprocess.list2cmdline(command)
     print(f"  {rendered_command}")
     if dry_run:
         print("dry-run: 未执行 PyInstaller。")
@@ -217,8 +223,7 @@ def run_dist_build(config: DistBuildConfig, *, dry_run: bool = False) -> int:
     )
     if result.returncode == 0:
         print("构建完成:")
-        print(f"  当前平台产物: {expected_artifact_path(config)}")
-        print(f"  Windows exe 路径: {expected_artifact_path(config, system='Windows')}")
+        print(f"  Windows exe 路径: {expected_artifact_path(config)}")
     return result.returncode
 
 
@@ -237,7 +242,7 @@ def help_text() -> str:
             "  --workpath  显式指定临时构建目录（可放在仓库外）",
             "  -h, --help  显示帮助",
             "",
-            "说明: PyInstaller 不是跨平台编译器；Windows .exe 需要在 Windows 上构建。",
+            "说明: 发行构建仅支持 Windows，生成 Windows .exe。",
         )
     )
 
@@ -247,6 +252,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     configure_cli_output()
     try:
         options = parse_cli_options(tuple(sys.argv[1:] if argv is None else argv))
+        _require_windows()
         config = replace(
             default_dist_config(),
             clean=options.clean,
@@ -264,6 +270,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     except (
         CascLibDistError,
         DistArgumentError,
+        DistPlatformError,
         DistSpecMissingError,
         ProjectRootNotFoundError,
     ) as exc:

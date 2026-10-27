@@ -1,0 +1,148 @@
+"""Descriptor-anchored trusted-cache inventory and byte proof."""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+from typing import Final
+
+import pytest
+
+from tests.trusted_description_cache_fixture import published_cache
+from gametool import trusted_description_cache_io as anchored_io
+from gametool.trusted_description_cache import (
+    TrustedDescriptionCacheError,
+    load_trusted_description_cache,
+    load_trusted_description_cache_from_descriptor,
+    load_trusted_description_cache_from_parent,
+)
+from gametool.trusted_description_cache_generation_io import (
+    read_trusted_cache_from_descriptor,
+)
+
+
+_DIRECTORY_FLAGS: Final = (
+    os.O_RDONLY
+    | getattr(os, "O_DIRECTORY", 0)
+    | getattr(os, "O_CLOEXEC", 0)
+    | getattr(os, "O_NOFOLLOW", 0)
+)
+_REQUIRES_ANCHORED_CACHE = pytest.mark.skipif(
+    not anchored_io._ANCHORED_CACHE_AVAILABLE,
+    reason="requires descriptor-relative no-follow cache reads",
+)
+
+
+@_REQUIRES_ANCHORED_CACHE
+def test_anchored_loader_proves_the_same_bytes_as_public_loader(
+    tmp_path: Path,
+) -> None:
+    # Given: one complete generation and a held descriptor for its parent.
+    root = published_cache(tmp_path)
+    expected = load_trusted_description_cache(root)
+    parent_descriptor = os.open(root.parent, _DIRECTORY_FLAGS)
+
+    # When: the same leaf is loaded through both held descriptor boundaries.
+    try:
+        actual = load_trusted_description_cache_from_parent(
+            parent_descriptor,
+            root.name,
+            root,
+        )
+        generation_descriptor = os.open(root, _DIRECTORY_FLAGS)
+        try:
+            _payloads, proof = read_trusted_cache_from_descriptor(
+                generation_descriptor,
+                root,
+            )
+            generation = load_trusted_description_cache_from_descriptor(
+                generation_descriptor,
+                root,
+                proof.leaves,
+            )
+        finally:
+            os.close(generation_descriptor)
+    finally:
+        os.close(parent_descriptor)
+
+    # Then: all three boundaries return the same semantic byte proof.
+    assert actual == expected
+    assert generation.verified == actual
+
+
+@_REQUIRES_ANCHORED_CACHE
+@pytest.mark.parametrize("mutation", ("symlink", "directory"))
+def test_anchored_loader_rejects_unsafe_owned_inventory_entry(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    # Given: one exact owned filename resolves to a non-regular inventory entry.
+    root = published_cache(tmp_path)
+    target = root / "可信描述缓存.tsv"
+    if mutation == "symlink":
+        moved = tmp_path / "cache.real.tsv"
+        target.rename(moved)
+        target.symlink_to(moved)
+    else:
+        target.unlink()
+        target.mkdir()
+    parent_descriptor = os.open(root.parent, _DIRECTORY_FLAGS)
+
+    # When / Then: fd-relative inventory stat rejects it before semantic proof.
+    try:
+        with pytest.raises(TrustedDescriptionCacheError, match="partial|unsafe"):
+            _ = load_trusted_description_cache_from_parent(
+                parent_descriptor,
+                root.name,
+                root,
+            )
+    finally:
+        os.close(parent_descriptor)
+
+
+@_REQUIRES_ANCHORED_CACHE
+def test_anchored_loader_rejects_owned_name_identity_change(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Given: the first owned file's name is replaced after its held-fd first read.
+    root = published_cache(tmp_path)
+    target = root / ".gamexray-trusted-description-cache"
+    displaced = tmp_path / "marker.original"
+    replacement = tmp_path / "marker.replacement"
+    replacement.write_bytes(target.read_bytes())
+    real_lseek = os.lseek
+    rewinds = 0
+
+    def replace_name_before_second_read(
+        descriptor: int,
+        position: int,
+        how: int,
+    ) -> int:
+        nonlocal rewinds
+        if position == 0 and how == os.SEEK_SET:
+            rewinds += 1
+            if rewinds == 2:
+                target.rename(displaced)
+                replacement.rename(target)
+        return real_lseek(descriptor, position, how)
+
+    monkeypatch.setattr(os, "lseek", replace_name_before_second_read)
+    parent_descriptor = os.open(root.parent, _DIRECTORY_FLAGS)
+
+    # When / Then: identical bytes at a different inode cannot satisfy stability.
+    try:
+        with pytest.raises(
+            TrustedDescriptionCacheError,
+            match="identity|metadata changed",
+        ):
+            _ = load_trusted_description_cache_from_parent(
+                parent_descriptor,
+                root.name,
+                root,
+            )
+    finally:
+        os.close(parent_descriptor)
+
+
+__all__: tuple[str, ...] = ()

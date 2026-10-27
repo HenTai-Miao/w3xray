@@ -6,7 +6,6 @@ from dataclasses import fields
 import hashlib
 import os
 from pathlib import Path
-import stat
 
 import pytest
 
@@ -69,26 +68,6 @@ def test_snapshot_uses_fixed_private_name(tmp_path: Path) -> None:
     try:
         assert snapshot.path.name == "current.w3m"
         assert snapshot.path.parent != source.parent
-    finally:
-        cleanup_current_map_snapshot(snapshot)
-
-
-@pytest.mark.skipif(
-    os.name != "posix",
-    reason="POSIX permission bits do not express Windows temp-directory ownership",
-)
-def test_snapshot_permissions_are_private_on_posix(tmp_path: Path) -> None:
-    # Given: a valid map on a platform with enforceable POSIX permission bits.
-    source = tmp_path / "private.w3x"
-    _ = source.write_bytes(b"map")
-
-    # When: a snapshot is created.
-    snapshot = create_current_map_snapshot(source)
-
-    # Then: group and other users receive no directory or file permissions.
-    try:
-        assert stat.S_IMODE(snapshot.path.parent.stat().st_mode) & 0o077 == 0
-        assert stat.S_IMODE(snapshot.path.stat().st_mode) & 0o077 == 0
     finally:
         cleanup_current_map_snapshot(snapshot)
 
@@ -174,38 +153,6 @@ def test_snapshot_rejects_symlink_source(tmp_path: Path) -> None:
     # When/Then: snapshot creation never follows the symlink.
     with pytest.raises(CurrentMapSnapshotError, match="regular file"):
         _ = create_current_map_snapshot(source)
-
-
-def test_snapshot_nonblocking_open_rejects_fifo_swap(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # Given: a regular source that becomes a FIFO immediately before open.
-    if not hasattr(os, "mkfifo") or getattr(os, "O_NONBLOCK", 0) == 0:
-        pytest.skip("POSIX FIFO and O_NONBLOCK support are required")
-    source = tmp_path / "swapped.w3x"
-    _ = source.write_bytes(b"map")
-    real_open = os.open
-    swapped = False
-
-    def swapping_open(
-        path: str | os.PathLike[str], flags: int, mode: int = 0o777
-    ) -> int:
-        nonlocal swapped
-        if Path(path) == source:
-            source.unlink()
-            os.mkfifo(source)
-            swapped = True
-            if flags & os.O_NONBLOCK == 0:
-                pytest.fail("source open omitted O_NONBLOCK and would hang on the FIFO")
-        return real_open(path, flags, mode)
-
-    monkeypatch.setattr("gametool.current_map_snapshot.os.open", swapping_open)
-
-    # When/Then: opening never blocks and fstat rejects the swapped object.
-    with pytest.raises(CurrentMapSnapshotError, match="changed"):
-        _ = create_current_map_snapshot(source)
-    assert swapped
 
 
 def test_snapshot_rejects_source_changed_during_copy(

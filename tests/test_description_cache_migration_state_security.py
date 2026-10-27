@@ -10,10 +10,10 @@ import pytest
 
 from tests.description_cache_conflict_fixture import write_conflicting_inputs
 from tests.description_cache_migration_fixture import write_legacy_inputs
+from tests.windows_cache_contract_fixture import observe_migration_proof
 from gametool.description_cache_migration import (
     DescriptionCacheMigrationError,
     DescriptionCacheMigrationOptions,
-    migrate_description_cache,
 )
 
 
@@ -44,7 +44,7 @@ def test_migration_rejects_non_published_terminal_schema1_semantics(
 
     # When / Then
     with pytest.raises(DescriptionCacheMigrationError, match="published|state|stage"):
-        _ = migrate_description_cache(
+        _ = observe_migration_proof(
             DescriptionCacheMigrationOptions(legacy_output, legacy_cache, output)
         )
     assert not output.exists()
@@ -72,7 +72,7 @@ def test_migration_rejects_noncanonical_schema1_output_directory(
 
     # When / Then
     with pytest.raises(DescriptionCacheMigrationError, match="canonical|output"):
-        _ = migrate_description_cache(
+        _ = observe_migration_proof(
             DescriptionCacheMigrationOptions(legacy_output, legacy_cache, output)
         )
     assert not output.exists()
@@ -99,7 +99,7 @@ def test_migration_rejects_casefolded_schema1_identity_alias(
 
     # When / Then
     with pytest.raises(DescriptionCacheMigrationError, match="duplicate"):
-        _ = migrate_description_cache(
+        _ = observe_migration_proof(
             DescriptionCacheMigrationOptions(legacy_output, legacy_cache, output)
         )
     assert not output.exists()
@@ -118,7 +118,7 @@ def test_migration_rejects_distinct_outputs_bound_to_same_report_inode(
 
     # When / Then
     with pytest.raises(DescriptionCacheMigrationError, match="duplicate.*report"):
-        _ = migrate_description_cache(
+        _ = observe_migration_proof(
             DescriptionCacheMigrationOptions(legacy_output, legacy_cache, output)
         )
     assert not output.exists()
@@ -134,7 +134,7 @@ def test_migration_accepts_exact_published_terminal_schema1_states(
     output = tmp_path / "trusted"
 
     # When
-    result = migrate_description_cache(
+    result = observe_migration_proof(
         DescriptionCacheMigrationOptions(legacy_output, legacy_cache, output)
     )
 

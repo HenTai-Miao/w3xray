@@ -3,18 +3,12 @@
 from __future__ import annotations
 
 import os
-import sys
-import unittest
 
 from gametool.casclib_api import MAX_CASC_FILE_SIZE
 from gametool.casclib_enumeration import CascNameType
 from gametool.casclib_source import CascLibDataSource
 
 
-@unittest.skipUnless(
-    sys.platform == "win32" and bool(os.getenv("GAMEXRAY_WAR3_DIR")),
-    "需要 Windows Warcraft III CASC 安装",
-)
 def test_real_install_reads_trigger_schema_and_icon() -> None:
     # Given: an explicitly selected real Windows Warcraft III installation.
     root = os.environ["GAMEXRAY_WAR3_DIR"]

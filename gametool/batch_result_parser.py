@@ -76,7 +76,9 @@ type JsonValue = (
 def parse_map_batch_result(value: JsonValue) -> MapBatchResult:
     """Parse exact keys, closed enums, counters, and result semantics."""
     raw = _mapping(value, "result")
-    _require_keys(raw, _RESULT_KEYS)
+    keys = set(raw)
+    if keys != _RESULT_KEYS and keys != _RESULT_KEYS | {"resource_diagnostics"}:
+        raise BatchStateFormatError("unexpected batch state keys")
     result = MapBatchResult(
         source=_parse_source(raw["source"]),
         display_name=_text(raw["display_name"], "display name"),
@@ -162,10 +164,21 @@ def parse_map_batch_result(value: JsonValue) -> MapBatchResult:
         ),
         manifest_sha256=_text(raw["manifest_sha256"], "manifest SHA-256"),
         published_bytes=_nonnegative(raw["published_bytes"], "published bytes"),
-        peak_rss_bytes=_nonnegative(raw["peak_rss_bytes"], "peak RSS bytes"),
+        peak_rss_bytes=(
+            None
+            if raw["peak_rss_bytes"] is None
+            else _nonnegative(raw["peak_rss_bytes"], "peak RSS bytes")
+        ),
+        resource_diagnostics=_resource_diagnostics(raw.get("resource_diagnostics", [])),
     )
     validate_result_state(result)
     return result
+
+
+def _resource_diagnostics(value: JsonValue) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        raise BatchStateFormatError("resource diagnostics must be a list")
+    return tuple(_text(item, "resource diagnostic") for item in value)
 
 
 def _parse_source(value: JsonValue) -> SourceFingerprint:

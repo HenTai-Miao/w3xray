@@ -24,8 +24,6 @@ _COMMANDS = (
     "reference",
     "current",
     "batch",
-    "integrity",
-    "description-cache",
     "casc",
     "save",
     "savecodes",
@@ -61,11 +59,114 @@ def test_every_command_help_finishes_without_opening_inputs(
     assert "Traceback" not in result.stdout
 
 
+@pytest.mark.parametrize("command", ("integrity", "description-cache"))
+@pytest.mark.parametrize("flag", ("--help", "-h"))
+def test_retired_command_help_returns_two_with_supported_alternatives(
+    command: str, flag: str
+) -> None:
+    result = _run(command, flag)
+
+    assert result.returncode == 2
+    assert not result.stdout
+    assert "Windows" in result.stderr and "--help" in result.stderr
+    assert "pack-query" in result.stderr
+    if command == "integrity":
+        assert "live-report inspect" in result.stderr
+        assert "live-report diff" in result.stderr
+    else:
+        assert "--description-cache" in result.stderr
+    assert "Traceback" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    (
+        ("integrity",),
+        ("integrity", "snapshot", "--root", "fixture=unread", "--output", "unwritten"),
+        ("integrity", "verify", "--snapshot", "unread"),
+        (
+            "integrity",
+            "retained-cache",
+            "--active-root",
+            "unread",
+            "--output",
+            "unwritten",
+        ),
+        ("description-cache",),
+        (
+            "description-cache",
+            "migrate",
+            "--legacy-output",
+            "unread",
+            "--legacy-cache",
+            "unread.tsv",
+            "--output",
+            "unwritten",
+        ),
+    ),
+)
+@pytest.mark.parametrize("help_flag", ((), ("--help",), ("-h",)))
+def test_retired_commands_never_enter_backends_inputs_single_instance_or_gui(
+    arguments: tuple[str, ...],
+    help_flag: tuple[str, ...],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    touched: list[str] = []
+    for name, function in (
+        ("gametool.integrity_cli", "run_integrity_cli"),
+        ("gametool.description_cache_cli", "run_description_cache_cli"),
+        ("gametool.single_instance", "ensure_single_instance"),
+        ("gametool.gui", "main"),
+    ):
+        module = ModuleType(name)
+        monkeypatch.setattr(
+            module,
+            function,
+            lambda *_args, selected=name: touched.append(selected) or 7,
+            raising=False,
+        )
+        monkeypatch.setitem(sys.modules, name, module)
+    monkeypatch.setattr(sys, "argv", ["gamexray", *arguments, *help_flag])
+
+    def unexpected_input(*_args: object, **_kwargs: object):
+        touched.append("input")
+        raise AssertionError("retired commands must not inspect paths")
+
+    with monkeypatch.context() as inputs:
+        inputs.setattr(Path, "open", unexpected_input)
+        inputs.setattr(Path, "stat", unexpected_input)
+        with pytest.raises(SystemExit) as caught:
+            app.main()
+
+    assert caught.value.code == 2
+    assert not touched
+    output = capsys.readouterr()
+    assert not output.out
+    assert "Windows" in output.err and "pack-query" in output.err
+    assert "--help" in output.err
+
+
+def test_release_build_help_gate_matches_only_supported_commands() -> None:
+    script = (_ROOT / "tools" / "build_windows_release.ps1").read_text(encoding="utf-8")
+    command_gate = next(
+        line
+        for line in script.splitlines()
+        if line.startswith("foreach ($Command in @(")
+    )
+    for command in _COMMANDS:
+        assert f'"{command}"' in command_gate
+    for command in ("integrity", "description-cache"):
+        assert f'"{command}"' not in command_gate
+
+
 def test_top_help_discovers_every_command_and_all_entrypoints_share_version() -> None:
     result = _run("--help")
     assert result.returncode == 0
     for command in _COMMANDS:
         assert command in result.stdout
+    for command in ("integrity", "description-cache"):
+        assert command not in result.stdout
 
     version = _run("--version")
     assert version.returncode == 0

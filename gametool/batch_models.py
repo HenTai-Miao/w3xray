@@ -81,7 +81,8 @@ class MapBatchResult:
     dependency_fingerprint: str = ""
     manifest_sha256: str = ""
     published_bytes: int = 0
-    peak_rss_bytes: int = 0
+    peak_rss_bytes: int | None = None
+    resource_diagnostics: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

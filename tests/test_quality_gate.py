@@ -100,7 +100,7 @@ def test_quality_gate_covers_audit_gap_core_modules() -> None:
         "tests/test_item_relation_resilience.py",
         "tests/test_item_relation_models.py",
         "tests/test_batch_map_retirement.py",
-        "tests/test_batch_map_retirement_safety.py",
+        "retired_contract_tests/posix/test_batch_map_retirement_safety.py",
         "tests/test_campaign_shared_object_identity.py",
         "tests/test_object_candidate_collection.py",
         "tests/test_object_candidate_merge.py",
@@ -109,7 +109,7 @@ def test_quality_gate_covers_audit_gap_core_modules() -> None:
         "tests/test_object_text_pipeline.py",
         "tests/test_object_text_roles.py",
         "tests/test_object_text_sources.py",
-        "tests/test_posix_package_assets.py",
+        "tests/test_windows_only_distribution.py",
         "tests/test_release_metadata.py",
         "tests/test_windows_acceptance_assets.py",
         "tests/test_windows_acceptance_support.py",
@@ -155,7 +155,7 @@ def test_quality_gate_covers_audit_gap_core_modules() -> None:
 
 def test_both_quality_authorities_cover_safe_output_callers_and_races() -> None:
     required = {
-        "tests/test_safe_output_races.py",
+        "retired_contract_tests/posix/test_safe_output_races.py",
         "gametool/safe_output_anchored.py",
         "gametool/safe_output_staging.py",
     }
@@ -212,7 +212,6 @@ def test_project_registers_quality_script_and_development_tools() -> None:
 def test_all_packaging_lanes_run_quality_after_sync_and_before_tests() -> None:
     # Given
     paths = (
-        _ROOT / ".github" / "workflows" / "posix-package.yml",
         _ROOT / ".github" / "workflows" / "windows-package.yml",
         _ROOT / "tools" / "run_windows_acceptance.ps1",
     )

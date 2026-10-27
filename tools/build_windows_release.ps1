@@ -283,7 +283,7 @@ if ($VersionRun.Stdout.Trim() -ne ("GameXRay " + $Identity.version)) {
 }
 $HelpRun = Invoke-ReleaseProcess -FilePath $Executable -Arguments @("--help") -Name "executable-help" -WorkingDirectory $OutputRoot
 Require-ReleaseSuccess $HelpRun "Executable help"
-foreach ($Command in @("cli", "pack-query", "guide", "live", "live-report", "reference", "current", "batch", "integrity", "description-cache", "casc", "save", "savecodes", "wgc", "gameconfig", "acceptance")) {
+foreach ($Command in @("cli", "pack-query", "guide", "live", "live-report", "reference", "current", "batch", "casc", "save", "savecodes", "wgc", "gameconfig", "acceptance")) {
     if (-not $HelpRun.Stdout.Contains($Command)) { throw "Executable help is incomplete: $Command" }
 }
 $UnknownRun = Invoke-ReleaseProcess -FilePath $Executable -Arguments @("--hlep") -Name "executable-unknown-option" -WorkingDirectory $OutputRoot
@@ -301,6 +301,13 @@ if ($Report.overall_status -ne "pass" -or -not [StringComparer]::OrdinalIgnoreCa
 }
 $RequiredChecks = @("windows_runtime", "bundled_casclib", "map_load", "campaign_switch", "knowledge_pack_export", "pack_query_workflow", "batch_publication", "repeat_load", "gui_tabs")
 if ($War3Dir) { $RequiredChecks += "real_windows_casc" }
+if ($Report.coverage_scope -ne "requested" -or -not $Report.requested_coverage_complete -or @($Report.skipped_checks).Count -ne 0) {
+    throw "Packaged acceptance did not complete every requested check without skips."
+}
+if (@($Report.requested_checks).Count -ne $RequiredChecks.Count -or
+    @(Compare-Object -ReferenceObject $RequiredChecks -DifferenceObject @($Report.requested_checks)).Count -ne 0) {
+    throw "Packaged acceptance requested a different check scope."
+}
 foreach ($Name in $RequiredChecks) {
     $Checks = @($Report.checks | Where-Object { $_.name -eq $Name })
     if ($Checks.Count -ne 1 -or $Checks[0].status -ne "pass") { throw "Required packaged acceptance did not pass: $Name" }
@@ -347,6 +354,12 @@ $Manifest = [ordered]@{
     acceptance_report = "acceptance/acceptance.json"
     acceptance_status = $Report.overall_status
     acceptance_coverage_complete = $Report.coverage_complete
+    acceptance_coverage_scope = $Report.coverage_scope
+    acceptance_requested_coverage_complete = $Report.requested_coverage_complete
+    acceptance_requested_checks = @($Report.requested_checks)
+    acceptance_executed_checks = @($Report.executed_checks)
+    acceptance_not_requested = @($Report.not_requested)
+    real_casc_verified = $Report.real_casc_verified
     acceptance_skipped_checks = @($Report.skipped_checks)
     required_checks = $RequiredChecks
     usage = $GuideLeaf

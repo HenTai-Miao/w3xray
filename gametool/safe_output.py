@@ -17,6 +17,12 @@ from gametool.safe_output_anchored import write_chunks_anchored
 from gametool.safe_output_chunk_writer import write_chunks_to_descriptor
 from gametool.safe_output_models import SafeWriteResult, SafeWriteStatus
 from gametool.safe_output_path_publication import publish_staged_path
+from gametool.windows_output_paths import (
+    logical_output_path,
+    native_output_path,
+    validate_output_root,
+    remove_owned_output,
+)
 
 _UNSAFE_OPEN_ERRNOS: Final = frozenset((errno.EISDIR, errno.ELOOP, errno.ENOTDIR))
 
@@ -44,23 +50,30 @@ def safe_destination(root: str, name: str) -> str | None:
     relative = safe_relative_path(name)
     if relative is None:
         return None
-    root_path = os.path.abspath(root)
-    if os.path.islink(root_path):
-        return None
-    root_real = os.path.realpath(root_path)
-    destination = os.path.abspath(os.path.join(root_real, *relative.parts))
-    current = root_real
-    for part in relative.parts[:-1]:
-        current = os.path.join(current, part)
-        if os.path.lexists(current) and (
-            os.path.islink(current) or not os.path.isdir(current)
-        ):
+    try:
+        validate_output_root(root)
+        root_path = os.path.abspath(root)
+        root_io = native_output_path(root_path)
+        if os.path.islink(root_io):
             return None
-        if not _within_root(root_real, os.path.realpath(current)):
+        root_real = _real_output_path(root_path)
+        destination = os.path.abspath(os.path.join(root_real, *relative.parts))
+        destination_io = native_output_path(destination)
+        current = root_real
+        for part in relative.parts[:-1]:
+            current = os.path.join(current, part)
+            current_io = native_output_path(current)
+            if os.path.lexists(current_io) and (
+                os.path.islink(current_io) or not os.path.isdir(current_io)
+            ):
+                return None
+            if not _within_root(root_real, _real_output_path(current)):
+                return None
+        if os.path.lexists(destination_io) and os.path.islink(destination_io):
             return None
-    if os.path.lexists(destination) and os.path.islink(destination):
-        return None
-    if not _within_root(root_real, os.path.realpath(destination)):
+        if not _within_root(root_real, _real_output_path(destination)):
+            return None
+    except OSError, ValueError:
         return None
     return destination
 
@@ -108,7 +121,7 @@ def _write_chunks_by_path(
         descriptor, staged_path = tempfile.mkstemp(
             prefix=".gamexray-stage-",
             suffix=".tmp",
-            dir=parent,
+            dir=native_output_path(parent),
         )
     except OSError as exc:
         return SafeWriteResult(_open_failure_status(exc), destination, 0, str(exc))
@@ -137,7 +150,9 @@ def _write_chunks_by_path(
         if stage_error is not None:
             return SafeWriteResult(SafeWriteStatus.UNSAFE, destination, 0, stage_error)
         try:
-            publish_staged_path(staged_path, destination)
+            publish_staged_path(
+                staged_path, destination, expected_stage_identity=staged_identity
+            )
         except OSError as exc:
             return SafeWriteResult(_open_failure_status(exc), destination, 0, str(exc))
         return SafeWriteResult(SafeWriteStatus.WRITTEN, destination, size)
@@ -152,7 +167,7 @@ def _descriptor_identity(descriptor: int) -> tuple[int, int]:
 
 def _staged_path_error(path: str, identity: tuple[int, int]) -> str | None:
     try:
-        details = os.stat(path, follow_symlinks=False)
+        details = os.stat(native_output_path(path), follow_symlinks=False)
     except FileNotFoundError:
         return "staged output disappeared before publication"
     if (details.st_dev, details.st_ino) != identity:
@@ -161,12 +176,7 @@ def _staged_path_error(path: str, identity: tuple[int, int]) -> str | None:
 
 
 def _remove_owned_staged_path(path: str, identity: tuple[int, int]) -> None:
-    try:
-        details = os.stat(path, follow_symlinks=False)
-    except FileNotFoundError:
-        return
-    if (details.st_dev, details.st_ino) == identity:
-        os.unlink(path)
+    _ = remove_owned_output(path, identity)
 
 
 def _open_failure_status(exc: OSError) -> SafeWriteStatus:
@@ -193,39 +203,63 @@ def _prepare_destination(
     relative = safe_relative_path(name)
     if relative is None:
         return "", SafeWriteStatus.UNSAFE, "unsafe relative path"
-    root_path = os.path.abspath(root)
-    if os.path.islink(root_path):
-        return root_path, SafeWriteStatus.UNSAFE, "output root is a symlink"
+    destination = root
     try:
-        os.makedirs(root_path, exist_ok=True)
+        validate_output_root(root)
+        root_path = os.path.abspath(root)
+        destination = os.path.join(root_path, *relative.parts)
+        root_io = native_output_path(root_path)
+        # Validate every untrusted component before creating any directory.
+        _ = native_output_path(destination)
+        if os.path.islink(root_io):
+            return root_path, SafeWriteStatus.UNSAFE, "output root is a symlink"
+        os.makedirs(root_io, exist_ok=True)
+        if os.path.islink(root_io):
+            return root_path, SafeWriteStatus.UNSAFE, "output root is a symlink"
+        root_real = _real_output_path(root_path)
+        current = root_real
+        for part in relative.parts[:-1]:
+            current = os.path.join(current, part)
+            current_io = native_output_path(current)
+            if not os.path.lexists(current_io):
+                try:
+                    os.mkdir(current_io, 0o700)
+                except FileExistsError:
+                    if not os.path.isdir(current_io):
+                        return (
+                            current,
+                            SafeWriteStatus.UNSAFE,
+                            "parent is not a directory",
+                        )
+            if os.path.islink(current_io) or not os.path.isdir(current_io):
+                return current, SafeWriteStatus.UNSAFE, "unsafe parent component"
+            if not _within_root(root_real, _real_output_path(current)):
+                return current, SafeWriteStatus.UNSAFE, "parent escapes output root"
+        destination = os.path.join(current, relative.name)
+        destination_io = native_output_path(destination)
+        if os.path.lexists(destination_io) and (
+            os.path.islink(destination_io) or os.path.isdir(destination_io)
+        ):
+            return destination, SafeWriteStatus.UNSAFE, "unsafe destination"
+        if not _within_root(root_real, _real_output_path(destination)):
+            return (
+                destination,
+                SafeWriteStatus.UNSAFE,
+                "destination escapes output root",
+            )
+    except ValueError as exc:
+        return destination, SafeWriteStatus.UNSAFE, str(exc)
     except OSError as exc:
-        return root_path, SafeWriteStatus.FAILED, str(exc)
-    if os.path.islink(root_path):
-        return root_path, SafeWriteStatus.UNSAFE, "output root is a symlink"
-    root_real = os.path.realpath(root_path)
-    current = root_real
-    for part in relative.parts[:-1]:
-        current = os.path.join(current, part)
-        if not os.path.lexists(current):
-            try:
-                os.mkdir(current, 0o700)
-            except FileExistsError:
-                if not os.path.isdir(current):
-                    return current, SafeWriteStatus.UNSAFE, "parent is not a directory"
-            except OSError as exc:
-                return current, SafeWriteStatus.FAILED, str(exc)
-        if os.path.islink(current) or not os.path.isdir(current):
-            return current, SafeWriteStatus.UNSAFE, "unsafe parent component"
-        if not _within_root(root_real, os.path.realpath(current)):
-            return current, SafeWriteStatus.UNSAFE, "parent escapes output root"
-    destination = os.path.join(current, relative.name)
-    if os.path.lexists(destination) and (
-        os.path.islink(destination) or os.path.isdir(destination)
-    ):
-        return destination, SafeWriteStatus.UNSAFE, "unsafe destination"
-    if not _within_root(root_real, os.path.realpath(destination)):
-        return destination, SafeWriteStatus.UNSAFE, "destination escapes output root"
+        return destination, _open_failure_status(exc), str(exc)
     return destination, None, ""
+
+
+def _real_output_path(path: str) -> str:
+    """Resolve through the long-path I/O spelling, then compare logical paths."""
+    resolved = os.path.realpath(native_output_path(path))
+    if os.name == "nt" and path.startswith("\\\\?\\"):
+        return resolved
+    return logical_output_path(resolved)
 
 
 def _within_root(root: str, path: str) -> bool:

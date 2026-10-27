@@ -44,31 +44,86 @@ class AcceptanceCheck:
 
 
 @dataclass(frozen=True, slots=True)
+class AcceptanceNotRequested:
+    name: str
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class AcceptanceReport:
     created_at: str
     platform: str
     python: str
     executable: str
     checks: tuple[AcceptanceCheck, ...]
+    requested_checks: tuple[str, ...] | None = None
+    not_requested: tuple[AcceptanceNotRequested, ...] = ()
+
+    def __post_init__(self) -> None:
+        # Legacy hand-built reports treated their recorded checks as requested.
+        # Preserve their statuses; an explicit empty plan remains incomplete.
+        if self.requested_checks is None:
+            object.__setattr__(self, "requested_checks", self.executed_checks)
+
+    @property
+    def executed_checks(self) -> tuple[str, ...]:
+        return tuple(check.name for check in self.checks)
+
+    @property
+    def requested_coverage_complete(self) -> bool:
+        requested = self.requested_checks or ()
+        executed = self.executed_checks
+        unrequested = tuple(check.name for check in self.not_requested)
+        return (
+            bool(requested)
+            and len(requested) == len(set(requested))
+            and len(executed) == len(set(executed))
+            and len(unrequested) == len(set(unrequested))
+            and set(requested) == set(executed)
+            and not set(requested).intersection(unrequested)
+            and all(check.status is AcceptanceStatus.PASS for check in self.checks)
+        )
+
+    @property
+    def real_casc_verified(self) -> bool:
+        checks = tuple(
+            check for check in self.checks if check.name == "real_windows_casc"
+        )
+        return (
+            "real_windows_casc" in (self.requested_checks or ())
+            and not any(
+                check.name == "real_windows_casc" for check in self.not_requested
+            )
+            and len(checks) == 1
+            and checks[0].status is AcceptanceStatus.PASS
+        )
 
     @property
     def overall_status(self) -> AcceptanceStatus:
         return (
-            AcceptanceStatus.FAIL
-            if any(check.status is AcceptanceStatus.FAIL for check in self.checks)
-            else AcceptanceStatus.PASS
+            AcceptanceStatus.PASS
+            if self.requested_coverage_complete
+            else AcceptanceStatus.FAIL
         )
 
     def to_json(self) -> str:
-        """Serialize stable machine-readable acceptance evidence."""
+        """Serialize acceptance coverage of the requested checks only."""
         payload = {
             "created_at": self.created_at,
             "platform": self.platform,
             "python": self.python,
             "executable": self.executable,
             "overall_status": self.overall_status.value,
-            "coverage_complete": bool(self.checks)
-            and all(check.status is AcceptanceStatus.PASS for check in self.checks),
+            "coverage_scope": "requested",
+            "requested_checks": list(self.requested_checks or ()),
+            "executed_checks": list(self.executed_checks),
+            "not_requested": [
+                {"name": check.name, "reason": check.reason}
+                for check in self.not_requested
+            ],
+            "requested_coverage_complete": self.requested_coverage_complete,
+            "coverage_complete": self.requested_coverage_complete,
+            "real_casc_verified": self.real_casc_verified,
             "skipped_checks": [
                 check.name
                 for check in self.checks
@@ -108,45 +163,97 @@ class AcceptanceCheckError(RuntimeError):
 
 
 def run_acceptance(config: AcceptanceConfig) -> AcceptanceReport:
-    """Run independent acceptance lanes and preserve every result."""
-    config.output_dir.mkdir(parents=True, exist_ok=True)
-    checks: list[AcceptanceCheck] = []
-    checks.append(_platform_check(config.require_windows))
-    checks.append(_bundled_casclib_check(config.require_windows))
-    checks.append(_run_check("map_load", lambda: _check_map(config.map_path)))
-    checks.append(_campaign_check(config.campaign_path))
-    checks.append(
-        _run_check(
+    """Plan the requested acceptance lanes and preserve every executed result."""
+    lanes: tuple[tuple[str, bool, Callable[[], AcceptanceCheck], str], ...] = (
+        (
+            "windows_runtime",
+            config.require_windows,
+            lambda: _platform_check(config.require_windows),
+            "未请求 --require-windows",
+        ),
+        (
+            "bundled_casclib",
+            config.require_windows,
+            lambda: _bundled_casclib_check(config.require_windows),
+            "未请求 --require-windows 的捆绑原生库检查",
+        ),
+        (
+            "map_load",
+            True,
+            lambda: _run_check("map_load", lambda: _check_map(config.map_path)),
+            "",
+        ),
+        (
+            "campaign_switch",
+            config.campaign_path is not None,
+            lambda: _campaign_check(config.campaign_path),
+            "未提供 --campaign 战役样本",
+        ),
+        (
             "knowledge_pack_export",
-            lambda: _check_knowledge_pack(config.map_path, config.output_dir),
-        )
-    )
-    checks.append(
-        _run_check(
+            True,
+            lambda: _run_check(
+                "knowledge_pack_export",
+                lambda: _check_knowledge_pack(config.map_path, config.output_dir),
+            ),
+            "",
+        ),
+        (
             "pack_query_workflow",
-            lambda: check_query_workflow(config.output_dir / "knowledge-pack"),
-        )
-    )
-    checks.append(
-        _run_check(
+            True,
+            lambda: _run_check(
+                "pack_query_workflow",
+                lambda: check_query_workflow(config.output_dir / "knowledge-pack"),
+            ),
+            "",
+        ),
+        (
             "batch_publication",
-            lambda: check_batch_publication(config.map_path, config.output_dir),
-        )
-    )
-    checks.append(
-        _run_check(
+            True,
+            lambda: _run_check(
+                "batch_publication",
+                lambda: check_batch_publication(config.map_path, config.output_dir),
+            ),
+            "",
+        ),
+        (
             "repeat_load",
-            lambda: _check_repeat_load(config.map_path, config.repeat_count),
-        )
+            True,
+            lambda: _run_check(
+                "repeat_load",
+                lambda: _check_repeat_load(config.map_path, config.repeat_count),
+            ),
+            "",
+        ),
+        (
+            "real_windows_casc",
+            config.war3_dir is not None,
+            lambda: _casc_check(config.war3_dir),
+            "未配置真实 CASC 目录；通过 --war3-dir 或非空 GAMEXRAY_WAR3_DIR 请求；真实 CASC 未验证",
+        ),
+        (
+            "gui_tabs",
+            config.run_gui,
+            lambda: _gui_check(config),
+            "未请求 GUI 验收（run_gui=False / --no-gui）",
+        ),
     )
-    checks.append(_casc_check(config.war3_dir))
-    checks.append(_gui_check(config))
+    requested = tuple(name for name, selected, _action, _reason in lanes if selected)
+    not_requested = tuple(
+        AcceptanceNotRequested(name, reason)
+        for name, selected, _action, reason in lanes
+        if not selected
+    )
+    config.output_dir.mkdir(parents=True, exist_ok=True)
+    checks = tuple(action() for _name, selected, action, _reason in lanes if selected)
     return AcceptanceReport(
         created_at=datetime.now(UTC).isoformat(),
         platform=platform.platform(),
         python=sys.version.split()[0],
         executable=sys.executable,
-        checks=tuple(checks),
+        checks=checks,
+        requested_checks=requested,
+        not_requested=not_requested,
     )
 
 

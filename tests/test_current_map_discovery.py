@@ -136,37 +136,6 @@ def test_default_roots_dedupe_and_keep_all_existing_directories(
     assert discovered == tuple(root.resolve() for root in roots)
 
 
-@pytest.mark.skipif(os.name != "posix", reason="requires POSIX /Volumes semantics")
-def test_known_roots_include_fixed_user_volume_pattern_without_volume_scan(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # Given: a macOS home whose username also names the mounted game volume.
-    home = Path("/Users/zhongerbing")
-    volume_root = Path("/Volumes") / home.name / "Program Files (x86)" / "Warcraft III"
-    volume_root /= "Warcraft III Frozen Throne/Maps"
-
-    def fake_home() -> Path:
-        return home
-
-    def fake_lstat(path: Path) -> os.stat_result:
-        if path == volume_root:
-            return os.stat_result((stat.S_IFDIR, 0, 0, 0, 0, 0, 0, 0, 0, 0))
-        raise FileNotFoundError(path)
-
-    def unexpected_scan(_path: str | Path) -> Never:
-        raise AssertionError("known roots must not recursively scan /Volumes")
-
-    monkeypatch.setattr(Path, "home", staticmethod(fake_home))
-    monkeypatch.setattr(Path, "lstat", fake_lstat)
-    monkeypatch.setattr(os, "scandir", unexpected_scan)
-
-    # When: public root discovery checks its fixed candidates.
-    roots = discover_default_map_roots()
-
-    # Then: the user's legacy Warcraft Maps location is an exact candidate.
-    assert roots == (volume_root,)
-
-
 def test_known_roots_include_windows_classic_install_directories(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -426,30 +395,6 @@ def test_large_wgc_is_passed_to_the_parser_in_full(
     # Then: byte length is fully retained; invalid format remains a separate issue.
     assert resolution.status is ResolutionStatus.NOT_FOUND
     assert sizes == [64 * 1024 * 1024 + 1]
-
-
-@pytest.mark.skipif(_NONBLOCK_FLAG == 0, reason="requires nonblocking POSIX file open")
-def test_wgc_open_is_nonblocking_against_fifo_replacement(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    # Given: a recent config whose open boundary could race with entry metadata.
-    root = tmp_path / "fifo-race"
-    target = root / "target.w3x"
-    _write_at(target, b"old", _NOW_NS - _WINDOW_NS - 1)
-    _write_at(root / "current.wgc", _wgc("target.w3x"), _NOW_NS)
-    real_open = os.open
-
-    def guarded_open(path: Path, flags: int) -> int:
-        assert flags & _NONBLOCK_FLAG
-        return real_open(path, flags)
-
-    monkeypatch.setattr(os, "open", guarded_open)
-
-    # When: the recent config is opened through discovery.
-    resolution = _locate(root)
-
-    # Then: the nonblocking capability preserves normal regular-file resolution.
-    assert tuple(item.path for item in resolution.candidates) == (target.resolve(),)
 
 
 def test_direct_process_evidence_always_outranks_recent_hints(tmp_path: Path) -> None:

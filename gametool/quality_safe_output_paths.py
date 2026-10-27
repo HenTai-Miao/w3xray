@@ -6,12 +6,7 @@ from typing import Final
 
 
 SAFE_OUTPUT_STRICT_PATHS: Final = tuple(
-    """tests/test_integrity_output_naming_probe.py
-tests/test_safe_output_cleanup_recovery.py
-tests/test_safe_output_publication_atomicity.py
-tests/test_safe_output_publication_cleanup_races.py
-tests/test_safe_output_races.py
-gametool/quality_safe_output_paths.py
+    """gametool/quality_safe_output_paths.py
 gametool/safe_output.py
 gametool/safe_output_anchored.py
 gametool/safe_output_chunk_writer.py
@@ -27,7 +22,13 @@ gametool/safe_output_publication_existing_finish.py
 gametool/safe_output_publication_identity.py
 gametool/safe_output_publication_rollback.py
 gametool/safe_output_publication_states.py
-gametool/safe_output_staging.py""".splitlines()
+gametool/safe_output_staging.py
+retired_contract_tests/posix/test_integrity_output_naming_probe.py
+retired_contract_tests/posix/test_safe_output_cleanup_recovery.py
+retired_contract_tests/posix/test_safe_output_publication_atomicity.py
+retired_contract_tests/posix/test_safe_output_publication_cleanup_races.py
+retired_contract_tests/posix/test_safe_output_races.py
+""".splitlines()
 )
 
 __all__ = ("SAFE_OUTPUT_STRICT_PATHS",)

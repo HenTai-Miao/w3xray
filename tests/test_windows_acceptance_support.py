@@ -7,74 +7,84 @@ from types import SimpleNamespace
 
 import pytest
 
-from tests import conftest as capability_markers
-from tests.conftest import requires_posix_provenance
+from gametool.test_scope import (
+    StrictScopePolicy,
+    load_scope_manifest,
+    verify_retired_contracts,
+)
 
 
 _ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_windows_capability_filter_is_limited_to_posix_provenance_suites() -> None:
-    # Given / When / Then: extraction and packaged acceptance remain mandatory.
-    for path in (
-        Path("tests/test_batch_e2e.py"),
-        Path("tests/test_acceptance_runner.py"),
-        Path("tests/test_gui_description_cache.py"),
-        Path("tests/test_trusted_description_cache.py"),
-    ):
-        assert not requires_posix_provenance(path)
-    for path in (
-        Path("tests/test_batch_map_retirement.py"),
-        Path("tests/test_description_cache_publication.py"),
-        Path("tests/test_integrity_snapshot.py"),
-        Path("tests/test_safe_output_publication_atomicity.py"),
-    ):
-        assert requires_posix_provenance(path)
-
-
-def test_windows_capability_filter_preserves_exact_portable_function_boundary() -> None:
-    path = Path("tests/test_integrity_cli.py")
-    portable = "test_integrity_cli_returns_two_for_inexact_requests"
-
-    assert not requires_posix_provenance(path, portable)
-    assert requires_posix_provenance(path)
-    assert requires_posix_provenance(
-        path, "test_integrity_cli_snapshots_then_verifies_exact_roots"
+def test_windows_scope_preserves_original_portable_contracts() -> None:
+    manifest = load_scope_manifest()
+    required = {
+        (row["module"], row["function"])
+        for row in manifest["required_windows_functions"]
+    }
+    assert (
+        "tests/test_integrity_cli.py",
+        "test_integrity_cli_returns_two_for_inexact_requests",
+    ) in required
+    assert (
+        "tests/test_description_cache_retained_generations.py",
+        "test_stage_io_unsupported_fails_before_any_publication_effect",
+    ) in required
+    assert (
+        "tests/test_batch_map_retirement.py",
+        "test_windows_retirement_without_directory_anchor_preserves_all_names",
+    ) in required
+    assert all(
+        row["old_module"] != "tests/test_gui_export_safety.py"
+        for row in manifest["retired_functions"]
     )
-    assert requires_posix_provenance(path, "test_future_parser_without_proof")
-    assert requires_posix_provenance(path, portable + "_extended")
-    assert requires_posix_provenance(
-        Path("tests/test_integrity_new_backend.py"), portable
-    )
+    verify_retired_contracts()
 
 
-@pytest.mark.parametrize("platform", ("nt", "posix"))
-def test_windows_collection_preserves_portable_parameters_and_native_boundary(
-    platform: str,
+def test_windows_scope_never_invents_a_skip_for_new_functions(
     request: pytest.FixtureRequest,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from typing import cast
+
+    monkeypatch.setenv("GAMEXRAY_TEST_SCOPE", "windows")
     module = pytest.Module.from_parent(
         request.session, path=_ROOT / "tests" / "test_integrity_cli.py"
     )
-    original = "test_integrity_cli_returns_two_for_inexact_requests"
-    portable = pytest.Function.from_parent(
-        module,
-        name=original + "[argv0]",
-        originalname=original,
-        callobj=lambda: None,
+    item = pytest.Function.from_parent(
+        module, name="test_future_portable_contract", callobj=lambda: None
     )
-    native = pytest.Function.from_parent(
+    session = cast(
+        pytest.Session,
+        cast(object, SimpleNamespace(config=SimpleNamespace(args=[str(item.path)]))),
+    )
+    StrictScopePolicy().pytest_collection_modifyitems(session, [item])
+    assert not tuple(item.iter_markers("skip"))
+
+
+def test_windows_scope_rejects_a_retired_body_moved_back_into_product_tests(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from typing import cast
+
+    monkeypatch.setenv("GAMEXRAY_TEST_SCOPE", "windows")
+    module = pytest.Module.from_parent(
+        request.session, path=_ROOT / "tests" / "test_integrity_cli.py"
+    )
+    item = pytest.Function.from_parent(
         module,
         name="test_integrity_cli_snapshots_then_verifies_exact_roots",
         callobj=lambda: None,
     )
-    monkeypatch.setattr(capability_markers, "os", SimpleNamespace(name=platform))
-
-    capability_markers.pytest_collection_modifyitems([portable, native])
-
-    assert not tuple(portable.iter_markers("skip"))
-    assert bool(tuple(native.iter_markers("skip"))) is (platform == "nt")
+    session = cast(
+        pytest.Session,
+        cast(object, SimpleNamespace(config=SimpleNamespace(args=[str(item.path)]))),
+    )
+    with pytest.raises(pytest.UsageError, match="退役 native"):
+        StrictScopePolicy().pytest_collection_modifyitems(session, [item])
+    assert not tuple(item.iter_markers("skip"))
 
 
 def test_windows_process_helper_quotes_powershell_51_argument_lists() -> None:

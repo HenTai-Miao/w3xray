@@ -116,7 +116,7 @@ def _run_batch_locked(
                 action=BatchAction.STARTING,
                 started_ns=started_ns,
                 now_ns=monotonic_ns(),
-                peak_rss_bytes=0,
+                peak_rss_bytes=None,
                 published_bytes=0,
                 diagnostic_code="started",
             )
@@ -145,7 +145,7 @@ def _run_batch_locked(
                     action=BatchAction.REUSED,
                     started_ns=started_ns,
                     now_ns=monotonic_ns(),
-                    peak_rss_bytes=0,
+                    peak_rss_bytes=None,
                     published_bytes=0,
                     diagnostic_code="duplicate_source_skipped",
                 )
@@ -159,7 +159,7 @@ def _run_batch_locked(
                         completed=index,
                         total=len(paths),
                         elapsed_ms=0,
-                        peak_rss_bytes=0,
+                        peak_rss_bytes=None,
                         published_bytes=0,
                     )
                 )

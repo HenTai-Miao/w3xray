@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from contextlib import ExitStack
+from collections.abc import Iterator
+from contextlib import ExitStack, contextmanager
 import hashlib
+import os
 from pathlib import Path, PurePosixPath
 from typing import Final, assert_never, override
 
@@ -31,6 +33,7 @@ from .trusted_description_cache_tables import (
     parse_source_manifest,
     validate_rejection_table,
 )
+from .windows_source_reads import WindowsSourceError, WindowsSourceRoot
 
 
 _MAX_REPORT_BYTES: Final[int | None] = None
@@ -77,14 +80,16 @@ def validate_source_manifest(
     if len(identities) != len(records):
         raise TrustedSourceError("duplicate source manifest identity")
     proven_entries: set[tuple[str, str, str, int | None, str, str]] = set()
-    with ExitStack() as source_stack:
+    with _source_context() as source_stack:
         try:
             anchored_root = source_stack.enter_context(
-                AnchoredSourceRoot.open(source_root)
+                WindowsSourceRoot.open(source_root)
+                if os.name == "nt"
+                else AnchoredSourceRoot.open(source_root)
             )
         except AnchoredSourceUnavailableError:
             anchored_root = None
-        except AnchoredSourceError as exc:
+        except (AnchoredSourceError, WindowsSourceError) as exc:
             raise TrustedSourceError(f"source report is unreadable: {exc}") from exc
         for record in records:
             entries = cache.lookup(
@@ -148,7 +153,7 @@ def validate_source_manifest(
 def _source_report(
     record: DescriptionCacheSourceRecord,
     root: Path,
-    anchored_root: AnchoredSourceRoot | None,
+    anchored_root: AnchoredSourceRoot | WindowsSourceRoot | None,
 ) -> LegacySourceReport:
     path = Path(record.report_path)
     absolute = path.expanduser().absolute()
@@ -171,6 +176,12 @@ def _source_report(
                 raise TrustedSourceError(f"source report is unreadable: {exc}") from exc
         case None:
             payload = _read_portable_source_report(absolute, root)
+        case WindowsSourceRoot():
+            try:
+                with anchored_root.protect(PurePosixPath(*relative.parts)):
+                    payload = _read_portable_source_report(absolute, root)
+            except WindowsSourceError as exc:
+                raise TrustedSourceError(f"source report is unreadable: {exc}") from exc
         case unreachable:
             assert_never(unreachable)
     if hashlib.sha256(payload).hexdigest() != record.report_sha256:
@@ -189,6 +200,16 @@ def _source_report(
         raise TrustedSourceError("source report row hash mismatch")
     state = LegacyStateResult("", record.source_map_sha256, "", "published")
     return LegacySourceReport(state, absolute, record.report_sha256, rows)
+
+
+@contextmanager
+def _source_context() -> Iterator[ExitStack]:
+    """Keep native setup and close failures inside the public proof boundary."""
+    try:
+        with ExitStack() as stack:
+            yield stack
+    except WindowsSourceError as exc:
+        raise TrustedSourceError(f"source report is unreadable: {exc}") from exc
 
 
 def _read_portable_source_report(path: Path, root: Path) -> bytes:

@@ -1,4 +1,4 @@
-"""Fail-closed migration tests for historical description evidence."""
+"""Portable pre-publication proofs; atomic publication is a retired contract."""
 
 from __future__ import annotations
 
@@ -22,10 +22,10 @@ from tests.description_cache_migration_fixture import (
 from tests.description_cache_conflict_fixture import write_conflicting_inputs
 from gametool import description_cache_migration_rows as migration_rows
 from gametool.description_cache import load_description_cache
+from tests.windows_cache_contract_fixture import observe_migration_proof
 from gametool.description_cache_migration import (
     DescriptionCacheMigrationError,
     DescriptionCacheMigrationOptions,
-    migrate_description_cache,
 )
 
 
@@ -103,12 +103,12 @@ def test_migration_accepts_only_exact_base_client_fill(tmp_path: Path) -> None:
     legacy_output, legacy_cache = write_legacy_inputs(tmp_path)
     output = tmp_path / "trusted"
 
-    # When: the explicit migration proves and publishes the candidate.
-    result = migrate_description_cache(
+    # When: the real controller proves the candidate before atomic publication.
+    result = observe_migration_proof(
         DescriptionCacheMigrationOptions(legacy_output, legacy_cache, output)
     )
 
-    # Then: exactly one manifest-bound base description is available.
+    # Then: one real manifest-bound fixture is parsed by the public cache reader.
     assert result.accepted_count == 1
     assert result.rejected_count == 0
     cache = load_description_cache(str(output / "可信描述缓存.tsv"))
@@ -134,7 +134,7 @@ def test_migration_rejects_unproved_rows(
     legacy_output, legacy_cache = write_mutated_inputs(tmp_path, mutation)
 
     # When: migration evaluates the candidate without aborting the valid structure.
-    result = migrate_description_cache(
+    result = observe_migration_proof(
         DescriptionCacheMigrationOptions(
             legacy_output,
             legacy_cache,
@@ -177,7 +177,7 @@ def test_migration_rejects_invalid_identity_before_source_checks(
     )
 
     # When
-    result = migrate_description_cache(
+    result = observe_migration_proof(
         DescriptionCacheMigrationOptions(legacy_output, legacy_cache, tmp_path / "out")
     )
 
@@ -199,10 +199,10 @@ def test_migration_distinguishes_source_path_escape_and_missing_report(
     (missing_output / LEGACY_RELATIVE / "对象描述.tsv").unlink()
 
     # When
-    escaped = migrate_description_cache(
+    escaped = observe_migration_proof(
         DescriptionCacheMigrationOptions(escaped_output, escaped_cache, tmp_path / "a")
     )
-    missing = migrate_description_cache(
+    missing = observe_migration_proof(
         DescriptionCacheMigrationOptions(missing_output, missing_cache, tmp_path / "b")
     )
 
@@ -220,7 +220,7 @@ def test_migration_rejects_candidate_when_tsv_round_trip_is_not_exact(
     monkeypatch.setattr(migration_rows, "format_tsv_rows", _broken_tsv)
 
     # When
-    result = migrate_description_cache(
+    result = observe_migration_proof(
         DescriptionCacheMigrationOptions(legacy_output, legacy_cache, tmp_path / "out")
     )
 
@@ -235,7 +235,7 @@ def test_migration_rejects_every_member_of_a_conflicting_value_group(
     legacy_output, legacy_cache = write_conflicting_inputs(tmp_path)
 
     # When
-    result = migrate_description_cache(
+    result = observe_migration_proof(
         DescriptionCacheMigrationOptions(legacy_output, legacy_cache, tmp_path / "out")
     )
 

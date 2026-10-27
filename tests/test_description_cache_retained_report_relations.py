@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from tests.retained_integrity_fixture import active_cache, install_previous, retained
+from tests.windows_cache_contract_fixture import report_fixture
 from gametool import description_cache_retained_integrity as retained_api
 
 
@@ -18,25 +19,33 @@ type JsonValue = (
 
 def _payload(tmp_path: Path, row_kind: str) -> dict[str, JsonValue]:
     active = active_cache(tmp_path)
+    paths: tuple[Path, ...] = ()
+    unsafe_previous: Path | None = None
+    unsafe_sibling: Path | None = None
     if row_kind == "valid":
-        install_previous(active, tmp_path)
+        paths = (install_previous(active, tmp_path),)
     elif row_kind == "invalid-inventory":
         previous = install_previous(active, tmp_path)
         (previous / "来源清单.tsv").unlink()
+        paths = (previous,)
     elif row_kind == "invalid-exact-inventory":
         previous = install_previous(active, tmp_path)
         (previous / "来源清单.tsv").unlink()
         (previous / "forged-extra.tsv").write_bytes(b"forged")
+        paths = (previous,)
     elif row_kind == "invalid-nested":
         previous = install_previous(active, tmp_path)
-        nested = previous / "nested"
-        nested.mkdir()
-        (nested / "unsafe").symlink_to(tmp_path / "outside")
+        # The parser consumes an explicit unsafe proof, not a POSIX link scan.
+        unsafe_previous = previous
     elif row_kind == "regular":
-        retained(active, "2", "failed-output").write_bytes(b"evidence")
+        artifact = retained(active, "2", "failed-output")
+        artifact.write_bytes(b"evidence")
+        paths = (artifact,)
     else:
-        retained(active, "2", "recovery").symlink_to(tmp_path / "outside")
-    report = retained_api.inspect_retained_description_caches(active)
+        unsafe_sibling = retained(active, "2", "recovery")
+    report = report_fixture(
+        active, paths, unsafe_previous=unsafe_previous, unsafe_sibling=unsafe_sibling
+    )
     payload: JsonValue = json.loads(
         retained_api.format_description_cache_retention_report(report)
     )

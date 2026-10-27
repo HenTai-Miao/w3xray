@@ -105,10 +105,11 @@ def test_main_help_gate(capsys):
         "live",
         "current",
         "batch",
-        "integrity",
         "casc",
     ):
         assert token in proc.stdout
+    assert "integrity" not in proc.stdout
+    assert "description-cache" not in proc.stdout
     # 380: 子命令计数与 _COMMANDS 实数一致 (361 轮去重后 27; 口径化石防再入)
     from gametool.pack_query_cli import _COMMANDS
 

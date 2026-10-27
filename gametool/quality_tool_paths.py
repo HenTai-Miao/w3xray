@@ -512,6 +512,8 @@ gametool/supplemented_archive.py
 gametool/supplemented_source.py
 gametool/terrain.py
 gametool/terrain_tiles.py
+gametool/test_environment.py
+gametool/test_scope.py
 gametool/textobj.py
 gametool/theme.py
 gametool/trigger_exports.py
@@ -536,6 +538,9 @@ gametool/w3world.py
 gametool/war3_encoding.py
 gametool/wct.py
 gametool/westrings.py
+gametool/windows_output_paths.py
+gametool/windows_source_reads.py
+gametool/windows_worker_memory.py
 gametool/world_exports.py
 gametool/wtg.py
 gametool/wtg_classic.py

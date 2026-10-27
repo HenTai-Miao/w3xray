@@ -105,27 +105,11 @@ schema 6 另存独立的“源覆盖缺口”计数；标准对象、脚本、�
 ## 运行命令
 
 ```bash
-uv run main.py description-cache migrate \
-  --legacy-output <schema-1-root> \
-  --legacy-cache <schema-2-cache.tsv> \
-  --output <owned-cache-root>
-
 uv run main.py batch <maps-root> \
   --output <v6-root> \
   --game-data <client-or-trusted-icon-root> \
   --description-cache <owned-cache-root>
 
-uv run main.py integrity snapshot \
-  --root maps=<maps-root> \
-  --root legacy-v1=<root> \
-  --root legacy-v2=<root> \
-  --root legacy-v4=<root> \
-  --output <before.json>
-
-uv run main.py integrity verify --snapshot <before.json>
-uv run main.py integrity retained-cache \
-  --active-root <owned-cache-root> \
-  --output <retained-cache-report.json>
 ```
 
 `--game-data` 可指向可读的 Warcraft 客户端数据目录。经典客户端按
@@ -133,19 +117,14 @@ uv run main.py integrity retained-cache \
 MPQ 证据构建的只读可信图标缓存；缓存中的每个虚拟路径都绑定 SHA-256、原客户端档案和同一张
 源地图的引用证据，不能把其他地图的自定义图标当作客户端资源。
 
-schema 6 只接受显式 `--description-cache` 指向的已拥有、已验证缓存 generation。迁移命令从
-只读 legacy 输入构建新缓存；批处理不会从任意旧结果隐式采纳文本。GUI 也可从数据工具菜单
+schema 6 只接受显式 `--description-cache` 指向的已拥有、已验证缓存 generation。
+批处理不会从任意旧结果隐式采纳文本。GUI 也可从数据工具菜单
 选择或清除可信描述缓存。缓存只接纳原版基础对象、客户端补全、键和值均唯一的记录。
 
-`integrity snapshot` 与 `verify` 用内容和纳秒 mtime 证明只读输入前后一致。`retained-cache` 将
-有意保留的 `previous`、失败 stage/output 和 recovery，与仍在发布命名空间中的 stage/backup
-临时违规分开报告；它不会把保留对象加载为描述来源，也不会删除、修复或重命名它们。
-完整性报告覆盖采用追加式不可变历史：新报告保持 `--output` 原路径，旧报告移入
-`.gamexray-integrity-history/<输出文件名 SHA-256>/<generation-id>/`。历史代的
-`report.json` 由 `历史清单.json` 绑定原文件名、大小和 SHA-256，每次覆盖只追加一代，
-不会自动删除旧代。历史根名称及其目标文件系统物理别名不能作为报告输出名；交换前失败
-会对仍属本次写出的 stage 做身份门控清理，交换结果不可信时保留证据。该历史策略不影响
-通用地图/资源写出器的原子替换职责。
+当前只维护 Windows 发行版，已撤下没有 Windows 底层实现的完整性快照与描述缓存迁移公开命令。
+原有快照、保留报告和 `.gamexray-integrity-history` 的格式与证明读取仍用于兼容历史数据，
+不会删除或自动采用这些保留对象。可用 `live-report inspect/diff` 检查和比较实时报告，
+或以 `pack-query <新包> diff <旧包>` 比较知识包；普通地图和资源写出继续使用已有安全发布边界。
 
 ## 输出结构
 

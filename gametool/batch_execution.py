@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import multiprocessing
+from dataclasses import replace
 from queue import Empty, Queue
 import struct
 from threading import Thread
@@ -28,8 +29,13 @@ from .batch_execution_messages import (
 from .batch_execution_request import MapExecutionRequest, build_execution_request
 from .batch_map_processing import process_one_map
 from .batch_models import SourceFingerprint
-from .batch_runtime import current_peak_rss_bytes
+from .batch_runtime import maximum_peak_rss_bytes
 from .load_context import MapLoadContext
+from .windows_worker_memory import (
+    WorkerMemoryLimit,
+    apply_worker_memory_limit,
+    read_peak_rss,
+)
 
 
 _POLL_SECONDS = 0.025
@@ -123,12 +129,20 @@ def _child_entry(
     max_memory_bytes: int | None,
 ) -> None:
     try:
-        limit_failure = _apply_memory_limit(max_memory_bytes)
-        if limit_failure is not None:
+        memory_limit = _apply_memory_limit(max_memory_bytes)
+        if isinstance(memory_limit, MapExecutionFailure):
+            peak = read_peak_rss()
             sender.send_bytes(
-                encode_child_failure(limit_failure.code, limit_failure.detail)
+                encode_child_failure(
+                    memory_limit.code,
+                    memory_limit.detail,
+                    peak.peak_rss_bytes,
+                    peak.diagnostics,
+                )
             )
             return
+        result = None
+        failure: MapExecutionFailure | None = None
         try:
             result = worker(
                 request.index,
@@ -138,23 +152,37 @@ def _child_entry(
                 dependency_fingerprint=request.dependency_fingerprint,
             )
         except MemoryError as exc:
-            sender.send_bytes(
-                encode_child_failure(
-                    "map_memory_error",
-                    str(exc),
-                    current_peak_rss_bytes(),
-                )
+            failure = MapExecutionFailure(
+                "map_memory_error",
+                f"{str(exc) or 'memory allocation failed'}; "
+                f"configured worker committed-byte budget={max_memory_bytes}"
+                if max_memory_bytes is not None
+                else str(exc),
             )
         except (OSError, ValueError, KeyError, IndexError, struct.error) as exc:
+            failure = MapExecutionFailure(
+                "map_processing_error", f"{type(exc).__name__}: {exc}"
+            )
+        finally:
+            cleanup_diagnostics = _close_memory_limit(memory_limit)
+        peak = read_peak_rss()
+        diagnostics = (*cleanup_diagnostics, *peak.diagnostics)
+        if failure is not None:
             sender.send_bytes(
                 encode_child_failure(
-                    "map_processing_error",
-                    f"{type(exc).__name__}: {exc}",
-                    current_peak_rss_bytes(),
+                    failure.code, failure.detail, peak.peak_rss_bytes, diagnostics
                 )
             )
         else:
-            sender.send_bytes(encode_child_success(result, current_peak_rss_bytes()))
+            assert result is not None
+            result = replace(
+                result,
+                peak_rss_bytes=maximum_peak_rss_bytes(
+                    result.peak_rss_bytes, peak.peak_rss_bytes
+                ),
+                resource_diagnostics=(*result.resource_diagnostics, *diagnostics),
+            )
+            sender.send_bytes(encode_child_success(result, peak.peak_rss_bytes))
     finally:
         sender.close()
 
@@ -264,20 +292,25 @@ def _stop_and_reap(process: _ProcessHandle) -> None:
         process.join(_JOIN_SECONDS)
 
 
-def _apply_memory_limit(max_memory_bytes: int | None) -> MapExecutionFailure | None:
-    if max_memory_bytes is None:
-        return None
+def _apply_memory_limit(
+    max_memory_bytes: int | None,
+) -> WorkerMemoryLimit | MapExecutionFailure | None:
     try:
-        import resource
-    except ImportError:
-        return None
-    if not hasattr(resource, "RLIMIT_AS"):
-        return None
+        return apply_worker_memory_limit(max_memory_bytes)
+    except (OSError, ValueError, AttributeError, MemoryError) as exc:
+        return MapExecutionFailure(
+            "memory_limit_setup_failed", f"{type(exc).__name__}: {exc}"
+        )
+
+
+def _close_memory_limit(memory_limit: WorkerMemoryLimit | None) -> tuple[str, ...]:
+    if memory_limit is None:
+        return ()
     try:
-        resource.setrlimit(resource.RLIMIT_AS, (max_memory_bytes, max_memory_bytes))
-    except (OSError, ValueError) as exc:
-        return MapExecutionFailure("memory_limit_setup_failed", str(exc))
-    return None
+        memory_limit.close()
+    except OSError as exc:
+        return (f"worker_memory_job_cleanup_failed: {exc}",)
+    return ()
 
 
 def _execution_outcome(payload: bytes) -> MapExecutionOutcome:
@@ -291,8 +324,18 @@ def _execution_outcome(payload: bytes) -> MapExecutionOutcome:
     match message:
         case ChildSuccess(result=result, peak_rss_bytes=peak):
             return MapExecutionSuccess(result, peak)
-        case ChildFailure(code=code, detail=detail, peak_rss_bytes=peak):
-            return MapExecutionFailure(code, detail, peak_rss_bytes=peak)
+        case ChildFailure(
+            code=code,
+            detail=detail,
+            peak_rss_bytes=peak,
+            resource_diagnostics=diagnostics,
+        ):
+            return MapExecutionFailure(
+                code,
+                detail,
+                peak_rss_bytes=peak,
+                resource_diagnostics=diagnostics,
+            )
         case unreachable:
             assert_never(unreachable)
 

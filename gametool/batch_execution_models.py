@@ -33,7 +33,7 @@ class MapWorker(Protocol):
 @dataclass(frozen=True, slots=True)
 class MapExecutionSuccess:
     result: MapBatchResult
-    peak_rss_bytes: int = 0
+    peak_rss_bytes: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,7 +41,8 @@ class MapExecutionFailure:
     code: str
     detail: str
     child_alive: bool = False
-    peak_rss_bytes: int = 0
+    peak_rss_bytes: int | None = None
+    resource_diagnostics: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +50,8 @@ class MapExecutionCancelled:
     code: str = "map_cancelled"
     detail: str = ""
     child_alive: bool = False
-    peak_rss_bytes: int = 0
+    peak_rss_bytes: int | None = None
+    resource_diagnostics: tuple[str, ...] = ()
 
 
 type MapExecutionOutcome = (

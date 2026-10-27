@@ -7,7 +7,8 @@ from enum import StrEnum
 import json
 from pathlib import Path
 import shutil
-import sys
+
+from .windows_worker_memory import read_peak_rss
 
 
 class BatchAction(StrEnum):
@@ -41,9 +42,10 @@ class BatchProgress:
     action: BatchAction
     elapsed_ms: int
     eta_seconds: float | None
-    peak_rss_bytes: int
+    peak_rss_bytes: int | None
     published_bytes: int
     diagnostic_code: str
+    resource_diagnostics: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,8 +58,9 @@ class BatchDiagnostic:
     completed: int
     total: int
     elapsed_ms: int
-    peak_rss_bytes: int
+    peak_rss_bytes: int | None
     published_bytes: int
+    resource_diagnostics: tuple[str, ...] = ()
 
 
 def check_disk_preflight(
@@ -85,9 +88,10 @@ def build_batch_progress(
     action: BatchAction,
     started_ns: int,
     now_ns: int,
-    peak_rss_bytes: int,
+    peak_rss_bytes: int | None,
     published_bytes: int,
     diagnostic_code: str,
+    resource_diagnostics: tuple[str, ...] = (),
 ) -> BatchProgress:
     """Build nonnegative elapsed time and ETA from injected monotonic values."""
     elapsed_ns = max(0, now_ns - started_ns)
@@ -103,9 +107,10 @@ def build_batch_progress(
         action,
         elapsed_ms,
         eta,
-        max(0, peak_rss_bytes),
+        peak_rss_bytes if peak_rss_bytes is not None and peak_rss_bytes > 0 else None,
         max(0, published_bytes),
         diagnostic_code,
+        resource_diagnostics,
     )
 
 
@@ -126,6 +131,11 @@ def format_batch_diagnostics_jsonl(
                 "sequence": item.sequence,
                 "source_path": item.source_path,
                 "total": item.total,
+                **(
+                    {"resource_diagnostics": item.resource_diagnostics}
+                    if item.resource_diagnostics
+                    else {}
+                ),
             },
             ensure_ascii=False,
             sort_keys=True,
@@ -136,14 +146,19 @@ def format_batch_diagnostics_jsonl(
     )
 
 
-def current_peak_rss_bytes() -> int:
-    """Return this process peak RSS, or zero when the platform lacks it."""
-    try:
-        import resource
-    except ImportError:
-        return 0
-    value = max(0, int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss))
-    return value if sys.platform == "darwin" else value * 1024
+def current_peak_rss_bytes() -> int | None:
+    """Read Windows peak RSS in bytes; None means unavailable, never zero.
+
+    Call read_peak_rss when the caller also needs the native failure diagnostic.
+    """
+    return read_peak_rss().peak_rss_bytes
+
+
+def maximum_peak_rss_bytes(*values: int | None) -> int | None:
+    """Merge measured peaks without treating historical zero placeholders as data."""
+    return max(
+        (value for value in values if value is not None and value > 0), default=None
+    )
 
 
 __all__ = (
@@ -156,5 +171,6 @@ __all__ = (
     "build_batch_progress",
     "check_disk_preflight",
     "current_peak_rss_bytes",
+    "maximum_peak_rss_bytes",
     "format_batch_diagnostics_jsonl",
 )

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-import os
 from pathlib import Path
 from typing import Literal, assert_never
 
@@ -14,13 +13,12 @@ from tests.description_cache_migration_fixture import (
     LEGACY_RELATIVE,
     write_legacy_inputs,
 )
-from tests.source_parent_swap_fixture import swapping_open
 from gametool import description_cache_migration as migration
 from gametool.bounded_file import FileIdentity
+from tests.windows_cache_contract_fixture import observe_migration_proof
 from gametool.description_cache_migration import (
     DescriptionCacheMigrationError,
     DescriptionCacheMigrationOptions,
-    migrate_description_cache,
 )
 
 type StructuralMutation = Literal["state_json", "cache_header", "report_header"]
@@ -39,7 +37,7 @@ def test_migration_fails_closed_on_malformed_structure(
 
     # When / Then: migration fails before creating any destination.
     with pytest.raises(DescriptionCacheMigrationError):
-        migrate_description_cache(
+        observe_migration_proof(
             DescriptionCacheMigrationOptions(legacy_output, legacy_cache, output)
         )
     assert not output.exists()
@@ -68,7 +66,7 @@ def test_migration_rejects_duplicate_schema1_state_identity(
 
     # When / Then
     with pytest.raises(DescriptionCacheMigrationError, match="duplicate"):
-        migrate_description_cache(
+        observe_migration_proof(
             DescriptionCacheMigrationOptions(legacy_output, legacy_cache, output)
         )
     assert not output.exists()
@@ -87,7 +85,7 @@ def test_migration_rejects_duplicate_json_object_keys(tmp_path: Path) -> None:
 
     # When / Then
     with pytest.raises(DescriptionCacheMigrationError, match="duplicate JSON key"):
-        migrate_description_cache(
+        observe_migration_proof(
             DescriptionCacheMigrationOptions(legacy_output, legacy_cache, output)
         )
     assert not output.exists()
@@ -109,7 +107,7 @@ def test_migration_rejects_input_output_overlap_and_state_escape(
 
     # When / Then
     with pytest.raises(DescriptionCacheMigrationError, match="overlap"):
-        migrate_description_cache(
+        observe_migration_proof(
             DescriptionCacheMigrationOptions(
                 legacy_output,
                 legacy_cache,
@@ -117,38 +115,13 @@ def test_migration_rejects_input_output_overlap_and_state_escape(
             )
         )
     with pytest.raises(DescriptionCacheMigrationError, match="escapes"):
-        migrate_description_cache(
+        observe_migration_proof(
             DescriptionCacheMigrationOptions(
                 escaped_output,
                 escaped_cache,
                 tmp_path / "trusted",
             )
         )
-
-
-def test_migration_rejects_symlinked_input_and_output_paths(tmp_path: Path) -> None:
-    # Given: exact inputs are exposed through links and output itself is a link.
-    legacy_output, legacy_cache = write_legacy_inputs(tmp_path / "real")
-    linked_root = tmp_path / "linked-root"
-    linked_root.symlink_to(legacy_output, target_is_directory=True)
-    linked_cache = tmp_path / "linked-cache.tsv"
-    linked_cache.symlink_to(legacy_cache)
-    output_target = tmp_path / "output-target"
-    output_target.mkdir()
-    linked_output = tmp_path / "linked-output"
-    linked_output.symlink_to(output_target, target_is_directory=True)
-
-    # When / Then
-    for options in (
-        DescriptionCacheMigrationOptions(linked_root, legacy_cache, tmp_path / "a"),
-        DescriptionCacheMigrationOptions(legacy_output, linked_cache, tmp_path / "b"),
-        DescriptionCacheMigrationOptions(legacy_output, legacy_cache, linked_output),
-    ):
-        with pytest.raises(
-            DescriptionCacheMigrationError,
-            match="symlink|regular|unsafe",
-        ):
-            migrate_description_cache(options)
 
 
 def test_migration_rejects_bytes_changing_between_stable_reads(
@@ -175,35 +148,9 @@ def test_migration_rejects_bytes_changing_between_stable_reads(
 
     # When / Then
     with pytest.raises(DescriptionCacheMigrationError, match="changed while reading"):
-        migrate_description_cache(
+        observe_migration_proof(
             DescriptionCacheMigrationOptions(legacy_output, legacy_cache, output)
         )
-    assert not output.exists()
-
-
-def test_migration_rejects_intermediate_source_parent_swapped_during_open(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # Given: the report's real parent is swapped through a symlink at open time.
-    legacy_output, legacy_cache = write_legacy_inputs(tmp_path / "input")
-    report = legacy_output / LEGACY_RELATIVE / "对象描述.tsv"
-    source_parent = legacy_output / "地图"
-    moved_parent = tmp_path / "moved-map-parent"
-    events: list[str] = []
-    monkeypatch.setattr(
-        os,
-        "open",
-        swapping_open(os.open, source_parent, moved_parent, report, events),
-    )
-    output = tmp_path / "trusted"
-
-    # When / Then: no intermediate symlink may be followed from the source root.
-    with pytest.raises(DescriptionCacheMigrationError, match="source|symlink|stable"):
-        _ = migrate_description_cache(
-            DescriptionCacheMigrationOptions(legacy_output, legacy_cache, output)
-        )
-    assert events == ["parent swapped"]
     assert not output.exists()
 
 
