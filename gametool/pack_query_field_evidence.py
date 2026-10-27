@@ -1,6 +1,6 @@
 """Shared immutable field records, source labels and lossless display."""
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 
 from .pack_query_objects import valid_object_code
@@ -55,19 +55,34 @@ class ObjectFields:
     fields: tuple[ObjectField, ...]
 
 
+def object_field_indexes(
+    rows: tuple[tuple[str, ...], ...],
+    categories: Iterable[str],
+    clean: Callable[[str], str],
+) -> dict[str, dict[str, ObjectFields]]:
+    """Build qualified field indexes for all requested categories in one pass."""
+    requested = frozenset(categories)
+    fields: dict[tuple[str, str], dict[ObjectField, None]] = {}
+    names: dict[tuple[str, str], dict[str, None]] = {}
+    header = rows[0] if rows else ()
+    for row in rows[1:]:
+        if len(row) < 7 or row[0] not in requested or not valid_object_code(row[1]):
+            continue
+        identity = (row[0], row[1])
+        fields.setdefault(identity, {}).setdefault(
+            field_record(row, header, clean), None
+        )
+        if name := clean(row[2]):
+            names.setdefault(identity, {}).setdefault(name, None)
+    output: dict[str, dict[str, ObjectFields]] = {}
+    for (category, code), records in fields.items():
+        output.setdefault(category, {})[code] = ObjectFields(
+            code, tuple(names.get((category, code), ())), tuple(records)
+        )
+    return output
+
+
 def object_field_index(
     rows: tuple[tuple[str, ...], ...], category: str, clean: Callable[[str], str]
 ) -> dict[str, ObjectFields]:
-    fields: dict[str, dict[ObjectField, None]] = {}
-    names: dict[str, dict[str, None]] = {}
-    header = rows[0] if rows else ()
-    for row in rows[1:]:
-        if len(row) < 7 or row[0] != category or not valid_object_code(row[1]):
-            continue
-        fields.setdefault(row[1], {}).setdefault(field_record(row, header, clean), None)
-        if name := clean(row[2]):
-            names.setdefault(row[1], {}).setdefault(name, None)
-    return {
-        code: ObjectFields(code, tuple(names.get(code, ())), tuple(records))
-        for code, records in fields.items()
-    }
+    return object_field_indexes(rows, (category,), clean).get(category, {})

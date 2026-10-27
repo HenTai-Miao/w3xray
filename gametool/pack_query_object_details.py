@@ -1,11 +1,11 @@
 """Complete dedicated object queries over ID rows and known field evidence."""
 
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from .pack_query_field_evidence import ObjectFields, object_field_index
+from .pack_query_field_evidence import ObjectFields, object_field_indexes
 from .pack_query_objects import ObjectTable
 from .search import compile_query
 
@@ -28,7 +28,7 @@ class ObjectRecord:
         if not self.from_fields:
             yield sources._clean(self.row[4])
         yield from self.evidence.names
-        yield from (sources._clean(value) for value in (*self.row[2:4], *self.row[6:]))
+        yield from (sources._clean(value) for value in (*self.row[2:4], *self.row[5:]))
         for field in self.evidence.fields:
             yield from field.search_fields(sources._clean)
 
@@ -44,28 +44,39 @@ class ObjectDetailIndex:
         return self.view.complete and self.field_view.complete
 
 
+def load_object_catalog(
+    pack: Path, tables: Iterable[str], sources: ObjectDetailSources
+) -> dict[str, ObjectDetailIndex]:
+    requested = tuple(dict.fromkeys(tables))
+    field_view = sources._named_table(pack, "对象字段.tsv")
+    fields = object_field_indexes(field_view.rows, requested, sources._clean)
+    catalog: dict[str, ObjectDetailIndex] = {}
+    for table in requested:
+        view = sources._named_table(pack, f"对象ID/{table}.tsv", table)
+        index = fields.get(table, {})
+        records = [
+            ObjectRecord(row, index.get(row[1]) or ObjectFields(row[1], (), ()))
+            for row in view.rows[1:]
+            if len(row) > 4
+        ]
+        known = {record.row[1] for record in records}
+        records.extend(
+            ObjectRecord(
+                (table, code, "", "", " / ".join(evidence.names) or code, "", ""),
+                evidence,
+                True,
+            )
+            for code, evidence in index.items()
+            if code not in known
+        )
+        catalog[table] = ObjectDetailIndex(view, field_view, tuple(records))
+    return catalog
+
+
 def load_object_records(
     pack: Path, table: str, sources: ObjectDetailSources
 ) -> ObjectDetailIndex:
-    view = sources._named_table(pack, f"对象ID/{table}.tsv", table)
-    field_view = sources._named_table(pack, "对象字段.tsv")
-    index = object_field_index(field_view.rows, table, sources._clean)
-    records = [
-        ObjectRecord(row, index.get(row[1]) or ObjectFields(row[1], (), ()))
-        for row in view.rows[1:]
-        if len(row) > 4
-    ]
-    known = {record.row[1] for record in records}
-    records.extend(
-        ObjectRecord(
-            (table, code, "", "", " / ".join(evidence.names) or code, "", ""),
-            evidence,
-            True,
-        )
-        for code, evidence in index.items()
-        if code not in known
-    )
-    return ObjectDetailIndex(view, field_view, tuple(records))
+    return load_object_catalog(pack, (table,), sources)[table]
 
 
 def render_object_record(
@@ -94,7 +105,7 @@ def render_object_record(
         alias != name for alias in record.evidence.names
     ):
         out.append("  字段记录名称: " + " / ".join(record.evidence.names))
-    details = [("数值", row[2]), ("基础ID", row[3])]
+    details = [("数值", row[2]), ("基础ID", row[3]), ("自定义标记", row[5])]
     details.extend(
         (view.rows[0][index], value) for index, value in enumerate(row[7:], 7)
     )
