@@ -12,7 +12,7 @@
     quest  [关键词]     任务、标题、条目与显示消息（空词全量列出）
     text   <关键词>     全包 TSV 全行搜索 (--limit N 显式缩减)
     price  <名字|四码>   金币价（igol 地图价优先, 基础ID继承）
-    tech   <名字|四码>   科技卡（最大等级/每级金木费用/效果/前置, 自定义字段优先基础继承）
+    tech   [名称|四码|字段表达式] [--level N]  完整科技证据、精确费用公式与指定等级费用
     cmd    <指令文字>    聊天指令效果链（注册->触发器->条件+动作函数体节选, 免手搓脚本）
     refs   <四码|名>     逐对象分类引用与来源；零消耗只说明当前可读索引未发现材料引用
 
@@ -602,108 +602,11 @@ def _is_record_code(value: str) -> bool:
 
 
 def _query_tech(pack: Path, query: str, limit: int) -> list[str]:
-    techs = load_techs(pack)
-    fields = load_tech_fields(pack)
-    bases = _tech_base_fields()
-    lines: list[str] = []
-    matches = [
-        (code, name, base_id)
-        for code, (name, base_id) in techs.items()
-        if _match(query, code, name)
-    ]
-    for code, name, base_id in _bounded(matches, limit):
-        f = fields.get(code, {})
-        base_f = bases.get(base_id, {})
+    from .pack_query_tech_details import TechDetailSources, query_tech_details
 
-        def _num(custom_key: str, base_label: str) -> int | None:
-            for v in (f.get(custom_key), base_f.get(base_label)):
-                if v and v.lstrip("'") not in ("-", "_", "'"):
-                    try:
-                        return int(float(v))
-                    except ValueError, OverflowError:
-                        pass  # 非数值/占位符 — 试下一来源 (base 兑底), 最终 None=未知
-            return None
-
-        levels = _num("glvl", "最大等级")
-        gold_b = _num("gglb", "基础金")
-        gold_i = _num("gglm", "金增量")
-        lum_b = _num("glmb", "基础木")
-        lum_i = _num("glmm", "木增量")
-
-        lines.append(
-            "["
-            + code
-            + "] "
-            + name
-            + (("  (基础: " + base_id + ")") if base_id else "")
-        )
-        if levels:
-            lines.append("  最大等级: " + str(levels))
-        cost_bits = []
-        if gold_b is not None:
-            cost_bits.append(
-                "金 " + str(gold_b) + (("+" + str(gold_i) + "/级") if gold_i else "")
-            )
-        if lum_b is not None:
-            cost_bits.append(
-                "木 " + str(lum_b) + (("+" + str(lum_i) + "/级") if lum_i else "")
-            )
-        if cost_bits:
-            lines.append("  每级费用: " + ", ".join(cost_bits))
-        if levels and levels > 1:
-
-            def _cost(n: int) -> str:
-                g = str(gold_b + (gold_i or 0) * (n - 1)) if gold_b is not None else "-"
-                w = str(lum_b + (lum_i or 0) * (n - 1)) if lum_b is not None else "-"
-                return "金" + g + " 木" + w
-
-            lines.append(
-                "  级费用: "
-                + " | ".join(str(n) + "级 " + _cost(n) for n in range(1, levels + 1))
-            )
-            gsum = (
-                levels * gold_b + (gold_i or 0) * levels * (levels - 1) // 2
-                if gold_b is not None
-                else None
-            )
-            wsum = (
-                levels * lum_b + (lum_i or 0) * levels * (levels - 1) // 2
-                if lum_b is not None
-                else None
-            )
-            if gsum is not None or wsum is not None:
-                lines.append(
-                    "  满级累计: "
-                    + (("金" + str(gsum) + " ") if gsum is not None else "")
-                    + (("木" + str(wsum)) if wsum is not None else "")
-                )
-        tips = {
-            int(key.removeprefix("gub1:")): value
-            for key, value in f.items()
-            if key.startswith("gub1:") and key.removeprefix("gub1:").isdigit()
-        }
-        if "gub1" in f:
-            tips.setdefault(1, f["gub1"])
-        for lv, text in sorted(tips.items()):
-            if text:
-                lines.append("  效果(" + str(lv) + "级): " + text)
-        reqs = sorted((k, v) for k, v in f.items() if k.startswith("greq:"))
-        if reqs:
-            lines.append(
-                "  前置: " + ", ".join(k.split(":", 1)[1] + "级←" + v for k, v in reqs)
-            )
-        lines.append("")
-    if note := _truncated_note(matches, limit):
-        lines.append(note)
-    if lines:
-        return lines
-    # 未命中时给科技总量提示——「未找到」不代表本图没有科技系统
-    if techs:
-        return [
-            "未找到科技: " + query,
-            f"  （本图共 {len(techs)} 项科技; 可用 tech <名称或四码> 查询）",
-        ]
-    return ["未找到科技: " + query]
+    return query_tech_details(
+        pack, query, limit, cast(TechDetailSources, cast(object, sys.modules[__name__]))
+    )
 
 
 def _item_price(
@@ -895,6 +798,18 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         against = rest[i + 1]
         rest = rest[:i] + rest[i + 2 :]
     command = rest[1] if len(rest) > 1 else ""
+    level_selector = ""
+    if "--level" in rest:
+        from .pack_query_tech_details import normalize_tech_level
+
+        index = rest.index("--level")
+        if command != "tech" or rest.count("--level") != 1 or index + 1 >= len(rest):
+            raise PackQueryCliOptionError("--level 仅用于 tech，且需要一个正整数等级")
+        try:
+            level_selector = normalize_tech_level(rest[index + 1])
+        except ValueError as error:
+            raise PackQueryCliOptionError(str(error)) from error
+        rest = rest[:index] + rest[index + 2 :]
     if command == "near" and len(rest) in (4, 5):
         rest = [*rest[:2], " ".join(rest[2:])]
     if (
@@ -914,6 +829,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
             "units",
             "quest",
             "item",
+            "tech",
         )
         and len(rest) == 2
     ):
@@ -926,13 +842,15 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
             + "> <查询词>"
             + ("  (near 用法: near <x> <y> [radius])" if command == "near" else "")
             + (
-                "  (affixes/registered/list/buffs/heroes/stats/synth/skills/units/quest/item 查询词可省 = 全量列出; diff 用法: diff <旧包目录>)"
+                "  (affixes/registered/list/buffs/heroes/stats/synth/skills/units/quest/item/tech 查询词可省 = 全量列出; diff 用法: diff <旧包目录>)"
                 if command
                 in ("affixes", "registered", "diff", "list", "buffs", "quest")
                 else ""
             )
         )
     pack_dir, query = rest[0], rest[2]
+    if level_selector:
+        query = (query + " --level " + level_selector).strip()
     if command not in _COMMANDS:
         raise PackQueryCliOptionError(
             "未知子命令: " + command + " (可选: " + ",".join(_COMMANDS) + ")"
@@ -952,6 +870,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         "units",
         "quest",
         "item",
+        "tech",
     ):
         raise PackQueryCliOptionError("查询词不能为空")
     return PackQueryCliOptions(
