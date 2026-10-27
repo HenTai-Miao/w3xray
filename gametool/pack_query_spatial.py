@@ -60,6 +60,11 @@ class PlacementDiagnostics(Protocol):
     def load_placement_diagnostics(self, pack: Path) -> list[str]: ...
 
 
+@runtime_checkable
+class RelationDiagnostics(Protocol):
+    def load_relation_diagnostics(self, pack: Path) -> list[str]: ...
+
+
 def preplaced_objects(
     pack: Path,
     sources: SpatialSources,
@@ -284,6 +289,8 @@ def query_near(
             input_error=True,
         )
     output = _Output(x, y, radius)
+    if isinstance(sources, RelationDiagnostics):
+        output.spatial_diagnostics.extend(sources.load_relation_diagnostics(pack))
     drops, shops = sources._source_drop_map(pack), sources._source_shop_map(pack)
     item_names = {
         code: name for code, (name, _description) in sources.load_items(pack).items()

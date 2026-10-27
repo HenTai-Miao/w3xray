@@ -67,6 +67,12 @@ from .pack_query_reference_records import (
     ReferenceRecord,
     reference_index,
 )
+from .pack_query_relation_records import (
+    AcquisitionRecord,
+    acquisition_index,
+    raw_relation,
+    relation_evidence,
+)
 from .presentation_safety import single_line_text
 from .static_numbers import format_number
 from .script_lexing import literal_string_value, script_views
@@ -248,6 +254,33 @@ def _table_identity(stat: os.stat_result) -> tuple[int, int, int, int]:
 
 def _object_rows(pack: Path, table: str) -> tuple[tuple[str, ...], ...]:
     return _named_rows(pack, "对象ID/" + table + ".tsv", table)
+
+
+def load_relation_diagnostics(pack: Path) -> list[str]:
+    index = acquisition_index(
+        tuple(tuple(row) for row in _read_rows(pack, "掉落与获取关系.tsv"))
+    )
+    notes = [
+        f"[⚠ 掉落与获取关系.tsv — {note} 来源: {pack}]" for note in index.diagnostics
+    ]
+    if not _table_is_readable(pack, "掉落与获取关系.tsv"):
+        notes.append(
+            f"[⚠ 掉落与获取关系.tsv — 读取失败，未用空结果证明没有获取关系；可用 text <词> 查询或重新导出。 来源: {pack}]"
+        )
+    return notes
+
+
+def _acquisition_rows(pack: Path) -> tuple[AcquisitionRecord, ...]:
+    index = acquisition_index(
+        tuple(tuple(row) for row in _read_rows(pack, "掉落与获取关系.tsv"))
+    )
+    if _QUERY_OBJECT_WARNINGS is not None and index.diagnostics:
+        notes = _QUERY_OBJECT_WARNINGS.setdefault(str(pack), [])
+        known = set(notes)
+        notes.extend(
+            note for note in load_relation_diagnostics(pack) if note not in known
+        )
+    return index.records
 
 
 def _field_rows(pack: Path) -> tuple[tuple[str, ...], ...]:
@@ -939,17 +972,17 @@ def _match(query: str, code: str, name: str) -> bool:
     return (bool(c) and q == c) or (bool(n) and (q in n or n in q))
 
 
-def _relation_is_candidate(row: list[str]) -> bool:
+def _relation_is_candidate(row: Sequence[str]) -> bool:
     return (len(row) > 23 and row[23] == RelationConfidence.CLUE.value) or (
         len(row) > 24 and row[24] == RelationCompleteness.CONFLICT.value
     )
 
 
-def _relation_kind_label(row: list[str]) -> str:
+def _relation_kind_label(row: Sequence[str]) -> str:
     return ("候选 " if _relation_is_candidate(row) else "") + row[2]
 
 
-def _relation_state_label(row: list[str]) -> str:
+def _relation_state_label(row: Sequence[str]) -> str:
     confidence, state, reason = (
         row[column] if len(row) > column else "" for column in (23, 24, 25)
     )
@@ -958,20 +991,22 @@ def _relation_state_label(row: list[str]) -> str:
         and state in ("", RelationCompleteness.COMPLETE.value)
         and not reason
     ):
-        return ""
+        return relation_evidence(row)
     return (
         " （"
         + "；".join(value for value in (confidence, state, reason) if value)
         + "）"
+        + relation_evidence(row)
     )
 
 
-def _relation_source_label(r: list[str]) -> str:
+def _relation_source_label(r: Sequence[str]) -> str:
     """关系行来源展示: 有来源对象用「分类 ID」, 脚本奖励行回落证据函数/行号。
 
     脚本奖励行的 来源ID/名称 为空 (接收者不是来源对象), 旧版打印
     "来源 []" 与 " <-  " 尾巴; 真实出处是 r[20] 证据函数 / r[21] 行号。"""
-    src = (r[5].strip() + " " + r[6].strip()).strip()
+    source = r[6].strip() or (r[7].strip() if len(r) > 7 else "")
+    src = (r[5].strip() + " " + source).strip()
     if src:
         return src
     cols = [r[i].strip() for i in (20, 21) if i < len(r) and r[i].strip()]
@@ -1119,7 +1154,7 @@ def _query_price(pack: Path, query: str, limit: int) -> list[str]:
     return ["未找到物品价格: " + query]
 
 
-def _shop_position_label(row: list[str]) -> tuple[str, str, bool]:
+def _shop_position_label(row: Sequence[str]) -> tuple[str, str, bool]:
     raw_x, raw_y = (
         decode_tsv_cell(row[column]) if len(row) > column else "" for column in (10, 11)
     )
@@ -1175,7 +1210,7 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
     # 商店制造 (关系表独立通道): 奇迹古树/神秘藏宝室这类制造商店没有
     # usei 货架, 只靠 stock 扫描会答「未找到商店」
     craft: dict[str, tuple[str, dict[tuple[str, str], None]]] = {}
-    for r in _read_rows(pack, "掉落与获取关系.tsv"):
+    for r in _acquisition_rows(pack):
         if len(r) < 8 or r[2] != "商店制造":
             continue
         code = r[6]
@@ -1196,7 +1231,7 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
     # 关系表「商店出售」行: 货架字段缺失时的另一证据源——战役容器商店
     # (h704 银月配方商) 只有关系行, 对象字段无自定义 usei, 曾答未找到
     sell: dict[str, tuple[str, dict[str, None]]] = {}
-    for r in _read_rows(pack, "掉落与获取关系.tsv"):
+    for r in _acquisition_rows(pack):
         if len(r) < 8 or r[2] != "商店出售":
             continue
         code = r[6]
@@ -1217,7 +1252,7 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
     if lines:
         selected_codes = {code for code, _start, _end in blocks}
         location_notes: dict[str, dict[str, None]] = {}
-        for ordinal, row in enumerate(_read_rows(pack, "掉落与获取关系.tsv"), 1):
+        for row in _acquisition_rows(pack):
             if (
                 len(row) < 8
                 or row[2] not in ("商店出售", "商店制造")
@@ -1227,7 +1262,7 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
             label, point, invalid = _shop_position_label(row)
             if invalid and _QUERY_OBJECT_WARNINGS is not None:
                 _QUERY_OBJECT_WARNINGS.setdefault(str(pack), []).append(
-                    f"[⚠ 掉落与获取关系.tsv — 记录 {ordinal}: 商店坐标不是完整的有限数字；请核对坐标列或重新导出，保留原始记录: {json.dumps(row, ensure_ascii=False)} 来源: {pack}]"
+                    f"[⚠ 掉落与获取关系.tsv — 记录 {row.ordinal}: 商店坐标不是完整的有限数字；请核对坐标列或重新导出，保留原始记录: {json.dumps(row.raw, ensure_ascii=False)} 来源: {pack}]"
                 )
             serial = f" 实例{row[8]}" if len(row) > 8 and row[8] else ""
             source = " / ".join(
@@ -1281,7 +1316,7 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
     return ["未找到商店: " + query]
 
 
-def _recipe_evidence_note(row: list[str]) -> str:
+def _recipe_evidence_note(row: Sequence[str]) -> str:
     """Keep an inferred or incomplete recipe visible as such in query output."""
     details: list[str] = []
     if len(row) > 23 and row[23] and row[23] != "已确认":
@@ -1290,26 +1325,51 @@ def _recipe_evidence_note(row: list[str]) -> str:
         details.append(row[24])
     if len(row) > 25 and row[25]:
         details.append(row[25])
-    return "  （" + "；".join(details) + "）" if details else ""
+    return ("  （" + "；".join(details) + "）" if details else "") + relation_evidence(
+        row
+    )
+
+
+def _relation_recipe_groups(pack: Path, query: str) -> list[tuple[str, bool]]:
+    groups: dict[tuple[str, str, str], tuple[dict[str, None], bool]] = {}
+    for row in _acquisition_rows(pack):
+        if row[2] != "合成":
+            continue
+        materials = _clean(row[18])
+        if not materials:
+            if not row[17]:
+                continue
+            materials = "材料ID（数量未记录）: " + _clean(row[17])
+        product, name = row[3], _clean(row[4])
+        rendered = (
+            "["
+            + product
+            + "] "
+            + name
+            + "  <-  "
+            + materials
+            + _recipe_evidence_note(row)
+        )
+        key = (product, row[17], materials)
+        evidence, matched = groups.get(key, ({}, False))
+        evidence.setdefault(rendered, None)
+        matched = (
+            matched
+            or _match(query, product, name)
+            or query.casefold() in row[17].casefold()
+            or query.casefold() in materials.casefold()
+        )
+        groups[key] = (evidence, matched)
+    return [("\n".join(evidence), matched) for evidence, matched in groups.values()]
 
 
 def _query_synth(pack: Path, query: str, limit: int) -> list[str]:
     """synth 全图合成总览: 所有配料一屏列完 (成品 <- 材料)。"""
     del query, limit  # synth 无视过滤与截断, 单配方查询走 recipe
     out: list[str] = []
-    seen: set[tuple[str, str]] = set()
     seen_formulas: set[tuple[str, tuple[tuple[str, int], ...]]] = set()
     items = load_items(pack)
-    for r in _read_rows(pack, "掉落与获取关系.tsv"):
-        if len(r) < 19 or r[2] != "合成":
-            continue
-        prod, pname, mats = r[3], _clean(r[4]), _clean(r[18])
-        if not mats or (prod, mats) in seen:
-            continue
-        seen.add((prod, mats))
-        out.append(
-            "[" + prod + "] " + pname + "  <-  " + mats + _recipe_evidence_note(r)
-        )
+    out.extend(rendered for rendered, _matched in _relation_recipe_groups(pack, ""))
     formula_diagnostics: list[str] = []
     for prod, pairs in load_formulas(pack, diagnostics=formula_diagnostics):
         key = (prod, tuple(sorted(pairs)))
@@ -1339,30 +1399,10 @@ def _query_recipe(pack: Path, query: str, limit: int) -> list[str]:
     seen: set[tuple[str, tuple[tuple[str, int], ...]]] = set()
     # 关系表「合成」行与脚本公式索引是两套证据: 公式索引只认脚本形态
     # (迷失国度 0 公式但关系表有秘法瓶/万灵药两条完整合成行)——两套都要
-    seen_rels: set[tuple[str, str]] = set()
-    for r in _read_rows(pack, "掉落与获取关系.tsv"):
-        if len(r) < 19 or r[2] != "合成":
-            continue
-        prod = r[3]
-        pname = _clean(r[4])
-        mats = _clean(r[18])
-        if not mats:
-            continue
-        rendered = (
-            "[" + prod + "] " + pname + "  <-  " + mats + _recipe_evidence_note(r)
-        )
+    for rendered, matched in _relation_recipe_groups(pack, query):
         all_recipes.add(rendered)
-        if not (
-            _match(query, prod, pname)
-            or (r[17] and query.casefold() in r[17].casefold())
-            or query.casefold() in mats.casefold()
-        ):
-            continue
-        key = (prod, mats)
-        if key in seen_rels:
-            continue
-        seen_rels.add(key)
-        hits.append(rendered)
+        if matched:
+            hits.append(rendered)
     for prod, pairs in load_formulas(pack):
         key = (prod, tuple(sorted(pairs)))
         if key in seen:
@@ -1498,7 +1538,7 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
                 code,
                 f"[{code}] {name} ({tag}) -> ({format_number(x)}, {format_number(y)})",
             )
-    for row in _read_rows(pack, "掉落与获取关系.tsv"):
+    for row in _acquisition_rows(pack):
         if len(row) < 7 or not _is_record_code(row[3]):
             continue
         code, name = row[3], _clean(row[4])
@@ -1939,32 +1979,20 @@ def _script_pool_drops(
             for _uc, (un, _ud) in items.items():
                 name_counts[un] = name_counts.get(un, 0) + 1
             acq_by_item: dict[str, list[str]] = {}
-            rel_rows = _read_rows(pack, "掉落与获取关系.tsv")
-            if rel_rows:
-                hdr = rel_rows[0]
-                try:
-                    ci = hdr.index("装备ID")
-                    ck = hdr.index("关系类型")
-                    cn = hdr.index("来源名称")
-                except ValueError:
-                    ci = ck = cn = -1
-                if ci >= 0:
-                    for r in rel_rows[1:]:
-                        if len(r) <= max(ci, ck, cn):
-                            continue
-                        kind = r[ck]
-                        src = r[cn].strip()
-                        tag = ""
-                        if kind == "合成":
-                            tag = "可合成"
-                        elif kind == "商店制造":
-                            tag = "商店制造" + (("@" + src) if src else "")
-                        elif kind == "脚本/触发奖励" and src:
-                            tag = "脚本获取@" + src
-                        if tag:
-                            lst = acq_by_item.setdefault(r[ci], [])
-                            if tag not in lst:
-                                lst.append(tag)
+            rel_rows = _acquisition_rows(pack)
+            for r in rel_rows:
+                kind, src = r[2], r[7].strip()
+                tag = ""
+                if kind == "合成":
+                    tag = "可合成"
+                elif kind == "商店制造":
+                    tag = "商店制造" + (("@" + src) if src else "")
+                elif kind == "脚本/触发奖励" and src:
+                    tag = "脚本获取@" + src
+                if tag:
+                    lst = acq_by_item.setdefault(r[3], [])
+                    if tag not in lst:
+                        lst.append(tag)
             for icode, w in entries:
                 iname, idesc = items.get(icode, (icode, ""))
                 qm = re.search(r"品质[：:]\s*([\w\u4e00-\u9fff]+)", idesc)
@@ -2426,7 +2454,7 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
     blocks = _AcquisitionBlocks()
     kinds: dict[str, set[str]] = {}
     target_codes: dict[str, None] = {}
-    for row in _read_rows(pack, "掉落与获取关系.tsv"):
+    for row in _acquisition_rows(pack):
         if len(row) < 7 or not _is_record_code(row[3]):
             continue
         code, name = row[3], _clean(row[4])
@@ -2831,7 +2859,7 @@ def _source_drop_map(pack: Path) -> dict[tuple[str, str], str]:
     drops: dict[tuple[str, str], list[str]] = {}
     entries_by_src: dict[tuple[str, str], set[str]] = {}
     codes_by_src: dict[tuple[str, str], set[str]] = {}
-    for ordinal, r in enumerate(_read_rows(pack, "掉落与获取关系.tsv"), 1):
+    for r in _acquisition_rows(pack):
         if len(r) < 3:
             continue
         kind = r[2].strip().casefold()
@@ -2857,10 +2885,10 @@ def _source_drop_map(pack: Path) -> dict[tuple[str, str], str]:
         if reason:
             if _QUERY_OBJECT_WARNINGS is not None:
                 _QUERY_OBJECT_WARNINGS.setdefault(str(pack), []).append(
-                    f"[⚠ 掉落与获取关系.tsv — 记录 {ordinal}: {reason}；"
+                    f"[⚠ 掉落与获取关系.tsv — 记录 {r.ordinal}: {reason}；"
                     "保留原始证据，请核对来源分类/对象码或重新导出；"
                     "可用 drop <码> / text <词> 继续查询。原始记录: "
-                    f"{json.dumps(r, ensure_ascii=False)} 来源: {pack}]"
+                    f"{json.dumps(raw_relation(r), ensure_ascii=False)} 来源: {pack}]"
                 )
             continue
         if category not in ("单位", "物品", "可破坏物"):

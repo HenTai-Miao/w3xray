@@ -311,9 +311,10 @@ def test_recipe_completeness_uses_declared_columns_and_preserves_valid_variants(
         elif layout == "text_only":
             header, row = header[:2] + header[4:], row[:2] + row[4:]
         rows = [header, row]
-        if layout == "bom":
-            rows = [[], [" \ufeff "], ["\ufeff 关系类型 ", *header[1:]], row]
         _write(pack / "掉落与获取关系.tsv", rows)
+        if layout == "bom":
+            path = pack / "掉落与获取关系.tsv"
+            path.write_bytes(b"\xef\xbb\xbf" + path.read_bytes())
     result = _run(old, new)
     data = json.loads(result.render(as_json=True))
     assert result.exit_code == 0 and data["comparison_complete"] and data["has_changes"]

@@ -2,11 +2,13 @@
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+import json
 from itertools import chain
 from pathlib import Path
 from typing import Protocol
 
-from .pack_query_objects import OBJECT_TABLES, ObjectTable, valid_object_code
+from .pack_query_objects import OBJECT_TABLES, ObjectTable
+from .pack_query_relation_records import acquisition_index
 
 
 class DiffSources(Protocol):
@@ -197,89 +199,44 @@ class _RecipeView:
 def _recipes(pack: Path, sources: DiffSources) -> _RecipeView:
     formulas: dict[str, dict[Recipe, None]] = {}
     names: dict[str, str] = {}
-    raw = sources._read_rows(pack, "掉落与获取关系.tsv")
+    raw = tuple(tuple(row) for row in sources._read_rows(pack, "掉落与获取关系.tsv"))
     readable = sources._table_is_readable(pack, "掉落与获取关系.tsv")
-    records = [
-        (index, row)
-        for index, row in enumerate(raw, 1)
-        if any(value.strip().lstrip("\ufeff").strip() for value in row)
-    ]
-    slots: tuple[int | None, ...] = (2, 3, 4, 17, 18)
-    if records:
-        first = records[0][1]
-        aliases = (
-            {"关系类型", "relation_type", "kind"},
-            {"装备id", "成品id", "item_id", "product_id"},
-            {"装备名称", "成品名称", "item_name", "product_name"},
-            {"合成材料id", "材料id", "material_ids"},
-            {"合成材料名称与数量", "材料名称与数量", "materials", "material_text"},
+    index = acquisition_index(raw)
+    diagnostics = list(index.diagnostics)
+    bad = list(index.diagnostic_ordinals)
+    if (
+        any(any(cell.strip() for cell in row) for row in raw)
+        and not (index.roles & {17, 18})
+        and not diagnostics
+    ):
+        diagnostics.append(
+            "配方关系表缺少材料列；未猜测材料身份或配方增删，请核对表头或重新导出。"
         )
-        normalized = tuple(
-            value.strip().lstrip("\ufeff").strip().casefold() for value in first
-        )
-        columns = [
-            tuple(i for i, name in enumerate(normalized) if name in choices)
-            for choices in aliases
-        ]
-        legacy = len(first) >= 19 and bool(first[2]) and valid_object_code(first[3])
-        if not legacy and any(columns):
-            if (
-                not columns[0]
-                or not columns[1]
-                or not (columns[3] or columns[4])
-                or any(len(indices) > 1 for indices in columns)
-            ):
-                return _RecipeView(
-                    {},
-                    {},
-                    False,
-                    "配方关系表缺少或重复语义列；未猜测成品与材料身份，请核对表头或重新导出。",
-                )
-            slots = tuple(indices[0] if indices else None for indices in columns)
-            records = records[1:]
-    bad: list[int] = []
-    for index, row in records:
-
-        def cell(slot: int | None) -> str | None:
-            return row[slot] if slot is not None and slot < len(row) else None
-
-        kind, code, name, materials, text = (cell(slot) for slot in slots)
-        if not kind:
-            bad.append(index)
+    for row in index.records:
+        if row[2] != "合成":
             continue
-        if kind != "合成":
-            continue
-        if (
-            code is None
-            or not valid_object_code(code)
-            or materials is None
-            and text is None
-        ):
-            bad.append(index)
-            continue
-        materials, text = (materials or "").strip(), sources._clean(text or "")
+        code, name = row[3], sources._clean(row[4])
+        materials, text = row[17].strip(), sources._clean(row[18]).strip()
         if not materials and not text:
-            bad.append(index)
+            bad.append(row.ordinal)
+            diagnostics.append(
+                f"配方关系表记录 {row.ordinal} 缺少材料证据；原始记录: {json.dumps(row.raw, ensure_ascii=False)}；未用缺失配方推断增删，请核对知识包。"
+            )
             continue
         formulas.setdefault(code, {}).setdefault((materials, text), None)
-        if name := sources._clean(name or ""):
+        if name:
             names.setdefault(code, name)
-    diagnostic = (
-        (
-            f"配方关系表有 {len(bad)} 条记录不完整；记录序号: "
-            + ", ".join(map(str, bad))
-            + "；未用缺失配方推断增删，请核对知识包。"
+    if not readable:
+        diagnostics.append("配方关系表读取失败，未用空结果推断配方变化。")
+    if bad:
+        diagnostics.append(
+            "不完整关系记录序号: " + ", ".join(map(str, dict.fromkeys(bad)))
         )
-        if bad
-        else "配方关系表读取失败，未用空结果推断配方变化。"
-        if not readable
-        else ""
-    )
     return _RecipeView(
         {code: tuple(rows) for code, rows in formulas.items()},
         names,
-        readable and not bad,
-        diagnostic,
+        readable and not diagnostics,
+        "\n".join(diagnostics),
     )
 
 
