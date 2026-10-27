@@ -476,18 +476,11 @@ def clean(s):
 
 
 def load_names(pack_dir, kind="物品"):
+    from .pack_query_cli import _object_rows
+
     nm = {}
-    p = os.path.join(pack_dir, "对象ID", f"{kind}.tsv")
-    if os.path.exists(p):
-        try:
-            with open(p, encoding="utf-8", errors="replace") as fh:
-                text = fh.read()
-        except OSError:
-            text = ""  # 包 TSV 被系统层锁死 (杀软扫描): 软失败退 BASE_NAMES_EN 兜底
-        for line in text.splitlines()[1:]:
-            c = line.split("\t")
-            if len(c) > 4 and len(c[1]) == 4:
-                nm[c[1].encode()] = clean(c[4])
+    for row in _object_rows(Path(pack_dir), kind)[1:]:
+        nm[row[1].encode("latin-1")] = clean(row[4])
     # BASE_NAMES_EN 兜底按 kind 匹配分类 (旧版恒用 item 过滤 → 单位/英雄在无包时全 '?')
     kind_marks = ("item",) if kind == "物品" else ("unit", "hero", "building")
     repo = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -500,22 +493,17 @@ def load_names(pack_dir, kind="物品"):
             if cat and any(mark in cat_text for mark in kind_marks):
                 n2 = BASE_NAMES_EN.get(code, "")
                 if n2 and len(code) == 4:
-                    nm.setdefault(code.encode(), n2)
+                    nm.setdefault(code.encode("latin-1"), n2)
     except Exception:
         pass  # 376: base_names 不可用 (隔离环境/import 失败) — 退 TSV 名/问号, 兜底语义
     return nm
 
 
 def _icon_paths_from_pack(pack_dir):
+    from .pack_query_cli import _field_rows
+
     paths = {}
-    p2 = os.path.join(pack_dir, "对象字段.tsv")
-    try:
-        with open(p2, encoding="utf-8", errors="replace") as fh:
-            lines = fh.readlines()
-    except OSError:
-        return paths  # 包表锁死: 软失败 (图标缺失不致命)
-    for line in lines:
-        c = line.rstrip("\n").split("\t")
+    for c in _field_rows(Path(pack_dir))[1:]:
         if (
             len(c) >= 6
             and c[0] == "物品"

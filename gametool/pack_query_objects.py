@@ -7,6 +7,9 @@ from collections import Counter
 from dataclasses import dataclass
 from functools import lru_cache
 
+from .batch_tsv import decode_tsv_cell
+from .object_codes import unquote_legacy_object_code, valid_object_code
+
 OBJECT_TABLES = ("物品", "单位", "技能", "英雄", "增益", "科技", "装饰物", "可破坏物")
 _HEADER = ("分类", "ID", "数值", "基础ID", "名称", "自定义", "说明")
 _ALIASES = (
@@ -49,10 +52,6 @@ def object_category(value: str) -> str:
     return _CATEGORIES.get(raw.casefold(), raw)
 
 
-def valid_object_code(code: str) -> bool:
-    return len(code) == 4 and all(ord(char) <= 255 for char in code)
-
-
 @dataclass(frozen=True, slots=True)
 class ObjectTable:
     rows: tuple[tuple[str, ...], ...]
@@ -92,11 +91,11 @@ def _table(
         return (
             len(row) >= (6 if fields else 5)
             and valid_category(row[0])
-            and valid_object_code(row[1])
+            and valid_object_code(unquote_legacy_object_code(row[1]))
         )
 
     indexed = [
-        (index, row)
+        (index, tuple(decode_tsv_cell(value) for value in row))
         for index, row in enumerate(raw, 1)
         if any(value.strip().lstrip("\ufeff").strip() for value in row)
     ]
@@ -192,7 +191,12 @@ def _table(
     for index, row in records:
 
         def cell(column: int | None) -> str:
-            return row[column] if column is not None and column < len(row) else ""
+            value = row[column] if column is not None and column < len(row) else ""
+            return (
+                unquote_legacy_object_code(value)
+                if column == slots[1] or not fields and column == slots[3]
+                else value
+            )
 
         code = cell(slots[1])
         declared_category = object_category(cell(slots[0]))

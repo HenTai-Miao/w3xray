@@ -181,7 +181,7 @@ def parse_live_cli_options(argv: Sequence[str]) -> LiveCliOptions:
     )
 
 
-LIVE_PACK_CACHE_VERSION = "live-pack-v26"
+LIVE_PACK_CACHE_VERSION = "live-pack-v27"
 
 
 def live_pack_cache_dir(map_path: str) -> Path:

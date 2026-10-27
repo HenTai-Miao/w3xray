@@ -8,6 +8,7 @@ from functools import lru_cache
 import json
 from typing import overload
 
+from .batch_tsv import decode_tsv_cell
 from .item_relation_exports import ACQUISITION_REPORT_HEADER
 from .item_relation_models import (
     ItemRelationKind,
@@ -15,6 +16,7 @@ from .item_relation_models import (
     RelationConfidence,
 )
 from .pack_query_objects import valid_object_code
+from .object_codes import unquote_legacy_object_code
 
 _ALIASES = (
     ("关系id", "relation_id"),
@@ -96,7 +98,7 @@ def acquisition_index(raw: tuple[tuple[str, ...], ...]) -> AcquisitionIndex:
     ]
     if not indexed:
         return AcquisitionIndex(())
-    first = indexed[0][1]
+    first = tuple(decode_tsv_cell(value) for value in indexed[0][1])
     columns: list[list[int]] = [[] for _ in _ALIASES]
     for i, value in enumerate(first):
         role = _ROLES.get(value.strip().casefold())
@@ -106,7 +108,10 @@ def acquisition_index(raw: tuple[tuple[str, ...], ...]) -> AcquisitionIndex:
     legacy = legacy and (
         len(first) >= 4
         and bool(first[2])
-        and (valid_object_code(first[3]) or first[2] in _KIND_VALUES)
+        and (
+            valid_object_code(unquote_legacy_object_code(first[3]))
+            or first[2] in _KIND_VALUES
+        )
     )
     declared = not legacy and (
         bool(columns[2] or columns[3]) or sum(bool(c) for c in columns) >= 2
@@ -132,7 +137,7 @@ def acquisition_index(raw: tuple[tuple[str, ...], ...]) -> AcquisitionIndex:
             return AcquisitionIndex(
                 (),
                 (
-                    _diagnostic(indexed[0][0], first, reason),
+                    _diagnostic(indexed[0][0], indexed[0][1], reason),
                     *(
                         _diagnostic(i, row, "表头不明确，保留未分类证据")
                         for i, row in indexed[1:]
@@ -166,7 +171,12 @@ def acquisition_index(raw: tuple[tuple[str, ...], ...]) -> AcquisitionIndex:
     diagnostics: list[str] = []
     diagnostic_ordinals: list[int] = []
     for ordinal, row in rows:
-        values = [row[i] if i is not None and i < len(row) else "" for i in slots]
+        values = [
+            decode_tsv_cell(row[i]) if i is not None and i < len(row) else ""
+            for i in slots
+        ]
+        for column in (3, 6):
+            values[column] = unquote_legacy_object_code(values[column])
         values[2] = _KINDS.get(values[2].strip().casefold(), values[2].strip())
         for column, labels in _STATE_LABELS.items():
             values[column] = labels.get(

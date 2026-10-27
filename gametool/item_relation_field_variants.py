@@ -10,6 +10,7 @@ from typing import Final
 
 from .item_relation_models import ItemRelationKind
 from .map_data import GameObject, GameObjectFieldEvidence, MapData
+from .object_codes import field_object_codes
 
 _FIELD_ROLES: Final[Mapping[str, ItemRelationKind]] = MappingProxyType(
     {
@@ -23,7 +24,6 @@ _FIELD_ROLES: Final[Mapping[str, ItemRelationKind]] = MappingProxyType(
         "icid": ItemRelationKind.COOLDOWN_ABILITY,
     }
 )
-_PLACEHOLDER_CODES: Final = frozenset(("____", "----", "0000"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,15 +93,8 @@ def relation_field_variants(obj: GameObject) -> tuple[RelationFieldVariant, ...]
 
 
 def split_relation_codes(raw: str) -> tuple[str, ...]:
-    """Split a relation-bearing list without inventing placeholder endpoints."""
-    codes: list[str] = []
-    for token in raw.replace("|", ",").split(","):
-        code = token.strip().strip("\x00")
-        if len(code) != 4 or code in _PLACEHOLDER_CODES or code.isdigit():
-            continue
-        if code not in codes:
-            codes.append(code)
-    return tuple(codes)
+    """Keep every encoded four-byte reference with stable, case-sensitive dedup."""
+    return tuple(dict.fromkeys(field_object_codes(raw)))
 
 
 def _relation_field_sort_key(

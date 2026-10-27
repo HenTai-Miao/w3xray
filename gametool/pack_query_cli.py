@@ -45,7 +45,6 @@ from typing import TYPE_CHECKING, cast
 
 from .cli_output import configure_cli_output
 from .csv_fields import full_csv_fields
-from .batch_tsv import decode_tsv_cell
 from .item_relation_models import RelationCompleteness, RelationConfidence
 from .pack_query_objects import (
     OBJECT_TABLES,
@@ -56,6 +55,7 @@ from .pack_query_objects import (
     valid_object_code,
 )
 from .pack_query_options import PackQueryCliOptions, parse_query_limit
+from .object_codes import field_object_codes
 from .pack_query_call_records import (
     CallArgumentIndex,
     call_argument_index,
@@ -384,19 +384,7 @@ def _load_item_price_index(pack: Path) -> ItemPriceIndex:
 
 def _field_object_codes(value: str) -> list[str]:
     """Read rawcodes or the final name(code) suffix, preserving every list entry."""
-    codes: list[str] = []
-    for raw_token in value.split(","):
-        token = raw_token.strip()
-        if valid_object_code(token):
-            codes.append(token)
-        elif (
-            token.endswith(")")
-            and len(token) >= 6
-            and token[-6] == "("
-            and valid_object_code(token[-5:-1])
-        ):
-            codes.append(token[-5:-1])
-    return codes
+    return list(field_object_codes(value))
 
 
 def load_shop_stocks(pack_dir: Path) -> list[tuple[str, str, list[str]]]:
@@ -1008,9 +996,8 @@ def _query_price(pack: Path, query: str, limit: int) -> list[str]:
 
 
 def _shop_position_label(row: Sequence[str]) -> tuple[str, str, bool]:
-    raw_x, raw_y = (
-        decode_tsv_cell(row[column]) if len(row) > column else "" for column in (10, 11)
-    )
+    # AcquisitionRecord values have already crossed the safety-envelope boundary.
+    raw_x, raw_y = (row[column] if len(row) > column else "" for column in (10, 11))
     if not raw_x and not raw_y:
         return (
             ("候选货架定义" if _relation_is_candidate(row) else "货架定义"),

@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from .api import GameObject, MapData
+from .batch_tsv import format_tsv_rows
 from .knowledge_io import safe_filename, tsv, write_text
 
 
@@ -12,23 +13,21 @@ def write_object_ids(md: MapData, out_dir: str) -> int:
     """Write per-category object ID TSV files."""
     count = 0
     for category, objects in sorted(md.objects.items()):
-        rows = ["分类\tID\t10进制\t基础ID\t名称\t自定义\t说明"]
+        rows = [("分类", "ID", "10进制", "基础ID", "名称", "自定义", "说明")]
         for obj in sorted_unique_objects(objects):
             rows.append(
-                "\t".join(
-                    (
-                        tsv(category),
-                        tsv(obj.obj_id),
-                        str(obj.decimal),
-                        tsv(obj.base_id),
-                        tsv(obj.name),
-                        "是" if obj.is_custom else "否",
-                        tsv(_object_description(obj)),
-                    )
+                (
+                    category,
+                    obj.obj_id,
+                    str(obj.decimal),
+                    obj.base_id,
+                    obj.name,
+                    "是" if obj.is_custom else "否",
+                    _object_description(obj),
                 )
             )
         count += write_text(
-            out_dir, f"{safe_filename(category)}.tsv", "\n".join(rows) + "\n"
+            out_dir, f"{safe_filename(category)}.tsv", format_tsv_rows(rows)
         )
     return count
 
@@ -114,7 +113,7 @@ def format_object_text_icons(md: MapData) -> str:
 
 def format_object_fields(md: MapData) -> str:
     """Return every materialized object field and its winning source as TSV."""
-    rows = ["分类\tID\t名称\t字段键\t字段名\t值\t来源"]
+    rows = [("分类", "ID", "名称", "字段键", "字段名", "值", "来源")]
     for obj in _all_objects(md):
         if obj.field_values:
             legacy_fields = tuple(obj.fields)
@@ -127,34 +126,30 @@ def format_object_fields(md: MapData) -> str:
                 ):
                     label = legacy_fields[index][0]
                 rows.append(
-                    "\t".join(
-                        (
-                            tsv(obj.category),
-                            tsv(obj.obj_id),
-                            tsv(obj.name),
-                            tsv(key),
-                            tsv(label or key),
-                            tsv(value),
-                            tsv(obj.field_sources.get(key, "")),
-                        )
+                    (
+                        obj.category,
+                        obj.obj_id,
+                        obj.name,
+                        key,
+                        label or key,
+                        value,
+                        obj.field_sources.get(key, ""),
                     )
                 )
             continue
         for label, value in obj.fields:
             rows.append(
-                "\t".join(
-                    (
-                        tsv(obj.category),
-                        tsv(obj.obj_id),
-                        tsv(obj.name),
-                        "",
-                        tsv(label),
-                        tsv(value),
-                        "",
-                    )
+                (
+                    obj.category,
+                    obj.obj_id,
+                    obj.name,
+                    "",
+                    label,
+                    value,
+                    "",
                 )
             )
-    return "\n".join(rows) + "\n"
+    return format_tsv_rows(rows)
 
 
 def _all_objects(md: MapData) -> Iterable[GameObject]:

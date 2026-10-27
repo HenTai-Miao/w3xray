@@ -386,6 +386,7 @@ gametool/pack_query_placements.py
 gametool/pack_query_spatial.py
 gametool/pack_query_search.py
 gametool/pack_query_objects.py
+gametool/object_codes.py
 gametool/pack_query_diff.py
 gametool/pack_query_item_abilities.py
 gametool/pack_query_item_details.py
