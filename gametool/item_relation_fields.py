@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from dataclasses import replace
 from typing import assert_never
 
 from .doo import Unit
 from .item_relation_endpoints import (
     object_field_evidence,
     placement_resolution,
-    resolve_relation_object,
 )
 from .item_relation_field_variants import (
     relation_field_variants,
@@ -24,10 +24,12 @@ from .item_relation_models import (
     RelationObject,
 )
 from .map_data import GameObject, GameObjectFieldEvidence, MapData
+from .placement_identity import PlacementObjectIndex
 
 
 def object_field_relations(md: MapData) -> Iterable[ItemRelation]:
     """Yield shop inventory and equipment-skill object-field evidence."""
+    objects = PlacementObjectIndex(md)
     units_by_type: dict[str, list[Unit]] = {}
     for unit in md.units:
         units_by_type.setdefault(unit.type_id, []).append(unit)
@@ -38,6 +40,8 @@ def object_field_relations(md: MapData) -> Iterable[ItemRelation]:
             codes = split_relation_codes(field.source_value)
             match kind:
                 case ItemRelationKind.SHOP_SELL | ItemRelationKind.SHOP_MAKE:
+                    if obj.category not in ("单位", "英雄"):
+                        continue
                     for code in codes:
                         yield from _shop_relations(
                             md,
@@ -47,6 +51,7 @@ def object_field_relations(md: MapData) -> Iterable[ItemRelation]:
                             kind,
                             units_by_type,
                             variant.conflict,
+                            objects,
                         )
                 case ItemRelationKind.ITEM_ABILITY | ItemRelationKind.COOLDOWN_ABILITY:
                     if obj.category == "物品":
@@ -58,6 +63,7 @@ def object_field_relations(md: MapData) -> Iterable[ItemRelation]:
                                 code,
                                 kind,
                                 variant.conflict,
+                                objects,
                             )
                 case (
                     ItemRelationKind.UNIT_DROP
@@ -80,18 +86,27 @@ def _shop_relations(
     kind: ItemRelationKind,
     units_by_type: Mapping[str, list[Unit]],
     conflict: bool,
+    objects: PlacementObjectIndex,
 ) -> Iterable[ItemRelation]:
-    item, item_resolved = resolve_relation_object(md, item_id, "物品")
-    source = RelationObject(shop.category, shop.obj_id, shop.name)
+    item, item_resolved = _field_object(objects, item_id, "物品")
+    source = RelationObject(
+        "单位" if shop.category == "英雄" else shop.category, shop.obj_id, shop.name
+    )
     instances = units_by_type.get(shop.obj_id, [])
+    identity = objects.placement(shop.obj_id, ("单位", "物品"))
+    position_confirmed = identity.category == "单位"
     evidence = object_field_evidence(
         shop,
         field.key,
         field.source_value,
         source=field.source,
     )
-    if not instances:
-        reason = "未预放置；商店可能由脚本创建"
+    if not instances or not position_confirmed:
+        reason = (
+            "未预放置；商店可能由脚本创建"
+            if not instances
+            else "货架字段已确认，尚无已确认预放置位置；" + identity.diagnostic
+        )
         if not item_resolved:
             reason = f"物品 {item_id} 未解析；{reason}"
         completeness = (
@@ -116,7 +131,8 @@ def _shop_relations(
             unresolved_reason=reason,
             map_name=md.name,
         )
-        return
+        if not instances:
+            return
     for unit in instances:
         completeness = (
             RelationCompleteness.COMPLETE
@@ -124,6 +140,23 @@ def _shop_relations(
             else RelationCompleteness.UNRESOLVED
         )
         reason = "" if item_resolved else f"物品 {item_id} 未解析"
+        confidence = RelationConfidence.CONFIRMED
+        if not position_confirmed:
+            confidence = RelationConfidence.CLUE
+            completeness = (
+                RelationCompleteness.CONFLICT
+                if identity.category or len(identity.candidates) > 1
+                else RelationCompleteness.UNRESOLVED
+            )
+            reason = "；".join(
+                value
+                for value in (
+                    identity.diagnostic or "商店预放置分类未确认",
+                    "位置仅为候选",
+                    reason,
+                )
+                if value
+            )
         completeness, reason = placement_resolution(
             md,
             "war3mapUnits.doo",
@@ -140,8 +173,18 @@ def _shop_relations(
             x=unit.x,
             y=unit.y,
             z=unit.z,
-            evidence=evidence,
-            confidence=RelationConfidence.CONFIRMED,
+            evidence=replace(
+                evidence,
+                location="；".join(
+                    value
+                    for value in (
+                        evidence.location,
+                        f"war3mapUnits.doo 实例{unit.serial} @0x{unit.source_offset:X}",
+                    )
+                    if value
+                ),
+            ),
+            confidence=confidence,
             completeness=completeness,
             unresolved_reason=reason,
             map_name=md.name,
@@ -155,9 +198,10 @@ def _skill_relation(
     skill_id: str,
     kind: ItemRelationKind,
     conflict: bool,
+    objects: PlacementObjectIndex,
 ) -> ItemRelation:
     item = RelationObject("物品", item_obj.obj_id, item_obj.name)
-    skill, resolved = resolve_relation_object(md, skill_id, "技能")
+    skill, resolved = _field_object(objects, skill_id, "技能")
     completeness = (
         RelationCompleteness.COMPLETE if resolved else RelationCompleteness.UNRESOLVED
     )
@@ -178,6 +222,15 @@ def _skill_relation(
         unresolved_reason=reason,
         map_name=md.name,
     )
+
+
+def _field_object(
+    objects: PlacementObjectIndex, code: str, category: str
+) -> tuple[RelationObject, bool]:
+    label = objects.placement(code, (category,))
+    return RelationObject(
+        category, code, label.name if label.category else "未解析", label.fine
+    ), bool(label.category)
 
 
 def _conflict_resolution(

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from itertools import chain
 from types import MappingProxyType
 from typing import Final
 
@@ -34,12 +35,17 @@ class RelationFieldVariant:
 
 def relation_objects(md: MapData) -> tuple[GameObject, ...]:
     """Return category-safe relation objects with legacy-map compatibility."""
-    values = (
-        md.obj_identity_index.values()
-        if md.obj_identity_index
-        else md.obj_index.values()
+    values = chain(
+        chain.from_iterable(md.objects.values()),
+        md.obj_identity_index.values(),
+        md.obj_index.values(),
     )
-    unique = {(item.category, item.obj_id): item for item in values}
+    unique: dict[tuple[str, str], GameObject] = {}
+    for item in values:
+        key = (item.category, item.obj_id)
+        previous = unique.get(key)
+        if previous is None or previous.ext == "script" and item.ext != "script":
+            unique[key] = item
     return tuple(
         unique[key]
         for key in sorted(unique, key=lambda value: (value[0].casefold(), value[1]))

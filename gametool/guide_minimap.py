@@ -40,6 +40,9 @@ from .placement_positions import (
 )
 from .static_numbers import format_number
 from .presentation_safety import single_line_text
+from .placement_identity import PlacementObjectIndex
+from .item_relation_field_variants import relation_field_variants, split_relation_codes
+from .item_relation_models import ItemRelationKind
 
 # 点位 = (名称, 世界X, 世界Y)
 Mark = tuple[str, float, float]
@@ -112,14 +115,35 @@ def crop_to_playable(img: Image, bounds: Bounds) -> Image:
 def shop_marks(
     md: MapData, positions: Mapping[str, Point | tuple[Point, ...]]
 ) -> tuple[Mark, ...]:
-    """带 usei 货架且有放置坐标的单位 → (名, X, Y) 列表; 坐标来自 load_minimap_assets。"""
+    """Return confirmed shop points; ambiguous DOO points stay separate evidence."""
+    return _shop_marks_with_candidates(md, positions)[0]
+
+
+def _shop_marks_with_candidates(
+    md: MapData, positions: Mapping[str, Point | tuple[Point, ...]]
+) -> tuple[tuple[Mark, ...], tuple[Mark, ...]]:
     marks: list[Mark] = []
+    candidates: list[Mark] = []
     seen: set[str] = set()
-    for obj in md.objects.get("单位", []):
+    objects = PlacementObjectIndex(md)
+    script_points: PositionGroups | None = None
+    for obj in objects.objects.values():
+        if obj.category not in ("单位", "英雄"):
+            continue
         if obj.obj_id in seen:
             continue
         has_shelf = "usei" in obj.field_values or any(
             field_id == "usei" for field_id, _value in obj.fields
+        )
+        has_shelf = has_shelf or any(
+            variant.kind in (ItemRelationKind.SHOP_SELL, ItemRelationKind.SHOP_MAKE)
+            and split_relation_codes(variant.field.source_value)
+            for variant in relation_field_variants(obj)
+        )
+        has_shelf = has_shelf or any(
+            key.casefold() in ("sellitems", "makeitems", "umki")
+            and split_relation_codes(value)
+            for key, value in obj.fields
         )
         if not has_shelf:
             continue
@@ -132,9 +156,14 @@ def shop_marks(
             if isinstance(found[0], (int, float))
             else cast(tuple[Point, ...], found)
         )
+        confirmed = objects.placement(obj.obj_id, ("单位", "物品")).category == "单位"
+        if not confirmed and script_points is None:
+            script_points = script_position_groups(md)
+        known_script = set((script_points or {}).get(obj.obj_id, ()))
         for x, y in points:
-            marks.append((obj.name or obj.obj_id, x, y))
-    return tuple(marks)
+            target = marks if confirmed or (x, y) in known_script else candidates
+            target.append((obj.name or obj.obj_id, x, y))
+    return tuple(marks), tuple(candidates)
 
 
 def extra_marks_from_json(path: str) -> tuple[Mark, ...]:
@@ -359,7 +388,7 @@ def write_guide_minimap(
     if bounds is None:
         raise GuideMinimapError("w3i 缺少镜头边界/补足, 无法把世界坐标对齐到小地图")
     img, positions = load_minimap_assets(md)
-    shops = shop_marks(md, positions)
+    shops, candidates = _shop_marks_with_candidates(md, positions)
     marks: list[Mark] = list(shops)
     extra_count = 0
     if extra_json:
@@ -367,6 +396,10 @@ def write_guide_minimap(
         marks.extend(extra)
         extra_count = len(extra)
     if not marks:
+        if candidates:
+            raise GuideMinimapError(
+                f"另有 {len(candidates)} 处候选商店位置，分类尚未确认为单位，不能标为确定商店；可用 guide --section shops 或 pack-query near 查看完整线索。"
+            )
         raise GuideMinimapError(
             "没有可标注的点位 (对象表没有带 usei 货架且已放置的商店, 也未提供追加 JSON)"
         )
@@ -374,8 +407,13 @@ def write_guide_minimap(
         raise GuideMinimapError("地图里没有可解码的 war3mapMap.blp 小地图底图")
     img = crop_to_playable(img, bounds)
     render_marks(img, bounds, tuple(marks), out_path)
-    return [
+    notes = [
         f"小地图标注图已保存: {out_path}",
         f"点位 {len(marks)} 个 (商店 {len(shops)} + 自定义 {extra_count})",
         "自定义追加: --minimap-marks <marks.json>, JSON 格式 [[名称, X, Y], ...]",
     ]
+    if candidates:
+        notes.append(
+            f"另有 {len(candidates)} 处候选商店位置未标为确定商店；可用 guide --section shops 或 pack-query near 查看完整线索。"
+        )
+    return notes

@@ -8,6 +8,7 @@ from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 from .pack_query_placements import script_placements
+from .placement_identity import PlacementObjectIndex
 
 if TYPE_CHECKING:
     from .doo_models import Unit
@@ -36,13 +37,21 @@ def script_position_groups(md: MapData, kind: str = "unit") -> PositionGroups:
 
 
 def unit_position_groups(
-    md: MapData, extra_units: Iterable[Unit] = ()
+    md: MapData, extra_units: Iterable[Unit] = (), *, confirmed_only: bool = False
 ) -> PositionGroups:
     """Merge DOO and script evidence; mirrored coordinates appear once."""
+
+    objects = PlacementObjectIndex(md) if confirmed_only else None
 
     def placements() -> Iterable[tuple[str, float, float]]:
         for units in (md.units, extra_units):
             for unit in units:
+                if (
+                    objects is not None
+                    and objects.placement(unit.type_id, ("单位", "物品")).category
+                    != "单位"
+                ):
+                    continue
                 yield unit.type_id, unit.x, unit.y
         for code, points in script_position_groups(md).items():
             for x, y in points:

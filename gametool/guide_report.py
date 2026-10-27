@@ -47,6 +47,7 @@ from .placement_positions import (
     unit_position_groups,
 )
 from .static_numbers import format_number
+from .placement_identity import PlacementObjectIndex
 from .wts import map_wts_table, resolve
 
 if TYPE_CHECKING:
@@ -254,12 +255,56 @@ def _recipe_lines(md: MapData) -> tuple[str, ...]:
 
 
 def _shop_lines(md: MapData, coords: PositionGroups | None = None) -> tuple[str, ...]:
-    return _grouped_source_lines(
-        md,
-        ItemRelationKind.SHOP_SELL,
-        "、",
-        coords=_placement_coords(md) if coords is None else coords,
-    )
+    objects = PlacementObjectIndex(md)
+    confirmed = unit_position_groups(md, confirmed_only=True)
+    preplaced = {
+        (unit.type_id, unit.x, unit.y)
+        for unit in md.units
+        if objects.placement(unit.type_id, ("单位", "物品")).category == "单位"
+    }
+    script_points = {
+        (code, x, y) for code, points in confirmed.items() for x, y in points
+    } - preplaced
+    if coords:
+        for code, points in coords.items():
+            if objects.placement(code, ("单位", "物品")).category == "单位":
+                confirmed[code] = tuple(
+                    dict.fromkeys((*confirmed.get(code, ()), *points))
+                )
+    rows: list[str] = []
+    for kind in (ItemRelationKind.SHOP_SELL, ItemRelationKind.SHOP_MAKE):
+        lines = _grouped_source_lines(
+            md,
+            kind,
+            "、",
+            coords=confirmed,
+            exclude_candidates=True,
+            preplaced_points=preplaced,
+            script_points=script_points,
+        )
+        rows.extend(
+            lines
+            if kind is ItemRelationKind.SHOP_SELL
+            else ("- 制造：" + line.removeprefix("- ") for line in lines)
+        )
+        for relation in md.item_relations.for_kind(kind):
+            if not _candidate_relation(relation):
+                continue
+            source = relation.source
+            name = (
+                "未记录来源"
+                if source is None
+                else f"{_endpoint_name(source)}({source.object_id})"
+            )
+            point = (
+                "位置未确认"
+                if relation.x is None or relation.y is None
+                else f"({format_number(relation.x)}, {format_number(relation.y)})"
+            )
+            rows.append(
+                f"- 未确认商店线索：{name} @{point} -> {_endpoint_name(relation.item)}({relation.item.object_id}) [{kind.value}]；{relation.confidence.value}/{relation.completeness.value}；{relation.unresolved_reason} {_evidence_tag(relation)} 实例{relation.instance_serial} / {relation.evidence.location}"
+            )
+    return tuple(rows)
 
 
 def _drop_lines(md: MapData, coords: PositionGroups | None = None) -> tuple[str, ...]:
@@ -419,6 +464,8 @@ def _grouped_source_lines(
     coords: PositionGroups | None = None,
     *,
     exclude_candidates: bool = False,
+    preplaced_points: set[tuple[str, float, float]] | None = None,
+    script_points: set[tuple[str, float, float]] | None = None,
 ) -> tuple[str, ...]:
     grouped: dict[
         tuple[str, str, str],
@@ -457,6 +504,8 @@ def _grouped_source_lines(
         grouped.setdefault(key, {}).setdefault(point, {})[identity] = entry
     preplaced = {(unit.type_id, unit.x, unit.y) for unit in md.units}
     preplaced.update((doodad.type_id, doodad.x, doodad.y) for doodad in md.doodads)
+    if preplaced_points is not None:
+        preplaced = preplaced_points
     rows: list[str] = []
     for (_category, code, source), by_point in grouped.items():
         general = by_point.get(None, {})
@@ -475,6 +524,8 @@ def _grouped_source_lines(
                 else " [关系记录位置]"
                 if (x, y) in by_point
                 else " [脚本位置]"
+                if script_points is None or (code, x, y) in script_points
+                else " [位置证据]"
             )
             rows.append(
                 f"- {source}：{separator.join(items.values())}  @({format_number(x)},{format_number(y)}){note}"

@@ -25,6 +25,7 @@ from __future__ import annotations
 import bisect
 import hashlib
 import json
+import math
 import time
 import os
 import csv
@@ -44,6 +45,7 @@ from typing import TYPE_CHECKING, cast
 
 from .cli_output import configure_cli_output
 from .csv_fields import full_csv_fields
+from .batch_tsv import decode_tsv_cell
 from .item_relation_models import RelationCompleteness, RelationConfidence
 from .pack_query_objects import (
     OBJECT_TABLES,
@@ -1117,6 +1119,34 @@ def _query_price(pack: Path, query: str, limit: int) -> list[str]:
     return ["未找到物品价格: " + query]
 
 
+def _shop_position_label(row: list[str]) -> tuple[str, str, bool]:
+    raw_x, raw_y = (
+        decode_tsv_cell(row[column]) if len(row) > column else "" for column in (10, 11)
+    )
+    if not raw_x and not raw_y:
+        return (
+            ("候选货架定义" if _relation_is_candidate(row) else "货架定义"),
+            "位置未确认",
+            False,
+        )
+    try:
+        point = (float(raw_x), float(raw_y))
+    except ValueError, OverflowError:
+        point = (math.nan, math.nan)
+    if not all(math.isfinite(value) for value in point):
+        return (
+            "坐标诊断",
+            "原始坐标未确认: "
+            + json.dumps({"X": raw_x, "Y": raw_y}, ensure_ascii=False),
+            True,
+        )
+    return (
+        ("候选位置" if _relation_is_candidate(row) else "位置记录"),
+        f"@({format_number(point[0])},{format_number(point[1])})",
+        False,
+    )
+
+
 def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
     """按商店列出售清单与逐件真实价格（igol 地图价优先，回落基础继承价）。"""
     items = load_items(pack)
@@ -1185,6 +1215,35 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
         lines.append("")
         blocks.append((code, block_start, len(lines)))
     if lines:
+        selected_codes = {code for code, _start, _end in blocks}
+        location_notes: dict[str, dict[str, None]] = {}
+        for ordinal, row in enumerate(_read_rows(pack, "掉落与获取关系.tsv"), 1):
+            if (
+                len(row) < 8
+                or row[2] not in ("商店出售", "商店制造")
+                or row[6] not in selected_codes
+            ):
+                continue
+            label, point, invalid = _shop_position_label(row)
+            if invalid and _QUERY_OBJECT_WARNINGS is not None:
+                _QUERY_OBJECT_WARNINGS.setdefault(str(pack), []).append(
+                    f"[⚠ 掉落与获取关系.tsv — 记录 {ordinal}: 商店坐标不是完整的有限数字；请核对坐标列或重新导出，保留原始记录: {json.dumps(row, ensure_ascii=False)} 来源: {pack}]"
+                )
+            serial = f" 实例{row[8]}" if len(row) > 8 and row[8] else ""
+            source = " / ".join(
+                row[column] for column in (19, 21) if len(row) > column and row[column]
+            )
+            note = (
+                f"  {label}: {_clean(row[4])}[{row[3]}] {point}{serial}{_relation_state_label(row)}"
+                + (f" 来源: {source}" if source else "")
+            )
+            location_notes.setdefault(row[6], {}).setdefault(note, None)
+        for code, notes in location_notes.items():
+            start = len(lines)
+            lines.append("  商店位置与线索 [" + code + "]")
+            lines.extend(notes)
+            lines.append("")
+            blocks.append((code, start, len(lines)))
         if not limit:
             return lines
         shops = list(dict.fromkeys(code for code, _start, _end in blocks))
