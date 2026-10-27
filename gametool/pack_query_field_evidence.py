@@ -1,6 +1,6 @@
 """Shared immutable field records, source labels and lossless display."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
 from .pack_query_objects import valid_object_code
@@ -13,6 +13,15 @@ class ObjectField:
     value: str
     source: str
     extras: tuple[tuple[str, str], ...] = ()
+
+    def search_fields(self, clean: Callable[[str], str]) -> Iterator[str]:
+        yield self.key
+        yield self.label
+        yield clean(self.value)
+        yield self.source
+        for label, value in self.extras:
+            yield label
+            yield clean(value)
 
     def render_lines(self, indent: str = "    ") -> tuple[str, ...]:
         key = self.key or "（字段键未记录）"

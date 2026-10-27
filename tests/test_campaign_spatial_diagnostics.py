@@ -378,7 +378,7 @@ def test_cli_missing_near_coordinates_reaches_shared_typed_usage(
 
 def test_other_keyword_commands_keep_their_required_query(tmp_path: Path) -> None:
     with pytest.raises(queries.PackQueryCliOptionError):
-        queries.parse_pack_query_cli_options([str(tmp_path), "item", "--json"])
+        queries.parse_pack_query_cli_options([str(tmp_path), "price", "--json"])
 
 
 def test_nonspatial_json_does_not_gain_spatial_status_fields(tmp_path: Path) -> None:

@@ -353,6 +353,7 @@ tests/test_preplaced_export_identity.py
 tests/test_placement_relation_identity.py
 tests/test_shop_placement_identity.py
 tests/test_acquisition_record_schema.py
+tests/test_item_query_details.py
 tests/test_query_object_lists_complete.py
 tests/test_query_result_limits.py
 tests/test_query_evidence_complete.py

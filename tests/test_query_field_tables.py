@@ -121,9 +121,9 @@ def test_field_consumers_share_complete_named_and_legacy_views(
     if command == "price":
         assert "123" in text and "地图价" in text
     elif command == "item":
-        assert (
-            "地图完整说明末尾" in text and "+11 力量" in text and "旧说明" not in text
-        )
+        assert "地图说明: 地图完整说明末尾" in text and "+11 力量" in text
+        assert "旧说明" not in text.splitlines()[0]
+        assert "ID表说明（原始清单证据）: 旧说明" in text
     elif command == "shop":
         assert "测试商店 [n001]" in text and "123金" in text and "第二物品" in text
     else:

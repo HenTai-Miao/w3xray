@@ -1040,9 +1040,9 @@ def test_parse_errors():
     with pytest.raises(PackQueryCliOptionError):
         parse_pack_query_cli_options(["pack", "nope", "x"])
     with pytest.raises(PackQueryCliOptionError):
-        parse_pack_query_cli_options(["pack", "item"])
+        parse_pack_query_cli_options(["pack", "price"])
     with pytest.raises(PackQueryCliOptionError):
-        parse_pack_query_cli_options(["pack", "item", ""])
+        parse_pack_query_cli_options(["pack", "price", ""])
     with pytest.raises(PackQueryCliOptionError):
         parse_pack_query_cli_options(["pack", "item", "x", "--limit"])
     with pytest.raises(PackQueryCliOptionError):
@@ -1220,7 +1220,9 @@ def test_run_cli_item_prefers_real_tooltip(pack, capsys):
     out = capsys.readouterr().out
     assert rc == 0
     assert "真实冻伤提示" in out
-    assert "减速" not in out  # 模板描述被真实提示取代
+    assert "地图说明: +5攻" in out
+    assert "减速" not in out.splitlines()[0]
+    assert "ID表说明（原始清单证据）:" in out  # 模板保留为独立原始证据，不作为地图说明
 
 
 def test_load_item_gold_overrides_accepts_goldcost(pack):

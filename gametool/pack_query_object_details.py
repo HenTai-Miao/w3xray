@@ -18,7 +18,7 @@ class ObjectDetailSources(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
-class _Record:
+class ObjectRecord:
     row: tuple[str, ...]
     evidence: ObjectFields
     from_fields: bool = False
@@ -30,13 +30,86 @@ class _Record:
         yield from self.evidence.names
         yield from (sources._clean(value) for value in (*self.row[2:4], *self.row[6:]))
         for field in self.evidence.fields:
-            yield field.key
-            yield field.label
-            yield sources._clean(field.value)
-            yield field.source
-            for label, value in field.extras:
-                yield label
-                yield sources._clean(value)
+            yield from field.search_fields(sources._clean)
+
+
+@dataclass(frozen=True, slots=True)
+class ObjectDetailIndex:
+    view: ObjectTable
+    field_view: ObjectTable
+    records: tuple[ObjectRecord, ...]
+
+    @property
+    def complete(self) -> bool:
+        return self.view.complete and self.field_view.complete
+
+
+def load_object_records(
+    pack: Path, table: str, sources: ObjectDetailSources
+) -> ObjectDetailIndex:
+    view = sources._named_table(pack, f"对象ID/{table}.tsv", table)
+    field_view = sources._named_table(pack, "对象字段.tsv")
+    index = object_field_index(field_view.rows, table, sources._clean)
+    records = [
+        ObjectRecord(row, index.get(row[1]) or ObjectFields(row[1], (), ()))
+        for row in view.rows[1:]
+        if len(row) > 4
+    ]
+    known = {record.row[1] for record in records}
+    records.extend(
+        ObjectRecord(
+            (table, code, "", "", " / ".join(evidence.names) or code, "", ""),
+            evidence,
+            True,
+        )
+        for code, evidence in index.items()
+        if code not in known
+    )
+    return ObjectDetailIndex(view, field_view, tuple(records))
+
+
+def render_object_record(
+    record: ObjectRecord,
+    view: ObjectTable,
+    sources: ObjectDetailSources,
+    *,
+    include_description: bool = True,
+) -> list[str]:
+    out: list[str] = []
+    row = record.row
+    name = sources._clean(row[4]) or " / ".join(record.evidence.names) or row[1]
+    custom, note = row[5].strip(), sources._clean(row[6])
+    origin = (
+        "自定义" if custom == "是" else "继承基础" if custom == "否" else "来源未记录"
+    )
+    out.append(
+        f"[{row[1]}] {name} ({origin})"
+        + (" — " + note if note and include_description else "")
+    )
+    if record.from_fields:
+        out.append(
+            "  该对象由对象字段.tsv确认；ID 清单未收录，基础 ID 及自定义标记未记录。"
+        )
+    elif record.evidence.names and any(
+        alias != name for alias in record.evidence.names
+    ):
+        out.append("  字段记录名称: " + " / ".join(record.evidence.names))
+    details = [("数值", row[2]), ("基础ID", row[3])]
+    details.extend(
+        (view.rows[0][index], value) for index, value in enumerate(row[7:], 7)
+    )
+    out.extend(
+        f"  {label}: {sources._clean(value)}" for label, value in details if value
+    )
+    if record.evidence.fields:
+        out.append("  完整对象字段:")
+        for field in record.evidence.fields:
+            out.extend(field.render_lines())
+    else:
+        out.append(
+            f"  对象字段未记录；可用 doc {row[1]} / text {row[1]} 查证或重新导出。"
+        )
+    return out
 
 
 def query_object_details(
@@ -49,31 +122,15 @@ def query_object_details(
             "未找到: 查询表达式没有关键词",
             '可输入名称、四码、字段词；组合使用 &&、||、%、括号或 ="精准词"。',
         ]
-    view = sources._named_table(pack, f"对象ID/{table}.tsv", table)
-    field_view = sources._named_table(pack, "对象字段.tsv")
-    index = object_field_index(field_view.rows, table, sources._clean)
-    records = [
-        _Record(row, index.get(row[1]) or ObjectFields(row[1], (), ()))
-        for row in view.rows[1:]
-        if len(row) > 4
-    ]
-    known = {record.row[1] for record in records}
-    records.extend(
-        _Record(
-            (table, code, "", "", " / ".join(evidence.names) or code, "", ""),
-            evidence,
-            True,
-        )
-        for code, evidence in index.items()
-        if code not in known
-    )
+    index = load_object_records(pack, table, sources)
+    view, records = index.view, index.records
     matches = [
         record
         for record in records
         if not expression
         or compiled.score_fields(record.search_fields(sources)) is not None
     ]
-    partial = not view.complete or not field_view.complete
+    partial = not index.complete
     if not matches:
         return [
             "未找到: " + (query or table + "对象记录") + " (名称/ID/说明/完整字段过滤)",
@@ -95,40 +152,7 @@ def query_object_details(
         ]
     out: list[str] = []
     for record in matches[:limit] if limit else matches:
-        row = record.row
-        name = sources._clean(row[4]) or " / ".join(record.evidence.names) or row[1]
-        custom, note = row[5].strip(), sources._clean(row[6])
-        origin = (
-            "自定义"
-            if custom == "是"
-            else "继承基础"
-            if custom == "否"
-            else "来源未记录"
-        )
-        out.append(f"[{row[1]}] {name} ({origin})" + (" — " + note if note else ""))
-        if record.from_fields:
-            out.append(
-                "  该对象由对象字段.tsv确认；ID 清单未收录，基础 ID 及自定义标记未记录。"
-            )
-        elif record.evidence.names and any(
-            alias != name for alias in record.evidence.names
-        ):
-            out.append("  字段记录名称: " + " / ".join(record.evidence.names))
-        details = [("数值", row[2]), ("基础ID", row[3])]
-        details.extend(
-            (view.rows[0][index], value) for index, value in enumerate(row[7:], 7)
-        )
-        out.extend(
-            f"  {label}: {sources._clean(value)}" for label, value in details if value
-        )
-        if record.evidence.fields:
-            out.append("  完整对象字段:")
-            for field in record.evidence.fields:
-                out.extend(field.render_lines())
-        else:
-            out.append(
-                f"  对象字段未记录；可用 doc {row[1]} / text {row[1]} 查证或重新导出。"
-            )
+        out.extend(render_object_record(record, view, sources))
     if limit and len(matches) > limit:
         out.append(
             f"  (已达 --limit {limit}, 其余 {len(matches) - limit} 条未显示——去掉 --limit 看全量)"

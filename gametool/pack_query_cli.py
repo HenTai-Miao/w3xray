@@ -5,7 +5,7 @@
     uv run main.py pack-query <资料包目录> <子命令> <查询词> [--limit N|all|全部] (默认全量输出; --limit N 为显式缩减)
 
 子命令：
-    item   <名字|四码>   物品属性（金币价; 装备效果取自携带技能属性字段; 真实提示文本优先于继承模板描述）
+    item   [名称|四码|字段表达式]  完整物品与技能证据（空词全量列出；真实说明与原始清单分别标注）
     recipe <名字|四码>   相关合成配方（作为产物或材料，自动去重）
     where  <名字|四码>   单位/地面物品/可破坏物的放置坐标
     drop   <名字|四码>   获取途径（掉落/商店/触发奖励; 无记录时回落文案级配方/来源线索）
@@ -913,6 +913,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
             "skills",
             "units",
             "quest",
+            "item",
         )
         and len(rest) == 2
     ):
@@ -925,7 +926,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
             + "> <查询词>"
             + ("  (near 用法: near <x> <y> [radius])" if command == "near" else "")
             + (
-                "  (affixes/registered/list/buffs/heroes/stats/synth/skills/units/quest 查询词可省 = 全量列出; diff 用法: diff <旧包目录>)"
+                "  (affixes/registered/list/buffs/heroes/stats/synth/skills/units/quest/item 查询词可省 = 全量列出; diff 用法: diff <旧包目录>)"
                 if command
                 in ("affixes", "registered", "diff", "list", "buffs", "quest")
                 else ""
@@ -950,6 +951,7 @@ def parse_pack_query_cli_options(argv: Sequence[str]) -> PackQueryCliOptions:
         "skills",
         "units",
         "quest",
+        "item",
     ):
         raise PackQueryCliOptionError("查询词不能为空")
     return PackQueryCliOptions(
@@ -1071,42 +1073,11 @@ def _query_locate(pack: Path, query: str, limit: int) -> list[str]:
 
 
 def _query_item(pack: Path, query: str, limit: int) -> list[str]:
-    items = load_items(pack)
-    bases = load_item_bases(pack)
-    overrides = load_item_gold_overrides(pack)
-    tooltips = load_item_tooltips(pack)
-    ability_index = _load_item_ability_evidence(pack)
-    lines = []
-    matches = [
-        (code, name, desc)
-        for code, (name, desc) in items.items()
-        if _match(query, code, name)
-    ]
-    for code, name, desc in _bounded(matches, limit):
-        lines.append("[" + code + "] " + name)
-        price = _item_price(bases, code, overrides)
-        base = bases.get(code, "")
-        if price:
-            src = (
-                "地图价" if code in overrides else ("继承基础 " + base if base else "")
-            )
-            lines.append("  金币: " + price + (" (" + src + ")" if src else ""))
-        if effects := ability_index.summaries_for(code):
-            lines.append("  属性字段摘要: " + ", ".join(effects))
-        lines.extend(ability_index.render_item(code))
-        # 真实提示文本（地图自定义 ides/utub）优先；继承模板描述仅作兜底。
-        lines.append("  " + (tooltips.get(code, "") or desc))  # ides/utub 全文
-    if note := _truncated_note(matches, limit):
-        lines.append(note)
-    if lines:
-        return lines
-    # 未命中时给物品总量提示 (「未找到」不代表本图没有物品表)
-    if items:
-        return [
-            "未找到物品: " + query,
-            f"  （本图物品表共 {len(items)} 件; 可用 item <名称或四码> 查询）",
-        ]
-    return ["未找到物品: " + query]
+    from .pack_query_item_details import ItemDetailSources, query_item_details
+
+    return query_item_details(
+        pack, query, limit, cast(ItemDetailSources, cast(object, sys.modules[__name__]))
+    )
 
 
 def _query_price(pack: Path, query: str, limit: int) -> list[str]:
