@@ -19,6 +19,11 @@ from .pack_query_spatial import NearEntry, SpatialQueryResult
 from .pack_query_regions import NearRegion
 from .pack_query_options import EMPTY_QUERY_COMMANDS, query_limit_error
 from .pack_query_diff import ComparisonDiagnostic, DiffQueryResult
+from .pack_query_script_coverage import (
+    SCRIPT_QUERY_COMMANDS,
+    ScriptCoverage,
+    combine_script_coverage,
+)
 
 if TYPE_CHECKING:
     from .pack_query_options import PackQueryCliOptions
@@ -31,6 +36,7 @@ class QueryBackend(Protocol):
     _QUERY_ROWS: dict[tuple[str, str], list[list[str]]] | None
     _QUERY_SCRIPTS: dict[str, str | None] | None
     _QUERY_SCRIPT_SOURCES: dict[str, tuple[tuple[str, str], ...]] | None
+    _QUERY_SCRIPT_COVERAGE: dict[str, ScriptCoverage] | None
     _QUERY_FILES: set[tuple[str, str]] | None
     _QUERY_OBJECT_WARNINGS: dict[str, list[str]] | None
     _LOCKED_FILES: set[tuple[str, str]]
@@ -58,11 +64,16 @@ class QueryBackend(Protocol):
         self, pack: Path, query: str, limit: int
     ) -> TextQueryResult: ...
 
+    def _query_script_result(
+        self, pack: Path, command: str, query: str, limit: int
+    ) -> TextQueryResult: ...
+
 
 @dataclass(frozen=True, slots=True)
 class TextQueryResult:
     lines: tuple[str, ...]
     has_matches: bool
+    script_coverage: ScriptCoverage | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +87,7 @@ class QuerySection:
     spatial_diagnostics: tuple[str, ...] = ()
     input_error: bool = False
     has_matches: bool | None = None
+    script_coverage: ScriptCoverage | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,6 +103,15 @@ class PackQueryResult:
     comparison_complete: bool | None = None
     comparison_diagnostics: tuple[ComparisonDiagnostic, ...] = ()
     has_changes: bool | None = None
+
+    @property
+    def script_coverage(self) -> ScriptCoverage | None:
+        coverages = tuple(
+            section.script_coverage
+            for section in self.sections
+            if section.script_coverage is not None
+        )
+        return combine_script_coverage(coverages) if coverages else None
 
     @property
     def extra_diagnostics(self) -> tuple[str, ...]:
@@ -123,6 +144,10 @@ class PackQueryResult:
             payload["has_matches"] = any(
                 _section_has_result(self.command, section) for section in self.sections
             )
+        coverage = self.script_coverage
+        if coverage is not None:
+            payload["script_coverage"] = asdict(coverage)
+            payload["checked_packs"] = list(self.checked_packs)
         if self.command == "diff":
             payload.update(
                 comparison_complete=self.comparison_complete,
@@ -179,6 +204,19 @@ class PackQueryResult:
                     "lines": list(section.lines),
                     **(
                         {
+                            "has_matches": _section_has_result(self.command, section),
+                            "input_error": section.input_error,
+                        }
+                        if section.has_matches is not None
+                        else {}
+                    ),
+                    **(
+                        {"script_coverage": asdict(section.script_coverage)}
+                        if section.script_coverage is not None
+                        else {}
+                    ),
+                    **(
+                        {
                             "entries": list(section.entries),
                             "regions": list(section.regions),
                             "regions_total": max(
@@ -220,11 +258,13 @@ def execute_query(
         previous = queries._QUERY_ROWS
         previous_scripts = queries._QUERY_SCRIPTS
         previous_sources = queries._QUERY_SCRIPT_SOURCES
+        previous_coverage = queries._QUERY_SCRIPT_COVERAGE
         previous_files = queries._QUERY_FILES
         previous_objects = queries._QUERY_OBJECT_WARNINGS
         queries._QUERY_ROWS = {}
         queries._QUERY_SCRIPTS = {}
         queries._QUERY_SCRIPT_SOURCES = {}
+        queries._QUERY_SCRIPT_COVERAGE = {}
         queries._QUERY_FILES = set()
         queries._QUERY_OBJECT_WARNINGS = {}
         try:
@@ -232,9 +272,11 @@ def execute_query(
         finally:
             touched = queries._QUERY_FILES or set()
             object_warnings = queries._QUERY_OBJECT_WARNINGS or {}
+            source_coverages = queries._QUERY_SCRIPT_COVERAGE or {}
             queries._QUERY_ROWS = previous
             queries._QUERY_SCRIPTS = previous_scripts
             queries._QUERY_SCRIPT_SOURCES = previous_sources
+            queries._QUERY_SCRIPT_COVERAGE = previous_coverage
             queries._QUERY_FILES = previous_files
             queries._QUERY_OBJECT_WARNINGS = previous_objects
         if object_warnings:
@@ -259,7 +301,15 @@ def execute_query(
                     if campaign and Path(pack).parent == Path(result.pack) / "子地图"
                     else "诊断来源 " + Path(pack).name
                 )
-                sections.append(QuerySection(label, pack, tuple(dict.fromkeys(notes))))
+                sections.append(
+                    QuerySection(
+                        label,
+                        pack,
+                        tuple(dict.fromkeys(notes)),
+                        has_matches=False,
+                        script_coverage=source_coverages.get(pack),
+                    )
+                )
             if campaign:
                 sections = [
                     replace(section, section="容器级")
@@ -282,7 +332,24 @@ def execute_query(
             ),
         )
     return _timed_result(
-        replace(result, diagnostics=(*result.diagnostics, *diagnostics)), started
+        replace(
+            result,
+            diagnostics=tuple(
+                dict.fromkeys(
+                    (
+                        *result.diagnostics,
+                        *diagnostics,
+                        *(
+                            note
+                            for section in result.sections
+                            if section.script_coverage is not None
+                            for note in section.script_coverage.diagnostics
+                        ),
+                    )
+                )
+            ),
+        ),
+        started,
     )
 
 
@@ -380,12 +447,20 @@ def _collect_query(
     if options.command == "near":
         subs = queries._campaign_subpacks(pack)
     checked = (
-        (str(pack), *(str(sub) for sub in subs)) if options.command == "near" else ()
+        (str(pack), *(str(sub) for sub in subs))
+        if options.command == "near" or options.command in SCRIPT_QUERY_COMMANDS
+        else ()
     )
     if subs:
         sections: list[QuerySection] = []
-        if _section_has_result(options.command, section) or (
-            options.command == "near" and section.spatial_diagnostics
+        observed = [section]
+        if (
+            _section_has_result(options.command, section)
+            or (options.command == "near" and section.spatial_diagnostics)
+            or (
+                section.script_coverage is not None
+                and section.script_coverage.complete is False
+            )
         ):
             sections.append(replace(section, section="容器级"))
         for sub in subs:
@@ -397,20 +472,42 @@ def _collect_query(
                 options.query,
                 options.limit,
             )
-            if _section_has_result(options.command, sub_section) or (
-                options.command == "near" and sub_section.spatial_diagnostics
+            observed.append(sub_section)
+            if (
+                _section_has_result(options.command, sub_section)
+                or (options.command == "near" and sub_section.spatial_diagnostics)
+                or (
+                    sub_section.script_coverage is not None
+                    and sub_section.script_coverage.complete is False
+                )
             ):
                 sections.append(sub_section)
         if not sections:
+            result = _message_lines(
+                options,
+                [
+                    "子地图均无结果: " + options.query,
+                    "容器级与全部子地图均已查询；可换名称/四码，或用 search、text、near 继续查。",
+                ],
+                2,
+            )
+            coverages = tuple(
+                row.script_coverage
+                for row in observed
+                if row.script_coverage is not None
+            )
             return replace(
-                _message_lines(
-                    options,
-                    [
-                        "子地图均无结果: " + options.query,
-                        "容器级与全部子地图均已查询；可换名称/四码，或用 search、text、near 继续查。",
-                    ],
-                    2,
-                ),
+                result,
+                sections=tuple(
+                    replace(
+                        row,
+                        has_matches=False,
+                        script_coverage=combine_script_coverage(coverages),
+                    )
+                    for row in result.sections
+                )
+                if coverages
+                else result.sections,
                 checked_packs=checked,
             )
         success = any(_section_has_result(options.command, row) for row in sections)
@@ -462,10 +559,14 @@ def _has_result(
 def _run_section(
     queries: QueryBackend, command: str, title: str, pack: Path, query: str, limit: int
 ) -> QuerySection:
-    if command == "cmd":
-        result = queries._query_cmd_result(pack, query, limit)
+    if command in SCRIPT_QUERY_COMMANDS:
+        result = queries._query_script_result(pack, command, query, limit)
         return QuerySection(
-            title, str(pack), result.lines, has_matches=result.has_matches
+            title,
+            str(pack),
+            result.lines,
+            has_matches=result.has_matches,
+            script_coverage=result.script_coverage,
         )
     if command == "near":
         result = queries._query_near_result(pack, query, limit)

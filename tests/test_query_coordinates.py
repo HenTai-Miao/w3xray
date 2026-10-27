@@ -130,16 +130,16 @@ def test_probe_rerun_uses_annotation_instead_of_code_digits() -> None:
 def test_guide_rerun_uses_shared_precise_coordinate_selection() -> None:
     from gametool import gui_topbar
 
-    calls: list[str] = []
+    calls: list[tuple[str, str]] = []
 
     def opened(*_args: object, **kwargs: object) -> None:
-        calls.append(str(kwargs["prefill"]))
+        calls.append((str(kwargs["prefill_command"]), str(kwargs["prefill"])))
 
     app = SimpleNamespace(on_pack_query=opened)
     gui_topbar._near_selected_coords(
         app, _Box("单位 [n123] ×8 @(1e-7,-2e3) 距50"), "100"
     )
-    assert calls == ["near 1e-7 -2e3 100"]
+    assert calls == [("near", "1e-7 -2e3 100")]
 
 
 @pytest.mark.parametrize(

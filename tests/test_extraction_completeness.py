@@ -48,6 +48,14 @@ class FakeArchive:
             return 123
         return None
 
+    def read_block_anon(self, block: FakeBlock) -> bytes | None:
+        if (
+            not block.flags & FLAG_ENCRYPTED
+            or self.recover_block_key(block) is not None
+        ):
+            return b"decoded fixture"
+        return None
+
 
 class ProtectedArchive:
     path = "protected.w3x"
@@ -73,6 +81,9 @@ class ProtectedArchive:
         return None
 
     def recover_block_key(self, block: FakeBlock) -> int | None:
+        return None
+
+    def read_block_anon(self, block: FakeBlock) -> bytes | None:
         return None
 
 

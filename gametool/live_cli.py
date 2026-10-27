@@ -24,7 +24,10 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import os
+import shutil
+import subprocess
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
@@ -136,14 +139,8 @@ def parse_live_cli_options(argv: Sequence[str]) -> LiveCliOptions:
                 raise LiveCliOptionError(
                     "参数需要两个数值：--resources 金币 木材 (或 --resources auto)"
                 )
-            for v in (argv[v1_i], argv[v2_i]):
-                try:
-                    float(v)
-                except ValueError as exc:
-                    raise LiveCliOptionError(
-                        f"--resources 的值必须是数字：{v}"
-                    ) from exc
             resources = (argv[v1_i], argv[v2_i])
+            _resource_arguments(resources)
             index += 3
             continue
         if option in _FLAG_OPTIONS:
@@ -182,7 +179,7 @@ def parse_live_cli_options(argv: Sequence[str]) -> LiveCliOptions:
     )
 
 
-LIVE_PACK_CACHE_VERSION = "live-pack-v28"
+LIVE_PACK_CACHE_VERSION = "live-pack-v29"
 
 
 def live_pack_cache_dir(map_path: str) -> Path:
@@ -284,6 +281,105 @@ def _pid_value(text: str | None) -> int | None:
     return value
 
 
+def _resource_arguments(resources: Sequence[str] | None) -> list[str]:
+    """Validate both parsed and programmatic requests before any pack/game access."""
+    if resources is None:
+        return []
+    if len(resources) != 2:
+        raise LiveCliOptionError("--resources 需要两个数值：金币 木材 (或 auto)")
+    if tuple(resources) == ("auto", ""):
+        return ["--resources", "auto"]
+    for value in resources:
+        try:
+            number = float(value)
+        except (TypeError, ValueError) as exc:
+            raise LiveCliOptionError(
+                f"--resources 的值必须是有限数字：{value}"
+            ) from exc
+        if not isinstance(value, str) or not math.isfinite(number):
+            raise LiveCliOptionError(f"--resources 的值必须是有限数字：{value}")
+    return ["--resources", *resources]
+
+
+def _icons_memory_arguments(options: LiveCliOptions) -> list[str]:
+    """Explicit visual mode cannot silently discard a requested memory feature."""
+    requested = []
+    for option, active in (
+        ("--players", options.players),
+        ("--all-units", options.all_units),
+        ("--resources", options.resources is not None),
+        ("--unit", options.unit_query is not None),
+        ("--nick", options.nick is not None),
+        ("--profile-json", options.profile_json is not None),
+        ("--export-profile", options.export_profile is not None),
+        ("--save-snapshot", options.save_snapshot is not None),
+        ("--load-snapshot", options.load_snapshot is not None),
+    ):
+        if active:
+            requested.append(option)
+    return requested
+
+
+def _request_arguments(options: LiveCliOptions) -> list[str]:
+    """Rebuild the original main.py request, excluding the print-only hint flag."""
+    args = [options.map_path] if options.map_path is not None else []
+    for option, value in (
+        ("--pack", options.pack_dir),
+        ("--strategy", options.strategy),
+        ("--test-image", options.test_image),
+        ("--save-snapshot", options.save_snapshot),
+        ("--load-snapshot", options.load_snapshot),
+        ("--unit", options.unit_query),
+        ("--nick", options.nick),
+        ("--export-profile", options.export_profile),
+        ("--profile-json", options.profile_json),
+        ("--pid", options.pid),
+        ("--dump-objects", options.dump_objects),
+    ):
+        if value is not None:
+            args += [option, value]
+    if options.players:
+        args.append("--players")
+    if options.all_units:
+        args.append("--all-units")
+    args += _resource_arguments(options.resources)
+    return args
+
+
+def _elevated_hint_command(options: LiveCliOptions) -> str:
+    """Print a Windows-quoted command; never start or elevate a process here."""
+
+    def literal(value: str) -> str:
+        return "'" + value.replace("'", "''") + "'"
+
+    prefix = (
+        ["live"]
+        if getattr(sys, "frozen", False)
+        else ["-X", "utf8", "-m", "gametool", "live"]
+    )
+    python_arguments = subprocess.list2cmdline([*prefix, *_request_arguments(options)])
+    # Set encoding inside the elevated shell. Its child receives one Windows
+    # command line, so spaces, quotes and trailing backslashes keep their roles.
+    script = (
+        "$env:PYTHONIOENCODING='utf-8'; Start-Process -FilePath "
+        + literal(sys.executable)
+        + " -NoNewWindow -Wait -ArgumentList "
+        + literal(python_arguments)
+    )
+    shell_arguments = subprocess.list2cmdline(
+        ["-NoProfile", "-NoExit", "-Command", script]
+    )
+    shell = shutil.which("pwsh") or shutil.which("powershell") or "powershell.exe"
+    return (
+        "Start-Process -FilePath "
+        + literal(shell)
+        + " -Verb RunAs -WorkingDirectory "
+        + literal(str(Path.cwd()))
+        + " -ArgumentList "
+        + literal(shell_arguments)
+    )
+
+
 def _auto_map_path() -> str | None:
     """未给地图路径/--pack 时自动定位正在使用的图 (仅接受唯一「直接证据」)。
 
@@ -320,9 +416,15 @@ def run_live_cli(options: LiveCliOptions) -> int:
     configure_cli_output()
     try:
         pid = _pid_value(options.pid)
+        resource_args = _resource_arguments(options.resources)
     except LiveCliOptionError as exc:
         print(str(exc), file=sys.stderr)
         return 2
+    if options.elevated_hint:
+        print("--elevated-hint 只打印提权参考命令；复制到 PowerShell 后会弹出 UAC：")
+        print("  " + _elevated_hint_command(options))
+        print("命令保留本次参数并使用 UTF-8 输出；执行后的窗口会保留读取结果。")
+        return 0
     if options.dump_objects is not None:
         # 内存对象表全量导出: 不需要地图/资料包 (地图可能根本解析不了,
         # CAME 壳地图正是本模式的目标用户)。
@@ -334,17 +436,16 @@ def run_live_cli(options: LiveCliOptions) -> int:
             print(f"实时对象导出失败：{type(exc).__name__}: {exc}", file=sys.stderr)
             return 2
         return 0 if result.objects else 2
-    if options.elevated_hint:
-        target = options.map_path or options.pack_dir or "<地图路径>"
-        print("--elevated-hint 提权运行参考（UAC 弹窗选“是”）：")
-        print("  Start-Process pwsh -Verb RunAs -ArgumentList '-NoProfile','-Command',")
-        print(
-            '    \'$env:PYTHONIOENCODING="utf-8"; uv run python -X utf8 main.py live "'
-            + target
-            + "\"'"
-        )
-        print("注意: 重定向到文件时同样保持 PYTHONIOENCODING=utf-8，避免 GBK 乱码。")
-        return 0
+    if options.strategy == "icons":
+        memory_arguments = _icons_memory_arguments(options)
+        if memory_arguments:
+            print(
+                "参数错误：--strategy icons 仅识别窗口图标；"
+                + "、".join(memory_arguments)
+                + " 需要内存读取，请使用 --strategy auto 或 handle。",
+                file=sys.stderr,
+            )
+            return 2
     options = _resolve_auto_map(options)
     if options.map_path is None and options.pack_dir is None:
         print(
@@ -373,11 +474,7 @@ def run_live_cli(options: LiveCliOptions) -> int:
         args += ["--players"]
     if options.all_units:
         args += ["--all-units"]
-    if options.resources is not None:
-        if options.resources == ("auto", ""):
-            args += ["--resources", "auto"]
-        else:
-            args += ["--resources", options.resources[0], options.resources[1]]
+    args += resource_args
     if options.test_image is not None:
         args += ["--test-image", options.test_image]
     if options.save_snapshot is not None:

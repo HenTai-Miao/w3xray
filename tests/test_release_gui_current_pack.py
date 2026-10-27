@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 
@@ -158,7 +161,27 @@ def test_live_probe_routes_and_names_use_its_current_map_binding(
         assert probe["pack_dir_provider"]() is None
         probe["query_callback"]("near 1 2 100")
         host.pump()
-        assert opened == [(str(tmp_path / "pack-0"), "near 1 2 100", "near")]
+        assert len(opened) == 1
+        current_pack, keyword, command = opened[0]
+        assert current_pack is not None
+        assert current_pack == str(tmp_path / "pack-0")
+        (Path(current_pack) / "预放置单位.tsv").write_text(
+            "类型ID\t名称\tX\tY\t分类\nn001\t本图守卫\t1\t2\t单位\n",
+            encoding="utf-8",
+        )
+        worker = SimpleNamespace(_pack_dir=current_pack)
+        body, _elapsed = query_gui._PackQueryWindow._run_query(
+            cast(query_gui._PackQueryWindow, cast(object, worker)),
+            command,
+            keyword,
+            as_json=True,
+        )
+        result = json.loads(body)
+        assert result["exit_code"] == 0
+        assert not result["input_error"]
+        assert [(row["code"], row["positions"]) for row in result["entries"]] == [
+            ("n001", [[1.0, 2.0]])
+        ]
         assert probe["pack_dir_provider"]() == str(tmp_path / "pack-0")
 
         host.map_data = MapData(path="other.w3x", name="其他地图")

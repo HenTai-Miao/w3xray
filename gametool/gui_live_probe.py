@@ -8,6 +8,11 @@ from __future__ import annotations
 
 from .query_coordinates import coordinates_from_text
 from .query_object_codes import code_from_text
+from .gui_live_subprocess import (
+    LiveProbeChild,
+    build_live_probe_command,
+    build_live_probe_environment,
+)
 
 from collections.abc import Callable
 import os
@@ -31,6 +36,10 @@ class LiveProbeWindow(ctk.CTkToplevel):
         pack_dir_provider: Callable[[], str | None] | None = None,
     ) -> None:
         super().__init__(master)
+        self._probe_child: LiveProbeChild | None = None
+        self._probe_start_id: str | None = None
+        self._probe_poll_id: str | None = None
+        self._probe_closed = False
         self._pack_dir = pack_dir
         self._pack_dir_provider = pack_dir_provider
         self._query_callback = query_callback
@@ -109,7 +118,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
         self._var_resources = ctk.BooleanVar(value=False)
         ctk.CTkCheckBox(
             bar,
-            text="资源对齐 (HUD 值校准)",
+            text="资源对齐 (自动差分)",
             variable=self._var_resources,
             font=("Microsoft YaHei UI", 10),
         ).pack(side="left", padx=(0, 6))
@@ -224,7 +233,28 @@ class LiveProbeWindow(ctk.CTkToplevel):
         )
         self._output.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
 
-        self.after(120, self._start)
+        self._probe_start_id = self.after(120, self._start)
+
+    def _cancel_live_probe(self) -> None:
+        child = self._probe_child
+        self._probe_child = None
+        if child is not None:
+            child.cancel()
+        for field in ("_probe_start_id", "_probe_poll_id"):
+            after_id = getattr(self, field, None)
+            setattr(self, field, None)
+            if after_id is not None:
+                try:
+                    self.after_cancel(after_id)
+                except tk.TclError:
+                    pass  # Parent teardown may already have removed the timer.
+
+    def destroy(self) -> None:
+        if self._probe_closed:
+            return
+        self._probe_closed = True
+        self._cancel_live_probe()
+        super().destroy()
 
     def _last_unit_query_file(self) -> pathlib.Path:
         from .gui_pack_query import _memo_dir
@@ -275,6 +305,14 @@ class LiveProbeWindow(ctk.CTkToplevel):
             pass  # fail-open: 记忆失败不影响探针
 
     def _start(self) -> None:
+        if self._probe_closed:
+            return
+        if self._probe_start_id is not None:
+            try:
+                self.after_cancel(self._probe_start_id)
+            except tk.TclError:
+                pass  # The scheduled callback may be executing this method now.
+            self._probe_start_id = None
         if self._probe_button.cget("state") == "disabled":
             return
         self._probe_button.configure(state="disabled")
@@ -297,53 +335,57 @@ class LiveProbeWindow(ctk.CTkToplevel):
         self._save_last_unit_query(unit_query)  # 注意: 上一行缩进已同块
         self._save_last_map_path(map_path)
         done: list[str] = []
+        from .live_cli import LiveCliOptions
 
-        def _worker() -> None:
-            import contextlib
-            import io
-
-            from .live_cli import LiveCliOptions, run_live_cli
-
-            buffer = io.StringIO()
-            err_buffer = io.StringIO()
-            resources = ("reported", "reported") if want_resources else None
+        try:
             options = LiveCliOptions(
                 map_path=map_path,
                 unit_query=unit_query,
                 pack_dir=pack_dir,
                 players=want_players,
                 all_units=want_all,
-                resources=resources,
+                resources=("auto", "") if want_resources else None,
             )
-            code = 0
+            child = LiveProbeChild(
+                build_live_probe_command(options),
+                env=build_live_probe_environment(),
+                cwd=os.getcwd(),
+            )
+        except Exception as exc:  # BROAD_EXCEPT_OK - report a failed request setup through the existing GUI result path.
+            self._finish(f"探针异常: {type(exc).__name__}: {exc}")
+            return
+        self._probe_child = child
+
+        def _worker() -> None:
             try:
-                with (
-                    contextlib.redirect_stdout(buffer),
-                    contextlib.redirect_stderr(err_buffer),
-                ):
-                    code = run_live_cli(options)
-            except SystemExit as exc:  # 返回码路径
-                code = int(exc.code or 0)
-            except Exception as exc:  # 撑住弹窗: 任何异常都落文本区
+                result = child.run()
+            except Exception as exc:  # BROAD_EXCEPT_OK - isolate this owned child failure from Tk and other probes.
                 done.append(f"探针异常: {type(exc).__name__}: {exc}")
                 return
-            body = buffer.getvalue()
-            if code != 0 and err_buffer.getvalue().strip():
+            code = 2 if result.cancelled else result.exit_code
+            body = result.stdout
+            if code != 0 and result.stderr.strip():
                 # 出路口径走 stderr (无图/未运行/主菜单提示) — GUI 用户必须看到
-                body = body + err_buffer.getvalue()
+                body += result.stderr
             done.append(f"{code}" + chr(0) + body)
 
         threading.Thread(target=_worker, daemon=True).start()
 
         def _poll() -> None:
-            if not self.winfo_exists():
+            self._probe_poll_id = None
+            if (
+                self._probe_closed
+                or self._probe_child is not child
+                or not self.winfo_exists()
+            ):
                 return
             if not done:
-                self.after(80, _poll)
+                self._probe_poll_id = self.after(80, _poll)
                 return
+            self._probe_child = None
             self._finish(done[0])
 
-        self.after(80, _poll)
+        self._probe_poll_id = self.after(80, _poll)
 
     def _finish(self, text: str) -> None:
         self._probe_button.configure(state="normal")

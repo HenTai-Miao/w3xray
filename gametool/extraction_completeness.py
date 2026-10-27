@@ -37,7 +37,7 @@ class ExtractionArchive(Protocol):
 
     def block_index_of(self, name: str) -> int | None: ...
 
-    def recover_block_key(self, block: BlockProbe) -> int | None: ...
+    def read_block_anon(self, block: BlockProbe) -> bytes | None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,15 +110,14 @@ def build_extraction_completeness_from_archive(
     anonymous_blocks = tuple(
         (idx, block) for idx, block in blocks if idx not in named_block_indexes
     )
-    recoverable = sum(
-        1 for _idx, block in anonymous_blocks if _can_export_unknown(archive, block)
-    )
+    recoverable = 0
+    encrypted_raw = 0
+    for _idx, block in anonymous_blocks:
+        if _can_export_unknown(archive, block):
+            recoverable += 1
+        elif block.flags & FLAG_ENCRYPTED:
+            encrypted_raw += 1
     raw_fallback = len(anonymous_blocks) - recoverable
-    encrypted_raw = sum(
-        1
-        for _idx, block in anonymous_blocks
-        if block.flags & FLAG_ENCRYPTED and not _can_export_unknown(archive, block)
-    )
     return ExtractionCompletenessReport(
         source_path=md.path,
         source_readable=True,
@@ -199,9 +198,7 @@ def _fallback_report(
 
 
 def _can_export_unknown(archive: ExtractionArchive, block: BlockProbe) -> bool:
-    if not block.flags & FLAG_ENCRYPTED:
-        return True
-    return archive.recover_block_key(block) is not None
+    return archive.read_block_anon(block) is not None
 
 
 def _warnings(

@@ -59,6 +59,7 @@ from .pack_query_options import (
     PackQueryCliOptions,
     parse_query_limit,
 )
+from .pack_query_script_coverage import ScriptCoverage, build_script_coverage
 from .object_codes import field_object_codes
 from .pack_query_call_records import (
     CallArgumentIndex,
@@ -150,6 +151,7 @@ _TABLE_READ_LOCK = threading.RLock()
 _QUERY_ROWS: dict[tuple[str, str], list[list[str]]] | None = None
 _QUERY_SCRIPTS: dict[str, str | None] | None = None
 _QUERY_SCRIPT_SOURCES: dict[str, tuple[tuple[str, str], ...]] | None = None
+_QUERY_SCRIPT_COVERAGE: dict[str, ScriptCoverage] | None = None
 _QUERY_FILES: set[tuple[str, str]] | None = None
 _QUERY_OBJECT_WARNINGS: dict[str, list[str]] | None = None
 
@@ -313,7 +315,10 @@ def _reference_index(pack: Path) -> ReferenceIndex:
         _QUERY_OBJECT_WARNINGS.setdefault(str(pack), []).extend(
             f"[⚠ {relative} — {note} 来源: {pack}]" for note in result.diagnostics
         )
-    return result
+    coverage = _script_coverage(pack)
+    return dataclass_replace(
+        result, diagnostics=(*result.diagnostics, *coverage.diagnostics)
+    )
 
 
 def _named_table(pack: Path, relative: str, table: str = "") -> ObjectTable:
@@ -665,6 +670,7 @@ def load_formulas(
     _call_index_diagnostics(pack_dir, notes)
     if diagnostics is not None:
         diagnostics.extend((*index.diagnostics, *notes))
+        diagnostics.extend(_script_coverage(pack_dir).diagnostics)
         if not _table_is_readable(pack_dir, "脚本调用参数索引.tsv"):
             diagnostics.append("调用参数索引读取失败，未用空结果证明无配方。")
     structured = [
@@ -937,6 +943,10 @@ def _relation_source_label(r: Sequence[str]) -> str:
 
 
 def _query_locate(pack: Path, query: str, limit: int) -> list[str]:
+    return list(_query_script_result(pack, "locate", query, limit).lines)
+
+
+def _query_locate_result(pack: Path, query: str, limit: int) -> TextQueryResult:
     """特征码交集: 多个对象码同时出现在本图时报告命中 (战役任务关识别)。
 
     战役工作流第④步的机械化: live 拿英雄/随从/物品四码, 用本命令扫
@@ -947,12 +957,17 @@ def _query_locate(pack: Path, query: str, limit: int) -> list[str]:
         dict.fromkeys(c.strip() for c in re.split(r"[;,，；\s]+", query) if c.strip())
     )
     if not codes:
-        return ["用法: locate <码1;码2;...> (特征码交集, 全部码都出现才算命中)"]
+        return _text_result(
+            ["用法: locate <码1;码2;...> (特征码交集, 全部码都出现才算命中)"], False
+        )
     index = _reference_index(pack)
     if not index.available:
-        return [
-            "未找到 脚本对象码出现索引.tsv（资料包未导出脚本索引——用 cli <地图> --pack 重导一次即有）"
-        ]
+        return _text_result(
+            [
+                "未找到 脚本对象码出现索引.tsv（资料包未导出脚本索引——用 cli <地图> --pack 重导一次即有）"
+            ],
+            False,
+        )
     counts = Counter(record.code for record in index.records)
     missing = [c for c in codes if counts[c] == 0]
     suffix = " 处引用" if index.complete else " 处已确认引用（索引不完整）"
@@ -978,7 +993,7 @@ def _query_locate(pack: Path, query: str, limit: int) -> list[str]:
             lines.append(
                 "  索引不完整，不能据此排除任务关；用 text <码> 查原文或重新导出知识包。"
             )
-        return lines
+        return _text_result(lines, False)
     lines = ["命中全部 " + str(len(codes)) + " 个特征码: " + "、".join(codes)]
     for c in codes:
         lines.append(
@@ -989,7 +1004,7 @@ def _query_locate(pack: Path, query: str, limit: int) -> list[str]:
             + str(counts[c])
             + suffix
         )
-    return lines
+    return _text_result(lines, True)
 
 
 def _query_item(pack: Path, query: str, limit: int) -> list[str]:
@@ -1235,6 +1250,10 @@ def _relation_recipe_groups(pack: Path, query: str) -> list[tuple[str, bool]]:
 
 
 def _query_synth(pack: Path, query: str, limit: int) -> list[str]:
+    return list(_query_script_result(pack, "synth", query, limit).lines)
+
+
+def _query_synth_result(pack: Path, query: str, limit: int) -> TextQueryResult:
     """synth 全图合成总览: 所有配料一屏列完 (成品 <- 材料)。"""
     del query, limit  # synth 无视过滤与截断, 单配方查询走 recipe
     out: list[str] = []
@@ -1255,15 +1274,22 @@ def _query_synth(pack: Path, query: str, limit: int) -> list[str]:
         out.append("[" + prod + "] " + prod_name + "  <-  " + need)
     if not out:
         if formula_diagnostics:
-            return [
-                "未找到可确认合成配方：调用索引不完整。",
-                "可用 text <材料或成品> 查完整原文，或重新导出知识包后再查。",
-            ]
-        return ["本包无合成配方"]
-    return sorted(dict.fromkeys(out), key=str.casefold)
+            return _text_result(
+                [
+                    "未找到可确认合成配方：脚本或调用来源覆盖不完整，未确认是否还有配方。",
+                    "可用 text <材料或成品> 查完整原文，或重新导出知识包后再查。",
+                ],
+                False,
+            )
+        return _text_result(["本包无合成配方"], False)
+    return _text_result(sorted(dict.fromkeys(out), key=str.casefold), True)
 
 
 def _query_recipe(pack: Path, query: str, limit: int) -> list[str]:
+    return list(_query_script_result(pack, "recipe", query, limit).lines)
+
+
+def _query_recipe_result(pack: Path, query: str, limit: int) -> TextQueryResult:
     items = load_items(pack)
     hits: list[str] = []
     all_recipes: set[str] = set()
@@ -1274,7 +1300,8 @@ def _query_recipe(pack: Path, query: str, limit: int) -> list[str]:
         all_recipes.add(rendered)
         if matched:
             hits.append(rendered)
-    for prod, pairs in load_formulas(pack):
+    formula_diagnostics: list[str] = []
+    for prod, pairs in load_formulas(pack, diagnostics=formula_diagnostics):
         key = (prod, tuple(sorted(pairs)))
         if key in seen:
             continue
@@ -1293,15 +1320,26 @@ def _query_recipe(pack: Path, query: str, limit: int) -> list[str]:
     hits = list(dict.fromkeys(hits))
     if hits:
         note = _truncated_note(hits, limit)
-        return [*_bounded(hits, limit), *([note] if note else [])]
+        return _text_result([*_bounded(hits, limit), *([note] if note else [])], True)
     # 未命中时给出配方总量与查询提示——「未找到」不代表本图没有合成
     if all_recipes:
-        return [
-            "未找到相关配方: " + query,
-            f"  （本图关系表/公式索引共 {len(all_recipes)} 条合成配方; "
-            "可用 recipe <成品或材料名> 查询）",
-        ]
-    return ["未找到相关配方: " + query]
+        return _text_result(
+            [
+                "未找到相关配方: " + query,
+                f"  （本图关系表/公式索引共 {len(all_recipes)} 条合成配方; "
+                "可用 recipe <成品或材料名> 查询）",
+            ],
+            False,
+        )
+    if formula_diagnostics:
+        return _text_result(
+            [
+                "未找到可确认相关配方: " + query,
+                "脚本或调用来源覆盖不完整，未确认是否还有配方；可用 text <词> 查其余原文，或重新导出。",
+            ],
+            False,
+        )
+    return _text_result(["未找到相关配方: " + query], False)
 
 
 def _acquisition_script_evidence(
@@ -1370,6 +1408,10 @@ def _acquisition_script_evidence(
 
 
 def _query_where(pack: Path, query: str, limit: int) -> list[str]:
+    return list(_query_script_result(pack, "where", query, limit).lines)
+
+
+def _query_where_result(pack: Path, query: str, limit: int) -> TextQueryResult:
     from .pack_query_spatial import SpatialSources, preplaced_objects
 
     items = load_items(pack)
@@ -1443,17 +1485,20 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
         )
         blocks.supplement(code, [*death, *usage])
     if blocks.records:
-        return blocks.render(limit)
+        return _text_result(blocks.render(limit), True)
     unit_misses = [
         f"未找到 [{code}] {name} 的预放置/关系表记录。"
         for code, name in units.items()
         if _match(query, code, name)
     ]
     if unit_misses:
-        return [
-            *_limit_result_blocks([[line] for line in unit_misses], limit),
-            "单位掉落查询用 drop <单位名或码> (按单位反查死亡触发)。",
-        ]
+        return _text_result(
+            [
+                *_limit_result_blocks([[line] for line in unit_misses], limit),
+                "单位掉落查询用 drop <单位名或码> (按单位反查死亡触发)。",
+            ],
+            False,
+        )
     hints = _tooltip_source_hints(pack, _hint_targets(pack, query))
     if hints:
         head = (
@@ -1461,7 +1506,10 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
             + ("; 脚本加密" if _script_encrypted(pack) else "")
             + "; 未脚本验证):"
         )
-        return [head, *_limit_result_blocks([["  " + hint] for hint in hints], limit)]
+        return _text_result(
+            [head, *_limit_result_blocks([["  " + hint] for hint in hints], limit)],
+            True,
+        )
     lines = ["未找到放置记录: " + query]
     hint = _code_home_hint(pack, query)
     if hint:
@@ -1469,7 +1517,7 @@ def _query_where(pack: Path, query: str, limit: int) -> list[str]:
     lines.append(
         "  （若有预放置坐标/脚本位置，可用 near <x> <y> 按坐标反查周边掉落与单位）"
     )
-    return lines
+    return _text_result(lines, False)
 
 
 _DEATH_COND_BLOCK_RE = re.compile(
@@ -2322,6 +2370,11 @@ def _item_slot_by_name(name: str) -> str:
 
 
 def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
+    return list(_query_script_result(pack, "drop", query, limit).lines)
+
+
+def _query_drop_result(pack: Path, query: str, limit: int) -> TextQueryResult:
+    coverage = _script_coverage(pack)
     items = load_items(pack)
     units = load_units(pack)
     names = {**units, **{code: name for code, (name, _desc) in items.items()}}
@@ -2369,6 +2422,12 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
                 supplemental.append(
                     "⚠ 防呆: 关系表无 Boss/单位死亡掉落行, 但脚本死亡触发有直发证据(见下); NPC 随身携带仍不构成掉落证据"
                 )
+            elif coverage.complete is False:
+                supplemental.append(
+                    "⚠ 防呆: 已确认关系仅 "
+                    + "/".join(sorted(code_kinds))
+                    + "；死亡触发来源覆盖不足，未确认是否还有掉落；NPC 随身携带仍不构成掉落证据"
+                )
             else:
                 supplemental.append(
                     "⚠ 防呆: 该物品无 Boss/单位死亡掉落记录(仅 "
@@ -2377,17 +2436,20 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
                 )
         blocks.supplement(code, [*supplemental, *death, *usage])
     if blocks.records:
-        return blocks.render(limit)
+        return _text_result(blocks.render(limit), True)
     unit_misses = [
         f"[{code}] {name} 无死亡触发直落/奖池证据。"
         for code, name in units.items()
         if _match(query, code, name)
     ]
     if unit_misses:
-        return [
-            *_limit_result_blocks([[line] for line in unit_misses], limit),
-            "位置/获取查询用 where <词>。",
-        ]
+        return _text_result(
+            [
+                *_limit_result_blocks([[line] for line in unit_misses], limit),
+                "位置/获取查询用 where <词>。",
+            ],
+            False,
+        )
     hints = _tooltip_source_hints(pack, _hint_targets(pack, query))
     if hints:
         head = (
@@ -2395,7 +2457,10 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
             + ("; 脚本加密" if _script_encrypted(pack) else "")
             + "; 未脚本验证——合成/掉落触发以实际游戏为准):"
         )
-        return [head, *_limit_result_blocks([["  " + hint] for hint in hints], limit)]
+        return _text_result(
+            [head, *_limit_result_blocks([["  " + hint] for hint in hints], limit)],
+            True,
+        )
     lines = ["未找到获取途径: " + query]
     if items or units:
         lines.append(
@@ -2407,10 +2472,14 @@ def _query_drop(pack: Path, query: str, limit: int) -> list[str]:
     lines.append(
         "  （若有预放置坐标/脚本位置，可用 near <x> <y> 按坐标反查周边掉落与单位）"
     )
-    return lines
+    return _text_result(lines, False)
 
 
 def _query_quest(pack: Path, query: str, limit: int) -> list[str]:
+    return list(_query_script_result(pack, "quest", query, limit).lines)
+
+
+def _query_quest_result(pack: Path, query: str, limit: int) -> TextQueryResult:
     from .pack_query_quest_records import QuestRecordReader
 
     path = pack / "脚本字符串索引.tsv"
@@ -2430,20 +2499,26 @@ def _query_quest(pack: Path, query: str, limit: int) -> list[str]:
             )
     if lines:
         note = _result_limit_note(matched, limit)
-        return [*lines, *([note] if note else [])]
+        return _text_result([*lines, *([note] if note else [])], True)
     if query:
         # 任务总量提示 + text 改道 (否定断言四维: 总量/换词/数据源)
         hint = f"本次可确认任务文本共 {total} 条"
-        return [
-            "未找到任务文本: " + query,
-            f"  （{hint}; 可用 text <词> 全文本索引兜底，或换更短关键词）",
-            "  数据源: 脚本字符串索引.tsv；缺失或列不明时可重新导出知识包。",
-        ]
-    return [
-        "未找到任务文本: 本包当前没有可确认的任务或显示文本记录。",
-        "  本次可确认任务文本共 0 条；数据源: 脚本字符串索引.tsv。",
-        "  可用 text <词> 查完整原文，或核对来源诊断、重新导出知识包。",
-    ]
+        return _text_result(
+            [
+                "未找到任务文本: " + query,
+                f"  （{hint}; 可用 text <词> 全文本索引兜底，或换更短关键词）",
+                "  数据源: 脚本字符串索引.tsv；缺失或列不明时可重新导出知识包。",
+            ],
+            False,
+        )
+    return _text_result(
+        [
+            "未找到任务文本: 本包当前没有可确认的任务或显示文本记录。",
+            "  本次可确认任务文本共 0 条；数据源: 脚本字符串索引.tsv。",
+            "  可用 text <词> 查完整原文，或核对来源诊断、重新导出知识包。",
+        ],
+        False,
+    )
 
 
 def _query_text(pack: Path, query: str, limit: int) -> list[str]:
@@ -2728,6 +2803,48 @@ def load_script_contexts(pack_dir: Path) -> tuple[AnalysisScriptSource, ...]:
     return tuple(entries)
 
 
+def _script_coverage(pack: Path) -> ScriptCoverage:
+    key = str(pack)
+    if _QUERY_SCRIPT_COVERAGE is not None and key in _QUERY_SCRIPT_COVERAGE:
+        return _QUERY_SCRIPT_COVERAGE[key]
+    contexts = load_script_contexts(pack)
+    source_directory = (
+        "脚本原始文本" if _has_original_script_sources(pack) else "脚本可读文本"
+    )
+    reports: dict[str, list[list[str]]] = {}
+    failures: list[str] = []
+    for relative in ("未知文件/加密脚本检测.txt", "脚本清单.txt", "组件诊断.tsv"):
+        try:
+            (pack / relative).lstat()
+        except FileNotFoundError:
+            continue
+        except OSError:
+            failures.append(relative)
+            continue
+        reports[relative] = _read_rows(pack, relative)
+        if not _table_is_readable(pack, relative):
+            failures.append(relative)
+    failures.extend(
+        relative
+        for directory, relative in sorted(_LOCKED_FILES)
+        if directory == str(pack)
+        and relative.startswith(("脚本原始文本", "脚本可读文本"))
+        and (_QUERY_FILES is None or (directory, relative) in _QUERY_FILES)
+    )
+    result = build_script_coverage(
+        pack,
+        contexts,
+        source_directory=source_directory,
+        encrypted_report=reports.get("未知文件/加密脚本检测.txt"),
+        manifest=reports.get("脚本清单.txt", ()),
+        component_rows=reports.get("组件诊断.tsv", ()),
+        read_failures=failures,
+    )
+    if _QUERY_SCRIPT_COVERAGE is not None:
+        _QUERY_SCRIPT_COVERAGE[key] = result
+    return result
+
+
 def _script_encrypted(pack_dir: Path) -> bool:
     """平台加密脚本块存在（未知文件/加密脚本检测.txt）：脚本类触发分析不可用。"""
     return (pack_dir / "未知文件" / "加密脚本检测.txt").is_file()
@@ -2896,7 +3013,7 @@ class _CommandMatch:
 
 
 def _query_cmd(pack: Path, query: str, limit: int) -> list[str]:
-    return list(_query_cmd_result(pack, query, limit).lines)
+    return list(_query_script_result(pack, "cmd", query, limit).lines)
 
 
 def _query_cmd_result(pack: Path, query: str, limit: int) -> TextQueryResult:
@@ -3050,11 +3167,18 @@ def _ref_kind(mech: str, digest: str, *, context: str = "") -> str:
 
 
 def _query_refs(pack: Path, query: str, limit: int) -> list[str]:
+    return list(_query_script_result(pack, "refs", query, limit).lines)
+
+
+def _query_refs_result(pack: Path, query: str, limit: int) -> TextQueryResult:
     index = _reference_index(pack)
     if not index.available:
-        return [
-            "未找到 脚本对象码出现索引.tsv（资料包未导出脚本索引——用 cli <地图> --pack 重导一次即有）"
-        ]
+        return _text_result(
+            [
+                "未找到 脚本对象码出现索引.tsv（资料包未导出脚本索引——用 cli <地图> --pack 重导一次即有）"
+            ],
+            False,
+        )
     all_groups: dict[tuple[str, str], list[ReferenceRecord]] = {}
     for record in index.records:
         all_groups.setdefault((record.category, record.code), []).append(record)
@@ -3070,14 +3194,20 @@ def _query_refs(pack: Path, query: str, limit: int) -> list[str]:
     }
     if not groups:
         if not index.complete:
-            return [
-                "未找到可确认引用: " + query,
-                "  索引不完整，不能判断孤立或后续升级；用 text <词> 查原文或重新导出知识包。",
-            ]
-        return [
-            "未找到引用: " + query,
-            "  （引用来自 对象字段.tsv 的单位/物品/技能列表与脚本 native 提码——对象若从未被引用, 此处即「孤立对象」信号）",
-        ]
+            return _text_result(
+                [
+                    "未找到可确认引用: " + query,
+                    "  索引不完整，不能判断孤立或后续升级；用 text <词> 查原文或重新导出知识包。",
+                ],
+                False,
+            )
+        return _text_result(
+            [
+                "未找到引用: " + query,
+                "  （引用来自 对象字段.tsv 的单位/物品/技能列表与脚本 native 提码——对象若从未被引用, 此处即「孤立对象」信号）",
+            ],
+            False,
+        )
     blocks: list[list[str]] = []
     encrypted = _script_encrypted(pack)
     for (kind, code), records in _bounded(list(groups.items()), limit):
@@ -3125,7 +3255,7 @@ def _query_refs(pack: Path, query: str, limit: int) -> list[str]:
     lines = [line for block in blocks for line in block]
     if note := _truncated_note(groups, limit):
         lines.append(note)
-    return lines
+    return _text_result(lines, True)
 
 
 def _load_affixes(pack_dir: Path) -> list[tuple[str, str, str]]:
@@ -3341,6 +3471,10 @@ def _query_list(pack: Path, query: str, limit: int) -> list[str]:
 
 
 def _query_doc(pack: Path, query: str, limit: int) -> list[str]:
+    return list(_query_script_result(pack, "doc", query, limit).lines)
+
+
+def _query_doc_result(pack: Path, query: str, limit: int) -> TextQueryResult:
     """doc 单对象全景报告: 一个对象一次看全 item/price/where/drop/refs。
     query 是对象四码或名称 (与 item 同语义)。"""
     sections = (
@@ -3352,20 +3486,28 @@ def _query_doc(pack: Path, query: str, limit: int) -> list[str]:
     )
     out: list[str] = []
     for cmd, title in sections:
-        query_fn = _QUERIES[cmd]
-        lines = query_fn(pack, query, limit)
-        if not lines or lines[0].startswith("未找到"):
-            continue
+        if cmd in _SCRIPT_QUERY_IMPLEMENTATIONS:
+            report = _SCRIPT_QUERY_IMPLEMENTATIONS[cmd](pack, query, limit)
+            if not report.has_matches:
+                continue
+            lines = report.lines
+        else:
+            lines = _QUERIES[cmd](pack, query, limit)
+            if not lines or lines[0].startswith("未找到"):
+                continue
         out.append(f"==== {title} ({cmd}) ====")
         out.extend(lines)
         out.append("")
     if not out:
-        return [
-            "未找到: "
-            + query
-            + " (doc 聚合 item/price/where/drop/refs 五个维度, 全部未命中)"
-        ]
-    return out
+        return _text_result(
+            [
+                "未找到: "
+                + query
+                + " (doc 聚合 item/price/where/drop/refs 五个维度, 全部未命中)"
+            ],
+            False,
+        )
+    return _text_result(out, True)
 
 
 def _query_object_list(pack: Path, query: str, table: str, limit: int = 0) -> list[str]:
@@ -3481,11 +3623,16 @@ def _query_stats(pack: Path, query: str, limit: int) -> list[str]:
 
 
 def _query_export(pack: Path, query: str, limit: int) -> list[str]:
+    return list(_query_script_result(pack, "export", query, limit).lines)
+
+
+def _query_export_result(pack: Path, query: str, limit: int) -> TextQueryResult:
     """export 单对象全景落盘: doc 报告写临时目录并打印文件路径。
     给 AI/文档喂上下文时复制文件比复制终端输出方便。query 是四码或名称。"""
-    lines = _query_doc(pack, query, limit)
-    if lines[0].startswith("未找到"):
-        return lines
+    report = _query_script_result(pack, "doc", query, limit)
+    if not report.has_matches:
+        return report
+    lines = report.lines
     from .archive_export import tmp_extract_dir
 
     safe = (
@@ -3496,7 +3643,7 @@ def _query_export(pack: Path, query: str, limit: int) -> list[str]:
     out_path = os.path.join(out_dir, safe + ".md")
     with open(out_path, "w", encoding="utf-8") as handle:
         handle.write("\n".join(lines))
-    return [f"已导出: {out_path}", *lines]
+    return _text_result([f"已导出: {out_path}", *lines], True)
 
 
 _LAST_QUERY_FILE = "pack-query-last.json"
@@ -3568,6 +3715,41 @@ def _query_again(pack: Path, query: str, limit: int) -> list[str]:
     ]
 
 
+def _text_result(lines: Sequence[str], has_matches: bool) -> TextQueryResult:
+    from .pack_query_execution import TextQueryResult
+
+    return TextQueryResult(tuple(lines), has_matches)
+
+
+def _query_script_result(
+    pack: Path, command: str, query: str, limit: int
+) -> TextQueryResult:
+    report = _SCRIPT_QUERY_IMPLEMENTATIONS[command](pack, query, limit)
+    coverage = _script_coverage(pack)
+    return dataclass_replace(
+        report,
+        lines=(
+            *report.lines,
+            *(note for note in coverage.diagnostics if note not in report.lines),
+        ),
+        script_coverage=coverage,
+    )
+
+
+_SCRIPT_QUERY_IMPLEMENTATIONS = {
+    "refs": _query_refs_result,
+    "locate": _query_locate_result,
+    "recipe": _query_recipe_result,
+    "synth": _query_synth_result,
+    "quest": _query_quest_result,
+    "cmd": _query_cmd_result,
+    "where": _query_where_result,
+    "drop": _query_drop_result,
+    "doc": _query_doc_result,
+    "export": _query_export_result,
+}
+
+
 _QUERIES = {
     "item": _query_item,
     "recipe": _query_recipe,
@@ -3615,6 +3797,9 @@ def _campaign_subpacks(pack: Path) -> list[Path]:
             (p / "对象ID").is_dir()
             or (p / "内容清单.json").is_file()
             or (p / "脚本可读文本").is_dir()
+            or (p / "脚本原始文本").is_dir()
+            or (p / "脚本清单.txt").is_file()
+            or (p / "未知文件" / "加密脚本检测.txt").is_file()
             or any(table.is_file() for table in p.glob("*.tsv"))
         )
     )

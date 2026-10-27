@@ -269,10 +269,11 @@ def _open_live_probe(app) -> None:
         return app.current_map_pack_dir(source)
 
     def query(code: str) -> None:
-        prefix = code.partition(" ")[0]
+        prefix, separator, keyword = code.partition(" ")
+        has_command = bool(separator) and prefix in {"near", "where", "drop"}
         app.on_pack_query(
-            prefill=code,
-            prefill_command=prefix if prefix in {"near", "where", "drop"} else "doc",
+            prefill=keyword if has_command else code,
+            prefill_command=prefix if has_command else "doc",
             source_map=source,
         )
 
@@ -560,7 +561,7 @@ def _code_selected(app, box, prefix: str = "") -> None:
     if code is None:
         return  # 多匹配拒猜测 (对齐探针 309)
     app.on_pack_query(
-        prefill=(f"{prefix} {code}" if prefix else code),
+        prefill=code,
         prefill_command=(prefix if prefix else "doc"),
         source_map=getattr(box, "_query_source_map", None),
     )
@@ -581,7 +582,7 @@ def _near_selected_coords(app, box, radius: str = "") -> None:
     if point is None:
         return
     app.on_pack_query(
-        prefill=f"near {point[0]} {point[1]}" + (f" {radius}" if radius else ""),
+        prefill=f"{point[0]} {point[1]}" + (f" {radius}" if radius else ""),
         prefill_command="near",
         source_map=getattr(box, "_query_source_map", None),
     )

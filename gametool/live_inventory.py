@@ -21,6 +21,7 @@ from contextlib import ExitStack
 import ctypes
 import ctypes.wintypes as wt
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -701,29 +702,188 @@ def get_icon_array(path, size):
     return arr
 
 
-def capture_window(title="Warcraft III"):
-    hwnd = u32.FindWindowW(None, title)
-    if not hwnd:
-        raise RuntimeError(f"未找到窗口 {title}")
+_WINDOW_ENUM_PROC = ctypes.WINFUNCTYPE(wt.BOOL, wt.HWND, wt.LPARAM)
+
+
+def _capture_setup():
+    """Use pointer-sized GDI/window handles on both 32-bit and 64-bit Python."""
+    for api, name, arguments, result in (
+        (u32, "EnumWindows", [_WINDOW_ENUM_PROC, wt.LPARAM], wt.BOOL),
+        (u32, "GetWindowTextLengthW", [wt.HWND], ctypes.c_int),
+        (u32, "GetWindowTextW", [wt.HWND, wt.LPWSTR, ctypes.c_int], ctypes.c_int),
+        (
+            u32,
+            "GetWindowThreadProcessId",
+            [wt.HWND, ctypes.POINTER(wt.DWORD)],
+            wt.DWORD,
+        ),
+        (u32, "IsIconic", [wt.HWND], wt.BOOL),
+        (u32, "GetClientRect", [wt.HWND, ctypes.POINTER(wt.RECT)], wt.BOOL),
+        (u32, "GetDC", [wt.HWND], wt.HDC),
+        (u32, "ReleaseDC", [wt.HWND, wt.HDC], ctypes.c_int),
+        (u32, "PrintWindow", [wt.HWND, wt.HDC, wt.UINT], wt.BOOL),
+        (g32, "CreateCompatibleDC", [wt.HDC], wt.HDC),
+        (
+            g32,
+            "CreateCompatibleBitmap",
+            [wt.HDC, ctypes.c_int, ctypes.c_int],
+            wt.HBITMAP,
+        ),
+        (g32, "SelectObject", [wt.HDC, wt.HANDLE], wt.HANDLE),
+        (g32, "DeleteObject", [wt.HANDLE], wt.BOOL),
+        (g32, "DeleteDC", [wt.HDC], wt.BOOL),
+        (
+            g32,
+            "GetDIBits",
+            [
+                wt.HDC,
+                wt.HBITMAP,
+                wt.UINT,
+                wt.UINT,
+                ctypes.c_void_p,
+                ctypes.c_void_p,
+                wt.UINT,
+            ],
+            ctypes.c_int,
+        ),
+    ):
+        function = getattr(api, name)
+        function.argtypes = arguments
+        function.restype = result
+
+
+def _window_title(hwnd):
+    length = u32.GetWindowTextLengthW(hwnd)
+    if not length:
+        return ""
+    buffer = ctypes.create_unicode_buffer(length + 1)
+    copied = u32.GetWindowTextW(hwnd, buffer, length + 1)
+    # Win32 may overestimate a caption length for mixed ANSI/Unicode windows.
+    # Growth beyond the allocated buffer still makes this enumeration unstable.
+    if copied <= 0 or copied > length or u32.GetWindowTextLengthW(hwnd) > length:
+        raise RuntimeError(f"窗口 0x{hwnd:X} 标题读取不完整或正在变化")
+    return buffer.value
+
+
+def _window_process_id(hwnd):
+    owner = wt.DWORD()
+    if not u32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner)) or not owner.value:
+        raise RuntimeError(f"无法确认窗口 0x{hwnd:X} 的 PID")
+    return owner.value
+
+
+def _select_capture_window(title, pid):
+    candidates = []
+    diagnostics = []
+
+    @_WINDOW_ENUM_PROC
+    def collect(hwnd, _parameter):
+        # ctypes callbacks cannot propagate Python exceptions across the C call.
+        try:
+            if _window_title(hwnd) == title:
+                candidates.append((hwnd, _window_process_id(hwnd)))
+        except Exception as exc:
+            diagnostics.append(str(exc))
+        return True
+
+    if not u32.EnumWindows(collect, 0):
+        raise RuntimeError("EnumWindows 未完成；无法唯一确认游戏窗口")
+    if diagnostics:
+        raise RuntimeError("窗口枚举证据不完整：" + "; ".join(diagnostics))
+    matches = [
+        (hwnd, owner) for hwnd, owner in candidates if pid is None or owner == pid
+    ]
+    target = f"PID {pid} 的" if pid is not None else ""
+    if not matches:
+        raise RuntimeError(f"未找到{target}窗口 {title}")
+    if len(matches) != 1:
+        detail = ", ".join(f"PID {owner}/HWND 0x{hwnd:X}" for hwnd, owner in matches)
+        raise RuntimeError(f"检测到多个{target}同标题窗口，无法唯一选择：{detail}")
+    return matches[0]
+
+
+def _verify_capture_window(hwnd, title, pid):
+    current, owner = _select_capture_window(title, pid)
+    if current != hwnd or owner != pid:
+        raise RuntimeError("捕获窗口身份已变化；丢弃本次图像，请重新探针")
+
+
+def capture_window(title="Warcraft III", *, pid=None):
+    _capture_setup()
+    hwnd, window_pid = _select_capture_window(title, pid)
+    if u32.IsIconic(hwnd):
+        raise RuntimeError("游戏窗口已最小化；当前无法识别图标，不能判定背包是否为空")
     rc = wt.RECT()
-    u32.GetClientRect(hwnd, ctypes.byref(rc))
+    if not u32.GetClientRect(hwnd, ctypes.byref(rc)):
+        raise RuntimeError("GetClientRect 失败；当前无法取得游戏窗口大小")
     w, h = rc.right - rc.left, rc.bottom - rc.top
     if w <= 0 or h <= 0:
-        raise RuntimeError("窗口客户区为空")
-    hdc = u32.GetDC(hwnd)
-    md = g32.CreateCompatibleDC(hdc)
-    bmp = g32.CreateCompatibleBitmap(hdc, w, h)
-    old = g32.SelectObject(md, bmp)
-    u32.PrintWindow(hwnd, md, 2)
-    bi = struct.pack("<IiiHHIIiiII", 40, w, -h, 1, 32, 0, 0, 0, 0, 0, 0)
-    buf = ctypes.create_string_buffer(w * h * 4)
-    g32.GetDIBits(md, bmp, 0, h, buf, bi, 0)
-    g32.SelectObject(md, old)
-    g32.DeleteObject(bmp)
-    g32.DeleteDC(md)
-    u32.ReleaseDC(hwnd, hdc)
-    arr = np.frombuffer(buf.raw, dtype=np.uint8).reshape(h, w, 4)
-    return Image.fromarray(arr[:, :, :3].copy(), "RGB"), (w, h)
+        raise RuntimeError("窗口客户区为空；当前无法识别图标，不能判定背包是否为空")
+    with ExitStack() as cleanup:
+        hdc = u32.GetDC(hwnd)
+        if not hdc:
+            raise RuntimeError("GetDC 失败；当前无法捕获游戏画面")
+        cleanup.callback(u32.ReleaseDC, hwnd, hdc)
+        md = g32.CreateCompatibleDC(hdc)
+        if not md:
+            raise RuntimeError("CreateCompatibleDC 失败；当前无法捕获游戏画面")
+        bmp = None
+
+        def release_gdi():
+            # Deleting the DC also releases any selection if restoring it failed.
+            try:
+                g32.DeleteDC(md)
+            finally:
+                if bmp:
+                    g32.DeleteObject(bmp)
+
+        cleanup.callback(release_gdi)
+        bmp = g32.CreateCompatibleBitmap(hdc, w, h)
+        if not bmp:
+            raise RuntimeError("CreateCompatibleBitmap 失败；当前无法捕获游戏画面")
+        old = g32.SelectObject(md, bmp)
+        failed_handle = ctypes.c_void_p(-1).value
+        if not old or old in (-1, failed_handle):
+            raise RuntimeError("SelectObject 失败；当前无法捕获游戏画面")
+        selected = True
+
+        def restore_bitmap():
+            nonlocal selected
+            if selected:
+                previous = g32.SelectObject(md, old)
+                if not previous or previous in (-1, failed_handle):
+                    return False
+                selected = False
+            return True
+
+        cleanup.callback(restore_bitmap)
+        _verify_capture_window(hwnd, title, window_pid)
+        # Client dimensions need PW_CLIENTONLY together with PW_RENDERFULLCONTENT.
+        if not u32.PrintWindow(hwnd, md, 1 | 2):
+            raise RuntimeError(
+                "PrintWindow 未成功 (返回 0)；当前无法捕获游戏画面，不能判定背包是否为空"
+            )
+        # GetDIBits requires the bitmap to be deselected from every DC first.
+        if not restore_bitmap():
+            raise RuntimeError("SelectObject 恢复失败；当前无法读取完整图像")
+        bi = ctypes.create_string_buffer(
+            struct.pack("<IiiHHIIiiII", 40, w, -h, 1, 32, 0, 0, 0, 0, 0, 0)
+        )
+        buf = ctypes.create_string_buffer(w * h * 4)
+        copied = g32.GetDIBits(md, bmp, 0, h, buf, bi, 0)
+        if copied != h:
+            raise RuntimeError(
+                f"GetDIBits 未取得完整图像 (请求 {h} 行，读取 {copied} 行)；当前无法识别图标"
+            )
+        _verify_capture_window(hwnd, title, window_pid)
+        arr = np.frombuffer(buf.raw, dtype=np.uint8).reshape(h, w, 4)
+        rgb = arr[:, :, :3]
+        if np.array_equal(rgb.min(axis=(0, 1)), rgb.max(axis=(0, 1))):
+            raise RuntimeError(
+                "游戏窗口捕获为纯色空帧；当前无法识别图标，不能判定背包是否为空。"
+                "请保持游戏正常显示后重试"
+            )
+        return Image.fromarray(rgb[:, :, ::-1].copy()), (w, h)
 
 
 def ncc_best(region, tmpl):
@@ -877,6 +1037,63 @@ class _LiveReport(TypedDict):
     resources: "list[dict[str, object]] | None"
     player_rows: "list[str] | None"
     nick_raw: "str | None"
+    input_error: bool
+
+
+def _icons_memory_requests(
+    *,
+    save_snapshot_dir=None,
+    load_snapshot_dir=None,
+    unit_query=None,
+    players=False,
+    all_units=False,
+    resources=None,
+    nick=None,
+    export_profile=None,
+    profile_json=None,
+):
+    return [
+        option
+        for option, active in (
+            ("--players", players),
+            ("--all-units", all_units),
+            ("--resources", resources is not None),
+            ("--unit", unit_query is not None),
+            ("--nick", nick is not None),
+            ("--profile-json", profile_json is not None),
+            ("--export-profile", export_profile is not None),
+            ("--save-snapshot", save_snapshot_dir is not None),
+            ("--load-snapshot", load_snapshot_dir is not None),
+        )
+        if active
+    ]
+
+
+def _read_icon_slots(report, pack_dir, verbose):
+    if pack_dir is None:
+        report["notes"].append("图标匹配跳过 (离线快照无图标模板目录)")
+        return []
+    if report["pid"] is None:
+        report["notes"].append("图标匹配跳过 (没有可绑定的游戏 PID，不能猜测当前窗口)")
+        return []
+    try:
+        templates, names = build_templates(pack_dir, verbose=verbose)
+        if not templates:
+            report["notes"].append("无图标模板")
+            return []
+        img, wh = capture_window(pid=report["pid"])
+        if verbose:
+            print(f"窗口 {wh[0]}x{wh[1]}")
+        picked = match_inventory(img, templates, names)
+        if not picked:
+            picked = match_image_full(img, templates, names)
+        return [
+            {"name": n, "item": i, "score": round(s, 3), "pos": list(pos), "size": sz}
+            for s, i, n, pos, sz in picked
+        ]
+    except Exception as ex:
+        report["notes"].append(f"图标匹配异常: {ex}")
+        return []
 
 
 def append_live_journal(rep):
@@ -934,11 +1151,14 @@ def _parse_resources_arg(parts):
     if parts == ["auto"]:
         return "auto"
     if len(parts) != 2:
-        return None
+        raise ValueError("--resources 需要两个数值：金币 木材 (或 auto)")
     try:
-        return (float(parts[0]), float(parts[1]))
-    except ValueError:
-        return None
+        values = (float(parts[0]), float(parts[1]))
+    except ValueError as exc:
+        raise ValueError("--resources 的金币/木材必须是有限数字") from exc
+    if not all(math.isfinite(value) for value in values):
+        raise ValueError("--resources 的金币/木材必须是有限数字")
+    return values
 
 
 def read_live(
@@ -1015,7 +1235,29 @@ def _read_live(
         "resources": None,
         "player_rows": None,
         "nick_raw": nick,
+        "input_error": False,
     }
+    if strategy == "icons":
+        memory_requests = _icons_memory_requests(
+            save_snapshot_dir=save_snapshot_dir,
+            load_snapshot_dir=load_snapshot_dir,
+            unit_query=unit_query,
+            players=players,
+            all_units=all_units,
+            resources=resources,
+            nick=nick,
+            export_profile=export_profile,
+            profile_json=profile_json,
+        )
+        if memory_requests:
+            report["input_error"] = True
+            report["notes"].append(
+                "参数错误：icons 仅识别窗口图标；"
+                + "、".join(memory_requests)
+                + " 需要内存读取，请使用 --strategy auto 或 handle"
+            )
+            return report
+    pure_icons = strategy == "icons"
     ver: dict[str, object] | None = None
     h = 0
     opened_path: str | None = None  # 进程身份基线 (离线快照无此概念)
@@ -1026,7 +1268,8 @@ def _read_live(
         if verbose:
             print(f"离线快照 {len(regions)} 区 {total // 1048576}MB")
     else:
-        mem_setup()
+        if not pure_icons:
+            mem_setup()
         pids = find_war3_pids()
         if not pids:
             report["notes"].append("war3 未运行")
@@ -1047,6 +1290,18 @@ def _read_live(
             chosen = pids[0]
         report["pid"] = chosen  # 追溯: 本次读的是哪个游戏进程 (多实例排查)
         _active_pid["pid"] = chosen  # 异常日志关联目标进程
+        if pure_icons:
+            report["notes"].append(
+                "图标模式只提供所绑定 PID 窗口中的可见图像匹配；pos 是图像像素，"
+                "不提供版本/偏移、单位归属、世界坐标或玩家资源证据"
+            )
+            slots = _read_icon_slots(report, pack_dir, verbose)
+            if slots:
+                report["strategy_used"] = "icons"
+                report["slots"] = slots
+            else:
+                report["notes"].append("本次未确认可见图标；不能据此判断背包为空")
+            return report
         h = open_process(chosen)
         if not h:
             report["notes"].append("OpenProcess 失败 (需管理员)")
@@ -1073,35 +1328,6 @@ def _read_live(
                 + (" [已知偏移表]" if ver.get("known_offsets") else "")
             )
         max_addr = 0x7FFFFFFEFFFF if ver["arch"] == "x64" else 0x7FFF0000
-        if resources is not None and not players and not unit_query:
-            import ctypes as _ct
-            import struct as _st
-
-            k = k32
-
-            def _ru32(a):
-                buf = _ct.create_string_buffer(4)
-                got = _ct.c_size_t()
-                if (
-                    k.ReadProcessMemory(h, _ct.c_void_p(a), buf, 4, _ct.byref(got))
-                    and got.value == 4
-                ):
-                    return _st.unpack("<I", buf.raw)[0]
-                return None
-
-            import importlib as _il
-
-            _hc0 = _il.import_module("gametool.live_handle_chain")
-            gd0 = ver.get("game_dll")
-            dll0 = gd0.get("base", 0) if isinstance(gd0, dict) else 0
-            chain_rows = _hc0.read_player_resources_chain(
-                _ru32, dll0, str(ver.get("version") or "")
-            )
-            if chain_rows:
-                report["resources"] = chain_rows
-                if verbose:
-                    print("权威链直读全队资源完成 (免扫描免报数)")
-                return report
         regions, total = snapshot(h, max_addr)
         if verbose:
             print(f"快照 {len(regions)} 区 {total // 1048576}MB")
@@ -1398,35 +1624,6 @@ def _read_live(
             report["notes"].append(f"结构链异常: {ex}")
             return []
 
-    def try_icons():
-        if pack_dir is None:
-            report["notes"].append("图标匹配跳过 (离线快照无图标模板目录)")
-            return []
-        try:
-            templates, names = build_templates(pack_dir, verbose=verbose)
-            if not templates:
-                report["notes"].append("无图标模板")
-                return []
-            img, wh = capture_window()
-            if verbose:
-                print(f"窗口 {wh[0]}x{wh[1]}")
-            picked = match_inventory(img, templates, names)
-            if not picked:
-                picked = match_image_full(img, templates, names)
-            return [
-                {
-                    "name": n,
-                    "item": i,
-                    "score": round(s, 3),
-                    "pos": list(pos),
-                    "size": sz,
-                }
-                for s, i, n, pos, sz in picked
-            ]
-        except Exception as ex:
-            report["notes"].append(f"图标匹配异常: {ex}")
-            return []
-
     def try_resources_scan():
         """版本无关的资源读取兜底 (template/reforged 档)。
 
@@ -1505,7 +1702,7 @@ def _read_live(
             report["slots"] = slots
             return report
     if strategy in ("auto", "icons"):
-        slots = try_icons()
+        slots = _read_icon_slots(report, pack_dir, verbose)
         if slots:
             warn = verify_opened_process(h, opened_path)
             if warn:
@@ -1516,7 +1713,9 @@ def _read_live(
     warn = verify_opened_process(h, opened_path)
     if warn:
         report["notes"].append(warn)
-    report["notes"].append("所有策略均未产出 (背包可能为空/结构未识别/UI 不可见)")
+    report["notes"].append(
+        "本次未确认背包内容；请按上述进程/档案/图像诊断重探，不能据此判断背包为空"
+    )
     return report
 
 
@@ -1600,6 +1799,28 @@ def main(argv=None):
         help="多实例时显式指定游戏进程 PID (多实例不给则不猜报错)",
     )
     args = ap.parse_args(argv)
+    try:
+        resource_request = _parse_resources_arg(args.resources)
+    except ValueError as exc:
+        ap.error(str(exc))
+    if args.strategy == "icons":
+        memory_requests = _icons_memory_requests(
+            save_snapshot_dir=args.save_snapshot,
+            load_snapshot_dir=args.load_snapshot,
+            unit_query=args.unit,
+            players=args.players,
+            all_units=args.all_units,
+            resources=resource_request,
+            nick=args.nick,
+            export_profile=args.export_profile,
+            profile_json=args.profile_json,
+        )
+        if memory_requests:
+            ap.error(
+                "icons 仅识别窗口图标；"
+                + "、".join(memory_requests)
+                + " 需要内存读取，请使用 --strategy auto 或 handle"
+            )
     if args.test_image:
         templates, names = build_templates(args.pack, verbose=True)
         img = Image.open(args.test_image).convert("RGB")
@@ -1620,43 +1841,50 @@ def main(argv=None):
         unit_query=args.unit,
         players=args.players or bool(args.resources),
         all_units=args.all_units,
-        resources=_parse_resources_arg(args.resources),
+        resources=resource_request,
         nick=args.nick,
         export_profile=args.export_profile,
         profile_json=args.profile_json,
         pid=args.pid,
     )
     append_live_journal(rep)
+    if rep.get("input_error"):
+        print(json.dumps(rep, ensure_ascii=False, indent=1, default=str))
+        return 2
     counts = rep.get("owner_counts") or {}
     if counts:
         print("== 所有者分布 ==")
         print("  " + "  ".join(f"P{o}:{n}" for o, n in sorted(counts.items())))
     res = rep.get("resources")
     if res is not None:
-        print(f"== 玩家资源 (同布局结构 {len(res)} 个: 你+队友+缓存副本) ==")
+        print(f"== 玩家资源 (同布局结构 {len(res)} 个) ==")
         for r2 in res:
             food = f" 人口~{r2['food']}" if r2.get("food") is not None else ""
             gold = r2["gold"] if r2.get("gold") is not None else "?"
             lumber = r2["lumber"] if r2.get("lumber") is not None else "?"
             print(f"  {r2['addr']}: 金{gold} 木{lumber}{food}")
     prows = rep.get("player_rows")
-    if (args.players or args.resources) and not prows:
-        garbage = counts and len(counts) == 1 and next(iter(counts.values()), 0) > 1000
-        print("== 归属不可读 ==")
-        print("  ⚠ 玩家号->单位归属链未产出 (本图布局差异):")
+    owned_units = rep.get("owned_units")
+    if (args.players or args.resources) and owned_units is None:
+        print("== 单位归属不可读 ==")
+        print("  ⚠ 本次未取得单位归属记录；请检查下方进程/权限/档案诊断并重探。")
         print("    禁止把场上单位/背包断言为某玩家的; 操作者只能以'当前选中'+复探位移")
         print("    推断, 且必须向玩家明示不确定。")
-        if garbage:
-            print(f"    (owner_counts 疑似垃圾读数: {counts})")
-    if prows:
+    if args.resources and prows is None:
+        print("== 资源归属不可读 ==")
+        print("  未取得按玩家号的资源/本地玩家证据；同布局结构值不能指认为具体玩家。")
+        print(
+            "  可用 --resources 金币 木材 校准，或在资源变化时用 --resources auto 重探。"
+        )
+    if prows is not None:
         print("== 按玩家号 (权威链直读, 玩家号=大厅号) ==")
         for line in prows:
             print("  " + line)
-        if not res:
+        if res is None:
             print("  未定位到资源结构; 确认金币/木材数值没变后重试")
-        listed = rep.get("owned_units") or []
-        print(f"== 玩家单位 (数量少的玩家号, 共{len(listed)}个) ==")
-        for u in listed:
+    if owned_units is not None:
+        print(f"== 玩家单位 (全槽位, 共{len(owned_units)}个) ==")
+        for u in owned_units:
             print(
                 f"  P{u['owner']} {u['unit']} [{u['code']}] @ ({format_number(u['x'])}, {format_number(u['y'])})"
             )
@@ -1677,7 +1905,10 @@ def main(argv=None):
             if sel.get("x") is not None
             else ""
         )
-        label = "当前选中" if prows else "当前选中(归属未知)"
+        owner_known = sel.get("addr") is not None and any(
+            u.get("addr") == sel["addr"] for u in owned_units or []
+        )
+        label = "当前选中" if owner_known else "当前选中(归属未知)"
         print(f"{label}: {sel['unit']} [{sel['code']}]{pos}")
         for it in sel["items"]:
             print(f"  槽{it['slot']}: {it['name']} [{it['code']}]")
@@ -1724,7 +1955,9 @@ def main(argv=None):
         rep.get("selected_unit") is not None or rep.get("unit_matches")
     ):
         return 0  # A confirmed empty inventory is a successful read.
-    if args.players and rep.get("owner_counts") is not None:
+    if args.players and (
+        owned_units is not None or rep.get("owner_counts") is not None
+    ):
         return 0
     if args.all_units and rep.get("all_units") is not None:
         return 0

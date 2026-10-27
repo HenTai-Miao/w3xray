@@ -27,7 +27,7 @@ import math
 import re
 import struct
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
@@ -946,12 +946,80 @@ def _probe_food(reader: "MemoryReader", gold_addr: int, delta: int) -> "int | No
 def _iter_float_slots(reader: "MemoryReader"):
     """遍历全部区域的 (地址, float 值); 只产出资源量级的候选。"""
     for base_a, data in reader._data.items():
-        if len(data) < 0x100:
-            continue
-        for off in range(0, len(data) - 4, 4):
-            f = struct.unpack_from("<f", data, off)[0]
+        complete = memoryview(data)[: len(data) // 4 * 4]
+        for index, (f,) in enumerate(struct.iter_unpack("<f", complete)):
             if _plausible_resource(f):
-                yield base_a + off, f
+                yield base_a + index * 4, f
+
+
+# A working-buffer size, never a coverage or candidate limit. Each complete
+# captured float is visited, with numerical masks bounded to one block.
+_RESOURCE_SCAN_BLOCK_FLOATS = 65536
+
+
+class _ResourceScan:
+    """Index captured float spans and stream exact reported-value matches."""
+
+    def __init__(self, reader: MemoryReader):
+        self.regions = tuple(
+            (base, data) for base, data in reader.iter_regions() if len(data) >= 4
+        )
+        self.bases = tuple(base for base, _data in self.regions)
+        self.prefix_ends: list[int] = []
+        furthest = 0
+        for base, data in self.regions:
+            furthest = max(furthest, base + len(data) // 4 * 4)
+            self.prefix_ends.append(furthest)
+
+    def reported_addresses(self, reported: float) -> Iterator[int]:
+        import numpy as np
+
+        for base, data in self.regions:
+            count = len(data) // 4
+            for start in range(0, count, _RESOURCE_SCAN_BLOCK_FLOATS):
+                values = np.frombuffer(
+                    data,
+                    dtype="<f4",
+                    count=min(_RESOURCE_SCAN_BLOCK_FLOATS, count - start),
+                    offset=start * 4,
+                )
+                # Python's scalar matcher subtracts two binary64 values. Keep
+                # that precision instead of numpy's scalar float32 promotion.
+                distance = values.astype(np.float64)
+                with np.errstate(invalid="ignore", over="ignore"):
+                    np.subtract(distance, reported, out=distance)
+                    np.abs(distance, out=distance)
+                matches = (
+                    (distance <= 1.0)
+                    & np.isfinite(values)
+                    & (values >= 0)
+                    & (values < 10_000_000)
+                )
+                for index in np.flatnonzero(matches):
+                    yield base + (start + int(index)) * 4
+
+    def neighbor_deltas(
+        self, gold_address: int, reported: float, lower: int, upper: int
+    ) -> Iterator[int]:
+        first = bisect.bisect_right(self.prefix_ends, lower)
+        last = bisect.bisect_right(self.bases, upper)
+        for region in range(first, last):
+            base, data = self.regions[region]
+            if (base - gold_address) % 4:
+                continue
+            start = max(0, (lower - base + 3) // 4 * 4)
+            end = min(len(data) // 4 * 4, ((upper - base) // 4 + 1) * 4)
+            if end <= start:
+                continue
+            complete = memoryview(data)[start:end]
+            for index, (value,) in enumerate(struct.iter_unpack("<f", complete)):
+                address = base + start + index * 4
+                if (
+                    address != gold_address
+                    and _plausible_resource(value)
+                    and _matches_reported(value, reported)
+                ):
+                    yield address - gold_address
 
 
 def find_resource_layout(
@@ -1000,26 +1068,23 @@ def find_resource_layout(
             _resource_cache_hit = True
             return replay
     _resource_cache_hit = False
-    gold_addr = []
-    lumber_addr = []
-    for addr, f in _iter_float_slots(reader):
-        if _matches_reported(f, gold):
-            gold_addr.append(addr)
-        elif _matches_reported(f, lumber):
-            lumber_addr.append(addr)
-    pairs: list[tuple[int, int]] = []
-    for g in gold_addr:
-        for lum in lumber_addr:
-            delta = lum - g
-            if 0 < abs(delta) <= window and delta % 4 == 0:
-                pairs.append((g, delta))
-    if not pairs:
+    if window < 4:
         return []
+    scan = _ResourceScan(reader)
     delta_counts: dict[int, int] = {}
-    for _, d in pairs:
-        delta_counts[d] = delta_counts.get(d, 0) + 1
+    for g in scan.reported_addresses(gold):
+        for delta in scan.neighbor_deltas(g, lumber, g - window, g + window):
+            delta_counts[delta] = delta_counts.get(delta, 0) + 1
+    if not delta_counts:
+        return []
     best_delta = max(delta_counts, key=lambda d: delta_counts[d])
-    anchors = sorted(g for g, d in pairs if d == best_delta)
+    # A second bounded scan keeps only the selected layout's complete output;
+    # neither dense lumber matches nor all local pairs become global lists.
+    anchors = sorted(
+        g
+        for g in scan.reported_addresses(gold)
+        for _delta in scan.neighbor_deltas(g, lumber, g + best_delta, g + best_delta)
+    )
     out: list[PlayerResources] = []
     for g in anchors:
         lum_addr = g + best_delta

@@ -23,7 +23,7 @@ _SHA256: Final = re.compile(r"[0-9a-f]{64}")
 _MAX_IDENTITY_FILE_BYTES: Final[int | None] = None
 _TRUSTED_MANIFEST: Final = "可信图标缓存.tsv"
 _TRUSTED_EVIDENCE_DIRECTORY: Final = "地图图标证据"
-BATCH_EXTRACTION_REVISION: Final = 31
+BATCH_EXTRACTION_REVISION: Final = 32
 
 type EvidenceField = str | int
 type EvidenceRecord = tuple[EvidenceField, ...]

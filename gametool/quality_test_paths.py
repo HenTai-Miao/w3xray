@@ -362,6 +362,16 @@ tests/test_query_tsv_bom.py
 tests/test_real_map_item_relation_acceptance.py
 tests/test_real_map_text_acceptance.py
 tests/test_real_save_files.py
+tests/test_real_session_extraction_coverage.py
+tests/test_real_session_live_api.py
+tests/test_real_session_live_capture.py
+tests/test_real_session_live_concurrency.py
+tests/test_real_session_live_icons.py
+tests/test_real_session_live_ownership.py
+tests/test_real_session_live_wiring.py
+tests/test_real_session_probe_query.py
+tests/test_real_session_resource_scan.py
+tests/test_real_session_script_coverage.py
 tests/test_recipe_evidence.py
 tests/test_recipe_parsing_complete.py
 tests/test_recipe_scroll.py

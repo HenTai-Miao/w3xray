@@ -38,26 +38,22 @@ def _pump(root: tk.Tk, deadline_s: float, done: list[str]) -> bool:
     return False
 
 
-def test_probe_window_reports_missing_game(_tk, tmp_path):
+def test_probe_window_reports_missing_game(_tk, tmp_path, monkeypatch):
     """无游戏进程时探针返回 2 + 「war3 未运行」JSON, 弹窗软失败不炸。"""
     win = LiveProbeWindow(_tk, pack_dir=str(tmp_path))
-    # 环境解耦: 真机开着 war3 时探针会真读内存 (exit 0) — 桩掉 live_cli 入口,
+    # 环境解耦: 真机开着 war3 时探针会真读内存 (exit 0) — 桩掉 owned child 边界,
     # 强制走「war3 未运行」路径 (测试只验弹窗软失败, 不验真机探测)
-    import gametool.live_cli as _live_cli_mod
+    from gametool.gui_live_subprocess import LiveProbeChild, LiveProbeResult
 
-    def _fake_run_live_cli(*_a, **_k):
-        # 真实 run_live_cli 把 JSON 打到 stdout, 探针 redirect 捕获
-        print(
-            "2"
-            + chr(0)
-            + "war3 未运行 (未检测到游戏进程)。"
-            + chr(0)
-            + '{"notes": [], "strategy_used": null}"'
-        )
-        return 2
-
-    _live_cli_mod_orig = _live_cli_mod.run_live_cli
-    _live_cli_mod.run_live_cli = _fake_run_live_cli
+    monkeypatch.setattr(
+        LiveProbeChild,
+        "run",
+        lambda _self: LiveProbeResult(
+            2,
+            '{"notes": [], "strategy_used": null}\n',
+            "war3 未运行 (未检测到游戏进程)。\n",
+        ),
+    )
     done: list[str] = []
     orig = LiveProbeWindow._finish
     LiveProbeWindow._finish = lambda self, text: done.append(text)  # type: ignore[assignment, method-assign]
@@ -72,9 +68,7 @@ def test_probe_window_reports_missing_game(_tk, tmp_path):
         assert '"strategy_used": null' in text
     finally:
         LiveProbeWindow._finish = orig  # type: ignore[assignment, method-assign]
-        import gametool.live_cli as _live_cli_restore
-
-        _live_cli_restore.run_live_cli = _live_cli_mod_orig
+        win.destroy()
 
 
 def test_probe_json_autocopy_on_success(_tk, tmp_path):

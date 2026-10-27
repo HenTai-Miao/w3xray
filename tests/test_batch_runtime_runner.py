@@ -169,7 +169,7 @@ def test_concurrent_batches_cannot_share_one_output_root(
     def first_run() -> None:
         try:
             _ = run_batch(options)
-        except BaseException as exc:  # noqa: BROAD_EXCEPT_OK - thread outcome is asserted below.
+        except BaseException as exc:  # The thread outcome is asserted below.
             failures.append(exc)
 
     monkeypatch.setattr(batch_runner, "process_one_map", process)

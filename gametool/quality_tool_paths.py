@@ -243,6 +243,7 @@ gametool/gui_item_relation_layout.py
 gametool/gui_item_relations.py
 gametool/gui_lifecycle.py
 gametool/gui_live_probe.py
+gametool/gui_live_subprocess.py
 gametool/gui_load_settings.py
 gametool/gui_loader.py
 gametool/gui_loader_host.py
@@ -405,6 +406,7 @@ gametool/pack_query_quest_records.py
 gametool/pack_query_reference_records.py
 gametool/pack_query_regions.py
 gametool/pack_query_relation_records.py
+gametool/pack_query_script_coverage.py
 gametool/pack_query_search.py
 gametool/pack_query_spatial.py
 gametool/pack_query_tech_details.py
