@@ -8,7 +8,7 @@ from enum import StrEnum
 from functools import lru_cache
 from typing import Final, assert_never
 
-from .object_candidates import ObjectSourceKind
+from .object_candidate_models import ObjectSourceKind
 
 
 class IconFieldDisposition(StrEnum):

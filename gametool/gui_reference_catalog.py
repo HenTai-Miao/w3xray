@@ -87,22 +87,65 @@ def _save_reference_memory(pack_dir: str, profile_json: str) -> None:
         pass  # fail-open: a read-only cache still permits the full reference UI.
 
 
-def open_reference_catalog_dialog(parent, pack_dir: str | Path | None = None) -> None:
+def _load_id_sources() -> tuple[str, ...]:
+    """Restore only explicitly selected local sources, independently of packs."""
+    try:
+        payload = json.loads(
+            (
+                gamexray_cache_root() / "gui-query-memo" / "reference-id-sources.json"
+            ).read_text(encoding="utf-8")
+        )
+    except OSError, ValueError:
+        return ()
+    if not isinstance(payload, list) or any(
+        not isinstance(value, str) or not value for value in payload
+    ):
+        return ()
+    return tuple(dict.fromkeys(payload))
+
+
+def _save_id_sources(paths: tuple[str, ...]) -> None:
+    try:
+        destination = (
+            gamexray_cache_root() / "gui-query-memo" / "reference-id-sources.json"
+        )
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(
+            json.dumps(list(paths), ensure_ascii=False), encoding="utf-8"
+        )
+    except OSError, UnicodeError:
+        pass  # Source memory is optional; a read-only cache cannot block queries.
+
+
+def open_reference_catalog_dialog(
+    parent,
+    pack_dir: str | Path | None = None,
+    *,
+    id_tables: tuple[str, ...] | None = None,
+) -> None:
     """Open the complete local reference; a pack and running game are optional."""
-    ReferenceCatalogWindow(parent, pack_dir)
+    ReferenceCatalogWindow(parent, pack_dir, id_tables=id_tables)
 
 
 class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
-    def __init__(self, parent, pack_dir: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        parent,
+        pack_dir: str | Path | None = None,
+        *,
+        id_tables: tuple[str, ...] | None = None,
+    ) -> None:
         super().__init__(parent)
         self._closed = False
         self._busy = False
+        self._query_generation = 0
         self._result: ReferenceSearchResult | None = None
         self._find_pos = "1.0"
         self._find_keyword = ""
         self._active_section = "详情"
         self._render_id: str | None = None
         self._detail_content = ""
+        self._id_tables = _load_id_sources() if id_tables is None else id_tables
         self._init_gui_worker_host()
         label = Path(pack_dir).name if pack_dir else "本地基础目录"
         self.title(f"离线字段与版本参考 — {label}")
@@ -151,6 +194,23 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         ctk.CTkButton(
             profile_bar, text="选 JSON 档案", width=100, command=self._choose_profile
         ).pack(side="left", padx=(0, 8))
+        id_bar = ctk.CTkFrame(self, fg_color=CARD)
+        id_bar.pack(fill="x", padx=12, pady=(0, 6))
+        self._id_sources_entry = ctk.CTkEntry(
+            id_bar,
+            placeholder_text="可选盒子兼容 ID 文本；外部名称与地图证据分别保留",
+        )
+        self._id_sources_entry.pack(side="left", fill="x", expand=True, padx=8, pady=8)
+        self._id_controls: list[ctk.CTkButton] = []
+        for label, command in (
+            ("加 ID 文件", self._choose_id_files),
+            ("加 ID 目录", self._choose_id_directory),
+            ("清空 ID", self._clear_id_sources),
+        ):
+            button = ctk.CTkButton(id_bar, text=label, width=85, command=command)
+            button.pack(side="left", padx=(0, 6))
+            self._id_controls.append(button)
+        self._render_id_sources()
         bar = ctk.CTkFrame(self, fg_color=CARD)
         bar.pack(fill="x", padx=12, pady=(0, 6))
         self._query_entry = ctk.CTkEntry(
@@ -279,12 +339,56 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
             self._profile_entry.insert(0, path)
             self._run()
 
+    def _render_id_sources(self) -> None:
+        self._id_sources_entry.configure(state="normal")
+        self._id_sources_entry.delete(0, "end")
+        self._id_sources_entry.insert(0, " | ".join(self._id_tables))
+        self._id_sources_entry.configure(state="disabled")
+
+    def _add_id_sources(self, paths: tuple[str, ...]) -> None:
+        if self._closed or self._busy or not paths:
+            return
+        self._id_tables = tuple(dict.fromkeys((*self._id_tables, *paths)))
+        self._render_id_sources()
+        _save_id_sources(self._id_tables)
+        self._run()
+
+    def _choose_id_files(self) -> None:
+        if self._closed or self._busy:
+            return
+        paths = filedialog.askopenfilenames(
+            parent=self,
+            title="选择盒子兼容 ID 文本（保留完整外部来源）",
+            filetypes=[("ID 文本", "*.txt"), ("所有文件", "*.*")],
+        )
+        self._add_id_sources(tuple(paths))
+
+    def _choose_id_directory(self) -> None:
+        if self._closed or self._busy:
+            return
+        path = filedialog.askdirectory(parent=self, title="选择盒子兼容 ID 目录")
+        if path:
+            self._add_id_sources((path,))
+
+    def _clear_id_sources(self) -> None:
+        if self._closed or self._busy:
+            return
+        self._id_tables = ()
+        self._render_id_sources()
+        _save_id_sources(())
+        self._run()
+
+    def _set_id_controls(self, state: str) -> None:
+        for button in self._id_controls:
+            button.configure(state=state)
+
     def _run(self) -> None:
         self._startup_id = None
         if self._closed or self._busy:
             return
         pack = self._pack_entry.get().strip()
         profile = self._profile_entry.get().strip()
+        id_tables = self._id_tables
         query = self._query_entry.get()
         kind = self._kind.get()
         category = self._category.get()
@@ -300,15 +404,26 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
             "离线字段与版本参考 — " + (Path(pack).name if pack else "本地基础目录")
         )
         self._busy = True
+        self._query_generation += 1
         self._cancel_gui_worker_group("reference-detail")
+        self._cancel_gui_worker_group("reference-export")
         self._run_button.configure(state="disabled")
+        self._export_button.configure(state="disabled")
+        self._set_id_controls("disabled")
         self._status.configure(text="后台读取全量目录并核对来源；可继续查看已有详情…")
 
         def work(ticket: GuiWorkerTicket) -> None:
             try:
-                catalog = load_reference_catalog(
-                    pack or None, profile_json=profile or None
-                )
+                if id_tables:
+                    catalog = load_reference_catalog(
+                        pack or None,
+                        profile_json=profile or None,
+                        id_tables=id_tables,
+                    )
+                else:
+                    catalog = load_reference_catalog(
+                        pack or None, profile_json=profile or None
+                    )
                 if ticket.cancellation.is_set():
                     return
                 result = search_reference_catalog(
@@ -333,6 +448,7 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         self._cancel_gui_worker_group("reference-detail")
         self._busy = False
         self._run_button.configure(state="normal")
+        self._set_id_controls("normal")
         self._result = result
         self._export_button.configure(state="normal")
         self._list.delete(0, "end")
@@ -366,6 +482,10 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         self._cancel_gui_worker_group("reference-detail")
         self._busy = False
         self._run_button.configure(state="normal")
+        self._set_id_controls("normal")
+        self._export_button.configure(
+            state="normal" if self._result is not None else "disabled"
+        )
         self._status.configure(
             text="读取失败；可检查知识包目录后重试，或清空目录查基础参考。"
         )
@@ -375,6 +495,10 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         self._cancel_gui_worker_group("reference-query")
         self._busy = False
         self._run_button.configure(state="normal")
+        self._set_id_controls("normal")
+        self._export_button.configure(
+            state="normal" if self._result is not None else "disabled"
+        )
         self._status.configure(text="已取消本次交付；已有列表可继续查看或导出。")
 
     def _show_selected(self) -> None:
@@ -466,31 +590,59 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
 
     def _export(self) -> None:
         result = self._result
-        if result is None:
+        if self._closed or self._busy or result is None:
             return
+        generation = self._query_generation
         path = filedialog.asksaveasfilename(
             parent=self,
             title="导出全部匹配与完整诊断",
             defaultextension=".md",
             filetypes=[("Markdown", "*.md"), ("JSON", "*.json"), ("Text", "*.txt")],
         )
-        if not path:
+        if (
+            not path
+            or self._closed
+            or self._busy
+            or generation != self._query_generation
+            or self._result is not result
+        ):
             return
         self._export_button.configure(state="disabled")
 
         def work(ticket: GuiWorkerTicket) -> None:
             try:
                 write_reference_export(path, result)
-                self._post_gui_worker(ticket, lambda: self._export_finished(path, ""))
+                self._post_gui_worker(
+                    ticket,
+                    lambda: self._export_finished(
+                        path, "", generation=generation, result=result
+                    ),
+                )
             except (OSError, ValueError) as exc:
                 error = str(exc)
                 self._post_gui_worker(
-                    ticket, lambda: self._export_finished(path, error)
+                    ticket,
+                    lambda: self._export_finished(
+                        path, error, generation=generation, result=result
+                    ),
                 )
 
         self._start_gui_worker("reference-export", work, replace=True)
 
-    def _export_finished(self, path: str, error: str) -> None:
+    def _export_finished(
+        self,
+        path: str,
+        error: str,
+        *,
+        generation: int,
+        result: ReferenceSearchResult,
+    ) -> None:
+        if (
+            self._closed
+            or self._query_generation != generation
+            or self._result is not result
+        ):
+            return
         self._export_button.configure(state="normal")
         if error:
             messagebox.showerror("参考报告导出失败", error, parent=self)
@@ -501,6 +653,9 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         if self._closed:
             return
         self._closed = True
+        from .gui_tk_callbacks import cancel_widget_callbacks
+
+        cancel_widget_callbacks(self)
         if self._startup_id is not None:
             self.after_cancel(self._startup_id)
             self._startup_id = None

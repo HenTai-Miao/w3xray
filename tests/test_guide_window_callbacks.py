@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from time import monotonic, sleep
 import tkinter as tk
 from traceback import format_exception
 from typing import Any
@@ -317,6 +318,7 @@ def _run_isolated_app_test(node: str, tmp_path: Path) -> None:
         capture_output=True,
         text=True,
         encoding="utf-8",
+        timeout=180,
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -411,3 +413,165 @@ def test_acceptance_callback_error_retains_full_traceback(
     assert "test_guide_window_callbacks.py" in message
     assert "guide original cause" in message
     assert "guide callback traceback marker" in message
+
+
+@pytest.mark.parametrize("error_kind", ("python", "tcl"))
+def test_acceptance_reports_delayed_error_after_parent_destroy(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    error_kind: str,
+) -> None:
+    node = f"test_acceptance_reports_delayed_error_after_parent_destroy[{error_kind}]"
+    if os.environ.get("GAMEXRAY_GUIDE_CALLBACK_CHILD") != node:
+        _run_isolated_app_test(node, tmp_path)
+        return
+    from gametool import gui_acceptance
+
+    original_destroy = gui_acceptance._destroy_without_persisting
+    destroyed = []
+    fired = []
+    marker = "delayed-parent-destroy-" + error_kind + "-" + uuid4().hex
+
+    def delayed_python_failure() -> None:
+        fired.append("python")
+        try:
+            raise ValueError("parent destroy original cause")
+        except ValueError as exc:
+            raise RuntimeError(marker) from exc
+
+    def destroy_with_delayed_failure(app) -> None:
+        original_destroy(app)
+        assert not app.tk.call("info", "commands", ".")
+        destroyed.append(app)
+        # Register only after real destruction, so widget-owned cancellation
+        # cannot hide the regression. This needs the final post-close pump.
+        if error_kind == "python":
+            app.after(100, delayed_python_failure)
+        else:
+            command = "::record_parent_destroy_error_" + uuid4().hex
+            app.tk.createcommand(command, lambda: fired.append("tcl"))
+            app.tk.call("after", 100, f"{command}; error {marker}")
+
+    monkeypatch.setattr(
+        gui_acceptance, "_destroy_without_persisting", destroy_with_delayed_failure
+    )
+    path = (
+        Path(__file__).parents[1] / "tests/fixtures/maps/war3net-map-script-builder.w3x"
+    )
+    with pytest.raises(RuntimeError, match="GUI 回调异常") as caught:
+        gui_acceptance.run_gui_acceptance(path)
+    assert len(destroyed) == 1
+    assert fired == [error_kind]
+    message = str(caught.value)
+    assert marker in message
+    if error_kind == "python":
+        assert "Traceback (most recent call last)" in message
+        assert "delayed_python_failure" in message
+        assert "test_guide_window_callbacks.py" in message
+        assert "parent destroy original cause" in message
+    else:
+        assert "Tcl background error" in message
+        assert "while executing" in message
+
+
+def test_full_acceptance_query_close_retires_only_its_owned_timers(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    node = "test_full_acceptance_query_close_retires_only_its_owned_timers"
+    if os.environ.get("GAMEXRAY_GUIDE_CALLBACK_CHILD") != node:
+        _run_isolated_app_test(node, tmp_path)
+        return
+    import json
+
+    from gametool.gui_acceptance import run_gui_acceptance
+    from gametool.gui_pack_query import _PackQueryWindow
+
+    original_destroy = _PackQueryWindow.destroy
+    observations: list[dict[str, Any]] = []
+    closed: list[_PackQueryWindow] = []
+
+    def observe_destroy(window: _PackQueryWindow) -> None:
+        app = window.master
+        assert app is not None
+        owners: dict[str, str] = {}
+        pending: list[tk.Misc] = [window]
+        while pending:
+            widget = pending.pop()
+            owners.update(
+                (command, str(widget))
+                for command in getattr(widget, "_tclCommands", ()) or ()
+            )
+            pending.extend(widget.winfo_children())
+        owned: dict[str, str] = {}
+        for identifier in app.tk.splitlist(app.tk.call("after", "info")):
+            info = app.tk.splitlist(app.tk.call("after", "info", identifier))
+            script = app.tk.splitlist(info[0])
+            if script and (owner := owners.get(str(script[0]))) is not None:
+                owned[str(identifier)] = owner
+        boxes = (str(window._output), str(window._pinned_box))
+        sibling = tk.Toplevel(app)
+        sibling.withdraw()
+        fired: list[str] = []
+        parent_timer = app.after(100, lambda: fired.append("parent"))
+        sibling_timer = sibling.after(100, lambda: fired.append("sibling"))
+        query_generation = window._query_generation
+        observation = {
+            "owned_before_close": owned,
+            "textbox_owners": boxes,
+            "query_generation": query_generation,
+            "final_query": json.JSONDecoder().raw_decode(
+                window._output.get("1.0", "end").lstrip()
+            )[0],
+            "external_fired": fired,
+        }
+        observations.append(observation)
+        try:
+            original_destroy(window)
+            remaining = set(app.tk.splitlist(app.tk.call("after", "info")))
+            observation["owned_after_close"] = sorted(set(owned) & remaining)
+            observation["external_preserved"] = {
+                parent_timer,
+                sibling_timer,
+            }.issubset(remaining)
+            observation["generation_after_close"] = window._query_generation
+            # Let the actual CTk textboxes' recurring timers become due while
+            # the real acceptance App and its strict callback capture are live.
+            deadline = monotonic() + 0.35
+            while monotonic() < deadline:
+                app.update_idletasks()
+                app.update()
+                sleep(0.01)
+            closed.append(window)
+        finally:
+            sibling.destroy()
+
+    monkeypatch.setattr(_PackQueryWindow, "destroy", observe_destroy)
+    path = (
+        Path(__file__).parents[1] / "tests/fixtures/maps/war3net-map-script-builder.w3x"
+    )
+    pack = tmp_path / "query-acceptance-request"
+    pack.mkdir()
+    try:
+        detail = run_gui_acceptance(path, pack_path=pack)
+    except RuntimeError:
+        print(
+            "QUERY-CLOSE-OBSERVATIONS " + json.dumps(observations, ensure_ascii=False)
+        )
+        raise
+    assert "tabs=12" in detail
+    assert "query-window=list/invalid-near/again" in detail
+    assert len(observations) == len(closed) == 1
+    observation = observations[0]
+    assert all(
+        owner in observation["owned_before_close"].values()
+        for owner in observation["textbox_owners"]
+    )
+    assert observation["owned_after_close"] == []
+    assert observation["external_preserved"]
+    assert sorted(observation["external_fired"]) == ["parent", "sibling"]
+    assert observation["generation_after_close"] > observation["query_generation"]
+    assert observation["final_query"]["command"] == "list"
+    assert observation["final_query"]["exit_code"] == 0
+    for window in closed:
+        original_destroy(window)  # Closing again after the parent is gone is harmless.

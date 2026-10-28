@@ -72,6 +72,8 @@ class ItemPriceIndex:
 
 
 def _field_value(fields: tuple[ObjectField, ...]) -> tuple[str, tuple[str, ...]]:
+    if any(not field.confirmed for field in fields):
+        return "", ("金币字段未确认，保留完整冲突/未知原文；未回退基础或其他来源值。",)
     values = tuple(decimal_value(field.value) for field in fields)
     if any(value is None for value in values) or len(set(values)) != 1:
         message = (
@@ -110,11 +112,17 @@ def item_price_index(
                 for field in evidence.fields
             )
         )
-        custom = tuple(field for field in fields if field.key.casefold() in _GOLD_KEYS)
+        declared_custom = tuple(
+            field for field in fields if field.key.casefold() in _GOLD_KEYS
+        )
+        custom = (
+            tuple(field for field in declared_custom if field.active) or declared_custom
+        )
         inherited = tuple(
             field
             for field in fields
             if field.key.casefold().startswith("base:")
+            and field.active
             and field.key.casefold()[5:] in _GOLD_KEYS
         )
         bases = tuple(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import os
 from pathlib import Path
 import shutil
 from uuid import uuid4
@@ -29,6 +30,7 @@ from .batch_publication_record import (
 from .batch_publication_recovery import recover_map_publications
 from .durable_io import sync_directory
 from .safe_output import safe_destination, safe_relative_path
+from .windows_output_paths import native_output_path
 
 
 def map_output_relative(index: int, display_name: str, digest: str) -> str:
@@ -56,15 +58,16 @@ def create_map_stage(
     transaction = new_transaction(publication)
     if transaction.destination_name != destination_name:
         raise BatchMapPublicationError("map destination identity changed")
-    if stage.exists() or stage.is_symlink():
+    stage_io = _io_path(stage)
+    if stage_io.exists() or stage_io.is_symlink():
         raise BatchMapPublicationError("map stage already exists")
-    stage.mkdir(mode=0o700)
+    stage_io.mkdir(mode=0o700)
     try:
         _sync_map_root(maps_root)
-        write_transaction(maps_root, transaction)
+        write_transaction(_io_path(maps_root), transaction)
     except OSError, PublicationRecordError:
-        if stage.is_dir() and not stage.is_symlink():
-            shutil.rmtree(stage)
+        if stage_io.is_dir() and not stage_io.is_symlink():
+            shutil.rmtree(stage_io)
             _sync_map_root(maps_root)
         raise
     return publication
@@ -77,7 +80,9 @@ def publish_map_stage(
 ) -> Path:
     """Advance a manifest-valid stage through a durable directory transaction."""
     maps_root, destination_name = _map_paths(output_root, publication.relative)
-    transaction = load_transaction(record_path(maps_root, publication.transaction_id))
+    transaction = load_transaction(
+        _io_path(record_path(maps_root, publication.transaction_id))
+    )
     _require_matching_record(publication, transaction, destination_name)
     prepared = _prepare_transaction(
         maps_root,
@@ -87,26 +92,26 @@ def publish_map_stage(
     )
     paths = paths_for(maps_root, prepared)
     current = prepared
-    if paths.destination.exists() or paths.destination.is_symlink():
+    if _io_path(paths.destination).exists() or _io_path(paths.destination).is_symlink():
         _require_owned_destination(paths.destination, publication.digest)
-        if paths.backup.exists() or paths.backup.is_symlink():
+        if _io_path(paths.backup).exists() or _io_path(paths.backup).is_symlink():
             raise BatchMapPublicationError("transaction backup already exists")
         _replace_directory(paths.destination, paths.backup)
         _sync_map_root(maps_root)
         current = replace(prepared, phase=PublicationPhase.BACKUP_READY)
-        write_transaction(maps_root, current)
+        write_transaction(_io_path(maps_root), current)
     _replace_directory(paths.stage, paths.destination)
     _sync_map_root(maps_root)
     current = replace(current, phase=PublicationPhase.DESTINATION_READY)
-    write_transaction(maps_root, current)
-    if not publication_matches(paths.destination, current):
+    write_transaction(_io_path(maps_root), current)
+    if not publication_matches(_io_path(paths.destination), current):
         raise BatchMapPublicationError("published map generation failed validation")
     current = replace(current, phase=PublicationPhase.COMMITTED)
-    write_transaction(maps_root, current)
-    if paths.backup.exists() or paths.backup.is_symlink():
+    write_transaction(_io_path(maps_root), current)
+    if _io_path(paths.backup).exists() or _io_path(paths.backup).is_symlink():
         _remove_owned_directory(paths.backup, publication.digest)
         _sync_map_root(maps_root)
-    remove_transaction(maps_root, current)
+    remove_transaction(_io_path(maps_root), current)
     return paths.destination
 
 
@@ -120,7 +125,7 @@ def discard_map_stage(
     maps_root = Path(output_root, "地图")
     try:
         transaction = load_transaction(
-            record_path(maps_root, publication.transaction_id)
+            _io_path(record_path(maps_root, publication.transaction_id))
         )
     except OSError as exc:
         return (
@@ -152,9 +157,8 @@ def discard_map_stage(
                 transaction.transaction_id,
             ),
         )
-    if publication.stage.is_symlink() or (
-        publication.stage.exists() and not publication.stage.is_dir()
-    ):
+    stage_io = _io_path(publication.stage)
+    if stage_io.is_symlink() or (stage_io.exists() and not stage_io.is_dir()):
         return (
             RecoveryDiagnostic(
                 "unproved_path",
@@ -162,10 +166,10 @@ def discard_map_stage(
                 publication.transaction_id,
             ),
         )
-    if publication.stage.exists():
-        shutil.rmtree(publication.stage)
+    if stage_io.exists():
+        shutil.rmtree(stage_io)
         _sync_map_root(maps_root)
-    remove_transaction(maps_root, transaction)
+    remove_transaction(_io_path(maps_root), transaction)
     return ()
 
 
@@ -177,10 +181,11 @@ def _map_paths(output_root: str, relative: str) -> tuple[Path, str]:
     if destination is None:
         raise BatchMapPublicationError("unsafe map output path")
     maps_root = Path(output_root, "地图")
-    if Path(output_root).is_symlink() or maps_root.is_symlink():
+    maps_root_io = _io_path(maps_root)
+    if _io_path(Path(output_root)).is_symlink() or maps_root_io.is_symlink():
         raise BatchMapPublicationError("map output directory is a symlink")
-    maps_root.mkdir(parents=True, exist_ok=True)
-    if maps_root.is_symlink() or not maps_root.is_dir():
+    maps_root_io.mkdir(parents=True, exist_ok=True)
+    if maps_root_io.is_symlink() or not maps_root_io.is_dir():
         raise BatchMapPublicationError("map output directory is unsafe")
     if Path(destination).parent != maps_root.resolve():
         raise BatchMapPublicationError("map destination escaped its parent")
@@ -198,7 +203,7 @@ def _prepare_transaction(
         phase=PublicationPhase.PREPARED,
         manifest_sha256=manifest_sha256,
     )
-    validation = verify_map_publication(publication.stage)
+    validation = verify_map_publication(_io_path(publication.stage))
     manifest = validation.manifest
     if (
         not validation.valid
@@ -209,7 +214,7 @@ def _prepare_transaction(
     ):
         reason = validation.detail or validation.code
         raise BatchMapPublicationError(f"map stage manifest mismatch: {reason}")
-    write_transaction(maps_root, prepared)
+    write_transaction(_io_path(maps_root), prepared)
     return prepared
 
 
@@ -231,12 +236,12 @@ def _require_matching_record(
 
 
 def _require_owned_destination(destination: Path, digest: str) -> None:
-    if owned_source_digest(destination) != digest:
+    if owned_source_digest(_io_path(destination)) != digest:
         raise BatchMapPublicationError("refusing to replace unowned map output")
 
 
 def _replace_directory(source: Path, destination: Path) -> None:
-    source.replace(destination)
+    _io_path(source).replace(_io_path(destination))
 
 
 def _sync_map_root(maps_root: Path) -> None:
@@ -245,7 +250,14 @@ def _sync_map_root(maps_root: Path) -> None:
 
 def _remove_owned_directory(path: Path, digest: str) -> None:
     _require_owned_destination(path, digest)
-    shutil.rmtree(path)
+    shutil.rmtree(_io_path(path))
+
+
+def _io_path(path: Path) -> Path:
+    """Use extended Windows I/O without changing stored transaction paths."""
+    if os.name != "nt":
+        return path
+    return Path(native_output_path(os.path.abspath(path)))
 
 
 __all__ = (

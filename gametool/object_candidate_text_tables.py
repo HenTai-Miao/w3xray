@@ -19,8 +19,6 @@ from .object_text_sources import TextObjectSourceKind, collect_text_object_recor
 from .references import extract_refs_by_column
 from .slk_objects import (
     SLK_CATEGORY_FILES,
-    is_noise_col,
-    parse_category_objects,
     slk_col_label,
 )
 
@@ -86,48 +84,11 @@ def collect_slk_candidates(
     md: DiagnosticTarget | None,
 ) -> tuple[ObjectCandidate, ...]:
     """Collect candidates from every supported embedded SLK family."""
+    from .slk_evidence_candidates import collect_category_candidates
+
     result: list[ObjectCandidate] = []
-    source = "war3map *Data.slk"
     for category in SLK_CATEGORY_FILES:
-        for code, row in sorted(
-            parse_category_objects(archive, category, md=md).items()
-        ):
-            resolved = {key: resolved_value(value, wts) for key, value in row.items()}
-            fields = tuple(
-                ObjectFieldValue(
-                    key,
-                    slk_col_label(key),
-                    value,
-                    source,
-                    ObjectSourceKind.SLK,
-                    wts_value_source(row[key], wts, "war3map"),
-                    field_type(key),
-                    resolved_source_value(row[key], wts),
-                )
-                for key, value in sorted(
-                    resolved.items(),
-                    key=lambda item: (item[0].casefold(), item[0]),
-                )
-                if not is_noise_col(key, category)
-                and retain_field(
-                    category,
-                    key,
-                    slk_col_label(key),
-                    value,
-                    field_type(key),
-                )
-            )
-            result.append(
-                ObjectCandidate(
-                    category,
-                    code,
-                    code,
-                    True,
-                    "slk",
-                    fields,
-                    _refs_tuple(extract_refs_by_column(resolved, category)),
-                )
-            )
+        result.extend(collect_category_candidates(archive, category, wts, md))
     return tuple(result)
 
 

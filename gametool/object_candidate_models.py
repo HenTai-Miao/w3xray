@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import IntEnum
+from enum import IntEnum, StrEnum
+
+
+class FieldEvidenceState(StrEnum):
+    CONFIRMED = "confirmed"
+    UNKNOWN = "unknown"
+    CONFLICT = "conflict"
 
 
 class ObjectSourceKind(IntEnum):
@@ -25,6 +31,9 @@ class ObjectFieldValue:
     value_source: str = ""
     value_type: str = ""
     raw_value: str | None = None
+    state: FieldEvidenceState = FieldEvidenceState.CONFIRMED
+    diagnostic: str = ""
+    encoded_evidence: str = ""
 
 
 @dataclass(frozen=True, slots=True)

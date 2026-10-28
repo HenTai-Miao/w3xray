@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from .campaign_sources import open_map_source
 from .map_archive_reader import MapArchiveReader
-from .slk import parse_slk
+from .slk_evidence import SlkEvidence, parse_slk_evidence
 
 if TYPE_CHECKING:
     from .map_data import MapData
@@ -20,6 +20,7 @@ class SlkFileSummary:
     path: str
     rows: int
     columns: int
+    evidence: SlkEvidence | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,11 +79,13 @@ def slk_inventory_from_archive(archive: MapArchiveReader) -> SlkInventoryReport:
 
 def _summarize_slk(path: str, payload: bytes) -> SlkFileSummary | None:
     text = _decode_slk_payload(payload)
-    rows: dict[str, dict[str, str]] = parse_slk(text)
-    if not rows:
+    evidence = parse_slk_evidence(text, raw_bytes=payload)
+    if not evidence.rows:
         return None
-    columns = {col for row in rows.values() for col in row}
-    return SlkFileSummary(path=path, rows=len(rows), columns=len(columns))
+    # Count encoded physical rows/columns, including duplicate IDs and opaque
+    # fields. Conflicting schema never masquerades as an empty source table.
+    columns = sum(column.number != 1 for column in evidence.columns)
+    return SlkFileSummary(path, len(evidence.rows), columns, evidence)
 
 
 def _decode_slk_payload(payload: bytes) -> str:

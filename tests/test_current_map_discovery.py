@@ -28,6 +28,7 @@ from gametool.current_map_models import (
     ResolutionStatus,
 )
 from gametool.current_map_process import OpenMapProbeReport, ProcessProbeReport
+from gametool.windows_output_paths import native_output_path
 
 _NOW_NS = 1_800_000_000_000_000_000
 _WINDOW_NS = 4 * 60 * 60 * 1_000_000_000
@@ -107,9 +108,10 @@ def _locate(
 
 
 def _write_at(path: Path, payload: bytes, mtime_ns: int) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    _ = path.write_bytes(payload)
-    os.utime(path, ns=(mtime_ns, mtime_ns))
+    path_io = Path(native_output_path(str(path)))
+    path_io.parent.mkdir(parents=True, exist_ok=True)
+    _ = path_io.write_bytes(payload)
+    os.utime(path_io, ns=(mtime_ns, mtime_ns))
 
 
 def _wgc(map_path: str) -> bytes:

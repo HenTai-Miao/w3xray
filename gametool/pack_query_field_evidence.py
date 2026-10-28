@@ -13,6 +13,15 @@ class ObjectField:
     value: str
     source: str
     extras: tuple[tuple[str, str], ...] = ()
+    state: str = "confirmed"
+
+    @property
+    def confirmed(self) -> bool:
+        return self.state == "confirmed"
+
+    @property
+    def active(self) -> bool:
+        return self.state != "overridden"
 
     def search_fields(self, clean: Callable[[str], str]) -> Iterator[str]:
         yield self.key
@@ -29,8 +38,12 @@ class ObjectField:
         inherited = (
             "（继承字段原文）" if self.key.casefold().startswith("base:") else ""
         )
+        certainty = "" if self.confirmed else f"（未确认字段原文；状态 {self.state}）"
+        value = self.value or (
+            "（显式空值）" if self.confirmed else "（原文为空，未确认）"
+        )
         return (
-            f"{indent}{key}{label}{inherited}: {self.value or '（显式空值）'}  [来源: {self.source or '来源未记录'}]",
+            f"{indent}{key}{label}{inherited}{certainty}: {value}  [来源: {self.source or '来源未记录'}]",
             *(
                 f"{indent}  {label}: {value or '（显式空值）'}"
                 for label, value in self.extras
@@ -45,7 +58,9 @@ def field_record(
         (header[index] if index < len(header) else f"扩展字段{index + 1}", value)
         for index, value in enumerate(row[7:], 7)
     )
-    return ObjectField(row[3], clean(row[4]), row[5], row[6], extras)
+    states = tuple(value for label, value in extras if label == "证据状态")
+    state = states[0] if len(states) == 1 else "unknown" if states else "confirmed"
+    return ObjectField(row[3], clean(row[4]), row[5], row[6], extras, state)
 
 
 @dataclass(frozen=True, slots=True)

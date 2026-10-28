@@ -47,7 +47,7 @@ def test_overlapping_roots_are_scanned_once(
         (tmp_path, nested), target.stat().st_mtime_ns
     )
     assert [path for path, _ in result.map_files] == [target]
-    assert visited.count(nested) == 1
+    assert sum(path.samefile(nested) for path in visited) == 1
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows directory junction")

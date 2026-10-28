@@ -412,17 +412,26 @@ def load_shop_stocks(pack_dir: Path) -> list[tuple[str, str, list[str]]]:
     inherited: list[tuple[str, str, list[str]]] = []
     custom_units: set[str] = set()
     unit_names: dict[str, str] | None = None
-    for r in _field_rows(pack_dir):
+    rows = _field_rows(pack_dir)
+    blocked = _shop_field_blockers(rows)
+    from .pack_query_field_evidence import field_record
+
+    for r in rows:
         if len(r) <= 5:
             continue
         if r[0] not in ("单位", "英雄") or r[3].removeprefix(
             "base:"
         ).casefold() not in ("usei", "sellitems"):
             continue
+        evidence = field_record(r, rows[0], _clean)
+        if not evidence.active:
+            continue
         codes = _field_object_codes(r[5])
         inherited_row = r[3].startswith("base:")
         if not inherited_row:
             custom_units.add(r[1])
+        if r[1] in blocked or not evidence.confirmed:
+            continue
         if not codes and (inherited_row or r[5].strip()):
             continue
         name = _clean(r[2])
@@ -435,6 +444,33 @@ def load_shop_stocks(pack_dir: Path) -> list[tuple[str, str, list[str]]]:
         else:
             custom.append((r[1], name, codes))
     return custom + [row for row in inherited if row[0] not in custom_units]
+
+
+def _shop_field_blockers(rows: tuple[tuple[str, ...], ...]):
+    from .pack_query_field_evidence import ObjectField, field_record
+
+    blocked: dict[str, list[tuple[str, ObjectField]]] = {}
+    confirmed_custom = {
+        row[1]
+        for row in rows[1:]
+        if len(row) >= 7
+        and row[0] in ("单位", "英雄")
+        and row[3].casefold() in ("usei", "sellitems")
+        and field_record(row, rows[0], _clean).confirmed
+    }
+    for row in rows[1:]:
+        if (
+            len(row) < 7
+            or row[0] not in ("单位", "英雄")
+            or row[3].casefold().removeprefix("base:") not in ("usei", "sellitems")
+        ):
+            continue
+        evidence = field_record(row, rows[0], _clean)
+        if not evidence.confirmed and (
+            evidence.active or row[1] not in confirmed_custom
+        ):
+            blocked.setdefault(row[1], []).append((_clean(row[2]) or row[1], evidence))
+    return blocked
 
 
 def load_item_tooltips(pack_dir: Path) -> dict[str, str]:
@@ -1059,6 +1095,22 @@ def _query_shop(pack: Path, query: str, limit: int) -> list[str]:
     blocks: list[tuple[str, int, int]] = []
     stocked: set[str] = set()
     price_items: dict[str, dict[str, None]] = {}
+    for code, evidence in _shop_field_blockers(_field_rows(pack)).items():
+        name = evidence[0][0]
+        if not _match(query, code, name):
+            continue
+        stocked.add(code)
+        block_start = len(lines)
+        lines.extend(
+            (
+                "== " + name + " [" + code + "]",
+                "  货架字段未确认；保留来源冲突/未知原文，未回填继承货物。",
+            )
+        )
+        for _name, field in evidence:
+            lines.extend(field.render_lines())
+        lines.append("")
+        blocks.append((code, block_start, len(lines)))
     for shop_code, shop_name, codes in load_shop_stocks(pack):
         if not _match(query, shop_code, shop_name):
             continue

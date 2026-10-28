@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+import json
 
 from .api import GameObject, MapData
 from .batch_tsv import format_tsv_rows
 from .knowledge_io import safe_filename, tsv, write_text
+from .object_candidate_models import FieldEvidenceState
+from .map_data import GameObjectFieldEvidence
 
 
 def write_object_ids(md: MapData, out_dir: str) -> int:
@@ -113,8 +116,25 @@ def format_object_text_icons(md: MapData) -> str:
 
 def format_object_fields(md: MapData) -> str:
     """Return every materialized object field and its winning source as TSV."""
-    rows = [("分类", "ID", "名称", "字段键", "字段名", "值", "来源")]
+    detailed = any(
+        row.encoded_evidence or row.state is not FieldEvidenceState.CONFIRMED
+        for obj in _all_objects(md)
+        for row in obj.field_evidence
+    )
+    rows = [
+        (
+            "分类",
+            "ID",
+            "名称",
+            "字段键",
+            "字段名",
+            "值",
+            "来源",
+            *(("证据状态", "值类型", "编码证据", "诊断") if detailed else ()),
+        )
+    ]
     for obj in _all_objects(md):
+        evidence_index = _field_evidence_index(obj) if detailed else {}
         if obj.field_values:
             legacy_fields = tuple(obj.fields)
             for index, (key, value) in enumerate(obj.field_values.items()):
@@ -134,22 +154,82 @@ def format_object_fields(md: MapData) -> str:
                         label or key,
                         value,
                         obj.field_sources.get(key, ""),
+                        *(
+                            _field_extras(obj, key, label or key, value, evidence_index)
+                            if detailed
+                            else ()
+                        ),
                     )
                 )
-            continue
-        for label, value in obj.fields:
-            rows.append(
-                (
-                    obj.category,
-                    obj.obj_id,
-                    obj.name,
-                    "",
-                    label,
-                    value,
-                    "",
+        else:
+            for label, value in obj.fields:
+                rows.append(
+                    (
+                        obj.category,
+                        obj.obj_id,
+                        obj.name,
+                        "",
+                        label,
+                        value,
+                        "",
+                        *(("confirmed", "", "", "") if detailed else ()),
+                    )
                 )
-            )
+        if detailed:
+            active = frozenset(obj.field_blockers)
+            for row in obj.field_evidence:
+                if row.state is FieldEvidenceState.CONFIRMED:
+                    continue
+                rows.append(
+                    (
+                        obj.category,
+                        obj.obj_id,
+                        obj.name,
+                        row.key,
+                        row.label,
+                        row.value,
+                        row.source,
+                        row.state.value if row in active else "overridden",
+                        row.value_type,
+                        row.encoded_evidence,
+                        row.diagnostic,
+                    )
+                )
     return format_tsv_rows(rows)
+
+
+def _field_evidence_index(
+    obj: GameObject,
+) -> dict[tuple[str, str, str, str], list[GameObjectFieldEvidence]]:
+    indexed: dict[tuple[str, str, str, str], list[GameObjectFieldEvidence]] = {}
+    for row in obj.field_evidence:
+        if row.state is not FieldEvidenceState.CONFIRMED:
+            continue
+        for role, token in (("key", row.key), ("label", row.label)):
+            indexed.setdefault((row.source, row.value, role, token), []).append(row)
+    return indexed
+
+
+def _field_extras(
+    obj: GameObject,
+    key: str,
+    label: str,
+    value: str,
+    index: dict[tuple[str, str, str, str], list[GameObjectFieldEvidence]],
+) -> tuple[str, ...]:
+    source = obj.field_sources.get(key, "")
+    evidence = index.get(
+        (source, value, "key", key), index.get((source, value, "label", label), [])
+    )
+    encoded = [
+        json.loads(row.encoded_evidence) for row in evidence if row.encoded_evidence
+    ]
+    return (
+        "confirmed",
+        " / ".join(dict.fromkeys(row.value_type for row in evidence if row.value_type)),
+        json.dumps(encoded, ensure_ascii=True) if encoded else "",
+        "",
+    )
 
 
 def _all_objects(md: MapData) -> Iterable[GameObject]:

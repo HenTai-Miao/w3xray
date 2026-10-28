@@ -1,4 +1,4 @@
-"""Bounded, read-only evidence extraction from real local save files."""
+"""Read-only save evidence, optional map correlation and complete source proof."""
 
 from __future__ import annotations
 
@@ -13,7 +13,11 @@ from enum import StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from .bounded_file import BoundedFileError, read_bounded_regular_file
+from .bounded_file import (
+    BoundedFileError,
+    read_bounded_regular_file,
+    sha256_regular_file,
+)
 from .mpq import MPQArchive
 from .mpq_layout import locate_mpq_layout
 from .presentation_safety import tsv_cell as _tsv
@@ -33,6 +37,7 @@ from .save_gamecache import (
 )
 from .pack_query_objects import object_category
 from .script_sources import script_language
+from .script_lexing import script_views
 from .save_source_paths import iter_save_source_files, save_source_path_error
 
 if TYPE_CHECKING:
@@ -84,6 +89,11 @@ class RealSaveFile:
     members: tuple[RealSaveFile, ...] = ()
     encoding: str = ""
     source_identity: dict[str, int] | None = None
+    complete: bool = True
+    diagnostics: tuple[str, ...] = ()
+    source_stable: bool = True
+    raw_text: str | None = None
+    unknown_ranges: tuple[dict[str, object], ...] = ()
 
     def _record_dict(self) -> dict[str, object]:
         return {
@@ -107,6 +117,11 @@ class RealSaveFile:
             "diagnostic": self.diagnostic,
             "encoding": self.encoding,
             "source_identity": self.source_identity,
+            "complete": self.complete,
+            "diagnostics": list(self.diagnostics),
+            "source_stable": self.source_stable,
+            "raw_text": self.raw_text,
+            "unknown_ranges": list(self.unknown_ranges),
             "caches": [cache.to_dict() for cache in self.caches],
             "codes": [code.to_dict() for code in self.codes],
             "text_carriers": [carrier.to_dict() for carrier in self.text_carriers],
@@ -141,21 +156,51 @@ class RealSaveReport:
     warnings: tuple[str, ...]
     map_path: str = ""
     map_name: str = ""
+    complete: bool = True
+    inventory_complete: bool = True
+    expected_keys: tuple[str, ...] = ()
+    map_associated: bool = False
+    source_files: tuple[str, ...] = ()
+    source_is_directory: bool = False
+    unverified_files: tuple[RealSaveFile, ...] = ()
+
+    def metadata_dict(self) -> dict[str, object]:
+        return {
+            "source": self.source,
+            "warnings": list(self.warnings),
+            "map": {"path": self.map_path, "name": self.map_name},
+            "complete": self.complete,
+            "inventory_complete": self.inventory_complete,
+            "expected_keys": list(self.expected_keys),
+            "map_association": "performed" if self.map_associated else "not_performed",
+            "map_association_note": (
+                "已与所选地图的静态键和对象关联；匹配不证明运行时状态。"
+                if self.map_associated
+                else "未选择地图，未做地图关联；存档键和对象匹配为空。可选择地图后重新分析。"
+            ),
+            "source_files": list(self.source_files),
+            "source_is_directory": self.source_is_directory,
+        }
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "source": self.source,
+            **self.metadata_dict(),
             "files": [record.to_dict() for record in self.files],
-            "warnings": list(self.warnings),
-            "map": {"path": self.map_path, "name": self.map_name},
+            "unverified_files": [record.to_dict() for record in self.unverified_files],
         }
 
 
-def analyze_real_save_path(path: str | Path, md: MapData) -> RealSaveReport:
-    """Inventory a save file/directory and correlate static evidence with one map."""
-    source = Path(path)
+def analyze_real_save_path(
+    path: str | Path, md: MapData | None = None
+) -> RealSaveReport:
+    """Read every physical source; preserve partial evidence and re-prove its SHA."""
+    source = Path(path).absolute()
     candidates, warnings = _candidate_files(source)
-    expected_keys = _expected_save_keys(md)
+    if not candidates and not warnings:
+        warnings.append(
+            "来源目录为空，没有可分析的普通文件；请选择包含存档的目录或文件。"
+        )
+    expected_keys = _expected_save_keys(md) if md is not None else ()
     records: list[RealSaveFile] = []
     identities: list[tuple[Path, tuple[int, ...]]] = []
     root = source if source.is_dir() else source.parent
@@ -195,27 +240,66 @@ def analyze_real_save_path(path: str | Path, md: MapData) -> RealSaveReport:
         )
         records.append(record)
         identities.append((candidate, signature))
-    stable: list[RealSaveFile] = []
+    verified: list[RealSaveFile] = []
+    unverified: list[RealSaveFile] = []
     for record, (candidate, signature) in zip(records, identities, strict=True):
+        problem = ""
         try:
+            problem = save_source_path_error(candidate)
+            if problem:
+                raise ValueError(problem)
             after = candidate.lstat()
-        except OSError as exc:
-            warnings.append(f"来源在报告交付前不可读：{record.relative_path} ({exc})")
-            continue
-        if save_source_path_error(candidate) or signature != (
-            after.st_dev,
-            after.st_ino,
-            after.st_size,
-            after.st_mtime_ns,
-            after.st_ctime_ns,
-            after.st_mode,
-        ):
-            warnings.append(
-                f"来源在报告交付前改变：{record.relative_path}；未交付旧读取结果"
+            if signature != (
+                after.st_dev,
+                after.st_ino,
+                after.st_size,
+                after.st_mtime_ns,
+                after.st_ctime_ns,
+                after.st_mode,
+            ):
+                raise ValueError("文件身份或元数据改变")
+            digest, _identity = sha256_regular_file(candidate)
+            if digest != record.sha256:
+                raise ValueError("完整输入 SHA256 改变")
+            problem = save_source_path_error(candidate)
+            if problem:
+                raise ValueError(problem)
+        except (OSError, ValueError) as exc:
+            problem = (
+                f"来源在报告交付前改变或不可读：{record.relative_path} ({exc})；"
+                "保留读取时的证据，不能视为当前来源的完整结果。"
             )
+            warnings.append(problem)
+            record = replace(
+                record,
+                complete=False,
+                source_stable=False,
+                diagnostics=(*record.diagnostics, problem),
+            )
+            unverified.append(record)
             continue
-        stable.append(record)
-    return RealSaveReport(str(source), tuple(stable), tuple(warnings), md.path, md.name)
+        verified.append(record)
+    final_candidates, final_warnings = _candidate_files(source)
+    warnings.extend(note for note in final_warnings if note not in warnings)
+    if candidates != final_candidates:
+        warnings.append("来源文件清单在分析期间改变；请刷新后重新读取完整目录。")
+    inventory_complete = bool(verified) and not warnings
+    return RealSaveReport(
+        str(source),
+        tuple(verified),
+        tuple(warnings),
+        md.path if md is not None else "",
+        md.name if md is not None else "",
+        complete=inventory_complete and all(record.complete for record in verified),
+        inventory_complete=inventory_complete,
+        expected_keys=expected_keys,
+        map_associated=md is not None,
+        source_files=tuple(
+            candidate.relative_to(root).as_posix() for candidate in candidates
+        ),
+        source_is_directory=source == root,
+        unverified_files=tuple(unverified),
+    )
 
 
 def format_real_save_report_tsv(report: RealSaveReport) -> str:
@@ -223,7 +307,7 @@ def format_real_save_report_tsv(report: RealSaveReport) -> str:
     lines = [
         "文件\t类型\t大小\tSHA256\t匹配存档键\t匹配对象\t可读字符串\t诊断\t完整结构与来源JSON"
     ]
-    for record in report.files:
+    for record in (*report.files, *report.unverified_files):
         objects = ",".join(f"{item.code}:{item.name}" for item in record.object_matches)
         lines.append(
             "\t".join(
@@ -244,6 +328,28 @@ def format_real_save_report_tsv(report: RealSaveReport) -> str:
                 )
             )
         )
+    for warning in report.warnings:
+        lines.append("\t".join(("[诊断]", "", "", "", "", "", "", _tsv(warning), "")))
+    lines.append(
+        "\t".join(
+            (
+                "[报告状态]",
+                "complete" if report.complete else "incomplete",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "已关联地图" if report.map_associated else "未做地图关联",
+                _tsv(
+                    json.dumps(
+                        {key: value for key, value in report.metadata_dict().items()},
+                        ensure_ascii=False,
+                    )
+                ),
+            )
+        )
+    )
     return "\n".join(lines) + "\n"
 
 
@@ -256,7 +362,7 @@ def _analyze_file(
     relative: str,
     payload: bytes,
     expected_keys: tuple[str, ...],
-    md: MapData,
+    md: MapData | None,
     ancestors: frozenset[str] = frozenset(),
 ) -> RealSaveFile:
     digest = hashlib.sha256(payload).hexdigest()
@@ -278,6 +384,11 @@ def _analyze_file(
                 "保存时 GameCache 字段；未推断当前英雄状态；"
                 + "；".join(cache.diagnostics),
                 caches=(cache,),
+                complete=cache.complete,
+                diagnostics=cache.diagnostics,
+                unknown_ranges=_unknown_ranges(payload, cache.consumed, relative)
+                if not cache.complete
+                else (),
             )
     if _looks_like_mpq(payload):
         if digest in ancestors:
@@ -290,8 +401,10 @@ def _analyze_file(
                 (),
                 (),
                 "nested archive repeats an ancestor identity; raw member hash retained",
+                complete=False,
+                diagnostics=("嵌套归档重复祖先身份，未猜测其记录。",),
             )
-        members, diagnostic = _read_mpq_members(
+        members, diagnostic, diagnostics = _read_mpq_members(
             payload, relative, expected_keys, md, ancestors | {digest}
         )
         return RealSaveFile(
@@ -310,13 +423,35 @@ def _analyze_file(
             ),
             diagnostic,
             members=members,
+            complete=not diagnostics and all(member.complete for member in members),
+            diagnostics=diagnostics,
         )
     text = _decode_text(payload)
     kind = _classify_text(path, text)
     diagnostic = _diagnostic(kind)
+    text_diagnostics: tuple[str, ...] = ()
+    if (
+        text is not None
+        and path.suffix.lower() == ".json"
+        and kind is not SaveFileKind.JSON
+    ):
+        text_diagnostics = (
+            "来源扩展名为 .json，但 JSON 结构无效；保留完整原文，未猜测字段。",
+        )
+        diagnostic += "；" + text_diagnostics[0]
     if text is None:
         return RealSaveFile(
-            relative, kind, len(payload), digest, (), (), (), diagnostic
+            relative,
+            kind,
+            len(payload),
+            digest,
+            (),
+            (),
+            (),
+            diagnostic,
+            complete=False,
+            diagnostics=(diagnostic,),
+            unknown_ranges=_unknown_ranges(payload, 0, relative),
         )
     keys, object_matches, strings = _text_evidence(text, expected_keys, md)
     decoded = decode_save_text(payload)
@@ -339,6 +474,11 @@ def _analyze_file(
     codes = tuple(
         extract_save_codes_bytes(payload, relative, lua=script_language(relative))
     )
+    if any(not carrier.literal_complete for carrier in (*carriers, *codes)):
+        text_diagnostics = (
+            *text_diagnostics,
+            "文本载体含未确认的字面量或转义；完整原文、原始字节与偏移已保留。",
+        )
     return RealSaveFile(
         relative,
         kind,
@@ -351,6 +491,9 @@ def _analyze_file(
         codes=codes,
         text_carriers=carriers,
         encoding=encoding,
+        raw_text=text,
+        complete=not text_diagnostics,
+        diagnostics=text_diagnostics,
     )
 
 
@@ -359,7 +502,7 @@ def _analyze_save_container(
     payload: bytes,
     digest: str,
     expected_keys: tuple[str, ...],
-    md: MapData,
+    md: MapData | None,
 ) -> RealSaveFile:
     """Decode the recorded-save outer container without modifying the source."""
     inspected = inspect_save_container(payload)
@@ -375,6 +518,9 @@ def _analyze_save_container(
             (),
             f"w3z 容器校验失败：{'; '.join(inspected.diagnostics)}；仅记录哈希和大小",
             container=container,
+            complete=False,
+            diagnostics=inspected.diagnostics,
+            unknown_ranges=_unknown_ranges(payload, inspected.consumed, relative),
         )
     raw = inspected.raw
     raw_source = f"{relative}::decompressed"
@@ -417,6 +563,16 @@ def _analyze_save_container(
             )
         )
     )
+    codes = tuple(extract_save_codes_bytes(raw, raw_source))
+    text_complete = all(carrier.literal_complete for carrier in (*carriers, *codes))
+    unknown_ranges = (
+        _cache_unknown_ranges(raw, caches, raw_source) if text is None else ()
+    )
+    text_diagnostics = (
+        ()
+        if text_complete
+        else ("文本载体含未确认的字面量或转义；完整原文、原始字节与偏移已保留。",)
+    )
     return RealSaveFile(
         relative,
         SaveFileKind.W3Z,
@@ -428,15 +584,28 @@ def _analyze_save_container(
         diagnostic,
         caches=caches,
         container=container,
-        codes=tuple(extract_save_codes_bytes(raw, raw_source)),
+        codes=codes,
         text_carriers=carriers,
+        encoding=decoded[1] if decoded is not None else "",
+        raw_text=text,
+        complete=inspected.complete
+        and bool(caches or text is not None)
+        and all(cache.complete for cache in caches)
+        and text_complete
+        and not unknown_ranges,
+        diagnostics=(
+            *inspected.diagnostics,
+            *(message for cache in caches for message in cache.diagnostics),
+            *text_diagnostics,
+        ),
+        unknown_ranges=unknown_ranges,
     )
 
 
 def _text_evidence(
     text: str,
     expected_keys: tuple[str, ...],
-    md: MapData,
+    md: MapData | None,
 ) -> tuple[tuple[str, ...], tuple[SaveObjectMatch, ...], tuple[str, ...]]:
     keys = tuple(key for key in expected_keys if key and key in text)
     object_matches = tuple(
@@ -451,7 +620,7 @@ def _text_evidence(
 def _binary_evidence(
     raw: bytes,
     expected_keys: tuple[str, ...],
-    md: MapData,
+    md: MapData | None,
 ) -> tuple[tuple[str, ...], tuple[SaveObjectMatch, ...], tuple[str, ...]]:
     keys = tuple(key for key in expected_keys if key and _key_in_raw(key, raw))
     object_matches = tuple(
@@ -462,9 +631,11 @@ def _binary_evidence(
     return keys, object_matches, _quoted_raw_strings(raw)
 
 
-def _map_objects(md: MapData) -> tuple[tuple[str, GameObject], ...]:
+def _map_objects(md: MapData | None) -> tuple[tuple[str, GameObject], ...]:
     """Retain same-code definitions in different categories and aliases."""
     objects: list[tuple[str, GameObject]] = []
+    if md is None:
+        return ()
     seen: set[tuple[str, str, str]] = set()
     for entries in (*md.objects.values(), list(md.obj_index.values())):
         for obj in entries:
@@ -478,7 +649,7 @@ def _map_objects(md: MapData) -> tuple[tuple[str, GameObject], ...]:
 
 
 def _cache_object_matches(
-    caches: tuple[GameCacheEvidence, ...], md: MapData
+    caches: tuple[GameCacheEvidence, ...], md: MapData | None
 ) -> tuple[SaveObjectMatch, ...]:
     definitions: dict[tuple[str, str], list[GameObject]] = {}
     for code, obj in _map_objects(md):
@@ -579,17 +750,23 @@ def _decode_text(payload: bytes) -> str | None:
 def _classify_text(path: Path, text: str | None) -> SaveFileKind:
     if text is None:
         return SaveFileKind.BINARY
-    lowered = text.lower()
-    if "preloadfiles" in lowered or "call preload(" in lowered:
-        return SaveFileKind.PRELOAD
-    if path.suffix.lower() == ".json":
+    suffix = path.suffix.lower()
+    if suffix == ".json":
         try:
             json.loads(text)
         except json.JSONDecodeError:
             return SaveFileKind.TEXT
         return SaveFileKind.JSON
-    if path.suffix.lower() in {".ini", ".cfg"}:
+    if suffix in {".ini", ".cfg"}:
         return SaveFileKind.INI
+    if suffix == ".pld":
+        return SaveFileKind.PRELOAD
+    syntax = script_views(text, lua=script_language(path.as_posix())).syntax
+    if re.search(
+        r"\bfunction\s+PreloadFiles(?:\s+takes\b|\s*\()|(?<![\w.:])call\s+(?:_G\s*\.\s*)?Preload\s*\(",
+        syntax,
+    ):
+        return SaveFileKind.PRELOAD
     return SaveFileKind.TEXT
 
 
@@ -616,13 +793,67 @@ def _named_mpq_member(name: str, payload: bytes) -> bool:
     return _looks_like_mpq(payload)
 
 
+def _unknown_ranges(
+    raw: bytes, start: int, source: str, *, end: int | None = None
+) -> tuple[dict[str, object], ...]:
+    stop = len(raw) if end is None else end
+    if start >= stop:
+        return ()
+    return (
+        {
+            "source": source,
+            "offset": start,
+            "end": stop,
+            "state": "unknown",
+            "sha256": hashlib.sha256(raw[start:stop]).hexdigest(),
+            "raw_hex": raw[start:stop].hex(),
+            "diagnostic": "此字节范围的私有记录格式未验证；未推断字段含义。",
+        },
+    )
+
+
+def _cache_unknown_ranges(
+    raw: bytes, caches: tuple[GameCacheEvidence, ...], source: str
+) -> tuple[dict[str, object], ...]:
+    """Account for every decoded byte; opaque frame data stays explicitly unknown."""
+    known: list[tuple[int, int]] = []
+    for cache in caches:
+        if cache.complete:
+            known.append((cache.offset, cache.offset + cache.consumed))
+        else:
+            known.extend(
+                (field.offset, field.end)
+                for field in cache.structure
+                if field.state == "confirmed"
+            )
+            known.extend(
+                (record.record_offset, record.end)
+                for record in cache.fields
+                if record.state == "confirmed"
+            )
+        known.extend(
+            (field.offset, field.end)
+            for field in cache.frame
+            if field.name != "frame.opaque" and field.state == "confirmed"
+        )
+    cursor = 0
+    unknown: list[dict[str, object]] = []
+    for start, stop in sorted(known):
+        start, stop = max(0, start), min(len(raw), stop)
+        if start > cursor:
+            unknown.extend(_unknown_ranges(raw, cursor, source, end=start))
+        cursor = max(cursor, stop)
+    unknown.extend(_unknown_ranges(raw, cursor, source))
+    return tuple(unknown)
+
+
 def _read_mpq_members(
     snapshot: bytes,
     source: str,
     expected_keys: tuple[str, ...],
-    md: MapData,
+    md: MapData | None,
     ancestors: frozenset[str],
-) -> tuple[tuple[RealSaveFile, ...], str]:
+) -> tuple[tuple[RealSaveFile, ...], str, tuple[str, ...]]:
     """Traverse named nested archives with an explicit stack and stable snapshots."""
     # Index identities preserve duplicate member names instead of overwriting them.
     stack: list[tuple[int, str, bytes, frozenset[str], bool]] = [
@@ -631,6 +862,7 @@ def _read_mpq_members(
     records: dict[int, RealSaveFile] = {}
     children: dict[int, tuple[int, ...]] = {}
     notes: dict[int, str] = {}
+    issues: dict[int, tuple[str, ...]] = {}
     next_index = 1
     while stack:
         index, name, payload, parents, visited = stack.pop()
@@ -657,6 +889,9 @@ def _read_mpq_members(
                 ),
                 notes[index],
                 members=members,
+                complete=not issues[index]
+                and all(member.complete for member in members),
+                diagnostics=issues[index],
             )
             continue
         if digest in parents:
@@ -669,10 +904,13 @@ def _read_mpq_members(
                 (),
                 (),
                 "nested archive repeats an ancestor identity; no guessed recursion",
+                complete=False,
+                diagnostics=("嵌套归档重复祖先身份，未猜测其记录。",),
             )
             continue
-        snapshots, note = _mpq_snapshots(payload)
+        snapshots, note, diagnostics = _mpq_snapshots(payload)
         notes[index] = note
+        issues[index] = diagnostics
         child_ids: list[int] = []
         stack.append((index, name, payload, parents, True))
         for member_name, member_payload in snapshots:
@@ -696,10 +934,12 @@ def _read_mpq_members(
                     parents | {digest},
                 )
         children[index] = tuple(child_ids)
-    return records[0].members, records[0].diagnostic
+    return records[0].members, records[0].diagnostic, records[0].diagnostics
 
 
-def _mpq_snapshots(snapshot: bytes) -> tuple[tuple[tuple[str, bytes], ...], str]:
+def _mpq_snapshots(
+    snapshot: bytes,
+) -> tuple[tuple[tuple[str, bytes], ...], str, tuple[str, ...]]:
     descriptor, temporary_path = tempfile.mkstemp(
         prefix="gamexray-save-", suffix=".mpq"
     )
@@ -709,21 +949,32 @@ def _mpq_snapshots(snapshot: bytes) -> tuple[tuple[tuple[str, bytes], ...], str]
         with os.fdopen(descriptor, "wb") as handle:
             _ = handle.write(snapshot)
         with MPQArchive(temporary_path) as archive:
+            named_blocks: set[int] = set()
             for name in archive.list_files():
-                if archive.block_index_of(name) is None:
+                block_index = archive.block_index_of(name)
+                if block_index is None:
                     diagnostics.append(f"{name}: named member has no block identity")
                     continue
+                named_blocks.add(block_index)
                 try:
                     members.append((name, archive.read_file(name)))
                 except (KeyError, OSError, ValueError) as exc:
                     diagnostics.append(f"{name}: {type(exc).__name__}: {exc}")
+            if callable(getattr(archive, "iter_blocks", None)):
+                diagnostics.extend(
+                    f"未具名 MPQ 块 {index}，声明大小 {block.file_size}；内部记录格式未验证，原始归档 SHA256 保留。"
+                    for index, block in archive.iter_blocks()
+                    if index not in named_blocks
+                )
     except (OSError, ValueError) as exc:
         diagnostics.append(f"MPQ 只读打开失败，未解密：{exc}")
     finally:
         with suppress(FileNotFoundError):
             os.unlink(temporary_path)
     note = f"MPQ 可读命名成员 {len(members)} 个；未执行平台 API 或解密"
-    return tuple(members), "；".join((note, *diagnostics))
+    if not members and not diagnostics:
+        diagnostics.append("MPQ 没有可读取的命名成员，未证明内部记录覆盖。")
+    return tuple(members), "；".join((note, *diagnostics)), tuple(diagnostics)
 
 
 def _diagnostic(kind: SaveFileKind) -> str:

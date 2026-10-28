@@ -163,6 +163,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self, master, pack_dir: str, prefill: str = "", prefill_command: str = ""
     ) -> None:
         super().__init__(master)
+        self._closed = False
         self._pack_dir = pack_dir
         self._query_generation = 0
         _load_memo()
@@ -539,6 +540,16 @@ class _PackQueryWindow(ctk.CTkToplevel):
             command=lambda: self._code_rerun("drop"),
         )
         self._output.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
+
+    def destroy(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        self._query_generation += 1
+        from .gui_tk_callbacks import cancel_widget_callbacks
+
+        cancel_widget_callbacks(self)
+        super().destroy()
 
     def _clear_history(self) -> None:
         _HISTORY.clear()

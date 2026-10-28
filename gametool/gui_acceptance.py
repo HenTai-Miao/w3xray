@@ -7,8 +7,6 @@ from collections.abc import Callable
 import json
 from pathlib import Path
 from time import monotonic, sleep
-from traceback import format_exception
-from types import TracebackType
 from typing import override
 
 from .gui import App
@@ -28,88 +26,91 @@ def run_gui_acceptance(
     map_path: Path, pack_path: Path | None = None, campaign_path: Path | None = None
 ) -> str:
     """Create the real workbench, load a map, and visit every primary tab."""
+    from .gui_offline_acceptance import _capture_callbacks, exercise_offline_workspaces
+
     payload = load_path_payload(str(map_path))
     app = App()
-    callback_errors: list[str] = []
-
-    def record_callback_error(
-        exc_type: type[BaseException],
-        exc: BaseException,
-        traceback: TracebackType | None,
-    ) -> None:
-        callback_errors.append(
-            "".join(format_exception(exc_type, exc, traceback)).rstrip()
-        )
-
-    app.report_callback_exception = record_callback_error
     app.withdraw()
-    try:
-        _exercise_dialog(
-            app, getattr(app, "profile_settings_button").invoke, "提取设置"
-        )
-        _exercise_dialog(
-            app, lambda: getattr(app, "data_tools_menu").invoke("键盘速查"), "键盘速查"
-        )
-        app._on_loaded(
-            payload.active,
-            payload.commands,
-            payload.recipes,
-            payload.resolver,
-            payload.views,
-            payload.campaign_path,
-        )
-        visited: list[str] = []
-        for label in app.editor_tab_labels:
-            app.tabs.set(label)
-            app.update_idletasks()
-            if app.tabs.get() != label:
-                raise GuiAcceptanceError(label)
-            visited.append(label)
-        app.update()
-        query_detail = _exercise_queries(app) if pack_path else ""
-        from .gui_topbar import _open_guide_window
-        from .guide_report import format_guide_report
-
-        previous = set(app.winfo_children())
-        _open_guide_window(app, format_guide_report(payload.active))
-        app.update()
-        guides = [
-            child
-            for child in app.winfo_children()
-            if child not in previous and child.winfo_toplevel() is child
-        ]
-        if len(guides) != 1:
-            raise RuntimeError("攻略速查窗口没有正常打开")
-        if campaign_path:
-            campaign = load_path_payload(str(campaign_path))
-            app._on_loaded(
-                campaign.active,
-                campaign.commands,
-                campaign.recipes,
-                campaign.resolver,
-                campaign.views,
-                campaign.campaign_path,
+    with _capture_callbacks(app) as callback_errors:
+        try:
+            _exercise_dialog(
+                app, getattr(app, "profile_settings_button").invoke, "提取设置"
             )
-            if app.current_map_pack_dir() is not None:
-                raise RuntimeError("切换地图后复用了上一张地图的资料包")
-            if not app._campaign_path or not app._campaign_views:
-                raise RuntimeError("GUI 战役载入丢失导航来源")
-            query_detail += "; campaign-current-pack" + _exercise_queries(app)
-        guides[0].destroy()
-        app.update()
+            _exercise_dialog(
+                app,
+                lambda: getattr(app, "data_tools_menu").invoke("键盘速查"),
+                "键盘速查",
+            )
+            offline_detail = exercise_offline_workspaces(app)
+            app._on_loaded(
+                payload.active,
+                payload.commands,
+                payload.recipes,
+                payload.resolver,
+                payload.views,
+                payload.campaign_path,
+            )
+            visited: list[str] = []
+            for label in app.editor_tab_labels:
+                app.tabs.set(label)
+                app.update_idletasks()
+                if app.tabs.get() != label:
+                    raise GuiAcceptanceError(label)
+                visited.append(label)
+            app.update()
+            query_detail = _exercise_queries(app) if pack_path else ""
+            from .gui_topbar import _open_guide_window
+            from .guide_report import format_guide_report
+
+            previous = set(app.winfo_children())
+            _open_guide_window(app, format_guide_report(payload.active))
+            app.update()
+            guides = [
+                child
+                for child in app.winfo_children()
+                if child not in previous and child.winfo_toplevel() is child
+            ]
+            if len(guides) != 1:
+                raise RuntimeError("攻略速查窗口没有正常打开")
+            if campaign_path:
+                campaign = load_path_payload(str(campaign_path))
+                app._on_loaded(
+                    campaign.active,
+                    campaign.commands,
+                    campaign.recipes,
+                    campaign.resolver,
+                    campaign.views,
+                    campaign.campaign_path,
+                )
+                if app.current_map_pack_dir() is not None:
+                    raise RuntimeError("切换地图后复用了上一张地图的资料包")
+                if not app._campaign_path or not app._campaign_views:
+                    raise RuntimeError("GUI 战役载入丢失导航来源")
+                query_detail += "; campaign-current-pack" + _exercise_queries(app)
+            guides[0].destroy()
+            app.update()
+            detail = (
+                f"loaded={payload.active.name}; tabs={len(visited)}; "
+                f"{','.join(visited)}{query_detail}; guide-open-close; "
+                f"settings-hotkeys-open-close; {offline_detail}"
+            )
+        finally:
+            try:
+                _destroy_without_persisting(app)
+                # Keep this interpreter's background-error capture alive through
+                # parent teardown; the packaged runner uses this exact path.
+                deadline = monotonic() + 0.35
+                while monotonic() < deadline:
+                    app.tk.call("update", "idletasks")
+                    app.tk.call("update")
+                    sleep(0.01)
+            finally:
+                payload.active.close()
+                for _name, md in payload.views or ():
+                    md.close()
         if callback_errors:
             raise RuntimeError("GUI 回调异常: " + "; ".join(callback_errors))
-        return (
-            f"loaded={payload.active.name}; tabs={len(visited)}; "
-            f"{','.join(visited)}{query_detail}; guide-open-close; settings-hotkeys-open-close"
-        )
-    finally:
-        try:
-            _destroy_without_persisting(app)
-        finally:
-            payload.active.close()
-            for _name, md in payload.views or ():
-                md.close()
+    return detail
 
 
 def _exercise_dialog(app: App, opener: Callable[[], object], label: str) -> None:

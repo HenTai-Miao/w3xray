@@ -128,27 +128,26 @@ class ExternalDataToolsMixin:
             self.data_tools_button.configure(text=text)
 
     def on_analyze_real_save_file(self) -> None:
-        if not self._need_map():
-            return
         path = filedialog.askopenfilename(
             title="选择真实存档文件", filetypes=[("所有文件", "*.*")]
         )
         if path:
-            self._start_real_save_analysis(path)
+            from .gui_save_workspace import open_save_workspace
+
+            _ = open_save_workspace(self, initial_path=path, map_data=self.map_data)
 
     def on_analyze_real_save_directory(self) -> None:
-        if not self._need_map():
-            return
         path = filedialog.askdirectory(title="选择真实存档目录")
         if path:
-            self._start_real_save_analysis(path)
+            from .gui_save_workspace import open_save_workspace
+
+            _ = open_save_workspace(self, initial_path=path, map_data=self.map_data)
 
     def _start_real_save_analysis(self, path: str) -> None:
         md = self.map_data
-        if md is None:
-            self.status.configure(text="先打开地图再分析存档")
-            return
-        out = tmp_extract_dir(md.name, "真实存档分析", clean=True)
+        out = tmp_extract_dir(
+            md.name if md is not None else Path(path).name, "真实存档分析", clean=True
+        )
         self.status.configure(text="正在只读分析真实存档 …")
 
         def work(ticket: GuiWorkerTicket) -> None:
@@ -163,10 +162,16 @@ class ExternalDataToolsMixin:
                     count += write_text(
                         out, "真实存档警告.txt", "\n".join(report.warnings) + "\n"
                     )
-                _ = self._post_gui_worker(
-                    ticket,
-                    lambda: self._open_dir(out, count, "存档分析文件"),
-                )
+
+                def deliver() -> None:
+                    self.status.configure(
+                        text="真实存档分析完整"
+                        if report.complete
+                        else "真实存档分析未完成；已保存确认记录与完整诊断"
+                    )
+                    self._open_dir(out, count, "存档分析文件")
+
+                _ = self._post_gui_worker(ticket, deliver)
             except (
                 Exception
             ) as exc:  # BROAD_EXCEPT_OK - GUI worker boundary reports failures.
@@ -176,4 +181,7 @@ class ExternalDataToolsMixin:
                     lambda: messagebox.showerror("存档分析失败", message),
                 )
 
-        _ = self._start_gui_map_worker("real-save-analysis", md, work, replace=True)
+        if md is not None:
+            _ = self._start_gui_map_worker("real-save-analysis", md, work, replace=True)
+        else:
+            _ = self._start_gui_worker("real-save-analysis", work, replace=True)

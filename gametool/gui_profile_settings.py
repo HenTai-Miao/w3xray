@@ -24,6 +24,12 @@ from .theme import BG, BORDER, CARD, FONT, PANEL, SUBTLE, TEXT, TITLE_FONT
 class ExtractionProfileDialog(ctk.CTkToplevel):
     """提取开关设置窗口; 保存后立即生效于下次导出。"""
 
+    def destroy(self) -> None:
+        from .gui_tk_callbacks import cancel_widget_callbacks
+
+        cancel_widget_callbacks(self)
+        super().destroy()
+
     def __init__(self, master) -> None:
         super().__init__(master)
         self.title("提取设置")

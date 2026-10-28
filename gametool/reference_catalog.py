@@ -14,6 +14,7 @@ import json
 from pathlib import Path
 
 from . import base_names, base_objects, field_meta, fields, live_handle_chain
+from .local_id_tables import LocalIdTablePath, LocalIdTableSources
 from .object_codes import valid_object_code
 from .live_profile_validation import (
     ProfileSupport,
@@ -578,11 +579,13 @@ def load_reference_catalog(
     pack_dir: str | Path | None = None,
     *,
     profile_json: str | Path | None = None,
+    id_tables: Iterable[LocalIdTablePath] = (),
 ) -> ReferenceCatalog:
     """Load all committed definitions plus every confirmed optional pack record.
 
-    A new invocation re-reads all pack bytes. The field table is parsed once per
-    scope and indexed for all categories by the shared object catalog loader.
+    A new invocation re-reads all pack and external ID-table bytes. External
+    labels are appended independently and never supply map/base definitions.
+    The field table is parsed once per scope by the shared object catalog loader.
     """
     builtin_sources, source_diagnostics = _builtin_sources()
     sources = list(builtin_sources)
@@ -593,6 +596,7 @@ def load_reference_catalog(
     diagnostics = list(source_diagnostics)
     roots: tuple[str, ...] = ()
     adapter = PackReferenceSources()
+    local_ids = LocalIdTableSources(id_tables)
     if pack_dir is not None:
         root = Path(pack_dir).absolute()
         scopes, scope_notes = reference_pack_scopes(root)
@@ -629,6 +633,18 @@ def load_reference_catalog(
     )
     if profile_json is not None:
         versions += (_external_profile(Path(profile_json).absolute(), adapter),)
+    for external in local_ids.records:
+        previous = objects.get((external.category, external.id))
+        if previous is not None and previous.label != external.label:
+            external = replace(
+                external,
+                diagnostics=(
+                    *external.diagnostics,
+                    f"与 {previous.scope} 的同类别同ID名称 {previous.label!r} 不同；"
+                    "外部标签单独保留，未覆盖或继承该对象的任何定义。",
+                ),
+            )
+        extra_objects.append(external)
     records = (
         *objects.values(),
         *extra_objects,
@@ -638,12 +654,15 @@ def load_reference_catalog(
     adapter.verify()
     diagnostics.extend(_verify_builtin_sources(builtin_sources))
     diagnostics.extend(adapter.diagnostics)
+    local_ids.verify()
+    diagnostics.extend(local_ids.diagnostics)
     sources.extend(adapter.sources.values())
+    sources.extend(local_ids.sources.values())
     return ReferenceCatalog(
         records,
         tuple(sources),
         tuple(diagnostics),
-        roots,
+        tuple(dict.fromkeys((*roots, *local_ids.input_roots))),
     )
 
 
@@ -664,7 +683,20 @@ def search_reference_catalog(
         raise ValueError("kind 需要 all/objects/fields/versions")
     category = object_category(category) if category else ""
     expression = compile_query(query)
-    diagnostics = list(catalog.diagnostics)
+    diagnostics = list(
+        _unique(
+            (
+                *catalog.diagnostics,
+                *(
+                    f"{record.kind} {record.category or '未分类'}:{record.id} "
+                    f"[{record.scope}]: {note}"
+                    for record in catalog.records
+                    if record.kind == "objects"
+                    for note in record.diagnostics
+                ),
+            )
+        )
+    )
     recovery: list[str] = []
     matches: list[ReferenceRecord] = []
     by_source = {item.id: item for item in catalog.sources}

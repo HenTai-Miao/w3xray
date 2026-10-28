@@ -11,15 +11,18 @@
 from __future__ import annotations
 
 import re
+import json
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 from .extraction_diagnostics import (
-    ComponentParseError,
     read_component,
     DiagnosticTarget,
     record_component_parse_issue,
 )
-from .slk import parse_slk
+from .object_codes import valid_object_code
+from .slk_evidence import SlkEvidence, parse_slk_evidence
+from .slk_evidence_models import SlkDiagnostic
 from .war3_encoding import decode_warcraft_string
 
 
@@ -52,6 +55,28 @@ SLK_CATEGORY_FILES = {
 
 # SLK 文件在 MPQ 里可能裸放或在 Units\ / Doodads\ 下（不区分大小写）。
 _PREFIXES = ["", "Units\\", "Doodads\\"]
+
+_CATEGORY_KEY_HEADERS = {
+    "技能": {"abilityid"},
+    "物品": {"itemid"},
+    "增益": {"buffid"},
+    "可破坏物": {"destructableid"},
+    "科技": {"upgradeid"},
+    "装饰物": {"doodid"},
+    "单位": {"unitid"},
+}
+_COMMON_KEY_HEADERS = {"id", "code", "alias"}
+
+
+@dataclass(frozen=True, slots=True)
+class SlkSourceEvidence:
+    """A declared archive/category binding plus its complete source evidence."""
+
+    source: str
+    category: str
+    table: SlkEvidence
+    identity_confirmed: bool
+
 
 # 常用 SLK 列名（无等级后缀）→ 中文标签。带等级后缀的列(Cast2/BuffID1…)交给 SLK_BASE_LABELS。
 SLK_COL_LABELS = {
@@ -151,28 +176,86 @@ def _find_name(archive: SlkArchive, name: str) -> str | None:
 
 def _read_text(
     archive: SlkArchive, name: str, md: DiagnosticTarget | None = None
-) -> tuple[str, str] | None:
+) -> tuple[str, str, bytes] | None:
     """在 MPQ 里找并读出该 SLK 文本；找不到/解码失败返回 None。"""
     fn = _find_name(archive, name)
     if fn is None:
         return None
+
+    def read() -> tuple[str, str, bytes]:
+        payload = archive.read_file(fn)
+        return fn, decode_warcraft_string(payload), payload
+
     if md is not None:
-        text = read_component(
-            md,
-            "slk",
-            fn,
-            lambda: decode_warcraft_string(archive.read_file(fn)),
-        )
-        return (fn, text) if text is not None else None
+        return read_component(md, "slk", fn, read)
     try:
-        return fn, decode_warcraft_string(archive.read_file(fn))
+        return read()
     except KeyError, OSError, UnicodeError, ValueError:
         return None
 
 
 def _looks_like_code(key: str) -> bool:
-    """对象码恒为 4 字符可见 ASCII；剔除表头/占位等非对象行键。"""
-    return len(key) == 4 and all(0x20 <= ord(c) < 0x7F for c in key)
+    """Use the shared case-sensitive four-byte Latin-1 identity boundary."""
+    return valid_object_code(key)
+
+
+def parse_category_evidence(
+    archive: SlkArchive,
+    category: str,
+    *,
+    md: DiagnosticTarget | None = None,
+) -> tuple[SlkSourceEvidence, ...]:
+    """Read every present category file, retaining raw bytes and source issues.
+
+    A malformed source remains inspectable and cannot bind guessed object IDs.
+    ``md`` receives every issue with complete escaped raw records and offsets.
+    """
+    result: list[SlkSourceEvidence] = []
+    for name in SLK_CATEGORY_FILES.get(category, []):
+        source_text = _read_text(archive, name, md)
+        if source_text is None:
+            continue
+        source, text, payload = source_text
+        table = parse_slk_evidence(text, raw_bytes=payload)
+        header = next(
+            (column.name for column in table.columns if column.number == 1), None
+        )
+        allowed = _COMMON_KEY_HEADERS | _CATEGORY_KEY_HEADERS.get(category, set())
+        identity_confirmed = (
+            not any(issue.code == "missing_id" for issue in table.diagnostics)
+            and header is not None
+            and header.casefold() in allowed
+        )
+        issues = list(table.diagnostics)
+        if header is not None and header.casefold() not in allowed:
+            issues.append(
+                SlkDiagnostic(
+                    "unsupported_key_header",
+                    f"{category} object table has no declared object-ID key role: {header!r}",
+                    cell_indexes=tuple(range(len(table.cells))),
+                    conflict=True,
+                )
+            )
+        for row in table.rows:
+            if row.key is not None and not _looks_like_code(row.key):
+                issues.append(
+                    SlkDiagnostic(
+                        "invalid_object_id",
+                        "declared object identity is not four-byte Latin-1",
+                        cell_indexes=row.cell_indexes,
+                        conflict=True,
+                    )
+                )
+        table = replace(table, diagnostics=tuple(issues))
+        if md is not None:
+            for issue in issues:
+                detail = json.loads(table.diagnostic_text(issue))
+                detail["category"] = category
+                record_component_parse_issue(
+                    md, "slk", source, json.dumps(detail, ensure_ascii=True)
+                )
+        result.append(SlkSourceEvidence(source, category, table, identity_confirmed))
+    return tuple(result)
 
 
 def parse_category_objects(
@@ -186,35 +269,99 @@ def parse_category_objects(
     单位类跨 UnitData/UnitBalance/UnitUI/UnitWeapons/UnitAbilities 合并同码行。
     某文件缺失/解析失败时跳过该文件（不拖垮整类）。
     """
-    files = SLK_CATEGORY_FILES.get(category, [])
+    sources = parse_category_evidence(archive, category, md=md)
     merged: dict[str, dict[str, str]] = {}
-    for fn in files:
-        source_text = _read_text(archive, fn, md)
-        if source_text is None:
+    values: dict[tuple[str, str], list[tuple[SlkSourceEvidence, str, str]]] = {}
+    blocked: set[tuple[str, str]] = set()
+    origins: (
+        dict[tuple[str, str], list[tuple[SlkSourceEvidence, tuple[int, ...]]]] | None
+    ) = None
+    for source in sources:
+        if not source.identity_confirmed:
             continue
-        source, text = source_text
-        if md is not None:
-            parsed = read_component(
-                md, "slk", source, lambda: _parse_slk_component(text), stage="parse"
-            )
-            if parsed is None:
-                continue
-            rows = parsed
-        else:
-            rows = parse_slk(text)
-        if md is not None and text.rstrip().splitlines()[-1].strip() != "E":
-            record_component_parse_issue(md, "slk", source, "missing SLK terminator")
-        for code, row in rows.items():
+        blocked.update(source.table.blocked_fields)
+        for row in source.table.objects:
+            code = row.key
             if not _looks_like_code(code):
                 continue
-            merged.setdefault(code, {}).update(row)
+            merged.setdefault(code, {})
+            kinds = dict(row.value_kinds)
+            for name, value in row.fields:
+                values.setdefault((code, name), []).append((source, value, kinds[name]))
+    for identity, evidence in values.items():
+        code, name = identity
+        unique = {(value, kind) for _source, value, kind in evidence}
+        if len(unique) == 1 and identity not in blocked:
+            merged[code][name] = next(iter(unique))[0]
+            continue
+        if md is not None:
+            if origins is None:
+                origins = _field_origins(sources)
+            _record_merge_conflict(md, category, code, name, origins.get(identity, []))
     return merged
 
 
-def _parse_slk_component(text: str) -> dict[str, dict[str, str]]:
-    if not text.lstrip().startswith("ID;"):
-        raise ComponentParseError("missing SLK ID header")
-    return parse_slk(text)
+def _field_origins(
+    sources: tuple[SlkSourceEvidence, ...],
+) -> dict[tuple[str, str], list[tuple[SlkSourceEvidence, tuple[int, ...]]]]:
+    """Index every field origin once, rather than rescanning all rows per issue."""
+    result: dict[tuple[str, str], list[tuple[SlkSourceEvidence, tuple[int, ...]]]] = {}
+    for source in sources:
+        if not source.identity_confirmed:
+            continue
+        table = source.table
+        columns = {column.number: column for column in table.columns}
+        grouped: dict[tuple[str, str], dict[int, None]] = {}
+        for row in table.rows:
+            if row.key is None:
+                continue
+            key_indexes = tuple(
+                index for index in row.cell_indexes if table.cells[index].x == 1
+            )
+            for index in row.cell_indexes:
+                cell = table.cells[index]
+                column = columns.get(cell.x) if cell.x is not None else None
+                if column is None or cell.x == 1:
+                    continue
+                for name in column.candidate_names:
+                    indexes = grouped.setdefault((row.key, name), {})
+                    indexes.update(
+                        dict.fromkeys((*column.cell_indexes, *key_indexes, index))
+                    )
+        for identity, indexes in grouped.items():
+            result.setdefault(identity, []).append((source, tuple(indexes)))
+    return result
+
+
+def _record_merge_conflict(
+    md: DiagnosticTarget,
+    category: str,
+    code: str,
+    name: str,
+    evidence: list[tuple[SlkSourceEvidence, tuple[int, ...]]],
+) -> None:
+    origins: list[dict[str, object]] = []
+    names: list[str] = []
+    for source, indexes in evidence:
+        table = source.table
+        issue = SlkDiagnostic("source_field_evidence", "", cell_indexes=indexes)
+        origins.append(
+            {
+                "source": source.source,
+                "evidence": json.loads(table.diagnostic_text(issue)),
+            }
+        )
+        names.append(source.source)
+    detail = {
+        "code": "cross_source_field_conflict",
+        "category": category,
+        "object_id": code,
+        "field": name,
+        "sources": origins,
+    }
+    record_component_parse_issue(
+        md, "slk", " | ".join(names), json.dumps(detail, ensure_ascii=True)
+    )
 
 
 def has_any_slk_objects(archive: SlkArchive) -> bool:

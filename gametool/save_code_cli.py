@@ -2,19 +2,20 @@
 
 用法: uv run main.py savecodes <知识包目录> [--limit N]
 
-扫描全部命名 .j/.lua/.txt/.pld 文本, 用保留偏移的脚本视图提取载体与候选。
+扫描全部命名 .j/.lua/.txt/.pld/.log 文本，也可指定一个文本文件或 --text/--stdin。
 只读文本, 绝不执行任何内容。--json 保留完整原文、编码、偏移和来源哈希。
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
 import sys
 
-from gametool.bounded_file import read_bounded_regular_file
+from gametool.bounded_file import read_bounded_regular_file, sha256_regular_file
 from gametool.pack_query_options import parse_query_limit
 from gametool.save_codes import (
     decode_save_text,
@@ -43,19 +44,36 @@ def _iter_text_files(
 ) -> list[tuple[str, str]]:
     """Every named script/text carrier below the pack, without following links."""
     root = Path(pack_dir)
+    directory = root.is_dir()
     files, notes = iter_save_source_files(
-        root, suffixes=frozenset({".j", ".lua", ".txt", ".pld"})
+        root,
+        suffixes=frozenset({".j", ".lua", ".txt", ".pld", ".log"})
+        if directory
+        else None,
     )
     if diagnostics is not None:
         diagnostics.extend(notes)
-    return [(os.path.relpath(path, root), str(path)) for path in files]
+    base = root if directory else root.parent
+    return [(os.path.relpath(path, base), str(path)) for path in files]
 
 
 def run_save_code_cli(argv: tuple[str, ...]) -> int:
     parser = argparse.ArgumentParser(
-        prog="savecodes", description="从知识包文本载体提取存/读码模板"
+        prog="savecodes",
+        description="从本地目录、文本文件或明确提供的文本提取存/读码候选",
     )
-    parser.add_argument("pack", help="导出知识包目录 (含 脚本可读文本/)")
+    parser.add_argument(
+        "pack", nargs="?", help="知识包/存档目录或单个文本文件（含 .log）"
+    )
+    inline = parser.add_mutually_exclusive_group()
+    inline.add_argument(
+        "--text", help="直接分析明确提供的文本；语言保持未知，不执行内容"
+    )
+    inline.add_argument(
+        "--stdin",
+        action="store_true",
+        help="明确请求从标准输入读取完整字节；不会默认等待输入",
+    )
     parser.add_argument(
         "--limit",
         type=parse_query_limit,
@@ -67,27 +85,52 @@ def run_save_code_cli(argv: tuple[str, ...]) -> int:
     )
     args = parser.parse_args(argv)
     pack = args.pack
-    if not os.path.isdir(pack):
-        print(f"包目录不存在: {pack}", file=sys.stderr)
-        return 2
+    if (pack is not None) == (args.text is not None or args.stdin):
+        parser.error("请指定一个目录/文件，或使用 --text/--stdin；三种来源只能选择一种")
     found = []
     carriers = []
     diagnostics: list[str] = []
-    identities: list[tuple[str, str, os.stat_result]] = []
+    identities: list[tuple[str, str, os.stat_result, str]] = []
     scanned = 0
-    for rel, full in _iter_text_files(pack, diagnostics):
+    if pack is not None:
+        sources: list[tuple[str, str | None, bytes | None]] = [
+            (rel, full, None) for rel, full in _iter_text_files(pack, diagnostics)
+        ]
+        if not sources and not diagnostics:
+            diagnostics.append(
+                "来源中没有可读取的命名文本文件；可指定存档文本文件或包含 .log/.txt/.pld/.j/.lua 的目录。"
+            )
+    else:
+        if args.text is not None:
+            inline_bytes = args.text.encode("utf-8")
+            source_label = "<text>"
+        else:
+            stream = getattr(sys.stdin, "buffer", sys.stdin)
+            content = stream.read()
+            inline_bytes = (
+                content.encode("utf-8") if isinstance(content, str) else content
+            )
+            source_label = "<stdin>"
+        sources = [(source_label, None, inline_bytes)]
+    for rel, full, inline_payload in sources:
         try:
-            problem = save_source_path_error(Path(full))
-            if problem:
-                diagnostics.append(problem)
-                continue
-            before = os.lstat(full)
-            payload, _identity = read_bounded_regular_file(Path(full))
+            if full is not None:
+                problem = save_source_path_error(Path(full))
+                if problem:
+                    diagnostics.append(problem)
+                    continue
+                before = os.lstat(full)
+                payload, _identity = read_bounded_regular_file(Path(full))
+                identities.append(
+                    (rel, full, before, hashlib.sha256(payload).hexdigest())
+                )
+            else:
+                assert inline_payload is not None
+                payload = inline_payload
         except OSError as exc:
             diagnostics.append(f"{rel}: {exc}")
             continue
         scanned += 1
-        identities.append((rel, full, before))
         decoded = decode_save_text(payload)
         if decoded is None:
             diagnostics.append(f"{rel}: 未识别完整文本编码；未替换或丢失源字节")
@@ -109,12 +152,15 @@ def run_save_code_cli(argv: tuple[str, ...]) -> int:
         for sc in hits:
             found.append((rel, sc))
     unstable: set[str] = set()
-    for rel, full, before in identities:
+    for rel, full, before, expected_sha in identities:
         try:
             after = os.lstat(full)
             changed = bool(save_source_path_error(Path(full))) or _stat_identity(
                 before
             ) != _stat_identity(after)
+            if not changed:
+                actual_sha, _identity = sha256_regular_file(Path(full))
+                changed = actual_sha != expected_sha
         except OSError:
             changed = True
         if changed:
@@ -127,6 +173,14 @@ def run_save_code_cli(argv: tuple[str, ...]) -> int:
         for carrier in carriers
         for note in carrier.diagnostics
     )
+    if pack is not None:
+        after_diagnostics: list[str] = []
+        after_sources = _iter_text_files(pack, after_diagnostics)
+        if [(rel, full) for rel, full, _payload in sources] != after_sources:
+            diagnostics.append("来源文本文件清单在分析期间改变；请刷新后重试。")
+        diagnostics.extend(
+            note for note in after_diagnostics if note not in diagnostics
+        )
     shown = found[: args.limit] if args.limit else found
     if args.json:
         print(

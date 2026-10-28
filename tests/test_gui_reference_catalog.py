@@ -17,6 +17,7 @@ from gametool.reference_models import (
     ReferenceSource,
     ReferenceValue,
 )
+from tests.gui_base import GuiTestCase, _get_app
 
 
 def _catalog(count: int = 1) -> ReferenceCatalog:
@@ -39,11 +40,28 @@ def _catalog(count: int = 1) -> ReferenceCatalog:
 
 @pytest.fixture
 def root(monkeypatch):
-    parent = tk.Tk()
+    # Reuse the suite's Tcl interpreter, including CTk's cached images and
+    # appearance/scaling timers. Only this fixture's new windows are retired.
+    from gametool.gui_offline_acceptance import _capture_callbacks
+
+    parent = _get_app()
+    baseline = GuiTestCase()
+    baseline.app = parent
+    baseline.setUp()
+    previous = set(parent.winfo_children())
+    previous_state = parent.state()
     parent.withdraw()
     monkeypatch.setattr(gui, "_SESSION", {})
-    yield parent
-    parent.destroy()
+    with _capture_callbacks(parent) as errors:
+        try:
+            yield parent
+        finally:
+            for child in parent.winfo_children():
+                if child not in previous and isinstance(child, tk.Toplevel):
+                    child.destroy()
+            parent.update()
+            parent.state(previous_state)
+            assert errors == []
 
 
 def _pump(parent, condition, *, seconds=30):
@@ -200,6 +218,133 @@ def test_export_writes_full_filter_result_in_background(root, monkeypatch, tmp_p
     assert payload["diagnostics"] == ["synthetic incomplete source diagnostic"]
     assert payload["omitted"] == 0
     window.destroy()
+
+
+@pytest.mark.parametrize("export_terminal", ("success", "error"))
+@pytest.mark.parametrize("query_phase", ("loading", "finished"))
+def test_new_query_rejects_old_export_worker_and_completion(
+    root, monkeypatch, tmp_path, export_terminal, query_phase
+):
+    catalog = _catalog(2)
+    query_entered, query_release = threading.Event(), threading.Event()
+    export_entered, export_release = threading.Event(), threading.Event()
+    loads = []
+    exported_results = []
+    export_threads = []
+    completions = []
+    dialogs = []
+    original_write = gui.write_reference_export
+
+    def load(_pack, **_kwargs):
+        loads.append(threading.get_ident())
+        if len(loads) > 1:
+            query_entered.set()
+            assert query_release.wait(30), "new query was not released"
+        return catalog
+
+    def write(path, result):
+        exported_results.append(result)
+        export_threads.append(threading.get_ident())
+        export_entered.set()
+        assert export_release.wait(30), "old export was not released"
+        if export_terminal == "error":
+            raise OSError("old synthetic export failure")
+        original_write(path, result)
+
+    monkeypatch.setattr(gui, "load_reference_catalog", load)
+    monkeypatch.setattr(gui, "write_reference_export", write)
+    monkeypatch.setattr(
+        gui.messagebox,
+        "showerror",
+        lambda *args, **kwargs: dialogs.append((args, kwargs)),
+    )
+    destination = tmp_path / "old-query.json"
+    monkeypatch.setattr(
+        gui.filedialog, "asksaveasfilename", lambda **_kwargs: str(destination)
+    )
+    window = gui.ReferenceCatalogWindow(root)
+    original_post = window._post_gui_worker
+
+    def observe_post(ticket, callback, **kwargs):
+        if ticket.group == "reference-export":
+            # Retain the actual success/error closure. Replaying it through Tk
+            # also covers a completion already handed off before cancellation.
+            completions.append(callback)
+        return original_post(ticket, callback, **kwargs)
+
+    monkeypatch.setattr(window, "_post_gui_worker", observe_post)
+    try:
+        _pump(root, lambda: window._result is not None and bool(window._detail_content))
+        old_result = window._result
+        window._export_button.invoke()
+        _pump(root, export_entered.is_set)
+        export_ticket = next(
+            worker.ticket
+            for worker in window._gui_workers._workers.values()
+            if worker.ticket.group == "reference-export"
+        )
+        assert exported_results == [old_result]
+        assert export_threads != [threading.get_ident()]
+        window._query_entry.insert(0, "单位 1")
+        window._run_button.invoke()
+        _pump(root, query_entered.is_set)
+        assert export_ticket.cancellation.is_set()
+        assert window._busy
+        assert window._result is old_result
+        assert window._export_button.cget("state") == "disabled"
+
+        if query_phase == "finished":
+            query_release.set()
+            _pump(
+                root,
+                lambda: (
+                    not window._busy
+                    and window._result is not old_result
+                    and "[0001]" in window._detail_content
+                ),
+            )
+            assert window._result is not None
+            assert window._result.query == "单位 1"
+            assert window._list.size() == 1
+        expected_status = window._status.cget("text")
+        expected_detail = window._detail_content
+        expected_export_state = window._export_button.cget("state")
+        export_release.set()
+        _pump(
+            root,
+            lambda: (
+                bool(completions)
+                and not any(
+                    worker.ticket.group == "reference-export"
+                    for worker in window._gui_workers._workers.values()
+                )
+            ),
+        )
+        assert window._status.cget("text") == expected_status
+        assert window._export_button.cget("state") == expected_export_state
+        assert dialogs == []
+        root.after_idle(completions[0])
+        root.update()
+        assert window._status.cget("text") == expected_status
+        assert window._export_button.cget("state") == expected_export_state
+        assert window._detail_content == expected_detail
+        assert dialogs == []
+        if export_terminal == "success":
+            payload = json.loads(destination.read_text(encoding="utf-8"))
+            assert [record["id"] for record in payload["records"]] == ["0000", "0001"]
+            assert payload["query"] == ""
+        else:
+            assert not destination.exists()
+        query_release.set()
+        _pump(root, lambda: not window._busy)
+        assert window._result is not None
+        assert window._result.query == "单位 1"
+        assert window._export_button.cget("state") == "normal"
+    finally:
+        query_release.set()
+        export_release.set()
+        _pump(root, lambda: not window._gui_workers._workers)
+        window.destroy()
 
 
 @pytest.mark.parametrize("terminal", ["empty", "error"])

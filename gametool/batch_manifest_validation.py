@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
 from typing import Final
 
@@ -25,6 +26,7 @@ from .batch_manifest_models import (
 from .batch_models import MapBatchResult
 from .batch_report_validation import validate_report_summaries
 from .bounded_file import read_bounded_regular_file
+from .windows_output_paths import native_output_path
 
 
 _MAX_MANIFEST_BYTES: Final[int | None] = None
@@ -38,7 +40,7 @@ def build_map_manifest(
     transaction_id: str,
 ) -> MapContentManifest:
     """Hash every staged artifact in bounded chunks and freeze its inventory."""
-    artifacts = _inventory(stage)
+    artifacts = _inventory(_io_path(stage))
     return MapContentManifest(
         schema_version=MANIFEST_SCHEMA_VERSION,
         transaction_id=transaction_id,
@@ -97,6 +99,7 @@ def verify_map_publication(
     """Re-read ownership, manifest, files, and report summaries for reuse."""
     if not requested_reports <= _REPORT_NAMES:
         return _invalid("invalid_report_request")
+    directory = _io_path(directory)
     if directory.is_symlink() or not directory.is_dir():
         return _invalid("unsafe_directory")
     marker_path = directory / OWNERSHIP_MARKER_NAME
@@ -161,6 +164,13 @@ def _inventory(root: Path) -> tuple[ManifestArtifact, ...]:
         return build_artifact_inventory(root)
     except ManifestInventoryError as exc:
         raise ValueError(exc.detail or exc.code) from exc
+
+
+def _io_path(path: Path) -> Path:
+    """Use the same physical paths for native Windows manifest reads."""
+    if os.name != "nt":
+        return path
+    return Path(native_output_path(os.path.abspath(path)))
 
 
 def _matches_expected(

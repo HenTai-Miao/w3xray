@@ -118,6 +118,13 @@ def build_topbar(app) -> None:
     )
     app.data_tools_menu.add_separator()
     app.data_tools_menu.add_command(
+        label="离线存档工作台", command=lambda: _open_save_workspace(app)
+    )
+    app.data_tools_menu.add_command(
+        label="检查 / 比较改键方案（离线）",
+        command=lambda: _open_hotkey_config(app),
+    )
+    app.data_tools_menu.add_command(
         label="分析真实存档文件", command=app.on_analyze_real_save_file
     )
     app.data_tools_menu.add_command(
@@ -224,7 +231,8 @@ def build_topbar(app) -> None:
         **secondary_button_style(),
     )
     _attach_tooltip(
-        app.data_tools_button, "本地资料包查询/离线报告/导出/存档分析/键盘速查"
+        app.data_tools_button,
+        "本地资料包/外部ID查询/离线报告/存档工作台/改键方案检查/导出",
     )
     app.data_tools_button.pack(side="left", padx=(0, 4))
     actions = ctk.CTkFrame(bar, fg_color="transparent")
@@ -394,6 +402,20 @@ def _open_local_pack_query(
     except OSError, UnicodeError:
         pass  # fail-open: keep the explicit session binding when disk is read-only.
     return target
+
+
+def _open_save_workspace(app) -> None:
+    """Inspect local saves with optional current-map correlation."""
+    from .gui_save_workspace import open_save_workspace
+
+    open_save_workspace(app, map_data=getattr(app, "map_data", None))
+
+
+def _open_hotkey_config(app) -> None:
+    """Inspect a chosen configuration without running a keyboard engine."""
+    from .gui_hotkey_config import open_hotkey_config_dialog
+
+    open_hotkey_config_dialog(app)
 
 
 def _open_reference_catalog(app) -> None:
@@ -647,19 +669,11 @@ def _open_guide_window(app, text: str) -> None:
             _GUIDE_SCROLL[source_path] = box.index("insert")
         except tk.TclError:
             pass  # Parent teardown may already have destroyed the text widget.
-        # CTkToplevel schedules its titlebar icon on this window without saving
-        # the timer ID. Cancel only callbacks registered by this guide before
-        # Tk deletes those Tcl commands; the app's own queued work stays live.
-        owned_commands = set(getattr(win, "_tclCommands", ()) or ())
-        for after_id in win.tk.splitlist(win.tk.call("after", "info")):
-            try:
-                data = win.tk.call("after", "info", after_id)
-                script = win.tk.splitlist(data)[0]
-                commands = win.tk.splitlist(script)
-                if commands and commands[0] in owned_commands:
-                    win.after_cancel(after_id)
-            except tk.TclError:
-                pass  # A queued callback may already have completed.
+        from .gui_tk_callbacks import cancel_widget_callbacks
+
+        # Include the text widget's scrollbar timers as well as titlebar work;
+        # callbacks registered by the parent app or another window stay live.
+        cancel_widget_callbacks(win)
         destroy_window()
 
     win.destroy = _close_guide
@@ -858,11 +872,26 @@ def _show_hotkeys(app) -> None:
     win = ctk.CTkToplevel(app)
     win.title("键盘速查")
     win.transient(app)
+    destroy_hotkeys = win.destroy
+    closed = False
+
+    def close_hotkeys(_event=None) -> None:
+        nonlocal closed
+        if closed:
+            return
+        closed = True
+        from .gui_tk_callbacks import cancel_widget_callbacks
+
+        cancel_widget_callbacks(win)
+        destroy_hotkeys()
+
+    win.destroy = close_hotkeys
+    win.protocol("WM_DELETE_WINDOW", close_hotkeys)
     from gametool.gui_pack_query import bind_geometry_memory
 
     bind_geometry_memory(win, "gui-hotkeys", "520x360")
     win.grab_set()
-    win.bind("<Escape>", lambda _e: win.destroy())
+    win.bind("<Escape>", close_hotkeys)
     rows = (
         (
             "Ctrl+1..9, Ctrl+0",

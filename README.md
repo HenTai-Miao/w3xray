@@ -14,7 +14,7 @@ GUI触发器、场景放置、触发指令、合成配方、孤立对象、分�
 
 > 用途：研究地图、学习地图制作。不含改存档 / 过反作弊 / 开图等作弊功能。
 
-## 0.7.0 使用入口
+## 0.8.0 使用入口
 
 日常使用直接运行 Windows 发行目录里的 `GameXRay 游戏档案透视器.exe`，保留同目录的
 `_internal` 文件夹。无需安装 Python，也无需先运行测试或开发工具。
@@ -31,19 +31,22 @@ GUI触发器、场景放置、触发指令、合成配方、孤立对象、分�
 源码运行统一使用 `uv run gamexray`，或 `uv run python -m gametool`；原来的
 `uv run main.py` 仍可用。各模式均支持 `--help`，总览运行 `uv run gamexray --help`。
 选中集合、字段证据、离线报告比较、字段与版本目录的完整步骤见
-[0.7.0 只读工作台使用说明](docs/usable-release-0.7.0.md)。
+[0.8.0 离线资料与存档工作台使用说明](docs/usable-release-0.8.0.md)。
 地图导出和已有查询的操作说明另见 [0.6.2 使用与验收说明](docs/usable-release-0.6.2.md)。
 
 六个外部 Warcraft III 工具的功能、读取与修改调用链、版本、数据目录及逐项适配结论，
 见 [2026-10-27 静态审计](docs/analysis/war3-tools-audit-2026-10-27.md)。
-该审计固定于 0.6.2 源码基线；0.7.0 的具体落地范围见上述使用说明，未验证的运行时布局仍单列状态。
+该审计固定于 0.6.2 源码基线；加入存档盒子后的七工具复核与本次落地范围见
+[2026-10-28 审计与实施对照](docs/analysis/war3-tools-adoption-2026-10-28.md)。
+当前版本可导入用户本地的盒子兼容 ID 文本、无地图分析存档，以及离线检查和比较改键方案。
+未验证的运行时布局仍单列状态。
 
 ## Windows 发行包
 
 Windows x64 同时提供：
 
-- `gamexray-v0.7.0-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
-- `gamexray-v0.7.0-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
+- `gamexray-v0.8.0-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
+- `gamexray-v0.8.0-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
 
 两者功能相同；遇到杀软误报或启动问题时优先使用 ZIP 版。
 
@@ -57,8 +60,11 @@ uv run main.py live <地图路径> --report <新的JSON文件>  # 保存完整�
 uv run main.py live-report diff <旧报告.json> <新报告.json> --json  # 离线比较
 uv run main.py reference --kind versions --json         # 档案支持与来源
 uv run main.py reference --pack <资料包> --kind fields   # 字段说明与完整证据
+uv run main.py reference --id-table <盒子兼容ID目录> --kind objects --json  # 外部ID来源
+uv run main.py hotkeys inspect <config.json> --json    # 离线配置诊断
+uv run main.py hotkeys diff <旧config.json> <新config.json> --json
 uv run main.py current         # 获取游戏进程正在使用的地图并解析只读快照
-uv run main.py cli <配置.wgc>   # 命令行查看 World Editor AI 测试配置
+uv run main.py wgc <配置.wgc>   # 命令行查看 World Editor AI 测试配置
 uv run main.py casc --help      # CASC Root 全量清单 / 单文件导出
 uv run main.py save --help      # 真实存档文件只读证据分析
 uv run main.py acceptance --help # 源码或打包 EXE 验收并生成 JSON

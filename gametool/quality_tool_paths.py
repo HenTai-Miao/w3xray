@@ -235,6 +235,7 @@ gametool/gui_data_tabs.py
 gametool/gui_export_actions.py
 gametool/gui_external_data.py
 gametool/gui_extraction_reports.py
+gametool/gui_hotkey_config.py
 gametool/gui_icon_cache.py
 gametool/gui_icon_evidence_loader.py
 gametool/gui_icon_gap_layout.py
@@ -255,6 +256,7 @@ gametool/gui_module_refresh.py
 gametool/gui_object_detail.py
 gametool/gui_object_filter_runner.py
 gametool/gui_object_text_controls.py
+gametool/gui_offline_acceptance.py
 gametool/gui_pack_query.py
 gametool/gui_pane_state.py
 gametool/gui_profile_settings.py
@@ -263,11 +265,13 @@ gametool/gui_report_tabs.py
 gametool/gui_report_types.py
 gametool/gui_reports.py
 gametool/gui_resource_reports.py
+gametool/gui_save_workspace.py
 gametool/gui_script_mechanics_reports.py
 gametool/gui_shell.py
 gametool/gui_shell_object_panel.py
 gametool/gui_shell_source_panel.py
 gametool/gui_source_browser.py
+gametool/gui_tk_callbacks.py
 gametool/gui_topbar.py
 gametool/gui_trigger_eca.py
 gametool/gui_ui_text_reports.py
@@ -279,6 +283,9 @@ gametool/guide_minimap.py
 gametool/guide_report.py
 gametool/hero_chain.py
 gametool/historical_icon_bindings.py
+gametool/hotkey_config.py
+gametool/hotkey_config_cli.py
+gametool/hotkey_config_models.py
 gametool/huffman.py
 gametool/icon_candidate_bindings.py
 gametool/icon_evidence_builder.py
@@ -347,6 +354,7 @@ gametool/live_report_json.py
 gametool/live_selection.py
 gametool/load_context.py
 gametool/load_options.py
+gametool/local_id_tables.py
 gametool/map_archive_open.py
 gametool/map_archive_reader.py
 gametool/map_components.py
@@ -377,6 +385,7 @@ gametool/object_candidate_values.py
 gametool/object_candidates.py
 gametool/object_codes.py
 gametool/object_detail_presentation.py
+gametool/object_field_roles.py
 gametool/object_field_selection.py
 gametool/object_filter.py
 gametool/object_gallery.py
@@ -452,6 +461,7 @@ gametool/save_code_cli.py
 gametool/save_codes.py
 gametool/save_container.py
 gametool/save_gamecache.py
+gametool/save_report_query.py
 gametool/save_source_paths.py
 gametool/scene_bounds.py
 gametool/script_assignment_index.py
@@ -504,6 +514,10 @@ gametool/script_variable_usage_index.py
 gametool/search.py
 gametool/single_instance.py
 gametool/slk.py
+gametool/slk_evidence.py
+gametool/slk_evidence_candidates.py
+gametool/slk_evidence_models.py
+gametool/slk_evidence_records.py
 gametool/slk_objects.py
 gametool/slkmeta.py
 gametool/static_numbers.py

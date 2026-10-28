@@ -11,6 +11,7 @@ from typing import Final
 from .item_relation_models import ItemRelationKind
 from .map_data import GameObject, GameObjectFieldEvidence, MapData
 from .object_codes import field_object_codes
+from .object_candidate_models import FieldEvidenceState
 
 _FIELD_ROLES: Final[Mapping[str, ItemRelationKind]] = MappingProxyType(
     {
@@ -87,6 +88,8 @@ def relation_field_variants(obj: GameObject) -> tuple[RelationFieldVariant, ...]
                 ),
             )
         )
+        if any(row.state is not FieldEvidenceState.CONFIRMED for row in selected):
+            continue
         conflict = len({row.value for row in selected}) > 1
         variants.extend(RelationFieldVariant(kind, row, conflict) for row in selected)
     return tuple(sorted(variants, key=_relation_field_sort_key))

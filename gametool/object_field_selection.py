@@ -12,7 +12,12 @@ from .icon_field_evidence import (
     classify_icon_field,
     icon_display_priority,
 )
-from .object_candidates import ObjectFieldValue, ObjectSourceKind
+from .object_candidate_models import (
+    FieldEvidenceState,
+    ObjectFieldValue,
+    ObjectSourceKind,
+)
+from .object_field_roles import tech_scalar_key
 
 _DISPLAY_ALIASES: Final[Mapping[str, str]] = {
     "name": "display:name",
@@ -189,7 +194,11 @@ def selected_display_value(
 ) -> str:
     """Return one canonical display value or an empty string when absent."""
     value = selected.get(identity)
-    return "" if value is None else value.value
+    return (
+        ""
+        if value is None or value.state is not FieldEvidenceState.CONFIRMED
+        else value.value
+    )
 
 
 def select_current_icon_fields(
@@ -220,7 +229,16 @@ def select_current_icon_fields(
             category,
         ):
             selected[role] = value
-    return tuple(selected[role] for role in sorted(selected))
+    return tuple(
+        selected[role]
+        for role in sorted(selected)
+        if selected[role].state is FieldEvidenceState.CONFIRMED
+    )
+
+
+def object_field_identity(value: ObjectFieldValue, category: str) -> str:
+    """Expose the shared semantic identity to evidence collectors and blockers."""
+    return _field_identity(value, category)
 
 
 def object_field_source_priority(value: ObjectFieldValue, category: str) -> int:
@@ -266,6 +284,38 @@ def _field_identity(value: ObjectFieldValue, category: str) -> str:
     non_display_key = key.removeprefix("binary:")
     if alias is not None:
         return alias
+    raw_role = (
+        non_display_key.removeprefix("base:")
+        if value.source_kind is ObjectSourceKind.BASE
+        else non_display_key
+    )
+    if category == "科技":
+        scalar = tech_scalar_key(
+            raw_role,
+            base_label=value.label
+            if value.source_kind is ObjectSourceKind.BASE
+            else "",
+        )
+        if scalar is not None:
+            return f"field:tech:{scalar}"
+    if category == "物品" and (
+        raw_role in {"igol", "goldcost"}
+        or value.source_kind is ObjectSourceKind.BASE
+        and value.label == "金币"
+    ):
+        return "field:item:gold"
+    if category == "物品" and (
+        raw_role in {"iabi", "abillist"}
+        or value.source_kind is ObjectSourceKind.BASE
+        and value.label in {"技能", "携带技能"}
+    ):
+        return "field:item:abilities"
+    if category in {"单位", "英雄"} and (
+        raw_role in {"usei", "sellitems"}
+        or value.source_kind is ObjectSourceKind.BASE
+        and value.label in {"售出的物品", "售出物品"}
+    ):
+        return "field:unit:shop-stock"
     if value.source_kind is ObjectSourceKind.BASE:
         base_alias = _BASE_LABEL_ALIASES.get(value.label.casefold())
         if base_alias == "display:icon":
@@ -280,7 +330,7 @@ def _field_rank(
     value: ObjectFieldValue,
     identity: str,
     category: str,
-) -> tuple[int, int, str, str, str, str, str, str, str, str]:
+) -> tuple[int, int, bool, str, str, str, str, str, str, str, str]:
     normalized_source = value.source.replace("/", "\\")
     display_priority = (
         icon_display_priority(category, value.key, value.source_kind)
@@ -290,6 +340,7 @@ def _field_rank(
     return (
         display_priority,
         object_field_source_priority(value, category),
+        value.state is not FieldEvidenceState.CONFIRMED,
         normalized_source.casefold(),
         normalized_source,
         value.source,

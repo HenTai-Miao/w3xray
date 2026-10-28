@@ -61,7 +61,7 @@ def format_reference_result(result: ReferenceSearchResult) -> str:
     """Render all selected records and all source/coverage diagnostics."""
     lines = [
         "GameXRay 离线字段与版本参考",
-        "静态定义及知识包证据；实时值请使用 live 探针，地图可用性请用 pack-query 查证。",
+        "静态定义、知识包证据与外部未验证标签；实时值请使用 live 探针，地图可用性请用 pack-query 查证。",
         f"已确认目录记录 {result.total}，匹配 {result.matched}，显示 {len(result.records)}。",
         f"筛选: kind={result.kind} category={result.category or '全部'} "
         f"build={result.build or '全部'} source={result.source or '全部'}",
@@ -101,6 +101,8 @@ def format_reference_result(result: ReferenceSearchResult) -> str:
         lines.extend(("", "== 完整来源诊断 ==", *result.diagnostics))
         lines.append(
             "存在不完整/变化来源；以上计数只描述已确认记录，请修复来源后刷新。"
+            if not result.catalog_complete
+            else "完整保留以上来源/记录诊断；冲突记录独立展示，未裁决哪份外部标签有效。"
         )
     return "\n".join(lines) + "\n"
 
@@ -116,7 +118,9 @@ def write_reference_export(
     if any(
         resolved.is_relative_to(Path(root).resolve()) for root in result.input_roots
     ):
-        raise ValueError("知识包为只读输入；请将参考报告导出到知识包之外。")
+        raise ValueError(
+            "知识包及外部 ID 表为只读输入；请将参考报告导出到输入目录之外。"
+        )
     json_output = (
         destination.suffix.casefold() == ".json" if as_json is None else as_json
     )
@@ -145,6 +149,13 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--pack", default=None, metavar="DIR", help="叠加知识包及战役的全部直接子包"
+    )
+    parser.add_argument(
+        "--id-table",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="叠加本地盒子 ID 文本文件/目录，可重复；目录只读四个声明文件名，标签为外部未验证",
     )
     parser.add_argument(
         "--profile-json",
@@ -185,7 +196,9 @@ def run_reference_cli(argv: Sequence[str]) -> int:
     try:
         args = parser.parse_args(list(argv))
         limit = parse_query_limit(args.limit)
-        catalog = load_reference_catalog(args.pack, profile_json=args.profile_json)
+        catalog = load_reference_catalog(
+            args.pack, profile_json=args.profile_json, id_tables=args.id_table
+        )
         result = search_reference_catalog(
             catalog,
             args.keyword,

@@ -149,6 +149,13 @@ class App(
         except tk.TclError:
             return
 
+    def destroy(self) -> None:
+        """Retire this app's Tcl timers before its widget commands disappear."""
+        from .gui_tk_callbacks import cancel_widget_callbacks
+
+        cancel_widget_callbacks(self)
+        super().destroy()
+
 
 def main() -> None:
     App().mainloop()

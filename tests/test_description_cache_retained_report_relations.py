@@ -10,6 +10,7 @@ import pytest
 from tests.retained_integrity_fixture import active_cache, install_previous, retained
 from tests.windows_cache_contract_fixture import report_fixture
 from gametool import description_cache_retained_integrity as retained_api
+from gametool.windows_output_paths import native_output_path
 
 
 type JsonValue = (
@@ -31,7 +32,8 @@ def _payload(tmp_path: Path, row_kind: str) -> dict[str, JsonValue]:
     elif row_kind == "invalid-exact-inventory":
         previous = install_previous(active, tmp_path)
         (previous / "来源清单.tsv").unlink()
-        (previous / "forged-extra.tsv").write_bytes(b"forged")
+        previous_io = Path(native_output_path(str(previous)))
+        (previous_io / "forged-extra.tsv").write_bytes(b"forged")
         paths = (previous,)
     elif row_kind == "invalid-nested":
         previous = install_previous(active, tmp_path)

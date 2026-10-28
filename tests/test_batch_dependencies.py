@@ -53,9 +53,9 @@ def test_dependency_fingerprint_binds_extraction_logic_revision(
     assert changed != current
 
 
-def test_batch_extraction_revision_is_thirty_three() -> None:
+def test_batch_extraction_revision_is_thirty_four() -> None:
     # Given: the dependency fingerprint binds extraction semantics separately.
-    expected_revision = 33
+    expected_revision = 34
 
     # When / Then: older extraction revisions cannot be silently reused.
     assert expected_revision == batch_dependencies.BATCH_EXTRACTION_REVISION

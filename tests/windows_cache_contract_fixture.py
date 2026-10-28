@@ -81,6 +81,7 @@ from gametool.integrity_snapshot import (
     tree_sha256,
 )
 from gametool.trusted_description_cache import load_trusted_description_cache
+from gametool.windows_output_paths import native_output_path
 
 
 def _file_state(path: Path) -> tuple[int, int, int, int, int, int]:
@@ -279,11 +280,12 @@ def _sibling(path: Path) -> SiblingState:
 def _ordinary_tree_proof(path: Path) -> RetainedTreeProof:
     entries = []
     payloads = []
-    for child in sorted(path.rglob("*")):
+    path_io = Path(native_output_path(str(path)))
+    for child in sorted(path_io.rglob("*")):
         details = child.lstat()
         kind = kind_from_mode(details.st_mode)
         payload = child.read_bytes() if kind is CacheArtifactKind.REGULAR_FILE else None
-        relative = child.relative_to(path).as_posix()
+        relative = child.relative_to(path_io).as_posix()
         entries.append(
             TreeEntryState(
                 relative,

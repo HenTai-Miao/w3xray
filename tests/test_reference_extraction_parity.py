@@ -57,7 +57,7 @@ def test_reference_map_produces_complete_sorted_four_category_reports(
     assert unit.field_values["display:description"] == "说明文本"
     assert ability.name == "测试技能"
     assert ability.field_values["DataA1"] == "777"
-    assert ability.field_sources["DataA1"] == "war3map *Data.slk"
+    assert ability.field_sources["DataA1"] == r"Units\AbilityData.slk"
     assert {"base", "binary", "slk", "text"}.issubset(md.object_source_counts)
     assert md.object_source_counts["base"] > 0
     assert {"war3map.j", "war3map.lua"}.issubset(md.scripts)

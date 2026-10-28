@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 from typing import Protocol
 
+from .object_field_roles import TECH_SCALAR_LABELS, tech_scalar_key
 from .pack_query_numeric_values import decimal_text as _text, decimal_value as _number
 from .pack_query_object_details import (
     ObjectDetailSources,
@@ -16,13 +17,7 @@ from .pack_query_object_details import (
 from .pack_query_objects import valid_object_code
 from .search import compile_query
 
-_SCALARS = {
-    "glvl": "最大等级",
-    "gglb": "基础金",
-    "gglm": "金增量",
-    "glmb": "基础木",
-    "glmm": "木增量",
-}
+_SCALARS = TECH_SCALAR_LABELS
 
 
 class TechDetailSources(ObjectDetailSources, Protocol):
@@ -44,9 +39,15 @@ def normalize_tech_level(value: str) -> str:
 def _scalar(
     record: ObjectRecord, key: str, base: dict[str, str], notes: list[str]
 ) -> Decimal | None:
-    fields = [field for field in record.evidence.fields if field.key == key]
+    declared = [
+        field for field in record.evidence.fields if tech_scalar_key(field.key) == key
+    ]
+    fields = [field for field in declared if field.active] or declared
     if not fields:
         return _number(base.get(_SCALARS[key], ""))
+    if any(not field.confirmed for field in fields):
+        notes.append(f"  {key} 字段未确认，未使用原文计算或回填继承值。")
+        return None
     values = [_number(field.value) for field in fields]
     if any(value is None for value in values) or len(set(values)) != 1:
         reason = "冲突" if len(set(values)) > 1 else "数值未确认"

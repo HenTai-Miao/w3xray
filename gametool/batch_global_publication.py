@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 from collections.abc import Mapping
+from dataclasses import replace
 from pathlib import Path
 import shutil
 from typing import Final
@@ -37,6 +38,7 @@ from .bounded_file import read_bounded_regular_file
 from .durable_io import sync_directory
 from .safe_output import write_text_safely
 from .safe_output_models import SafeWriteStatus
+from .windows_output_paths import native_output_path
 
 
 _MAX_POINTER_BYTES: Final[int | None] = None
@@ -83,7 +85,8 @@ def _publish_global_generation_locked(
     destination = generations / generation_id
     bundle = build_global_payloads(output, state, cache_text, diagnostics_text)
     payloads = bundle.payloads
-    stage.mkdir(mode=0o700)
+    stage_io = _io_path(stage)
+    stage_io.mkdir(mode=0o700)
     try:
         sync_directory(global_root)
         for name, text in payloads.items():
@@ -92,9 +95,9 @@ def _publish_global_generation_locked(
         manifest_text = format_global_manifest(manifest)
         _write_text(stage, GLOBAL_MANIFEST_NAME, manifest_text)
         sync_directory(stage)
-        os.replace(stage, destination)
+        os.replace(stage_io, _io_path(destination))
         sync_directory(generations)
-        generation = validate_global_generation(destination)
+        generation = _validate_generation(destination)
         if generation is None:
             raise GlobalPublicationError("published global generation is invalid")
         _publish_pointer(global_root, generation)
@@ -104,8 +107,8 @@ def _publish_global_generation_locked(
         _publish_compatibility_mirrors(output, payloads)
         return generation
     finally:
-        if stage.is_dir() and not stage.is_symlink():
-            shutil.rmtree(stage)
+        if stage_io.is_dir() and not stage_io.is_symlink():
+            shutil.rmtree(stage_io)
             sync_directory(global_root)
 
 
@@ -113,15 +116,18 @@ def load_current_generation(output_root: str | Path) -> GlobalGeneration | None:
     """Load only the exact generation selected by a strict current pointer."""
     global_root = Path(output_root, GLOBAL_ROOT_NAME)
     pointer_path = global_root / GLOBAL_POINTER_NAME
-    if global_root.is_symlink() or not global_root.is_dir():
+    global_root_io = _io_path(global_root)
+    if global_root_io.is_symlink() or not global_root_io.is_dir():
         return None
     try:
-        payload, _identity = read_bounded_regular_file(pointer_path, _MAX_POINTER_BYTES)
+        payload, _identity = read_bounded_regular_file(
+            _io_path(pointer_path), _MAX_POINTER_BYTES
+        )
         pointer = parse_global_pointer(payload.decode("utf-8"))
     except OSError, UnicodeError, ValueError:
         return None
     directory = global_root / "generations" / pointer.generation_id
-    return validate_global_generation(directory, pointer.manifest_sha256)
+    return _validate_generation(directory, pointer.manifest_sha256)
 
 
 def load_current_batch_state(output_root: str | Path) -> BatchState | None:
@@ -131,22 +137,40 @@ def load_current_batch_state(output_root: str | Path) -> BatchState | None:
 
 
 def _prepare_roots(output: Path) -> tuple[Path, Path, Path]:
-    if output.is_symlink():
+    output_io = _io_path(output)
+    if output_io.is_symlink():
         raise GlobalPublicationError("output root is a symlink")
-    output.mkdir(parents=True, exist_ok=True)
-    if output.is_symlink() or not output.is_dir():
+    output_io.mkdir(parents=True, exist_ok=True)
+    if output_io.is_symlink() or not output_io.is_dir():
         raise GlobalPublicationError("output root is unsafe")
     global_root = output / GLOBAL_ROOT_NAME
     generations = global_root / "generations"
-    if global_root.is_symlink() or generations.is_symlink():
+    global_root_io, generations_io = _io_path(global_root), _io_path(generations)
+    if global_root_io.is_symlink() or generations_io.is_symlink():
         raise GlobalPublicationError("global publication root is a symlink")
-    global_root.mkdir(exist_ok=True)
-    generations.mkdir(exist_ok=True)
-    if not global_root.is_dir() or not generations.is_dir():
+    global_root_io.mkdir(exist_ok=True)
+    generations_io.mkdir(exist_ok=True)
+    if not global_root_io.is_dir() or not generations_io.is_dir():
         raise GlobalPublicationError("global publication root is unsafe")
     sync_directory(output)
     sync_directory(global_root)
     return output, global_root, generations
+
+
+def _io_path(path: Path) -> Path:
+    """Keep logical publication identities while using native Windows I/O."""
+    if os.name != "nt":
+        return path
+    return Path(native_output_path(os.path.abspath(path)))
+
+
+def _validate_generation(
+    directory: Path, expected_manifest_sha256: str | None = None
+) -> GlobalGeneration | None:
+    generation = validate_global_generation(
+        _io_path(directory), expected_manifest_sha256
+    )
+    return None if generation is None else replace(generation, directory=directory)
 
 
 def _manifest(

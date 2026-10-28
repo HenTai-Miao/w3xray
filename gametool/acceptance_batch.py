@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import shutil
 from typing import Final, assert_never, override
@@ -19,6 +20,7 @@ from .batch_runtime import BatchAction, BatchProgress
 from .batch_status import PublicationResult
 from .bounded_file import read_bounded_regular_file
 from .safe_output import safe_relative_path
+from .windows_output_paths import native_output_path
 
 
 _MAX_GLOBAL_PAYLOAD_BYTES: Final[int | None] = None
@@ -94,11 +96,11 @@ def _require_compatibility_mirrors(
     for name in GLOBAL_PAYLOAD_NAMES:
         try:
             mirror, _mirror_identity = read_bounded_regular_file(
-                output / name,
+                _io_path(output / name),
                 _MAX_GLOBAL_PAYLOAD_BYTES,
             )
             authoritative, _authority_identity = read_bounded_regular_file(
-                generation.directory / name,
+                _io_path(generation.directory / name),
                 _MAX_GLOBAL_PAYLOAD_BYTES,
             )
         except OSError as exc:
@@ -107,6 +109,13 @@ def _require_compatibility_mirrors(
             raise BatchAcceptanceError(
                 "compatibility mirror disagrees with current pointer"
             )
+
+
+def _io_path(path: Path) -> Path:
+    """Read logical publication paths through native Windows I/O spellings."""
+    if os.name != "nt":
+        return path
+    return Path(native_output_path(os.path.abspath(path)))
 
 
 def _authoritative_publications(

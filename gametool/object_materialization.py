@@ -12,9 +12,11 @@ from .base_names import BASE_CATEGORIES, BASE_NAMES, BASE_NAMES_EN
 from .base_objects import BASE_OBJECTS
 from .map_data import GameObject, GameObjectFieldEvidence
 from .object_candidates import ObjectCandidate, ObjectFieldValue, ObjectSourceKind
+from .object_candidate_models import FieldEvidenceState
 from .object_field_selection import (
     build_selection_index,
     object_field_source_priority,
+    object_field_identity,
     public_object_field_key,
     select_current_icon_fields,
     select_object_field,
@@ -264,7 +266,14 @@ def _materialize(
             evidence_values.append(value)
             select_object_field(selected, value, category, selection_index)
     ordered = tuple(
-        sorted(selected.items(), key=lambda item: (item[1].label.casefold(), item[0]))
+        sorted(
+            (
+                (key, value)
+                for key, value in selected.items()
+                if value.state is FieldEvidenceState.CONFIRMED
+            ),
+            key=lambda item: (item[1].label.casefold(), item[0]),
+        )
     )
     fields = [(value.label, value.value) for _identity, value in ordered]
     field_values = {
@@ -279,19 +288,37 @@ def _materialize(
         public_object_field_key(identity, value): value.source
         for identity, value in ordered
     }
-    name = selected_display_value(selected, "display:name") or selected_display_value(
-        selected, "display:propernames"
-    )
-    if not name:
-        name = (
-            BASE_NAMES.get(representative.base_id) or BASE_NAMES.get(obj_id) or obj_id
-        )
+    declared_name = selected.get("display:name")
+    if declared_name is not None and (
+        declared_name.state is not FieldEvidenceState.CONFIRMED
+        or declared_name.value == ""
+        and declared_name.source_kind is not ObjectSourceKind.BASE
+    ):
+        # An encoded empty name overrides every inherited name/propername.
+        # Keep the ID as a usable display/export label; the field remains empty.
+        name = obj_id
+    else:
+        name = selected_display_value(
+            selected, "display:name"
+        ) or selected_display_value(selected, "display:propernames")
+        if not name:
+            name = (
+                BASE_NAMES.get(representative.base_id)
+                or BASE_NAMES.get(obj_id)
+                or obj_id
+            )
     name = name.split("\n", 1)[0]  # 整行名称, 不截断
     selected_icon = selected.get("display:icon")
-    icon = "" if selected_icon is None else selected_icon.value.split(",", 1)[0].strip()
+    icon = (
+        ""
+        if selected_icon is None
+        or selected_icon.state is not FieldEvidenceState.CONFIRMED
+        else selected_icon.value.split(",", 1)[0].strip()
+    )
     icon_evidence = (
         None
         if selected_icon is None
+        or selected_icon.state is not FieldEvidenceState.CONFIRMED
         else _materialized_evidence((selected_icon,), category)[0]
     )
     icon_fields_evidence = _materialized_evidence(
@@ -330,6 +357,19 @@ def _materialize(
         field_labels=field_labels,
         field_sources=field_sources,
         field_evidence=_materialized_evidence(evidence_values, category),
+        field_blockers=_materialized_evidence(
+            (
+                value
+                for value in evidence_values
+                if value.state is not FieldEvidenceState.CONFIRMED
+                and (winner := selected.get(object_field_identity(value, category)))
+                is not None
+                and winner.state is not FieldEvidenceState.CONFIRMED
+                and object_field_source_priority(value, category)
+                == object_field_source_priority(winner, category)
+            ),
+            category,
+        ),
         icon_field_evidence=icon_evidence,
         icon_fields_evidence=icon_fields_evidence,
     )
@@ -349,6 +389,9 @@ def _materialized_evidence(
             value_type=value.value_type,
             raw_value=value.raw_value,
             value_source=value.value_source,
+            state=value.state,
+            diagnostic=value.diagnostic,
+            encoded_evidence=value.encoded_evidence,
         )
         for value in values
     }
@@ -370,6 +413,9 @@ def _materialized_evidence(
                 "" if row.raw_value is None else row.raw_value,
                 row.value_source.casefold(),
                 row.value_source,
+                row.state,
+                row.diagnostic,
+                row.encoded_evidence,
             ),
         )
     )

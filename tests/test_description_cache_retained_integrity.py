@@ -15,6 +15,7 @@ from tests.retained_integrity_fixture import (
     stage,
 )
 from gametool import description_cache_retained_integrity as snapshot_api
+from gametool.windows_output_paths import native_output_path
 
 
 def test_transient_and_malformed_reasons_are_closed(tmp_path: Path) -> None:
@@ -52,8 +53,9 @@ def test_report_codec_rejects_unsorted_rows_and_unsafe_problem_paths(
     active = active_cache(tmp_path)
     for digit in ("3", "2"):
         path = retained(active, digit, "failed-output")
-        path.mkdir()
-        (path / "leaf").write_bytes(digit.encode())
+        path_io = Path(native_output_path(str(path)))
+        path_io.mkdir()
+        (path_io / "leaf").write_bytes(digit.encode())
     report = report_fixture(
         active, tuple(retained(active, digit, "failed-output") for digit in ("3", "2"))
     )

@@ -127,6 +127,7 @@ tests/test_batch_extraction_gaps.py
 tests/test_batch_global_evidence.py
 tests/test_batch_global_fix_acceptance.py
 tests/test_batch_global_publication.py
+tests/test_batch_global_windows_long_paths.py
 tests/test_batch_icon_export.py
 tests/test_batch_icon_report_validation.py
 tests/test_batch_item_report_processing.py
@@ -252,6 +253,7 @@ tests/test_gui_loader.py
 tests/test_gui_loader_runner.py
 tests/test_gui_object_filter_runner.py
 tests/test_gui_object_presentation.py
+tests/test_gui_offline_acceptance.py
 tests/test_gui_pack_query_memo.py
 tests/test_gui_pane_state.py
 tests/test_gui_preplaced.py
@@ -269,6 +271,9 @@ tests/test_guide_positions_complete.py
 tests/test_guide_report.py
 tests/test_guide_window_callbacks.py
 tests/test_historical_icon_backfill.py
+tests/test_hotkey_config.py
+tests/test_hotkey_config_cli.py
+tests/test_hotkey_config_gui.py
 tests/test_huffman.py
 tests/test_icon_candidate_bindings.py
 tests/test_icon_candidate_input_normalization.py
@@ -330,6 +335,8 @@ tests/test_live_selection_complete.py
 tests/test_live_unit_query.py
 tests/test_load_context_compat.py
 tests/test_load_options.py
+tests/test_local_id_tables.py
+tests/test_local_workbench_entrypoints.py
 tests/test_lua_trigger_acquisition_complete.py
 tests/test_map_analysis_evidence_exports.py
 tests/test_map_data_compat.py
@@ -453,6 +460,7 @@ tests/test_resources.py
 tests/test_safe_output.py
 tests/test_save_analysis.py
 tests/test_save_call_context.py
+tests/test_save_code_inputs.py
 tests/test_save_codes.py
 tests/test_save_container.py
 tests/test_save_container_evidence.py
@@ -460,6 +468,9 @@ tests/test_save_gamecache.py
 tests/test_save_review_regressions.py
 tests/test_save_structure_integration.py
 tests/test_save_text_carriers.py
+tests/test_save_workspace.py
+tests/test_save_workspace_logic.py
+tests/test_save_workspace_review.py
 tests/test_scene_bounds.py
 tests/test_script_assignment_index.py
 tests/test_script_call_argument_index.py
@@ -507,6 +518,10 @@ tests/test_security_read_budgets.py
 tests/test_shop_placement_identity.py
 tests/test_single_instance.py
 tests/test_slk.py
+tests/test_slk_evidence.py
+tests/test_slk_evidence_loading.py
+tests/test_slk_evidence_names.py
+tests/test_slk_evidence_pipeline.py
 tests/test_slk_objects.py
 tests/test_slkmeta.py
 tests/test_spatial_query_completeness.py

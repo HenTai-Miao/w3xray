@@ -19,6 +19,7 @@ from .bounded_file import FileIdentity, read_bounded_regular_file
 from .current_map_inuse_probe import probe_in_use_files
 from .current_map_process import OpenMapProbeReport, ProcessProbeReport
 from .gameconfig import parse_game_configuration
+from .windows_output_paths import native_output_path
 
 _HINT_WINDOW_NS: Final = 4 * 60 * 60 * 1_000_000_000
 _LOG_WINDOW_NS: Final = 15 * 60 * 1_000_000_000
@@ -195,7 +196,8 @@ def _scan_hint_evidence(roots: tuple[Path, ...], now_ns: int) -> _RootScan:
     while pending:
         directory = pending.popleft()
         try:
-            directory_metadata = directory.lstat()
+            directory_io = Path(native_output_path(str(directory)))
+            directory_metadata = directory_io.lstat()
             identity = (directory_metadata.st_dev, directory_metadata.st_ino)
             if (
                 not _real_directory_metadata(directory_metadata)
@@ -203,7 +205,7 @@ def _scan_hint_evidence(roots: tuple[Path, ...], now_ns: int) -> _RootScan:
             ):
                 continue
             seen_directories.add(identity)
-            entries = os.scandir(directory)
+            entries = os.scandir(directory_io)
         except OSError:
             continue
         with entries:
@@ -215,11 +217,11 @@ def _scan_hint_evidence(roots: tuple[Path, ...], now_ns: int) -> _RootScan:
                 mode = metadata.st_mode
                 if stat.S_ISDIR(mode):
                     if _real_directory_metadata(metadata):
-                        pending.append(Path(entry.path))
+                        pending.append(directory / entry.name)
                     continue
                 if not stat.S_ISREG(mode):
                     continue
-                path = Path(entry.path)
+                path = directory / entry.name
                 suffix = path.suffix.casefold()
                 if suffix in _MAP_SUFFIXES:
                     map_files.append((path, metadata.st_mtime_ns))

@@ -26,6 +26,7 @@ class AbilityLink:
     value: str
     source: str
     codes: tuple[str, ...]
+    state: str = "confirmed"
 
 
 def _summaries(ability: AbilityEvidence) -> tuple[str, ...]:
@@ -33,6 +34,8 @@ def _summaries(ability: AbilityEvidence) -> tuple[str, ...]:
     levels: dict[str, set[str]] = {}
     values: dict[tuple[str, str], set[str]] = {}
     for row in ability.fields:
+        if not row.confirmed:
+            continue
         match = _ATTRIBUTE.fullmatch(row.key)
         if match is None:
             continue
@@ -116,7 +119,7 @@ class ItemAbilityIndex:
                     else ""
                 )
                 lines.append(
-                    f"  物品技能字段 {link.key}{tag}: {link.value or '（显式空值）'}  [来源: {link.source or '来源未记录'}]"
+                    f"  物品技能字段 {link.key}{tag}{'（未确认）' if link.state != 'confirmed' else ''}: {link.value or ('（显式空值）' if link.state == 'confirmed' else '（原文为空，未确认）')}  [来源: {link.source or '来源未记录'}]"
                 )
                 if not overridden and link.value.strip() and not link.codes:
                     lines.append(
@@ -147,6 +150,7 @@ def item_ability_index(
 ) -> ItemAbilityIndex:
     custom: dict[str, dict[AbilityLink, None]] = {}
     inherited: dict[str, dict[AbilityLink, None]] = {}
+    overridden: dict[str, dict[AbilityLink, None]] = {}
     fields: dict[str, dict[AbilityField, None]] = {}
     names: dict[str, dict[str, None]] = {}
     referenced: dict[str, None] = {}
@@ -155,10 +159,21 @@ def item_ability_index(
         if len(row) < 7 or not valid_object_code(row[1]):
             continue
         if row[0] == "物品" and (
-            row[3] == "iabi" or row[3].casefold() in _INHERITED_LINKS
+            row[3].casefold() in {"iabi", "abillist"}
+            or row[3].casefold() in _INHERITED_LINKS
         ):
-            link = AbilityLink(row[3], row[5], row[6], tuple(decode_codes(row[5])))
-            target = custom if row[3] == "iabi" else inherited
+            evidence = field_record(row, header, clean)
+            link = AbilityLink(
+                row[3],
+                row[5],
+                row[6],
+                tuple(decode_codes(row[5])) if evidence.confirmed else (),
+                evidence.state,
+            )
+            if not evidence.active:
+                overridden.setdefault(row[1], {}).setdefault(link, None)
+                continue
+            target = inherited if row[3].casefold() in _INHERITED_LINKS else custom
             target.setdefault(row[1], {}).setdefault(link, None)
             for code in link.codes:
                 referenced.setdefault(code, None)
@@ -168,6 +183,9 @@ def item_ability_index(
             )
             if name := clean(row[2]):
                 names.setdefault(row[1], {}).setdefault(name, None)
+    for code, links in overridden.items():
+        if code not in custom:
+            custom[code] = links
     codes = dict.fromkeys((*fields, *referenced))
     abilities = {
         code: AbilityEvidence(

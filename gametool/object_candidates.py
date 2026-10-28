@@ -20,6 +20,7 @@ from .extraction_diagnostics import (
 )
 from .map_archive_reader import MapArchiveReader
 from .object_candidate_models import ObjectCandidate, ObjectFieldValue, ObjectSourceKind
+from .object_text_roles import classify_text_field
 from .references import extract_refs_by_type
 from .w3obj import EXT_CATEGORY, parse_object_data, parse_object_data_report
 
@@ -102,11 +103,15 @@ def collect_binary_object_candidates(
             value = _resolved_value(mod.value, wts)
             if is_concat_type(mod.field_id):
                 value = _expand_codes(value)
-            if not value:
-                # 空字符串 mod 无信息量，却会以自定义身份驱逐同名继承值
-                # （如 uhpm="" 清掉基础生命上限），与文本/SLK 路径的
-                # retain_field 过滤口径对齐。
-                continue
+            if not value and not is_concat_type(mod.field_id):
+                # Encoded empty lists and Name fields are explicit overrides.
+                # Other empty binary mods retain the existing filter
+                # (e.g. uhpm="" does not erase base health).
+                role = classify_text_field(
+                    category, key, label, field_type(mod.field_id)
+                )
+                if role is None or role.semantic_field != "name":
+                    continue
             values.append(
                 ObjectFieldValue(
                     key,

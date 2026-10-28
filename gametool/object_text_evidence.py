@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Final, assert_never
 
 from .description_cache import DescriptionCache
 from .object_candidates import ObjectCandidate, ObjectFieldValue, ObjectSourceKind
+from .object_candidate_models import FieldEvidenceState
 from .object_text_models import TextSourcePriority
 from .object_text_roles import classify_text_field, semantic_field_for_role
 from .textobj import _sub_westring
@@ -46,6 +47,8 @@ def collect_map_text_evidence(
     grouped: dict[TextIdentity, list[TextEvidence]] = {}
     for candidate in candidates:
         for field in candidate.fields:
+            if field.state is not FieldEvidenceState.CONFIRMED:
+                continue
             role = classify_text_field(
                 candidate.category,
                 field.key,
@@ -86,6 +89,8 @@ def collect_client_text_evidence(
     grouped: dict[TextIdentity, list[TextEvidence]] = {}
     for item in client_objects:
         for field in item.evidence_fields:
+            if field.state is not FieldEvidenceState.CONFIRMED:
+                continue
             role = classify_text_field(
                 item.category,
                 field.key,

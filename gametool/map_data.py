@@ -9,6 +9,7 @@ from .external_listfile import ExternalListfileReport
 from .icon_evidence_index import IconEvidenceIndex, empty_icon_evidence_index
 from .item_relation_models import ItemRelationIndex, empty_item_relation_index
 from .object_text_models import ObjectTextIndex, empty_object_text_index
+from .object_candidate_models import FieldEvidenceState
 
 if TYPE_CHECKING:
     from .archive_source import ArchiveSource
@@ -36,6 +37,9 @@ class GameObjectFieldEvidence:
     value_type: str = ""
     raw_value: str | None = None
     value_source: str = ""
+    state: FieldEvidenceState = FieldEvidenceState.CONFIRMED
+    diagnostic: str = ""
+    encoded_evidence: str = ""
 
     @property
     def source_value(self) -> str:
@@ -63,6 +67,7 @@ class GameObject:
     field_evidence: tuple[GameObjectFieldEvidence, ...] = ()
     icon_field_evidence: GameObjectFieldEvidence | None = None
     icon_fields_evidence: tuple[GameObjectFieldEvidence, ...] = ()
+    field_blockers: tuple[GameObjectFieldEvidence, ...] = ()
 
     @property
     def decimal(self) -> int:

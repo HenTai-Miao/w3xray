@@ -1,0 +1,299 @@
+{
+  "schema_version": 1,
+  "audit_date": "2026-10-28",
+  "source_baseline": "1aa916c836fb997a4ba96b75df01d8a7e53fd74b",
+  "release_version": "0.8.0",
+  "execution_policy": "static-only; supplied EXE/DLL/scripts/maps never executed",
+  "prior_targets": [
+    {
+      "id": "T1",
+      "path": "War3ReforgedHotkeys-v2.0.0.exe",
+      "bytes": 18607643,
+      "sha256": "96918355fd386afb7eabae8286e0a552c7dcbc81a239bc35e165fdc75529af41"
+    },
+    {
+      "id": "T2",
+      "path": "War3ReforgedTrainer-v1.0.19-JianYX-v2.6.4-R8.exe",
+      "bytes": 18821684,
+      "sha256": "20098c26644bb20f2a6a846e2ca94aedbe013d5260c3c46d1d5aaa4c0ef1fd2c"
+    },
+    {
+      "id": "T3",
+      "path": "War3ReforgedTrainer-v2.1.20-213F512FD188.exe",
+      "bytes": 30268092,
+      "sha256": "213f512fd188c47ad62c4c16a40d956f75b86f20ab669d9338d93360fcd57f1c"
+    },
+    {
+      "id": "T4",
+      "path": "大象1.27修改器.exe",
+      "bytes": 1229162,
+      "sha256": "d0ea7e018a0c6480171360196f244649fb5328216ebfb94991ae1caa861964d4"
+    },
+    {
+      "id": "T5",
+      "path": "魔兽争霸3修改器_new.exe",
+      "bytes": 300544,
+      "sha256": "8d6189762b0b5cf8789629f95e206be1882d7e9d6d3be972bed01ddd35dadba1"
+    },
+    {
+      "id": "T6",
+      "path": "war3 1.24E修改器V1.4by大象.exe",
+      "bytes": 746612,
+      "sha256": "47a519e7cfd77c943a3f535ff5e49daf5ee7eccfb8020a1cd39df5ebd7348fa2"
+    }
+  ],
+  "new_box": {
+    "id": "T7",
+    "root_name": "魔兽多功能存档盒子1.8.0.9",
+    "files": [
+      {
+        "path": "1.txt",
+        "bytes": 16,
+        "sha256": "4c15d98cba75d66d56202b43a23d88a5019028925a9ffd3d31fb54292d227b3e"
+      },
+      {
+        "path": "Get.dll",
+        "bytes": 159744,
+        "sha256": "76710bb2039657eb38a85a154cde8b694d8d3bb24d64372eedce0e0b63ebd321"
+      },
+      {
+        "path": "HKHZ.ini",
+        "bytes": 25,
+        "sha256": "612819086b0d3ca93d168c6078f7b6379604f553d88a85d30ef8ebf533a77121"
+      },
+      {
+        "path": "Hwnd.ini",
+        "bytes": 62,
+        "sha256": "d67fc8d178d01a9f92ac573bc1afbdfdf1ac36d3cc1a930819e235cbcf5a326e"
+      },
+      {
+        "path": "StormLib.dll",
+        "bytes": 397824,
+        "sha256": "c96a3f3b07905c681dedf9dd35f4bf7c5ebdb9b7037f935d9dea050a1b88042c"
+      },
+      {
+        "path": "关于更新的说明.txt",
+        "bytes": 160,
+        "sha256": "ce8f823af56653fc171eb082e4be5c0e49d36586f0aec4adb40a02ec2b38402f"
+      },
+      {
+        "path": "工具说明.txt",
+        "bytes": 5648,
+        "sha256": "f33d1f23932b8cbb3538f6eaa4f24d78caea9444c8835f11e00039193ba3687a"
+      },
+      {
+        "path": "防检测说明.txt",
+        "bytes": 163,
+        "sha256": "a9e895e29e6ee75364bfc3a16eb31c69ef0c887550b52cdee3370d9490009cf8"
+      },
+      {
+        "path": "魔兽多功能存档盒子(请右键管理员模式运行).exe",
+        "bytes": 40861696,
+        "sha256": "2e12c0394e2797b483cf5cc7ef47899a50ccab1c2984af61094e85ed4ac7e901"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-仙界大掌门 反作弊代码用.txt",
+        "bytes": 628,
+        "sha256": "84bd66f22732bcb42c7304e883f86c12b68a0bd5ec3908a326627c5384c876b9"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-伏魔战记AllStar 反作弊代码用.txt",
+        "bytes": 1640,
+        "sha256": "86c2fa577e62e49d1975356569dbbac7a043949043cb00afc9ab35552915cb73"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-侏罗纪公园 反作弊代码用.txt",
+        "bytes": 926,
+        "sha256": "8075186315b50a347b973d7f55ee97d3a295e82d9c5d2954968d03b9f7316029"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-修仙之路 反作弊代码用.txt",
+        "bytes": 100,
+        "sha256": "184166c9b49fdc2873beea277b765120ad91f658a3320e9eabb051d4c0157899"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-修仙十万年 反作弊代码用.txt",
+        "bytes": 975,
+        "sha256": "130acf0f1f8324e727535cd685e8586b656bba7d04dcedb47b8edf311c3a05b4"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-僵尸岛大灾变 反作弊代码用.txt",
+        "bytes": 817,
+        "sha256": "fba8747318ec0caddad50920bd02741249a2d82ac42eefd6627fe749ddee3ae2"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-华山论剑TD 反作弊代码用.txt",
+        "bytes": 167,
+        "sha256": "2785e95f8108c8e26671b4e1eae0307d7912128047bc070adc818c305ce520dc"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-向不死族开炮 反作弊代码用.txt",
+        "bytes": 1845,
+        "sha256": "b38373bf11b5a08596d1cbe4338e0191a2ca3595eb11d81ce9ae6df7917e7aea"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-哎呀！又挖到金矿啦 反作弊代码用.txt",
+        "bytes": 1004,
+        "sha256": "e6a368352c30d298bc1d3266c28976076bcfcd021db02512a8e4b42456c8a630"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-圣斗士圣域冥王篇版 反作弊代码用.txt",
+        "bytes": 173,
+        "sha256": "7bc7c9d6822ee8d9809978ba08258d37e00126fd99ec3d59a926b98715f6a9dc"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-大圣娶亲 反作弊代码用.txt",
+        "bytes": 5518,
+        "sha256": "e9b492c9df14087b13b5457d85bb6a7a2770f933706252e40c5d23cd0df808b7"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-奇迹大陆 反作弊代码用.txt",
+        "bytes": 98,
+        "sha256": "51b2a6026a817fe329fd5c9aa45a0c457d949855962c81951c0a341b0cd33d4a"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-宠物防御战 反作弊代码用.txt",
+        "bytes": 787,
+        "sha256": "0acdaa58fe7a46c55e82683d9793a2d0da3cd95e35800a1dd4de5e806b66303c"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-封天劫 反作弊代码用.txt",
+        "bytes": 118,
+        "sha256": "6cbc5711fa35f70d5a85ef8d69613d34320080b999f067a81318b3f7a1ec7be5"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-小偷科技TD 反作弊代码用.txt",
+        "bytes": 993,
+        "sha256": "a6102e4f339e0704b0be13fd40b762ff92b230d0fe4d265c3ceea370c8103c54"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-弑魔 反作弊代码用.txt",
+        "bytes": 130,
+        "sha256": "ec56621b185a13a24eb383894068a5ca5216a7f60d010e4474de19ce9ef7c893"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-摸金兄弟.txt",
+        "bytes": 1776,
+        "sha256": "47af9c2d72cbfa090f1ab2f8fa7e09c10cdf8a6973a560cbbe9754b9ebf184f7"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-数码之随机进化 反作弊代码用.txt",
+        "bytes": 638,
+        "sha256": "d8ea6cfb672d6ebbaf51850f4b86e8420c18e227f9408ba7046981fe95f0ceac"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-斗战乾坤 反作弊代码用.txt",
+        "bytes": 1178,
+        "sha256": "68dbd8651f27687784450f77d39b1f621c514b4992a7d412d374decb8e91d40b"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-朝僵尸开炮 反作弊代码用.txt",
+        "bytes": 948,
+        "sha256": "aacbfbf0ba5718fd46ef4084304b1869d37249bfbc3789fb8d734a02647134e8"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-次元激斗 反作弊代码用.txt",
+        "bytes": 729,
+        "sha256": "402893b57f4f2fcd99fd9781fe7428f70ae02c0e9711a83008121cfdf05f2fb7"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-神之墓地叁 反作弊代码用.txt",
+        "bytes": 546,
+        "sha256": "813e9fd8cee6fef0ae65a1cbe2c464a219573e2e290cac3c772aa44e09f932b9"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-神之浩劫 反作弊代码用.txt",
+        "bytes": 545,
+        "sha256": "2535c29142ee65ccd8586068526592bc5ac150939801e403277ffdf40be850fb"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-自走生存战 反作弊代码用.txt",
+        "bytes": 68,
+        "sha256": "7f5786a7253089fe86d04d733ed435d56653cefeb1154fea16233da487f6ec50"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-觉醒风暴：六道之力 反作弊代码用.txt",
+        "bytes": 1598,
+        "sha256": "6135bc3f2ee63d05448627e29bcadd446f680ba0a57bce891b35052751629a23"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-诛仙神器 反作弊代码用.txt",
+        "bytes": 1085,
+        "sha256": "597832923d0933948d8dbf9ec635c4aeb30c1b4147b2921e0fbe129b4a849013"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-赤灵英雄传 反作弊代码用.txt",
+        "bytes": 447,
+        "sha256": "1c8799aa9dcd6c431141c67d2bcd32a10dbd33b1324ea9d96c1f46de4c0bc6e1"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\11-踏碎山河 反作弊代码用.txt",
+        "bytes": 702,
+        "sha256": "66ad76139b9c174d8e4b62cf3da3d0c5585a0fbefbcdb03c548aaa96a1e629d3"
+      },
+      {
+        "path": "11商城反作弊key-更新2024年6月25日\\80-五虎将后传-定制版  反作弊代码用.txt",
+        "bytes": 502,
+        "sha256": "7acdd879c18e6e2242b43005d89f047aad93d6fd92bc5dfd5ac5290de986b173"
+      },
+      {
+        "path": "提取的ID\\单位ID.txt",
+        "bytes": 128978,
+        "sha256": "b44efdd7632028a2023538a97bbb7e13d02b54f045a976b2ca0a1a8a09cce8b8"
+      },
+      {
+        "path": "提取的ID\\技能ID.txt",
+        "bytes": 487394,
+        "sha256": "c4ca97367892b9a58a6c4dc38b988e20f6a9f34fb7e0b5d811db6af8e0dcb490"
+      },
+      {
+        "path": "提取的ID\\物品ID.txt",
+        "bytes": 572997,
+        "sha256": "8599f5355d67cfc5bd2dbc5d58b350b913c4f307c8d4dbc9ffca330ad29ef6e4"
+      },
+      {
+        "path": "提取的ID\\科技ID.txt",
+        "bytes": 13724,
+        "sha256": "d303c7cc69c59437f02dfbe10856585eaabb0acbca4b32dc47ea8ef669667fc5"
+      }
+    ],
+    "file_count": 42,
+    "directory_count_including_root": 3,
+    "total_bytes": 42655112
+  },
+  "coverage": {
+    "rechecked_prior_index_records": 1382,
+    "modern_first_party_modules": 183,
+    "modern_index_records": 1096,
+    "legacy_index_records": 248,
+    "hotkeys_index_records": 38,
+    "hotkeys_archive_members_rehashed": 1148,
+    "box_pe_sections": 19,
+    "box_resource_leaves": 10,
+    "box_embedded_pe_files": 9,
+    "box_serialized_form_objects": 397,
+    "box_event_declarations": 175,
+    "box_id_records": {
+      "units": 1572,
+      "skills": 1823,
+      "items": 1834,
+      "technology": 136,
+      "total": 5365
+    }
+  },
+  "adoption": [
+    "local ID text -> reference CLI and browser",
+    "map-optional save workspace and complete-file queries",
+    "savecodes file/log/explicit text/stdin",
+    "offline hotkey declaration inspection and diff",
+    "lossless SLK and typed unresolved field propagation"
+  ],
+  "sensitive_data_policy": "Marketplace key bodies and target datasets are not included; file identity metadata only.",
+  "unknowns": [
+    "protected native regions and callbacks",
+    "target runtime effects and exact build compatibility",
+    "private platform save protocols without real saved inputs",
+    "real Hotkeys runtime configuration round-trip",
+    "unproved live field layouts"
+  ]
+}

@@ -176,7 +176,7 @@ def load_object_pipeline(
         from .client_object_data import ClientObjectSnapshot
 
         client_snapshot = ClientObjectSnapshot((), False)
-    candidates = collect_object_candidates(archive, wts, prefix=prefix)
+    candidates = collect_object_candidates(archive, wts, prefix=prefix, md=md)
     populate_object_pipeline(
         md,
         candidates,
