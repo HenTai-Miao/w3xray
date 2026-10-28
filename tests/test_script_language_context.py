@@ -17,6 +17,7 @@ from gametool.script_sources import (
     WCT_TEXT_NAME,
     analysis_script_sources,
     script_language,
+    script_type_from_report,
 )
 from gametool.w3i import W3iInfo
 
@@ -54,6 +55,9 @@ def test_wct_context_keeps_source_name_and_line_offsets() -> None:
         ("", ("war3map.j",), False),
         ("", ("war3map.lua", "war3map.j"), None),
         ("", (), None),
+        ("unknown", ("war3map.j",), None),
+        ("unknown", ("war3map.lua",), None),
+        ("unrecognized", ("war3map.lua",), None),
     ],
 )
 def test_wct_language_uses_evidence_without_guessing(
@@ -65,6 +69,47 @@ def test_wct_language_uses_evidence_without_guessing(
         )
         is expected
     )
+
+
+def test_unknown_w3i_language_survives_report_and_primary_script() -> None:
+    from gametool.map_info import format_map_info
+
+    md = _lua_wct()
+    assert md.w3i is not None
+    md.w3i.script_type = "unknown"
+    md.scripts["war3map.lua"] = "local ordinary = true"
+    entries = {entry.source: entry for entry in analysis_script_sources(md)}
+    assert entries[WCT_TEXT_NAME].lua is None
+    assert entries[WCT_TEXT_NAME].text == md.scripts[WCT_TEXT_NAME]
+    assert entries["war3map.lua"].lua is True
+    declared = script_type_from_report(format_map_info(md))
+    assert declared == "unknown"
+    assert (
+        script_language(
+            WCT_TEXT_NAME,
+            available_sources=md.scripts,
+            declared_script_type=declared,
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    ("report", "expected"),
+    [
+        ("地图名称：测试\n", ""),
+        ("脚本语言：\n说明：Lua\n", ""),
+        ("脚本语言：Lua\r\n", "Lua"),
+        ("脚本语言：unknown\n", "unknown"),
+        ("脚本语言：未来语言\n", "unknown"),
+        ("脚本语言：Lua\n脚本语言：JASS\n", "unknown"),
+        ("脚本语言：jass\n脚本语言：JASS\n", "JASS"),
+    ],
+)
+def test_script_report_preserves_unknown_and_conflicting_declarations(
+    report: str, expected: str
+) -> None:
+    assert script_type_from_report(report) == expected
 
 
 def test_wct_catalog_arguments_functions_and_positions_share_lua_context() -> None:

@@ -21,6 +21,7 @@ from .archive_export import (
     tmp_extract_dir as tmp_extract_dir,
 )
 from .map_archive_reader import MapArchiveReader
+from .extraction_diagnostics import read_component
 from .map_components import (
     _add_preplaced as _add_preplaced,
     _add_script_refs as _add_script_refs,
@@ -44,7 +45,7 @@ from .script_sources import (
     analysis_script_texts,
     collect_readable_scripts,
 )
-from .wts import map_wts_table, parse_wts, resolve
+from .wts import map_wts_table, parse_wts_evidence, resolve, retain_wts_evidence
 
 MPQArchive = map_loader.MPQArchive
 
@@ -196,17 +197,20 @@ def recipes_from_map(md: MapData) -> list[Recipe]:
 
 def _script_only_map(archive: MapArchiveReader, path: str) -> MapData:
     """Load readable scripts, strings and language without materializing objects."""
-    collection = collect_readable_scripts(archive)
-    ui_strings = None
-    if collection.wts_raw is not None:
-        try:
-            ui_strings = parse_wts(collection.wts_raw)
-        except UnicodeError, ValueError:
-            ui_strings = {}
-    md = MapData(
-        path=path, name=path, scripts=dict(collection.texts), ui_strings=ui_strings
-    )
-    _add_w3i(md, archive, ui_strings or {})
+    md = MapData(path=path, name=path)
+    collection = collect_readable_scripts(archive, md=md)
+    md.scripts.update(collection.texts)
+    wts_raw = collection.wts_raw
+    if wts_raw is not None:
+        report = read_component(
+            md,
+            "wts",
+            "war3map.wts",
+            lambda: parse_wts_evidence(wts_raw),
+            stage="parse",
+        )
+        md.ui_strings = retain_wts_evidence(md, report) if report is not None else {}
+    _add_w3i(md, archive, md.ui_strings or {})
     return md
 
 

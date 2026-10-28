@@ -61,11 +61,37 @@ def format_reference_result(result: ReferenceSearchResult) -> str:
     """Render all selected records and all source/coverage diagnostics."""
     lines = [
         "GameXRay 离线字段与版本参考",
-        "静态定义、知识包证据与外部未验证标签；实时值请使用 live 探针，地图可用性请用 pack-query 查证。",
+        "静态定义、地图/知识包证据与外部未验证标签；实时值请使用 live 探针。",
         f"已确认目录记录 {result.total}，匹配 {result.matched}，显示 {len(result.records)}。",
         f"筛选: kind={result.kind} category={result.category or '全部'} "
         f"build={result.build or '全部'} source={result.source or '全部'}",
     ]
+    if result.map_path:
+        lines.extend(
+            (
+                f"地图归档: {result.map_path}",
+                "地图证据按归档/章节分别计数；基础定义仍为独立静态参考。",
+            )
+        )
+        for scope in result.map_scopes:
+            counts = " / ".join(
+                f"{category} {count}" for category, count in scope.category_counts
+            )
+            lines.append(
+                f"  {scope.scope}: {counts or '无已确认对象'} · {'完整' if scope.complete else '不完整'}"
+            )
+            if scope.shared_scope:
+                lines.append(
+                    f"    战役共享来源: {scope.shared_scope}（共享定义仅在该范围展示一次）"
+                )
+            if scope.shared_references:
+                lines.append(
+                    "    共享引用: "
+                    + " / ".join(
+                        f"{category}:{code}"
+                        for category, code in scope.shared_references
+                    )
+                )
     if not result.records:
         lines.append("未找到符合筛选条件的记录。")
     for kind, label in (
@@ -95,6 +121,14 @@ def format_reference_result(result: ReferenceSearchResult) -> str:
                 f"  指纹边界: {source.fingerprint_basis}",
                 f"  磁盘源码独立观测: {source.source_file_sha256 or '无独立文件'} · {source.source_file_state or '不适用'}",
                 f"  溯源: {source.provenance}",
+                *(
+                    (
+                        f"  归档成员: {source.member_path}",
+                        f"  容器 SHA-256: {source.container_sha256}",
+                    )
+                    if source.member_path
+                    else ()
+                ),
             )
         )
     if result.diagnostics:
@@ -107,20 +141,43 @@ def format_reference_result(result: ReferenceSearchResult) -> str:
     return "\n".join(lines) + "\n"
 
 
-def write_reference_export(
-    path: str | Path, result: ReferenceSearchResult, *, as_json: bool | None = None
+def _require_report_destination(
+    destination: Path, result: ReferenceSearchResult
 ) -> None:
-    """Export an explicit report without replacing a catalog source/input asset."""
-    destination = Path(path).absolute()
+    """Reject both current input names and retained original archive identities."""
     resolved = destination.resolve()
-    if any(resolved == Path(source.path).resolve() for source in result.sources):
+    inputs = tuple(
+        dict.fromkeys(
+            (*result.input_files, *(source.path for source in result.sources))
+        )
+    )
+    if any(
+        resolved == Path(source).resolve()
+        or destination.exists()
+        and Path(source).exists()
+        and destination.samefile(source)
+        for source in inputs
+    ):
         raise ValueError("导出路径是目录的输入源文件；请选择独立报告路径。")
+    if destination.exists():
+        details = destination.stat()
+        identities = {source.source_file_identity for source in result.sources}
+        if (details.st_dev, details.st_ino) in identities:
+            raise ValueError("导出路径是目录的输入源文件的硬链接；请选择独立报告路径。")
     if any(
         resolved.is_relative_to(Path(root).resolve()) for root in result.input_roots
     ):
         raise ValueError(
             "知识包及外部 ID 表为只读输入；请将参考报告导出到输入目录之外。"
         )
+
+
+def write_reference_export(
+    path: str | Path, result: ReferenceSearchResult, *, as_json: bool | None = None
+) -> None:
+    """Export an explicit report without replacing a catalog source/input asset."""
+    destination = Path(path).absolute()
+    _require_report_destination(destination, result)
     json_output = (
         destination.suffix.casefold() == ".json" if as_json is None else as_json
     )
@@ -130,6 +187,7 @@ def write_reference_export(
         if json_output
         else format_reference_result(result)
     )
+    _require_report_destination(destination, result)
     written = write_text_safely(str(destination.parent), destination.name, content)
     if written.status != SafeWriteStatus.WRITTEN:
         raise OSError(f"参考报告写入失败: {written.status.value} {written.error}")
@@ -140,15 +198,22 @@ def _parser() -> argparse.ArgumentParser:
         prog="gamexray reference",
         description="完整离线字段/对象/版本参考；不连接游戏。空关键词列出全量。",
         epilog='例: reference "冷却 && real" --kind fields；reference --kind versions；'
-        "reference ckng --pack DIR --json --export reference.json。"
+        "reference ckng --pack DIR --json --export reference.json；reference --map MAP.w3x --kind objects。"
         'Boolean 关键词支持 &&、||、%、括号、="区分大小写的精准词"。'
         " build 仅精确匹配已记录标签，基础表缺 build 时标为 unrecorded。",
     )
     parser.add_argument(
         "keyword", nargs="?", default="", help="关键词/Boolean 表达式，省略=完整列表"
     )
-    parser.add_argument(
+    map_input = parser.add_mutually_exclusive_group()
+    map_input.add_argument(
         "--pack", default=None, metavar="DIR", help="叠加知识包及战役的全部直接子包"
+    )
+    map_input.add_argument(
+        "--map",
+        default=None,
+        metavar="PATH",
+        help="直接只读 .w3x/.w3m/.w3n 的完整对象/字段及战役章节；无需预先导出知识包",
     )
     parser.add_argument(
         "--id-table",
@@ -197,7 +262,10 @@ def run_reference_cli(argv: Sequence[str]) -> int:
         args = parser.parse_args(list(argv))
         limit = parse_query_limit(args.limit)
         catalog = load_reference_catalog(
-            args.pack, profile_json=args.profile_json, id_tables=args.id_table
+            args.pack,
+            profile_json=args.profile_json,
+            id_tables=args.id_table,
+            map_path=args.map,
         )
         result = search_reference_catalog(
             catalog,

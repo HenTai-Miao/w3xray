@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from .api import MapData
+from .map_metadata_exports import format_w3i_metadata
 from .wtg_diagnostics import format_summary_diagnostics
 
 
@@ -45,12 +46,18 @@ def _format_w3i_info(info, md: MapData) -> list[str]:
     ]
     if info.recommended_players:
         lines.append(f"推荐人数：{info.recommended_players}")
-    lines.append(f"尺寸　　：{info.width} × {info.height}")
+    if info.width > 0 and info.height > 0:
+        lines.append(f"尺寸　　：{info.width} × {info.height}")
+    else:
+        lines.append("尺寸　　：未确认有效尺寸（原始字段见证据与诊断）")
     version_names = {
         18: "RoC(1.07-)",
         25: "TFT(1.13-)",
         28: "重制 1.31",
-        31: "重制 1.32+",
+        31: "重制 1.32",
+        32: "2.0.3 PTR",
+        33: "2.0.3",
+        39: "3.0.0",
     }
     lines.append(f"格式版本：{info.version}  {version_names.get(info.version, '')}")
     if info.script_type:
@@ -66,17 +73,7 @@ def _format_w3i_info(info, md: MapData) -> list[str]:
         )
     if info.description:
         lines.append(f"\n描述：\n{info.description}")
-    if info.players:
-        lines.append(f"\n玩家（{len(info.players)}）：")
-        for player in info.players:
-            lines.append(
-                f"  P{player.id + 1}  {player.name or '(无名)'}  ·  "
-                f"{player.type_name}  ·  {player.race_name}"
-            )
-    if info.forces:
-        lines.append(f"\n队伍（{len(info.forces)}）：")
-        for force in info.forces:
-            lines.append(_format_force(force))
+    lines.extend(format_w3i_metadata(info))
     return lines
 
 
@@ -91,19 +88,6 @@ def _map_tags(info) -> list[str]:
     if info.custom_ability:
         tags.append("自定义技能")
     return tags
-
-
-def _format_force(force) -> str:
-    share = []
-    if force.allied:
-        share.append("同盟")
-    if force.share_vision:
-        share.append("共享视野")
-    if force.share_control:
-        share.append("共享控制")
-    players = "、".join(f"P{i}" for i in force.players) if force.players else "无"
-    suffix = f"  ·  {'/'.join(share)}" if share else ""
-    return f"  {force.name or '(无名队伍)'}  ·  玩家 {players}{suffix}"
 
 
 def _format_world_metadata(md: MapData) -> list[str]:
@@ -153,8 +137,6 @@ def _format_game_configs(md: MapData) -> list[str]:
         if custom_ai:
             names = [f"P{p.slot_id + 1}:{p.custom_ai_path}" for p in custom_ai]
             lines.append(f"    自定义AI：{_names(names)}")
-    if len(configs) > 4:
-        lines.append(f"  ……另 {len(configs) - 4} 个配置")
     return lines
 
 

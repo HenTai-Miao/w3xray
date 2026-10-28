@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from decimal import Decimal
 from typing import assert_never
 
 from .base_names import BASE_NAMES
 from .object_text_roles import classify_text_field
+from .script_string_references import trigstr_reference_id
 from .static_numbers import format_number
 from .textobj import _sub_westring
 from .wts import resolve
@@ -43,9 +45,12 @@ def wts_value_source(
             if not text.startswith("TRIGSTR_"):
                 return ""
             suffix = text.removeprefix("TRIGSTR_")
-            if not suffix.isdecimal() or int(suffix) not in wts:
+            if not suffix.isdecimal():
                 return ""
-            return f"{prefix}.wts#STRING {int(suffix)}"
+            sid = trigstr_reference_id(suffix)
+            if sid not in wts:
+                return ""
+            return f"{prefix}.wts#STRING {Decimal(sid)}"
         case int() | float():
             return ""
         case unreachable:

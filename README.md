@@ -14,7 +14,7 @@ GUI触发器、场景放置、触发指令、合成配方、孤立对象、分�
 
 > 用途：研究地图、学习地图制作。不含改存档 / 过反作弊 / 开图等作弊功能。
 
-## 0.8.0 使用入口
+## 0.9.0 使用入口
 
 日常使用直接运行 Windows 发行目录里的 `GameXRay 游戏档案透视器.exe`，保留同目录的
 `_internal` 文件夹。无需安装 Python，也无需先运行测试或开发工具。
@@ -31,6 +31,8 @@ GUI触发器、场景放置、触发指令、合成配方、孤立对象、分�
 源码运行统一使用 `uv run gamexray`，或 `uv run python -m gametool`；原来的
 `uv run main.py` 仍可用。各模式均支持 `--help`，总览运行 `uv run gamexray --help`。
 选中集合、字段证据、离线报告比较、字段与版本目录的完整步骤见
+[0.9.0 地图直接查询与证据使用说明](docs/usable-release-0.9.0.md)。
+存档、改键方案和外部 ID 的既有操作见
 [0.8.0 离线资料与存档工作台使用说明](docs/usable-release-0.8.0.md)。
 地图导出和已有查询的操作说明另见 [0.6.2 使用与验收说明](docs/usable-release-0.6.2.md)。
 
@@ -40,13 +42,16 @@ GUI触发器、场景放置、触发指令、合成配方、孤立对象、分�
 [2026-10-28 审计与实施对照](docs/analysis/war3-tools-adoption-2026-10-28.md)。
 当前版本可导入用户本地的盒子兼容 ID 文本、无地图分析存档，以及离线检查和比较改键方案。
 未验证的运行时布局仍单列状态。
+新增两份 Trainer 输入的全量静态差异、功能归属与本版实现见
+[2.1.21 / R8 复核与实施对照](docs/analysis/war3-trainer-2.1.21-adoption-2026-10-28.md)。
+参考目录可以直接选择地图或战役，按对象类别、名称、四码和完整字段查询；无需先导出知识包。
 
 ## Windows 发行包
 
 Windows x64 同时提供：
 
-- `gamexray-v0.8.0-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
-- `gamexray-v0.8.0-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
+- `gamexray-v0.9.0-windows-x64.zip`：完整解压后运行，启动更快，也更容易诊断依赖或启动问题，适合长期使用。
+- `gamexray-v0.9.0-windows-x64.exe`：单文件直接运行，首次启动会解压到临时目录，因此启动较慢。此单文件直发版未做代码签名，因此可能出现 SmartScreen 提示。
 
 两者功能相同；遇到杀软误报或启动问题时优先使用 ZIP 版。
 
@@ -60,6 +65,7 @@ uv run main.py live <地图路径> --report <新的JSON文件>  # 保存完整�
 uv run main.py live-report diff <旧报告.json> <新报告.json> --json  # 离线比较
 uv run main.py reference --kind versions --json         # 档案支持与来源
 uv run main.py reference --pack <资料包> --kind fields   # 字段说明与完整证据
+uv run main.py reference --map <地图或战役> --kind objects --json # 直接建立完整对象目录
 uv run main.py reference --id-table <盒子兼容ID目录> --kind objects --json  # 外部ID来源
 uv run main.py hotkeys inspect <config.json> --json    # 离线配置诊断
 uv run main.py hotkeys diff <旧config.json> <新config.json> --json

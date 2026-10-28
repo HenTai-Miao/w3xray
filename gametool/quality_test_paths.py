@@ -341,6 +341,8 @@ tests/test_lua_trigger_acquisition_complete.py
 tests/test_map_analysis_evidence_exports.py
 tests/test_map_data_compat.py
 tests/test_map_directory.py
+tests/test_map_metadata_exports.py
+tests/test_map_reference.py
 tests/test_map_relation_loading.py
 tests/test_map_reuse.py
 tests/test_mapmeta.py
@@ -544,6 +546,7 @@ tests/test_trusted_description_cache_anchored.py
 tests/test_trusted_icon_cache.py
 tests/test_ui_text_report.py
 tests/test_w3i.py
+tests/test_w3i_metadata.py
 tests/test_w3obj.py
 tests/test_w3world.py
 tests/test_war3_encoding.py
@@ -559,6 +562,8 @@ tests/test_wtg.py
 tests/test_wtg_eca_exports.py
 tests/test_wtg_real_fixture.py
 tests/test_wts.py
+tests/test_wts_evidence.py
+tests/test_wts_loading.py
 tests/trusted_description_cache_fixture.py
 tests/windows_cache_contract_fixture.py
 """.splitlines()

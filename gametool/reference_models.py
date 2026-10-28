@@ -18,6 +18,27 @@ class ReferenceSource:
     fingerprint_basis: str = "file-bytes"
     source_file_sha256: str = ""
     source_file_state: str = ""
+    member_path: str = ""
+    container_sha256: str = ""
+    source_file_identity: tuple[int, int] | None = None
+    source_descriptor_stamp: tuple[int, ...] = ()
+    source_path_stamp: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ReferenceMapScope:
+    """One archive context, including empty or failed campaign chapters."""
+
+    scope: str
+    archive_path: str
+    member_path: str
+    name: str
+    sha256: str
+    category_counts: tuple[tuple[str, int], ...] = ()
+    shared_scope: str = ""
+    shared_references: tuple[tuple[str, str], ...] = ()
+    diagnostics: tuple[str, ...] = ()
+    complete: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,6 +117,10 @@ class ReferenceCatalog:
     sources: tuple[ReferenceSource, ...]
     diagnostics: tuple[str, ...] = ()
     input_roots: tuple[str, ...] = ()
+    map_path: str = ""
+    map_scopes: tuple[ReferenceMapScope, ...] = ()
+    source_counts: tuple[tuple[str, int], ...] = ()
+    input_files: tuple[str, ...] = ()
 
     @property
     def complete(self) -> bool:
@@ -119,3 +144,7 @@ class ReferenceSearchResult:
     catalog_complete: bool = True
     recovery: tuple[str, ...] = ()
     input_roots: tuple[str, ...] = ()
+    map_path: str = ""
+    map_scopes: tuple[ReferenceMapScope, ...] = ()
+    source_counts: tuple[tuple[str, int], ...] = ()
+    input_files: tuple[str, ...] = ()

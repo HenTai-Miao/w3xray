@@ -1,251 +1,377 @@
-"""war3map.w3i 地图信息解析（移植自 w3x2lni frontend_w3i.lua）。
+"""Read proven W3I layouts without discarding raw or incomplete evidence.
 
-w3i 是地图的"信息卡"：真实地图名/作者/描述、推荐人数、尺寸、对战/自定义标志、
-脚本语言(JASS/Lua)、各玩家(类型/种族/开局点/名字)、队伍(同盟/共享)。gamexray 原来完全没解析。
+Layout reference: War3Net reader AND writer at commit
+5f6f7bac26ed7ce7d0db83ceb4fb9ce59f918ff8, including the Info/Common record readers:
+https://github.com/Drake53/War3Net/blob/5f6f7bac26ed7ce7d0db83ceb4fb9ce59f918ff8/src/War3Net.Build.Core/Serialization/Binary/Info/MapInfo.cs
 
-版本：第一个 int32 即 file_version（18=RoC，25=TFT，28/31=重制版 1.31/1.32）。
-本工具只取到玩家/队伍段（head 须读穿载入屏/雾/环境才能到玩家段）；之后的升级/科技/随机段不暴露、不解析。
-不可信文件：任一段解析出错即停，保留已解析部分；版本不认/空数据返回 None。
+Only explicitly verified versions are accepted. Every consumed byte belongs to
+a field with its original bytes and offset; all remaining bytes are retained.
 """
 
 from __future__ import annotations
 
-import struct
 from collections.abc import Mapping
-from dataclasses import dataclass, field
 
-from .war3_encoding import decode_warcraft_string
 from .w3f import CampaignMapEntry, W3fDiagnostic, W3fInfo, parse_w3f
-from .wts import resolve
+from .w3i_evidence import w3i_info_to_dict
+from .w3i_models import (
+    PLAYER_TYPES,
+    RACES,
+    Force,
+    Player,
+    RandomItem,
+    RandomItemSet,
+    RandomItemTable,
+    RandomUnitRow,
+    RandomUnitTable,
+    TechAvailability,
+    UpgradeAvailability,
+    W3iDiagnostic,
+    W3iDiagnosticCode,
+    W3iField,
+    W3iInfo,
+)
+from .w3i_reader import W3iReadError, W3iReader
 
-__all__ = ["CampaignMapEntry", "W3fDiagnostic", "W3fInfo", "parse_w3f", "parse_w3i"]
+__all__ = [
+    "CampaignMapEntry",
+    "Force",
+    "PLAYER_TYPES",
+    "Player",
+    "RACES",
+    "RandomItem",
+    "RandomItemSet",
+    "RandomItemTable",
+    "RandomUnitRow",
+    "RandomUnitTable",
+    "TechAvailability",
+    "UpgradeAvailability",
+    "W3fDiagnostic",
+    "W3fInfo",
+    "W3iDiagnostic",
+    "W3iDiagnosticCode",
+    "W3iField",
+    "W3iInfo",
+    "parse_w3f",
+    "parse_w3i",
+    "w3i_info_to_dict",
+]
 
-# 玩家类型 / 种族（编辑器口径）
-PLAYER_TYPES = {1: "用户", 2: "电脑", 3: "中立", 4: "可救援"}
-RACES = {0: "可选", 1: "人族", 2: "兽族", 3: "不死", 4: "暗夜", 5: "中立"}
-
-
-@dataclass  # [OK: MUTABLE_OK]  # [OK: SLOTS_OK] - legacy mutable compatibility model.
-class Player:
-    id: int
-    type: int
-    race: int
-    fixed_start: int
-    name: str
-    start_x: float = 0.0
-    start_y: float = 0.0
-
-    @property
-    def type_name(self):
-        return PLAYER_TYPES.get(self.type, str(self.type))
-
-    @property
-    def race_name(self):
-        return RACES.get(self.race, str(self.race))
-
-
-@dataclass  # [OK: MUTABLE_OK]  # [OK: SLOTS_OK] - legacy mutable compatibility model.
-class Force:
-    name: str
-    allied: bool = False
-    allied_victory: bool = False
-    share_vision: bool = False
-    share_control: bool = False
-    players: list[int] = field(default_factory=list)  # 玩家序号(1基) 列表
-
-
-@dataclass  # [OK: MUTABLE_OK]  # [OK: SLOTS_OK] - mutable extraction builder compatibility model.
-class W3iInfo:
-    version: int = 0
-    map_name: str = ""
-    author: str = ""
-    description: str = ""
-    recommended_players: str = ""
-    width: int = 0
-    height: int = 0
-    script_type: str = ""  # 'JASS'/'Lua'/''(版本<28未记)
-    # 配置标志
-    disable_preview: bool = False
-    custom_ally: bool = False
-    melee: bool = False
-    large_map: bool = False
-    custom_forces: bool = False
-    custom_techtree: bool = False
-    custom_ability: bool = False
-    custom_upgrade: bool = False
-    players: list[Player] = field(default_factory=list)
-    forces: list[Force] = field(default_factory=list)
-    parse_issue: str = ""
-    camera_bounds: tuple[
-        float, ...
-    ] = ()  # 镜头边界 8f: left,bottom,right,top + 4 补充浮点
-    camera_margins: tuple[int, ...] = ()  # 镜头补足 4i (可玩区 = 边界 ± 补足)
+SUPPORTED_W3I_VERSIONS = frozenset((18, 23, 24, 25, 26, 27, 28, 31, 32, 33, 39))
+_KNOWN_MAP_FLAGS = ((1 << 26) - 1) | (1 << 29) | (1 << 30)
+_KNOWN_RACE_HUD_FLAGS = 0xCF
 
 
-class _Reader:
-    def __init__(self, data: bytes):
-        self.d = data
-        self.p = 0
+def parse_w3i(data: bytes, wts: Mapping[int, str] | None = None) -> W3iInfo | None:
+    """Return confirmed metadata and complete diagnostics, including bad tails.
 
-    def i32(self) -> int:
-        v = struct.unpack_from("<i", self.d, self.p)[0]
-        self.p += 4
-        return v
-
-    def u32(self) -> int:
-        v = struct.unpack_from("<I", self.d, self.p)[0]
-        self.p += 4
-        return v
-
-    def f32(self) -> float:
-        v = struct.unpack_from("<f", self.d, self.p)[0]
-        self.p += 4
-        return v
-
-    def skip(self, n: int):
-        if self.p + n > len(self.d):
-            raise IndexError("skip 越界")
-        self.p += n
-
-    def cstr(self) -> str:
-        end = self.d.find(b"\x00", self.p)
-        if end < 0:
-            raise IndexError("unterminated W3I string")
-        b = self.d[self.p : end]
-        self.p = end + 1
-        return decode_warcraft_string(b)
-
-
-def parse_w3i(data: bytes, wts: Mapping[int, str] | None = None) -> "W3iInfo | None":
-    wts = wts or {}
-    if len(data) < 8:
+    ``complete`` means all encoded data was understood without diagnostics.
+    A terminal FF is a documented omitted-table marker: ``optional_data_skipped``
+    is true, and ``tables_complete`` remains false rather than claiming no rows.
+    """
+    if len(data) < 4:
         return None
-    r = _Reader(data)
-
-    def rs():  # 读 z 串并还原 TRIGSTR
-        return str(resolve(r.cstr(), wts))
-
-    try:
-        version = r.i32()
-    except struct.error, IndexError:
-        return None
-    if version not in (18, 25, 28, 31):
-        return None
-    info = W3iInfo(version=version)
-    try:
-        r.i32()  # map_version
-        r.i32()  # we_version
-        if version >= 28:
-            r.i32()  # war3 版本 4 段
-            r.i32()
-            r.i32()
-            r.i32()
-        info.map_name = rs()
-        info.author = rs()
-        info.description = rs()
-        info.recommended_players = rs()
-        info.camera_bounds = struct.unpack_from("<8f", r.d, r.p)
-        r.p += 8 * 4  # 镜头边界 8f
-        info.camera_margins = struct.unpack_from("<4i", r.d, r.p)
-        r.p += 4 * 4  # 镜头补足 4i
-        info.width = r.i32()
-        info.height = r.i32()
-        flag = r.u32()
-        info.disable_preview = bool(flag & 0x1)
-        info.custom_ally = bool(flag & 0x2)
-        info.melee = bool(flag & 0x4)
-        info.large_map = bool(flag & 0x8)
-        info.custom_forces = bool(flag & 0x40)
-        info.custom_techtree = bool(flag & 0x80)
-        info.custom_ability = bool(flag & 0x100)
-        info.custom_upgrade = bool(flag & 0x200)
-        r.skip(1)  # c1 主地表
-
-        if version >= 25:
-            r.i32()  # 载入屏 id + 4z
-            rs()
-            rs()
-            rs()
-            rs()
-            r.i32()  # game_data_set
-            rs()  # 序章 4z
-            rs()
-            rs()
-            rs()
-            r.i32()  # 雾 type+3f+4B
-            r.f32()
-            r.f32()
-            r.f32()
-            r.skip(4)
-            r.skip(4)  # 环境 weather c4 + sound z + light c1 + water 4B
-            rs()
-            r.skip(1)
-            r.skip(4)
-            if version >= 28:
-                info.script_type = "Lua" if r.i32() == 1 else "JASS"
-            if version >= 31:
-                r.i32()  # 1.32 未知 8 字节
-                r.i32()
-        elif version == 18:
-            r.i32()  # 载入屏 id + 3z
-            rs()
-            rs()
-            rs()
-            r.i32()  # 序章 id + 3z
-            rs()
-            rs()
-            rs()
-    except struct.error, IndexError:
-        info.parse_issue = "truncated W3I metadata header"
-        return info  # head 半截：返回已得字段
-
-    # 玩家段
-    try:
-        pcount = r.i32()
-        if not 0 <= pcount <= len(r.d) - r.p:
-            info.parse_issue = f"invalid W3I player count: {pcount}"
-            return info
-        for _ in range(pcount):
-            pid = r.i32()
-            ptype = r.i32()
-            race = r.i32()
-            fixed = r.i32()
-            name = rs()
-            sx = r.f32()
-            sy = r.f32()
-            r.u32()  # ally low/high
-            r.u32()
-            if version >= 31:
-                r.i32()  # 1.32 未知
-                r.i32()
-            info.players.append(Player(pid, ptype, race, fixed, name, sx, sy))
-    except struct.error, IndexError:
-        info.parse_issue = "truncated W3I player data"
-        return info
-
-    # 队伍段
-    try:
-        fcount = r.i32()
-        if not 0 <= fcount <= len(r.d) - r.p:
-            info.parse_issue = f"invalid W3I force count: {fcount}"
-            return info
-        for _ in range(fcount):
-            fflag = r.u32()
-            mask = r.u32()
-            fname = rs()
-            players = [i + 1 for i in range(32) if mask & (1 << i)]
-            info.forces.append(
-                Force(
-                    name=fname,
-                    allied=bool(fflag & 0x1),
-                    allied_victory=bool(fflag & 0x2),
-                    share_vision=bool(fflag & 0x8),
-                    share_control=bool(fflag & 0x10),
-                    players=players,
+    info = W3iInfo()
+    r = W3iReader(data, info, wts if wts is not None else {})
+    info.version = r.i32("version")
+    if info.version >= 28 or info.version not in SUPPORTED_W3I_VERSIONS:
+        # A missing/corrupt declaration must not act like an old format that
+        # never declared a language, allowing downstream WCT language guessing.
+        info.script_type = "unknown"
+    if info.version not in SUPPORTED_W3I_VERSIONS:
+        r.problem(
+            W3iDiagnosticCode.UNSUPPORTED_VERSION,
+            "version",
+            f"unverified W3I layout {info.version}; remaining bytes retained",
+            offset=0,
+        )
+    else:
+        try:
+            _read_header(r, info)
+            info.header_complete = True
+            _read_players(r, info)
+            _read_forces(r, info)
+            _read_optional_tables(r, info)
+            if r.remaining:
+                r.problem(
+                    W3iDiagnosticCode.TRAILING_DATA,
+                    "unconsumed_data",
+                    f"{r.remaining} bytes follow the verified layout",
                 )
-            )
-    except struct.error, IndexError:
-        info.parse_issue = "truncated W3I force data"
-        return info
-
+        except W3iReadError:
+            pass  # The failed bounded read already recorded its exact boundary.
+    info.consumed_bytes = r.position
+    info.unconsumed_data = data[r.position :]
+    info.complete = not info.diagnostics and not info.unconsumed_data
+    info.parse_issue = "; ".join(
+        f"{diagnostic.code} W3I {diagnostic.field} at byte {diagnostic.offset}: "
+        f"{diagnostic.message}"
+        for diagnostic in info.diagnostics
+    )
     return info
+
+
+def _read_header(r: W3iReader, info: W3iInfo) -> None:
+    info.map_version = r.i32("map_version")
+    info.editor_version = r.i32("editor_version")
+    if info.version >= 27:
+        offset = r.position
+        info.game_version = r.ints("game_version", 4)
+        if any(value < 0 for value in info.game_version):
+            r.problem(
+                W3iDiagnosticCode.INVALID_VALUE,
+                "game_version",
+                "negative game-version component; original values retained",
+                offset=offset,
+            )
+    info.map_name = r.text("map_name")
+    info.author = r.text("author")
+    info.description = r.text("description")
+    info.recommended_players = r.text("recommended_players")
+    info.camera_bounds = r.floats("camera_bounds", 8)
+    info.camera_margins = r.ints("camera_margins", 4)
+    info.width = _dimension(r, "width")
+    info.height = _dimension(r, "height")
+    flags = r.flags("flags", _KNOWN_MAP_FLAGS)
+    info.flags = flags
+    info.disable_preview = bool(flags & 0x1)
+    info.custom_ally = bool(flags & 0x2)
+    info.melee = bool(flags & 0x4)
+    info.large_map = bool(flags & 0x8)
+    info.custom_forces = bool(flags & 0x40)
+    info.custom_techtree = bool(flags & 0x80)
+    info.custom_ability = bool(flags & 0x100)
+    info.custom_upgrade = bool(flags & 0x200)
+    info.tileset = r.code("tileset", 1)
+    info.loading_screen_background = r.i32("loading_screen_background")
+    if info.version >= 39:
+        info.race_hud = r.flags("race_hud", _KNOWN_RACE_HUD_FLAGS)
+    if info.version >= 23:
+        info.loading_screen_path = r.text("loading_screen_path", display=False)
+    info.loading_screen_text = r.text("loading_screen_text")
+    info.loading_screen_title = r.text("loading_screen_title")
+    info.loading_screen_subtitle = r.text("loading_screen_subtitle")
+    if info.version >= 23:
+        info.game_data_set = r.enum("game_data_set", (-1, 0, 1, 2))
+        info.prologue_screen_path = r.text("prologue_screen_path", display=False)
+    else:
+        info.prologue_screen_background = r.i32("prologue_screen_background")
+    info.prologue_screen_text = r.text("prologue_screen_text")
+    info.prologue_screen_title = r.text("prologue_screen_title")
+    info.prologue_screen_subtitle = r.text("prologue_screen_subtitle")
+    if info.version >= 23:
+        _read_environment(r, info)
+    if info.version >= 28:
+        info.script_language_raw = r.enum("script_language_raw", (0, 1))
+        info.script_type = {0: "JASS", 1: "Lua"}.get(
+            info.script_language_raw, "unknown"
+        )
+    if info.version >= 31:
+        info.supported_modes = r.flags("supported_modes", 7)
+        info.game_data_version = r.enum("game_data_version", (0, 1, 2))
+    if info.version >= 32:
+        info.default_camera_zoom = r.i32("default_camera_zoom")
+        info.max_camera_zoom = r.i32("max_camera_zoom")
+    if info.version >= 33:
+        info.min_camera_zoom = r.i32("min_camera_zoom")
+    if info.version >= 39:
+        _read_hd_water(r, info)
+
+
+def _dimension(r: W3iReader, name: str) -> int:
+    offset = r.position
+    value = r.i32(name)
+    if value <= 0:
+        r.problem(
+            W3iDiagnosticCode.INVALID_VALUE,
+            name,
+            f"non-positive map dimension {value}; raw evidence retained",
+            offset=offset,
+        )
+        return 0
+    return value
+
+
+def _read_environment(r: W3iReader, info: W3iInfo) -> None:
+    info.fog_style = r.enum("fog_style", (0, 1, 2))
+    info.fog_start = r.f32("fog_start")
+    info.fog_end = r.f32("fog_end")
+    info.fog_density = r.f32("fog_density")
+    info.fog_color_bgra = r.octets("fog_color_bgra", 4)
+    if info.version >= 39:
+        info.fog_height_start = r.f32("fog_height_start")
+        info.fog_height_end = r.f32("fog_height_end")
+        info.fog_linear_start = r.f32("fog_linear_start")
+        info.fog_linear_end = r.f32("fog_linear_end")
+        info.fog_max_opacity = r.f32("fog_max_opacity")
+        info.fog_draw_over_sky = r.enum("fog_draw_over_sky", (0, 1))
+    if info.version >= 25:
+        info.weather_id = r.code("weather_id")
+    info.sound_environment = r.text("sound_environment", display=False)
+    info.light_environment = r.code("light_environment", 1)
+    info.water_color_bgra = r.octets("water_color_bgra", 4)
+
+
+def _read_hd_water(r: W3iReader, info: W3iInfo) -> None:
+    info.hd_water_min_opacity = r.i32("hd_water_min_opacity")
+    info.hd_water_max_opacity = r.i32("hd_water_max_opacity")
+    info.hd_water_reflectivity = r.i32("hd_water_reflectivity")
+    info.hd_water_emissivity = r.i32("hd_water_emissivity")
+    info.hd_water_edge_softness = r.i32("hd_water_edge_softness")
+    info.hd_water_wave_displacement = r.i32("hd_water_wave_displacement")
+    info.hd_water_wave_normal_strength = r.i32("hd_water_wave_normal_strength")
+    info.hd_water_color_bgra = r.octets("hd_water_color_bgra", 4)
+    info.hd_water_envmap_reflectivity = r.i32("hd_water_envmap_reflectivity")
+    info.alpha_tile_minimap_color_bgra = r.octets("alpha_tile_minimap_color_bgra", 4)
+
+
+def _read_players(r: W3iReader, info: W3iInfo) -> None:
+    minimum = 33 + (8 if info.version >= 31 else 0) + (4 if info.version >= 39 else 0)
+    for index in range(r.count("players.count", minimum)):
+        offset = r.position
+        path = f"players[{index}]"
+        pid = r.i32(f"{path}.id")
+        controller = r.enum(f"{path}.type", (0, 1, 2, 3, 4))
+        race = r.enum(f"{path}.race", (0, 1, 2, 3, 4, 5))
+        race_hud = (
+            r.flags(f"{path}.race_hud", _KNOWN_RACE_HUD_FLAGS)
+            if info.version >= 39
+            else None
+        )
+        flags = r.flags(f"{path}.fixed_start", 3)
+        name = r.text(f"{path}.name")
+        sx = r.f32(f"{path}.start_x")
+        sy = r.f32(f"{path}.start_y")
+        ally_low = r.u32(f"{path}.ally_low_priority_flags")
+        ally_high = r.u32(f"{path}.ally_high_priority_flags")
+        enemy_low = enemy_high = None
+        if info.version >= 31:
+            enemy_low = r.u32(f"{path}.enemy_low_priority_flags")
+            enemy_high = r.u32(f"{path}.enemy_high_priority_flags")
+        info.players.append(
+            Player(
+                pid,
+                controller,
+                race,
+                flags,
+                name,
+                sx,
+                sy,
+                ally_low,
+                ally_high,
+                enemy_low,
+                enemy_high,
+                race_hud,
+                offset,
+                r.position,
+            )
+        )
+
+
+def _read_forces(r: W3iReader, info: W3iInfo) -> None:
+    for index in range(r.count("forces.count", 9)):
+        offset = r.position
+        path = f"forces[{index}]"
+        flags = r.flags(f"{path}.flags", 0x3F)
+        mask = r.u32(f"{path}.player_mask")
+        name = r.text(f"{path}.name")
+        info.forces.append(
+            Force(
+                name=name,
+                allied=bool(flags & 0x1),
+                allied_victory=bool(flags & 0x2),
+                share_vision=bool(flags & 0x8),
+                share_control=bool(flags & 0x10),
+                players=[bit + 1 for bit in range(32) if mask & (1 << bit)],
+                flags=flags,
+                player_mask=mask,
+                share_advanced_control=bool(flags & 0x20),
+                offset=offset,
+                end_offset=r.position,
+            )
+        )
+
+
+def _read_optional_tables(r: W3iReader, info: W3iInfo) -> None:
+    # The reference writer emits FF as the entire omitted-data tail. Match that
+    # whole marker, so a real upgrade count of 255 cannot erase its records.
+    if r.remaining == 1 and r.data[r.position] == 0xFF:
+        r.octets("optional_data_marker", 1)
+        info.optional_data_skipped = True
+        return
+    for index in range(r.count("upgrades.count", 16)):
+        offset = r.position
+        path = f"upgrades[{index}]"
+        mask = r.u32(f"{path}.player_mask")
+        code = r.code(f"{path}.object_id")
+        level = r.i32(f"{path}.level")
+        availability = r.enum(f"{path}.availability", (0, 1, 2))
+        info.upgrades.append(
+            UpgradeAvailability(mask, code, level, availability, offset, r.position)
+        )
+    for index in range(r.count("techs.count", 8)):
+        offset = r.position
+        path = f"techs[{index}]"
+        mask = r.u32(f"{path}.player_mask")
+        code = r.code(f"{path}.object_id")
+        info.techs.append(TechAvailability(mask, code, offset, r.position))
+    _read_random_units(r, info)
+    if info.version >= 24:
+        _read_random_items(r, info)
+    if info.version in (26, 27):
+        offset = r.position
+        info.legacy_tail_reserved = r.i32("legacy_tail_reserved")
+        if info.legacy_tail_reserved != 0:
+            r.problem(
+                W3iDiagnosticCode.UNKNOWN_VALUE,
+                "legacy_tail_reserved",
+                f"expected zero reserved field, found {info.legacy_tail_reserved}",
+                offset=offset,
+            )
+    info.tables_complete = True
+
+
+def _read_random_units(r: W3iReader, info: W3iInfo) -> None:
+    for index in range(r.count("random_unit_tables.count", 13)):
+        offset = r.position
+        path = f"random_unit_tables[{index}]"
+        number = r.i32(f"{path}.index")
+        name = r.text(f"{path}.name")
+        table = RandomUnitTable(number, name, offset)
+        info.random_unit_tables.append(table)
+        columns = r.count(f"{path}.columns.count", 4)
+        for column in range(columns):
+            table.column_types.append(r.i32(f"{path}.columns[{column}]"))
+        for row in range(r.count(f"{path}.rows.count", 4 + 4 * columns)):
+            row_offset = r.position
+            chance = r.i32(f"{path}.rows[{row}].chance")
+            codes = tuple(
+                r.code(f"{path}.rows[{row}].object_ids[{column}]")
+                for column in range(columns)
+            )
+            table.rows.append(RandomUnitRow(chance, codes, row_offset, r.position))
+        table.complete = True
+        table.end_offset = r.position
+
+
+def _read_random_items(r: W3iReader, info: W3iInfo) -> None:
+    for index in range(r.count("random_item_tables.count", 9)):
+        offset = r.position
+        path = f"random_item_tables[{index}]"
+        number = r.i32(f"{path}.index")
+        name = r.text(f"{path}.name")
+        table = RandomItemTable(number, name, offset)
+        info.random_item_tables.append(table)
+        for group in range(r.count(f"{path}.sets.count", 4)):
+            item_set = RandomItemSet(r.position)
+            table.sets.append(item_set)
+            set_path = f"{path}.sets[{group}]"
+            for item in range(r.count(f"{set_path}.items.count", 8)):
+                item_offset = r.position
+                chance = r.i32(f"{set_path}.items[{item}].chance")
+                code = r.code(f"{set_path}.items[{item}].object_id")
+                item_set.items.append(RandomItem(chance, code, item_offset, r.position))
+            item_set.complete = True
+            item_set.end_offset = r.position
+        table.complete = True
+        table.end_offset = r.position

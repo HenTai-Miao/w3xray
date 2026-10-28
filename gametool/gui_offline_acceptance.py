@@ -1,4 +1,4 @@
-"""Real, isolated Tk acceptance for the three map-independent workspaces."""
+"""Real, isolated Tk acceptance for offline data and direct-map workspaces."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import struct
 import tempfile
 import threading
 from time import monotonic, sleep
@@ -183,12 +184,90 @@ class _Fixtures:
     id_table: Path
     id_blocks: tuple[str, str]
     descriptions: tuple[str, str]
+    map_path: Path
+    map_names: tuple[str, str]
     save_root: Path
     save_text: Path
     hotkeys_old: Path
     hotkeys_new: Path
     payloads: dict[Path, bytes]
     identities: dict[Path, tuple[int, ...]]
+
+
+def _fixture_mpq(members: dict[str, bytes]) -> bytes:
+    """Encode a tiny real MPQ for source and frozen acceptance without test imports."""
+    from .mpq_crypto import CRYPT_TABLE, hash_name_bytes
+
+    def encrypt(data: bytes, seed1: int) -> bytes:
+        seed2 = 0xEEEEEEEE
+        encrypted: list[int] = []
+        for (value,) in struct.iter_unpack("<I", data):
+            seed2 = (seed2 + CRYPT_TABLE[0x400 + (seed1 & 0xFF)]) & 0xFFFFFFFF
+            encrypted.append(value ^ ((seed1 + seed2) & 0xFFFFFFFF))
+            seed1 = (
+                ((~seed1 & 0xFFFFFFFF) << 21) + 0x11111111 | (seed1 >> 11)
+            ) & 0xFFFFFFFF
+            seed2 = (value + seed2 + (seed2 << 5) + 3) & 0xFFFFFFFF
+        return struct.pack(f"<{len(encrypted)}I", *encrypted)
+
+    members = {**members, "(listfile)": "\r\n".join((*members, "(listfile)")).encode()}
+    hash_count = 1
+    while hash_count < len(members) * 2:
+        hash_count *= 2
+    empty = b"\xff" * 16
+    hashes = [empty] * hash_count
+    blocks: list[bytes] = []
+    data_pos = 32 + 16 * (hash_count + len(members))
+    for index, (name, payload) in enumerate(members.items()):
+        encoded = name.encode("utf-8")
+        slot = hash_name_bytes(encoded, 0) & (hash_count - 1)
+        while hashes[slot] != empty:
+            slot = (slot + 1) & (hash_count - 1)
+        hashes[slot] = struct.pack(
+            "<IIHHI",
+            hash_name_bytes(encoded, 1),
+            hash_name_bytes(encoded, 2),
+            0,
+            0,
+            index,
+        )
+        blocks.append(
+            struct.pack("<IIII", data_pos, len(payload), len(payload), 0x81000000)
+        )
+        data_pos += len(payload)
+    return b"".join(
+        (
+            struct.pack(
+                "<4sIIHHIIII",
+                b"MPQ\x1a",
+                32,
+                data_pos,
+                0,
+                3,
+                32,
+                32 + hash_count * 16,
+                hash_count,
+                len(members),
+            ),
+            encrypt(b"".join(hashes), hash_name_bytes(b"(hash table)", 3)),
+            encrypt(b"".join(blocks), hash_name_bytes(b"(block table)", 3)),
+            *members.values(),
+        )
+    )
+
+
+def _fixture_map(names: tuple[str, str], descriptions: tuple[str, str]) -> bytes:
+    """Store two explicitly authored item definitions in a Warcraft III map."""
+    records = [struct.pack("<iii", 2, 0, 2)]
+    for code, name, description in zip(
+        (b"yM01", b"yM02"), names, descriptions, strict=True
+    ):
+        records.append(b"ratf" + code + struct.pack("<i", 2))
+        for key, value in ((b"unam", name), (b"ides", description)):
+            records.append(
+                key + struct.pack("<i", 3) + value.encode("utf-8") + b"\0" * 5
+            )
+    return _fixture_mpq({"war3map.w3t": b"".join(records)})
 
 
 def _create_fixtures() -> _Fixtures:
@@ -206,6 +285,8 @@ def _create_fixtures() -> _Fixtures:
         "ID：yA02\r\n名字：离线 beta 物品\r\n描述：" + descriptions[1],
     )
     id_table = root / "物品ID.txt"
+    map_path = root / "直接读取地图.w3x"
+    map_names = (f"{marker} alpha 地图物品", f"{marker} beta 地图物品")
     save_root = root / "save-inputs"
     save_root.mkdir()
     save_text = save_root / "alpha.txt"
@@ -241,6 +322,7 @@ def _create_fixtures() -> _Fixtures:
     changed["profiles"]["One"]["bindings"][0]["smartcast"] = True
     hotkeys_old, hotkeys_new = root / "hotkeys-old.json", root / "hotkeys-new.json"
     payloads = {
+        map_path: _fixture_map(map_names, descriptions),
         id_table: b"\xef\xbb\xbf" + "".join(blocks).encode("utf-8"),
         save_text: (
             "function PreloadFiles takes nothing returns nothing\r\n"
@@ -265,6 +347,8 @@ def _create_fixtures() -> _Fixtures:
         id_table,
         blocks,
         descriptions,
+        map_path,
+        map_names,
         save_root,
         save_text,
         hotkeys_old,
@@ -293,6 +377,7 @@ def _exercise_reference(
     window = reference.ReferenceCatalogWindow(app, id_tables=(str(fixtures.id_table),))
     owned.append(window)
     for entry in (
+        window._map_entry,
         window._pack_entry,
         window._profile_entry,
         window._build_entry,
@@ -424,6 +509,148 @@ def _exercise_reference(
         window._result is not None and len(window._result.records) == 2,
         "重新选择 ID 未恢复两条",
     )
+
+
+def _exercise_map_reference(
+    app: App, fixtures: _Fixtures, owned: list[tk.Toplevel], errors: list[str]
+) -> None:
+    from . import gui_reference_catalog as reference
+
+    previous_windows = set(app.winfo_children())
+    with _dialog_response(
+        reference.filedialog, "askopenfilename", str(fixtures.map_path)
+    ):
+        app.data_tools_menu.invoke("直接打开地图对象目录（离线）")
+    windows = [
+        child
+        for child in app.winfo_children()
+        if child not in previous_windows
+        and isinstance(child, reference.ReferenceCatalogWindow)
+    ]
+    _require(len(windows) == 1, "数据工具没有打开直接地图目录窗口")
+    window = windows[0]
+    owned.append(window)
+    _set_entry(window._query_entry, "")
+    _set_entry(window._build_entry, "")
+    _set_entry(window._profile_entry, "")
+    _set_entry(window._source_entry, str(fixtures.map_path))
+    window._kind.set("objects")
+    window._category.set("物品")
+    _wait_for(
+        app,
+        lambda: window._result is not None and not window._busy,
+        "真实地图全量对象目录读取",
+        errors,
+    )
+    result = window._result
+    _require(result is not None and result.catalog_complete, "真实地图目录读取不完整")
+    assert result is not None
+    _require(window._pack_entry.get() == "", "选地图后知识包来源未清空")
+    _require(result.map_path == str(fixtures.map_path), "地图来源身份丢失")
+    _require(
+        {row.id for row in result.records} == {"yM01", "yM02"}, "地图两物品未完整读取"
+    )
+    _require(window._list.size() == 2 and result.omitted == 0, "地图列表被截断")
+    _require(len(result.map_scopes) == 1, "地图范围数量错误")
+    scope = result.map_scopes[0]
+    _require(
+        dict(scope.category_counts)["物品"] == 2 and scope.complete,
+        "地图分类计数不完整",
+    )
+    digest = hashlib.sha256(fixtures.payloads[fixtures.map_path]).hexdigest()
+    _require(scope.sha256 == digest, "地图范围没有原文件 SHA")
+    _require(
+        any(
+            source.member_path == "war3map.w3t"
+            and source.path == str(fixtures.map_path)
+            for source in result.sources
+        ),
+        "地图对象来源缺归档成员",
+    )
+    window._overview_button.invoke()
+    _wait_for(
+        app,
+        lambda: (
+            digest in window._detail_content
+            and "已确认分类数:" in window._detail_content
+            and window._render_id is None
+        ),
+        "地图来源总览",
+        errors,
+    )
+    _require(
+        "物品 2" in window._detail_content and "war3map.w3t" in window._detail_content,
+        "地图总览缺分类或成员",
+    )
+    _set_entry(window._query_entry, fixtures.marker + " && alpha")
+    window._run_button.invoke()
+    _wait_for(
+        app,
+        lambda: window._result is not result and not window._busy,
+        "地图 Boolean 筛选",
+        errors,
+    )
+    selected = window._result
+    _require(
+        selected is not None and [row.id for row in selected.records] == ["yM01"],
+        "地图筛选没有保留完整目标对象",
+    )
+    assert selected is not None
+    _wait_for(
+        app,
+        lambda: (
+            fixtures.map_names[0] in window._detail_content
+            and window._render_id is None
+        ),
+        "地图对象完整详情",
+        errors,
+    )
+    _require(
+        digest in window._detail_content and "war3map.w3t" in window._detail_content,
+        "地图详情丢原文件或成员来源",
+    )
+    destination = fixtures.root / "exports" / "map-reference.json"
+    with _dialog_response(reference.filedialog, "asksaveasfilename", str(destination)):
+        window._export_button.invoke()
+    _wait_for(
+        app,
+        lambda: destination.is_file() and "已导出" in str(window._status.cget("text")),
+        "地图 GUI 完整导出",
+        errors,
+    )
+    exported = _read_json(destination)
+    _require(
+        exported["map_path"] == str(fixtures.map_path) and exported["catalog_complete"],
+        "地图导出丢来源状态",
+    )
+    _require(
+        len(exported["records"]) == 1 and exported["records"][0]["id"] == "yM01",
+        "地图导出丢筛选对象",
+    )
+    _require(exported["map_scopes"][0]["sha256"] == digest, "地图导出丢范围 SHA")
+    _require(
+        any(
+            value["key"] == "ides" and value["value"] == fixtures.descriptions[0]
+            for value in exported["records"][0]["values"]
+        ),
+        "地图导出截断多行字段",
+    )
+    _set_entry(window._source_entry, "")
+    _set_entry(window._query_entry, "")
+    window._clear_source_button.invoke()
+    _wait_for(
+        app,
+        lambda: window._result is not selected and not window._busy,
+        "清空地图回到基础目录",
+        errors,
+    )
+    _require(
+        window._result is not None
+        and not window._result.map_path
+        and not window._result.map_scopes,
+        "清空地图仍显示原地图范围",
+    )
+    _require(window._id_tables == (str(fixtures.id_table),), "切换地图丢已选 ID 来源")
 
 
 def _exercise_save(
@@ -675,6 +902,7 @@ def exercise_offline_workspaces(app: App) -> str:
             app.deiconify()
             app.lift()
             _exercise_reference(app, fixtures, owned, errors)
+            _exercise_map_reference(app, fixtures, owned, errors)
             _exercise_save(app, fixtures, owned, errors)
             _exercise_hotkeys(app, fixtures, owned, errors)
             for path, payload in fixtures.payloads.items():
@@ -699,9 +927,10 @@ def exercise_offline_workspaces(app: App) -> str:
                     app.iconify()
         _raise_callback_errors(errors)
     return (
-        "offline-workspaces=reference/save/hotkeys; offline-id-records=2; "
+        "offline-workspaces=reference/map-reference/save/hotkeys; offline-id-records=2; "
+        "offline-map-records=2; offline-map-filtered=1; "
         "offline-save-files=2; hotkeys-declared-bindings=2; hotkeys-projection=2x42; "
-        "offline-gui-exports=4; hotkeys-runtime-verified=False; "
+        "offline-gui-exports=5; hotkeys-runtime-verified=False; "
         f"offline-artifacts={fixtures.root}"
     )
 

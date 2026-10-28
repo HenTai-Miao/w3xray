@@ -128,6 +128,10 @@ def build_topbar(app) -> None:
         label="分析真实存档文件", command=app.on_analyze_real_save_file
     )
     app.data_tools_menu.add_command(
+        label="直接打开地图对象目录（离线）",
+        command=lambda: _open_map_reference_catalog(app),
+    )
+    app.data_tools_menu.add_command(
         label="字段 / 对象 / 版本目录", command=lambda: _open_reference_catalog(app)
     )
     app.data_tools_menu.add_command(
@@ -416,6 +420,21 @@ def _open_hotkey_config(app) -> None:
     from .gui_hotkey_config import open_hotkey_config_dialog
 
     open_hotkey_config_dialog(app)
+
+
+def _open_map_reference_catalog(app) -> None:
+    """Select a standalone map/campaign without extracting a knowledge pack."""
+    from tkinter import filedialog
+
+    from .gui_reference_catalog import open_reference_catalog_dialog
+
+    path = filedialog.askopenfilename(
+        parent=app,
+        title="选择地图 / 战役，直接查看对象目录",
+        filetypes=[("地图与战役", "*.w3x *.w3m *.w3n"), ("所有文件", "*.*")],
+    )
+    if path:
+        open_reference_catalog_dialog(app, map_path=path)
 
 
 def _open_reference_catalog(app) -> None:

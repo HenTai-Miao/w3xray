@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from .w3i import W3iInfo
     from .w3world import Camera, Region, Sound
     from .wtg_models import TriggerTreeSummary
+    from .wts_models import WtsReport
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,6 +124,7 @@ class MapData:
     item_relations: ItemRelationIndex = field(default_factory=empty_item_relation_index)
     obj_identity_index: dict[tuple[str, str], GameObject] = field(default_factory=dict)
     icon_evidence: IconEvidenceIndex = field(default_factory=empty_icon_evidence_index)
+    wts_reports: dict[str, WtsReport] = field(default_factory=dict)
     _closed: bool = field(default=False, init=False, repr=False)
     # 脚本在加载完成后不再变化；函数范围索引是纯派生数据（实际类型
     # ScriptFunctionIndex，用 object 注解避免与 script_function_index 成环），

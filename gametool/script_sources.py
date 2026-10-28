@@ -28,7 +28,7 @@ _SCRIPT_PLACEHOLDER_CHARS: Final = "\x00\r\n\t "
 _WCT_HEADER: Final = re.compile(
     r"(?m)^//(?= ===== (?:全局自定义脚本|触发器自定义脚本 #\d+) =====\r?$)"
 )
-_SCRIPT_TYPE_LINE: Final = re.compile(r"(?im)^脚本语言[:：]\s*(Lua|JASS)\s*$")
+_SCRIPT_TYPE_LINE: Final = re.compile(r"(?im)^脚本语言[:：]([^\r\n]*)\r?$")
 
 
 class AnalysisScriptSource(NamedTuple):
@@ -54,6 +54,8 @@ def script_language(
     declared = {"lua": True, "jass": False}.get(declared_script_type.casefold())
     if declared is not None:
         return declared
+    if declared_script_type.strip():
+        return None
     choices = {
         name.casefold().endswith(".lua")
         for path in available_sources
@@ -64,8 +66,14 @@ def script_language(
 
 
 def script_type_from_report(text: str) -> str:
-    match = _SCRIPT_TYPE_LINE.search(text)
-    return match.group(1) if match else ""
+    declarations = {
+        {"lua": "Lua", "jass": "JASS"}.get(value.casefold(), "unknown")
+        for match in _SCRIPT_TYPE_LINE.finditer(text)
+        if (value := match.group(1).strip())
+    }
+    if not declarations:
+        return ""
+    return next(iter(declarations)) if len(declarations) == 1 else "unknown"
 
 
 def analysis_script_text(source: str, text: str, lua: bool | None) -> str:

@@ -271,12 +271,15 @@ def test_map_loading_parses_wts_from_original_mixed_encoding_bytes() -> None:
     archive = _MemoryArchive({"war3map.wts": raw_wts})
     parsed_inputs: list[bytes] = []
 
-    def capture_wts(data: bytes) -> dict[int, str]:
+    from gametool.wts import parse_wts_evidence
+    from gametool.wts_models import WtsReport
+
+    def capture_wts(data: bytes) -> WtsReport:
         parsed_inputs.append(data)
-        return {}
+        return parse_wts_evidence(data)
 
     # When: map loading parses strings for object metadata.
-    with patch("gametool.map_loader.parse_wts", side_effect=capture_wts):
+    with patch("gametool.map_loader.parse_wts_evidence", side_effect=capture_wts):
         _load_map_impl(archive, "memory.w3x", 0, None, MapLoadContext())
 
     # Then: the byte-oriented parser receives the untouched mixed stream.

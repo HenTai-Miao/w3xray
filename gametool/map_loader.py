@@ -40,7 +40,8 @@ from .object_pipeline import populate_object_pipeline_from_context
 from .references import build_reference_graph
 from .script_sources import analysis_script_sources, collect_readable_scripts
 from .supplemented_source import SupplementedPathArchiveSource
-from .wts import parse_wts, validate_wts_component
+from .wts import parse_wts_evidence, retain_wts_evidence
+from .wts_models import WtsReport
 
 # Optional embedding budgets; ordinary map loading always visits every child.
 _MAX_CAMPAIGN_CHILD_BYTES: Final[int | None] = None
@@ -97,13 +98,11 @@ def _load_map_impl(
             md,
             "wts",
             "war3map.wts",
-            lambda: validate_wts_component(
-                wts_raw,
-                parse_wts(wts_raw),
-            ),
+            lambda: parse_wts_evidence(wts_raw),
             stage="parse",
         )
-        wts = parsed_wts or {}
+        if parsed_wts is not None:
+            wts = retain_wts_evidence(md, parsed_wts)
 
     md.ui_strings = dict(wts)
     if script_collection.wct_diagnostic is not None:
@@ -124,10 +123,10 @@ def _load_map_impl(
     md.external_listfile = external_report if load_context.external_names else None
 
     candidates = list(collect_object_candidates(archive, wts, prefix="war3map", md=md))
+    cwts = {}
     if archive.has_file("war3campaign.wts") or any(
         archive.has_file("war3campaign." + ext) for ext in OBJECT_EXTS
     ):
-        cwts = {}
         if archive.has_file("war3campaign.wts"):
             parsed_cwts = read_component(
                 md,
@@ -135,7 +134,8 @@ def _load_map_impl(
                 "war3campaign.wts",
                 lambda: _parse_campaign_wts(archive),
             )
-            cwts = parsed_cwts or {}
+            if parsed_cwts is not None:
+                cwts = retain_wts_evidence(md, parsed_cwts)
         candidates.extend(
             collect_object_candidates(archive, cwts, prefix="war3campaign", md=md),
         )
@@ -150,7 +150,7 @@ def _load_map_impl(
     for _source, text, lua in script_sources:
         _add_script_refs(md, text, shared_index, lua=lua)
 
-    _add_w3f(md, archive, wts)
+    _add_w3f(md, archive, cwts)
     _add_preplaced(md, archive)
     from .map_extras import (
         add_game_configs,
@@ -240,6 +240,6 @@ def _campaign_inner_maps(archive: MapArchiveReader, known_names=(), w3f=None):
     return found
 
 
-def _parse_campaign_wts(archive: MapArchiveReader) -> dict[int, str]:
+def _parse_campaign_wts(archive: MapArchiveReader) -> WtsReport:
     data = archive.read_file("war3campaign.wts")
-    return validate_wts_component(data, parse_wts(data))
+    return parse_wts_evidence(data, source="war3campaign.wts")

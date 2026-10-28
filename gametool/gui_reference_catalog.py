@@ -22,21 +22,19 @@ from .theme import BG, CARD, FONT, PANEL, TEXT, TEXT_STRONG
 _SESSION: dict[str, str] = {}
 
 
-def _detail_text(result: ReferenceSearchResult, selected: int) -> str:
-    record = result.records[selected]
-    sources = [source for source in result.sources if source.id in record.sources]
-    lines = ["== 详情 ==", format_reference_record(record), "", "== 原始记录 =="]
-    lines.append(
-        json.dumps(record.raw_rows, ensure_ascii=False, indent=2)
-        if record.raw_rows
-        else "本条为项目静态定义；完整原始文件见来源台账，未反推未记录的字段。"
-    )
-    lines.extend(("", "== 来源 =="))
-    for source in sources:
+def _source_lines(result: ReferenceSearchResult, source_ids=None) -> list[str]:
+    lines: list[str] = []
+    for source in result.sources:
+        if source_ids is not None and source.id not in source_ids:
+            continue
         lines.extend(
             (
                 source.path,
+                "来源ID: " + source.id,
+                "来源状态: " + source.state,
+                "归档成员: " + (source.member_path or "无独立成员"),
                 "SHA-256: " + source.sha256,
+                "容器 SHA-256: " + (source.container_sha256 or "不适用"),
                 "指纹边界: " + source.fingerprint_basis,
                 "磁盘源码独立观测: "
                 + (source.source_file_sha256 or "无独立文件")
@@ -47,8 +45,77 @@ def _detail_text(result: ReferenceSearchResult, selected: int) -> str:
                 "",
             )
         )
+    return lines
+
+
+def _scope_lines(result: ReferenceSearchResult) -> list[str]:
+    lines: list[str] = []
+    for scope in result.map_scopes:
+        lines.extend(
+            (
+                f"范围: {scope.scope} · {scope.name or '未记录名称'}",
+                "读取状态: " + ("完整" if scope.complete else "不完整，请核对诊断"),
+                "地图文件: " + scope.archive_path,
+                "成员路径: " + (scope.member_path or "容器自身"),
+                "范围 SHA-256: " + scope.sha256,
+                "已确认分类数: "
+                + "；".join(
+                    f"{category} {count}" for category, count in scope.category_counts
+                ),
+            )
+        )
+        if scope.shared_scope:
+            lines.append("共享对象范围: " + scope.shared_scope)
+        lines.extend(
+            f"共享引用: {category} [{code}]"
+            for category, code in scope.shared_references
+        )
+        lines.extend("范围诊断: " + diagnostic for diagnostic in scope.diagnostics)
+        lines.append("")
+    return lines
+
+
+def _catalog_text(result: ReferenceSearchResult) -> str:
+    lines = [
+        "== 详情 ==",
+        "来源读取: "
+        + ("完整" if result.catalog_complete else "不完整；保留已确认记录"),
+        f"显示 {len(result.records)} / 匹配 {result.matched}；本地已确认 {result.total} 条",
+    ]
+    if result.map_path:
+        lines.append("所选地图: " + result.map_path)
+    lines.extend("输入文件: " + path for path in result.input_files)
+    lines.extend(
+        f"来源范围计数: {scope} {count}" for scope, count in result.source_counts
+    )
+    if not result.records:
+        lines.extend(("未找到符合筛选的记录。", *result.recovery))
+    lines.extend(("", "== 原始记录 ==", "选中左侧记录查看完整字段与原始记录。"))
+    lines.extend(("", "== 来源 ==", *_scope_lines(result), *_source_lines(result)))
+    lines.extend(("== 诊断 ==", *result.diagnostics))
+    if not result.catalog_complete and not result.diagnostics:
+        lines.append("来源不完整；请核对上方每个范围的读取状态。")
+    elif not result.diagnostics:
+        lines.append("本次来源读取完整；静态目录不证明当前游戏的可用性或实时字段值。")
+    return "\n".join(lines)
+
+
+def _detail_text(result: ReferenceSearchResult, selected: int) -> str:
+    record = result.records[selected]
+    lines = ["== 详情 ==", format_reference_record(record), "", "== 原始记录 =="]
+    lines.append(
+        json.dumps(record.raw_rows, ensure_ascii=False, indent=2)
+        if record.raw_rows
+        else "本条为项目静态定义；完整原始文件见来源台账，未反推未记录的字段。"
+    )
+    lines.extend(("", "== 来源 =="))
+    lines.extend(_source_lines(result, record.sources))
+    if result.map_scopes:
+        lines.append("全部地图/章节分类计数与诊断见「来源总览」。")
     lines.extend(("== 诊断 ==", *record.diagnostics, *result.diagnostics))
-    if not record.diagnostics and not result.diagnostics:
+    if not result.catalog_complete and not result.diagnostics:
+        lines.append("来源不完整；保留已确认记录，请在来源总览核对范围诊断。")
+    elif not record.diagnostics and not result.diagnostics:
         lines.append("本次来源读取完整；静态目录不证明当前游戏的可用性或实时字段值。")
     return "\n".join(lines)
 
@@ -64,7 +131,8 @@ def _load_reference_memory() -> dict[str, str]:
             {
                 key: value
                 for key, value in data.items()
-                if key in {"pack_dir", "profile_json"} and isinstance(value, str)
+                if key in {"pack_dir", "profile_json", "map_path"}
+                and isinstance(value, str)
             }
             if isinstance(data, dict)
             else {}
@@ -73,13 +141,20 @@ def _load_reference_memory() -> dict[str, str]:
         return {}  # fail-open: malformed reference memory cannot block browsing.
 
 
-def _save_reference_memory(pack_dir: str, profile_json: str) -> None:
+def _save_reference_memory(
+    pack_dir: str, profile_json: str, map_path: str = ""
+) -> None:
     try:
         path = gamexray_cache_root() / "gui-query-memo" / "reference-settings.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
             json.dumps(
-                {"pack_dir": pack_dir, "profile_json": profile_json}, ensure_ascii=False
+                {
+                    "pack_dir": pack_dir,
+                    "profile_json": profile_json,
+                    "map_path": map_path,
+                },
+                ensure_ascii=False,
             ),
             encoding="utf-8",
         )
@@ -121,10 +196,11 @@ def open_reference_catalog_dialog(
     parent,
     pack_dir: str | Path | None = None,
     *,
+    map_path: str | Path | None = None,
     id_tables: tuple[str, ...] | None = None,
 ) -> None:
     """Open the complete local reference; a pack and running game are optional."""
-    ReferenceCatalogWindow(parent, pack_dir, id_tables=id_tables)
+    ReferenceCatalogWindow(parent, pack_dir, map_path=map_path, id_tables=id_tables)
 
 
 class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
@@ -133,13 +209,20 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         parent,
         pack_dir: str | Path | None = None,
         *,
+        map_path: str | Path | None = None,
         id_tables: tuple[str, ...] | None = None,
     ) -> None:
+        if map_path and pack_dir:
+            raise ValueError("地图与知识包目录不能同时选择")
         super().__init__(parent)
         self._closed = False
         self._busy = False
         self._query_generation = 0
         self._result: ReferenceSearchResult | None = None
+        self._result_request: tuple[object, ...] | None = None
+        self._source_controls: list[ctk.CTkButton] = []
+        self._input_controls = []
+        self._source_changing = False
         self._find_pos = "1.0"
         self._find_keyword = ""
         self._active_section = "详情"
@@ -147,7 +230,8 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         self._detail_content = ""
         self._id_tables = _load_id_sources() if id_tables is None else id_tables
         self._init_gui_worker_host()
-        label = Path(pack_dir).name if pack_dir else "本地基础目录"
+        initial_source = map_path or pack_dir
+        label = Path(initial_source).name if initial_source else "本地基础目录"
         self.title(f"离线字段与版本参考 — {label}")
         self.configure(fg_color=BG)
         self.transient(parent)
@@ -169,20 +253,53 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
             text_color=TEXT_STRONG,
         )
         heading.pack(anchor="w", padx=14, pady=(12, 6))
+        memory = _load_reference_memory()
+        remembered_map = (
+            str(map_path)
+            if map_path is not None
+            else ("" if pack_dir is not None else memory.get("map_path", ""))
+        )
+        remembered_pack = (
+            str(pack_dir)
+            if pack_dir is not None
+            else (
+                ""
+                if map_path is not None or remembered_map
+                else memory.get("pack_dir", "")
+            )
+        )
+        self._map_var = tk.StringVar(self, value=remembered_map)
+        self._pack_var = tk.StringVar(self, value=remembered_pack)
+        map_bar = ctk.CTkFrame(self, fg_color=CARD)
+        map_bar.pack(fill="x", padx=12, pady=(0, 6))
+        self._map_entry = ctk.CTkEntry(
+            map_bar,
+            textvariable=self._map_var,
+            placeholder_text="可直接选地图 / 战役 .w3x / .w3m / .w3n；读取完整对象与章节来源",
+        )
+        self._map_entry.pack(side="left", fill="x", expand=True, padx=8, pady=8)
+        self._map_button = ctk.CTkButton(
+            map_bar, text="选地图", width=90, command=self._choose_map
+        )
+        self._map_button.pack(side="left", padx=(0, 6))
+        self._clear_source_button = ctk.CTkButton(
+            map_bar, text="清空地图 / 包", width=110, command=self._clear_source
+        )
+        self._clear_source_button.pack(side="left", padx=(0, 8))
+        self._source_controls.extend((self._map_button, self._clear_source_button))
         pack_bar = ctk.CTkFrame(self, fg_color=CARD)
         pack_bar.pack(fill="x", padx=12, pady=(0, 6))
         self._pack_entry = ctk.CTkEntry(
-            pack_bar, placeholder_text="可选知识包目录；留空看基础目录与版本档案"
+            pack_bar,
+            textvariable=self._pack_var,
+            placeholder_text="可选知识包目录；与地图互斥，均留空看基础目录与版本档案",
         )
         self._pack_entry.pack(side="left", fill="x", expand=True, padx=8, pady=8)
-        memory = _load_reference_memory()
-        remembered = (
-            str(pack_dir) if pack_dir is not None else memory.get("pack_dir", "")
-        )
-        self._pack_entry.insert(0, remembered)
-        ctk.CTkButton(
+        self._pack_button = ctk.CTkButton(
             pack_bar, text="选知识包", width=90, command=self._choose_pack
-        ).pack(side="left", padx=(0, 8))
+        )
+        self._pack_button.pack(side="left", padx=(0, 8))
+        self._source_controls.append(self._pack_button)
         profile_bar = ctk.CTkFrame(self, fg_color=CARD)
         profile_bar.pack(fill="x", padx=12, pady=(0, 6))
         self._profile_entry = ctk.CTkEntry(
@@ -191,9 +308,11 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         )
         self._profile_entry.pack(side="left", fill="x", expand=True, padx=8, pady=8)
         self._profile_entry.insert(0, memory.get("profile_json", ""))
-        ctk.CTkButton(
+        self._profile_button = ctk.CTkButton(
             profile_bar, text="选 JSON 档案", width=100, command=self._choose_profile
-        ).pack(side="left", padx=(0, 8))
+        )
+        self._profile_button.pack(side="left", padx=(0, 8))
+        self._source_controls.append(self._profile_button)
         id_bar = ctk.CTkFrame(self, fg_color=CARD)
         id_bar.pack(fill="x", padx=12, pady=(0, 6))
         self._id_sources_entry = ctk.CTkEntry(
@@ -233,16 +352,18 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         filters = ctk.CTkFrame(self, fg_color=CARD)
         filters.pack(fill="x", padx=12, pady=(0, 6))
         self._kind = ctk.StringVar(value=_SESSION.get("kind", "all"))
-        ctk.CTkOptionMenu(
+        kind_menu = ctk.CTkOptionMenu(
             filters,
             variable=self._kind,
             values=["all", "objects", "fields", "versions"],
             width=110,
-        ).pack(side="left", padx=8, pady=7)
+        )
+        kind_menu.pack(side="left", padx=8, pady=7)
         self._category = ctk.StringVar(value=_SESSION.get("category", "全部"))
-        ctk.CTkOptionMenu(
+        category_menu = ctk.CTkOptionMenu(
             filters, variable=self._category, values=["全部", *OBJECT_TABLES], width=110
-        ).pack(side="left", padx=(0, 8))
+        )
+        category_menu.pack(side="left", padx=(0, 8))
         self._build_entry = ctk.CTkEntry(
             filters, placeholder_text="精确 build（空=全部）", width=215
         )
@@ -253,6 +374,24 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         )
         self._source_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
         self._source_entry.insert(0, _SESSION.get("source", ""))
+        self._overview_button = ctk.CTkButton(
+            filters,
+            text="来源总览",
+            width=90,
+            command=self._show_overview,
+            state="disabled",
+        )
+        self._overview_button.pack(side="left", padx=(0, 8))
+        self._input_controls = [
+            self._map_entry,
+            self._pack_entry,
+            self._profile_entry,
+            self._query_entry,
+            self._build_entry,
+            self._source_entry,
+            kind_menu,
+            category_menu,
+        ]
         self._status = ctk.CTkLabel(
             self, text="准备加载完整目录…", anchor="w", text_color=TEXT
         )
@@ -273,8 +412,14 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
             borderwidth=0,
         )
         scrollbar = tk.Scrollbar(listing, orient="vertical", command=self._list.yview)
-        self._list.configure(yscrollcommand=scrollbar.set)
+        horizontal = tk.Scrollbar(
+            listing, orient="horizontal", command=self._list.xview
+        )
+        self._list.configure(
+            yscrollcommand=scrollbar.set, xscrollcommand=horizontal.set
+        )
         scrollbar.pack(side="right", fill="y")
+        horizontal.pack(side="bottom", fill="x")
         self._list.pack(fill="both", expand=True)
         self._list.bind("<<ListboxSelect>>", lambda _event: self._show_selected())
         self._list.bind("<Double-Button-1>", lambda _event: self._show_selected())
@@ -321,20 +466,72 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         self._output.bind(
             "<Button-3>", lambda event: menu.tk_popup(event.x_root, event.y_root)
         )
+        self._source_traces = (
+            (
+                self._map_var,
+                self._map_var.trace_add(
+                    "write", lambda *_args: self._source_changed("map")
+                ),
+            ),
+            (
+                self._pack_var,
+                self._pack_var.trace_add(
+                    "write", lambda *_args: self._source_changed("pack")
+                ),
+            ),
+        )
         self._startup_id: str | None = self.after(0, self._run)
 
+    def _source_changed(self, kind: str) -> None:
+        if self._closed or self._source_changing:
+            return
+        self._source_changing = True
+        try:
+            if kind == "map" and self._map_var.get().strip():
+                self._pack_var.set("")
+            elif kind == "pack" and self._pack_var.get().strip():
+                self._map_var.set("")
+        finally:
+            self._source_changing = False
+        self._cancel()
+        self._result_request = None
+        self._export_button.configure(state="disabled")
+        self._status.configure(text="来源已更改；请检索 / 刷新后查看和导出本次来源。")
+
+    def _choose_map(self) -> None:
+        if self._closed or self._busy:
+            return
+        path = filedialog.askopenfilename(
+            parent=self,
+            title="选择 Warcraft III 地图或战役",
+            filetypes=[("地图与战役", "*.w3x *.w3m *.w3n"), ("所有文件", "*.*")],
+        )
+        if path and not self._closed and not self._busy:
+            self._map_var.set(path)
+            self._run()
+
+    def _clear_source(self) -> None:
+        if self._closed or self._busy:
+            return
+        self._map_var.set("")
+        self._pack_var.set("")
+        self._run()
+
     def _choose_pack(self) -> None:
+        if self._closed or self._busy:
+            return
         path = filedialog.askdirectory(parent=self, title="选择 GameXRay 知识包目录")
-        if path:
-            self._pack_entry.delete(0, "end")
-            self._pack_entry.insert(0, path)
+        if path and not self._closed and not self._busy:
+            self._pack_var.set(path)
             self._run()
 
     def _choose_profile(self) -> None:
+        if self._closed or self._busy:
+            return
         path = filedialog.askopenfilename(
             parent=self, title="选择纯数据只读档案", filetypes=[("JSON", "*.json")]
         )
-        if path:
+        if path and not self._closed and not self._busy:
             self._profile_entry.delete(0, "end")
             self._profile_entry.insert(0, path)
             self._run()
@@ -379,13 +576,66 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         self._run()
 
     def _set_id_controls(self, state: str) -> None:
-        for button in self._id_controls:
-            button.configure(state=state)
+        for control in (
+            *self._id_controls,
+            *self._source_controls,
+            *self._input_controls,
+        ):
+            control.configure(state=state)
+
+    def _request_state(self) -> tuple[object, ...]:
+        return (
+            self._map_entry.get().strip(),
+            self._pack_entry.get().strip(),
+            self._profile_entry.get().strip(),
+            self._id_tables,
+            self._query_entry.get(),
+            self._kind.get(),
+            self._category.get(),
+            self._build_entry.get().strip(),
+            self._source_entry.get().strip(),
+        )
+
+    def _result_is_current(self) -> bool:
+        return (
+            self._result is not None and self._result_request == self._request_state()
+        )
+
+    def _query_current(self, generation: int, request: tuple[object, ...]) -> bool:
+        return (
+            not self._closed
+            and self._busy
+            and generation == self._query_generation
+            and request == self._request_state()
+        )
+
+    def _deliver_query(
+        self,
+        result: ReferenceSearchResult,
+        generation: int,
+        request: tuple[object, ...],
+    ) -> None:
+        if self._query_current(generation, request):
+            self._result_request = request
+            self._finish(result)
+
+    def _deliver_failure(
+        self, error: str, generation: int, request: tuple[object, ...]
+    ) -> None:
+        if self._query_current(generation, request):
+            self._failed(error)
+
+    def _progress(
+        self, text: str, generation: int, request: tuple[object, ...]
+    ) -> None:
+        if self._query_current(generation, request):
+            self._status.configure(text=text)
 
     def _run(self) -> None:
         self._startup_id = None
         if self._closed or self._busy:
             return
+        map_path = self._map_entry.get().strip()
         pack = self._pack_entry.get().strip()
         profile = self._profile_entry.get().strip()
         id_tables = self._id_tables
@@ -399,12 +649,16 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         _SESSION.update(
             query=query, kind=kind, category=category, build=build, source=source
         )
-        _save_reference_memory(pack, profile)
+        _save_reference_memory(pack, profile, map_path)
         self.title(
-            "离线字段与版本参考 — " + (Path(pack).name if pack else "本地基础目录")
+            "离线字段与版本参考 — "
+            + (Path(map_path or pack).name if map_path or pack else "本地基础目录")
         )
         self._busy = True
         self._query_generation += 1
+        generation = self._query_generation
+        request = self._request_state()
+        self._result_request = None
         self._cancel_gui_worker_group("reference-detail")
         self._cancel_gui_worker_group("reference-export")
         self._run_button.configure(state="disabled")
@@ -413,17 +667,20 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         self._status.configure(text="后台读取全量目录并核对来源；可继续查看已有详情…")
 
         def work(ticket: GuiWorkerTicket) -> None:
+            def progress(text: str) -> None:
+                self._post_gui_worker(
+                    ticket, lambda: self._progress(text, generation, request)
+                )
+
             try:
-                if id_tables:
-                    catalog = load_reference_catalog(
-                        pack or None,
-                        profile_json=profile or None,
-                        id_tables=id_tables,
-                    )
-                else:
-                    catalog = load_reference_catalog(
-                        pack or None, profile_json=profile or None
-                    )
+                catalog = load_reference_catalog(
+                    pack or None,
+                    map_path=map_path or None,
+                    profile_json=profile or None,
+                    id_tables=id_tables,
+                    cancelled=ticket.cancellation.is_set,
+                    progress=progress,
+                )
                 if ticket.cancellation.is_set():
                     return
                 result = search_reference_catalog(
@@ -434,10 +691,14 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
                     build=build,
                     source=source,
                 )
-                self._post_gui_worker(ticket, lambda: self._finish(result))
+                self._post_gui_worker(
+                    ticket, lambda: self._deliver_query(result, generation, request)
+                )
             except Exception as exc:  # BROAD_EXCEPT_OK - boundary reports a failed background query without killing Tk.
                 error = str(exc)
-                self._post_gui_worker(ticket, lambda: self._failed(error))
+                self._post_gui_worker(
+                    ticket, lambda: self._deliver_failure(error, generation, request)
+                )
 
         self._start_gui_worker("reference-query", work, replace=True)
 
@@ -450,32 +711,34 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         self._run_button.configure(state="normal")
         self._set_id_controls("normal")
         self._result = result
+        self._overview_button.configure(state="normal")
         self._export_button.configure(state="normal")
         self._list.delete(0, "end")
         if result.records:
             self._list.insert(
                 "end",
                 *(
-                    f"[{record.id}] {record.label} · {record.category or record.kind}"
+                    f"[{record.id}] {record.label} · {record.category or record.kind} · {record.scope}"
                     for record in result.records
                 ),
             )
             self._list.selection_set(0)
             self._show_selected()
         else:
-            self._set_output(
-                "== 详情 ==\n未找到符合筛选的记录。\n"
-                + "\n".join(result.recovery)
-                + "\n\n== 诊断 ==\n"
-                + "\n".join(result.diagnostics)
-            )
+            self._set_output(_catalog_text(result))
         suffix = (
             f"；来源诊断 {len(result.diagnostics)} 条，请在详情核对"
             if result.diagnostics
             else ""
         )
         self._status.configure(
-            text=f"完整列表 {len(result.records)} / 匹配 {result.matched}；本地已确认 {result.total} 条{suffix}"
+            text=f"已显示 {len(result.records)} / 匹配 {result.matched}；本地已确认 {result.total} 条；"
+            + (
+                "来源读取完整"
+                if result.catalog_complete
+                else "来源不完整，保留已确认记录"
+            )
+            + suffix
         )
 
     def _failed(self, error: str) -> None:
@@ -483,33 +746,68 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         self._busy = False
         self._run_button.configure(state="normal")
         self._set_id_controls("normal")
-        self._export_button.configure(
-            state="normal" if self._result is not None else "disabled"
-        )
+        self._result_request = None
+        self._export_button.configure(state="disabled")
         self._status.configure(
-            text="读取失败；可检查知识包目录后重试，或清空目录查基础参考。"
+            text="读取失败；请检查地图 / 知识包后重试，或清空地图 / 包查基础参考。"
         )
         self._set_output("== 诊断 ==\n" + error)
 
     def _cancel(self) -> None:
+        if self._closed:
+            return
+        self._query_generation += 1
         self._cancel_gui_worker_group("reference-query")
+        self._cancel_gui_worker_group("reference-detail")
+        self._cancel_gui_worker_group("reference-export")
+        if self._render_id is not None:
+            self.after_cancel(self._render_id)
+            self._render_id = None
         self._busy = False
         self._run_button.configure(state="normal")
         self._set_id_controls("normal")
         self._export_button.configure(
-            state="normal" if self._result is not None else "disabled"
+            state="normal" if self._result_is_current() else "disabled"
         )
-        self._status.configure(text="已取消本次交付；已有列表可继续查看或导出。")
+        self._status.configure(
+            text="已取消本次交付；可重新选择来源并检索，已有列表为上次结果。"
+        )
+
+    def _show_overview(self) -> None:
+        if self._closed or self._result is None:
+            return
+        result, generation = self._result, self._query_generation
+
+        def work(ticket: GuiWorkerTicket) -> None:
+            text = _catalog_text(result)
+            self._post_gui_worker(
+                ticket, lambda: self._deliver_detail(text, result, generation)
+            )
+
+        self._start_gui_worker("reference-detail", work, replace=True)
+
+    def _deliver_detail(
+        self, text: str, result: ReferenceSearchResult, generation: int
+    ) -> None:
+        if (
+            not self._closed
+            and self._result is result
+            and generation == self._query_generation
+        ):
+            self._set_output(text)
 
     def _show_selected(self) -> None:
         selection = self._list.curselection()
         if self._result is None or not selection:
             return
         result, selected = self._result, selection[0]
+        generation = self._query_generation
 
         def work(ticket: GuiWorkerTicket) -> None:
             text = _detail_text(result, selected)
-            self._post_gui_worker(ticket, lambda: self._set_output(text))
+            self._post_gui_worker(
+                ticket, lambda: self._deliver_detail(text, result, generation)
+            )
 
         self._start_gui_worker("reference-detail", work, replace=True)
 
@@ -592,6 +890,12 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         result = self._result
         if self._closed or self._busy or result is None:
             return
+        if not self._result_is_current():
+            self._export_button.configure(state="disabled")
+            self._status.configure(
+                text="筛选或来源已更改；请检索 / 刷新后导出当前结果。"
+            )
+            return
         generation = self._query_generation
         path = filedialog.asksaveasfilename(
             parent=self,
@@ -605,6 +909,7 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
             or self._busy
             or generation != self._query_generation
             or self._result is not result
+            or not self._result_is_current()
         ):
             return
         self._export_button.configure(state="disabled")
@@ -641,6 +946,7 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
             self._closed
             or self._query_generation != generation
             or self._result is not result
+            or not self._result_is_current()
         ):
             return
         self._export_button.configure(state="normal")
@@ -652,6 +958,13 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
     def destroy(self) -> None:
         if self._closed:
             return
+        _save_reference_memory(
+            self._pack_entry.get().strip(),
+            self._profile_entry.get().strip(),
+            self._map_entry.get().strip(),
+        )
+        for variable, trace in self._source_traces:
+            variable.trace_remove("write", trace)
         self._closed = True
         from .gui_tk_callbacks import cancel_widget_callbacks
 

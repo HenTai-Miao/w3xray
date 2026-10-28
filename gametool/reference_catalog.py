@@ -15,6 +15,15 @@ from pathlib import Path
 
 from . import base_names, base_objects, field_meta, fields, live_handle_chain
 from .local_id_tables import LocalIdTablePath, LocalIdTableSources
+from .map_reference_sources import (
+    CancelCheck,
+    MapReferenceSources,
+    ProgressCallback,
+    check_cancelled,
+)
+from .map_reference_tables import bind_map_record
+from .map_reference_identity import MapObjectIdentity
+from .map_reference_records import resolve_scope_records
 from .object_codes import valid_object_code
 from .live_profile_validation import (
     ProfileSupport,
@@ -580,6 +589,9 @@ def load_reference_catalog(
     *,
     profile_json: str | Path | None = None,
     id_tables: Iterable[LocalIdTablePath] = (),
+    map_path: str | Path | None = None,
+    cancelled: CancelCheck | None = None,
+    progress: ProgressCallback | None = None,
 ) -> ReferenceCatalog:
     """Load all committed definitions plus every confirmed optional pack record.
 
@@ -587,6 +599,11 @@ def load_reference_catalog(
     labels are appended independently and never supply map/base definitions.
     The field table is parsed once per scope by the shared object catalog loader.
     """
+    if pack_dir is not None and map_path is not None:
+        raise ValueError(
+            "--map 与 --pack 不能同时使用；请选择地图归档或已导出的知识包。"
+        )
+    check_cancelled(cancelled)
     builtin_sources, source_diagnostics = _builtin_sources()
     sources = list(builtin_sources)
     base = _base_records()
@@ -597,6 +614,59 @@ def load_reference_catalog(
     roots: tuple[str, ...] = ()
     adapter = PackReferenceSources()
     local_ids = LocalIdTableSources(id_tables)
+    map_sources = (
+        MapReferenceSources(map_path, cancelled=cancelled, progress=progress)
+        if map_path is not None
+        else None
+    )
+    if map_sources is not None:
+        scope_objects: dict[str, dict[tuple[str, str], ReferenceRecord]] = {}
+        for scope_index, metadata in enumerate(map_sources.scopes):
+            scope = Path(metadata.scope)
+            if (scope, "对象字段.tsv") not in map_sources.tables:
+                continue
+            indexes = load_object_catalog(scope, OBJECT_TABLES, map_sources)
+            shared_objects = scope_objects.get(metadata.shared_scope, {})
+            current_objects = dict(shared_objects)
+            current_records: list[ReferenceRecord] = []
+            for category, index in indexes.items():
+                for record in index.records:
+                    check_cancelled(cancelled)
+                    current = bind_map_record(
+                        _map_record(
+                            scope,
+                            category,
+                            record,
+                            index.view.rows[0],
+                            base if record.row[3] else {},
+                        ),
+                        metadata.scope,
+                        map_sources.sources,
+                        map_sources.members[metadata.scope],
+                        map_sources.identities[metadata.scope].get(
+                            (category, record.row[1]), MapObjectIdentity()
+                        ),
+                    )
+                    current_records.append(current)
+            resolved_records, inheritance_notes = resolve_scope_records(
+                tuple(current_records),
+                shared_objects,
+                base,
+            )
+            if inheritance_notes:
+                map_sources.diagnostics.extend(inheritance_notes)
+                map_sources.scopes[scope_index] = replace(
+                    metadata,
+                    complete=False,
+                    diagnostics=(*metadata.diagnostics, *inheritance_notes),
+                )
+            for current in resolved_records:
+                current_objects[(current.category, current.id)] = current
+                extra_objects.append(current)
+                for value in current.values:
+                    if not value.source.startswith("builtin:"):
+                        observations[value.key].append(value)
+            scope_objects[metadata.scope] = current_objects
     if pack_dir is not None:
         root = Path(pack_dir).absolute()
         scopes, scope_notes = reference_pack_scopes(root)
@@ -658,11 +728,25 @@ def load_reference_catalog(
     diagnostics.extend(local_ids.diagnostics)
     sources.extend(adapter.sources.values())
     sources.extend(local_ids.sources.values())
+    if map_sources is not None:
+        map_sources.verify()
+        diagnostics.extend(map_sources.diagnostics)
+        sources.extend(map_sources.sources.values())
+    check_cancelled(cancelled)
     return ReferenceCatalog(
         records,
         tuple(sources),
         tuple(diagnostics),
         tuple(dict.fromkeys((*roots, *local_ids.input_roots))),
+        map_path=str(map_sources.path) if map_sources is not None else "",
+        map_scopes=tuple(map_sources.scopes) if map_sources is not None else (),
+        source_counts=tuple(
+            (scope.scope, sum(count for _category, count in scope.category_counts))
+            for scope in map_sources.scopes
+        )
+        if map_sources is not None
+        else (),
+        input_files=(str(map_sources.path),) if map_sources is not None else (),
     )
 
 
@@ -742,7 +826,7 @@ def search_reference_catalog(
         recovery.extend(
             (
                 f"本地目录共有 {len(catalog.records)} 条已确认静态记录；请清空关键词或筛选条件看全量。",
-                "可用 --kind fields 查字段、--kind versions 查验证范围，或 --pack DIR 叠加地图自定义证据。",
+                "可用 --kind fields 查字段、--kind versions 查验证范围，或 --map PATH / --pack DIR 叠加地图证据。",
             )
         )
     selected = matches[:limit] if limit else matches
@@ -762,4 +846,8 @@ def search_reference_catalog(
         catalog.complete,
         tuple(recovery),
         catalog.input_roots,
+        catalog.map_path,
+        catalog.map_scopes,
+        catalog.source_counts,
+        catalog.input_files,
     )

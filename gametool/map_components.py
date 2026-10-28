@@ -117,7 +117,15 @@ def _add_w3i(md: MapData, archive: MapArchiveReader, wts: dict[int, str]) -> Non
     if info is None:
         return
     md.w3i = info
-    if info.parse_issue:
+    for diagnostic in info.diagnostics:
+        record_component_parse_issue(
+            md,
+            "w3i",
+            "war3map.w3i",
+            f"{diagnostic.field} at byte {diagnostic.offset}: {diagnostic.message}",
+            stage=f"parse/{diagnostic.code.value}",
+        )
+    if info.parse_issue and not info.diagnostics:
         record_component_parse_issue(md, "w3i", "war3map.w3i", info.parse_issue)
     nm = (info.map_name or "").strip()
     if nm and not nm.startswith("TRIGSTR_"):

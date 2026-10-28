@@ -13,6 +13,7 @@ import pytest
 from gametool import gui_reference_catalog as gui
 from gametool.reference_models import (
     ReferenceCatalog,
+    ReferenceMapScope,
     ReferenceRecord,
     ReferenceSource,
     ReferenceValue,
@@ -39,7 +40,7 @@ def _catalog(count: int = 1) -> ReferenceCatalog:
 
 
 @pytest.fixture
-def root(monkeypatch):
+def root(monkeypatch, tmp_path):
     # Reuse the suite's Tcl interpreter, including CTk's cached images and
     # appearance/scaling timers. Only this fixture's new windows are retired.
     from gametool.gui_offline_acceptance import _capture_callbacks
@@ -52,6 +53,9 @@ def root(monkeypatch):
     previous_state = parent.state()
     parent.withdraw()
     monkeypatch.setattr(gui, "_SESSION", {})
+    monkeypatch.setattr(
+        gui, "gamexray_cache_root", lambda: tmp_path / "reference-cache"
+    )
     with _capture_callbacks(parent) as errors:
         try:
             yield parent
@@ -79,7 +83,7 @@ def test_complete_list_worker_main_thread_delivery_and_dialog_keys(root, monkeyp
     load_threads = []
     finish_threads = []
 
-    def load(_pack, *, profile_json=None):
+    def load(_pack, *, profile_json=None, **_kwargs):
         load_threads.append(threading.get_ident())
         return catalog
 
@@ -176,7 +180,7 @@ def test_filter_no_records_recovery_and_profile_picker_propagation(
 ):
     calls = []
 
-    def load(pack, *, profile_json=None):
+    def load(pack, *, profile_json=None, **_kwargs):
         calls.append((pack, profile_json))
         return _catalog()
 
@@ -344,6 +348,309 @@ def test_new_query_rejects_old_export_worker_and_completion(
         query_release.set()
         export_release.set()
         _pump(root, lambda: not window._gui_workers._workers)
+        window.destroy()
+
+
+def _map_catalog(path, *, complete=True):
+    source = ReferenceSource(
+        str(path),
+        str(path),
+        "b" * 64,
+        "地图完整字节",
+        member_path="Maps\\Chapter1.w3x!war3map.w3t",
+        container_sha256="c" * 64,
+    )
+    note = () if complete else ("章节尾部对象数据未读取完整",)
+    scope = ReferenceMapScope(
+        str(path),
+        str(path),
+        "Maps\\Chapter1.w3x",
+        "章节一",
+        "b" * 64,
+        (("物品", 1), ("单位", 0)),
+        diagnostics=note,
+        complete=complete,
+    )
+    record = replace(
+        _catalog().records[0], category="物品", scope=scope.scope, sources=(source.id,)
+    )
+    return ReferenceCatalog(
+        (record,),
+        (source,),
+        note,
+        map_path=str(path),
+        map_scopes=(scope,),
+        source_counts=((scope.scope, 1),),
+        input_files=(str(path),),
+    )
+
+
+def test_map_pack_picker_mutual_exclusion_clear_and_memory(root, monkeypatch, tmp_path):
+    map_path, pack = tmp_path / "地图.w3n", tmp_path / "知识包"
+    calls = []
+
+    def load(pack_dir, *, map_path=None, profile_json=None, id_tables=(), **kwargs):
+        calls.append((pack_dir, map_path, profile_json, id_tables))
+        assert callable(kwargs["cancelled"]) and callable(kwargs["progress"])
+        kwargs["progress"]("正在读取完整地图对象")
+        return _map_catalog(map_path) if map_path else _catalog()
+
+    monkeypatch.setattr(gui, "load_reference_catalog", load)
+    window = gui.ReferenceCatalogWindow(root, id_tables=(str(tmp_path / "ID.txt"),))
+    _pump(root, lambda: window._result is not None and not window._busy)
+    window._profile_entry.insert(0, str(tmp_path / "profile.json"))
+    monkeypatch.setattr(
+        gui.filedialog, "askopenfilename", lambda **_kwargs: str(map_path)
+    )
+    window._map_button.invoke()
+    _pump(
+        root,
+        lambda: (
+            not window._busy
+            and window._result is not None
+            and window._result.map_path == str(map_path)
+        ),
+    )
+    assert window._pack_entry.get() == ""
+    assert calls[-1] == (
+        None,
+        str(map_path),
+        str(tmp_path / "profile.json"),
+        (str(tmp_path / "ID.txt"),),
+    )
+    assert gui._load_reference_memory() == {
+        "map_path": str(map_path),
+        "pack_dir": "",
+        "profile_json": str(tmp_path / "profile.json"),
+    }
+    assert map_path.name in window.title()
+    monkeypatch.setattr(gui.filedialog, "askdirectory", lambda **_kwargs: str(pack))
+    window._pack_button.invoke()
+    _pump(root, lambda: not window._busy and calls[-1][0] == str(pack))
+    assert window._map_entry.get() == ""
+    assert gui._load_reference_memory()["map_path"] == ""
+    window._clear_source_button.invoke()
+    _pump(root, lambda: not window._busy and calls[-1][:2] == (None, None))
+    assert window._pack_entry.get() == window._map_entry.get() == ""
+    assert window._id_tables == (str(tmp_path / "ID.txt"),)
+    assert window._profile_entry.get() == str(tmp_path / "profile.json")
+    window.destroy()
+
+
+@pytest.mark.parametrize("source", ("map", "pack", "empty"))
+def test_explicit_source_overrides_remembered_map_and_pack(
+    root, monkeypatch, tmp_path, source
+):
+    calls = []
+    gui._save_reference_memory(
+        str(tmp_path / "old-pack"), "", str(tmp_path / "old.w3x")
+    )
+
+    def load(pack, *, map_path=None, **_kwargs):
+        calls.append((pack, map_path))
+        return _map_catalog(map_path) if map_path else _catalog()
+
+    monkeypatch.setattr(gui, "load_reference_catalog", load)
+    window = gui.ReferenceCatalogWindow(
+        root,
+        pack_dir=tmp_path / "new-pack"
+        if source == "pack"
+        else ""
+        if source == "empty"
+        else None,
+        map_path=tmp_path / "new.w3x" if source == "map" else None,
+    )
+    _pump(root, lambda: not window._busy and window._result is not None)
+    assert calls == [
+        (None, str(tmp_path / "new.w3x"))
+        if source == "map"
+        else (str(tmp_path / "new-pack"), None)
+        if source == "pack"
+        else (None, None)
+    ]
+    window.destroy()
+
+
+def test_map_partial_overview_retains_all_scopes_counts_and_member_sources(
+    root, monkeypatch, tmp_path
+):
+    catalog = _map_catalog(tmp_path / "partial.w3n", complete=False)
+    empty_scope = ReferenceMapScope(
+        "missing-chapter",
+        str(tmp_path / "partial.w3n"),
+        "Maps\\Missing.w3x",
+        "空/失败章节",
+        "",
+        (("物品", 0), ("单位", 0)),
+        diagnostics=("缺失章节原始诊断",),
+        complete=False,
+    )
+    catalog = replace(catalog, map_scopes=(*catalog.map_scopes, empty_scope))
+    monkeypatch.setattr(gui, "load_reference_catalog", lambda _pack, **_kwargs: catalog)
+    window = gui.ReferenceCatalogWindow(root, map_path=tmp_path / "partial.w3n")
+    _pump(root, lambda: bool(window._detail_content))
+    assert "来源不完整" in window._status.cget("text")
+    assert "来源读取完整" not in window._status.cget("text")
+    assert "Maps\\Chapter1.w3x!war3map.w3t" in window._detail_content
+    assert "容器 SHA-256: " + "c" * 64 in window._detail_content
+    window._overview_button.invoke()
+    _pump(root, lambda: "missing-chapter" in window._detail_content)
+    text = window._detail_content
+    for marker in (
+        "章节一",
+        "物品 1",
+        "单位 0",
+        "Maps\\Missing.w3x",
+        "缺失章节原始诊断",
+        "章节尾部对象数据未读取完整",
+    ):
+        assert marker in text
+    assert "来源读取: 不完整" in text
+    window._query_entry.insert(0, "never-matches")
+    window._run_button.invoke()
+    _pump(
+        root,
+        lambda: (
+            not window._busy
+            and window._result is not None
+            and window._result.query == "never-matches"
+        ),
+    )
+    assert window._list.size() == 0
+    assert "缺失章节原始诊断" in window._detail_content
+    assert "清空关键词" in window._detail_content
+    window.destroy()
+
+
+def test_map_cancel_reenable_inputs_and_reject_old_progress_and_result(
+    root, monkeypatch, tmp_path
+):
+    entered, release = threading.Event(), threading.Event()
+    first_path, second_path = tmp_path / "first.w3x", tmp_path / "second.w3x"
+    callbacks = []
+    cancelled = []
+    posts = []
+
+    def load(_pack, *, map_path=None, cancelled=None, progress=None, **_kwargs):
+        if map_path == str(first_path):
+            callbacks.append(progress)
+            assert progress is not None
+            progress("第一图读取进度")
+            entered.set()
+            assert release.wait(20)
+            assert cancelled is not None
+            assert cancelled()
+            progress("不应交付的旧图进度")
+        return _map_catalog(map_path)
+
+    monkeypatch.setattr(gui, "load_reference_catalog", load)
+    window = gui.ReferenceCatalogWindow(root, map_path=first_path)
+    original_post = window._post_gui_worker
+
+    def post(ticket, callback, **kwargs):
+        posts.append(callback)
+        cancelled.append(ticket.cancellation)
+        return original_post(ticket, callback, **kwargs)
+
+    monkeypatch.setattr(window, "_post_gui_worker", post)
+    try:
+        _pump(root, entered.is_set)
+        assert all(
+            control.cget("state") == "disabled"
+            for control in (
+                *window._source_controls,
+                *window._id_controls,
+                *window._input_controls,
+            )
+        )
+        window._clear_source()
+        assert window._map_entry.get() == str(first_path)
+        window._cancel()
+        assert all(
+            control.cget("state") == "normal"
+            for control in (
+                *window._source_controls,
+                *window._id_controls,
+                *window._input_controls,
+            )
+        )
+        monkeypatch.setattr(
+            gui.filedialog, "askopenfilename", lambda **_kwargs: str(second_path)
+        )
+        window._map_button.invoke()
+        _pump(root, lambda: not window._busy and window._result is not None)
+        assert window._result is not None
+        assert window._result.map_path == str(second_path)
+        status = window._status.cget("text")
+        callbacks[0]("取消后的旧图进度")
+        release.set()
+        _pump(root, lambda: not window._gui_workers._workers)
+        for callback in posts:
+            root.after_idle(callback)
+        root.update()
+        assert window._result.map_path == str(second_path)
+        assert window._status.cget("text") == status
+        assert cancelled[0].is_set()
+    finally:
+        release.set()
+        window.destroy()
+
+
+@pytest.mark.parametrize("change", ("source", "filter", "cancel", "close"))
+def test_export_completion_cannot_claim_success_after_source_filter_cancel_or_close(
+    root, monkeypatch, tmp_path, change
+):
+    entered, release = threading.Event(), threading.Event()
+    completions = []
+    dialogs = []
+    monkeypatch.setattr(
+        gui, "load_reference_catalog", lambda _pack, **_kwargs: _catalog()
+    )
+    monkeypatch.setattr(
+        gui.filedialog,
+        "asksaveasfilename",
+        lambda **_kwargs: str(tmp_path / "out.json"),
+    )
+    monkeypatch.setattr(
+        gui.messagebox, "showerror", lambda *args, **kwargs: dialogs.append(args)
+    )
+
+    def write(_path, _result):
+        entered.set()
+        assert release.wait(20)
+
+    monkeypatch.setattr(gui, "write_reference_export", write)
+    window = gui.ReferenceCatalogWindow(root)
+    original_post = window._post_gui_worker
+
+    def post(ticket, callback, **kwargs):
+        if ticket.group == "reference-export":
+            completions.append(callback)
+        return original_post(ticket, callback, **kwargs)
+
+    monkeypatch.setattr(window, "_post_gui_worker", post)
+    try:
+        _pump(root, lambda: window._result is not None)
+        window._export_button.invoke()
+        _pump(root, entered.is_set)
+        if change == "source":
+            window._map_var.set(str(tmp_path / "changed.w3x"))
+        elif change == "filter":
+            window._query_entry.insert(0, "changed-filter")
+        elif change == "cancel":
+            window._cancel()
+        else:
+            window.destroy()
+        release.set()
+        _pump(root, lambda: bool(completions) and not window._gui_workers._workers)
+        for callback in completions:
+            root.after_idle(callback)
+        root.update()
+        assert not dialogs
+        if not window._closed:
+            assert "已导出" not in window._status.cget("text")
+    finally:
+        release.set()
         window.destroy()
 
 

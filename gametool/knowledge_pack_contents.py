@@ -41,6 +41,10 @@ from .knowledge_preplaced_exports import (
 from .knowledge_requirement_models import ExtractionCapabilities
 from .knowledge_requirements import format_requirement_coverage
 from .map_info import format_map_info
+from .map_metadata_exports import (
+    format_map_metadata_evidence,
+    format_map_string_evidence,
+)
 from .knowledge_resource_exports import write_resources
 from .knowledge_terrain_exports import write_terrain_exports
 from .knowledge_unknown_exports import write_unknown_files
@@ -111,6 +115,12 @@ def write_knowledge_pack_contents(
             out_dir,
             "地图信息.txt",
             f"地图：{md.name}\n路径：{md.path}\n\n{format_map_info(md)}\n",
+        )
+        count += write_text(
+            out_dir, "地图信息证据.json", format_map_metadata_evidence(md)
+        )
+        count += write_text(
+            out_dir, "地图字符串证据.json", format_map_string_evidence(md)
         )
     if _allowed(gate, adapter, "basic"):
         count += write_text(out_dir, "资料包审计.txt", format_knowledge_audit(md))

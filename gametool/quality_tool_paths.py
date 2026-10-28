@@ -365,6 +365,11 @@ gametool/map_gallery.py
 gametool/map_identity.py
 gametool/map_info.py
 gametool/map_loader.py
+gametool/map_metadata_exports.py
+gametool/map_reference_identity.py
+gametool/map_reference_records.py
+gametool/map_reference_sources.py
+gametool/map_reference_tables.py
 gametool/mapmeta.py
 gametool/memory_regions.py
 gametool/mmp.py
@@ -547,6 +552,9 @@ gametool/trusted_icon_cache.py
 gametool/ui_texts.py
 gametool/w3f.py
 gametool/w3i.py
+gametool/w3i_evidence.py
+gametool/w3i_models.py
+gametool/w3i_reader.py
 gametool/w3obj.py
 gametool/w3world.py
 gametool/war3_encoding.py
@@ -564,6 +572,8 @@ gametool/wtg_models.py
 gametool/wtg_reader.py
 gametool/wtg_reforged.py
 gametool/wts.py
+gametool/wts_models.py
+gametool/wts_parser.py
 tools/__init__.py
 tools/check_syntax_warnings.py
 """.splitlines()

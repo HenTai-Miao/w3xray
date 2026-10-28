@@ -68,7 +68,9 @@ def test_real_offline_workspaces_and_parent_teardown(tmp_path: Path) -> None:
             assert app.map_data is None
             assert "offline-id-records=2" in detail
             assert "offline-save-files=2" in detail
-            assert "offline-gui-exports=4" in detail
+            assert "offline-map-records=2" in detail
+            assert "offline-map-filtered=1" in detail
+            assert "offline-gui-exports=5" in detail
             assert "hotkeys-runtime-verified=False" in detail
             assert not [
                 child
