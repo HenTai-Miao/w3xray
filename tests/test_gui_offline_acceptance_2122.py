@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import locale
 from pathlib import Path
 
 import pytest
@@ -16,6 +18,36 @@ from gametool.gui_offline_acceptance_mpq import (
     validate_archive_export,
 )
 from gametool.gui_reports import build_analysis_blocks
+
+
+def _simulate_windows_encoding(
+    monkeypatch: pytest.MonkeyPatch, *, preferred: str, acp: str
+) -> list[list[str]]:
+    """Replace only the Windows ACP codec boundary, including UTF-8 mode."""
+    from gametool import war3_encoding
+
+    known_codecs = war3_encoding._known_non_utf8_codecs
+    requested: list[list[str]] = []
+
+    def resolve_acp(candidates: list[str]) -> tuple[str, ...]:
+        requested.append(list(candidates))
+        return known_codecs(
+            [acp if candidate == "mbcs" else candidate for candidate in candidates]
+        )
+
+    monkeypatch.setattr(locale, "getpreferredencoding", lambda _do_setlocale: preferred)
+    monkeypatch.setattr(war3_encoding, "_known_non_utf8_codecs", resolve_acp)
+    return requested
+
+
+def _archive_alias_names(output: Path) -> list[str]:
+    return [
+        json.loads(dict(cell.split("=", 1) for cell in line.split("\t")[1:])["name"])
+        for line in (output / "RecoveredNames/manifest.tsv")
+        .read_text("utf-8")
+        .splitlines()
+        if line.startswith("ALIAS\t")
+    ]
 
 
 @pytest.mark.parametrize(
@@ -102,4 +134,102 @@ def test_archive_acceptance_checks_exact_member_and_manifest_identity(
     else:
         (output / "extra.bin").write_bytes(b"not an authored member")
     with pytest.raises(RuntimeError):
+        validate_archive_export(output)
+
+
+@pytest.mark.parametrize(
+    ("preferred", "acp", "extra_name"),
+    [
+        ("UTF-8", "cp936", None),
+        ("UTF-8", "cp1252", "Textures\\è‹±é›„.blp"),
+        ("UTF-8", "utf-8", None),
+        ("cp1252", "cp936", "Textures\\è‹±é›„.blp"),
+    ],
+)
+def test_archive_acceptance_matches_complete_aliases_for_active_windows_encoding(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    preferred: str,
+    acp: str,
+    extra_name: str | None,
+) -> None:
+    requested = _simulate_windows_encoding(monkeypatch, preferred=preferred, acp=acp)
+    path = tmp_path / "combined.w3x"
+    path.write_bytes(archive_fixture_payloads()["archive-recovery.w3x"])
+    output = tmp_path / "output"
+
+    export_all_files(str(path), str(output))
+
+    names = ["war3map.j", "Textures\\鑻遍泟.blp"]
+    if extra_name is not None:
+        names.append(extra_name)
+    assert sorted(_archive_alias_names(output)) == sorted(names)
+    assert requested and all("mbcs" in candidates for candidates in requested)
+    if preferred == "UTF-8":
+        assert all("cp1252" not in candidates for candidates in requested)
+    validate_archive_export(output)
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    [
+        "missing",
+        "duplicate",
+        "extra",
+        "block",
+        "locale",
+        "platform",
+        "hash_index",
+        "name",
+        "path",
+        "size",
+        "sha256",
+        "reason",
+    ],
+)
+def test_archive_acceptance_rejects_incomplete_or_wrong_acp_alias_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tamper: str
+) -> None:
+    _simulate_windows_encoding(monkeypatch, preferred="UTF-8", acp="cp1252")
+    path = tmp_path / "combined.w3x"
+    path.write_bytes(archive_fixture_payloads()["archive-recovery.w3x"])
+    output = tmp_path / "output"
+    export_all_files(str(path), str(output))
+    validate_archive_export(output)
+    manifest = output / "RecoveredNames/manifest.tsv"
+    lines = manifest.read_text("utf-8").splitlines()
+    selected = next(
+        index
+        for index, line in enumerate(lines)
+        if line.startswith("ALIAS\t") and "è‹±é›„" in line
+    )
+    row = dict(cell.split("=", 1) for cell in lines[selected].split("\t")[1:])
+    if tamper == "missing":
+        lines.pop(selected)
+    elif tamper == "duplicate":
+        lines.append(lines[selected])
+    elif tamper == "extra":
+        row["name"] = json.dumps("Textures\\unproved.blp")
+        lines.append(
+            "ALIAS\t" + "\t".join(f"{key}={value}" for key, value in row.items())
+        )
+    else:
+        replacements = {
+            "block": "6",
+            "locale": "1033",
+            "platform": "1",
+            "hash_index": "30",
+            "name": json.dumps("Textures\\not-the-source-bytes.blp"),
+            "path": json.dumps("Textures/other.blp"),
+            "size": "26",
+            "sha256": "0" * 64,
+            "reason": "verified-entry-for-exported-block",
+        }
+        row[tamper] = replacements[tamper]
+        lines[selected] = "ALIAS\t" + "\t".join(
+            f"{key}={value}" for key, value in row.items()
+        )
+    manifest.write_text("\n".join(lines) + "\n", "utf-8")
+
+    with pytest.raises(RuntimeError, match="别名 manifest 遗漏、重复或错误归属"):
         validate_archive_export(output)

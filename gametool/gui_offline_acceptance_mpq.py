@@ -179,12 +179,16 @@ _EXPECTED: dict[str, Any] = {
             "sha256": "170e17efda9640ae0e08b492119c7cf4c93bfb00b01b116ff8d0b68c4c12649b",
             "reason": "verified-entry-for-exported-block",
         },
+    ],
+    "manifest_alias_encoding_contracts": [
         {
             "block": 7,
             "locale": 0,
             "platform": 0,
             "hash_index": 31,
-            "name": "Textures\\鑻遍泟.blp",
+            "name_bytes_hex": "54657874757265735ce88bb1e99b842e626c70",
+            "published_name": "Textures\\英雄.blp",
+            "decoding_policy": "utf-8-and-all-active-default-legacy-codecs-strict-roundtrip",
             "path": "Textures/英雄.blp",
             "size": 25,
             "sha256": "0b60f1db7d7e96182879a99aa1352f3005bf17af9459acf3e0bf8e308ad45672",
@@ -192,6 +196,34 @@ _EXPECTED: dict[str, Any] = {
         },
     ],
 }
+
+
+def _expected_alias_identities() -> list[dict[str, Any]]:
+    """Derive all aliases from authored bytes and the active encoding contract."""
+    from .war3_encoding import default_legacy_codecs
+
+    expected = list(_EXPECTED["manifest_alias_identities"])
+    encodings = ("utf-8", *default_legacy_codecs())
+    for contract in _EXPECTED["manifest_alias_encoding_contracts"]:
+        raw = bytes.fromhex(contract["name_bytes_hex"])
+        names: set[str] = set()
+        for encoding in encodings:
+            try:
+                name = raw.decode(encoding)
+                if name.encode(encoding) == raw:
+                    names.add(name)
+            except LookupError, UnicodeError:
+                continue
+        identity = {
+            key: value
+            for key, value in contract.items()
+            if key not in {"name_bytes_hex", "published_name", "decoding_policy"}
+        }
+        expected.extend(
+            {**identity, "name": name}
+            for name in sorted(names - {contract["published_name"]})
+        )
+    return expected
 
 
 def archive_fixture_payloads() -> dict[str, bytes]:
@@ -277,13 +309,16 @@ def validate_archive_export(output: Path) -> None:
                 "reason": alias["reason"],
             }
         )
+    expected_aliases = _expected_alias_identities()
     _require(
         sorted(normalized_aliases, key=lambda row: (row["block"], row["name"]))
         == sorted(
-            _EXPECTED["manifest_alias_identities"],
+            expected_aliases,
             key=lambda row: (row["block"], row["name"]),
         ),
-        "别名 manifest 遗漏、重复或错误归属已证明的 hash 条目",
+        "别名 manifest 遗漏、重复或错误归属已证明的 hash 条目; "
+        f"expected={json.dumps(expected_aliases, ensure_ascii=False)}; "
+        f"actual={json.dumps(normalized_aliases, ensure_ascii=False)}",
     )
     all_files = {
         path.relative_to(output).as_posix()
