@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from bisect import bisect_left
+from collections.abc import Iterable
 from dataclasses import dataclass, replace
 import re
 
@@ -26,8 +27,19 @@ class FunctionReference:
 
 
 class ScriptFunctionBindings:
-    def __init__(self, text: str, *, lua: bool | None) -> None:
+    def __init__(
+        self,
+        text: str,
+        *,
+        lua: bool | None,
+        additional_builtins: Iterable[str] = (),
+    ) -> None:
         self.text, self.lua = text, lua
+        self.additional_builtins = frozenset(additional_builtins)
+        self.builtins = frozenset(
+            {"FourCC", *GEOMETRY_BUILTINS, *self.additional_builtins}
+            | ({"select", "table.unpack"} if lua is True else set())
+        )
         self.structure = script_structure(text, lua=lua)
         self.views = script_views(text, lua=lua)
         self.symbols = ScriptSymbols(text, self.structure, lua=lua)
@@ -233,6 +245,17 @@ class ScriptFunctionBindings:
                 owner, start = assignment.owner, self._rhs_position(assignment)
                 continue
             candidates = tuple(self.definitions.get(symbol, ()))
+            if (
+                self.lua is True
+                and owner is None
+                and symbol[2] in self.additional_builtins
+                and all(
+                    item.parent is None and item.start > start for item in candidates
+                )
+            ):
+                # An opted-in native captured by straight-line top-level code
+                # keeps the value preceding a later Lua function declaration.
+                candidates = ()
             if candidates:
                 parent_notes = tuple(
                     self._parent_diagnostic(
@@ -264,10 +287,7 @@ class ScriptFunctionBindings:
                     )
                 return finish(FunctionReference(raw, candidates, diagnostic))
             canonical = symbol[2]
-            builtins = {"FourCC", *GEOMETRY_BUILTINS}
-            if self.lua is True:
-                builtins.update(("select", "table.unpack"))
-            if canonical in builtins:
+            if canonical in self.builtins:
                 diagnostic = self._parent_diagnostic(value, owner, start, None)
                 if diagnostic:
                     return finish(FunctionReference(raw, (), diagnostic))

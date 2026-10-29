@@ -169,6 +169,14 @@ class _RecoveredArchive:
         self.read_names.append(name)
         return b"x"
 
+    def read_file_entry(self, name, entry) -> bytes:
+        if entry.block_index != self.names.index(name):
+            raise KeyError(name)
+        return self.read_file(name)
+
+    def block_index_of(self, name: str) -> int | None:
+        return self.names.index(name) if name in self.names else None
+
     def iter_blocks(self) -> tuple[tuple[int, _Block], ...]:
         return ()
 

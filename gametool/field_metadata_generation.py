@@ -28,7 +28,8 @@ TABLE_NAMES = (
 )
 _HASH = re.compile(r"[0-9a-f]{64}\Z")
 _VERSION = re.compile(r"[0-9]+(?:\.[0-9]+){3}\Z")
-_REFERENCE_CATEGORIES = frozenset({"ability", "unit", "item"})
+_REQUIRED_REFERENCE_CATEGORIES = frozenset({"ability", "unit", "item"})
+_REFERENCE_CATEGORIES = _REQUIRED_REFERENCE_CATEGORIES | {"upgrade"}
 
 
 class MetadataInputError(ValueError):
@@ -84,8 +85,14 @@ def _hashes(value: object, origin: str) -> dict[str, str]:
 def validate_metadata(
     value: object, origin: str
 ) -> dict[str, dict[str, dict[str, str]]]:
-    if not isinstance(value, dict) or set(value) != _REFERENCE_CATEGORIES:
-        raise MetadataInputError(f"{origin}: requires ability, unit and item metadata")
+    if (
+        not isinstance(value, dict)
+        or not _REQUIRED_REFERENCE_CATEGORIES <= set(value) <= _REFERENCE_CATEGORIES
+    ):
+        raise MetadataInputError(
+            f"{origin}: requires ability, unit and item metadata; "
+            "upgrade is the only optional category"
+        )
     for category, rows in value.items():
         if not isinstance(rows, dict) or not rows:
             raise MetadataInputError(f"{origin}: empty metadata category {category!r}")
@@ -103,6 +110,14 @@ def validate_metadata(
                     f"{origin}: missing label/type for {category}/{code}"
                 )
     return value
+
+
+def category_coverage(metadata: dict[str, Any]) -> dict[str, list[str]]:
+    """Describe actual inputs without claiming an omitted category is complete."""
+    return {
+        "present": sorted(metadata),
+        "absent": sorted(_REFERENCE_CATEGORIES - set(metadata)),
+    }
 
 
 def reference_label(row: dict[str, str]) -> tuple[str, str]:
@@ -168,6 +183,7 @@ def reference_from_source(path: Path) -> dict[str, Any]:
         },
         "source_hashes": _hashes(payload.get("sources"), path.name),
         "record_counts": {category: len(rows) for category, rows in metadata.items()},
+        "category_coverage": category_coverage(metadata),
         "metadata_sha256": sha256(canonical_json(metadata).encode("utf-8")),
         "metadata": metadata,
     }
@@ -186,6 +202,12 @@ def read_reference(path: Path) -> tuple[dict[str, Any], bytes]:
     if not isinstance(version, str) or not _VERSION.fullmatch(version):
         raise MetadataInputError(f"{path.name}: invalid game_build")
     metadata = validate_metadata(data.get("metadata"), path.name)
+    if "category_coverage" in data and data["category_coverage"] != category_coverage(
+        metadata
+    ):
+        raise MetadataInputError(
+            f"{path.name}: metadata category coverage does not match"
+        )
     counts = {category: len(rows) for category, rows in metadata.items()}
     if data.get("record_counts") != counts or any(
         type(count) is not int for count in data.get("record_counts", {}).values()
@@ -219,6 +241,10 @@ class Generation:
     retained_differences: dict[str, dict[str, Any]] = field(default_factory=dict)
     found: int = 0
     unresolved: int = 0
+    categories: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    category_provenance: dict[str, dict[str, tuple[str, ...]]] = field(
+        default_factory=dict
+    )
 
     def legacy_tuple(self):
         return (
@@ -310,6 +336,8 @@ def merge_reference(result: Generation, path: Path) -> None:
         "game_build": data["game_build"],
         "origin": data["origin"],
         "record_counts": data["record_counts"],
+        "metadata_sha256": data["metadata_sha256"],
+        "category_coverage": category_coverage(data["metadata"]),
         "source_hashes": data["source_hashes"],
         "policy": "fill missing metadata; preserve existing values; no stock object values",
     }
@@ -317,6 +345,13 @@ def merge_reference(result: Generation, path: Path) -> None:
     for category, rows in sorted(data["metadata"].items()):
         for code, row in sorted(rows.items()):
             result.found += 1
+            result.categories[code] = tuple(
+                dict.fromkeys((*result.categories.get(code, ()), category))
+            )
+            declared = result.category_provenance.setdefault(code, {})
+            declared[category] = tuple(
+                dict.fromkeys((*declared.get(category, ()), source))
+            )
             label, language = reference_label(row)
             values: dict[str, Any] = {
                 "GENERATED_FIELD_LABELS": label,

@@ -258,6 +258,10 @@ gametool/gui_object_detail.py
 gametool/gui_object_filter_runner.py
 gametool/gui_object_text_controls.py
 gametool/gui_offline_acceptance.py
+gametool/gui_offline_acceptance_2122.py
+gametool/gui_offline_acceptance_diagnostics.py
+gametool/gui_offline_acceptance_mpq.py
+gametool/gui_offline_acceptance_support.py
 gametool/gui_pack_query.py
 gametool/gui_pane_state.py
 gametool/gui_profile_settings.py
@@ -483,6 +487,7 @@ gametool/script_call_argument_index.py
 gametool/script_call_catalog.py
 gametool/script_condition_branch_index.py
 gametool/script_control_ranges.py
+gametool/script_diagnostic_analysis.py
 gametool/script_environments.py
 gametool/script_forward_calls.py
 gametool/script_function_bindings.py

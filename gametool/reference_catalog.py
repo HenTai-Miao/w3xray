@@ -86,9 +86,20 @@ def _builtin_sources() -> tuple[tuple[ReferenceSource, ...], tuple[str, ...]]:
                 "applicability": field_meta.GENERATED_FIELD_APPLICABILITY,
                 "bounds": field_meta.GENERATED_FIELD_BOUNDS,
                 "constants": field_meta.GENERATED_FIELD_CONSTANTS,
+                "categories": field_meta.GENERATED_FIELD_CATEGORIES,
+                "category_provenance": field_meta.GENERATED_FIELD_CATEGORY_PROVENANCE,
+                "source_manifest": field_meta.GENERATED_FIELD_SOURCE_MANIFEST,
+                "field_provenance": field_meta.GENERATED_FIELD_PROVENANCE,
+                "source_differences": field_meta.GENERATED_FIELD_SOURCE_DIFFERENCES,
             },
-            "build_field_labels.py 生成的 MetaData.slk/westrings 静态字段定义，"
-            "常量名来源 common.j；游戏 build 未记录。",
+            "build_field_labels.py 生成的静态字段定义；历史 seed 的游戏 build 未记录，"
+            "版本化参考仅补缺并保留显式类别，fields.py 人工标签优先。"
+            "完整生成输入台账（上游文件 hash 为参考来源声明）："
+            + json.dumps(
+                field_meta.GENERATED_FIELD_SOURCE_MANIFEST,
+                ensure_ascii=False,
+                sort_keys=True,
+            ),
         ),
         (
             _FIELD_LABELS,
@@ -391,9 +402,15 @@ def _metadata_records(
         | set(field_meta.GENERATED_FIELD_APPLICABILITY)
         | set(field_meta.GENERATED_FIELD_BOUNDS)
         | set(field_meta.GENERATED_FIELD_CONSTANTS)
+        | set(field_meta.GENERATED_FIELD_CATEGORIES)
         | set(observations)
     )
     records: list[ReferenceRecord] = []
+    differences: dict[str, dict[str, dict[str, object]]] = {}
+    for source, tables in field_meta.GENERATED_FIELD_SOURCE_DIFFERENCES.items():
+        for table, values in tables.items():
+            for code, value in values.items():
+                differences.setdefault(code, {}).setdefault(source, {})[table] = value
     name_categories = {
         "w3u": "单位",
         "w3t": "物品",
@@ -405,9 +422,21 @@ def _metadata_records(
     }
     for key in keys:
         seen = tuple(observations.get(key, ()))
+        category_sources = field_meta.GENERATED_FIELD_CATEGORY_PROVENANCE.get(key, {})
+        category_builds = _unique(
+            str(field_meta.GENERATED_FIELD_SOURCE_MANIFEST[source]["game_build"])
+            for sources in category_sources.values()
+            for source in sources
+            if "game_build"
+            in field_meta.GENERATED_FIELD_SOURCE_MANIFEST.get(source, {})
+        )
         categories = _unique(
             (
                 *(value.category for value in seen),
+                *(
+                    object_category(category)
+                    for category in field_meta.GENERATED_FIELD_CATEGORIES.get(key, ())
+                ),
                 *(
                     name_categories[ext]
                     for ext, name in fields.NAME_FIELD.items()
@@ -429,6 +458,32 @@ def _metadata_records(
                 "类别证据",
                 " / ".join(categories) or "元数据未记录；未按字段前缀猜测类别",
             ),
+            (
+                "版本化类别来源",
+                json.dumps(category_sources, ensure_ascii=False, sort_keys=True)
+                if category_sources
+                else "",
+            ),
+            (
+                "版本化类别范围",
+                "类别声明来自列示编辑器版本；标签/类型/边界按历史 seed 补缺与人工优先级保留。"
+                if category_sources
+                else "",
+            ),
+            (
+                "生成条目来源",
+                json.dumps(
+                    field_meta.GENERATED_FIELD_PROVENANCE.get(key, {}),
+                    ensure_ascii=False,
+                    sort_keys=True,
+                ),
+            ),
+            (
+                "版本参考差异",
+                json.dumps(differences[key], ensure_ascii=False, sort_keys=True)
+                if key in differences
+                else "",
+            ),
             ("语义", "静态字段定义与已导出值证据；不代表运行时 getter 或实时生效。"),
         )
         metadata_sources = (
@@ -442,6 +497,7 @@ def _metadata_records(
                         field_meta.GENERATED_FIELD_APPLICABILITY,
                         field_meta.GENERATED_FIELD_BOUNDS,
                         field_meta.GENERATED_FIELD_CONSTANTS,
+                        field_meta.GENERATED_FIELD_CATEGORIES,
                     )
                 )
                 else []
@@ -455,6 +511,7 @@ def _metadata_records(
                 fields.label_for(key),
                 aliases=_field_aliases(key),
                 categories=categories,
+                builds=_unique((_UNKNOWN_BUILD, *category_builds)),
                 sources=_unique((*metadata_sources, *(value.source for value in seen))),
                 values=seen,
                 details=details,

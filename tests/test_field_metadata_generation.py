@@ -65,9 +65,26 @@ def test_complete_reference_fills_all_missing_fields_with_versioned_provenance()
     reference, raw = read_reference(bfl.DEFAULT_REFERENCE)
     seed = load_seed(bfl.DEFAULT_SEED)
     result = bfl.build_generation()
-    assert reference["record_counts"] == {"ability": 962, "unit": 247, "item": 48}
-    assert result.found == 1257
-    expected_missing = {"ability": 185, "unit": 8, "item": 5}
+    assert reference["record_counts"] == {
+        "ability": 962,
+        "unit": 247,
+        "item": 48,
+        "upgrade": 37,
+    }
+    assert reference["category_coverage"] == {
+        "present": ["ability", "item", "unit", "upgrade"],
+        "absent": [],
+    }
+    assert result.found == 1294
+    legacy_metadata = {
+        category: rows
+        for category, rows in reference["metadata"].items()
+        if category != "upgrade"
+    }
+    assert sha256(canonical_json(legacy_metadata).encode("utf-8")) == (
+        "9167f0e238e7329f68c6624619400dc6a7c1d3fd2daa218ba81fb31d55977f74"
+    )
+    expected_missing = {"ability": 185, "unit": 8, "item": 5, "upgrade": 0}
     for category, rows in reference["metadata"].items():
         missing = {
             code
@@ -89,6 +106,18 @@ def test_complete_reference_fills_all_missing_fields_with_versioned_provenance()
                 )
     assert result.sources["editor-reference:3.0.1.24371"]["sha256"] == sha256(raw)
     assert len(result.sources["editor-reference:3.0.1.24371"]["source_hashes"]) == 76
+    declared_categories = {}
+    for category, rows in sorted(reference["metadata"].items()):
+        for code in rows:
+            declared_categories.setdefault(code, []).append(category)
+            assert result.category_provenance[code][category] == (
+                "editor-reference:3.0.1.24371",
+            )
+    assert result.categories == {
+        code: tuple(categories) for code, categories in declared_categories.items()
+    }
+    assert result.categories == field_meta.GENERATED_FIELD_CATEGORIES
+    assert result.category_provenance == field_meta.GENERATED_FIELD_CATEGORY_PROVENANCE
     for table in TABLE_NAMES:
         assert all(
             result.tables[table][code] == value
@@ -96,6 +125,72 @@ def test_complete_reference_fills_all_missing_fields_with_versioned_provenance()
         )
         assert result.tables[table] == getattr(field_meta, table)
     assert result.retained_differences  # Version disagreements are not silently erased.
+
+
+@pytest.mark.parametrize("declare_coverage", [False, True])
+def test_legacy_three_category_reference_retains_explicit_missing_upgrade_scope(
+    tmp_path, declare_coverage
+):
+    data = json.loads(bfl.DEFAULT_REFERENCE.read_text(encoding="utf-8"))
+    del data["metadata"]["upgrade"]
+    del data["record_counts"]["upgrade"]
+    data["metadata_sha256"] = sha256(canonical_json(data["metadata"]).encode("utf-8"))
+    coverage = {"present": ["ability", "item", "unit"], "absent": ["upgrade"]}
+    if declare_coverage:
+        data["category_coverage"] = coverage
+    else:
+        del data["category_coverage"]
+    reference = tmp_path / "legacy-reference.json"
+    reference.write_text(canonical_json(data), encoding="utf-8")
+    result = bfl.build_generation(reference=reference)
+    source = result.sources["editor-reference:3.0.1.24371"]
+    assert result.found == 1257
+    assert source["category_coverage"] == coverage
+    assert source["record_counts"] == {"ability": 962, "unit": 247, "item": 48}
+    assert not any("upgrade" in categories for categories in result.categories.values())
+    for table in TABLE_NAMES:
+        assert result.tables[table] == getattr(field_meta, table)
+
+
+def test_upgrade_metadata_preserves_existing_vocabulary_types_and_bounds():
+    reference, _ = read_reference(bfl.DEFAULT_REFERENCE)
+    seed = load_seed(bfl.DEFAULT_SEED)
+    result = bfl.build_generation()
+    upgrades = reference["metadata"]["upgrade"]
+    different_labels = set()
+    for code, row in upgrades.items():
+        assert result.tables["FIELD_TYPES"][code] == row["type"]
+        assert (
+            result.tables["GENERATED_FIELD_LABELS"][code]
+            == seed.tables["GENERATED_FIELD_LABELS"][code]
+        )
+        if row.get("minVal") or row.get("maxVal"):
+            assert result.tables["GENERATED_FIELD_BOUNDS"][code] == (
+                row.get("minVal") or None,
+                row.get("maxVal") or None,
+            )
+        if row["zhCN"] != seed.tables["GENERATED_FIELD_LABELS"][code]:
+            different_labels.add(code)
+            assert (
+                result.retained_differences[
+                    "editor-reference:3.0.1.24371:upgrade:zhCN"
+                ]["GENERATED_FIELD_LABELS"][code]
+                == row["zhCN"]
+            )
+    assert different_labels == {
+        "gub1",
+        "gcls",
+        "gglb",
+        "gglm",
+        "glmb",
+        "glmm",
+        "gtib",
+        "gtim",
+        "ginh",
+        "greq",
+        "grqc",
+    }
+    assert len(result.tables["GENERATED_FIELD_CONSTANTS"]) == 727
 
 
 @pytest.mark.parametrize(
@@ -223,6 +318,11 @@ def test_invalid_explicit_constants_preserve_output(tmp_path, text):
         "duplicate_key",
         "schema",
         "conflicting_category",
+        "unknown_category",
+        "empty_upgrade",
+        "invalid_upgrade",
+        "missing_upgrade_with_declared_coverage",
+        "false_missing_upgrade_coverage",
     ],
 )
 def test_invalid_reference_does_not_publish(tmp_path, damage):
@@ -239,6 +339,31 @@ def test_invalid_reference_does_not_publish(tmp_path, damage):
     elif damage == "conflicting_category":
         data["metadata"]["unit"]["iequ"] = {"type": "int", "enUS": "Different"}
         data["record_counts"]["unit"] += 1
+        data["metadata_sha256"] = sha256(
+            canonical_json(data["metadata"]).encode("utf-8")
+        )
+    elif damage == "unknown_category":
+        data["metadata"]["upgrades"] = data["metadata"].pop("upgrade")
+    elif damage == "empty_upgrade":
+        data["metadata"]["upgrade"] = {}
+    elif damage == "invalid_upgrade":
+        data["metadata"]["upgrade"]["gnam"]["type"] = 17
+    elif damage == "missing_upgrade_with_declared_coverage":
+        del data["metadata"]["upgrade"]
+    elif damage == "false_missing_upgrade_coverage":
+        data["category_coverage"] = {
+            "present": ["ability", "item", "unit"],
+            "absent": ["upgrade"],
+        }
+    if damage in {
+        "unknown_category",
+        "empty_upgrade",
+        "invalid_upgrade",
+        "missing_upgrade_with_declared_coverage",
+    }:
+        data["record_counts"] = {
+            key: len(rows) for key, rows in data["metadata"].items()
+        }
         data["metadata_sha256"] = sha256(
             canonical_json(data["metadata"]).encode("utf-8")
         )
@@ -365,6 +490,10 @@ def test_static_reference_import_never_executes_source(tmp_path):
     result = reference_from_source(source)
     assert not marker.exists()
     assert result["metadata"] == metadata
+    assert result["category_coverage"] == {
+        "present": ["ability", "item", "unit"],
+        "absent": ["upgrade"],
+    }
     assert "profiles" not in result
     assert result["origin"]["module_sha256"] == sha256(source.read_bytes())
     assert result["origin"]["decoded_payload_sha256"] == sha256(decoded)

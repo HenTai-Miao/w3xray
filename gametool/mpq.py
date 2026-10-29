@@ -247,16 +247,33 @@ class MPQArchive:
         entry, real, candidate = self._resolve_match(name)
         if entry is None:
             raise KeyError(name)
-        bi = entry.block_index
-        if bi >= len(self.block_table):  # 块表被截断/索引越界
-            raise KeyError(name)
         assert candidate is not None  # entry 命中时必有真名
+        return self._read_matched_payload(entry, real, candidate)
+
+    def read_file_entry(self, name: str, entry: HashEntry) -> bytes:
+        """Read one proved hash entry without applying the default locale.
+
+        Recovery walks every locale/platform and must not read the default
+        member while marking another block as exported. Replay the actual
+        probe chain for each byte spelling before accepting that identity.
+        """
+        for candidate in encoded_name_candidates(name, self.legacy_codecs):
+            if entry in self._matching_hash_entries(candidate):
+                return self._read_matched_payload(entry, name, candidate)
+        raise KeyError(name)
+
+    def _read_matched_payload(
+        self, entry: HashEntry, name: str, candidate: bytes
+    ) -> bytes:
+        bi = entry.block_index
+        if not 0 <= bi < len(self.block_table):  # 块表被截断/索引越界
+            raise KeyError(name)
         cache_key = (bi, candidate)
         cached = self._payload_cache.get(cache_key)
         if cached is not None:
             return cached
         block = self.block_table[bi]
-        payload = self._read_block(block, real, name_bytes=candidate)
+        payload = self._read_block(block, name, name_bytes=candidate)
         total = self._payload_cache_bytes + len(payload)
         if total > _PAYLOAD_CACHE_BUDGET:
             # FIFO 逐出旧条目直到放得下；单条超预算则不缓存 (下次重解压一次)

@@ -165,6 +165,14 @@ class TestRecoveredNamedExport(unittest.TestCase):
                     return b"BLP1texture"
                 raise KeyError(file_name)
 
+            def read_file_entry(self, file_name, entry):
+                if entry.block_index != 1:
+                    raise KeyError(file_name)
+                return self.read_file(file_name)
+
+            def block_index_of(self, file_name):
+                return 1 if file_name == name else None
+
         with tempfile.TemporaryDirectory() as out:
             exported_blocks = set()
             count = _export_recovered_named_files(Archive(), out, exported_blocks)  # pyright: ignore[reportArgumentType]

@@ -127,6 +127,14 @@ def test_recovered_name_does_not_follow_destination_symlink(tmp_path: Path) -> N
                 raise KeyError(file_name)
             return b"BLP1texture"
 
+        def read_file_entry(self, file_name, entry):
+            if entry.block_index != 1:
+                raise KeyError(file_name)
+            return self.read_file(file_name)
+
+        def block_index_of(self, file_name):
+            return 1 if file_name == name else None
+
     output = tmp_path / "out"
     textures = output / "Textures"
     textures.mkdir(parents=True)
@@ -173,6 +181,14 @@ def test_recovered_unc_name_is_rejected_before_normalization(tmp_path: Path) -> 
             if file_name != normalized_name:
                 raise KeyError(file_name)
             return b"BLP1texture"
+
+        def read_file_entry(self, file_name, entry):
+            if entry.block_index != 1:
+                raise KeyError(file_name)
+            return self.read_file(file_name)
+
+        def block_index_of(self, file_name):
+            return 1 if file_name == normalized_name else None
 
     output = tmp_path / "out"
 

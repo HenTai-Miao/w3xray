@@ -284,6 +284,8 @@ def render_module(
         )
     if generation is not None:
         manifests = {
+            "GENERATED_FIELD_CATEGORIES": generation.categories,
+            "GENERATED_FIELD_CATEGORY_PROVENANCE": generation.category_provenance,
             "GENERATED_FIELD_SOURCE_MANIFEST": generation.sources,
             "GENERATED_FIELD_PROVENANCE": generation.provenance,
             "GENERATED_FIELD_SOURCE_DIFFERENCES": generation.retained_differences,

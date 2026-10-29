@@ -71,15 +71,21 @@ def test_real_offline_workspaces_and_parent_teardown(tmp_path: Path) -> None:
             assert "offline-save-files=2" in detail
             assert "offline-map-records=2" in detail
             assert "offline-map-filtered=1" in detail
-            assert "offline-gui-exports=9" in detail
+            assert "offline-gui-exports=22" in detail
             assert "offline-selected-exports=json/tsv/md" in detail
             assert "offline-pack-handoffs=2" in detail
             assert "offline-utf16-carriers=2" in detail
+            assert "upgrade-field-records=37" in detail
+            assert "archive-recovered-members=7" in detail
+            assert (
+                "diagnostic-maps=4; diagnostic-groups=4; diagnostic-mutations=4"
+                in detail
+            )
             artifacts = Path(detail.rsplit("offline-artifacts=", 1)[1])
             inventory = json.loads(
                 (artifacts / "acceptance-inventory.json").read_text(encoding="utf-8")
             )
-            assert inventory["accepted"] == 8
+            assert inventory["accepted"] == 11
             assert inventory["failed"] == inventory["not_run"] == 0
             assert inventory["callback_errors"] == []
             assert all(case["status"] == "accepted" for case in inventory["cases"])

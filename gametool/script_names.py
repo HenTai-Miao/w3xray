@@ -5,6 +5,9 @@ from __future__ import annotations
 import re
 
 IDENTIFIER = r"[A-Za-z_][A-Za-z0-9_]*"
+# Boundary-only lexing keeps source Unicode names intact without expanding the
+# qualified-name resolver's supported binding grammar or native identities.
+LEXICAL_IDENTIFIER = r"[^\W\d]\w*"
 QUALIFIED_NAME = IDENTIFIER + r"(?:\s*[.:]\s*" + IDENTIFIER + r")*"
 NAME_PATTERN = re.compile(QUALIFIED_NAME)
 _SPACE = re.compile(r"\s+")

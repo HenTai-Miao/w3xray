@@ -27,6 +27,45 @@ from gametool.reference_sources import PackReferenceSources
 
 _HEADER = ("分类", "ID", "数值", "基础ID", "名称", "自定义", "说明")
 _FIELDS = ("分类", "ID", "名称", "字段键", "字段名", "值", "来源")
+_UPGRADE_FIELDS = {
+    "gar1",
+    "gba1",
+    "gba2",
+    "gba3",
+    "gba4",
+    "gbpx",
+    "gbpy",
+    "gcls",
+    "gco1",
+    "gco2",
+    "gco3",
+    "gco4",
+    "gef1",
+    "gef2",
+    "gef3",
+    "gef4",
+    "gglb",
+    "gglm",
+    "ghk1",
+    "ginh",
+    "glmb",
+    "glmm",
+    "glob",
+    "glvl",
+    "gmo1",
+    "gmo2",
+    "gmo3",
+    "gmo4",
+    "gnam",
+    "gnsf",
+    "grac",
+    "greq",
+    "grqc",
+    "gtib",
+    "gtim",
+    "gtp1",
+    "gub1",
+}
 
 
 def _tsv(path: Path, rows, *, bom: bool = False) -> bytes:
@@ -103,6 +142,119 @@ def test_builtin_catalog_is_complete_and_retains_definition_aliases(small_assets
     assert dict(field.details)["字段类型"] == catalog_module.fields.field_type("uhpm")
     assert all(len(source.sha256) == 64 for source in catalog.sources)
     assert all(source.build == "unrecorded" for source in catalog.sources)
+
+
+def test_versioned_upgrade_fields_are_complete_without_a_map(small_assets):
+    catalog = load_reference_catalog()
+    for category in ("科技", "upgrade"):
+        result = search_reference_catalog(catalog, kind="fields", category=category)
+        assert result.catalog_complete
+        assert {record.id for record in result.records} == _UPGRADE_FIELDS
+        assert result.matched == 37 and result.omitted == 0
+        for record in result.records:
+            assert record.categories == ("科技",)
+            assert record.builds == ("unrecorded", "3.0.1.24371")
+            assert json.loads(dict(record.details)["版本化类别来源"]) == {
+                "upgrade": ["editor-reference:3.0.1.24371"]
+            }
+            assert "builtin:field_meta" in record.sources
+            assert "历史 seed" in dict(record.details)["版本化类别范围"]
+    shared = next(
+        record
+        for record in catalog.records
+        if record.kind == "fields" and record.id == "unam"
+    )
+    assert set(shared.categories) == {"物品", "单位"}
+    assert set(json.loads(dict(shared.details)["版本化类别来源"])) == {"item", "unit"}
+    difference = next(record for record in result.records if record.id == "gcls")
+    assert json.loads(dict(difference.details)["版本参考差异"])[
+        "editor-reference:3.0.1.24371:upgrade:zhCN"
+    ]["GENERATED_FIELD_LABELS"]
+    source = next(
+        source for source in catalog.sources if source.id == "builtin:field_meta"
+    )
+    manifest = catalog_module.field_meta.GENERATED_FIELD_SOURCE_MANIFEST
+    assert json.dumps(manifest, ensure_ascii=False, sort_keys=True) in source.provenance
+
+
+def test_declared_categories_do_not_guess_from_field_prefixes(
+    small_assets, monkeypatch
+):
+    monkeypatch.setattr(
+        catalog_module.field_meta,
+        "GENERATED_FIELD_CATEGORIES",
+        {"Z001": ("upgrade", "item")},
+    )
+    monkeypatch.setattr(
+        catalog_module.field_meta, "GENERATED_FIELD_CATEGORY_PROVENANCE", {}
+    )
+    catalog = load_reference_catalog()
+    result = search_reference_catalog(catalog, kind="fields", category="科技")
+    assert {record.id for record in result.records} == {"Z001", "gnam"}
+    declared = next(record for record in result.records if record.id == "Z001")
+    assert declared.categories == ("科技", "物品")
+    # gnam has an independent explicit NAME_FIELD role; other g-prefixed keys do not.
+    assert "gcls" not in {record.id for record in result.records}
+
+
+@pytest.mark.parametrize(
+    "attribute",
+    [
+        "GENERATED_FIELD_CATEGORIES",
+        "GENERATED_FIELD_CATEGORY_PROVENANCE",
+        "GENERATED_FIELD_SOURCE_MANIFEST",
+        "GENERATED_FIELD_PROVENANCE",
+        "GENERATED_FIELD_SOURCE_DIFFERENCES",
+    ],
+)
+def test_metadata_fingerprint_binds_category_and_source_evidence(
+    small_assets, monkeypatch, attribute
+):
+    before, _ = catalog_module._builtin_sources()
+    original = dict(getattr(catalog_module.field_meta, attribute))
+    monkeypatch.setattr(
+        catalog_module.field_meta,
+        attribute,
+        {**original, "fixture-extra-evidence": {"source": "independent statement"}},
+    )
+    after, _ = catalog_module._builtin_sources()
+    old = next(source for source in before if source.id == "builtin:field_meta")
+    new = next(source for source in after if source.id == "builtin:field_meta")
+    assert old.sha256 != new.sha256
+    assert old.source_file_sha256 == new.source_file_sha256
+
+
+def test_public_upgrade_field_json_export_retains_all_evidence(
+    tmp_path, small_assets, capsys
+):
+    output = tmp_path / "technology-fields.json"
+    assert (
+        run_reference_cli(
+            (
+                "--kind",
+                "fields",
+                "--category",
+                "科技",
+                "--json",
+                "--export",
+                str(output),
+            )
+        )
+        == 0
+    )
+    printed = json.loads(capsys.readouterr().out)
+    exported = json.loads(output.read_text(encoding="utf-8"))
+    assert printed == exported
+    assert exported["matched"] == 37 and exported["omitted"] == 0
+    assert {record["id"] for record in exported["records"]} == _UPGRADE_FIELDS
+    assert all(record["categories"] == ["科技"] for record in exported["records"])
+    source = next(
+        source for source in exported["sources"] if source["id"] == "builtin:field_meta"
+    )
+    assert (
+        "1205957d8344c6b27c8b7625073dc50d9bc7b4a68a4b14bf9c6a1fa3b0373848"
+        in source["provenance"]
+    )
 
 
 def test_frozen_assets_hash_all_loaded_data_without_loose_source_files(

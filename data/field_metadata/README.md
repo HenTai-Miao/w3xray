@@ -13,7 +13,7 @@ seed explicitly leaves that provenance unknown. The separately maintained labels
 in `gametool/fields.py` retain their higher runtime priority.
 
 `editor-3.0.1.24371.json` contains every metadata record from the source's pinned
-editor reference: 962 ability, 247 unit and 48 item records. It preserves every
+editor reference: 962 ability, 247 unit, 48 item and 37 upgrade records. It preserves every
 raw metadata property, including both language labels, applicability, bounds,
 table/field/index roles and extensions. Unresolved `WESTRING_*` Chinese labels
 fall back to the complete English label; the unresolved original key remains in
@@ -22,7 +22,11 @@ generator inputs.
 
 The reference was obtained from the literal `_DATA` in
 `war3_map_catalog_reference.py`, SHA-256
-`ddb5b5fd4324754d3e9b7d409f1b30dc3920f0ccfb63c1b7bb2cec8b48d12988`.
+`1205957d8344c6b27c8b7625073dc50d9bc7b4a68a4b14bf9c6a1fa3b0373848`,
+from the frozen source commit `39ddabe2dc16ca7c3be9911c41dc22c83d1b9c4d`.
+Its normalized Python code and constants match the v2.1.22 packaged module;
+the package SHA-256 is
+`8b9b7bb50ecfb9db6d0474728ffd622946acb2509280a5bf137e0462ecc9b007`.
 Preparation parses Python's AST, accepts one literal string, decodes Base85 and
 zlib, then parses JSON with duplicate-key rejection. It never imports or executes
 that module. The JSON retains the source module hash, compressed literal hash,
@@ -30,6 +34,15 @@ decoded payload hash, canonical metadata hash, exact category counts and all 76
 upstream source-file hashes. The latter are declarations embedded in the source
 reference; this generator does not claim to have re-read those original game
 installation files.
+
+The 1,257 ability/unit/item records are unchanged from the previous pinned
+reference: their canonical metadata SHA-256 remains
+`9167f0e238e7329f68c6624619400dc6a7c1d3fd2daa218ba81fb31d55977f74`.
+The complete four-category metadata hash is
+`c9c9e17f9c3521af1f232b43afbe2012758e2844a57663c5cf5c05f4dd556825`.
+Category coverage explicitly records present and absent categories. Legacy
+three-category references remain accepted and declare upgrade as absent;
+an omitted category is never reported as a complete empty upgrade catalog.
 
 Run from a checkout with the locked development dependencies installed:
 
@@ -46,6 +59,13 @@ every differing reference value is retained in
 `GENERATED_FIELD_SOURCE_DIFFERENCES`. A preserved seed constraint is not evidence
 that the new version has the same constraint.
 
+All 37 upgrade types and their 27 numeric bounds already exist in the seed.
+Eleven upgrade label translations differ and remain reviewable reference
+differences, without replacing the existing vocabulary. The new explicit
+category index contains 1,284 field identities and 1,294 category memberships,
+including all ten fields shared by item and unit metadata. Categories come
+from the input declarations, never from a field-ID prefix.
+
 `GENERATED_FIELD_SOURCE_MANIFEST` identifies every input by full SHA-256.
 `GENERATED_FIELD_PROVENANCE` identifies additions or explicitly rebuilt entries;
 entries absent from this mapping originate in the seed. The two JSON inputs and
@@ -53,6 +73,18 @@ generated Python have LF Git attributes, so Windows checkout conversion does not
 change their hashes. The locked development Ruff formatter produces canonical
 Python without network access. The generator does not depend on a target path,
 working directory, previously generated output, game installation or source repo.
+
+`GENERATED_FIELD_CATEGORIES` maps each declared field to a tuple of source
+categories (`ability`, `item`, `unit`, `upgrade`).
+`GENERATED_FIELD_CATEGORY_PROVENANCE` retains a source-ID tuple for each
+field/category pair, including multiple categories for the same field. The
+offline reference browser uses these declarations for CLI and GUI category
+filters. Its content fingerprint covers all five field tables, category data,
+category provenance, source manifest, per-entry origins and retained version
+differences. Public reports retain the complete source manifest and each field's
+category evidence. Build filters include the category declaration's build beside
+`unrecorded`; that qualification does not relabel historical seed values as
+current-version or current-map values.
 
 Prepare a future source reference without running its code:
 

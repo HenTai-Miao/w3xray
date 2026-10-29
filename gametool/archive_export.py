@@ -165,6 +165,7 @@ def _export_all_impl(
     names.update(external_names)
     sub_maps: list[str] = []
     exported_blocks: set[int] = set()
+    published_names: dict[int, str] = {}
     raw_manifest: list[str] = []
     named_bytes = 0
     for name in sorted(names):
@@ -177,9 +178,14 @@ def _export_all_impl(
             None
             if _MAX_NAMED_EXPORT_BYTES is None
             else _MAX_NAMED_EXPORT_BYTES - named_bytes,
+            published_names=published_names,
         )
     _export_recovered_named_files(
-        cast("RecoveryArchive", cast(object, archive)), out_dir, exported_blocks
+        cast("RecoveryArchive", cast(object, archive)),
+        out_dir,
+        exported_blocks,
+        name_hints=names,
+        published_names=published_names,
     )
     _export_unknown_blocks(
         archive,
@@ -215,6 +221,8 @@ def _export_named_file(
     exported_blocks: set[int],
     sub_maps: list[str],
     remaining_bytes: int | None,
+    *,
+    published_names: dict[int, str] | None = None,
 ) -> int:
     if not archive.has_file(name):
         return 0
@@ -238,6 +246,8 @@ def _export_named_file(
     block_index = archive.block_index_of(name)
     if block_index is not None:
         exported_blocks.add(block_index)
+        if published_names is not None:
+            published_names.setdefault(block_index, name)
     if name.lower().endswith((".w3x", ".w3m")):
         sub_maps.append(name)
     return consumed_bytes

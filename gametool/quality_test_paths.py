@@ -110,6 +110,7 @@ tests/test_anchored_source.py
 tests/test_api_split.py
 tests/test_archive_diagnostics.py
 tests/test_archive_inventory.py
+tests/test_archive_export_recovery.py
 tests/test_archive_output_safety.py
 tests/test_atomic_rename.py
 tests/test_audit.py
@@ -259,6 +260,7 @@ tests/test_gui_loader_runner.py
 tests/test_gui_object_filter_runner.py
 tests/test_gui_object_presentation.py
 tests/test_gui_offline_acceptance.py
+tests/test_gui_offline_acceptance_2122.py
 tests/test_gui_pack_query_memo.py
 tests/test_gui_pane_state.py
 tests/test_gui_preplaced.py
@@ -489,6 +491,7 @@ tests/test_script_assignment_index.py
 tests/test_script_call_argument_index.py
 tests/test_script_call_catalog.py
 tests/test_script_condition_branch_index.py
+tests/test_script_diagnostic_analysis.py
 tests/test_script_forward_calls.py
 tests/test_script_function_boundaries.py
 tests/test_script_function_graph_complete.py
