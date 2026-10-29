@@ -12,6 +12,7 @@ import re
 import struct
 from typing import Final, Protocol
 
+from . import mpq_resource_hints
 from .mpq import HASH_NAME_A, HASH_NAME_B, _hash as _hash, guess_extension
 from .mpq_crypto import hash_name_bytes
 from .mpq_names import HashEntry, encoded_name_candidates
@@ -63,7 +64,13 @@ def _export_recovered_named_files(
     published_names: Mapping[int, str] | None = None,
 ) -> int:
     """Recover exact entries; retain other locales in separate output files."""
-    candidates: set[str] = set()
+    # Keep the catalog's exact spellings alongside derived filename hints.
+    # Neither path normalization nor membership in a stock-name catalog proves
+    # an archive member: the existing indexed hash lookup and exact entry read do.
+    catalog_candidates = set(mpq_resource_hints.RESOURCE_NAME_HINTS)
+    for name in mpq_resource_hints.RESOURCE_NAME_HINTS:
+        catalog_candidates.update(_resource_name_variants(name))
+    candidates = set(catalog_candidates)
     legacy_codecs = getattr(archive, "legacy_codecs", None)
     for name in chain(archive.list_files() or (), name_hints):
         candidates.update(_resource_name_variants(name))
@@ -123,6 +130,10 @@ def _export_recovered_named_files(
                     f"block={index}\tlocale={entry.locale}\tplatform={entry.platform}"
                     f"\thash_index={hash_index}\tname={json.dumps(name, ensure_ascii=False)}"
                 )
+                if name in catalog_candidates:
+                    identity += "\thint_catalog=" + json.dumps(
+                        mpq_resource_hints.CATALOG_ID
+                    )
                 if remaining is not None and declared > remaining:
                     manifest.append(f"SKIP\t{identity}\treason=size-limit")
                     continue
@@ -189,11 +200,43 @@ def _export_recovered_named_files(
                     f"\tsha256={hashlib.sha256(data).hexdigest()}"
                 )
                 count += 1
+    _export_name_hint_catalog(out_dir)
     if manifest:
         destination = _unused_destination(out_dir, "RecoveredNames/manifest.tsv")
         if destination is not None:
             write_text_safely(out_dir, destination, "\n".join(manifest) + "\n")
     return count
+
+
+def _export_name_hint_catalog(out_dir: str) -> None:
+    """Record candidate provenance separately from verified member records."""
+    destination = _unused_destination(out_dir, "RecoveredNames/name-hint-catalog.json")
+    if destination is None:
+        return
+    provenance = {
+        "schema_version": mpq_resource_hints.CATALOG_SCHEMA_VERSION,
+        "catalog_id": mpq_resource_hints.CATALOG_ID,
+        "candidate_only": True,
+        "game_version": None,
+        "hint_count": mpq_resource_hints.RESOURCE_NAME_COUNT,
+        "ordered_names_sha256": mpq_resource_hints.RESOURCE_NAMES_SHA256,
+        "source_repository": mpq_resource_hints.SOURCE_REPOSITORY,
+        "source_commit": mpq_resource_hints.SOURCE_COMMIT,
+        "source_file": mpq_resource_hints.SOURCE_FILE,
+        "source_file_sha256": mpq_resource_hints.SOURCE_FILE_SHA256,
+        "source_document": mpq_resource_hints.SOURCE_DOCUMENT,
+        "source_document_sha256": mpq_resource_hints.SOURCE_DOCUMENT_SHA256,
+        "source_declared_inputs": [
+            {"name": name, "sha256": digest}
+            for name, digest in mpq_resource_hints.SOURCE_REFERENCE_SHA256
+        ],
+        "confirmation": "MPQ hash probe-chain membership and exact entry read",
+    }
+    write_text_safely(
+        out_dir,
+        destination,
+        json.dumps(provenance, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+    )
 
 
 def _remaining(limit: int | None, consumed: int) -> int | None:

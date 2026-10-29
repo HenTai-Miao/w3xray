@@ -283,7 +283,7 @@ if ($VersionRun.Stdout.Trim() -ne ("GameXRay " + $Identity.version)) {
 }
 $HelpRun = Invoke-ReleaseProcess -FilePath $Executable -Arguments @("--help") -Name "executable-help" -WorkingDirectory $OutputRoot
 Require-ReleaseSuccess $HelpRun "Executable help"
-foreach ($Command in @("cli", "pack-query", "guide", "live", "live-report", "reference", "current", "batch", "casc", "save", "savecodes", "wgc", "gameconfig", "acceptance")) {
+foreach ($Command in @("cli", "pack-query", "guide", "live", "live-report", "reference", "hotkeys", "loadout", "current", "batch", "casc", "save", "savecodes", "wgc", "gameconfig", "acceptance")) {
     if (-not $HelpRun.Stdout.Contains($Command)) { throw "Executable help is incomplete: $Command" }
 }
 $UnknownRun = Invoke-ReleaseProcess -FilePath $Executable -Arguments @("--hlep") -Name "executable-unknown-option" -WorkingDirectory $OutputRoot

@@ -121,6 +121,9 @@ def build_topbar(app) -> None:
         label="离线存档工作台", command=lambda: _open_save_workspace(app)
     )
     app.data_tools_menu.add_command(
+        label="离线装备方案", command=lambda: _open_loadout_workspace(app)
+    )
+    app.data_tools_menu.add_command(
         label="检查 / 比较改键方案（离线）",
         command=lambda: _open_hotkey_config(app),
     )
@@ -180,7 +183,7 @@ def build_topbar(app) -> None:
     )
     _attach_tooltip(
         app.pack_query_button,
-        "包查询 26 模式三排面板: 核心 10 (Ctrl+1..0) + 扩展 16 (where/drop/diff/price/quest/cmd/text/refs/affixes/registered 等)",
+        "完整查询物品、单位、坐标、脚本调用与来源证据；核心模式快捷键 Ctrl+1..0",
     )
     app.pack_query_button.pack(side="left", padx=(0, 4))
     app.live_probe_button = ctk.CTkButton(
@@ -236,7 +239,7 @@ def build_topbar(app) -> None:
     )
     _attach_tooltip(
         app.data_tools_button,
-        "本地资料包/外部ID查询/离线报告/存档工作台/改键方案检查/导出",
+        "本地资料包/外部ID查询/离线报告/存档工作台/装备方案/改键方案检查/导出",
     )
     app.data_tools_button.pack(side="left", padx=(0, 4))
     actions = ctk.CTkFrame(bar, fg_color="transparent")
@@ -413,6 +416,13 @@ def _open_save_workspace(app) -> None:
     from .gui_save_workspace import open_save_workspace
 
     open_save_workspace(app, map_data=getattr(app, "map_data", None))
+
+
+def _open_loadout_workspace(app) -> None:
+    """Inspect and export local equipment plans with complete source evidence."""
+    from .gui_loadout_workbench import open_loadout_workbench
+
+    open_loadout_workbench(app)
 
 
 def _open_hotkey_config(app) -> None:

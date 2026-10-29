@@ -71,7 +71,9 @@ def test_real_offline_workspaces_and_parent_teardown(tmp_path: Path) -> None:
             assert "offline-save-files=2" in detail
             assert "offline-map-records=2" in detail
             assert "offline-map-filtered=1" in detail
-            assert "offline-gui-exports=22" in detail
+            assert "offline-gui-exports=31" in detail
+            assert "legacy-gui-exports=22" in detail
+            assert "v12-gui-exports=8" in detail
             assert "offline-selected-exports=json/tsv/md" in detail
             assert "offline-pack-handoffs=2" in detail
             assert "offline-utf16-carriers=2" in detail
@@ -85,7 +87,27 @@ def test_real_offline_workspaces_and_parent_teardown(tmp_path: Path) -> None:
             inventory = json.loads(
                 (artifacts / "acceptance-inventory.json").read_text(encoding="utf-8")
             )
-            assert inventory["accepted"] == 11
+            assert inventory["accepted"] == 14
+            assert {case["name"] for case in inventory["cases"]} == {
+                "external-id-full-records",
+                "direct-map-multiselect-json-tsv-md",
+                "pack-scope-real-query-handoff",
+                "save-independent-full-files",
+                "save-explicit-utf16le-no-bom",
+                "hotkeys-complete-static-projections",
+                "upgrade-explicit-category-full-exports",
+                "archive-all-export-exact-recovered-members",
+                "script-diagnostics-visible-complete-evidence",
+                "source-bytes-and-metadata-unchanged",
+                "owned-window-teardown",
+                "calls-source-query-history-replay",
+                "offline-loadout-complete-records",
+                "unicode-wts-w3f-inheritance",
+            }
+            from gametool.gui_offline_acceptance_v12 import expected_export_names
+
+            assert len(inventory["exports"]) == 31
+            assert set(inventory["exports"]) == expected_export_names()
             assert inventory["failed"] == inventory["not_run"] == 0
             assert inventory["callback_errors"] == []
             assert all(case["status"] == "accepted" for case in inventory["cases"])

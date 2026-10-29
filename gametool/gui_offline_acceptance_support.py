@@ -192,7 +192,7 @@ class _Fixtures:
     identities: dict[Path, tuple[int, ...]]
 
 
-def _fixture_mpq(members: dict[str, bytes]) -> bytes:
+def _fixture_mpq(members: dict[str, bytes], *, listed: bool = True) -> bytes:
     """Encode a tiny real MPQ for source and frozen acceptance without test imports."""
     from .mpq_crypto import CRYPT_TABLE, hash_name_bytes
 
@@ -208,7 +208,11 @@ def _fixture_mpq(members: dict[str, bytes]) -> bytes:
             seed2 = (value + seed2 + (seed2 << 5) + 3) & 0xFFFFFFFF
         return struct.pack(f"<{len(encrypted)}I", *encrypted)
 
-    members = {**members, "(listfile)": "\r\n".join((*members, "(listfile)")).encode()}
+    if listed:
+        members = {
+            **members,
+            "(listfile)": "\r\n".join((*members, "(listfile)")).encode(),
+        }
     hash_count = 1
     while hash_count < len(members) * 2:
         hash_count *= 2

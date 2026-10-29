@@ -103,39 +103,28 @@ def test_gui_success_writes_cli_again_memo(tmp_path, monkeypatch) -> None:
 
 
 def test_stats_mode_in_panel() -> None:
-    """stats 总览模式在模式面板第 14 位 (查看型, 关键词可空)。"""
-    import inspect
-
+    """Every command remains selectable with a visible label and a hint."""
     from gametool.gui_pack_query import _PackQueryWindow
+    from gametool.gui_pack_query_modes import MODE_ROWS, mode_command, mode_row_labels
 
-    src = inspect.getsource(_PackQueryWindow)
-    assert src.count('"stats",') >= 2  # _mode_commands + SegmentedButton values
-    assert src.count('"shop",') >= 2 and src.count('"tech",') >= 2  # 16 模式 (322)
-    assert src.count('"item",') >= 2 and src.count('"heroes",') >= 2  # 18 模式 (323)
-    assert src.count('"quest",') >= 2 and src.count('"cmd",') >= 2  # 21 模式 (338)
-    assert (
-        src.count('"text",') >= 3
-        and src.count('"refs",') >= 3
-        and src.count('"affixes",') >= 3
-        and src.count('"registered",')
-        >= 3  # 25 模式 (三排重整后三处=二排 values+两名单, 342/344/363)
-    )  # 23 模式 (339/340, 列表+名单+placeholder)
-    assert src.count('"diff",') >= 2  # 26 模式 diff (373: 二排 values+switch 名单)
-    assert '"stats":' in src  # placeholder 表
-    assert '"diff":' in src  # 373 diff placeholder 入表
+    commands = [command for row in MODE_ROWS for command in row]
+    visible = [label for row in range(len(MODE_ROWS)) for label in mode_row_labels(row)]
+    assert commands[13] == "stats"
+    assert commands == [mode_command(label) for label in visible]
+    assert len(commands) == len(set(commands)) == 27
+    assert set(commands) == set(_PackQueryWindow._PLACEHOLDERS)
+    assert "脚本调用" in visible
 
 
 def test_mode_panel_three_rows() -> None:
-    """23 模式三排布局: 主排+扩展排+扩展二排, 双排高亮互斥。"""
-    import inspect
+    """The actual third-row commands must never highlight the second row."""
+    from gametool.gui_pack_query_modes import mode_row_selections
 
-    from gametool.gui_pack_query import _PackQueryWindow
-
-    src = inspect.getsource(_PackQueryWindow)
-    assert "_mode_extra2" in src  # 扩展二排
-    assert (
-        src.count('_mode_extra2.set("<<none>>")') >= 3
-    )  # 构造占位+切换+初开双排互斥清显
+    for command in "price quest cmd text refs affixes registered diff".split():
+        assert mode_row_selections(command) == ("<<none>>", "<<none>>", command)
+    assert mode_row_selections("calls") == ("<<none>>", "<<none>>", "脚本调用")
+    assert mode_row_selections("stats") == ("<<none>>", "stats", "<<none>>")
+    assert mode_row_selections("near") == ("near", "<<none>>", "<<none>>")
 
 
 def test_sel_index_dot_syntax_everywhere() -> None:

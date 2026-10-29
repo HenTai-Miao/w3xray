@@ -201,8 +201,8 @@ def bind_map_record(
             if dependency in members:
                 dependencies.append(members[dependency])
         state = extras.get("证据状态") or "confirmed"
-        if state == "overridden" and extras.get("来源优先级") in {"11", "12"}:
-            state = "overridden-campaign"
+        if state == "overridden" and value.state == "overridden-campaign":
+            state = value.state
         if extras.get("证据角色") == "二进制原始修改":
             state = "raw-binary-evidence"
         values.append(

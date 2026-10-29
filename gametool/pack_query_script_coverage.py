@@ -19,6 +19,7 @@ SCRIPT_QUERY_COMMANDS = frozenset(
         "synth",
         "quest",
         "cmd",
+        "calls",
         "where",
         "drop",
         "doc",

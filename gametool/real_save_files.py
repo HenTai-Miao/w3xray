@@ -777,9 +777,13 @@ def _classify_text(path: Path, text: str | None) -> SaveFileKind:
         return SaveFileKind.BINARY
     suffix = path.suffix.lower()
     if suffix == ".json":
+        from .hotkey_config import parse_hotkey_json
+
         try:
-            json.loads(text)
-        except json.JSONDecodeError:
+            # Classification needs syntax, not Python integers or a recursive
+            # object tree. Keep arbitrary numeric tokens and duplicate keys.
+            parse_hotkey_json(text)
+        except ValueError:
             return SaveFileKind.TEXT
         return SaveFileKind.JSON
     if suffix in {".ini", ".cfg"}:

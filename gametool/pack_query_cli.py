@@ -14,6 +14,7 @@
     price  [名称|四码|字段表达式]  完整金币字段证据（空词全量，来源与冲突诊断）
     tech   [名称|四码|字段表达式] [--level N]  完整科技证据、精确费用公式与指定等级费用
     cmd    <指令文字>    聊天指令效果链（注册->触发器->条件+动作函数体节选, 免手搓脚本）
+    calls  [函数|四码|表达式]  完整脚本调用、参数、绑定与词法条件证据
     refs   <四码|名>     逐对象分类引用与来源；零消耗只说明当前可读索引未发现材料引用
 
 设计动机：避免为每次查询写一次性脚本/起多个进程（文件变更通知会拖垮资源
@@ -107,6 +108,7 @@ if TYPE_CHECKING:
     from .pack_query_diff import DiffQueryResult
     from .pack_query_execution import PackQueryResult, TextQueryResult
     from .pack_query_spatial import SpatialQueryResult
+    from .script_call_query_models import ScriptCallQueryResult
 
 __all__ = (
     "PackQueryCliOptionError",
@@ -130,6 +132,7 @@ _COMMANDS = (
     "tech",
     "near",
     "cmd",
+    "calls",
     "refs",
     "locate",
     "affixes",
@@ -852,6 +855,7 @@ def pack_query_help() -> str:
   where <名称或四码>     获取途径、放置坐标与来源证据
   drop <名称或四码>      掉落、奖池及触发奖励证据
   cmd [聊天指令]         完整注册、条件与动作链；空词列出全部监听
+  calls [函数或表达式]   完整调用、参数、绑定与词法条件；空词全量，支持布尔查询
   quest [关键词]         任务、标题、条目与显示消息；空词全量列出
   refs [名称或四码]      逐对象脚本引用与来源；空词列出全部引用对象
   locate <码1;码2;...>    战役各子地图中的特征码交集
@@ -3849,6 +3853,16 @@ def _query_script_result(
     )
 
 
+def _query_calls_result(pack: Path, query: str, limit: int) -> ScriptCallQueryResult:
+    from .pack_query_script_calls import query_script_calls
+
+    return query_script_calls(pack, query, limit)
+
+
+def _query_calls(pack: Path, query: str, limit: int) -> list[str]:
+    return list(_query_calls_result(pack, query, limit).lines)
+
+
 _SCRIPT_QUERY_IMPLEMENTATIONS = {
     "refs": _query_refs_result,
     "locate": _query_locate_result,
@@ -3874,6 +3888,7 @@ _QUERIES = {
     "shop": _query_shop,
     "tech": _query_tech,
     "cmd": _query_cmd,
+    "calls": _query_calls,
     "refs": _query_refs,
     "near": _query_near,
     "locate": _query_locate,

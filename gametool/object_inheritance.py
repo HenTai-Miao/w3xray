@@ -14,6 +14,12 @@ from .object_candidate_models import (
     ObjectSourceKind,
 )
 from .object_codes import valid_object_code
+from .object_field_selection import (
+    build_selection_index,
+    object_field_identity,
+    object_field_source_priority,
+    select_object_field,
+)
 from .object_layers import binary_layer_priority
 from .object_materialization import (
     BaseObjectTable,
@@ -88,7 +94,9 @@ def inherit_campaign_candidates(
                             )
                         ),
                     )
-                    resolved[identity] = grouped[identity]
+                    resolved[identity] = _mark_overridden_inherited_fields(
+                        identity[0], grouped[identity]
+                    )
                     objects[identity] = _materialize(
                         identity, resolved[identity], base_objects
                     )
@@ -118,11 +126,64 @@ def inherit_campaign_candidates(
                             for note in notes[parent]
                         ),
                     )
-            resolved[identity] = rows
-            objects[identity] = _materialize(identity, rows, base_objects)
+            resolved[identity] = _mark_overridden_inherited_fields(identity[0], rows)
+            objects[identity] = _materialize(identity, resolved[identity], base_objects)
     return (
         tuple(row for identity in grouped for row in resolved[identity]),
         tuple(note for identity in grouped for note in notes.get(identity, ())),
+    )
+
+
+def _mark_overridden_inherited_fields(
+    category: str, candidates: tuple[ObjectCandidate, ...]
+) -> tuple[ObjectCandidate, ...]:
+    """Keep child overrides in inherited evidence before final materialization.
+
+    Only a strictly higher source tier proves an override. Same-tier evidence
+    and unknown/conflicting source states remain available without arbitration.
+    """
+    inherited_indexes = {
+        index
+        for index, candidate in enumerate(candidates)
+        if candidate.ext == "base" and not candidate.source and candidate.fields
+    }
+    if not inherited_indexes:
+        return candidates
+    selected: dict[str, ObjectFieldValue] = {}
+    selection_index = build_selection_index()
+    for candidate in candidates:
+        for value in candidate.fields:
+            select_object_field(selected, value, category, selection_index)
+    non_base_labels: dict[str, int] = {}
+    for value in selected.values():
+        if value.source_kind is not ObjectSourceKind.BASE:
+            label = value.label.casefold()
+            non_base_labels[label] = max(
+                non_base_labels.get(label, -1),
+                object_field_source_priority(value, category),
+            )
+
+    def field(value: ObjectFieldValue) -> ObjectFieldValue:
+        if value.state is not FieldEvidenceState.CONFIRMED:
+            return value
+        identity = object_field_identity(value, category)
+        winner = selected.get(identity)
+        priority = (
+            object_field_source_priority(winner, category)
+            if winner is not None
+            else non_base_labels.get(value.label.casefold(), -1)
+            if value.source_kind is ObjectSourceKind.BASE
+            else -1
+        )
+        if priority > object_field_source_priority(value, category):
+            return replace(value, state=FieldEvidenceState.OVERRIDDEN)
+        return value
+
+    return tuple(
+        replace(candidate, fields=tuple(field(value) for value in candidate.fields))
+        if index in inherited_indexes
+        else candidate
+        for index, candidate in enumerate(candidates)
     )
 
 

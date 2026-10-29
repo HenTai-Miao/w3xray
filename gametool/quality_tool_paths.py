@@ -101,6 +101,7 @@ gametool/batch_status.py
 gametool/batch_tsv.py
 gametool/blp.py
 gametool/bounded_file.py
+gametool/build_mpq_resource_hints.py
 gametool/cache_root.py
 gametool/campaign_budget.py
 gametool/campaign_child_loader.py
@@ -252,6 +253,7 @@ gametool/gui_load_settings.py
 gametool/gui_loader.py
 gametool/gui_loader_host.py
 gametool/gui_loader_runner.py
+gametool/gui_loadout_workbench.py
 gametool/gui_map_resources.py
 gametool/gui_module_refresh.py
 gametool/gui_object_detail.py
@@ -262,7 +264,11 @@ gametool/gui_offline_acceptance_2122.py
 gametool/gui_offline_acceptance_diagnostics.py
 gametool/gui_offline_acceptance_mpq.py
 gametool/gui_offline_acceptance_support.py
+gametool/gui_offline_acceptance_v12.py
+gametool/gui_offline_acceptance_v12_evidence.py
+gametool/gui_offline_acceptance_v12_fixtures.py
 gametool/gui_pack_query.py
+gametool/gui_pack_query_modes.py
 gametool/gui_pane_state.py
 gametool/gui_profile_settings.py
 gametool/gui_reference_catalog.py
@@ -352,6 +358,7 @@ gametool/live_inventory.py
 gametool/live_object_dump.py
 gametool/live_pack_cache.py
 gametool/live_pe_image.py
+gametool/live_profile_json.py
 gametool/live_profile_validation.py
 gametool/live_report.py
 gametool/live_report_cli.py
@@ -361,6 +368,9 @@ gametool/live_report_json.py
 gametool/live_selection.py
 gametool/load_context.py
 gametool/load_options.py
+gametool/loadout_cli.py
+gametool/loadout_documents.py
+gametool/loadout_report.py
 gametool/local_id_tables.py
 gametool/map_archive_open.py
 gametool/map_archive_reader.py
@@ -390,6 +400,7 @@ gametool/mpq_file_types.py
 gametool/mpq_files.py
 gametool/mpq_layout.py
 gametool/mpq_names.py
+gametool/mpq_resource_hints.py
 gametool/mpq_storage.py
 gametool/object_candidate_models.py
 gametool/object_candidate_text_tables.py
@@ -441,7 +452,9 @@ gametool/pack_query_quest_records.py
 gametool/pack_query_reference_records.py
 gametool/pack_query_regions.py
 gametool/pack_query_relation_records.py
+gametool/pack_query_script_calls.py
 gametool/pack_query_script_coverage.py
+gametool/pack_query_script_snapshot.py
 gametool/pack_query_search.py
 gametool/pack_query_spatial.py
 gametool/pack_query_tech_details.py
@@ -483,8 +496,12 @@ gametool/scene_bounds.py
 gametool/script_assignment_index.py
 gametool/script_assignments.py
 gametool/script_atoms.py
+gametool/script_behavior_catalog.py
+gametool/script_behavior_index.py
+gametool/script_behavior_syntax.py
 gametool/script_call_argument_index.py
 gametool/script_call_catalog.py
+gametool/script_call_query_models.py
 gametool/script_condition_branch_index.py
 gametool/script_control_ranges.py
 gametool/script_diagnostic_analysis.py
@@ -587,8 +604,7 @@ gametool/wts.py
 gametool/wts_models.py
 gametool/wts_parser.py
 tools/__init__.py
-tools/check_syntax_warnings.py
-""".splitlines()
+tools/check_syntax_warnings.py""".splitlines()
 )
 
 

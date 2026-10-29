@@ -156,6 +156,10 @@ def _read_script_member(
 def _decode_script_member(
     raw: bytes, name: str, md: ScriptSourceHost | None
 ) -> str | None:
+    if name == "war3map.wts" and raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        # Readable export only. Confirmed WTS values and decoding diagnostics
+        # come from the byte-preserving WTS parser, never this display string.
+        return raw.decode("utf-16", errors="replace")
     if md is not None:
         component = "wts" if name == "war3map.wts" else "script"
         return read_component(

@@ -51,6 +51,8 @@ def demote_builtin_fields(
 def inherit_campaign_record(
     record: ReferenceRecord,
     shared: Mapping[tuple[str, str], ReferenceRecord],
+    *,
+    campaign_scope: bool = True,
 ) -> ReferenceRecord:
     """Only a unique declared base can inherit a category-qualified shared object.
 
@@ -72,9 +74,9 @@ def inherit_campaign_record(
         replace(
             value,
             object_id=record.id,
-            state="overridden-campaign"
+            state=("overridden-campaign" if campaign_scope else "overridden")
             if _field_identity(value, record.category) in overridden
-            else "campaign-inherited"
+            else ("campaign-inherited" if campaign_scope else "inherited-evidence")
             if value.state
             in {
                 "map-evidence",
@@ -83,7 +85,7 @@ def inherit_campaign_record(
                 "campaign-inherited",
             }
             else "campaign-raw-evidence"
-            if value.state == "raw-binary-evidence"
+            if campaign_scope and value.state == "raw-binary-evidence"
             else value.state,
             extras=(*value.extras, ("共享来源范围", parent.scope)),
         )
@@ -109,6 +111,8 @@ def resolve_scope_records(
     records: tuple[ReferenceRecord, ...],
     shared: Mapping[tuple[str, str], ReferenceRecord],
     builtin: Mapping[tuple[str, str], ReferenceRecord],
+    *,
+    campaign_scope: bool = False,
 ) -> tuple[tuple[ReferenceRecord, ...], tuple[str, ...]]:
     """Resolve every explicit same-scope base chain iteratively, with full diagnostics."""
     local = {
@@ -155,7 +159,11 @@ def resolve_scope_records(
                 else shared.get(parent_id)
             )
             if parent is not None:
-                row = inherit_campaign_record(row, {parent_id: parent})
+                row = inherit_campaign_record(
+                    row,
+                    {parent_id: parent},
+                    campaign_scope=campaign_scope or parent.scope != row.scope,
+                )
                 diagnostics.extend(
                     f"{row.scope} {row.category}:{row.id}: 继承来源 "
                     f"{parent.scope} {parent.category}:{parent.id} 不完整: {note}"

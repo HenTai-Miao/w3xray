@@ -155,9 +155,13 @@ def _create_fixtures() -> _Fixtures:
             )
         ).encode("utf-8")
     from .gui_offline_acceptance_2122 import adoption_fixture_payloads
+    from .gui_offline_acceptance_v12_fixtures import source_adoption_fixture_payloads
 
     payloads.update(
         {root / name: data for name, data in adoption_fixture_payloads().items()}
+    )
+    payloads.update(
+        {root / name: data for name, data in source_adoption_fixture_payloads().items()}
     )
     for path, payload in payloads.items():
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -927,6 +931,13 @@ def exercise_offline_workspaces(app: App) -> str:
     from .gui_offline_acceptance_2122 import exercise_upgrade_metadata
     from .gui_offline_acceptance_mpq import exercise_archive_recovery
     from .gui_offline_acceptance_diagnostics import exercise_script_diagnostics
+    from .gui_offline_acceptance_v12 import (
+        V12_CASE_NAMES,
+        exercise_loadout_workbench,
+        exercise_source_calls,
+        exercise_unicode_sources,
+        expected_export_names,
+    )
 
     fixtures = _create_fixtures()
     inventory: dict[str, Any] = {
@@ -945,6 +956,7 @@ def exercise_offline_workspaces(app: App) -> str:
                 "upgrade-explicit-category-full-exports",
                 "archive-all-export-exact-recovered-members",
                 "script-diagnostics-visible-complete-evidence",
+                *V12_CASE_NAMES,
                 "source-bytes-and-metadata-unchanged",
                 "owned-window-teardown",
             )
@@ -980,12 +992,26 @@ def exercise_offline_workspaces(app: App) -> str:
                     exercise_upgrade_metadata,
                     exercise_archive_recovery,
                     exercise_script_diagnostics,
+                    exercise_source_calls,
+                    exercise_loadout_workbench,
+                    exercise_unicode_sources,
                 ),
                 strict=True,
             ):
                 case["status"] = "running"
                 try:
                     operation(app, fixtures, owned, errors)
+                    if operation is exercise_unicode_sources:
+                        actual_exports = {
+                            path.relative_to(fixtures.root / "exports").as_posix()
+                            for path in (fixtures.root / "exports").rglob("*")
+                            if path.is_file()
+                        }
+                        inventory["exports"] = sorted(actual_exports)
+                        _require(
+                            actual_exports == expected_export_names(),
+                            "原有和新增 GUI 导出清单不完整或出现额外文件",
+                        )
                 except Exception as exc:  # BROAD_EXCEPT_OK - persist the exact failed acceptance case before re-raising.
                     case.update(status="failed", error=f"{type(exc).__name__}: {exc}")
                     raise
@@ -1045,12 +1071,14 @@ def exercise_offline_workspaces(app: App) -> str:
                 )
         _raise_callback_errors(errors)
     return (
-        "offline-workspaces=reference/map-reference/pack-handoff/save/utf16-save/hotkeys/upgrade/archive/diagnostics; offline-id-records=2; "
+        "offline-workspaces=reference/map-reference/pack-handoff/save/utf16-save/hotkeys/upgrade/archive/diagnostics/calls/loadout/unicode; offline-id-records=2; "
         "offline-map-records=2; offline-map-filtered=1; "
         "offline-save-files=2; hotkeys-declared-bindings=2; hotkeys-projection=2x42; "
         "offline-selected-exports=json/tsv/md; offline-pack-handoffs=2; offline-utf16-carriers=2; "
         "upgrade-field-records=37; upgrade-field-exports=json/tsv; archive-recovered-members=7; "
         "diagnostic-maps=4; diagnostic-groups=4; diagnostic-mutations=4; diagnostic-static-only=True; "
+        "calls-source-records=10; loadout-gui-exports=6; unicode-wts-carriers=2; w3f-version=3; "
+        "legacy-gui-exports=22; resource-hint-catalogs=1; v12-gui-exports=8; "
         f"offline-gui-exports={sum(path.is_file() for path in (fixtures.root / 'exports').rglob('*'))}; "
         f"offline-acceptance-cases={len(inventory['cases'])}; hotkeys-runtime-verified=False; "
         f"offline-artifacts={fixtures.root}"

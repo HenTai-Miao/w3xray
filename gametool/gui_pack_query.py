@@ -14,6 +14,12 @@ from .theme import BG, CARD, FONT, SUBTLE, TEXT, TITLE_FONT
 from .query_coordinates import coordinates_from_text, radius_from_text
 from .query_object_codes import code_from_text
 from .pack_query_options import EMPTY_QUERY_COMMANDS
+from .gui_pack_query_modes import (
+    MODE_ROWS,
+    mode_command,
+    mode_row_labels,
+    mode_row_selections,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -217,7 +223,9 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self._keyword = ctk.CTkEntry(
             row, placeholder_text="四码或名称…  Ctrl+1..8 切模式  回车查", width=340
         )
-        self._keyword.insert(0, prefill or _LAST_KEYWORD)
+        self._keyword.insert(
+            0, prefill if prefill or prefill_command else _LAST_KEYWORD
+        )
         self._keyword.pack(side="left", padx=(0, 8))
         self._keyword.bind("<Return>", lambda _e: self._run(self._mode.get()))
         self._paste_coords = ctk.CTkButton(
@@ -227,26 +235,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             command=self._coords_from_clipboard,
         )
         self._paste_coords.pack(side="left", padx=(0, 8))
-        self._mode_commands = [
-            "doc",
-            "search",
-            "list",
-            "buffs",
-            "export",
-            "synth",
-            "skills",
-            "units",
-            "locate",
-            "near",
-            "where",
-            "drop",
-            "again",
-            "stats",
-            "shop",
-            "tech",
-            "item",
-            "heroes",
-        ]
+        self._mode_commands = [command for modes in MODE_ROWS for command in modes]
         for _i, _cmd in enumerate(self._mode_commands, start=1):
             keynum = _i if _i < 10 else 0  # near 排第 10 = Ctrl+0; again 第 11 位走不到
             if _i > 10:
@@ -257,81 +246,27 @@ class _PackQueryWindow(ctk.CTkToplevel):
             )
         self._mode = ctk.CTkSegmentedButton(
             row,
-            values=[
-                "doc",
-                "search",
-                "list",
-                "buffs",
-                "export",
-                "synth",
-                "skills",
-                "units",
-                "locate",
-                "near",
-                "where",
-                "drop",
-            ],
+            values=mode_row_labels(0),
+            command=self._switch_mode,
             width=280,
         )
-        self._mode.set(prefill_command or _LAST_MODE)
         self._mode.pack(side="left", padx=(0, 8))
         # 扩展模式第二行 (低频查点选; 切换时与主面板联动 set)
         self._mode_extra = ctk.CTkSegmentedButton(
             row,
-            values=[
-                "again",
-                "stats",
-                "shop",
-                "tech",
-                "item",
-                "heroes",
-            ],
+            values=mode_row_labels(1),
             width=280,
         )
-        self._mode_extra.set("again")  # 占位显示 (真实模式以 self._mode 为准)
         self._mode_extra.configure(command=self._extra_mode_clicked)
         self._mode_extra.pack(side="left", padx=(0, 8))
         # 扩展第二排 (数值/文本/引用类; 与扩展排共用联动)
         self._mode_extra2 = ctk.CTkSegmentedButton(
             row,
-            values=[
-                "price",
-                "quest",
-                "cmd",
-                "text",
-                "refs",
-                "affixes",
-                "registered",
-                "diff",
-            ],
+            values=mode_row_labels(2),
             width=280,
         )
-        self._mode_extra2.set("<<none>>")
         self._mode_extra2.configure(command=self._extra_mode_clicked)
         self._mode_extra2.pack(side="left", padx=(0, 8))
-        # 初开时扩展排高亮同步 (记忆恢复的模式可能属扩展组)
-        _initial = self._mode.get()
-        if _initial in (
-            "again",
-            "stats",
-            "shop",
-            "tech",
-            "item",
-            "heroes",
-            "price",
-            "quest",
-            "cmd",
-            "text",
-            "refs",
-            "affixes",
-            "registered",
-            "diff",
-        ):
-            self._mode_extra.set(_initial)
-            self._mode_extra2.set("<<none>>")
-        else:
-            self._mode_extra.set("<<none>>")
-            self._mode_extra2.set(_initial)
         ctk.CTkButton(row, text="查询", width=84, command=self._run_clicked).pack(
             side="left"
         )
@@ -341,7 +276,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
             width=76,
         )
         self._near_kind.set(self._load_near_kind())
-        # near 模式才显示 (switch 时切换)
+        # 恢复和点击共用入口，行高亮、near 控件与提示保持一致。
+        self._switch_mode(prefill_command or _LAST_MODE)
 
         pin_row = ctk.CTkFrame(self, fg_color="transparent")
         pin_row.pack(fill="x", padx=14, pady=(10, 0))
@@ -352,7 +288,8 @@ class _PackQueryWindow(ctk.CTkToplevel):
             height=24,
             font=(FONT, 11),
             command=self._pin_current,
-        ).pack(side="left")
+        )
+        self._pin_button.pack(side="left")
         ctk.CTkButton(
             pin_row,
             text="清空收藏",
@@ -445,6 +382,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
                 "1.0",
                 "模式速览 (Ctrl+1..9 直切): doc=全景 search=全包搜 list=表清单\n"
                 "buffs=增益 export=导出 synth=配方 skills=技能 units=单位 locate=战役定位\n"
+                "脚本调用=calls：查 API、四码或参数，空词列出全部调用\n"
                 "（有上会话结果时此处自动恢复; Ctrl+F 内搜本区）\n",
             )
         pin_menu = tk.Menu(self, tearoff=0)
@@ -475,6 +413,10 @@ class _PackQueryWindow(ctk.CTkToplevel):
         pin_menu.add_command(
             label="用选中码查完整描述 (doc)",
             command=lambda: self._code_rerun("doc", self._pinned_box),
+        )
+        pin_menu.add_command(
+            label="用选中码查脚本调用",
+            command=lambda: self._code_rerun("calls", self._pinned_box),
         )
         pin_menu.add_command(
             label="用选中码 where 反查获取途径",
@@ -530,6 +472,10 @@ class _PackQueryWindow(ctk.CTkToplevel):
         menu.add_command(
             label="用选中码查完整描述 (doc)",
             command=lambda: self._code_rerun("doc"),
+        )
+        menu.add_command(
+            label="用选中码查脚本调用",
+            command=lambda: self._code_rerun("calls"),
         )
         menu.add_command(
             label="用选中码 where 反查获取途径",
@@ -592,6 +538,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         "cmd": "指令词 → 注册/条件/动作链全文 (空词看注册清单)",
         "text": "任意词 → 全 tsv 完整记录兜底；空词=全量原文",
         "refs": "码 → 脚本引用分类与来源；空词=全部引用对象",
+        "calls": "API / 四码 / 参数… 支持 &&、||、%、括号；空词=全部脚本调用",
         "affixes": "词缀词可空=全量…  (回车查)",
         "registered": "消息词可空=全部触发消息…  (回车查)",
         "diff": "旧包目录路径…  (八类对象+完整配方对比；记忆旧包后可填表名或合成筛选)",
@@ -618,29 +565,12 @@ class _PackQueryWindow(ctk.CTkToplevel):
             pass  # fail-open: 记忆失败不影响查询
 
     def _switch_mode(self, command: str) -> None:
+        command = mode_command(command)
+        # 主按钮同时保存逻辑命令；扩展命令不属于主排时会清除主排高亮。
         self._mode.set(command)
-        # 扩展排高亮联动: 值属扩展组则高亮该值, 否则清高亮 (避免两排误导性高亮)
-        if command in (
-            "again",
-            "stats",
-            "shop",
-            "tech",
-            "item",
-            "heroes",
-            "price",
-            "quest",
-            "cmd",
-            "text",
-            "refs",
-            "affixes",
-            "registered",
-            "diff",
-        ):
-            self._mode_extra.set(command)
-            self._mode_extra2.set("<<none>>")
-        else:
-            self._mode_extra.set("<<none>>")
-            self._mode_extra2.set(command)
+        selected = mode_row_selections(command)
+        self._mode_extra.set(selected[1])
+        self._mode_extra2.set(selected[2])
         if command == "near":
             self._near_kind.pack(side="left", padx=(8, 0))
         else:
@@ -717,7 +647,6 @@ class _PackQueryWindow(ctk.CTkToplevel):
 
     def _extra_mode_clicked(self, value: str) -> None:
         """扩展面板点选: 同步主面板模式并执行切换 (near 专有控件显隐跟随)。"""
-        self._mode.set(value)
         self._switch_mode(value)
 
     def _run_clicked(self) -> None:
@@ -725,6 +654,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
 
     def _run_initial(self, command: str) -> None:
         if self.winfo_exists() and self._query_generation == 0:
+            command = mode_command(command)
             self._switch_mode(command)
             self._run(command)
 
@@ -878,7 +808,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         out_dir = tmp_extract_dir("pack-query-export")
         safe = "".join(ch if ch not in '\\/:*?"<>|' else "_" for ch in label)
         out_path = os.path.join(out_dir, safe + ".md")
-        with open(out_path, "w", encoding="utf-8") as handle:
+        with open(out_path, "w", encoding="utf-8", newline="") as handle:
             handle.write(text + "\n")
         self._output.insert("end", f"\n[已导出: {out_path}]\n")
         self._find_state["start"] = "1.0"

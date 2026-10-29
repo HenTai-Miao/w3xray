@@ -48,6 +48,49 @@ class _Opening:
     next_line: int
 
 
+@dataclass(frozen=True, slots=True)
+class _Source:
+    """ASCII structural view whose offsets map exactly to original bytes.
+
+    UTF-16 is selected only by a file-leading BOM. Every code unit occupies
+    one view byte; non-ASCII units cannot become punctuation or declarations.
+    The view is never used as decoded text or published source evidence.
+    """
+
+    raw: bytes
+    view: bytes
+    width: int = 1
+    codec: str | None = None
+
+    def offset(self, position: int) -> int:
+        return min(position * self.width, len(self.raw))
+
+    def slice(self, start: int, end: int) -> bytes:
+        return self.raw[self.offset(start) : self.offset(end)]
+
+    def text(self, raw: bytes) -> str:
+        return (
+            raw.decode(self.codec, errors="replace")
+            if self.codec is not None
+            else decode_warcraft_string(raw)
+        )
+
+
+def _source(data: bytes) -> tuple[_Source, int]:
+    for bom, codec in (
+        (b"\xff\xfe", "utf-16-le"),
+        (b"\xfe\xff", "utf-16-be"),
+    ):
+        if data.startswith(bom):
+            view = bytearray()
+            for index in range(0, len(data), 2):
+                raw = data[index : index + 2]
+                unit = int.from_bytes(raw, "little" if codec == "utf-16-le" else "big")
+                view.append(unit if len(raw) == 2 and unit < 128 else 128)
+            return _Source(data, bytes(view), 2, codec), 1
+    return _Source(data, data), 3 if data.startswith(b"\xef\xbb\xbf") else 0
+
+
 def parse_wts_evidence(data: bytes, *, source: str = "war3map.wts") -> WtsReport:
     """Retain all bytes and declarations; expose only unambiguous string IDs.
 
@@ -58,9 +101,20 @@ def parse_wts_evidence(data: bytes, *, source: str = "war3map.wts") -> WtsReport
     records: list[WtsRecord] = []
     regions: list[WtsRegion] = []
     diagnostics: list[WtsDiagnostic] = []
-    start = 3 if data.startswith(b"\xef\xbb\xbf") else 0
+    original, start = _source(data)
+    data = original.view
     if start:
-        regions.append(WtsRegion("bom", 0, 3, 1, 1, data[:3], "\ufeff"))
+        regions.append(
+            WtsRegion(
+                "bom",
+                0,
+                original.offset(start),
+                1,
+                1,
+                original.slice(0, start),
+                "\ufeff",
+            )
+        )
     lines = _lines(data, start)
     headers = [_header(line) for line in lines]
     next_header = _next_indices([header is not None for header in headers])
@@ -84,7 +138,7 @@ def parse_wts_evidence(data: bytes, *, source: str = "war3map.wts") -> WtsReport
                 and ("trivia" if _trivia(lines[end].content) else "unparsed") == kind
             ):
                 end += 1
-            region = _region(data, lines, index, end, kind)
+            region = _region(original, lines, index, end, kind)
             regions.append(region)
             if kind == "unparsed":
                 diagnostics.append(
@@ -107,7 +161,9 @@ def parse_wts_evidence(data: bytes, *, source: str = "war3map.wts") -> WtsReport
             state = (
                 WtsRecordState.INCOMPLETE if header.valid else WtsRecordState.INVALID
             )
-            record = _record(data, lines, index, end, header, len(records) + 1, state)
+            record = _record(
+                original, lines, index, end, header, len(records) + 1, state
+            )
             records.append(record)
             message = (
                 _incomplete_message(header)
@@ -134,7 +190,7 @@ def parse_wts_evidence(data: bytes, *, source: str = "war3map.wts") -> WtsReport
             else len(data)
         )
         row = _record(
-            data,
+            original,
             lines,
             index,
             end,
@@ -144,7 +200,9 @@ def parse_wts_evidence(data: bytes, *, source: str = "war3map.wts") -> WtsReport
             body_start,
             body_end,
         )
-        if state == WtsRecordState.CONFIRMED and not _lossless(row.body_bytes or b""):
+        if state == WtsRecordState.CONFIRMED and not _lossless(
+            row.body_bytes or b"", original.codec
+        ):
             row = replace(row, state=WtsRecordState.INVALID)
             diagnostics.append(
                 _diagnostic("decode", "WTS body requires replacement decoding", (row,))
@@ -162,7 +220,7 @@ def parse_wts_evidence(data: bytes, *, source: str = "war3map.wts") -> WtsReport
     table = _confirmed_values(records, diagnostics)
     return WtsReport(
         source,
-        data,
+        original.raw,
         MappingProxyType(table),
         tuple(records),
         tuple(regions),
@@ -263,7 +321,7 @@ def _opening(
 
 
 def _record(
-    data: bytes,
+    data: _Source,
     lines: list[_Line],
     begin: int,
     end: int,
@@ -275,9 +333,9 @@ def _record(
 ) -> WtsRecord:
     start = lines[begin].start
     finish = lines[end - 1].end
-    raw = data[start:finish]
+    raw = data.slice(start, finish)
     body = (
-        data[body_start:body_end]
+        data.slice(body_start, body_end)
         if body_start is not None and body_end is not None
         else None
     )
@@ -286,31 +344,31 @@ def _record(
         header.string_id,
         header.id_text,
         state,
-        start,
-        finish,
+        data.offset(start),
+        data.offset(finish),
         lines[begin].number,
         lines[end - 1].number,
         raw,
-        decode_warcraft_string(raw),
-        body_start,
-        body_end,
+        data.text(raw),
+        data.offset(body_start) if body_start is not None else None,
+        data.offset(body_end) if body_end is not None else None,
         body,
-        decode_warcraft_string(body) if body is not None else None,
+        data.text(body) if body is not None else None,
     )
 
 
 def _region(
-    data: bytes, lines: list[_Line], begin: int, end: int, kind: str
+    data: _Source, lines: list[_Line], begin: int, end: int, kind: str
 ) -> WtsRegion:
-    raw = data[lines[begin].start : lines[end - 1].end]
+    raw = data.slice(lines[begin].start, lines[end - 1].end)
     return WtsRegion(
         kind,
-        lines[begin].start,
-        lines[end - 1].end,
+        data.offset(lines[begin].start),
+        data.offset(lines[end - 1].end),
         lines[begin].number,
         lines[end - 1].number,
         raw,
-        decode_warcraft_string(raw),
+        data.text(raw),
     )
 
 
@@ -363,7 +421,13 @@ def _body_end(data: bytes, lower_bound: int, end: int) -> int:
     return end
 
 
-def _lossless(raw: bytes) -> bool:
+def _lossless(raw: bytes, codec: str | None = None) -> bool:
+    if codec is not None:
+        try:
+            raw.decode(codec)
+            return True
+        except UnicodeDecodeError:
+            return False
     try:
         raw.decode("utf-8")
         return True

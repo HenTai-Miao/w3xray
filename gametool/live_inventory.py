@@ -558,11 +558,10 @@ def load_profile_override(profile_json):
     game_profile 的失败可见化——档案问题必须出现在 notes, 不静默吞)。
     """
     from .live_handle_chain import profile_from_dict
+    from .live_profile_json import parse_live_profile_json
 
     try:
-        p = profile_from_dict(
-            json.loads(Path(profile_json).read_text(encoding="utf-8"))
-        )
+        p = profile_from_dict(parse_live_profile_json(Path(profile_json).read_bytes()))
         return p, f"已加载显式档案: {profile_json} (tier={p.tier})"
     except (OSError, ValueError, KeyError, TypeError) as exc:
         return None, f"显式档案不可用 ({type(exc).__name__}: {exc}), 回退内置"

@@ -246,6 +246,7 @@ def archive_fixture_payloads() -> dict[str, bytes]:
 def validate_archive_export(output: Path) -> None:
     """Check each independently authored payload and exact recovered identity."""
     from .gui_offline_acceptance_support import _require
+    from .gui_offline_acceptance_v12_fixtures import NAME_HINT_CATALOG_CONTRACT
 
     members = _EXPECTED["members"]
     for row in members:
@@ -328,8 +329,19 @@ def validate_archive_export(output: Path) -> None:
     _require(
         all_files
         == {row["expected_path"] for row in members}
-        | {_EXPECTED["manifest"], _EXPECTED["unknown_manifest"]},
+        | {
+            _EXPECTED["manifest"],
+            _EXPECTED["unknown_manifest"],
+            "RecoveredNames/name-hint-catalog.json",
+        },
         "全部导出出现缺失或额外文件",
+    )
+    _require(
+        json.loads(
+            (output / "RecoveredNames/name-hint-catalog.json").read_text("utf-8")
+        )
+        == NAME_HINT_CATALOG_CONTRACT,
+        "名称候选目录声明错误、来源哈希遗漏或被误认游戏版本/实际成员",
     )
     unknown = (output / _EXPECTED["unknown_manifest"]).read_text("utf-8")
     size = len(bytes.fromhex(members[-1]["stored_hex"]))
@@ -377,7 +389,7 @@ def exercise_archive_recovery(
         buttons[0].invoke()
         _wait_for(app, lambda: bool(completed), "真实全部归档导出", errors)
         _require(
-            completed == [(str(destination), len(_EXPECTED["members"]) + 2, "文件")],
+            completed == [(str(destination), len(_EXPECTED["members"]) + 3, "文件")],
             "导出全部完成回调缺失或文件数量错误",
         )
         validate_archive_export(destination)

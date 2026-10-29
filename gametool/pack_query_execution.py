@@ -11,10 +11,15 @@ import json
 import time
 from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Protocol
 
+from .script_call_query_models import (
+    ScriptCallQueryDiagnostic,
+    ScriptCallQueryRecord,
+    ScriptCallQueryResult,
+)
 from .pack_query_spatial import NearEntry, SpatialQueryResult
 from .pack_query_regions import NearRegion
 from .pack_query_options import EMPTY_QUERY_COMMANDS, query_limit_error
@@ -66,6 +71,10 @@ class QueryBackend(Protocol):
         self, pack: Path, query: str, limit: int
     ) -> TextQueryResult: ...
 
+    def _query_calls_result(
+        self, pack: Path, query: str, limit: int
+    ) -> ScriptCallQueryResult: ...
+
     def _query_script_result(
         self, pack: Path, command: str, query: str, limit: int
     ) -> TextQueryResult: ...
@@ -90,6 +99,14 @@ class QuerySection:
     input_error: bool = False
     has_matches: bool | None = None
     script_coverage: ScriptCoverage | None = None
+    calls: tuple[ScriptCallQueryRecord, ...] = ()
+    calls_total: int = 0
+    calls_omitted: int = 0
+    call_diagnostics: tuple[ScriptCallQueryDiagnostic, ...] = ()
+    source_stable: bool | None = None
+    calls_report: ScriptCallQueryResult | None = field(
+        default=None, repr=False, compare=False
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,6 +167,9 @@ class PackQueryResult:
         if coverage is not None:
             payload["script_coverage"] = asdict(coverage)
             payload["checked_packs"] = list(self.checked_packs)
+        if self.command == "calls":
+            payload.update(_call_payload(self.sections))
+            payload["checked_packs"] = list(self.checked_packs)
         if self.command == "diff":
             payload.update(
                 comparison_complete=self.comparison_complete,
@@ -204,9 +224,14 @@ class PackQueryResult:
                     "section": section.section,
                     "pack": section.pack,
                     "lines": list(section.lines),
+                    **(_call_payload((section,)) if self.command == "calls" else {}),
                     **(
                         {
-                            "has_matches": _section_has_result(self.command, section),
+                            "has_matches": (
+                                section.has_matches
+                                if self.command == "calls"
+                                else _section_has_result(self.command, section)
+                            ),
                             "input_error": section.input_error,
                         }
                         if section.has_matches is not None
@@ -350,6 +375,7 @@ def execute_query(
                 for pack, rel in sorted(queries._LOCKED_FILES.intersection(touched))
             ),
         )
+        result = _revalidate_calls(result)
         if result.exit_code == 0 and options.command not in {"again", "diff"}:
             queries._store_last_query(Path(result.pack), result.command, result.query)
     return _timed_result(
@@ -371,6 +397,68 @@ def execute_query(
             ),
         ),
         started,
+    )
+
+
+def _call_payload(sections: tuple[QuerySection, ...]) -> dict[str, object]:
+    return {
+        "calls": [
+            {**asdict(record), "pack": section.pack, "section": section.section}
+            for section in sections
+            for record in section.calls
+        ],
+        "calls_total": sum(section.calls_total for section in sections),
+        "calls_omitted": sum(section.calls_omitted for section in sections),
+        "call_diagnostics": [
+            {**asdict(note), "pack": section.pack, "section": section.section}
+            for section in sections
+            for note in section.call_diagnostics
+        ],
+        "source_stable": (
+            all(section.source_stable for section in sections)
+            if any(section.source_stable is not None for section in sections)
+            else None
+        ),
+        "has_matches": any(section.has_matches is True for section in sections),
+    }
+
+
+def _call_section(section: QuerySection, report: ScriptCallQueryResult) -> QuerySection:
+    # Keep replay headers and any independently appended diagnostics on refresh.
+    old_lines = section.calls_report.lines if section.calls_report is not None else ()
+    extras = tuple(line for line in section.lines if line not in old_lines)
+    return replace(
+        section,
+        lines=(*extras, *report.lines),
+        calls=report.calls,
+        calls_total=report.total,
+        calls_omitted=report.omitted,
+        call_diagnostics=report.diagnostics,
+        source_stable=report.source_stable,
+        input_error=report.input_error,
+        has_matches=report.has_matches,
+        script_coverage=report.script_coverage,
+        calls_report=report,
+    )
+
+
+def _revalidate_calls(result: PackQueryResult) -> PackQueryResult:
+    if result.command != "calls":
+        return result
+    from .pack_query_script_calls import revalidate_script_calls
+
+    sections = tuple(
+        _call_section(section, revalidate_script_calls(section.calls_report))
+        if section.calls_report is not None
+        else section
+        for section in result.sections
+    )
+    return replace(
+        result,
+        sections=sections,
+        exit_code=2
+        if any(section.input_error for section in sections)
+        else result.exit_code,
     )
 
 
@@ -413,7 +501,15 @@ def _collect_query(
         )
     pack = Path(options.pack_dir)
     if not pack.is_dir():
-        return _message(options, "资料包目录不存在: " + options.pack_dir, 2)
+        result = _message(options, "资料包目录不存在: " + options.pack_dir, 2)
+        if options.command == "calls":
+            result = replace(
+                result,
+                sections=tuple(
+                    replace(section, input_error=True) for section in result.sections
+                ),
+            )
+        return result
     if options.command not in queries._QUERIES:
         return _message(options, "未知子命令: " + options.command, 2)
     if not options.query.strip() and options.command not in EMPTY_QUERY_COMMANDS | {
@@ -477,6 +573,7 @@ def _collect_query(
         observed = [section]
         if (
             _section_has_result(options.command, section)
+            or options.command == "calls"
             or (options.command == "near" and section.spatial_diagnostics)
             or (
                 section.script_coverage is not None
@@ -496,6 +593,7 @@ def _collect_query(
             observed.append(sub_section)
             if (
                 _section_has_result(options.command, sub_section)
+                or options.command == "calls"
                 or (options.command == "near" and sub_section.spatial_diagnostics)
                 or (
                     sub_section.script_coverage is not None
@@ -532,6 +630,8 @@ def _collect_query(
                 checked_packs=checked,
             )
         success = any(_section_has_result(options.command, row) for row in sections)
+        if options.command == "calls" and any(row.input_error for row in sections):
+            success = False
         if remember and success:
             queries._store_last_query(pack, options.command, options.query)
         return PackQueryResult(
@@ -580,6 +680,9 @@ def _has_result(
 def _run_section(
     queries: QueryBackend, command: str, title: str, pack: Path, query: str, limit: int
 ) -> QuerySection:
+    if command == "calls":
+        report = queries._query_calls_result(pack, query, limit)
+        return _call_section(QuerySection(title, str(pack), ()), report)
     if command in SCRIPT_QUERY_COMMANDS:
         result = queries._query_script_result(pack, command, query, limit)
         return QuerySection(

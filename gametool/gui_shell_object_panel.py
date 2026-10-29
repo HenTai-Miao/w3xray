@@ -184,11 +184,12 @@ def build_detail_panel(host: ObjectPanelHost, paned: tk.PanedWindow) -> None:
         ("哪来", "where", "pack_where_button"),
         ("谁掉", "drop", "pack_drop_button"),
         ("全景", "doc", "pack_query_detail_button"),
+        ("查脚本调用", "calls", "pack_calls_button"),
     ):
         button = ctk.CTkButton(
             detail_head,
             text=_label,
-            width=52,
+            width=88 if _cmd == "calls" else 52,
             height=26,
             font=(FONT, 11),
             command=lambda c=_cmd: _pack_query_selected(host, c),

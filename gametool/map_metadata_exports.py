@@ -7,6 +7,7 @@ import json
 
 from .extraction_diagnostics import DiagnosticSeverity
 from .map_data import MapData
+from .w3f import w3f_info_to_dict
 from .w3i import W3iInfo, w3i_info_to_dict
 from .wts_models import wts_report_to_dict
 
@@ -112,7 +113,7 @@ _FLAG_LABELS = (
 
 
 def format_map_metadata_evidence(md: MapData) -> str:
-    """Retain the selected map's complete W3I object and extraction boundaries."""
+    """Retain complete map/campaign metadata and their separate boundaries."""
     return _json(
         {
             "schema": "gamexray.map-metadata.v1",
@@ -123,6 +124,11 @@ def format_map_metadata_evidence(md: MapData) -> str:
             "complete": md.w3i.complete if md.w3i is not None else False,
             "w3i": w3i_info_to_dict(md.w3i) if md.w3i is not None else None,
             "diagnostics": _component_diagnostics(md, "w3i"),
+            "campaign_source": "war3campaign.w3f",
+            "campaign_source_listed": _listed(md, "war3campaign.w3f"),
+            "campaign_complete": md.w3f.complete if md.w3f is not None else False,
+            "w3f": w3f_info_to_dict(md.w3f) if md.w3f is not None else None,
+            "campaign_diagnostics": _component_diagnostics(md, "w3f"),
         }
     )
 

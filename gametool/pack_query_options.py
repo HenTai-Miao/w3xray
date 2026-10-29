@@ -22,6 +22,7 @@ EMPTY_QUERY_COMMANDS = frozenset(
         "tech",
         "price",
         "cmd",
+        "calls",
         "shop",
         "text",
         "refs",

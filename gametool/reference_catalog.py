@@ -25,13 +25,14 @@ from .map_reference_tables import bind_map_record
 from .map_reference_identity import MapObjectIdentity
 from .map_reference_records import resolve_scope_records
 from .object_codes import valid_object_code
+from .live_profile_json import parse_live_profile_json
 from .live_profile_validation import (
     ProfileSupport,
     architecture_pointer_size,
     inspect_profile_support,
-    validate_profile_data,
 )
 from .pack_query_object_details import ObjectRecord, load_object_catalog
+from .pack_query_field_evidence import ObjectField
 from .pack_query_objects import OBJECT_TABLES, object_category
 from .pack_query_options import query_limit_error
 from .reference_models import (
@@ -294,12 +295,47 @@ def _base_for_record(
     )
 
 
+def _map_field_state(field: ObjectField, campaign_scope: bool) -> str:
+    extras = dict(field.extras)
+    inherited = extras.get("证据角色") == "继承物化字段"
+    overridden_inheritance = field.state == "overridden" and extras.get(
+        "来源优先级"
+    ) in {"11", "12"}
+    if not campaign_scope and (inherited or overridden_inheritance):
+        # Exported packs retain the explicit shared scope in their original
+        # field evidence. A low inheritance priority alone is not campaign proof.
+        try:
+            encoded = json.loads(extras.get("编码证据", ""))
+        except ValueError, RecursionError:
+            encoded = None
+        rows = encoded if isinstance(encoded, list) else (encoded,)
+        campaign_scope = any(
+            isinstance(row, dict)
+            and isinstance(row.get("shared_scope"), str)
+            and bool(row["shared_scope"])
+            for row in rows
+        )
+    if field.confirmed:
+        if inherited:
+            return "campaign-inherited" if campaign_scope else "inherited-evidence"
+        return (
+            "inherited-evidence"
+            if field.key.casefold().startswith("base:")
+            else "map-evidence"
+        )
+    if overridden_inheritance and campaign_scope:
+        return "overridden-campaign"
+    return field.state
+
+
 def _map_record(
     pack: Path,
     category: str,
     record: ObjectRecord,
     header: tuple[str, ...],
     bases: dict[tuple[str, str], ReferenceRecord],
+    *,
+    campaign_scope: bool = False,
 ) -> ReferenceRecord:
     row = record.row
     code = row[1]
@@ -314,18 +350,7 @@ def _map_record(
             fields.field_type(field.key),
             field_source,
             field.source,
-            (
-                "campaign-inherited"
-                if dict(field.extras).get("证据角色") == "继承物化字段"
-                else "inherited-evidence"
-                if field.key.casefold().startswith("base:")
-                else "map-evidence"
-            )
-            if field.confirmed
-            else "overridden-campaign"
-            if field.state == "overridden"
-            and dict(field.extras).get("来源优先级") in {"11", "12"}
-            else field.state,
+            _map_field_state(field, campaign_scope),
             _field_aliases(field.key, field.label),
             field.extras,
             category,
@@ -606,16 +631,8 @@ def _external_profile(path: Path, adapter: PackReferenceSources) -> ReferenceRec
     if payload is None:
         raise ValueError(f"{path}: {error}")
 
-    def unique_pairs(pairs: list[tuple[str, object]]) -> dict[str, object]:
-        data: dict[str, object] = {}
-        for key, value in pairs:
-            if key in data:
-                raise ValueError(f"档案 JSON 有重复键 {key!r}；未猜测哪项有效。")
-            data[key] = value
-        return data
-
+    data = parse_live_profile_json(payload)
     raw = payload.decode("utf-8-sig")
-    data = validate_profile_data(json.loads(raw, object_pairs_hook=unique_pairs))
     coverage = inspect_profile_support(data)
     if not coverage.complete:
         raise ValueError("; ".join(coverage.diagnostics))
@@ -693,6 +710,10 @@ def load_reference_catalog(
                 continue
             indexes = load_object_catalog(scope, OBJECT_TABLES, map_sources)
             shared_objects = scope_objects.get(metadata.shared_scope, {})
+            campaign_scope = (
+                bool(metadata.shared_scope)
+                or map_sources.path.suffix.casefold() == ".w3n"
+            )
             current_objects = dict(shared_objects)
             current_records: list[ReferenceRecord] = []
             for category, index in indexes.items():
@@ -705,6 +726,7 @@ def load_reference_catalog(
                             record,
                             index.view.rows[0],
                             base if record.row[3] else {},
+                            campaign_scope=campaign_scope,
                         ),
                         metadata.scope,
                         map_sources.sources,
@@ -718,6 +740,7 @@ def load_reference_catalog(
                 tuple(current_records),
                 shared_objects,
                 base,
+                campaign_scope=campaign_scope,
             )
             if inheritance_notes:
                 map_sources.diagnostics.extend(inheritance_notes)

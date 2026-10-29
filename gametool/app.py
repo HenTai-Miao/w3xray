@@ -26,6 +26,7 @@ def top_level_help() -> str:
         "  live-report             离线查看/比较实时报告 (inspect / diff)\n"
         "  reference               字段、对象与版本参考目录 (可指定知识包)\n"
         "  hotkeys                 离线检查/比较改键 JSON 方案 (inspect / diff)\n"
+        "  loadout <文件>          离线查看、筛选与导出完整装备方案\n"
         "  current                 定位正在使用的地图\n"
         "  batch <目录>            批量导出 (schema-6; 显式指定 --output)\n"
         "  casc …                  CASC 客户端浏览/导出\n"
@@ -188,6 +189,10 @@ def main() -> None:
         from gametool.hotkey_config_cli import run_hotkeys_cli
 
         raise SystemExit(run_hotkeys_cli(tuple(sys.argv[2:])))
+    if len(sys.argv) >= 2 and sys.argv[1] == "loadout":
+        from gametool.loadout_cli import run_loadout_cli
+
+        raise SystemExit(run_loadout_cli(list(sys.argv[2:])))
     if len(sys.argv) >= 2 and sys.argv[1] == "save":
         from gametool.real_save_cli import run_real_save_cli
 

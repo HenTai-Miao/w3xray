@@ -163,15 +163,12 @@ def _load_map_impl(
         for candidate in candidates[len(shared_candidates) :]
     }
     declared_candidates = tuple(candidates)
-    if campaign_candidates or shared_candidates or path.lower().endswith(".w3n"):
-        inherited, inheritance_notes = inherit_campaign_candidates(
-            candidates, base_objects
+    inherited, inheritance_notes = inherit_campaign_candidates(candidates, base_objects)
+    candidates = list(inherited)
+    for note in inheritance_notes:
+        record_component_parse_issue(
+            md, "object-inheritance", "object-bases", note, stage="resolve"
         )
-        candidates = list(inherited)
-        for note in inheritance_notes:
-            record_component_parse_issue(
-                md, "object-inheritance", "object-bases", note, stage="resolve"
-            )
     populate_object_pipeline_from_context(md, candidates, base_objects, load_context)
     for candidate in shared_candidates:
         identity = (candidate.category, candidate.obj_id)
@@ -272,10 +269,37 @@ def _root_archive_source(
 
 
 def _campaign_inner_maps(archive: MapArchiveReader, known_names=(), w3f=None):
-    """从战役里找出内含的地图文件名。优先 listfile，其次扫常见名。"""
+    """Order declared children using proved member spellings when available."""
     declared = tuple(entry.path for entry in w3f.maps) if w3f is not None else ()
-    candidates = declared + tuple(known_names) + tuple(archive.list_files())
-    found = list(campaign_inner_maps(w3f, candidates))
+    raw_declared = (
+        tuple(entry.path for entry in w3f.map_buttons)
+        + tuple(path for _reserved, path in w3f.map_order)
+        if w3f is not None
+        else ()
+    )
+    candidates = (
+        tuple(known_names) + tuple(archive.list_files()) + declared + raw_declared
+    )
+    declared_order: dict[str, int] = {}
+    for index, name in enumerate(declared):
+        declared_order.setdefault(name.casefold(), index)
+    spellings: dict[str, dict[str, str]] = {}
+    for name in candidates:
+        if name.casefold().endswith((".w3x", ".w3m")):
+            key = name.replace("/", "\\").casefold()
+            spellings.setdefault(key, {}).setdefault(name.casefold(), name)
+    found = []
+    for name in campaign_inner_maps(w3f, candidates):
+        variants = spellings[name.replace("/", "\\").casefold()]
+        confirmed = [
+            variant for variant in variants.values() if archive.has_file(variant)
+        ]
+        confirmed.sort(
+            key=lambda variant: declared_order.get(variant.casefold(), len(declared))
+        )
+        # Slash variants can be different MPQ hash members. Keep every proved
+        # spelling; an unconfirmed declaration still reaches child diagnostics.
+        found.extend(confirmed or (name,))
     if found:
         return found
     for i in range(1, 30):

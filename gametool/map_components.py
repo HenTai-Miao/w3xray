@@ -136,26 +136,24 @@ def _add_w3f(md: MapData, archive: MapArchiveReader, wts: dict[int, str]) -> Non
     """解析战役信息 war3campaign.w3f（仅 .w3n 顶层有）并存入 md.w3f。"""
     if not archive.has_file("war3campaign.w3f"):
         return
-    from .w3i import parse_w3f
+    from .w3f import parse_w3f_evidence
 
     info = read_component(
         md,
         "w3f",
         "war3campaign.w3f",
-        lambda: require_component_result(
-            parse_w3f(archive.read_file("war3campaign.w3f"), wts),
-            "war3campaign.w3f",
-        ),
+        lambda: parse_w3f_evidence(archive.read_file("war3campaign.w3f"), wts),
     )
     if info is None:
         return
     md.w3f = info
-    if info.diagnostic is not None:
+    for diagnostic in info.diagnostics:
         record_component_parse_issue(
             md,
             "w3f",
             "war3campaign.w3f",
-            f"W3F parse diagnostic: {info.diagnostic.value}",
+            f"{diagnostic.field} at byte {diagnostic.offset}: {diagnostic.message}",
+            stage=f"parse/{diagnostic.code.value}",
         )
     nm = (info.name or "").strip()
     if (
