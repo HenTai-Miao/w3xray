@@ -17,13 +17,16 @@ from .pack_query_objects import OBJECT_TABLES
 def write_object_ids(
     md: MapData, out_dir: str, *, coverage_required: bool = False
 ) -> int:
-    """Write every selected category, including explicit header-only empty tables.
+    """Write declared categories, or all categories with explicit coverage.
 
-    Knowledge-pack composition also writes the source coverage table, so a
-    partial parser result is never certified complete by these empty rows.
+    The direct helper retains its category/file-count contract. Complete
+    knowledge packs select coverage_required and publish the coverage table.
     """
     count = 0
-    for category in sorted(set(OBJECT_TABLES).union(md.objects)):
+    categories = set(md.objects)
+    if coverage_required:
+        categories.update(OBJECT_TABLES)
+    for category in sorted(categories):
         objects = md.objects.get(category, ())
         header = ("分类", "ID", "10进制", "基础ID", "名称", "自定义", "说明")
         rows: list[tuple[str, ...]] = [
@@ -37,7 +40,7 @@ def write_object_ids(
                     str(obj.decimal),
                     obj.base_id,
                     obj.name,
-                    ("是" if obj.is_custom else "否") if obj.base_id else "",
+                    "是" if obj.is_custom else "否",
                     _object_description(obj),
                 )
             )

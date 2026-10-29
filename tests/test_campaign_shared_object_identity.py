@@ -8,6 +8,8 @@ from pathlib import Path
 import pytest
 
 from gametool import map_loader
+from gametool.extraction_diagnostics import ExtractionDiagnostic
+from gametool.object_candidate_models import ObjectCandidate
 from gametool.load_context import MapLoadContext
 from gametool.map_archive_reader import MapArchiveReader
 from gametool.map_components import _add_script_refs
@@ -49,10 +51,21 @@ def test_campaign_loader_passes_identity_index_to_children(
         depth: int,
         shared_index: Mapping[tuple[str, str], GameObject] | None,
         load_context: MapLoadContext,
+        *,
+        shared_candidates: tuple[ObjectCandidate, ...] = (),
+        shared_diagnostics: tuple[ExtractionDiagnostic, ...] = (),
     ) -> MapData:
         if depth > 0:
             captured.append(shared_index)
-        return original(archive, path, depth, shared_index, load_context)
+        return original(
+            archive,
+            path,
+            depth,
+            shared_index,
+            load_context,
+            shared_candidates=shared_candidates,
+            shared_diagnostics=shared_diagnostics,
+        )
 
     monkeypatch.setattr(map_loader, "_load_map_impl", capture_shared_index)
 
@@ -61,6 +74,7 @@ def test_campaign_loader_passes_identity_index_to_children(
 
     # Then: the child receives the parent's exact category-safe index object.
     try:
-        assert captured == [loaded.obj_identity_index]
+        assert len(captured) == 1
+        assert captured[0] is loaded.obj_identity_index
     finally:
         loaded.close()

@@ -484,7 +484,7 @@ def test_full_acceptance_query_close_retires_only_its_owned_timers(
         return
     import json
 
-    from gametool.gui_acceptance import run_gui_acceptance
+    from gametool import gui_acceptance
     from gametool.gui_pack_query import _PackQueryWindow
 
     original_destroy = _PackQueryWindow.destroy
@@ -546,14 +546,23 @@ def test_full_acceptance_query_close_retires_only_its_owned_timers(
         finally:
             sibling.destroy()
 
-    monkeypatch.setattr(_PackQueryWindow, "destroy", observe_destroy)
+    original_exercise_queries = gui_acceptance._exercise_queries
+
+    def observe_query_workflow(app) -> str:
+        # Offline handoff windows have text output and their own acceptance
+        # cases; observe only this test's current-map list/near/again workflow.
+        with monkeypatch.context() as query_scope:
+            query_scope.setattr(_PackQueryWindow, "destroy", observe_destroy)
+            return original_exercise_queries(app)
+
+    monkeypatch.setattr(gui_acceptance, "_exercise_queries", observe_query_workflow)
     path = (
         Path(__file__).parents[1] / "tests/fixtures/maps/war3net-map-script-builder.w3x"
     )
     pack = tmp_path / "query-acceptance-request"
     pack.mkdir()
     try:
-        detail = run_gui_acceptance(path, pack_path=pack)
+        detail = gui_acceptance.run_gui_acceptance(path, pack_path=pack)
     except RuntimeError:
         print(
             "QUERY-CLOSE-OBSERVATIONS " + json.dumps(observations, ensure_ascii=False)

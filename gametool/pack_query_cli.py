@@ -486,14 +486,6 @@ def _shop_field_blockers(rows: tuple[tuple[str, ...], ...]):
     from .pack_query_field_evidence import ObjectField, field_record
 
     blocked: dict[str, list[tuple[str, ObjectField]]] = {}
-    confirmed_custom = {
-        row[1]
-        for row in rows[1:]
-        if len(row) >= 7
-        and row[0] in ("单位", "英雄")
-        and row[3].casefold() in ("usei", "sellitems")
-        and field_record(row, rows[0], _clean).confirmed
-    }
     for row in rows[1:]:
         if (
             len(row) < 7
@@ -502,9 +494,7 @@ def _shop_field_blockers(rows: tuple[tuple[str, ...], ...]):
         ):
             continue
         evidence = field_record(row, rows[0], _clean)
-        if not evidence.confirmed and (
-            evidence.active or row[1] not in confirmed_custom
-        ):
+        if evidence.active and not evidence.confirmed:
             blocked.setdefault(row[1], []).append((_clean(row[2]) or row[1], evidence))
     return blocked
 

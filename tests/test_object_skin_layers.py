@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from gametool.batch_tsv import format_tsv_rows
 from gametool.knowledge_object_exports import format_object_fields, write_object_ids
 from gametool.map_loader import load_map
 from gametool.mpq_files import STATIC_MAP_FILES
@@ -49,6 +50,58 @@ def _pack(md, root: Path) -> None:
     (root / "对象字段.tsv").write_text(
         format_object_fields(md), encoding="utf-8", newline=""
     )
+
+
+@pytest.mark.parametrize("active_conflict", (False, True))
+def test_overridden_stock_remains_searchable_without_becoming_a_shop_blocker(
+    tmp_path: Path, active_conflict: bool
+) -> None:
+    ids = tmp_path / "对象ID"
+    ids.mkdir()
+    (ids / "单位.tsv").write_text(
+        format_tsv_rows(
+            (
+                ("分类", "ID", "10进制", "基础ID", "名称", "自定义", "说明"),
+                ("单位", "n001", "", "n001", "Known shop", "是", ""),
+            )
+        ),
+        encoding="utf-8",
+    )
+    fields = [
+        ("分类", "ID", "名称", "字段键", "字段名", "值", "来源", "证据状态"),
+        (
+            "单位",
+            "n001",
+            "Known shop",
+            "base:Sellitems",
+            "出售物品",
+            "I000",
+            "base:n001",
+            "overridden",
+        ),
+    ]
+    if active_conflict:
+        fields.extend(
+            (
+                "单位",
+                "n001",
+                "Known shop",
+                "Sellitems",
+                "出售物品",
+                code,
+                "UnitData.slk",
+                "conflict",
+            )
+            for code in ("I001", "I002")
+        )
+    (tmp_path / "对象字段.tsv").write_text(format_tsv_rows(fields), encoding="utf-8")
+
+    shop = execute_pack_query(PackQueryCliOptions(str(tmp_path), "shop", "n001"))
+    assert "I000" not in shop.render()
+    assert ("货架字段未确认" in shop.render()) is active_conflict
+    details = execute_pack_query(PackQueryCliOptions(str(tmp_path), "units", "I000"))
+    assert details.exit_code == 0
+    assert "I000" in details.render() and "overridden" in details.render()
 
 
 @pytest.mark.parametrize("prefix", ("war3map", "war3campaign"))

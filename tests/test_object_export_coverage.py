@@ -13,7 +13,7 @@ from gametool.archive_source import PathArchiveSource
 from gametool.extraction_profile import ALL_CATEGORIES, ExtractionProfile
 from gametool.knowledge_pack import write_knowledge_pack_report
 from gametool.knowledge_results import KnowledgeWriteStatus
-from gametool.map_data import MapData
+from gametool.map_data import GameObject, MapData
 from gametool.map_loader import load_map
 from gametool.object_export_coverage import (
     OBJECT_COVERAGE_COLUMN,
@@ -359,3 +359,44 @@ def test_failed_coverage_publication_never_certifies_empty_tables(
     partial = json.loads(capsys.readouterr().out)
     assert partial["catalog_complete"] is False
     assert any(OBJECT_COVERAGE_FILE in note for note in partial["diagnostics"])
+
+
+@pytest.mark.parametrize("custom, expected", ((True, "是"), (False, "否")))
+def test_explicit_object_custom_flag_does_not_require_a_base_id(
+    tmp_path: Path, custom: bool, expected: str
+) -> None:
+    from gametool.knowledge_object_exports import write_object_ids
+    from gametool.live_inventory import load_names
+
+    obj = GameObject("物品", "w3t", "ratf", "", "Explicit name", custom)
+    md = MapData("declared.w3x", "Declared", objects={"物品": [obj]})
+    assert write_object_ids(md, str(tmp_path / "对象ID")) == 1
+    assert {path.name for path in (tmp_path / "对象ID").iterdir()} == {"物品.tsv"}
+    with (tmp_path / "对象ID" / "物品.tsv").open(
+        encoding="utf-8", newline=""
+    ) as handle:
+        rows = list(csv.DictReader(handle, delimiter="\t"))
+    assert rows[0]["基础ID"] == ""
+    assert rows[0]["自定义"] == expected
+    assert load_names(tmp_path)[b"ratf"] == "Explicit name"
+
+
+def test_field_only_record_does_not_infer_custom_or_base_metadata(
+    tmp_path: Path,
+) -> None:
+    from gametool import pack_query_cli as queries
+    from gametool.knowledge_object_exports import format_object_fields
+    from gametool.pack_query_object_details import load_object_records
+
+    obj = GameObject("物品", "w3t", "I001", "ratf", "Only field evidence", True)
+    obj.field_values = {"unam": "Only field evidence"}
+    obj.field_sources = {"unam": "war3map.w3t"}
+    md = MapData("fields.w3x", "Fields", objects={"物品": [obj]})
+    (tmp_path / "对象字段.tsv").write_text(format_object_fields(md), encoding="utf-8")
+    index = load_object_records(tmp_path, "物品", queries)
+    assert len(index.records) == 1
+    record = index.records[0]
+    assert record.from_fields
+    assert record.row[1] == "I001"
+    assert record.row[3] == ""
+    assert record.row[5] == ""
