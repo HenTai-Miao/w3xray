@@ -10,7 +10,12 @@ from tkinter import filedialog, messagebox
 import customtkinter as ctk
 
 from .cache_root import gamexray_cache_root
-from .gui_pack_query import bind_geometry_memory
+from .gui_pack_query import bind_geometry_memory, open_pack_query_dialog
+from .gui_reference_selection import (
+    format_reference_selection,
+    reference_pack_query_target,
+    write_reference_selection,
+)
 from .gui_worker_host import GuiWorkerHostMixin
 from .gui_worker_registry import GuiWorkerTicket
 from .pack_query_objects import OBJECT_TABLES
@@ -20,6 +25,9 @@ from .reference_models import ReferenceSearchResult
 from .theme import BG, CARD, FONT, PANEL, TEXT, TEXT_STRONG
 
 _SESSION: dict[str, str] = {}
+_selection_memory: (
+    tuple[tuple[object, ...], ReferenceSearchResult, tuple[int, ...]] | None
+) = None
 
 
 def _source_lines(result: ReferenceSearchResult, source_ids=None) -> list[str]:
@@ -217,6 +225,7 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         super().__init__(parent)
         self._closed = False
         self._busy = False
+        self._exporting = False
         self._query_generation = 0
         self._result: ReferenceSearchResult | None = None
         self._result_request: tuple[object, ...] | None = None
@@ -248,7 +257,7 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
 
         heading = ctk.CTkLabel(
             self,
-            text="完整本地目录 · 静态定义与导出值证据 · 双击记录查看全部字段/来源",
+            text="完整本地目录 · Ctrl / Shift 多选条目 · 复制或导出选中的全部字段与来源",
             font=(FONT, 13, "bold"),
             text_color=TEXT_STRONG,
         )
@@ -357,11 +366,16 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
             variable=self._kind,
             values=["all", "objects", "fields", "versions"],
             width=110,
+            command=self._filters_changed,
         )
         kind_menu.pack(side="left", padx=8, pady=7)
         self._category = ctk.StringVar(value=_SESSION.get("category", "全部"))
         category_menu = ctk.CTkOptionMenu(
-            filters, variable=self._category, values=["全部", *OBJECT_TABLES], width=110
+            filters,
+            variable=self._category,
+            values=["全部", *OBJECT_TABLES],
+            width=110,
+            command=self._filters_changed,
         )
         category_menu.pack(side="left", padx=(0, 8))
         self._build_entry = ctk.CTkEntry(
@@ -397,6 +411,48 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         )
         self._status.pack(fill="x", padx=14, pady=(0, 5))
 
+        selection_bar = ctk.CTkFrame(self, fg_color=CARD)
+        selection_bar.pack(fill="x", padx=12, pady=(0, 6))
+        self._selection_count = ctk.CTkLabel(
+            selection_bar, text="已选 0 / 0", width=105, anchor="w"
+        )
+        self._selection_count.pack(side="left", padx=8, pady=6)
+        self._select_records_button = ctk.CTkButton(
+            selection_bar, text="全选条目", width=85, command=self._select_all_records
+        )
+        self._select_records_button.pack(side="left", padx=(0, 6))
+        self._clear_records_button = ctk.CTkButton(
+            selection_bar,
+            text="清除选择",
+            width=85,
+            command=self._clear_record_selection,
+        )
+        self._clear_records_button.pack(side="left", padx=(0, 6))
+        self._copy_records_button = ctk.CTkButton(
+            selection_bar,
+            text="复制选中完整条目",
+            width=140,
+            command=self._copy_records,
+            state="disabled",
+        )
+        self._copy_records_button.pack(side="left", padx=(0, 6))
+        self._export_selected_button = ctk.CTkButton(
+            selection_bar,
+            text="导出选中条目",
+            width=110,
+            command=self._export_selected,
+            state="disabled",
+        )
+        self._export_selected_button.pack(side="left", padx=(0, 6))
+        self._query_button = ctk.CTkButton(
+            selection_bar,
+            text="查询所属包",
+            width=100,
+            command=self._query_selected,
+            state="disabled",
+        )
+        self._query_button.pack(side="left", padx=(0, 8))
+
         content = tk.PanedWindow(
             self, orient="horizontal", sashwidth=7, bg=BG, borderwidth=0
         )
@@ -405,6 +461,7 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         self._list = tk.Listbox(
             listing,
             exportselection=False,
+            selectmode="extended",
             font=(FONT, 10),
             activestyle="none",
             bg=CARD,
@@ -423,6 +480,10 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         self._list.pack(fill="both", expand=True)
         self._list.bind("<<ListboxSelect>>", lambda _event: self._show_selected())
         self._list.bind("<Double-Button-1>", lambda _event: self._show_selected())
+        for sequence in ("<Control-a>", "<Control-A>"):
+            self._list.bind(sequence, self._select_all_records)
+        for sequence in ("<Control-c>", "<Control-C>"):
+            self._list.bind(sequence, self._copy_records)
         content.add(listing, minsize=230, width=340)
         details = ctk.CTkFrame(content, fg_color=CARD)
         content.add(details, minsize=300)
@@ -466,6 +527,16 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         self._output.bind(
             "<Button-3>", lambda event: menu.tk_popup(event.x_root, event.y_root)
         )
+        self._selection_menu = tk.Menu(self, tearoff=0)
+        for label, command in (
+            ("全选条目", self._select_all_records),
+            ("清除选择", self._clear_record_selection),
+            ("复制选中完整条目", self._copy_records),
+            ("导出选中条目 (.md/.json/.tsv)", self._export_selected),
+            ("查询所选条目的所属知识包", self._query_selected),
+        ):
+            self._selection_menu.add_command(label=label, command=command)
+        self._list.bind("<Button-3>", self._show_selection_menu)
         self._source_traces = (
             (
                 self._map_var,
@@ -480,7 +551,26 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
                 ),
             ),
         )
+        for entry in (
+            self._profile_entry,
+            self._query_entry,
+            self._build_entry,
+            self._source_entry,
+        ):
+            entry.bind("<KeyRelease>", self._filters_changed, add=True)
         self._startup_id: str | None = self.after(0, self._run)
+
+    def _filters_changed(self, _event=None) -> None:
+        if self._closed or self._busy:
+            return
+        self._update_selection_controls()
+        self._export_button.configure(
+            state="normal"
+            if self._result_is_current() and not self._exporting
+            else "disabled"
+        )
+        if not self._result_is_current():
+            self._status.configure(text="筛选已更改；请检索 / 刷新后复制、导出或查询。")
 
     def _source_changed(self, kind: str) -> None:
         if self._closed or self._source_changing:
@@ -496,6 +586,7 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         self._cancel()
         self._result_request = None
         self._export_button.configure(state="disabled")
+        self._update_selection_controls()
         self._status.configure(text="来源已更改；请检索 / 刷新后查看和导出本次来源。")
 
     def _choose_map(self) -> None:
@@ -661,8 +752,11 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         self._result_request = None
         self._cancel_gui_worker_group("reference-detail")
         self._cancel_gui_worker_group("reference-export")
+        self._cancel_gui_worker_group("reference-copy")
+        self._exporting = False
         self._run_button.configure(state="disabled")
         self._export_button.configure(state="disabled")
+        self._update_selection_controls()
         self._set_id_controls("disabled")
         self._status.configure(text="后台读取全量目录并核对来源；可继续查看已有详情…")
 
@@ -722,9 +816,19 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
                     for record in result.records
                 ),
             )
-            self._list.selection_set(0)
+            remembered = _selection_memory
+            selected = (
+                remembered[2]
+                if remembered is not None
+                and remembered[0] == self._request_state()
+                and remembered[1] == result
+                else (0,)
+            )
+            for index in selected:
+                self._list.selection_set(index)
             self._show_selected()
         else:
+            self._update_selection_controls()
             self._set_output(_catalog_text(result))
         suffix = (
             f"；来源诊断 {len(result.diagnostics)} 条，请在详情核对"
@@ -748,6 +852,7 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         self._set_id_controls("normal")
         self._result_request = None
         self._export_button.configure(state="disabled")
+        self._update_selection_controls()
         self._status.configure(
             text="读取失败；请检查地图 / 知识包后重试，或清空地图 / 包查基础参考。"
         )
@@ -760,6 +865,8 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         self._cancel_gui_worker_group("reference-query")
         self._cancel_gui_worker_group("reference-detail")
         self._cancel_gui_worker_group("reference-export")
+        self._cancel_gui_worker_group("reference-copy")
+        self._exporting = False
         if self._render_id is not None:
             self.after_cancel(self._render_id)
             self._render_id = None
@@ -769,6 +876,7 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         self._export_button.configure(
             state="normal" if self._result_is_current() else "disabled"
         )
+        self._update_selection_controls()
         self._status.configure(
             text="已取消本次交付；可重新选择来源并检索，已有列表为上次结果。"
         )
@@ -797,10 +905,18 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
             self._set_output(text)
 
     def _show_selected(self) -> None:
-        selection = self._list.curselection()
-        if self._result is None or not selection:
+        self._cancel_gui_worker_group("reference-copy")
+        self._update_selection_controls()
+        self._remember_selection()
+        selection = tuple(self._list.curselection())
+        if self._result is None:
             return
-        result, selected = self._result, selection[0]
+        if not selection:
+            self._show_overview()
+            return
+        active = self._list.index("active")
+        result = self._result
+        selected = active if active in selection else selection[0]
         generation = self._query_generation
 
         def work(ticket: GuiWorkerTicket) -> None:
@@ -810,6 +926,137 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
             )
 
         self._start_gui_worker("reference-detail", work, replace=True)
+
+    def _remember_selection(self) -> None:
+        global _selection_memory
+        if not self._busy and self._result_is_current() and self._result is not None:
+            _selection_memory = (
+                self._request_state(),
+                self._result,
+                tuple(self._list.curselection()),
+            )
+
+    def _selected_query_target(self) -> tuple[str, str, str] | None:
+        selected = self._list.curselection()
+        if (
+            self._busy
+            or self._result is None
+            or not self._result_is_current()
+            or len(selected) != 1
+        ):
+            return None
+        return reference_pack_query_target(
+            self._result, selected[0], self._pack_entry.get().strip()
+        )
+
+    def _update_selection_controls(self) -> None:
+        selected = self._list.curselection()
+        self._selection_count.configure(
+            text=f"已选 {len(selected)} / {self._list.size()}"
+        )
+        current = not self._busy and self._result_is_current()
+        enabled = bool(selected) and current
+        self._copy_records_button.configure(state="normal" if enabled else "disabled")
+        self._export_selected_button.configure(
+            state="normal" if enabled and not self._exporting else "disabled"
+        )
+        self._select_records_button.configure(
+            state="normal" if current and self._list.size() else "disabled"
+        )
+        self._clear_records_button.configure(state="normal" if enabled else "disabled")
+        self._query_button.configure(
+            state="normal" if self._selected_query_target() is not None else "disabled"
+        )
+
+    def _select_all_records(self, _event=None) -> str:
+        if not self._closed and not self._busy and self._result_is_current():
+            self._list.selection_set(0, "end")
+            self._show_selected()
+        return "break"
+
+    def _clear_record_selection(self) -> None:
+        if not self._closed and not self._busy:
+            self._list.selection_clear(0, "end")
+            self._show_selected()
+
+    def _show_selection_menu(self, event) -> None:
+        self._update_selection_controls()
+        for index, control in enumerate(
+            (
+                self._select_records_button,
+                self._clear_records_button,
+                self._copy_records_button,
+                self._export_selected_button,
+                self._query_button,
+            )
+        ):
+            self._selection_menu.entryconfigure(index, state=control.cget("state"))
+        self._selection_menu.tk_popup(event.x_root, event.y_root)
+
+    def _query_selected(self) -> None:
+        if self._closed:
+            return
+        target = self._selected_query_target()
+        if target is None:
+            self._update_selection_controls()
+            self._status.configure(
+                text="请选择所属知识包中的单条对象；地图归档可导出完整证据，"
+                "或先生成对应知识包后在此选择该包。"
+            )
+            return
+        pack, command, query = target
+
+        def available() -> str | None:
+            path = Path(pack)
+            return pack if path.is_dir() and not path.is_symlink() else None
+
+        def unavailable() -> None:
+            self._status.configure(
+                text=f"所属知识包已不可用：{pack}；请重新选择此来源并刷新。"
+            )
+
+        # The record supplies the exact target, including its campaign chapter.
+        # A parent window's current map/last pack is never consulted.
+        open_pack_query_dialog(
+            self,
+            available,
+            unavailable,
+            prefill=query,
+            prefill_command=command,
+        )
+
+    def _copy_records(self, _event=None) -> str:
+        result = self._result
+        selected = tuple(self._list.curselection())
+        if (
+            self._closed
+            or self._busy
+            or result is None
+            or not selected
+            or not self._result_is_current()
+        ):
+            return "break"
+        generation = self._query_generation
+
+        def deliver(text: str) -> None:
+            if (
+                not self._closed
+                and self._result is result
+                and self._query_generation == generation
+                and self._result_is_current()
+                and tuple(self._list.curselection()) == selected
+            ):
+                self._copy(text)
+                self._status.configure(
+                    text=f"已复制 {len(selected)} 条完整条目及全部来源诊断。"
+                )
+
+        def work(ticket: GuiWorkerTicket) -> None:
+            text = format_reference_selection(result, selected)
+            self._post_gui_worker(ticket, lambda: deliver(text))
+
+        self._start_gui_worker("reference-copy", work, replace=True)
+        return "break"
 
     def _set_output(self, text: str) -> None:
         if self._render_id is not None:
@@ -871,6 +1118,8 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         return "break"
 
     def _select_all(self, _event=None) -> str:
+        if _event is not None and _event.widget is self._list:
+            return self._select_all_records(_event)
         self._output.tag_add("sel", "1.0", "end-1c")
         self._output.focus_set()
         return "break"
@@ -886,12 +1135,18 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         except tk.TclError:
             pass  # An empty selection is an intentional no-op.
 
-    def _export(self) -> None:
+    def _export_selected(self) -> None:
+        selected = tuple(self._list.curselection())
+        if selected:
+            self._export(selected_indices=selected)
+
+    def _export(self, *, selected_indices: tuple[int, ...] | None = None) -> None:
         result = self._result
-        if self._closed or self._busy or result is None:
+        if self._closed or self._busy or self._exporting or result is None:
             return
         if not self._result_is_current():
             self._export_button.configure(state="disabled")
+            self._update_selection_controls()
             self._status.configure(
                 text="筛选或来源已更改；请检索 / 刷新后导出当前结果。"
             )
@@ -899,9 +1154,13 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         generation = self._query_generation
         path = filedialog.asksaveasfilename(
             parent=self,
-            title="导出全部匹配与完整诊断",
+            title="导出选中完整条目与诊断"
+            if selected_indices is not None
+            else "导出全部匹配与完整诊断",
             defaultextension=".md",
-            filetypes=[("Markdown", "*.md"), ("JSON", "*.json"), ("Text", "*.txt")],
+            filetypes=[("Markdown", "*.md"), ("JSON", "*.json")]
+            + ([("TSV", "*.tsv")] if selected_indices is not None else [])
+            + [("Text", "*.txt")],
         )
         if (
             not path
@@ -910,17 +1169,29 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
             or generation != self._query_generation
             or self._result is not result
             or not self._result_is_current()
+            or selected_indices is not None
+            and selected_indices != tuple(self._list.curselection())
         ):
             return
+        self._exporting = True
         self._export_button.configure(state="disabled")
+        self._update_selection_controls()
+        selected_count = len(selected_indices) if selected_indices is not None else None
 
         def work(ticket: GuiWorkerTicket) -> None:
             try:
-                write_reference_export(path, result)
+                if selected_indices is None:
+                    write_reference_export(path, result)
+                else:
+                    write_reference_selection(path, result, selected_indices)
                 self._post_gui_worker(
                     ticket,
                     lambda: self._export_finished(
-                        path, "", generation=generation, result=result
+                        path,
+                        "",
+                        generation=generation,
+                        result=result,
+                        selected_count=selected_count,
                     ),
                 )
             except (OSError, ValueError) as exc:
@@ -928,7 +1199,11 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
                 self._post_gui_worker(
                     ticket,
                     lambda: self._export_finished(
-                        path, error, generation=generation, result=result
+                        path,
+                        error,
+                        generation=generation,
+                        result=result,
+                        selected_count=selected_count,
                     ),
                 )
 
@@ -941,6 +1216,7 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
         *,
         generation: int,
         result: ReferenceSearchResult,
+        selected_count: int | None = None,
     ) -> None:
         if (
             self._closed
@@ -949,15 +1225,23 @@ class ReferenceCatalogWindow(ctk.CTkToplevel, GuiWorkerHostMixin):
             or not self._result_is_current()
         ):
             return
+        self._exporting = False
         self._export_button.configure(state="normal")
+        self._update_selection_controls()
         if error:
             messagebox.showerror("参考报告导出失败", error, parent=self)
         else:
-            self._status.configure(text="已导出全部匹配与完整来源诊断: " + path)
+            label = (
+                "全部匹配"
+                if selected_count is None
+                else f"选中 {selected_count} 条完整条目"
+            )
+            self._status.configure(text=f"已导出{label}与完整来源诊断: " + path)
 
     def destroy(self) -> None:
         if self._closed:
             return
+        self._remember_selection()
         _save_reference_memory(
             self._pack_entry.get().strip(),
             self._profile_entry.get().strip(),

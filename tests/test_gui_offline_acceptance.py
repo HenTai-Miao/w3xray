@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -37,7 +38,7 @@ def test_real_offline_workspaces_and_parent_teardown(tmp_path: Path) -> None:
             capture_output=True,
             text=True,
             encoding="utf-8",
-            timeout=180,
+            timeout=240,
             check=False,
         )
         assert result.returncode == 0, result.stdout + result.stderr
@@ -70,7 +71,18 @@ def test_real_offline_workspaces_and_parent_teardown(tmp_path: Path) -> None:
             assert "offline-save-files=2" in detail
             assert "offline-map-records=2" in detail
             assert "offline-map-filtered=1" in detail
-            assert "offline-gui-exports=5" in detail
+            assert "offline-gui-exports=9" in detail
+            assert "offline-selected-exports=json/tsv/md" in detail
+            assert "offline-pack-handoffs=2" in detail
+            assert "offline-utf16-carriers=2" in detail
+            artifacts = Path(detail.rsplit("offline-artifacts=", 1)[1])
+            inventory = json.loads(
+                (artifacts / "acceptance-inventory.json").read_text(encoding="utf-8")
+            )
+            assert inventory["accepted"] == 8
+            assert inventory["failed"] == inventory["not_run"] == 0
+            assert inventory["callback_errors"] == []
+            assert all(case["status"] == "accepted" for case in inventory["cases"])
             assert "hotkeys-runtime-verified=False" in detail
             assert not [
                 child

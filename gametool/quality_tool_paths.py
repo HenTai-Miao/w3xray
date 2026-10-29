@@ -212,6 +212,7 @@ gametool/extraction_ledger.py
 gametool/extraction_ledger_format.py
 gametool/extraction_profile.py
 gametool/field_meta.py
+gametool/field_metadata_generation.py
 gametool/fields.py
 gametool/game_config_summary.py
 gametool/game_data_inventory.py
@@ -261,6 +262,7 @@ gametool/gui_pack_query.py
 gametool/gui_pane_state.py
 gametool/gui_profile_settings.py
 gametool/gui_reference_catalog.py
+gametool/gui_reference_selection.py
 gametool/gui_report_tabs.py
 gametool/gui_report_types.py
 gametool/gui_reports.py
@@ -345,6 +347,7 @@ gametool/live_handle_chain.py
 gametool/live_inventory.py
 gametool/live_object_dump.py
 gametool/live_pack_cache.py
+gametool/live_pe_image.py
 gametool/live_profile_validation.py
 gametool/live_report.py
 gametool/live_report_cli.py
@@ -390,6 +393,7 @@ gametool/object_candidate_values.py
 gametool/object_candidates.py
 gametool/object_codes.py
 gametool/object_detail_presentation.py
+gametool/object_export_coverage.py
 gametool/object_field_roles.py
 gametool/object_field_selection.py
 gametool/object_filter.py
@@ -397,6 +401,8 @@ gametool/object_gallery.py
 gametool/object_gallery_icons.py
 gametool/object_id_summary.py
 gametool/object_id_usage.py
+gametool/object_inheritance.py
+gametool/object_layers.py
 gametool/object_materialization.py
 gametool/object_pipeline.py
 gametool/object_text_categories.py
@@ -468,6 +474,7 @@ gametool/save_container.py
 gametool/save_gamecache.py
 gametool/save_report_query.py
 gametool/save_source_paths.py
+gametool/save_text_encoding.py
 gametool/scene_bounds.py
 gametool/script_assignment_index.py
 gametool/script_assignments.py

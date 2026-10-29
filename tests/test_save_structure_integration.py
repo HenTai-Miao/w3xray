@@ -178,8 +178,18 @@ def test_source_change_before_delivery_is_diagnostic_not_stale_evidence(
         expected_keys: tuple[str, ...],
         md: MapData,
         ancestors: frozenset[str] = frozenset(),
+        *,
+        text_encoding: str = "auto",
     ) -> module.RealSaveFile:
-        result = original(path, relative, payload, expected_keys, md, ancestors)
+        result = original(
+            path,
+            relative,
+            payload,
+            expected_keys,
+            md,
+            ancestors,
+            text_encoding=text_encoding,
+        )
         source.write_text('Preload("-load AFTER12345")', encoding="utf-8")
         return result
 

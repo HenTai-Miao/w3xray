@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Protocol
 
 from .object_field_roles import TECH_SCALAR_LABELS, tech_scalar_key
+from .object_layers import split_field_column
 from .pack_query_numeric_values import decimal_text as _text, decimal_value as _number
 from .pack_query_object_details import (
     ObjectDetailSources,
@@ -113,6 +114,7 @@ def _total(base: Decimal | None, increment: Decimal | None, level: Decimal) -> s
 
 
 def _field_level(key: str, prefix: str) -> str | None:
+    key, _column = split_field_column(key)
     if key == prefix:
         return "1"
     if key.startswith(prefix + ":"):
@@ -175,6 +177,8 @@ def _sheet(
     if levels is not None and levels > 0:
         points[Decimal(1)] = "1"
     for field in record.evidence.fields:
+        if not field.confirmed:
+            continue
         for prefix in ("gub1", "greq"):
             label = _field_level(field.key, prefix)
             if label is not None and label != "0":
@@ -210,12 +214,18 @@ def _sheet(
         if totals:
             lines.append("  满级累计: " + " ".join(totals))
     for field in record.evidence.fields:
+        if not field.confirmed:
+            continue
+        _key, column = split_field_column(field.key)
+        column_label = f"，数据列 {column}" if column is not None else ""
         label = _field_level(field.key, "gub1")
         if label is not None:
             lines.append(
                 "  效果("
                 + label
-                + "级): "
+                + "级"
+                + column_label
+                + "): "
                 + sources._clean(field.value)
                 + (" [来源: " + field.source + "]" if field.source else "")
             )
@@ -226,7 +236,9 @@ def _sheet(
             lines.append(
                 "  前置: "
                 + label
-                + "级←"
+                + "级"
+                + column_label
+                + "←"
                 + field.value
                 + (" [来源: " + field.source + "]" if field.source else "")
             )

@@ -16,6 +16,7 @@ from .save_report_query import (
     verify_save_report_sources,
     write_save_report,
 )
+from .save_text_encoding import SAVE_TEXT_ENCODINGS, normalize_save_text_encoding
 
 
 def run_real_save_cli(argv: tuple[str, ...]) -> int:
@@ -25,6 +26,14 @@ def run_real_save_cli(argv: tuple[str, ...]) -> int:
     parser.add_argument("--save", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--author-bundle", type=Path)
+    parser.add_argument(
+        "--text-encoding",
+        "--encoding",
+        type=normalize_save_text_encoding,
+        choices=SAVE_TEXT_ENCODINGS,
+        default="auto",
+        help="文本文件/归档文本成员的编码；auto 不猜测无 BOM UTF-16，二进制存档容器仍按其格式读取",
+    )
     parser.add_argument(
         "--query", default="", help="按完整文件搜索；支持 &&、||、%%、括号和精准词"
     )
@@ -61,7 +70,7 @@ def run_real_save_cli(argv: tuple[str, ...]) -> int:
             if args.map is not None
             else None
         )
-        report = analyze_real_save_path(args.save, md)
+        report = analyze_real_save_path(args.save, md, text_encoding=args.text_encoding)
         report = verify_save_report_sources(report)
         selection = select_save_report(report, args.query, args.kind, args.limit)
         result = write_save_report(selection, args.output, args.format)

@@ -13,6 +13,7 @@ from .base_objects import BASE_OBJECTS
 from .map_data import GameObject, GameObjectFieldEvidence
 from .object_candidates import ObjectCandidate, ObjectFieldValue, ObjectSourceKind
 from .object_candidate_models import FieldEvidenceState
+from .object_layers import binary_layer_priority
 from .object_field_selection import (
     build_selection_index,
     object_field_source_priority,
@@ -361,7 +362,8 @@ def _materialize(
             (
                 value
                 for value in evidence_values
-                if value.state is not FieldEvidenceState.CONFIRMED
+                if value.state
+                not in {FieldEvidenceState.CONFIRMED, FieldEvidenceState.OVERRIDDEN}
                 and (winner := selected.get(object_field_identity(value, category)))
                 is not None
                 and winner.state is not FieldEvidenceState.CONFIRMED
@@ -424,7 +426,17 @@ def _materialized_evidence(
 def _candidate_identity_rank(
     candidate: ObjectCandidate,
 ) -> tuple[int, int, bool, str, str]:
-    source_rank = max((int(value.source_kind) for value in candidate.fields), default=0)
+    source_rank = (
+        candidate.priority_override
+        if candidate.priority_override is not None
+        else max(
+            (
+                object_field_source_priority(value, candidate.category)
+                for value in candidate.fields
+            ),
+            default=binary_layer_priority(candidate.source) if candidate.source else 0,
+        )
+    )
     return (
         _EXT_RANK.get(candidate.ext, 20),
         source_rank,

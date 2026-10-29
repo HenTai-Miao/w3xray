@@ -3,6 +3,8 @@
 from collections.abc import Mapping
 from typing import Final
 
+from .object_layers import split_field_column
+
 
 TECH_SCALAR_LABELS: Final[Mapping[str, str]] = {
     "glvl": "最大等级",
@@ -29,5 +31,5 @@ _BASE_TECH_SCALAR_KEYS: Final[Mapping[str, str]] = {
 def tech_scalar_key(key: str, *, base_label: str = "") -> str | None:
     """Return the exact declared scalar code; base labels require caller proof."""
     return _TECH_SCALAR_KEYS.get(
-        key.casefold().removeprefix("binary:")
+        split_field_column(key)[0].casefold().removeprefix("binary:")
     ) or _BASE_TECH_SCALAR_KEYS.get(base_label)

@@ -115,9 +115,13 @@ def _source_state(row: TextEvidence) -> ObjectTextState:
         case (
             TextSourcePriority.MAP_TEXT_STRINGS
             | TextSourcePriority.MAP_BINARY
+            | TextSourcePriority.CAMPAIGN_BINARY
+            | TextSourcePriority.CAMPAIGN_SKIN
+            | TextSourcePriority.MAP_SKIN
             | TextSourcePriority.MAP_FUNCTION_TEXT
             | TextSourcePriority.MAP_SLK
             | TextSourcePriority.MAP_ANONYMOUS
+            | TextSourcePriority.CAMPAIGN_INHERITED
         ):
             return (
                 ObjectTextState.MAP_EXPLICIT_EMPTY

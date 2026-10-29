@@ -49,6 +49,7 @@ from .knowledge_resource_exports import write_resources
 from .knowledge_terrain_exports import write_terrain_exports
 from .knowledge_unknown_exports import write_unknown_files
 from .object_id_summary import format_object_id_usage_summary
+from .object_export_coverage import OBJECT_COVERAGE_FILE, format_object_export_coverage
 from .object_text_exports import format_object_text_tsv
 from .save_analysis import build_save_report, format_save_report_tsv
 from .knowledge_script_exports import (
@@ -105,6 +106,12 @@ def write_knowledge_pack_contents(
         profile=effective_profile,
     )
     count = 0
+    coverage_written = write_text(
+        out_dir,
+        OBJECT_COVERAGE_FILE,
+        format_object_export_coverage(md, selected=_allowed(gate, adapter, "objects")),
+    )
+    count += coverage_written
     if _allowed(gate, adapter, "basic"):
         count += write_text(out_dir, "资料包目录.tsv", format_knowledge_manifest())
     count += write_text(
@@ -140,12 +147,16 @@ def write_knowledge_pack_contents(
         count += write_text(
             out_dir, "组件诊断.tsv", format_component_diagnostics_tsv(md)
         )
-    if _allowed(gate, adapter, "objects"):
-        count += write_object_ids(md, os.path.join(out_dir, "对象ID"))
+    if _allowed(gate, adapter, "objects") and coverage_written:
+        count += write_object_ids(
+            md, os.path.join(out_dir, "对象ID"), coverage_required=True
+        )
     if _allowed(gate, adapter, "objects"):
         count += write_box_ids(md, os.path.join(out_dir, "盒子兼容ID"))
     if _allowed(gate, adapter, "objects"):
-        count += write_text(out_dir, "对象字段.tsv", format_object_fields(md))
+        count += write_text(
+            out_dir, "对象字段.tsv", format_object_fields(md, coverage_required=True)
+        )
     if _allowed(gate, adapter, "objects"):
         count += write_text(out_dir, "对象文本与图标.tsv", format_object_text_icons(md))
     if _allowed(gate, adapter, "objects"):

@@ -18,6 +18,7 @@ from .object_candidate_models import (
     ObjectSourceKind,
 )
 from .object_field_roles import tech_scalar_key
+from .object_layers import binary_layer_priority, split_field_column
 
 _DISPLAY_ALIASES: Final[Mapping[str, str]] = {
     "name": "display:name",
@@ -81,6 +82,8 @@ def select_object_field(
     index: SelectionIndex | None = None,
 ) -> None:
     """Mutate the materialization accumulator with the winning field value."""
+    if value.state is FieldEvidenceState.OVERRIDDEN:
+        return
     identity = _field_identity(value, category)
     if not identity.startswith("display:"):
         label = value.label.casefold()
@@ -208,6 +211,8 @@ def select_current_icon_fields(
     """Select one current value for the primary and each auxiliary icon role."""
     selected: dict[str, ObjectFieldValue] = {}
     for value in values:
+        if value.state is FieldEvidenceState.OVERRIDDEN:
+            continue
         decision = classify_icon_field(
             category,
             value.key,
@@ -222,6 +227,9 @@ def select_current_icon_fields(
             if icon_display_priority(category, value.key, value.source_kind) > 1
             else f"icon:{decision.canonical_key}"
         )
+        _key, column = split_field_column(value.key)
+        if column is not None:
+            role += f":column:{column}"
         previous = selected.get(role)
         if previous is None or _field_rank(value, role, category) > _field_rank(
             previous,
@@ -243,11 +251,15 @@ def object_field_identity(value: ObjectFieldValue, category: str) -> str:
 
 def object_field_source_priority(value: ObjectFieldValue, category: str) -> int:
     """Return the effective priority used by public-field selection."""
+    if value.priority_override is not None:
+        return value.priority_override
     identity = _field_identity(value, category)
     if value.source_kind is ObjectSourceKind.TEXT_STRINGS and not identity.startswith(
         "display:"
     ):
         return 15
+    if value.source_kind is ObjectSourceKind.BINARY:
+        return binary_layer_priority(value.source)
     return int(value.source_kind)
 
 
@@ -259,6 +271,8 @@ def _field_identity(value: ObjectFieldValue, category: str) -> str:
     物化大地图时这里是百万级调用，记忆化后按不同值收敛。
     """
     key = value.key.casefold()
+    if split_field_column(value.key)[1] is not None:
+        return f"field:{value.key}"
     decision = classify_icon_field(
         category,
         value.key,

@@ -5,10 +5,11 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 import hashlib
+import base64
 import struct
 
 from .campaign_sources import open_map_source
-from .fields import label_for
+from .object_layers import binary_field_key, binary_field_label, binary_layer_priority
 from .map_data import MapData
 from .object_codes import valid_object_code
 from .reference_models import ReferenceSource
@@ -25,6 +26,12 @@ class MapBinaryField:
     level: int
     object_ordinal: int
     field_ordinal: int
+    data_pointer: int = 0
+    offset: int = -1
+    end_offset: int = -1
+    raw_bytes_base64: str = ""
+    trailer: int = 0
+    extra_ints: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,7 +60,12 @@ def map_object_identities(
     diagnostics: list[str] = []
     try:
         with open_map_source(md) as archive:
-            for prefix in ("war3map", "war3campaign"):
+            for prefix in (
+                "war3map",
+                "war3mapSkin",
+                "war3campaign",
+                "war3campaignSkin",
+            ):
                 for ext, category in EXT_CATEGORY.items():
                     check()
                     member = f"{prefix}.{ext}"
@@ -72,6 +84,10 @@ def map_object_identities(
                             )
                             continue
                         report = parse_object_data_report(payload, ext)
+                        diagnostics.extend(
+                            f"{scope}!{member}: 对象身份来源不完整: {issue}"
+                            for issue in report.issues
+                        )
                         for ordinal, obj in enumerate(report.objects, 1):
                             code = (
                                 obj.new_id
@@ -89,14 +105,11 @@ def map_object_identities(
                                 )
                             )
                             for field_ordinal, mod in enumerate(obj.mods, 1):
-                                key = (
-                                    f"{mod.field_id}:{mod.level}"
-                                    if mod.level
-                                    else mod.field_id
+                                pointer = getattr(mod, "data_pointer", 0)
+                                key = binary_field_key(mod.field_id, mod.level, pointer)
+                                label = binary_field_label(
+                                    mod.field_id, mod.level, pointer
                                 )
-                                label = label_for(mod.field_id)
-                                if mod.level:
-                                    label += f" (等级{mod.level})"
                                 binary_fields.setdefault((category, code), []).append(
                                     MapBinaryField(
                                         key,
@@ -107,6 +120,14 @@ def map_object_identities(
                                         mod.level,
                                         ordinal,
                                         field_ordinal,
+                                        pointer,
+                                        getattr(mod, "offset", -1),
+                                        getattr(mod, "end_offset", -1),
+                                        base64.b64encode(
+                                            getattr(mod, "raw_bytes", b"")
+                                        ).decode("ascii"),
+                                        getattr(mod, "trailer", 0),
+                                        getattr(obj, "extra_ints", ()),
                                     )
                                 )
                     except (
@@ -123,11 +144,15 @@ def map_object_identities(
         diagnostics.append(f"{scope}: 身份声明来源无法重开: {exc}")
     result = {}
     for identity, rows in declarations.items():
-        pairs = {(base, custom) for base, custom, _source, _ordinal in rows}
+        highest = max(
+            binary_layer_priority(source) for _base, _custom, source, _ordinal in rows
+        )
+        current = [row for row in rows if binary_layer_priority(row[2]) == highest]
+        pairs = {(base, custom) for base, custom, _source, _ordinal in current}
         notes: tuple[str, ...] = ()
         base_id, custom = "", ""
-        if len(pairs) == 1 and valid_object_code(rows[0][0]):
-            base_id, custom = rows[0][:2]
+        if len(pairs) == 1 and valid_object_code(current[0][0]):
+            base_id, custom = current[0][:2]
         else:
             notes = (
                 f"{scope} {identity[0]}:{identity[1]}: 基础ID/自定义声明冲突或无效；全部候选保留，未选任一声明。",

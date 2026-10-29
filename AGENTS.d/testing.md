@@ -150,6 +150,8 @@ Historical schema-4 measurements from 2026-07-15 remain evidence only: 39/39 pro
 
 ## Runtime-cache isolation
 
+The test runner also defaults pytest's `--basetemp` to a fresh child of its private cache allocation. Parallel runs and elevated runs never share the user-wide `pytest-current` cleanup link. An explicitly supplied `--basetemp` is forwarded unchanged. Failed cleanup is a failed run, never a passing result; use a fresh private path when investigating it.
+
 Prefer `uv run gamexray-test`. The runner creates a fresh `GAMEXRAY_CACHE_DIR` before launching pytest, including when `--noconftest` is forwarded. The repository-root `conftest.py` also isolates ordinary direct pytest sessions before test-module collection. It restores the previous environment on exit, distinguishing an absent variable, an empty value, and a configured path; repeated in-process sessions get distinct roots. Test and collection failures retain their exit status and receive the same protection.
 
 Caller overrides are not reused as test caches. Private cache directories are created under the system temporary directory, outside the repository and the caller's cache, and retained for diagnosis. If the temporary location is inside either protected root or cache allocation fails, stop with an explicit isolation error before running tests; do not fall back to the user's cache. The runner passes a copied environment to its child instead of changing the parent process.

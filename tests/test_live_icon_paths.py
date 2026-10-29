@@ -54,3 +54,20 @@ def test_non_icon_and_malformed_rows_ignored(tmp_path):
         ],
     )
     assert _icon_paths_from_pack(pack) == {}
+
+
+@pytest.mark.parametrize("state", ["overridden", "conflict", "unknown"])
+@pytest.mark.parametrize("raw_first", [True, False])
+def test_unconfirmed_icon_evidence_does_not_replace_effective_icon(
+    tmp_path, state, raw_first
+):
+    effective = "物品\tI0AA\t冰晶\tdisplay:icon\t图标\tCommandButtons/BTNcurrent.blp\twar3mapSkin.w3t\tconfirmed"
+    raw = f"物品\tI0AA\t冰晶\tdisplay:icon\t图标\tCommandButtons/BTNold.blp\twar3map.w3t\t{state}"
+    pack = _write_pack(
+        tmp_path,
+        [
+            "分类\tID\t名称\t字段键\t字段名\t值\t来源\t证据状态",
+            *([raw, effective] if raw_first else [effective, raw]),
+        ],
+    )
+    assert _icon_paths_from_pack(pack) == {"I0AA": "CommandButtons/BTNcurrent.blp"}

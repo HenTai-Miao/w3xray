@@ -19,6 +19,7 @@ from .pack_query_spatial import NearEntry, SpatialQueryResult
 from .pack_query_regions import NearRegion
 from .pack_query_options import EMPTY_QUERY_COMMANDS, query_limit_error
 from .pack_query_diff import ComparisonDiagnostic, DiffQueryResult
+from .object_export_coverage import ObjectCoverageInput
 from .pack_query_script_coverage import (
     SCRIPT_QUERY_COMMANDS,
     ScriptCoverage,
@@ -39,6 +40,7 @@ class QueryBackend(Protocol):
     _QUERY_SCRIPT_COVERAGE: dict[str, ScriptCoverage] | None
     _QUERY_FILES: set[tuple[str, str]] | None
     _QUERY_OBJECT_WARNINGS: dict[str, list[str]] | None
+    _QUERY_OBJECT_COVERAGE: dict[str, ObjectCoverageInput] | None
     _LOCKED_FILES: set[tuple[str, str]]
     _QUERIES: dict[str, Callable[[Path, str, int], list[str]]]
 
@@ -261,24 +263,41 @@ def execute_query(
         previous_coverage = queries._QUERY_SCRIPT_COVERAGE
         previous_files = queries._QUERY_FILES
         previous_objects = queries._QUERY_OBJECT_WARNINGS
+        previous_object_coverage = queries._QUERY_OBJECT_COVERAGE
         queries._QUERY_ROWS = {}
         queries._QUERY_SCRIPTS = {}
         queries._QUERY_SCRIPT_SOURCES = {}
         queries._QUERY_SCRIPT_COVERAGE = {}
         queries._QUERY_FILES = set()
         queries._QUERY_OBJECT_WARNINGS = {}
+        queries._QUERY_OBJECT_COVERAGE = {}
         try:
-            result = _collect_query(options, queries)
+            result = _collect_query(options, queries, remember=False)
         finally:
             touched = queries._QUERY_FILES or set()
             object_warnings = queries._QUERY_OBJECT_WARNINGS or {}
             source_coverages = queries._QUERY_SCRIPT_COVERAGE or {}
+            object_coverages = queries._QUERY_OBJECT_COVERAGE or {}
             queries._QUERY_ROWS = previous
             queries._QUERY_SCRIPTS = previous_scripts
             queries._QUERY_SCRIPT_SOURCES = previous_sources
             queries._QUERY_SCRIPT_COVERAGE = previous_coverage
             queries._QUERY_FILES = previous_files
             queries._QUERY_OBJECT_WARNINGS = previous_objects
+            queries._QUERY_OBJECT_COVERAGE = previous_object_coverage
+        coverage_changed = False
+        for pack, snapshot in object_coverages.items():
+            if note := snapshot.verify():
+                coverage_changed = True
+                object_warnings.setdefault(pack, []).append(f"[⚠ {note}]")
+        if coverage_changed:
+            result = replace(
+                result,
+                exit_code=2,
+                comparison_complete=(
+                    False if result.comparison_complete is not None else None
+                ),
+            )
         if object_warnings:
             remaining = dict(object_warnings)
             sections = []
@@ -331,6 +350,8 @@ def execute_query(
                 for pack, rel in sorted(queries._LOCKED_FILES.intersection(touched))
             ),
         )
+        if result.exit_code == 0 and options.command not in {"again", "diff"}:
+            queries._store_last_query(Path(result.pack), result.command, result.query)
     return _timed_result(
         replace(
             result,

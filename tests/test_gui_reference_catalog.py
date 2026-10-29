@@ -53,6 +53,7 @@ def root(monkeypatch, tmp_path):
     previous_state = parent.state()
     parent.withdraw()
     monkeypatch.setattr(gui, "_SESSION", {})
+    monkeypatch.setattr(gui, "_selection_memory", None)
     monkeypatch.setattr(
         gui, "gamexray_cache_root", lambda: tmp_path / "reference-cache"
     )
@@ -708,4 +709,200 @@ def test_query_terminal_delivery_rejects_detail_started_from_old_list(
     finally:
         release.set()
         detail_release.set()
+        window.destroy()
+
+
+def test_multiple_record_selection_copy_clear_and_session_restore(root, monkeypatch):
+    catalog = _catalog(3)
+    catalog = replace(
+        catalog,
+        records=tuple(
+            replace(
+                record,
+                id="Same",
+                scope=f"independent-scope-{index}",
+                raw_rows=(("原始\t行\r\n", str(index)),),
+                diagnostics=(f"完整记录诊断 {index}",),
+            )
+            for index, record in enumerate(catalog.records)
+        ),
+        diagnostics=("完整来源诊断",),
+    )
+    monkeypatch.setattr(gui, "load_reference_catalog", lambda _pack, **_kwargs: catalog)
+    copied = []
+    copy_threads = []
+    window = gui.ReferenceCatalogWindow(root)
+
+    def copy(value):
+        copied.append(value)
+        copy_threads.append(threading.get_ident())
+
+    monkeypatch.setattr(window, "_copy", copy)
+    _pump(root, lambda: bool(window._detail_content))
+    assert window._list.cget("selectmode") == "extended"
+    for sequence in ("<Control-a>", "<Control-A>", "<Control-c>", "<Control-C>"):
+        assert window._list.bind(sequence)
+    window._select_records_button.invoke()
+    assert window._list.curselection() == (0, 1, 2)
+    assert window._selection_count.cget("text") == "已选 3 / 3"
+    window._copy_records_button.invoke()
+    _pump(root, lambda: bool(copied))
+    assert copy_threads == [threading.get_ident()]
+    for index in range(3):
+        assert f"independent-scope-{index}" in copied[0]
+        assert f"完整记录诊断 {index}" in copied[0]
+    assert "原始\\t行\\r\\n" in copied[0]
+    assert "完整来源诊断" in copied[0]
+    window._clear_records_button.invoke()
+    assert window._selection_count.cget("text") == "已选 0 / 3"
+    assert window._copy_records_button.cget("state") == "disabled"
+    assert window._export_selected_button.cget("state") == "disabled"
+    window._list.selection_set(0)
+    window._list.selection_set(2)
+    window._show_selected()
+    window.destroy()
+    restored = gui.ReferenceCatalogWindow(root)
+    _pump(root, lambda: restored._result is not None)
+    assert restored._list.curselection() == (0, 2)
+    assert restored._selection_count.cget("text") == "已选 2 / 3"
+    restored.destroy()
+
+
+@pytest.mark.parametrize("suffix", (".json", ".md", ".tsv"))
+def test_selected_export_uses_exact_selection_and_background_snapshot(
+    root, monkeypatch, tmp_path, suffix
+):
+    catalog = _catalog(3)
+    monkeypatch.setattr(gui, "load_reference_catalog", lambda _pack, **_kwargs: catalog)
+    destination = tmp_path / f"selected{suffix}"
+    monkeypatch.setattr(
+        gui.filedialog, "asksaveasfilename", lambda **_kwargs: str(destination)
+    )
+    write = gui.write_reference_selection
+    calls = []
+
+    def write_selected(path, result, indices):
+        calls.append((threading.get_ident(), result, indices))
+        write(path, result, indices)
+
+    monkeypatch.setattr(gui, "write_reference_selection", write_selected)
+    window = gui.ReferenceCatalogWindow(root)
+    _pump(root, lambda: window._result is not None)
+    window._list.selection_set(2)
+    window._show_selected()
+    window._export_selected_button.invoke()
+    _pump(root, lambda: "已导出选中 2 条" in window._status.cget("text"))
+    assert calls[0][0] != threading.get_ident()
+    assert calls[0][1] is window._result
+    assert calls[0][2] == (0, 2)
+    text = destination.read_text(encoding="utf-8")
+    if suffix == ".json":
+        payload = json.loads(text)
+        assert [record["id"] for record in payload["records"]] == ["0000", "0002"]
+        assert payload["selection"]["indices"] == [0, 2]
+    else:
+        assert "0000" in text and "0002" in text and "0001" not in text
+    window.destroy()
+
+
+def test_query_handoff_binds_child_and_never_uses_external_or_current_map(
+    root, monkeypatch, tmp_path
+):
+    pack = tmp_path / "bound-pack"
+    child = pack / "子地图" / "chapter"
+    child.mkdir(parents=True)
+    source_path = str(child / "对象ID" / "技能.tsv")
+    source = ReferenceSource(
+        source_path, source_path, "a" * 64, "fixture", state="map-evidence"
+    )
+    record = replace(
+        _catalog().records[0],
+        category="技能",
+        id="A001",
+        scope=str(child),
+        sources=(source.id,),
+        state="map-evidence",
+    )
+    catalog = ReferenceCatalog(
+        (record, replace(record, scope="external-label", state="external-label")),
+        (source,),
+        input_roots=(str(pack),),
+    )
+    monkeypatch.setattr(gui, "load_reference_catalog", lambda _pack, **_kwargs: catalog)
+    opened = []
+
+    def open_query(_parent, provider, _ensure, **kwargs):
+        opened.append((provider(), kwargs))
+
+    monkeypatch.setattr(gui, "open_pack_query_dialog", open_query)
+    window = gui.ReferenceCatalogWindow(root, pack_dir=pack)
+    _pump(root, lambda: window._result is not None)
+    assert window._query_button.cget("state") == "normal"
+    window._query_button.invoke()
+    assert opened == [(str(child), {"prefill": '="A001"', "prefill_command": "skills"})]
+    window._list.selection_clear(0, "end")
+    window._list.selection_set(1)
+    window._show_selected()
+    assert window._query_button.cget("state") == "disabled"
+    window._query_selected()
+    assert len(opened) == 1
+    window._list.selection_set(0)
+    window._show_selected()
+    assert window._query_button.cget("state") == "disabled"
+    window._query_selected()
+    assert len(opened) == 1
+    window.destroy()
+
+
+@pytest.mark.parametrize("change", ("selection", "source", "filter", "cancel", "close"))
+def test_selected_copy_rejects_stale_snapshot_on_main_thread(
+    root, monkeypatch, tmp_path, change
+):
+    entered, release = threading.Event(), threading.Event()
+    copied = []
+    completions = []
+    format_selection = gui.format_reference_selection
+    monkeypatch.setattr(
+        gui, "load_reference_catalog", lambda _pack, **_kwargs: _catalog(3)
+    )
+
+    def blocked_format(result, selected):
+        entered.set()
+        assert release.wait(20)
+        return format_selection(result, selected)
+
+    monkeypatch.setattr(gui, "format_reference_selection", blocked_format)
+    window = gui.ReferenceCatalogWindow(root)
+    monkeypatch.setattr(window, "_copy", copied.append)
+    original_post = window._post_gui_worker
+
+    def capture_post(ticket, callback, **kwargs):
+        if ticket.group == "reference-copy":
+            completions.append(callback)
+        return original_post(ticket, callback, **kwargs)
+
+    monkeypatch.setattr(window, "_post_gui_worker", capture_post)
+    try:
+        _pump(root, lambda: window._result is not None)
+        window._select_all_records()
+        window._copy_records_button.invoke()
+        _pump(root, entered.is_set)
+        if change == "selection":
+            window._clear_record_selection()
+        elif change == "source":
+            window._map_var.set(str(tmp_path / "different.w3x"))
+        elif change == "filter":
+            window._query_entry.insert(0, "changed-query")
+        elif change == "cancel":
+            window._cancel()
+        else:
+            window.destroy()
+        release.set()
+        _pump(root, lambda: bool(completions) and not window._gui_workers._workers)
+        for callback in completions:
+            root.after_idle(callback)
+        root.update()
+        assert not copied
+    finally:
+        release.set()
         window.destroy()

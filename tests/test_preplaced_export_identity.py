@@ -126,7 +126,7 @@ def test_live_pack_cache_version_retires_old_export_without_removing_it(
     source = tmp_path / "map.w3x"
     source.write_bytes(b"read-only-key-input")
     current = live_cli.live_pack_cache_dir(str(source))
-    assert live_cli.LIVE_PACK_CACHE_VERSION == "live-pack-v32"
+    assert live_cli.LIVE_PACK_CACHE_VERSION == "live-pack-v33"
     previous_version = "live-pack-v" + str(
         int(live_cli.LIVE_PACK_CACHE_VERSION.rsplit("v", 1)[1]) - 1
     )

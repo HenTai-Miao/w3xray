@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Final, assert_never
 from .description_cache import DescriptionCache
 from .object_candidates import ObjectCandidate, ObjectFieldValue, ObjectSourceKind
 from .object_candidate_models import FieldEvidenceState
+from .object_layers import binary_layer_priority, split_field_column
 from .object_text_models import TextSourcePriority
 from .object_text_roles import classify_text_field, semantic_field_for_role
 from .textobj import _sub_westring
@@ -49,18 +50,22 @@ def collect_map_text_evidence(
         for field in candidate.fields:
             if field.state is not FieldEvidenceState.CONFIRMED:
                 continue
+            text_key, column = split_field_column(field.key)
             role = classify_text_field(
                 candidate.category,
-                field.key,
+                text_key,
                 field.label,
                 field.value_type,
             )
             if role is None:
                 continue
+            semantic_field = role.semantic_field + (
+                f":column:{column}" if column is not None else ""
+            )
             key = (
                 candidate.category,
                 candidate.obj_id,
-                role.semantic_field,
+                semantic_field,
                 role.role,
                 role.level,
             )
@@ -68,14 +73,17 @@ def collect_map_text_evidence(
             grouped.setdefault(key, []).append(
                 TextEvidence(
                     role.role,
-                    role.semantic_field,
+                    semantic_field,
                     role.level,
                     field.key,
                     field.label,
                     raw_value,
                     map_source_label(field.source_kind),
                     source_path(field),
-                    map_text_source_priority(field.source_kind),
+                    int(TextSourcePriority.CAMPAIGN_INHERITED)
+                    if field.priority_override is not None
+                    and field.source_kind is not ObjectSourceKind.BASE
+                    else map_text_source_priority(field.source_kind, field.source),
                     is_placeholder(raw_value),
                 ),
             )
@@ -99,10 +107,14 @@ def collect_client_text_evidence(
             )
             if role is None:
                 continue
+            _text_key, column = split_field_column(field.key)
+            semantic_field = role.semantic_field + (
+                f":column:{column}" if column is not None else ""
+            )
             key = (
                 item.category,
                 item.obj_id,
-                role.semantic_field,
+                semantic_field,
                 role.role,
                 role.level,
             )
@@ -110,7 +122,7 @@ def collect_client_text_evidence(
             grouped.setdefault(key, []).append(
                 TextEvidence(
                     role.role,
-                    role.semantic_field,
+                    semantic_field,
                     role.level,
                     field.key,
                     field.label,
@@ -187,7 +199,7 @@ def map_source_label(kind: ObjectSourceKind) -> str:
             assert_never(unreachable)
 
 
-def map_text_source_priority(kind: ObjectSourceKind) -> int:
+def map_text_source_priority(kind: ObjectSourceKind, source: str = "") -> int:
     """Map every candidate source kind to the complete-text precedence scale."""
     match kind:
         case ObjectSourceKind.BASE:
@@ -199,7 +211,12 @@ def map_text_source_priority(kind: ObjectSourceKind) -> int:
         case ObjectSourceKind.TEXT_FUNC:
             return int(TextSourcePriority.MAP_FUNCTION_TEXT)
         case ObjectSourceKind.BINARY:
-            return int(TextSourcePriority.MAP_BINARY)
+            return {
+                32: int(TextSourcePriority.CAMPAIGN_BINARY),
+                35: int(TextSourcePriority.CAMPAIGN_SKIN),
+                40: int(TextSourcePriority.MAP_BINARY),
+                45: int(TextSourcePriority.MAP_SKIN),
+            }[binary_layer_priority(source)]
         case ObjectSourceKind.TEXT_STRINGS:
             return int(TextSourcePriority.MAP_TEXT_STRINGS)
         case unreachable:

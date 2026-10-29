@@ -28,6 +28,7 @@ WARCRAFT_GROUPS = (
         (
             "资料包目录.tsv",
             "需求覆盖.tsv",
+            "对象来源覆盖.tsv",
             "地图信息.txt",
             "地图信息证据.json",
             "地图字符串证据.json",

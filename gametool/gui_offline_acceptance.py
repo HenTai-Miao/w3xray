@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 import base64
+import csv
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass
@@ -11,6 +12,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import struct
 import tempfile
 import threading
@@ -188,6 +190,11 @@ class _Fixtures:
     map_names: tuple[str, str]
     save_root: Path
     save_text: Path
+    save_utf16: Path
+    save_utf16_text: str
+    pack_root: Path
+    pack_child: Path
+    unrelated_pack: Path
     hotkeys_old: Path
     hotkeys_new: Path
     payloads: dict[Path, bytes]
@@ -290,6 +297,16 @@ def _create_fixtures() -> _Fixtures:
     save_root = root / "save-inputs"
     save_root.mkdir()
     save_text = save_root / "alpha.txt"
+    save_utf16 = root / "explicit-utf16le.txt"
+    save_utf16_text = (
+        "function PreloadFiles takes nothing returns nothing\r\n"
+        f'    call Preload( "-load {marker}-utf16-甲" )\r\n'
+        f'    call Preload( "-load {marker}-utf16-乙" )\r\n'
+        "endfunction\r\n"
+    )
+    pack_root = root / "reference-pack"
+    pack_child = pack_root / "子地图" / "章一"
+    unrelated_pack = root / "unrelated-pack"
     config: dict[str, Any] = {
         "language": "auto",
         "active_profile": "One",
@@ -332,6 +349,7 @@ def _create_fixtures() -> _Fixtures:
         save_root / "beta.ini": (
             f'[save]\r\nnote="{marker} beta 完整记录"\r\ngold=0\r\n'
         ).encode("utf-8"),
+        save_utf16: save_utf16_text.encode("utf-16-le"),
         hotkeys_old: (json.dumps(config, ensure_ascii=False, indent=2) + "\n").encode(
             "utf-8"
         ),
@@ -339,6 +357,28 @@ def _create_fixtures() -> _Fixtures:
             "utf-8"
         ),
     }
+    from .batch_tsv import format_tsv_rows
+
+    for pack, name in (
+        (pack_root, "根包"),
+        (pack_child, "章一"),
+        (unrelated_pack, "禁止串入的另包"),
+    ):
+        ids = pack / "对象ID" / "物品.tsv"
+        fields = pack / "对象字段.tsv"
+        ids.parent.mkdir(parents=True)
+        payloads[ids] = format_tsv_rows(
+            (
+                ("分类", "ID", "数值", "基础ID", "名称", "自定义", "说明"),
+                ("物品", "yP01", "", "", name + "物品", "True", name + "说明"),
+            )
+        ).encode("utf-8")
+        payloads[fields] = format_tsv_rows(
+            (
+                ("分类", "ID", "名称", "字段键", "字段名", "值", "来源"),
+                ("物品", "yP01", name + "物品", "ides", "说明", name + "证据", name),
+            )
+        ).encode("utf-8")
     for path, payload in payloads.items():
         path.write_bytes(payload)
     return _Fixtures(
@@ -351,6 +391,11 @@ def _create_fixtures() -> _Fixtures:
         map_names,
         save_root,
         save_text,
+        save_utf16,
+        save_utf16_text,
+        pack_root,
+        pack_child,
+        unrelated_pack,
         hotkeys_old,
         hotkeys_new,
         payloads,
@@ -367,6 +412,110 @@ def _read_json(path: Path) -> dict[str, Any]:
     value = json.loads(path.read_text(encoding="utf-8"))
     _require(isinstance(value, dict), f"报告不是 JSON 对象: {path}")
     return value
+
+
+def _read_selection_export(path: Path) -> dict[str, Any]:
+    """Reparse the public report bytes instead of trusting the export callback."""
+    from .batch_tsv import decode_tsv_cell
+    from .csv_fields import full_csv_fields
+
+    if path.suffix == ".json":
+        return _read_json(path)
+    if path.suffix == ".tsv":
+        with path.open(encoding="utf-8", newline="") as source, full_csv_fields():
+            rows = [
+                {key: decode_tsv_cell(value) for key, value in row.items()}
+                for row in csv.DictReader(source, delimiter="\t", strict=True)
+            ]
+        _require(rows and rows[0]["记录类型"] == "catalog", "选中 TSV 缺目录上下文")
+        context = json.loads(rows[0]["完整证据_json"])
+        context["records"] = [
+            json.loads(row["完整证据_json"])
+            for row in rows[1:]
+            if row["记录类型"] == "record"
+        ]
+        _require(len(rows) == len(context["records"]) + 1, "选中 TSV 存在未解析记录")
+        return context
+    markdown = path.read_text(encoding="utf-8")
+    blocks = re.findall(r"(?m)^```json\n(.*?)\n```$", markdown, re.DOTALL)
+    reports = [json.loads(block) for block in blocks]
+    contexts = [
+        report
+        for report in reports
+        if isinstance(report, dict) and "selection" in report
+    ]
+    _require(len(contexts) == 1, "选中 Markdown 缺唯一完整来源上下文")
+    records = [
+        report
+        for report in reports
+        if isinstance(report, dict) and "kind" in report and "id" in report
+    ]
+    _require(len(reports) == len(records) + 1, "选中 Markdown 存在未解析 JSON 块")
+    contexts[0]["records"] = records
+    return contexts[0]
+
+
+def _exercise_selected_exports(app, fixtures, window, errors) -> None:
+    from . import gui_reference_catalog as reference
+    from .reference_cli import reference_result_to_dict
+
+    result = window._result
+    _require(
+        result is not None and len(result.records) == 2, "多选验收需要两条实际记录"
+    )
+    assert result is not None
+    _require(
+        all(row.values and row.raw_rows and row.scope for row in result.records),
+        "多选记录没有完整字段、原始记录与范围",
+    )
+    window._list.selection_clear(0, "end")
+    window._list.selection_set(0, 1)
+    window._list.event_generate("<<ListboxSelect>>", when="tail")
+    _wait_for(
+        app,
+        lambda: len(window._list.curselection()) == 2 and window._render_id is None,
+        "实际 Listbox 多选两条",
+        errors,
+    )
+    expected = reference_result_to_dict(result)
+    expected = json.loads(json.dumps(expected, ensure_ascii=False))
+    for extension in ("json", "tsv", "md"):
+        destination = fixtures.root / "exports" / f"selected-map.{extension}"
+        with _dialog_response(
+            reference.filedialog, "asksaveasfilename", str(destination)
+        ):
+            window._export_selected_button.invoke()
+        _wait_for(
+            app,
+            lambda: (
+                destination.is_file()
+                and not window._exporting
+                and "已导出" in str(window._status.cget("text"))
+            ),
+            f"GUI 多选 {extension} 导出",
+            errors,
+        )
+        exported = _read_selection_export(destination)
+        _require(
+            exported.pop("selection")
+            == {
+                "indices": [0, 1],
+                "selected": 2,
+                "displayed": 2,
+                "matched": 2,
+                "omitted_by_query": 0,
+            },
+            f"{extension} 多选计数或索引错误",
+        )
+        _require(exported == expected, f"{extension} 重解析后字段/raw/scope/来源不完整")
+    window._list.selection_clear(0, "end")
+    window._list.event_generate("<<ListboxSelect>>", when="tail")
+    _wait_for(
+        app,
+        lambda: str(window._export_selected_button.cget("state")) == "disabled",
+        "清空多选后导出按钮禁用",
+        errors,
+    )
 
 
 def _exercise_reference(
@@ -539,11 +688,11 @@ def _exercise_map_reference(
     _wait_for(
         app,
         lambda: window._result is not None and not window._busy,
-        "真实地图全量对象目录读取",
+        "合成 MPQ 全量对象目录读取",
         errors,
     )
     result = window._result
-    _require(result is not None and result.catalog_complete, "真实地图目录读取不完整")
+    _require(result is not None and result.catalog_complete, "合成 MPQ 目录读取不完整")
     assert result is not None
     _require(window._pack_entry.get() == "", "选地图后知识包来源未清空")
     _require(result.map_path == str(fixtures.map_path), "地图来源身份丢失")
@@ -582,6 +731,7 @@ def _exercise_map_reference(
         "物品 2" in window._detail_content and "war3map.w3t" in window._detail_content,
         "地图总览缺分类或成员",
     )
+    _exercise_selected_exports(app, fixtures, window, errors)
     _set_entry(window._query_entry, fixtures.marker + " && alpha")
     window._run_button.invoke()
     _wait_for(
@@ -651,6 +801,78 @@ def _exercise_map_reference(
         "清空地图仍显示原地图范围",
     )
     _require(window._id_tables == (str(fixtures.id_table),), "切换地图丢已选 ID 来源")
+
+
+def _exercise_pack_handoff(
+    app: App, fixtures: _Fixtures, owned: list[tk.Toplevel], errors: list[str]
+) -> None:
+    from . import gui_reference_catalog as reference
+    from .gui_export_actions import save_last_pack_dir
+    from .gui_pack_query import _PackQueryWindow
+
+    save_last_pack_dir(str(fixtures.unrelated_pack))
+    window = reference.ReferenceCatalogWindow(app, fixtures.pack_root, id_tables=())
+    owned.append(window)
+    for entry in (
+        window._map_entry,
+        window._profile_entry,
+        window._build_entry,
+        window._source_entry,
+        window._query_entry,
+    ):
+        _set_entry(entry, "")
+    window._kind.set("objects")
+    window._category.set("物品")
+    _set_entry(window._query_entry, '="yP01"')
+    _wait_for(
+        app,
+        lambda: window._result is not None and not window._busy,
+        "实际知识包及直接子章查询",
+        errors,
+    )
+    result = window._result
+    _require(result is not None and len(result.records) == 2, "根包和子章同码证据丢失")
+    assert result is not None
+    for scope, expected_text, forbidden in (
+        (fixtures.pack_root, "根包证据", "禁止串入的另包"),
+        (fixtures.pack_child, "章一证据", "根包证据"),
+    ):
+        index = next(
+            i for i, record in enumerate(result.records) if record.scope == str(scope)
+        )
+        window._list.selection_clear(0, "end")
+        window._list.selection_set(index)
+        window._list.event_generate("<<ListboxSelect>>", when="tail")
+        _wait_for(app, lambda: window._render_id is None, "绑定选中包范围", errors)
+        previous = set(window.winfo_children()) | set(app.winfo_children())
+        window._query_selected()
+        opened: list[_PackQueryWindow] = []
+
+        def find_window() -> bool:
+            opened[:] = [
+                child
+                for child in (*window.winfo_children(), *app.winfo_children())
+                if child not in previous and isinstance(child, _PackQueryWindow)
+            ]
+            return len(opened) == 1
+
+        _wait_for(app, find_window, "实际打开范围绑定的包查询窗口", errors)
+        query = opened[0]
+        owned.append(query)
+        _require(Path(query._pack_dir) == scope, "包查询串入其他包或父级范围")
+        query._run(query._mode.get())
+        _wait_for(
+            app,
+            lambda: expected_text in query._output.get("1.0", "end-1c"),
+            "实际执行范围绑定的完整对象查询",
+            errors,
+        )
+        output = query._output.get("1.0", "end-1c")
+        _require(
+            forbidden not in output and "禁止串入的另包" not in output,
+            "包查询结果串入其他范围",
+        )
+        query.destroy()
 
 
 def _exercise_save(
@@ -747,6 +969,97 @@ def _exercise_save(
     _require(
         exported["files"][0]["text_carriers"] and exported["files"][0]["codes"],
         "存档导出缺完整载体/码",
+    )
+
+
+def _exercise_utf16_save(
+    app: App, fixtures: _Fixtures, owned: list[tk.Toplevel], errors: list[str]
+) -> None:
+    from . import gui_save_workspace as saves
+
+    window = saves.open_save_workspace(app, initial_path="", map_data=None)
+    owned.append(window)
+    window.source_var.set(str(fixtures.save_utf16))
+    window.map_var.set("")
+    window.query_var.set("")
+    window.kind_var.set("全部")
+    window.limit_var.set("0")
+    window.encoding_menu.set("utf-16-le")
+    _wait_for(app, lambda: bool(window.winfo_ismapped()), "显示独立存档窗口", errors)
+    from customtkinter import CTkButton
+
+    refresh_button = next(
+        button
+        for button in window.source_entry.master.winfo_children()
+        if isinstance(button, CTkButton) and button.cget("text") == "读取 / 刷新"
+    )
+    refresh_button.invoke()
+    _wait_for(
+        app,
+        lambda: window._selection is not None and len(window._row_records) == 1,
+        "无 BOM UTF-16LE 的显式 GUI 读取",
+        errors,
+    )
+    report = window._report
+    _require(report is not None and report.complete, "显式 UTF-16LE 存档读取不完整")
+    assert report is not None
+    _require(report.text_encoding == "utf-16-le", "GUI 编码选择未传递至报告")
+    record = report.files[0]
+    _require(record.raw_text == fixtures.save_utf16_text, "UTF-16LE 完整文本被改写")
+    assert record.raw_text is not None
+    _require(
+        record.encoding == "utf-16-le" and len(record.text_carriers) == 2,
+        "UTF-16LE 载体未完整提取",
+    )
+    payload = fixtures.payloads[fixtures.save_utf16]
+    _require(
+        record.raw_text.encode(record.encoding) == payload, "UTF-16LE 原字节不可恢复"
+    )
+    _require(
+        all(carrier.byte_offset is not None for carrier in record.text_carriers),
+        "UTF-16LE 载体缺源字节偏移",
+    )
+    row = next(iter(window._row_records))
+    window.tree.selection_set(row)
+    window.tree.event_generate("<<TreeviewSelect>>", when="tail")
+    _wait_for(
+        app,
+        lambda: "utf-16-le" in window.details.get("1.0", "end-1c"),
+        "UTF-16LE 编码证据展示",
+        errors,
+    )
+    destination = fixtures.root / "exports" / "save-utf16le.json"
+    with _dialog_response(saves.filedialog, "asksaveasfilename", str(destination)):
+        window.export_button.invoke()
+    _wait_for(
+        app,
+        lambda: destination.is_file() and "已导出" in str(window.status.cget("text")),
+        "UTF-16LE GUI 完整导出",
+        errors,
+    )
+    exported = _read_json(destination)
+    _require(exported["text_encoding"] == "utf-16-le", "导出丢失编码选择")
+    parsed = exported["files"][0]
+    _require(
+        parsed["raw_text"] == fixtures.save_utf16_text
+        and parsed["encoding"] == "utf-16-le",
+        "导出后重解析丢失 UTF-16LE 完整文本",
+    )
+    _require(
+        parsed["text_decoding"]["bom_hex"] == ""
+        and parsed["text_decoding"]["byte_roundtrip"],
+        "导出没有明确无 BOM 及字节可逆证据",
+    )
+    _require(
+        len(parsed["text_carriers"]) == 2 and len(parsed["codes"]) == 2,
+        "导出丢失 UTF-16LE 两条载体或码",
+    )
+    window.destroy()
+    reopened = saves.open_save_workspace(app, initial_path="", map_data=None)
+    owned.append(reopened)
+    _require(reopened.encoding_var.get() == "utf-16-le", "关闭重开丢失显式编码选择")
+    _require(
+        reopened.source_var.get() == str(fixtures.save_utf16), "关闭重开丢失存档来源"
     )
 
 
@@ -883,6 +1196,24 @@ def exercise_offline_workspaces(app: App) -> str:
     )
     _require(app.map_data is None, "离线验收必须在主地图载入前执行")
     fixtures = _create_fixtures()
+    inventory: dict[str, Any] = {
+        "schema_version": 1,
+        "input_kind": "explicitly-authored-synthetic-fixtures",
+        "root": str(fixtures.root),
+        "cases": [
+            {"name": name, "status": "not-run"}
+            for name in (
+                "external-id-full-records",
+                "direct-map-multiselect-json-tsv-md",
+                "pack-scope-real-query-handoff",
+                "save-independent-full-files",
+                "save-explicit-utf16le-no-bom",
+                "hotkeys-complete-static-projections",
+                "source-bytes-and-metadata-unchanged",
+                "owned-window-teardown",
+            )
+        ],
+    }
     owned: list[tk.Toplevel] = []
     state = app.state()
 
@@ -901,16 +1232,25 @@ def exercise_offline_workspaces(app: App) -> str:
         try:
             app.deiconify()
             app.lift()
-            _exercise_reference(app, fixtures, owned, errors)
-            _exercise_map_reference(app, fixtures, owned, errors)
-            _exercise_save(app, fixtures, owned, errors)
-            _exercise_hotkeys(app, fixtures, owned, errors)
-            for path, payload in fixtures.payloads.items():
-                _require(
-                    path.read_bytes() == payload
-                    and _identity(path) == fixtures.identities[path],
-                    f"源输入被修改: {path}",
-                )
+            for case, operation in zip(
+                inventory["cases"][:-2],
+                (
+                    _exercise_reference,
+                    _exercise_map_reference,
+                    _exercise_pack_handoff,
+                    _exercise_save,
+                    _exercise_utf16_save,
+                    _exercise_hotkeys,
+                ),
+                strict=True,
+            ):
+                case["status"] = "running"
+                try:
+                    operation(app, fixtures, owned, errors)
+                except Exception as exc:  # BROAD_EXCEPT_OK - persist the exact failed acceptance case before re-raising.
+                    case.update(status="failed", error=f"{type(exc).__name__}: {exc}")
+                    raise
+                case["status"] = "accepted"
         finally:
             for window in reversed(owned):
                 try:
@@ -921,16 +1261,56 @@ def exercise_offline_workspaces(app: App) -> str:
             try:
                 _pump_after_close(app, errors)
             finally:
+                input_errors: list[str] = []
+                for path, payload in fixtures.payloads.items():
+                    try:
+                        preserved = (
+                            path.read_bytes() == payload
+                            and _identity(path) == fixtures.identities[path]
+                        )
+                    except OSError as exc:
+                        input_errors.append(
+                            f"源输入无法复核: {path}: {type(exc).__name__}: {exc}"
+                        )
+                    else:
+                        if not preserved:
+                            input_errors.append(
+                                f"源输入字节或完整文件元数据被修改: {path}"
+                            )
+                inventory["cases"][-2]["status"] = (
+                    "failed" if input_errors else "accepted"
+                )
+                inventory["input_errors"] = input_errors
+                errors.extend(input_errors)
                 if state == "withdrawn":
                     app.withdraw()
                 elif state == "iconic":
                     app.iconify()
+                inventory["cases"][-1]["status"] = "failed" if errors else "accepted"
+                for case in inventory["cases"]:
+                    if case["status"] == "running":
+                        case["status"] = "failed"
+                inventory["callback_errors"] = list(errors)
+                inventory["accepted"] = sum(
+                    case["status"] == "accepted" for case in inventory["cases"]
+                )
+                inventory["failed"] = sum(
+                    case["status"] == "failed" for case in inventory["cases"]
+                )
+                inventory["not_run"] = sum(
+                    case["status"] == "not-run" for case in inventory["cases"]
+                )
+                (fixtures.root / "acceptance-inventory.json").write_text(
+                    json.dumps(inventory, ensure_ascii=False, indent=2) + "\n",
+                    encoding="utf-8",
+                )
         _raise_callback_errors(errors)
     return (
-        "offline-workspaces=reference/map-reference/save/hotkeys; offline-id-records=2; "
+        "offline-workspaces=reference/map-reference/pack-handoff/save/utf16-save/hotkeys; offline-id-records=2; "
         "offline-map-records=2; offline-map-filtered=1; "
         "offline-save-files=2; hotkeys-declared-bindings=2; hotkeys-projection=2x42; "
-        "offline-gui-exports=5; hotkeys-runtime-verified=False; "
+        "offline-selected-exports=json/tsv/md; offline-pack-handoffs=2; offline-utf16-carriers=2; "
+        "offline-gui-exports=9; offline-acceptance-cases=8; hotkeys-runtime-verified=False; "
         f"offline-artifacts={fixtures.root}"
     )
 

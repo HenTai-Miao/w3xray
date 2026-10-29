@@ -319,9 +319,25 @@ if (-not $Onefile) {
     }
 }
 $GuideLeaf = '"\u4f7f\u7528\u8bf4\u660e.md"' | ConvertFrom-Json
-$GuideSource = Join-Path $RepoRoot ("docs/usable-release-" + $Identity.version + ".md")
-Copy-Item -LiteralPath $GuideSource -Destination (Join-Path $OutputRoot $GuideLeaf)
-if (-not $Onefile) { Copy-Item -LiteralPath $GuideSource -Destination (Join-Path $AppDirectory $GuideLeaf) }
+$GuideRelative = "docs/usable-release-" + $Identity.version + ".md"
+$GuideSource = Join-Path $RepoRoot $GuideRelative
+if (-not (Test-Path -LiteralPath $GuideSource -PathType Leaf)) { throw "Current release usage document is missing." }
+# Preserve repository-relative documentation links inside the actual ZIP as well
+# as the delivery folder. The entry page links to the original, unchanged guide.
+$GuideText = "# GameXRay $($Identity.version)`n`n[$($GuideLeaf)]($GuideRelative)`n"
+$DocumentRoots = @($OutputRoot)
+if (-not $Onefile) { $DocumentRoots += $AppDirectory }
+foreach ($DocumentRoot in $DocumentRoots) {
+    $DocumentsTarget = Join-Path $DocumentRoot "docs"
+    $DataTarget = Join-Path $DocumentRoot "data"
+    if ((Test-Path -LiteralPath $DocumentsTarget) -or (Test-Path -LiteralPath $DataTarget)) {
+        throw "Refusing to replace existing release documentation."
+    }
+    Copy-Item -LiteralPath (Join-Path $RepoRoot "docs") -Destination $DocumentsTarget -Recurse
+    New-Item -ItemType Directory -Path $DataTarget | Out-Null
+    Copy-Item -LiteralPath (Join-Path $RepoRoot "data/field_metadata") -Destination $DataTarget -Recurse
+    [System.IO.File]::WriteAllText((Join-Path $DocumentRoot $GuideLeaf), $GuideText, [System.Text.UTF8Encoding]::new($false))
+}
 $SourceAfter = Get-ReleaseSourceSnapshot "source-after-files"
 if ($SourceBefore.sha256 -ne $SourceAfter.sha256) { throw "Source files changed during the release build; no release asset was published." }
 

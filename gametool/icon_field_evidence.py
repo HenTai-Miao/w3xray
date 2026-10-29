@@ -9,6 +9,7 @@ from functools import lru_cache
 from typing import Final, assert_never
 
 from .object_candidate_models import ObjectSourceKind
+from .object_layers import split_field_column
 
 
 class IconFieldDisposition(StrEnum):
@@ -139,6 +140,11 @@ def split_icon_field_values(
 
 
 def _canonical_key(key: str) -> str:
-    canonical = key.casefold().removeprefix("binary:").removeprefix("field:")
+    canonical = (
+        split_field_column(key)[0]
+        .casefold()
+        .removeprefix("binary:")
+        .removeprefix("field:")
+    )
     base_key, separator, level = canonical.rpartition(":")
     return base_key if separator and level.isdecimal() else canonical

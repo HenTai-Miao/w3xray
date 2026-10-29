@@ -10,6 +10,7 @@ class FieldEvidenceState(StrEnum):
     CONFIRMED = "confirmed"
     UNKNOWN = "unknown"
     CONFLICT = "conflict"
+    OVERRIDDEN = "overridden"
 
 
 class ObjectSourceKind(IntEnum):
@@ -34,6 +35,7 @@ class ObjectFieldValue:
     state: FieldEvidenceState = FieldEvidenceState.CONFIRMED
     diagnostic: str = ""
     encoded_evidence: str = ""
+    priority_override: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,3 +47,5 @@ class ObjectCandidate:
     ext: str
     fields: tuple[ObjectFieldValue, ...]
     refs: tuple[tuple[str, tuple[str, ...]], ...]
+    source: str = ""
+    priority_override: int | None = None

@@ -202,10 +202,13 @@ def fake_live(monkeypatch: pytest.MonkeyPatch):
     if sys.platform != "win32":
         pytest.skip("Windows module API is mocked on Windows")
     from gametool import hero_chain, live_inventory as live
+    from tests.test_live_process_images import snapshot_image
 
     data, _reader, _system, _hero, _other, offsets = _selection_memory(
         [(0x80000007, 0x5001), (0x80000008, 0x5002)]
     )
+    image, image_binding = snapshot_image(DLL_BASE)
+    data[DLL_BASE] = image
     for address, x, y, owner in (
         (0x20000000, 0.0, 2.25, 1),
         (0x20001000, -4.5, 0.0, 2),
@@ -236,7 +239,7 @@ def fake_live(monkeypatch: pytest.MonkeyPatch):
             "version": "1.27.0.52240",
             "arch": "x86",
             "engine": "classic",
-            "game_dll": {"base": DLL_BASE},
+            **image_binding,
         },
     )
     monkeypatch.setattr(
@@ -286,6 +289,62 @@ def test_live_report_keeps_every_selection_and_actual_opened_process_metadata(
         == 133700000000000000
     )
     assert "map_epoch" not in identity
+
+
+def test_unverified_process_image_cannot_promote_builtin_chain_fields(
+    fake_live, monkeypatch
+):
+    live, _data, _offsets = fake_live
+    version = dict(live.detect_version(123), image_verified=False)
+    monkeypatch.setattr(live, "detect_version", lambda _handle: version)
+    report = live.read_live("fixture", strategy="handle", verbose=False)
+    assert report["strategy_used"] == "handle" and report["selected_units"]
+    assert not report["selection_complete"]
+    assert report["offset_profile"]["state"] == "declared-layout-only"
+    for unit in report["selected_units"]:
+        assert unit["owner"] is None and unit["x"] is None and unit["y"] is None
+        assert not any(entry["state"] == "confirmed" for entry in unit["evidence"])
+
+
+@pytest.mark.parametrize("snapshot_state", ["same", "changed", "missing", "short"])
+def test_patch_attribution_requires_the_same_snapshot_image(
+    fake_live, monkeypatch, snapshot_state
+):
+    from tests.test_live_process_images import snapshot_image
+
+    live, data, _offsets = fake_live
+    profile = hc.build_profiles()["1.27.0.52240"]
+    monkeypatch.setattr(hc, "resolve_profile", lambda *_a: profile)
+    image, image_binding = snapshot_image(DLL_BASE, profile.fingerprint)
+    version = {**live.detect_version(123), **image_binding}
+    monkeypatch.setattr(live, "detect_version", lambda _h: version)
+    data[DLL_BASE] = image
+    for check in profile.checks:
+        changed = bytearray(check.expect)
+        changed[0] ^= 1
+        data[DLL_BASE + check.rva] = bytes(changed)
+    if snapshot_state == "changed":
+        altered = bytearray(image)
+        struct.pack_into("<I", altered, 0x88, 0x87654321)
+        data[DLL_BASE] = bytes(altered)
+    elif snapshot_state == "missing":
+        del data[DLL_BASE]
+    elif snapshot_state == "short":
+        data[DLL_BASE] = image[:63]
+    # Retain a candidate chain after failed validation to inspect its qualification.
+    monkeypatch.setattr(hc, "derive_offsets", lambda *_a, **_k: profile.handle_chain)
+    report = live.read_live("fixture", strategy="handle", verbose=False)
+    assert report["strategy_used"] == "handle"
+    assert report["version"]["snapshot_image_verified"] is (snapshot_state == "same")
+    if snapshot_state == "same":
+        assert report["offset_profile"]["state"] == "confirmed"
+        assert report["selection_complete"]
+        assert any("完整校验字节差异" in note for note in report["notes"])
+    else:
+        assert report["offset_profile"]["state"] == "declared-layout-only"
+        assert not report["selection_complete"]
+        assert any("快照 PE" in note for note in report["notes"])
+        assert not any("完整校验字节差异" in note for note in report["notes"])
 
 
 def test_live_empty_selection_never_falls_back_to_another_units_inventory(fake_live):
@@ -778,6 +837,7 @@ def _pending_resource_profile(monkeypatch, live):
             "engine": pending.engine,
             "arch": pending.arch,
             "game_dll": {"base": DLL_BASE},
+            "image_verified": True,
         },
     )
 

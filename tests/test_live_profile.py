@@ -267,18 +267,22 @@ class TestProfileVerification:
         info = inv.detect_version(object())
         assert info["game_dll"] is None
         assert info["modules_seen"] == ["notepad.exe"]
+        from tests.test_live_process_images import pe_fixture
+
+        image, _loaded, fingerprint = pe_fixture()
         dll = tmp_path / "Game.dll"
-        dll.write_bytes(b"MZ" + bytes(64))
+        dll.write_bytes(image)
         monkeypatch.setattr(
             inv,
             "enum_modules",
             lambda h: [
                 ("C:/x/notepad.exe", 0x400000, 0x10000),
-                (str(dll), 0x600000, 0x20000),
+                (str(dll), 0x600000, fingerprint.image_size),
             ],
         )
-        monkeypatch.setattr(inv, "read_file_version", lambda p: "1.27.0.52240")
-        monkeypatch.setattr(inv, "pe_machine", lambda p: 0x014C)
+        monkeypatch.setattr(
+            inv, "read_loaded_pe_header", lambda *args: inv.read_pe_image(dll).header
+        )
         info2 = inv.detect_version(object())
         assert info2["game_dll"] is not None
         assert "modules_seen" not in info2

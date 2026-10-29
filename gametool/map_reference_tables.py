@@ -15,6 +15,7 @@ from .knowledge_object_exports import _object_description, format_object_fields
 from .map_data import MapData
 from .map_reference_identity import MapObjectIdentity
 from .map_reference_records import demote_builtin_fields
+from .object_layers import binary_wts_member
 from .pack_query_objects import (
     OBJECT_TABLES,
     ObjectTable,
@@ -49,19 +50,21 @@ def map_object_tables(
     }
     identities = identities or {}
     selected = replace(md, objects=objects)
-    exported = _rows(format_object_fields(selected))
+    exported = _rows(format_object_fields(selected, include_evidence=True))
     header = exported[0]
     # Keep every original candidate beside its materialized value. In particular,
     # a confirmed but overridden value is still source evidence, not disposable.
     extra_header = (
-        "原始值",
-        "值来源",
-        "来源优先级",
-        "证据角色",
         "二进制类型",
         "等级",
+        "数据列",
         "对象序号",
         "字段序号",
+        "字节偏移",
+        "结束偏移",
+        "原始字节Base64",
+        "结束标记",
+        "对象扩展整数",
     )
     added_header = tuple(
         name
@@ -71,39 +74,13 @@ def map_object_tables(
     full_header = (*header, *added_header, *extra_header)
     rows = [full_header]
     rows.extend(
-        (*row, *("" for _ in added_header), "", "", "", "物化字段", "", "", "", "")
-        for row in exported[1:]
+        (*row, *("" for _ in (*added_header, *extra_header))) for row in exported[1:]
     )
     # Exported rows are already envelope-encoded. Additional original rows pass
     # through the same formatter once, before the shared schema decodes them.
     original_rows: list[tuple[str, ...]] = []
     for category, bucket in objects.items():
         for obj in bucket:
-            blockers = frozenset(obj.field_blockers)
-            for evidence in obj.field_evidence:
-                state = evidence.state.value
-                if state != "confirmed" and evidence not in blockers:
-                    state = "overridden"
-                values = {
-                    "分类": category,
-                    "ID": obj.obj_id,
-                    "名称": obj.name,
-                    "字段键": evidence.key,
-                    "字段名": evidence.label,
-                    "值": evidence.value,
-                    "来源": evidence.source,
-                    "证据状态": state,
-                    "值类型": evidence.value_type,
-                    "编码证据": evidence.encoded_evidence,
-                    "诊断": evidence.diagnostic,
-                    "原始值": evidence.source_value,
-                    "值来源": evidence.value_source,
-                    "来源优先级": str(evidence.source_priority),
-                    "证据角色": "原始候选",
-                }
-                original_rows.append(
-                    tuple(values.get(name, "") for name in full_header)
-                )
             declared = identities.get((category, obj.obj_id), MapObjectIdentity())
             for binary in declared.binary_fields:
                 values = {
@@ -122,8 +99,14 @@ def map_object_tables(
                     "证据角色": "二进制原始修改",
                     "二进制类型": str(binary.storage_type),
                     "等级": str(binary.level),
+                    "数据列": str(binary.data_pointer),
                     "对象序号": str(binary.object_ordinal),
                     "字段序号": str(binary.field_ordinal),
+                    "字节偏移": str(binary.offset),
+                    "结束偏移": str(binary.end_offset),
+                    "原始字节Base64": binary.raw_bytes_base64,
+                    "结束标记": str(binary.trailer),
+                    "对象扩展整数": json.dumps(binary.extra_ints),
                 }
                 original_rows.append(
                     tuple(values.get(name, "") for name in full_header)
@@ -196,24 +179,30 @@ def bind_map_record(
             source_id = "builtin:base_objects"
         elif provenance == "base names":
             source_id = "builtin:base_names"
+        elif provenance in sources:
+            source_id = provenance
         else:
             source_id = members.get(provenance.replace("/", "\\").casefold(), scope)
         extras = dict(value.extras)
-        dependency = (
-            extras.get("值来源", "").split("#", 1)[0].replace("/", "\\").casefold()
-        )
-        if dependency in members:
-            dependencies.append(members[dependency])
+        for location in extras.get("值来源", "").splitlines():
+            dependency = location.split("#", 1)[0]
+            if dependency in sources:
+                dependencies.append(dependency)
+            normalized = dependency.replace("/", "\\").casefold()
+            if normalized in members:
+                dependencies.append(members[normalized])
         if (
             extras.get("证据角色") == "二进制原始修改"
             and value.value.startswith("TRIGSTR_")
             and value.value.removeprefix("TRIGSTR_").isdecimal()
         ):
-            wts_member = value.provenance.rsplit(".", 1)[0] + ".wts"
+            wts_member = binary_wts_member(value.provenance)
             dependency = wts_member.replace("/", "\\").casefold()
             if dependency in members:
                 dependencies.append(members[dependency])
         state = extras.get("证据状态") or "confirmed"
+        if state == "overridden" and extras.get("来源优先级") in {"11", "12"}:
+            state = "overridden-campaign"
         if extras.get("证据角色") == "二进制原始修改":
             state = "raw-binary-evidence"
         values.append(

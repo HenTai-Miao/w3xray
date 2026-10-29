@@ -18,12 +18,16 @@ import sys
 from gametool.bounded_file import read_bounded_regular_file, sha256_regular_file
 from gametool.pack_query_options import parse_query_limit
 from gametool.save_codes import (
-    decode_save_text,
     extract_save_codes_bytes,
     extract_save_text_carriers,
 )
 from gametool.script_sources import script_language
 from gametool.save_source_paths import iter_save_source_files, save_source_path_error
+from gametool.save_text_encoding import (
+    SAVE_TEXT_ENCODINGS,
+    inspect_save_text,
+    normalize_save_text_encoding,
+)
 
 __all__ = ("run_save_code_cli",)
 
@@ -83,14 +87,25 @@ def run_save_code_cli(argv: tuple[str, ...]) -> int:
     parser.add_argument(
         "--json", action="store_true", help="完整载体/候选/原始文本/字节偏移与诊断"
     )
+    parser.add_argument(
+        "--text-encoding",
+        "--encoding",
+        type=normalize_save_text_encoding,
+        choices=SAVE_TEXT_ENCODINGS,
+        default="auto",
+        help="文件/标准输入的文本编码；auto 不猜测无 BOM UTF-16，可明确选择 utf-16-le/utf-16-be",
+    )
     args = parser.parse_args(argv)
     pack = args.pack
     if (pack is not None) == (args.text is not None or args.stdin):
         parser.error("请指定一个目录/文件，或使用 --text/--stdin；三种来源只能选择一种")
+    if args.text is not None and args.text_encoding not in ("auto", "utf-8"):
+        parser.error("--text 已是 Unicode 文本；编码选项用于文件或 --stdin 原始字节")
     found = []
     carriers = []
     diagnostics: list[str] = []
     identities: list[tuple[str, str, os.stat_result, str]] = []
+    source_records: list[tuple[str, dict[str, object]]] = []
     scanned = 0
     if pack is not None:
         sources: list[tuple[str, str | None, bytes | None]] = [
@@ -107,6 +122,8 @@ def run_save_code_cli(argv: tuple[str, ...]) -> int:
         else:
             stream = getattr(sys.stdin, "buffer", sys.stdin)
             content = stream.read()
+            if isinstance(content, str) and args.text_encoding not in ("auto", "utf-8"):
+                parser.error("标准输入未提供原始字节；无法按指定编码重新解释已解码文本")
             inline_bytes = (
                 content.encode("utf-8") if isinstance(content, str) else content
             )
@@ -131,11 +148,24 @@ def run_save_code_cli(argv: tuple[str, ...]) -> int:
             diagnostics.append(f"{rel}: {exc}")
             continue
         scanned += 1
-        decoded = decode_save_text(payload)
-        if decoded is None:
-            diagnostics.append(f"{rel}: 未识别完整文本编码；未替换或丢失源字节")
+        decoded = inspect_save_text(payload, args.text_encoding)
+        source_records.append(
+            (
+                rel,
+                {
+                    "source": rel,
+                    "size": len(payload),
+                    "sha256": hashlib.sha256(payload).hexdigest(),
+                    "raw_hex": payload.hex(),
+                    "raw_text": decoded.text,
+                    "text_decoding": decoded.to_dict(payload),
+                },
+            )
+        )
+        if decoded.text is None:
+            diagnostics.extend(f"{rel}: {note}" for note in decoded.diagnostics)
             continue
-        text, encoding, bom = decoded
+        text, encoding, bom = decoded.text, decoded.encoding, decoded.bom_bytes
         lua = script_language(rel)
         carriers.extend(
             extract_save_text_carriers(
@@ -148,7 +178,9 @@ def run_save_code_cli(argv: tuple[str, ...]) -> int:
                 byte_source=payload,
             )
         )
-        hits = extract_save_codes_bytes(payload, source=rel, lua=lua)
+        hits = extract_save_codes_bytes(
+            payload, source=rel, lua=lua, text_encoding=args.text_encoding
+        )
         for sc in hits:
             found.append((rel, sc))
     unstable: set[str] = set()
@@ -168,6 +200,7 @@ def run_save_code_cli(argv: tuple[str, ...]) -> int:
             diagnostics.append(f"{rel}: 来源在交付前改变；未交付旧读取结果")
     found = [(rel, code) for rel, code in found if rel not in unstable]
     carriers = [carrier for carrier in carriers if carrier.source not in unstable]
+    source_records = [entry for entry in source_records if entry[0] not in unstable]
     diagnostics.extend(
         f"{carrier.source}:{carrier.line}: {note}"
         for carrier in carriers
@@ -191,6 +224,8 @@ def run_save_code_cli(argv: tuple[str, ...]) -> int:
                     "omitted": len(found) - len(shown),
                     "codes": [sc.to_dict() for _rel, sc in shown],
                     "text_carriers": [carrier.to_dict() for carrier in carriers],
+                    "text_encoding": args.text_encoding,
+                    "sources": [record for _rel, record in source_records],
                     "diagnostics": diagnostics,
                     "map_validation": "not_performed",
                 },

@@ -79,9 +79,9 @@ def _binary_object(
     return struct.pack("<ii", 2, 0) + struct.pack("<i", 1) + obj
 
 
-def test_empty_binary_mod_does_not_evict_base_inherited_value() -> None:
-    # 空字符串 mod 无信息量，却会以自定义身份驱逐同名继承值
-    # （uhpm="" 清掉基础生命上限）；应与文本/SLK 的空值过滤口径一致。
+def test_empty_binary_mod_retains_explicit_override_without_numeric_fallback() -> None:
+    # A binary string-empty modification is encoded evidence even for a numeric
+    # metadata role. Preserve it; never invent the lower-layer numeric value.
     archive = FakeArchive(
         {"war3map.w3u": _binary_object("hfoo", "H001", (("uhpm", ""),))}
     )
@@ -91,7 +91,12 @@ def test_empty_binary_mod_does_not_evict_base_inherited_value() -> None:
         md, archive, {}, base_objects={"hfoo": ("单位", (("生命上限", "420"),))}
     )
 
-    assert dict(md.obj_index["H001"].fields)["生命上限"] == "420"
+    item = md.obj_index["H001"]
+    assert item.field_values["uhpm"] == ""
+    assert {(row.value, row.source) for row in item.field_evidence} == {
+        ("", "war3map.w3u"),
+        ("420", "base:hfoo"),
+    }
 
 
 def test_text_and_slk_values_resolve_wts_and_westring_before_storage() -> None:

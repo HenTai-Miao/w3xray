@@ -99,6 +99,7 @@ tests/quality_audit_gap_paths.py
 tests/real_map_text_acceptance.py
 tests/retained_integrity_fixture.py
 tests/save_structure_fixture.py
+tests/skin_layers_fixture.py
 tests/source_parent_swap_fixture.py
 tests/symlink_capability.py
 tests/test_acceptance_requested_scope.py
@@ -154,6 +155,7 @@ tests/test_batch_state_reports.py
 tests/test_batch_status.py
 tests/test_blp.py
 tests/test_campaign.py
+tests/test_campaign_object_inheritance.py
 tests/test_campaign_shared_object_identity.py
 tests/test_campaign_sources.py
 tests/test_campaign_spatial_diagnostics.py
@@ -170,6 +172,7 @@ tests/test_cli_audit.py
 tests/test_cli_options.py
 tests/test_cli_structure.py
 tests/test_cli_terrain.py
+tests/test_client_object_cache_inputs.py
 tests/test_client_object_data.py
 tests/test_client_resource_assets.py
 tests/test_codes.py
@@ -207,6 +210,7 @@ tests/test_description_cache_retained_integrity_bounds.py
 tests/test_description_cache_retained_report_relations.py
 tests/test_dev_test.py
 tests/test_dev_test_cache_isolation.py
+tests/test_dev_test_temp_isolation.py
 tests/test_diagnostics.py
 tests/test_dist_build.py
 tests/test_doo.py
@@ -223,6 +227,7 @@ tests/test_extraction_diagnostics.py
 tests/test_extraction_ledger.py
 tests/test_extraction_profile.py
 tests/test_field_meta.py
+tests/test_field_metadata_generation.py
 tests/test_fields.py
 tests/test_full_input_boundaries.py
 tests/test_game_data_inventory.py
@@ -258,6 +263,7 @@ tests/test_gui_pack_query_memo.py
 tests/test_gui_pane_state.py
 tests/test_gui_preplaced.py
 tests/test_gui_reference_catalog.py
+tests/test_gui_reference_selection.py
 tests/test_gui_reports.py
 tests/test_gui_scroll.py
 tests/test_gui_source_browser_worker.py
@@ -321,11 +327,13 @@ tests/test_knowledge_results.py
 tests/test_live_cli.py
 tests/test_live_field_evidence.py
 tests/test_live_handle_chain.py
+tests/test_live_handle_validation.py
 tests/test_live_icon_paths.py
 tests/test_live_inventory_chain.py
 tests/test_live_inventory_names_roundtrip.py
 tests/test_live_object_dump.py
 tests/test_live_owned_units.py
+tests/test_live_process_images.py
 tests/test_live_profile.py
 tests/test_live_profile_validation.py
 tests/test_live_report.py
@@ -362,6 +370,7 @@ tests/test_near_region_completeness.py
 tests/test_object_candidate_collection.py
 tests/test_object_candidate_merge.py
 tests/test_object_code_token_boundaries.py
+tests/test_object_export_coverage.py
 tests/test_object_extraction_integrity.py
 tests/test_object_field_codes_complete.py
 tests/test_object_filter.py
@@ -369,6 +378,7 @@ tests/test_object_id_summary.py
 tests/test_object_materialization.py
 tests/test_object_pipeline.py
 tests/test_object_pipeline_priority.py
+tests/test_object_skin_layers.py
 tests/test_object_text_identity.py
 tests/test_object_text_index.py
 tests/test_object_text_pipeline.py
@@ -470,6 +480,7 @@ tests/test_save_gamecache.py
 tests/test_save_review_regressions.py
 tests/test_save_structure_integration.py
 tests/test_save_text_carriers.py
+tests/test_save_text_encoding.py
 tests/test_save_workspace.py
 tests/test_save_workspace_logic.py
 tests/test_save_workspace_review.py
@@ -548,6 +559,7 @@ tests/test_ui_text_report.py
 tests/test_w3i.py
 tests/test_w3i_metadata.py
 tests/test_w3obj.py
+tests/test_w3obj_evidence.py
 tests/test_w3world.py
 tests/test_war3_encoding.py
 tests/test_wct.py

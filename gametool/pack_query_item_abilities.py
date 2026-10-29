@@ -6,6 +6,7 @@ import re
 
 from .pack_query_objects import valid_object_code
 from .pack_query_field_evidence import ObjectField as AbilityField, field_record
+from .object_layers import split_field_column
 
 _ATTRIBUTES = {"Istr": "力量", "Iagi": "敏捷", "Iint": "智力"}
 _ATTRIBUTE = re.compile(r"(Istr|Iagi|Iint)(?::([0-9]+)|([0-9]+))?\Z")
@@ -30,13 +31,15 @@ class AbilityLink:
 
 
 def _summaries(ability: AbilityEvidence) -> tuple[str, ...]:
-    candidates: dict[tuple[str, str, str], str] = {}
+    candidates: dict[tuple[str, str, str, str], str] = {}
     levels: dict[str, set[str]] = {}
-    values: dict[tuple[str, str], set[str]] = {}
+    values: dict[tuple[str, str, str], set[str]] = {}
     for row in ability.fields:
         if not row.confirmed:
             continue
-        match = _ATTRIBUTE.fullmatch(row.key)
+        key, raw_column = split_field_column(row.key)
+        column = "" if raw_column is None else raw_column
+        match = _ATTRIBUTE.fullmatch(key)
         if match is None:
             continue
         value = row.value.strip().lstrip("'").strip()
@@ -45,23 +48,26 @@ def _summaries(ability: AbilityEvidence) -> tuple[str, ...]:
         field = match.group(1)
         raw_level = match.group(2) or match.group(3) or ""
         level = raw_level.lstrip("0") or ("0" if raw_level else "")
-        candidates.setdefault((field, level, value), row.key)
+        candidates.setdefault((field, level, column, value), row.key)
         levels.setdefault(field, set()).add(level)
-        values.setdefault((field, level), set()).add(value)
+        values.setdefault((field, level, column), set()).add(value)
     field_order = {field: index for index, field in enumerate(_ATTRIBUTES)}
     ordered = sorted(
-        candidates, key=lambda key: (field_order[key[0]], len(key[1]), key[1])
+        candidates,
+        key=lambda key: (field_order[key[0]], len(key[1]), key[1], len(key[2]), key[2]),
     )
     output: list[str] = []
-    for field, level, value in ordered:
+    for field, level, column, value in ordered:
         prefix = "" if value.startswith(("+", "-")) else "+"
         summary = prefix + value + " " + _ATTRIBUTES[field]
         if (
             level not in ("", "1")
             or len(levels[field]) > 1
-            or len(values[field, level]) > 1
+            or len(values[field, level, column]) > 1
+            or column
         ):
-            summary += f"（技能 [{ability.code}]，等级 {level or '未记录'}，字段 {candidates[field, level, value]}）"
+            column_label = f"，数据列 {column}" if column else ""
+            summary += f"（技能 [{ability.code}]，等级 {level or '未记录'}{column_label}，字段 {candidates[field, level, column, value]}）"
         output.append(summary)
     return tuple(output)
 

@@ -11,6 +11,12 @@ from pathlib import Path
 
 from .csv_fields import full_csv_fields
 from .pack_query_objects import ObjectTable, object_field_table, object_table
+from .object_export_coverage import (
+    OBJECT_COVERAGE_FILE,
+    OBJECT_COVERAGE_COLUMN,
+    ObjectExportCoverage,
+    object_export_coverage_bytes,
+)
 from .reference_models import ReferenceSource
 
 
@@ -33,6 +39,7 @@ class PackReferenceSources:
         self.sources: dict[str, ReferenceSource] = {}
         self.diagnostics: list[str] = []
         self.tables: dict[Path, ObjectTable] = {}
+        self.coverages: dict[Path, ObjectExportCoverage | None] = {}
 
     def _clean(self, text: str) -> str:
         # Reference evidence keeps complete cells, including color codes/BOMs.
@@ -75,16 +82,40 @@ class PackReferenceSources:
             if table
             else object_field_table(tuple(rows))
         )
+        readable = payload is not None and not problems
+        coverage = self._object_coverage(pack)
+        if coverage is not None:
+            problems.extend(coverage.for_table(table))
+        elif OBJECT_COVERAGE_COLUMN in parsed.rows[0]:
+            problems.append(
+                f"表头声明的 {OBJECT_COVERAGE_FILE} 未记录；来源完整性未确认。"
+            )
         result = replace(
             parsed,
             diagnostics=(*parsed.diagnostics, *problems),
-            readable=payload is not None and not problems,
+            readable=readable,
         )
         self.tables[path] = result
         self.diagnostics.extend(f"{path}: {note}" for note in result.diagnostics)
         return result
 
-    def _read(self, path: Path, pack: Path) -> tuple[bytes | None, str]:
+    def _object_coverage(self, pack: Path) -> ObjectExportCoverage | None:
+        if pack not in self.coverages:
+            payload, error = self._read(
+                pack / OBJECT_COVERAGE_FILE, pack, optional=True
+            )
+            self.coverages[pack] = (
+                object_export_coverage_bytes(payload)
+                if payload is not None
+                else ObjectExportCoverage((), (("", error),))
+                if error
+                else None
+            )
+        return self.coverages[pack]
+
+    def _read(
+        self, path: Path, pack: Path, *, optional: bool = False
+    ) -> tuple[bytes | None, str]:
         try:
             relative = path.relative_to(pack)
             current = pack
@@ -115,7 +146,12 @@ class PackReferenceSources:
             return payload, ""
         except FileNotFoundError:
             self.snapshots[path] = _Snapshot(path, None, b"")
-            return None, "未记录此表；可用已确认字段继续检索，或重新完整导出知识包。"
+            return (
+                None,
+                ""
+                if optional
+                else "未记录此表；可用已确认字段继续检索，或重新完整导出知识包。",
+            )
         except OSError as exc:
             return None, f"读取失败: {exc}；可检查目录或重新导出知识包。"
 

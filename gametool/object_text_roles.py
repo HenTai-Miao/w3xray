@@ -6,6 +6,8 @@ import re
 from dataclasses import dataclass
 from typing import Final
 
+from .object_layers import split_field_column
+
 
 @dataclass(frozen=True, slots=True)
 class TextRoleMatch:
@@ -139,7 +141,12 @@ def classify_text_field(
 
 
 def _key_and_level(key: str, label: str) -> tuple[str, int | None]:
-    normalized = key.casefold().removeprefix("binary:").removeprefix("field:")
+    normalized = (
+        split_field_column(key)[0]
+        .casefold()
+        .removeprefix("binary:")
+        .removeprefix("field:")
+    )
     base, separator, suffix = normalized.rpartition(":")
     if separator and suffix.isdecimal():
         return base, int(suffix)

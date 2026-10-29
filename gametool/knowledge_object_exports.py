@@ -9,14 +9,26 @@ from .api import GameObject, MapData
 from .batch_tsv import format_tsv_rows
 from .knowledge_io import safe_filename, tsv, write_text
 from .object_candidate_models import FieldEvidenceState
+from .object_export_coverage import OBJECT_COVERAGE_COLUMN
 from .map_data import GameObjectFieldEvidence
+from .pack_query_objects import OBJECT_TABLES
 
 
-def write_object_ids(md: MapData, out_dir: str) -> int:
-    """Write per-category object ID TSV files."""
+def write_object_ids(
+    md: MapData, out_dir: str, *, coverage_required: bool = False
+) -> int:
+    """Write every selected category, including explicit header-only empty tables.
+
+    Knowledge-pack composition also writes the source coverage table, so a
+    partial parser result is never certified complete by these empty rows.
+    """
     count = 0
-    for category, objects in sorted(md.objects.items()):
-        rows = [("分类", "ID", "10进制", "基础ID", "名称", "自定义", "说明")]
+    for category in sorted(set(OBJECT_TABLES).union(md.objects)):
+        objects = md.objects.get(category, ())
+        header = ("分类", "ID", "10进制", "基础ID", "名称", "自定义", "说明")
+        rows: list[tuple[str, ...]] = [
+            (*header, OBJECT_COVERAGE_COLUMN) if coverage_required else header
+        ]
         for obj in sorted_unique_objects(objects):
             rows.append(
                 (
@@ -25,7 +37,7 @@ def write_object_ids(md: MapData, out_dir: str) -> int:
                     str(obj.decimal),
                     obj.base_id,
                     obj.name,
-                    "是" if obj.is_custom else "否",
+                    ("是" if obj.is_custom else "否") if obj.base_id else "",
                     _object_description(obj),
                 )
             )
@@ -114,9 +126,11 @@ def format_object_text_icons(md: MapData) -> str:
     return "\n".join(rows) + "\n"
 
 
-def format_object_fields(md: MapData) -> str:
-    """Return every materialized object field and its winning source as TSV."""
-    detailed = any(
+def format_object_fields(
+    md: MapData, *, include_evidence: bool = False, coverage_required: bool = False
+) -> str:
+    """Export current fields and retain lower layers as non-current evidence."""
+    detailed = include_evidence or any(
         row.encoded_evidence or row.state is not FieldEvidenceState.CONFIRMED
         for obj in _all_objects(md)
         for row in obj.field_evidence
@@ -130,11 +144,26 @@ def format_object_fields(md: MapData) -> str:
             "字段名",
             "值",
             "来源",
-            *(("证据状态", "值类型", "编码证据", "诊断") if detailed else ()),
+            *(
+                (
+                    "证据状态",
+                    "值类型",
+                    "编码证据",
+                    "诊断",
+                    "原始值",
+                    "值来源",
+                    "来源优先级",
+                    "证据角色",
+                )
+                if detailed
+                else ()
+            ),
+            *((OBJECT_COVERAGE_COLUMN,) if coverage_required else ()),
         )
     ]
     for obj in _all_objects(md):
         evidence_index = _field_evidence_index(obj) if detailed else {}
+        selected_evidence: set[GameObjectFieldEvidence] = set()
         if obj.field_values:
             legacy_fields = tuple(obj.fields)
             for index, (key, value) in enumerate(obj.field_values.items()):
@@ -161,6 +190,11 @@ def format_object_fields(md: MapData) -> str:
                         ),
                     )
                 )
+                selected_evidence.update(
+                    _matching_field_evidence(
+                        obj, key, label or key, value, evidence_index
+                    )
+                )
         else:
             for label, value in obj.fields:
                 rows.append(
@@ -172,13 +206,17 @@ def format_object_fields(md: MapData) -> str:
                         label,
                         value,
                         "",
-                        *(("confirmed", "", "", "") if detailed else ()),
+                        *(
+                            ("confirmed", "", "", "", "", "", "", "物化字段")
+                            if detailed
+                            else ()
+                        ),
                     )
                 )
         if detailed:
             active = frozenset(obj.field_blockers)
             for row in obj.field_evidence:
-                if row.state is FieldEvidenceState.CONFIRMED:
+                if row in selected_evidence:
                     continue
                 rows.append(
                     (
@@ -193,6 +231,10 @@ def format_object_fields(md: MapData) -> str:
                         row.value_type,
                         row.encoded_evidence,
                         row.diagnostic,
+                        row.source_value,
+                        row.value_source,
+                        str(row.source_priority),
+                        "原始候选",
                     )
                 )
     return format_tsv_rows(rows)
@@ -217,10 +259,7 @@ def _field_extras(
     value: str,
     index: dict[tuple[str, str, str, str], list[GameObjectFieldEvidence]],
 ) -> tuple[str, ...]:
-    source = obj.field_sources.get(key, "")
-    evidence = index.get(
-        (source, value, "key", key), index.get((source, value, "label", label), [])
-    )
+    evidence = _matching_field_evidence(obj, key, label, value, index)
     encoded = [
         json.loads(row.encoded_evidence) for row in evidence if row.encoded_evidence
     ]
@@ -229,6 +268,27 @@ def _field_extras(
         " / ".join(dict.fromkeys(row.value_type for row in evidence if row.value_type)),
         json.dumps(encoded, ensure_ascii=True) if encoded else "",
         "",
+        "\n".join(dict.fromkeys(row.source_value for row in evidence)),
+        "\n".join(
+            dict.fromkeys(row.value_source for row in evidence if row.value_source)
+        ),
+        "\n".join(dict.fromkeys(str(row.source_priority) for row in evidence)),
+        "继承物化字段"
+        if any(row.source_priority == 12 for row in evidence)
+        else "物化字段",
+    )
+
+
+def _matching_field_evidence(
+    obj: GameObject,
+    key: str,
+    label: str,
+    value: str,
+    index: dict[tuple[str, str, str, str], list[GameObjectFieldEvidence]],
+) -> list[GameObjectFieldEvidence]:
+    source = obj.field_sources.get(key, "")
+    return index.get(
+        (source, value, "key", key), index.get((source, value, "label", label), [])
     )
 
 

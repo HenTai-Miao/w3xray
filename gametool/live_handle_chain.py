@@ -188,8 +188,8 @@ class ProfileFingerprint:
     """Game.dll PE 头三要素指纹 (学自 trainer GameProfile.fingerprint)。
 
     machine = PE Machine (0x14C x86 / 0x8664 x64), timestamp =
-    TimeDateStamp, image_size = SizeOfImage。把档案锚定到具体二进制,
-    防「版本号相同但 DLL 不同」的错配。
+    TimeDateStamp, image_size = SizeOfImage。核对档案的 PE 元数据;
+    三要素不是内容哈希, 匹配不能证明完整文件字节相同。
     """
 
     machine: int
@@ -318,10 +318,9 @@ def verify_profile(
     档案视为「无校验可做, 不拦截」。dll_fingerprint (来自磁盘 PE 头)
     提供时先比指纹三要素。返回 (是否通过, 失败描述列表, 运行时补丁差异列表)。
 
-    归因规则: 磁盘 PE 三要素与档案一致 = 同一个文件, 内存字节不同只可能
-    是平台加载后打的运行时补丁 (KK 类平台实证, 每局补的字节还可能不同),
-    这种差异进 patches 交调用方写进 notes 作证据, 不拦截; 指纹不符 = 版本
-    不明, text 差异硬拦截。
+    只有完整读取的不同字节才是差异证据。PE 三要素匹配时保留 KK 平台
+    运行时补丁的兼容路径, 差异交调用方完整披露; 元数据匹配不等于内容
+    哈希匹配, 不证明差异必由补丁造成。不可读/短读永远是校验失败。
     """
     fails: list[str] = []
     patches: list[str] = []
@@ -348,13 +347,20 @@ def verify_profile(
             fp_matched = True
     for c in profile.checks:
         got = reader.read(dll_base + c.rva, len(c.expect))
+        if got is None or len(got) != len(c.expect):
+            actual = "不可读" if got is None else f"短读 {len(got)} 字节 ({got.hex()})"
+            fails.append(
+                f"[{c.domain}] {c.label or 'check'}@0x{c.rva:X}: "
+                f"期望 {len(c.expect)} 字节 {c.expect.hex()}, 实得 {actual}"
+            )
+            continue
         if got != c.expect:
             entry = "[%s] %s@0x%X: 期望 %s, 实得 %s" % (
                 c.domain,
                 c.label or "check",
                 c.rva,
                 c.expect.hex(),
-                got.hex() if got else "不可读",
+                got.hex(),
             )
             if fp_matched:
                 patches.append(entry)
@@ -373,7 +379,7 @@ def resolve_profile(
     """
     v = str(version or "")
     hit = build_profiles().get(v)
-    if hit is not None:
+    if hit is not None and hit.engine == engine and hit.arch == arch:
         return hit
     if engine == "reforged" or arch == "x64":
         return LiveBuildProfile(
@@ -645,36 +651,93 @@ class _Table:
     bound: int
 
 
+def _handle_integer(
+    reader: MemoryReader,
+    address: int,
+    key: str,
+    evidence: dict[str, int],
+    diagnostics: list[str],
+) -> int | None:
+    evidence[key + "_address"] = address
+    raw = reader.read(address, 4)
+    if raw is None or len(raw) != 4:
+        detail = "" if raw is None else f" (短读 {len(raw)}/4 字节: {raw.hex()})"
+        diagnostics.append(f"句柄 {key} 不可读 @0x{address:X}{detail}")
+        return None
+    value = struct.unpack("<I", raw)[0]
+    evidence[key] = value
+    return value
+
+
 class HandleSystem:
     """句柄管理器双表: (低字, 高字) → 包装对象 → 真实对象指针。"""
 
     def __init__(self, reader: MemoryReader, dll_base: int, o: LiveHandleOffsets):
         self._r = reader
         self._o = o
-        hm = reader.u32(dll_base + o.handle_mgr_global_rva)
-        self.manager = hm if _HEAP_LO <= hm < _HEAP_HI else 0
-        self.tables = (
+        diagnostics: list[str] = []
+        evidence: dict[str, int] = {}
+        hm = _handle_integer(
+            reader,
+            dll_base + o.handle_mgr_global_rva,
+            "manager",
+            evidence,
+            diagnostics,
+        )
+        self.manager = hm if hm is not None and _HEAP_LO <= hm < _HEAP_HI else 0
+        if hm is not None and not self.manager:
+            diagnostics.append(f"句柄管理器地址无效: 0x{hm:X}")
+        self.tables: tuple[_Table, ...] = (
             _Table(0, 0),
             _Table(0, 0),
         )
         if self.manager:
-            self.tables = (
-                _Table(
-                    reader.u32(hm + o.hm_tableA_base_off),
-                    reader.u32(hm + o.hm_tableA_bound_off),
-                ),
-                _Table(
-                    reader.u32(hm + o.hm_tableB_base_off),
-                    reader.u32(hm + o.hm_tableB_bound_off),
-                ),
-            )
+            tables: list[_Table] = []
+            for selector, (base_off, bound_off) in enumerate(
+                (
+                    (o.hm_tableA_base_off, o.hm_tableA_bound_off),
+                    (o.hm_tableB_base_off, o.hm_tableB_bound_off),
+                )
+            ):
+                base = _handle_integer(
+                    reader,
+                    self.manager + base_off,
+                    f"table{selector}_base",
+                    evidence,
+                    diagnostics,
+                )
+                bound = _handle_integer(
+                    reader,
+                    self.manager + bound_off,
+                    f"table{selector}_bound",
+                    evidence,
+                    diagnostics,
+                )
+                table = _Table(base or 0, bound or 0)
+                tables.append(table)
+                if (
+                    base is not None
+                    and bound is not None
+                    and not self._valid_table(table)
+                ):
+                    diagnostics.append(
+                        f"句柄表 {selector} 地址/声明边界无效: base=0x{base:X}, bound={bound}"
+                    )
+            self.tables = tuple(tables)
+        self._initial_diagnostics = tuple(diagnostics)
+        self.live_diagnostics = self._initial_diagnostics
+        self.live_complete = False
+
+    @staticmethod
+    def _valid_table(table: _Table) -> bool:
+        return (
+            _HEAP_LO <= table.base < _HEAP_HI
+            and 0 < table.bound <= (_HEAP_HI - table.base) // 8
+        )
 
     @property
     def valid(self) -> bool:
-        return bool(self.manager) and all(
-            _HEAP_LO <= t.base < _HEAP_HI and 0 < t.bound <= (_HEAP_HI - t.base) // 8
-            for t in self.tables
-        )
+        return bool(self.manager) and all(self._valid_table(t) for t in self.tables)
 
     def resolve(self, lo: int, hi: int) -> int | None:
         """句柄对 → 对象地址; 失败返回 None。"""
@@ -685,20 +748,36 @@ class HandleSystem:
         self, lo: int, hi: int
     ) -> tuple[int | None, dict[str, int], tuple[str, ...]]:
         """Resolve a handle without treating unreadable validation bytes as zero."""
+        return self._resolve_evidence(lo, hi)
+
+    def _resolve_evidence(
+        self, lo: int, hi: int | None, entry: bytes | None = None
+    ) -> tuple[int | None, dict[str, int], tuple[str, ...]]:
         o = self._o
         r = self._r
-        table = self.tables[(lo >> 0x1F) & 1]
+        selector = (lo >> 0x1F) & 1
+        table = self.tables[selector]
         index = lo & 0x7FFFFFFF
-        evidence = {"handle_lo": lo, "handle_hi": hi, "table_index": index}
+        evidence = {"handle_lo": lo, "table_selector": selector, "table_index": index}
+        if hi is not None:
+            evidence["handle_hi"] = hi
+        if not self.manager or not self._valid_table(table):
+            return None, evidence, self._initial_diagnostics or ("句柄表未确认可读",)
         if index >= table.bound:
             return None, evidence, (f"句柄表索引 {index} 超出声明边界 {table.bound}",)
-        slot = table.base + index * 8 + 4
-        evidence["wrapper_pointer_address"] = slot
-        raw = r.read(slot, 4)
-        if raw is None:
-            return None, evidence, (f"句柄包装指针不可读 @0x{slot:X}",)
-        wrapper = struct.unpack("<I", raw)[0]
+        slot = table.base + index * 8
+        evidence["entry_address"] = slot
+        evidence["entry_flag_address"] = slot
+        evidence["wrapper_pointer_address"] = slot + 4
+        raw = r.read(slot, 8) if entry is None else entry
+        if raw is None or len(raw) != 8:
+            detail = "" if raw is None else f" (短读 {len(raw)}/8 字节: {raw.hex()})"
+            return None, evidence, (f"句柄表项不可读 @0x{slot:X}{detail}",)
+        flag, wrapper = struct.unpack("<II", raw)
+        evidence["entry_flag"] = flag
         evidence["wrapper_address"] = wrapper
+        if flag != 0xFFFFFFFE:
+            return None, evidence, (f"句柄表项未标记活动: 0x{flag:X} @0x{slot:X}",)
         if not (_HEAP_LO <= wrapper < _HEAP_HI):
             return None, evidence, (f"句柄包装地址无效: 0x{wrapper:X}",)
         values: dict[str, int] = {}
@@ -708,15 +787,10 @@ class HandleSystem:
             ("alive", o.wrapper_alive_off),
             ("object", o.wrapper_obj_off),
         ):
-            address = wrapper + offset
-            evidence[key + "_address"] = address
-            raw = r.read(address, 4)
-            if raw is None:
-                diagnostics.append(f"句柄包装 {key} 不可读 @0x{address:X}")
-            else:
-                values[key] = struct.unpack("<I", raw)[0]
-                evidence[key] = values[key]
-        if "generation" in values and values["generation"] != hi:
+            value = _handle_integer(r, wrapper + offset, key, evidence, diagnostics)
+            if value is not None:
+                values[key] = value
+        if hi is not None and "generation" in values and values["generation"] != hi:
             diagnostics.append(
                 f"句柄世代不符: 期望 0x{hi:X}, 实得 0x{values['generation']:X}"
             )
@@ -730,23 +804,64 @@ class HandleSystem:
     def live_objects(self):
         """枚举句柄表中所有存活对象地址 (单位/物品/UI 混在一起)。
 
-        无上限: 句柄表自身的 bound 就是完备边界, 走满为止。
+        无上限: 句柄表自身的 bound 就是完备边界, 走满为止。每个对象必须
+        具有活动表项、完整包装字段和一致的自身句柄对。保留所有失败诊断,
+        不将缺页/短读/过期句柄当作确认存活; live_complete 描述本次枚举。
         """
         o = self._o
         r = self._r
         found: list[int] = []
-        for table in self.tables:
-            if not table.base:
+        diagnostics = list(self._initial_diagnostics)
+        for selector, table in enumerate(self.tables):
+            if not self.manager or not self._valid_table(table):
                 continue
             for index in range(table.bound):
-                wrapper = r.u32(table.base + index * 8 + 4)
-                if not (_HEAP_LO <= wrapper < _HEAP_HI):
+                address = table.base + index * 8
+                entry = r.read(address, 8)
+                prefix = f"句柄表 {selector} 索引 {index} @0x{address:X}: "
+                if entry is None or len(entry) != 8:
+                    detail = (
+                        ""
+                        if entry is None
+                        else f" (短读 {len(entry)}/8 字节: {entry.hex()})"
+                    )
+                    diagnostics.append(prefix + "表项不可读" + detail)
                     continue
-                if r.u32(wrapper + o.wrapper_alive_off) != 0:
+                flag, wrapper = struct.unpack("<II", entry)
+                if flag != 0xFFFFFFFE and wrapper == 0:
                     continue
-                obj = r.u32(wrapper + o.wrapper_obj_off)
-                if _HEAP_LO <= obj < _HEAP_HI:
+                expected_lo = (selector << 31) | index
+                obj, evidence, issues = self._resolve_evidence(expected_lo, None, entry)
+                if obj is None:
+                    diagnostics.extend(prefix + issue for issue in issues)
+                    continue
+                pair_address = obj + o.entry_pair_off
+                pair = r.read(pair_address, 8)
+                if pair is None or len(pair) != 8:
+                    detail = (
+                        ""
+                        if pair is None
+                        else f" (短读 {len(pair)}/8 字节: {pair.hex()})"
+                    )
+                    diagnostics.append(
+                        prefix + f"对象自身句柄对不可读 @0x{pair_address:X}" + detail
+                    )
+                    continue
+                lo, hi = struct.unpack("<II", pair)
+                if lo != expected_lo:
+                    diagnostics.append(
+                        prefix + f"对象自身句柄回链不符 @0x{pair_address:X}: "
+                        f"期望 0x{expected_lo:X}, 实得 0x{lo:X}"
+                    )
+                if hi != evidence["generation"]:
+                    diagnostics.append(
+                        prefix + f"对象自身句柄世代不符 @0x{pair_address + 4:X}: "
+                        f"包装 0x{evidence['generation']:X}, 对象 0x{hi:X}"
+                    )
+                if lo == expected_lo and hi == evidence["generation"]:
                     found.append(obj)
+        self.live_diagnostics = tuple(diagnostics)
+        self.live_complete = not diagnostics
         return found
 
 

@@ -24,9 +24,9 @@ import ctypes
 import ctypes.wintypes as wt
 import json
 import math
+import ntpath
 import os
 from pathlib import Path
-import re
 import struct
 import sys
 import time
@@ -45,6 +45,7 @@ from .live_field_evidence import (
     reconcile_field_evidence,
 )
 from .live_profile_validation import LiveFieldLayout, field_layout_to_dict
+from .live_pe_image import PEImageError, pe_header_record, read_pe_header, read_pe_image
 from .static_numbers import format_number
 
 u32 = ctypes.windll.user32
@@ -211,11 +212,20 @@ _active_pid: dict[str, "int | None"] = {"pid": None}
 def _process_identity(handle):
     """进程 exe 绝对路径 (身份); 拿不到返回 None (fail-open)。"""
     try:
-        buf = ctypes.create_unicode_buffer(0x400)
-        if k32.K32GetModuleFileNameExW(handle, None, buf, 0x400):
-            return buf.value
+        function = k32.QueryFullProcessImageNameW
+        function.argtypes = [wt.HANDLE, wt.DWORD, wt.LPWSTR, ctypes.POINTER(wt.DWORD)]
+        function.restype = wt.BOOL
+        capacity = 260
+        while True:
+            buf = ctypes.create_unicode_buffer(capacity)
+            size = wt.DWORD(capacity)
+            if function(handle, 0, buf, ctypes.byref(size)):
+                return buf.value
+            if ctypes.get_last_error() != 122 or capacity == 0xFFFFFFFF:
+                break
+            capacity = min(capacity * 2, 0xFFFFFFFF)
     except Exception:
-        pass  # 376: psapi 缺失/权限不足 — 返回 None 由调用方 opened_path 分支披露
+        pass  # Native query unavailable/denied; the caller discloses missing identity.
     return None
 
 
@@ -376,65 +386,163 @@ class _MODULEINFO(ctypes.Structure):
     ]
 
 
-def enum_modules(h):
-    """枚举进程模块 -> [(路径, 基址, 镜像字节数)]。镜像大小用于量出扫描窗口。
+class ModuleEnumeration(list[tuple[str, int, int]]):
+    """Keep the historical list API, with complete enumeration diagnostics."""
 
-    先量后分: 第一趟拿 needed 字节数, 按量得大小精确分配再枚举, 不设
-    1024 之类的数量上限 (模块再多也全量); 列表增长时按新尺寸重试一趟。
-    """
-    psapi = ctypes.WinDLL("psapi")
-    needed = wt.DWORD()
-    if not psapi.EnumProcessModulesEx(
-        h, None, 0, ctypes.byref(needed), 0x03
-    ) and not psapi.EnumProcessModules(h, None, 0, ctypes.byref(needed)):
-        return []
-    arr_t = ctypes.c_void_p * (needed.value // ctypes.sizeof(ctypes.c_void_p) or 1)
-    arr = arr_t()
-    ok = psapi.EnumProcessModulesEx(
-        h, arr, ctypes.sizeof(arr), ctypes.byref(needed), 0x03
-    )
-    if not ok:
-        ok = psapi.EnumProcessModules(h, arr, ctypes.sizeof(arr), ctypes.byref(needed))
-    if not ok:
-        return []
-    count = needed.value // ctypes.sizeof(ctypes.c_void_p)
-    mods = []
-    buf = ctypes.create_unicode_buffer(2048)
-    mi = _MODULEINFO()
-    for i in range(count):
-        base = arr[i]
-        if not base:
-            continue
-        if psapi.GetModuleFileNameExW(h, ctypes.c_void_p(base), buf, 2048):
-            size = 0
-            if psapi.GetModuleInformation(
-                h, ctypes.c_void_p(base), ctypes.byref(mi), ctypes.sizeof(mi)
-            ):
-                size = int(mi.SizeOfImage)
-            mods.append((buf.value, base, size))
-    return mods
+    def __init__(self):
+        super().__init__()
+        self.complete = True
+        self.diagnostics: list[str] = []
+        self.identity_changed = False
+
+    def incomplete(self, message: str) -> None:
+        self.complete = False
+        self.diagnostics.append(message)
+
+
+def enum_modules(h):
+    """Grow from API byte counts; retain only the last confirmed bounded prefix."""
+    result = ModuleEnumeration()
+    opened_path = _process_identity(h)
+    opened_time = _process_creation_time(h)
+    handles: list[int] = []
+    unresolved_slots: list[int] = []
+    try:
+        psapi = ctypes.WinDLL("psapi", use_last_error=True)
+        common = [wt.HANDLE, ctypes.c_void_p, wt.DWORD, ctypes.POINTER(wt.DWORD)]
+        enum_calls = []
+        for name, extra in (
+            ("EnumProcessModulesEx", [wt.DWORD]),
+            ("EnumProcessModules", []),
+        ):
+            function = getattr(psapi, name, None)
+            if function is not None:
+                function.argtypes = common + extra
+                function.restype = wt.BOOL
+                enum_calls.append((function, bool(extra)))
+        psapi.GetModuleFileNameExW.argtypes = [
+            wt.HANDLE,
+            wt.HMODULE,
+            wt.LPWSTR,
+            wt.DWORD,
+        ]
+        psapi.GetModuleFileNameExW.restype = wt.DWORD
+        psapi.GetModuleInformation.argtypes = [
+            wt.HANDLE,
+            wt.HMODULE,
+            ctypes.POINTER(_MODULEINFO),
+            wt.DWORD,
+        ]
+        psapi.GetModuleInformation.restype = wt.BOOL
+
+        def enumerate_into(array, capacity):
+            errors = []
+            for function, extended in enum_calls:
+                needed = wt.DWORD()
+                args = (h, array, capacity, ctypes.byref(needed))
+                if function(*args, 0x03) if extended else function(*args):
+                    return int(needed.value)
+                errors.append(str(ctypes.get_last_error()))
+            result.incomplete(
+                "模块枚举失败，保留已确认前缀 (WinError=" + "/".join(errors) + ")"
+            )
+            return None
+
+        pointer_bytes = ctypes.sizeof(ctypes.c_void_p)
+        # The Windows cb parameter is a DWORD; this is an ABI boundary, not a cap.
+        largest_capacity = 0xFFFFFFFF // pointer_bytes * pointer_bytes
+        needed = enumerate_into(None, 0)
+        capacity = max(pointer_bytes, needed or 0)
+        while needed is not None:
+            if needed % pointer_bytes or capacity > largest_capacity:
+                result.incomplete(f"模块枚举所需字节数无效或超出 DWORD 范围: {needed}")
+                break
+            try:
+                array = (ctypes.c_void_p * (capacity // pointer_bytes))()
+            except (MemoryError, OverflowError) as exc:
+                result.incomplete(f"模块缓冲区无法分配，保留已确认前缀: {exc}")
+                break
+            needed = enumerate_into(array, ctypes.sizeof(array))
+            if needed is None:
+                break
+            confirmed_count = min(needed, ctypes.sizeof(array)) // pointer_bytes
+            handles = [
+                int(array[index]) for index in range(confirmed_count) if array[index]
+            ]
+            unresolved_slots = [
+                index for index in range(confirmed_count) if not array[index]
+            ]
+            if needed % pointer_bytes:
+                result.incomplete(f"模块枚举字节数未按 HMODULE 对齐: {needed}")
+                break
+            if needed <= ctypes.sizeof(array):
+                break
+            capacity = max(needed, min(capacity * 2, largest_capacity))
+        for index in unresolved_slots:
+            result.incomplete(f"模块枚举第 {index + 1} 项为空，可能在枚举期间卸载")
+        for base in handles:
+            path_capacity = 260
+            while True:
+                buffer = ctypes.create_unicode_buffer(path_capacity)
+                copied = psapi.GetModuleFileNameExW(
+                    h, ctypes.c_void_p(base), buffer, path_capacity
+                )
+                if not copied:
+                    result.incomplete(
+                        f"模块 0x{base:X} 路径不可读 (WinError={ctypes.get_last_error()})"
+                    )
+                    break
+                if copied < path_capacity:
+                    module = _MODULEINFO()
+                    size = 0
+                    if psapi.GetModuleInformation(
+                        h,
+                        ctypes.c_void_p(base),
+                        ctypes.byref(module),
+                        ctypes.sizeof(module),
+                    ):
+                        if module.lpBaseOfDll == base:
+                            size = int(module.SizeOfImage)
+                        else:
+                            result.incomplete(f"模块 0x{base:X} 基址在枚举期间变化")
+                    if not size:
+                        result.incomplete(f"模块 0x{base:X} 镜像大小未确认")
+                    result.append((buffer.value, base, size))
+                    break
+                if path_capacity == 0xFFFFFFFF:
+                    result.incomplete(
+                        f"模块 0x{base:X} 路径超出 Windows DWORD 长度范围"
+                    )
+                    break
+                path_capacity = min(path_capacity * 2, 0xFFFFFFFF)
+    except (
+        OSError,
+        AttributeError,
+        TypeError,
+        ValueError,
+        MemoryError,
+        OverflowError,
+    ) as exc:
+        result.incomplete(f"模块枚举不完整: {type(exc).__name__}: {exc}")
+    current_path = _process_identity(h)
+    current_time = _process_creation_time(h)
+    if (
+        opened_path is not None
+        and current_path is not None
+        and ntpath.normcase(opened_path) != ntpath.normcase(current_path)
+    ) or (
+        opened_time is not None
+        and current_time is not None
+        and opened_time != current_time
+    ):
+        result.identity_changed = True
+        result.incomplete("模块枚举期间进程身份已变化，模块记录仅保留为诊断")
+    return result
 
 
 def read_file_version(path):
-    """VS_FIXEDFILEINFO -> 'a.b.c.d'; 失败返回 None。"""
-    try:
-        with open(path, "rb") as fh:
-            d = fh.read()
-    except OSError:
-        return None
-    pos = d.find(b"\xbd\x04\xef\xfe")
-    if pos < 0 or pos + 24 > len(d):
-        m = re.search(rb"(\d+\.\d+\.\d+\.\d+)", d)
-        return m.group(1).decode() if m else None
-    ms, ls = struct.unpack_from("<II", d, pos + 8)
-
-    def hi(v):
-        return (v >> 16) & 0xFFFF
-
-    def lo(v):
-        return v & 0xFFFF
-
-    return f"{hi(ms)}.{lo(ms)}.{hi(ls)}.{lo(ls)}"
+    """Return only a declared RT_VERSION / VS_VERSION_INFO fixed version."""
+    return read_pe_image(path).version
 
 
 # 最近一次 snapshot 里失败区域计数 (299=ERROR_PARTIAL_COPY 部分拷贝)。
@@ -467,54 +575,216 @@ def read_pe_fingerprint(path):
     """
     from gametool.live_handle_chain import ProfileFingerprint
 
-    try:
-        with open(path, "rb") as f:
-            d = f.read(4096)
-        e = struct.unpack_from("<I", d, 0x3C)[0]
-        if d[e : e + 4] != b"PE\0\0" or e + 24 + 64 > len(d):
-            return None
-        machine, _numsec, timestamp = struct.unpack_from("<HHI", d, e + 4)
-        image_size = struct.unpack_from("<I", d, e + 24 + 56)[0]
-        return ProfileFingerprint(
-            machine=machine, timestamp=timestamp, image_size=image_size
-        )
-    except Exception, struct.error:
-        return None
+    header = read_pe_image(path).header
+    return (
+        None
+        if header is None
+        else ProfileFingerprint(header.machine, header.timestamp, header.image_size)
+    )
 
 
 def pe_machine(path):
+    header = read_pe_image(path).header
+    return 0 if header is None else header.machine
+
+
+def read_loaded_pe_header(h, base, size=0):
+    """Read exact PE header ranges from the opened process; never load a DLL."""
+
+    def read_at(offset, length):
+        buffer = ctypes.create_string_buffer(length)
+        got = ctypes.c_size_t()
+        if not k32.ReadProcessMemory(
+            h, ctypes.c_void_p(base + offset), buffer, length, ctypes.byref(got)
+        ):
+            return None
+        return buffer.raw if got.value == length else None
+
     try:
-        with open(path, "rb") as fh:
-            d = fh.read(65536)  # PE 头可达 64KB (证书表前移时)
-        e = struct.unpack_from("<I", d, 0x3C)[0]
-        return struct.unpack_from("<H", d, e + 4)[0]
-    except OSError, struct.error:
-        return 0
+        return read_pe_header(read_at, size or (1 << 32))
+    except (
+        PEImageError,
+        OSError,
+        TypeError,
+        ValueError,
+        MemoryError,
+        OverflowError,
+        ctypes.ArgumentError,
+    ):
+        return None
+
+
+def read_loaded_pe_fingerprint(h, base, size=0):
+    from .live_handle_chain import ProfileFingerprint
+
+    header = read_loaded_pe_header(h, base, size)
+    return (
+        None
+        if header is None
+        else ProfileFingerprint(header.machine, header.timestamp, header.image_size)
+    )
+
+
+class _SYSTEM_INFO(ctypes.Structure):
+    _fields_ = [
+        ("processor", wt.DWORD),
+        ("page_size", wt.DWORD),
+        ("minimum_address", ctypes.c_void_p),
+        ("maximum_address", ctypes.c_void_p),
+        ("processor_mask", ctypes.c_size_t),
+        ("processor_count", wt.DWORD),
+        ("processor_type", wt.DWORD),
+        ("allocation_granularity", wt.DWORD),
+        ("processor_level", wt.WORD),
+        ("processor_revision", wt.WORD),
+    ]
+
+
+def process_scan_limit(version):
+    """Unknown architecture uses the host address range, never an assumed x86 cap."""
+    limit = 1 << (ctypes.sizeof(ctypes.c_void_p) * 8)
+    try:
+        system_info = _SYSTEM_INFO()
+        function = k32.GetNativeSystemInfo
+        function.argtypes = [ctypes.POINTER(_SYSTEM_INFO)]
+        function.restype = None
+        function(ctypes.byref(system_info))
+        if system_info.maximum_address:
+            limit = int(system_info.maximum_address) + 1
+    except AttributeError, OSError, TypeError, ValueError:
+        pass
+    return min(limit, 1 << 32) if version.get("arch") == "x86" else limit
+
+
+def _snapshot_image_binding(reader, base, module, version):
+    """Bind earlier image metadata to the exact snapshot used for all checks."""
+    from .live_handle_chain import ProfileFingerprint
+
+    diagnostics: list[str] = []
+    fingerprint = None
+    try:
+        expected = version.get("image_fingerprint")
+        extent = int(module.get("size") or 0) if isinstance(module, dict) else 0
+        if not extent and isinstance(expected, dict):
+            extent = int(expected.get("image_size") or 0)
+        header = read_pe_header(
+            lambda offset, size: reader.read(base + offset, size), extent or (1 << 32)
+        )
+        actual = {
+            "machine": header.machine,
+            "timestamp": header.timestamp,
+            "image_size": header.image_size,
+        }
+        version["snapshot_image_fingerprint"] = actual
+        if (
+            version.get("image_verified") is True
+            and expected == actual
+            and (not extent or extent == header.image_size)
+            and version.get("image_header") == pe_header_record(header)
+        ):
+            fingerprint = ProfileFingerprint(**actual)
+        else:
+            diagnostics.append(
+                "本次快照 PE 头与先前映像识别不一致或缺少完整绑定证据，不以旧指纹归因运行时补丁"
+            )
+    except (PEImageError, TypeError, ValueError, OverflowError) as exc:
+        diagnostics.append(f"本次快照 PE 头未完整确认: {exc}；不沿用先前映像指纹")
+    version["snapshot_image_verified"] = fingerprint is not None
+    version["snapshot_image_diagnostics"] = diagnostics
+    return fingerprint, diagnostics
 
 
 def detect_version(h):
     info: dict[str, object] = {
         "engine": "unknown",
         "version": None,
-        "arch": "x86",
+        "arch": "unknown",
         "game_dll": None,
+        "game_image": None,
+        "image_verified": False,
+        "image_fingerprint": None,
     }
     mods = enum_modules(h)
-    for path, base, size in mods:
-        name = os.path.basename(path).lower()
-        if name == "game.dll":
-            ver = read_file_version(path)
-            info["version"] = ver
-            info["arch"] = "x64" if pe_machine(path) == 0x8664 else "x86"
-            info["engine"] = "reforged" if info["arch"] == "x64" else "classic"
-            info["game_dll"] = {"base": base, "path": path, "size": size}
-            break
+    diagnostics: list[str] = list(getattr(mods, "diagnostics", ()))
+    info["modules_complete"] = getattr(mods, "complete", True)
+    info["diagnostics"] = diagnostics
+    dlls = [
+        module for module in mods if ntpath.basename(module[0]).casefold() == "game.dll"
+    ]
+    executables = [
+        module
+        for module in mods
+        if ntpath.basename(module[0]).casefold() == "war3.exe"
+        or (
+            ntpath.basename(module[0]).casefold().startswith("warcraft")
+            and module[0].casefold().endswith(".exe")
+        )
+    ]
+    selected = None
+    if len(dlls) == 1:
+        selected = dlls[0]
+    elif len(dlls) > 1:
+        diagnostics.append("多个 Game.dll 映像同时存在，未选择版本来源")
+    elif len(executables) == 1:
+        selected = executables[0]
+    else:
+        diagnostics.append("未找到唯一的游戏 PE 映像")
+    if selected is not None:
+        path, base, size = selected
+        image = {"base": base, "path": path, "size": size}
+        info["game_image"] = image
+        is_dll = ntpath.basename(path).casefold() == "game.dll"
+        if is_dll:
+            info["game_dll"] = image
+        before = read_loaded_pe_header(h, base, size)
+        disk = read_pe_image(path)
+        after = read_loaded_pe_header(h, base, size)
+        diagnostics.extend(f"{path}: {message}" for message in disk.diagnostics)
+        if before is not None and before == after:
+            info["arch"] = {0x14C: "x86", 0x8664: "x64"}.get(before.machine, "unknown")
+            fingerprint = {
+                "machine": before.machine,
+                "timestamp": before.timestamp,
+                "image_size": before.image_size,
+            }
+            info["loaded_image_fingerprint"] = fingerprint
+            info["engine"] = (
+                "reforged"
+                if info["arch"] == "x64"
+                else "classic"
+                if is_dll and info["arch"] == "x86"
+                else "unknown"
+            )
+            if disk.header is not None and (
+                disk.header == before
+                and (not size or size == before.image_size)
+                and not getattr(mods, "identity_changed", False)
+            ):
+                info["image_verified"] = True
+                info["image_fingerprint"] = fingerprint
+                info["image_header"] = pe_header_record(before)
+                info["version"] = disk.version
+            else:
+                diagnostics.append(
+                    f"{path}: 磁盘/内存 PE 元数据或枚举大小不一致，未采纳磁盘版本"
+                )
+        else:
+            diagnostics.append(
+                f"{path}: 内存 PE 头不可读或读取期间已变化，未采纳磁盘版本"
+            )
+        if info["arch"] == "unknown":
+            diagnostics.append("游戏架构尚未确认，不按 x86 限制扫描或套用经典布局")
     if info["game_dll"] is None:
         # 失败可见化 (学 trainer GameModuleNotFoundError 的状态精确区分
         # 「进程活着但已验证映像不可见」+ game_module_base 的模块枚举
         # 交叉验证): 给出实际枚举到的模块名, 排查不再两眼一抹黑。
-        info["modules_seen"] = [os.path.basename(p) for p, _b, _s in mods]  # 全量列出
-    if isinstance(info["version"], str) and info["version"] in OFFSET_REFERENCE:
+        info["modules_seen"] = [ntpath.basename(p) for p, _b, _s in mods]
+    if (
+        info["engine"] == "classic"
+        and info["arch"] == "x86"
+        and isinstance(info["version"], str)
+        and info["version"] in OFFSET_REFERENCE
+    ):
         info["known_offsets"] = OFFSET_REFERENCE[info["version"]]
     return info
 
@@ -562,11 +832,14 @@ def load_names(pack_dir, kind="物品"):
 
 def _icon_paths_from_pack(pack_dir):
     from .pack_query_cli import _field_rows
+    from .pack_query_field_evidence import field_record
 
     paths = {}
-    for c in _field_rows(Path(pack_dir))[1:]:
+    rows = _field_rows(Path(pack_dir))
+    for c in rows[1:]:
         if (
             len(c) >= 6
+            and field_record(c, rows[0], clean).confirmed
             and c[0] == "物品"
             and c[3].startswith(("display:icon", "base:art"))
             and c[5].lower().endswith(".blp")
@@ -1069,6 +1342,7 @@ class _LiveReport(TypedDict):
     capture_finished_at: str
     capture_consistency: str
     units_complete: bool
+    units_diagnostics: list[str]
     owned_units_complete: bool
     all_units_complete: bool
     resources_complete: bool
@@ -1472,6 +1746,7 @@ def _read_live(
         "capture_finished_at": "",
         "capture_consistency": "sequential-read",
         "units_complete": False,
+        "units_diagnostics": [],
         "owned_units_complete": False,
         "all_units_complete": False,
         "resources_complete": False,
@@ -1576,14 +1851,22 @@ def _read_live(
             )
         ver = detect_version(h)
         report["version"] = ver
+        version_diagnostics = ver.get("diagnostics")
+        if isinstance(version_diagnostics, list):
+            report["notes"].extend(str(message) for message in version_diagnostics)
         if verbose:
-            gd = ver.get("game_dll")
+            gd = ver.get("game_image") or ver.get("game_dll")
             gd_base = gd.get("base", 0) if isinstance(gd, dict) else 0
+            image_name = (
+                ntpath.basename(str(gd.get("path", "映像")))
+                if isinstance(gd, dict)
+                else "映像"
+            )
             print(
-                f"检测: {ver['engine']} {ver['version']} {ver['arch']} Game.dll@0x{gd_base:X}"
+                f"检测: {ver['engine']} {ver['version']} {ver['arch']} {image_name}@0x{gd_base:X}"
                 + (" [已知偏移表]" if ver.get("known_offsets") else "")
             )
-        max_addr = 0x7FFFFFFEFFFF if ver["arch"] == "x64" else 0x7FFF0000
+        max_addr = process_scan_limit(ver)
         regions, total = snapshot(h, max_addr)
         if verbose:
             print(f"快照 {len(regions)} 区 {total // 1048576}MB")
@@ -1606,7 +1889,7 @@ def _read_live(
             import importlib
 
             hc = importlib.import_module("gametool.live_handle_chain")
-            gd = ver.get("game_dll")
+            gd = ver.get("game_dll") or ver.get("game_image")
             dll_base = gd.get("base", 0) if isinstance(gd, dict) else 0
             if not dll_base:
                 seen = ver.get("modules_seen")
@@ -1619,7 +1902,19 @@ def _read_live(
                     "未取到 Game.dll 基址 (进程存活但按文件名未命中)" + hint
                 )
                 return None
+            if ver.get("arch") not in ("x86", "x64") or ver.get("engine") not in (
+                "classic",
+                "reforged",
+            ):
+                report["notes"].append(
+                    "游戏 PE 架构/引擎尚未确认，未套用版本偏移或经典结构布局"
+                )
+                return None
             reader = hc.MemoryReader(regions)
+            snapshot_fp, image_diagnostics = _snapshot_image_binding(
+                reader, dll_base, gd, ver
+            )
+            report["notes"].extend(image_diagnostics)
             v_str = str(ver.get("version") or "")
             v_engine = str(ver.get("engine") or "classic")
             v_arch = str(ver.get("arch") or "x86")
@@ -1698,21 +1993,19 @@ def _read_live(
             }
             offsets = profile.handle_chain
             retained_trusted_builtin_chain = (
-                offsets is not None and not accepted_profile_override
+                offsets is not None
+                and not accepted_profile_override
+                and snapshot_fp is not None
             )
             last_stage: list[str] = []  # 推导阶段追踪 (诊断带最后阶段)
             if offsets is not None and (profile.checks or profile.fingerprint):
-                disk_fp = None
-                _gd = ver.get("game_dll")
-                if isinstance(_gd, dict) and _gd.get("path"):
-                    disk_fp = read_pe_fingerprint(str(_gd["path"]))
                 ok, fails, patches = hc.verify_profile(
-                    reader, dll_base, profile, disk_fp
+                    reader, dll_base, profile, snapshot_fp
                 )
                 if patches:
                     report["notes"].append(
-                        f"运行时补丁差异 {len(patches)} 处 — 磁盘 PE 指纹匹配证实同版本,"
-                        f" 差异为平台加载后所打 (放行; 明细: {'; '.join(patches)})"
+                        f"完整校验字节差异 {len(patches)} 处 — 已核对当前映像 PE 元数据,"
+                        f" 差异可能来自运行时补丁 (保留; 明细: {'; '.join(patches)})"
                     )
                 if not ok:
                     retained_trusted_builtin_chain = False
@@ -1724,17 +2017,16 @@ def _read_live(
                     offsets = None
             if offsets is None and profile.tier != "reforged-pending":
                 retained_trusted_builtin_chain = False
-                # 扫描窗口量出来, 不拍数字: 进程内镜像大小 (GetModuleInformation)
-                # -> 磁盘 PE size-of-image -> 兜底扫满用户态。
-                gd_raw = ver.get("game_dll")
-                gd = gd_raw if isinstance(gd_raw, dict) else {}
-                span_end = dll_base + int(gd.get("size") or 0)
-                if span_end <= dll_base and gd.get("path"):
-                    fp0 = read_pe_fingerprint(str(gd["path"]))
-                    if fp0 is not None and fp0.image_size:
-                        span_end = dll_base + fp0.image_size
-                if span_end <= dll_base:
-                    span_end = 0x7FFE0000
+                # Derive within this snapshot's measured image; earlier module
+                # sizes can be stale after a reload. Missing headers use all
+                # available user-space evidence, without guessing a window.
+                current_image = ver.get("snapshot_image_fingerprint")
+                span_end = (
+                    dll_base + int(current_image["image_size"])
+                    if isinstance(current_image, dict)
+                    and current_image.get("image_size")
+                    else max_addr
+                )
 
                 def _track(stage) -> None:  # hc.DiscoveryStage (运行时导入)
                     last_stage.append(stage.name)
@@ -1760,6 +2052,8 @@ def _read_live(
                 return None
             system = hc.HandleSystem(reader, dll_base, offsets)
             if not system.valid:
+                report["units_diagnostics"] = list(system.live_diagnostics)
+                report["notes"].extend(system.live_diagnostics)
                 report["notes"].append("句柄管理器不可读")
                 return None
             if export_profile:
@@ -1935,6 +2229,8 @@ def _read_live(
 
             units = hc.walk_item_units(reader, system, offsets)
             report["units"] = [describe(u) for u in units]
+            report["units_diagnostics"] = list(system.live_diagnostics)
+            report["notes"].extend(system.live_diagnostics)
             selection = hc.selected_units(reader, system, offsets, dll_base)
             report["selected_units"] = [describe(u) for u in selection.units]
             report["selection_complete"] = (
@@ -2157,6 +2453,11 @@ def _read_live(
             return None
 
     def try_chain():
+        if ver and (ver.get("arch") != "x86" or ver.get("engine") != "classic"):
+            report["notes"].append(
+                "结构链需要已确认的经典 x86 架构；本次保留资源扫描与图标通道"
+            )
+            return []
         if pack_dir is None:
             report["notes"].append("结构链跳过 (离线快照无知识包, 物品名单不可用)")
             return []
@@ -2216,7 +2517,9 @@ def _read_live(
                         resource_reader,
                         build=str((ver or {}).get("version") or "unknown"),
                         profile="version-independent-resource-scan",
-                        pointer_size=8 if (ver or {}).get("arch") == "x64" else 4,
+                        pointer_size=4
+                        if (ver or {}).get("arch") == "x86"
+                        else ctypes.sizeof(ctypes.c_void_p),
                     )
                     for r in found
                 ]

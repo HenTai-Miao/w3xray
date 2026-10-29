@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import ast
+
 from gametool.api import GameObject
 from gametool.field_meta import (
     FIELD_TYPES,
@@ -82,6 +84,14 @@ def _write(path, text):
 
 def _synthetic_meta(tmp_path):
     meta = tmp_path / "meta"
+    for index, relative in enumerate(bfl._META_FILES):
+        _write(
+            meta / relative,
+            'ID;PWXL\nB;Y2;X3\nC;X1;Y1;K"id"\n'
+            'C;X2;Y1;K"displayName"\nC;X3;Y1;K"type"\n'
+            f'C;X1;Y2;K"z{index:03}"\nC;X2;Y2;K"Fixture"\n'
+            'C;X3;Y2;K"string"\nE\n',
+        )
     _write(
         meta / "units" / "abilitymetadata.slk",
         "ID;PWXL\nB;Y3;X6\n"
@@ -111,7 +121,7 @@ def test_generator_build_extracts_new_tables_and_preserves_labels(tmp_path):
     # 标签/类型保留现有值，只补新码
     assert all(labels[k] == v for k, v in before_labels.items())
     assert all(types[k] == v for k, v in before_types.items())
-    assert found == 2
+    assert found == 2 + len(bfl._META_FILES) - 1
     assert applicability == {
         "Efk1": (("AEfk", "Aroc"), ()),
         "Ocr6": (("AOcr",), ()),
@@ -135,4 +145,12 @@ def test_generator_write_module_emits_all_tables(tmp_path):
     assert "GENERATED_FIELD_APPLICABILITY" in text
     assert "GENERATED_FIELD_BOUNDS" in text
     assert "GENERATED_FIELD_CONSTANTS" in text
-    assert "'Hbz1': 'ABILITY_ILF_NUMBER_OF_WAVES'" in text
+    tree = ast.parse(text)
+    tables = {
+        node.targets[0].id: ast.literal_eval(node.value)
+        for node in tree.body
+        if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name)
+    }
+    assert tables["GENERATED_FIELD_CONSTANTS"] == {
+        "Hbz1": "ABILITY_ILF_NUMBER_OF_WAVES"
+    }

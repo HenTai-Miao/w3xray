@@ -16,6 +16,7 @@ from .extraction_diagnostics import (
 )
 from .imp import ImportTable, import_table_parse_issue, parse_import_table
 from .map_archive_reader import DeclaredSizeArchive
+from .object_layers import binary_object_members
 from .war3_encoding import decode_warcraft_string
 
 
@@ -38,13 +39,7 @@ STATIC_MAP_FILES: Final[tuple[str, ...]] = (
     "war3map.lua",
     "war3map.wts",
     # 对象数据
-    "war3map.w3u",
-    "war3map.w3t",
-    "war3map.w3a",
-    "war3map.w3q",
-    "war3map.w3b",
-    "war3map.w3d",
-    "war3map.w3h",
+    *binary_object_members("war3map"),
     # 触发器
     "war3map.wtg",
     "war3map.wct",
@@ -80,13 +75,7 @@ STATIC_MAP_FILES: Final[tuple[str, ...]] = (
     "war3campaign.w3f",
     "war3campaign.imp",
     "war3campaign.wts",
-    "war3campaign.w3u",
-    "war3campaign.w3t",
-    "war3campaign.w3a",
-    "war3campaign.w3q",
-    "war3campaign.w3b",
-    "war3campaign.w3d",
-    "war3campaign.w3h",
+    *binary_object_members("war3campaign"),
 )
 IMPORT_TABLE_FILES: Final[tuple[str, ...]] = ("war3map.imp", "war3campaign.imp")
 

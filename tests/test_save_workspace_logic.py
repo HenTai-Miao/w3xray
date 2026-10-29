@@ -83,6 +83,7 @@ class _Host(GuiWorkerHostMixin):
         self._initial_map = initial_map
         self.source_var = _Var(str(source))
         self.map_var = _Var(initial_map.path if initial_map else "")
+        self.encoding_var = _Var("auto")
         self.query_var, self.kind_var, self.limit_var = (
             _Var(""),
             _Var("全部"),
@@ -194,4 +195,44 @@ def test_same_path_refresh_loads_fresh_owned_map_after_parent_retires_old_map(
     assert [match.name for match in host._report.files[0].object_matches] == [
         "NEW NAME"
     ]
+    assert host._shutdown_gui_worker_host(0) == ()
+
+
+def test_refresh_captures_explicit_encoding_before_background_work(
+    tmp_path: Path,
+) -> None:
+    _ManualThread.all.clear()
+    source = tmp_path / "profile.txt"
+    text = "存档码: AbCD1234\n-load AbCD1234"
+    payload = text.encode("utf-16-le")
+    source.write_bytes(payload)
+    host = _Host(source)
+    host.encoding_var.set("utf-16-le")
+    workspace.SaveWorkspace.refresh(host)  # pyright: ignore[reportArgumentType] - pure Tk worker harness.
+    host.encoding_var.set("utf-16-be")
+    _ManualThread.all[-1].run()
+    host.deliver_all()
+    assert host._report is not None and host._report.complete
+    assert host._report.text_encoding == "utf-16-le"
+    assert host._report.files[0].raw_text == text
+    assert host._report.files[0].codes[0].code == "-load AbCD1234"
+    assert source.read_bytes() == payload
+    assert host._shutdown_gui_worker_host(0) == ()
+
+
+def test_encoding_selection_persists_only_to_isolated_memo(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    isolated = tmp_path / "isolated-cache"
+    unrelated = tmp_path / "caller-cache" / "gui-query-memo" / "save-workspace.json"
+    unrelated.parent.mkdir(parents=True)
+    unrelated.write_bytes(b'{"text_encoding":"caller-original"}')
+    before = unrelated.read_bytes(), unrelated.stat().st_mtime_ns
+    monkeypatch.setattr(workspace, "gamexray_cache_root", lambda: isolated)
+    host = _Host(tmp_path / "profile.txt")
+    host.encoding_var.set("utf-16-be")
+    workspace.SaveWorkspace._memo(host)  # pyright: ignore[reportArgumentType] - pure Tk memo harness.
+    assert workspace._load_workspace_memo()["text_encoding"] == "utf-16-be"
+    assert (unrelated.read_bytes(), unrelated.stat().st_mtime_ns) == before
     assert host._shutdown_gui_worker_host(0) == ()

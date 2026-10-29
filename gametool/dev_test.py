@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Final
 
 from .test_environment import create_test_environment as create_test_environment
@@ -32,9 +33,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ScopeRequestError as error:
         print(f"gamexray-test: {error}", file=sys.stderr)
         return 2
-    command = build_pytest_module_command(
-        ("-p", "gametool.test_scope", *request.arguments)
-    )
     try:
         env = create_test_environment()
         env.update(request.environment)
@@ -43,6 +41,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     except OSError as error:
         print(f"gamexray-test: 无法创建隔离测试缓存: {error}", file=sys.stderr)
         return 2
+    arguments = request.arguments
+    options = arguments[: arguments.index("--")] if "--" in arguments else arguments
+    if not any(
+        option == "--basetemp" or option.startswith("--basetemp=") for option in options
+    ):
+        # pytest's default user-wide pytest-current link can belong to an
+        # elevated or concurrent session. Keep its cleanup inside this fresh,
+        # private allocation; the caller's cache and shared temp are untouched.
+        arguments = (
+            "--basetemp",
+            str(Path(env["GAMEXRAY_CACHE_DIR"]) / "pytest"),
+            *arguments,
+        )
+    command = build_pytest_module_command(("-p", "gametool.test_scope", *arguments))
     return subprocess.run(command, check=False, env=env).returncode
 
 

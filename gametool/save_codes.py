@@ -14,6 +14,7 @@ from .script_literal_decoding import (
     decode_script_literal,
     decode_script_literal_sequence,
 )
+from .save_text_encoding import inspect_save_text
 
 __all__ = (
     "SaveCode",
@@ -144,26 +145,16 @@ class SaveCode:
         }
 
 
-def decode_save_text(payload: bytes) -> tuple[str, str, int] | None:
+def decode_save_text(
+    payload: bytes, *, text_encoding: str = "auto"
+) -> tuple[str, str, int] | None:
     """Strict text decoding, preserving the original byte offset of a BOM."""
-    for marker, encoding in (
-        (b"\xef\xbb\xbf", "utf-8"),
-        (b"\xff\xfe", "utf-16-le"),
-        (b"\xfe\xff", "utf-16-be"),
-    ):
-        if payload.startswith(marker):
-            try:
-                return payload[len(marker) :].decode(encoding), encoding, len(marker)
-            except UnicodeDecodeError:
-                return None
-    if any(byte == 0 or byte < 9 or 13 < byte < 32 for byte in payload):
-        return None
-    for encoding in ("utf-8", "gb18030"):
-        try:
-            return payload.decode(encoding), encoding, 0
-        except UnicodeDecodeError:
-            pass
-    return None
+    decoded = inspect_save_text(payload, text_encoding)
+    return (
+        None
+        if decoded.text is None
+        else (decoded.text, decoded.encoding, decoded.bom_bytes)
+    )
 
 
 def _argument_spans(syntax: str) -> dict[int, tuple[tuple[int, int], ...]]:
@@ -436,8 +427,9 @@ def extract_save_codes_bytes(
     *,
     lua: bool | None = None,
     include_plain_prefixes: bool = True,
+    text_encoding: str = "auto",
 ) -> list[SaveCode]:
-    decoded = decode_save_text(payload)
+    decoded = decode_save_text(payload, text_encoding=text_encoding)
     if decoded is None:
         return []
     text, encoding, bom = decoded

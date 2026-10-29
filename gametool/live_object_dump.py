@@ -459,6 +459,7 @@ def dump_live_objects(
         find_war3_pids,
         mem_setup,
         open_process,
+        process_scan_limit,
     )
 
     notes: list[str] = []
@@ -485,7 +486,10 @@ def dump_live_objects(
         return _fail_with_notes(("OpenProcess 失败 (需管理员)",), out_dir, pid=chosen)
     try:
         version = detect_version(handle)
-        max_addr = 0x7FFFFFFEFFFF if version["arch"] == "x64" else 0x7FFF0000
+        version_diagnostics = version.get("diagnostics")
+        if isinstance(version_diagnostics, list):
+            notes.extend(str(message) for message in version_diagnostics)
+        max_addr = process_scan_limit(version)
         regions, total, skipped = _snapshot_regions(handle, max_addr)
     finally:
         ctypes.WinDLL("kernel32").CloseHandle(handle)

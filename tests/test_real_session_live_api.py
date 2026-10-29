@@ -12,9 +12,12 @@ import pytest
 def resource_api(monkeypatch, tmp_path):
     from gametool import live_handle_chain as hc, live_inventory as live
     from tests.test_live_handle_chain import DLL_BASE, _build_memory
+    from tests.test_live_process_images import snapshot_image
 
     regions, hero, _other, _offsets = _build_memory()
     profile = hc.resolve_profile("1.27.0.52240", "classic", "x86")
+    image, image_binding = snapshot_image(DLL_BASE, profile.fingerprint)
+    regions.append((DLL_BASE, image))
     resource_rows = [hc.PlayerResources(4096, 169.0, 808.0, 4, 12)]
     monkeypatch.setattr(live, "mem_setup", Mock())
     monkeypatch.setattr(live, "find_war3_pids", Mock(return_value=[42]))
@@ -39,7 +42,7 @@ def resource_api(monkeypatch, tmp_path):
                 "engine": "classic",
                 "arch": "x86",
                 "version": "1.27.0.52240",
-                "game_dll": {"base": DLL_BASE},
+                **image_binding,
             }
         ),
     )

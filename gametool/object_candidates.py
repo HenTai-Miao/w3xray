@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import base64
+import json
 import struct
 from collections.abc import Mapping
-from typing import Protocol, Final
+from typing import Protocol
 
 from .object_candidate_values import (
     expand_codes as _expand_codes,
@@ -12,7 +14,7 @@ from .object_candidate_values import (
     resolved_value as _resolved_value,
     wts_value_source as _wts_value_source,
 )
-from .fields import field_type, is_concat_type, label_for
+from .fields import field_type, is_concat_type
 from .extraction_diagnostics import (
     DiagnosticTarget,
     read_component,
@@ -20,11 +22,15 @@ from .extraction_diagnostics import (
 )
 from .map_archive_reader import MapArchiveReader
 from .object_candidate_models import ObjectCandidate, ObjectFieldValue, ObjectSourceKind
-from .object_text_roles import classify_text_field
+from .object_layers import (
+    OBJECT_EXTS as OBJECT_EXTS,
+    binary_field_key,
+    binary_field_label,
+    binary_object_members,
+    binary_wts_member,
+)
 from .references import extract_refs_by_type
 from .w3obj import EXT_CATEGORY, parse_object_data, parse_object_data_report
-
-OBJECT_EXTS: Final[tuple[str, ...]] = ("w3u", "w3t", "w3a", "w3q", "w3b", "w3d", "w3h")
 
 
 class _DiagnosticHost(DiagnosticTarget, Protocol):
@@ -48,9 +54,10 @@ def collect_object_candidates(
     if prefix == "war3map":
         candidates.extend(collect_text_candidates(archive, wts, md))
         candidates.extend(collect_slk_candidates(archive, wts, md))
-    for ext in OBJECT_EXTS:
+    for member in binary_object_members(prefix):
+        stem, _, ext = member.rpartition(".")
         candidates.extend(
-            collect_binary_object_candidates(archive, wts, ext, prefix=prefix, md=md),
+            collect_binary_object_candidates(archive, wts, ext, prefix=stem, md=md),
         )
     return tuple(sorted(candidates, key=_candidate_sort_key))
 
@@ -88,30 +95,19 @@ def collect_binary_object_candidates(
             return ()
     category = EXT_CATEGORY.get(ext, ext)
     result: list[ObjectCandidate] = []
-    for item in parsed:
+    for object_ordinal, item in enumerate(parsed, 1):
         obj_id = (
             item.new_id if item.is_custom and item.new_id.strip("\x00") else item.old_id
         )
         values: list[ObjectFieldValue] = []
-        for mod in item.mods:
-            label = label_for(mod.field_id)
-            key = mod.field_id
-            if mod.level:
-                label = f"{label} (等级{mod.level})"
-                key = f"{key}:{mod.level}"
+        for field_ordinal, mod in enumerate(item.mods, 1):
+            data_pointer = getattr(mod, "data_pointer", 0)
+            label = binary_field_label(mod.field_id, mod.level, data_pointer)
+            key = binary_field_key(mod.field_id, mod.level, data_pointer)
             raw_value = _resolved_source_value(mod.value, wts)
             value = _resolved_value(mod.value, wts)
             if is_concat_type(mod.field_id):
                 value = _expand_codes(value)
-            if not value and not is_concat_type(mod.field_id):
-                # Encoded empty lists and Name fields are explicit overrides.
-                # Other empty binary mods retain the existing filter
-                # (e.g. uhpm="" does not erase base health).
-                role = classify_text_field(
-                    category, key, label, field_type(mod.field_id)
-                )
-                if role is None or role.semantic_field != "name":
-                    continue
             values.append(
                 ObjectFieldValue(
                     key,
@@ -119,15 +115,47 @@ def collect_binary_object_candidates(
                     value,
                     filename,
                     ObjectSourceKind.BINARY,
-                    _wts_value_source(mod.value, wts, prefix),
+                    _wts_value_source(
+                        mod.value, wts, binary_wts_member(filename).removesuffix(".wts")
+                    ),
                     field_type(mod.field_id),
                     raw_value,
+                    encoded_evidence=json.dumps(
+                        {
+                            "member": filename,
+                            "object_ordinal": object_ordinal,
+                            "field_ordinal": field_ordinal,
+                            "old_id": item.old_id,
+                            "new_id": item.new_id,
+                            "is_custom": item.is_custom,
+                            "extra_ints": getattr(item, "extra_ints", ()),
+                            "field_id": mod.field_id,
+                            "storage_type": mod.var_type,
+                            "level": mod.level,
+                            "data_pointer": data_pointer,
+                            "value": mod.value,
+                            "offset": getattr(mod, "offset", -1),
+                            "end_offset": getattr(mod, "end_offset", -1),
+                            "raw_bytes_base64": base64.b64encode(
+                                getattr(mod, "raw_bytes", b"")
+                            ).decode("ascii"),
+                            "trailer": getattr(mod, "trailer", 0),
+                        },
+                        ensure_ascii=True,
+                    ),
                 ),
             )
         refs = _refs_tuple(extract_refs_by_type(item.mods, field_type))
         result.append(
             ObjectCandidate(
-                category, obj_id, item.old_id, item.is_custom, ext, tuple(values), refs
+                category,
+                obj_id,
+                item.old_id,
+                item.is_custom,
+                ext,
+                tuple(values),
+                refs,
+                filename,
             )
         )
     return tuple(result)
@@ -146,6 +174,7 @@ def _candidate_sort_key(
     str,
     str,
     str,
+    str,
     int,
     tuple[tuple[str, str, str, str, int, str, str, str], ...],
     tuple[tuple[str, tuple[str, ...]], ...],
@@ -155,6 +184,7 @@ def _candidate_sort_key(
         candidate.category.casefold(),
         candidate.obj_id,
         candidate.ext,
+        candidate.source,
         candidate.base_id,
         int(candidate.is_custom),
         tuple(

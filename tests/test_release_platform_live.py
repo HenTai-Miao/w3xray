@@ -138,8 +138,11 @@ def test_confirmed_empty_inventory_never_uses_another_units_fallback(
 ):
     from gametool import hero_chain, live_handle_chain as hc, live_inventory as live
     from tests.test_live_handle_chain import DLL_BASE, _build_memory
+    from tests.test_live_process_images import snapshot_image
 
     regions, _hero, _other, _offsets = _build_memory()
+    image, image_binding = snapshot_image(DLL_BASE)
+    regions.append((DLL_BASE, image))
     # Empty the selected unit's slots while the other unit keeps three items.
     regions = [
         (base, bytes(len(payload)) if base == 0x10010000 else payload)
@@ -165,7 +168,7 @@ def test_confirmed_empty_inventory_never_uses_another_units_fallback(
             "arch": "x86",
             "engine": "classic",
             "version": "1.27.0.52240",
-            "game_dll": {"base": DLL_BASE},
+            **image_binding,
         },
     )
     monkeypatch.setattr(

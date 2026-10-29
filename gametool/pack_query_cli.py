@@ -61,6 +61,13 @@ from .pack_query_options import (
 )
 from .pack_query_script_coverage import ScriptCoverage, build_script_coverage
 from .object_codes import decode_object_id_query, field_object_codes
+from .object_export_coverage import (
+    OBJECT_COVERAGE_FILE,
+    OBJECT_COVERAGE_COLUMN,
+    ObjectCoverageInput,
+    ObjectExportCoverage,
+    read_object_coverage_input,
+)
 from .pack_query_call_records import (
     CallArgumentIndex,
     call_argument_index,
@@ -154,6 +161,7 @@ _QUERY_SCRIPT_SOURCES: dict[str, tuple[tuple[str, str], ...]] | None = None
 _QUERY_SCRIPT_COVERAGE: dict[str, ScriptCoverage] | None = None
 _QUERY_FILES: set[tuple[str, str]] | None = None
 _QUERY_OBJECT_WARNINGS: dict[str, list[str]] | None = None
+_QUERY_OBJECT_COVERAGE: dict[str, ObjectCoverageInput] | None = None
 
 # 本进程内遇到的 OS 级锁死表 (杀软隔离/ACL 损坏): (pack_dir, rel) — 查询出口统一披露
 _LOCKED_FILES: set[tuple[str, str]] = set()
@@ -327,11 +335,39 @@ def _named_table(pack: Path, relative: str, table: str = "") -> ObjectTable:
         result = object_table(table, raw) if table else object_field_table(raw)
         if not _table_is_readable(pack, relative):
             result = dataclass_replace(result, readable=False)
+        coverage = _object_coverage(pack)
+        if coverage is not None:
+            notes = coverage.for_table(table)
+            if not (pack / relative).is_file():
+                notes += ("未记录此表；来源覆盖声明不能替代实际对象表。",)
+            result = dataclass_replace(
+                result, diagnostics=(*result.diagnostics, *notes)
+            )
+        elif OBJECT_COVERAGE_COLUMN in result.rows[0]:
+            result = dataclass_replace(
+                result,
+                diagnostics=(
+                    *result.diagnostics,
+                    f"表头声明的 {OBJECT_COVERAGE_FILE} 未记录；来源完整性未确认。",
+                ),
+            )
         if _QUERY_OBJECT_WARNINGS is not None and result.diagnostics:
             _QUERY_OBJECT_WARNINGS.setdefault(str(pack), []).extend(
                 f"[⚠ {relative} — {note} 来源: {pack}]" for note in result.diagnostics
             )
     return result
+
+
+def _object_coverage(pack: Path) -> ObjectExportCoverage | None:
+    key = str(pack)
+    if _QUERY_OBJECT_COVERAGE is not None and key in _QUERY_OBJECT_COVERAGE:
+        return _QUERY_OBJECT_COVERAGE[key].coverage
+    snapshot = read_object_coverage_input(pack)
+    if _QUERY_FILES is not None:
+        _QUERY_FILES.add((key, OBJECT_COVERAGE_FILE))
+    if _QUERY_OBJECT_COVERAGE is not None:
+        _QUERY_OBJECT_COVERAGE[key] = snapshot
+    return snapshot.coverage
 
 
 def load_items(pack_dir: Path) -> dict[str, tuple[str, str]]:
@@ -483,7 +519,10 @@ def load_item_tooltips(pack_dir: Path) -> dict[str, str]:
     电子表格转义前缀单引号，展示前剥离。
     """
     best: dict[str, tuple[int, str]] = {}
-    for r in _field_rows(pack_dir):
+    from .pack_query_field_evidence import field_record
+
+    rows = _field_rows(pack_dir)
+    for r in rows[1:]:
         if len(r) <= 5:
             continue
         if (
@@ -491,13 +530,13 @@ def load_item_tooltips(pack_dir: Path) -> dict[str, str]:
             and r[0] == "物品"
             and len(r[1]) == 4
             and r[3] in ("ides", "utub")
+            and field_record(r, rows[0], _clean).confirmed
         ):
             prio = 0 if r[3] == "ides" else 1
             cur = best.get(r[1])
             if cur is None or prio < cur[0]:
                 text = _clean(r[5].lstrip("'"))
-                if text:
-                    best[r[1]] = (prio, text)
+                best[r[1]] = (prio, text)
     return {code: text for code, (_prio, text) in best.items()}
 
 
@@ -569,7 +608,10 @@ def load_techs(pack_dir: Path) -> dict[str, tuple[str, str]]:
 def load_tech_fields(pack_dir: Path) -> dict[str, dict[str, str]]:
     """科技四码 -> {自定义字段键: 值}（不含 base: 继承行；gub1:N/greq:N 原样保留）。"""
     out: dict[str, dict[str, str]] = {}
-    for r in _field_rows(pack_dir):
+    from .pack_query_field_evidence import field_record
+
+    rows = _field_rows(pack_dir)
+    for r in rows[1:]:
         if len(r) <= 5:
             continue
         if (
@@ -577,6 +619,7 @@ def load_tech_fields(pack_dir: Path) -> dict[str, dict[str, str]]:
             and r[0] == "科技"
             and len(r[1]) == 4
             and not r[3].startswith("base:")
+            and field_record(r, rows[0], _clean).confirmed
         ):
             out.setdefault(r[1], {})[r[3]] = _clean(r[5].lstrip("'"))
     return out
@@ -3440,6 +3483,8 @@ def _diff_field_changes(
     wanted = set(ids)
 
     def collect(pack: Path) -> dict[str, dict[str, str]]:
+        from .pack_query_field_evidence import field_record
+
         rows = _field_rows(pack)
         if len(rows) <= 1:
             return {}
@@ -3456,6 +3501,8 @@ def _diff_field_changes(
             if len(r) <= max(val_i, key_i, id_i, cat_i):
                 continue
             if r[cat_i] != table or r[id_i] not in wanted:
+                continue
+            if not field_record(r, header, _clean).confirmed:
                 continue
             fields.setdefault(r[id_i], {})[r[key_i]] = r[val_i]
         return fields
@@ -3619,6 +3666,7 @@ def _query_stats(pack: Path, query: str, limit: int) -> list[str]:
     """stats 包总览: 地图信息摘要 + 每张对象表的行数与自定义行数。"""
     del query, limit  # 总览无过滤/截断
     out: list[str] = []
+    coverage = _object_coverage(pack)
     info = pack / "地图信息.txt"
     if info.exists():
         for line in _iter_tsv_lines(info):
@@ -3632,7 +3680,7 @@ def _query_stats(pack: Path, query: str, limit: int) -> list[str]:
         exported = datetime.datetime.fromtimestamp(obj_dir.stat().st_mtime)
         out.append(f"导出时间: {exported:%Y-%m-%d %H:%M}")
         out.append("")
-    if not info.exists() and not obj_dir.is_dir():
+    if not info.exists() and not obj_dir.is_dir() and coverage is None:
         # 无地图信息也无对象表 = 战役容器级空壳, 返回未找到让分段逻辑跳过
         # (战役场景由分段协议消费; 普通目录则由外层 fallback 给指引)
         if not (pack / "子地图").is_dir():
@@ -3644,24 +3692,35 @@ def _query_stats(pack: Path, query: str, limit: int) -> list[str]:
     if out:
         out.append("")
     out.append("==== 对象表总览 ====")
-    if not obj_dir.is_dir():
+    if not obj_dir.is_dir() and coverage is None:
         out.append("本包无对象表")
         return out
-    for tsv in sorted(obj_dir.glob("*.tsv")):
-        rows = _object_rows(pack, tsv.stem)
-        if len(rows) <= 1:
+    categories = {path.stem for path in obj_dir.glob("*.tsv")}
+    if coverage is not None:
+        categories.update(OBJECT_TABLES)
+    for category in sorted(categories):
+        view = _named_table(pack, f"对象ID/{category}.tsv", category)
+        rows = view.rows
+        if not rows:
+            out.append(f"{category}: 0 条已确认记录（完整性未确认）")
             continue
-        custom_idx = rows[0].index("自定义") if "自定义" in rows[0] else -1
+        header = rows[0]
+        if len(rows) <= 1 and coverage is None and OBJECT_COVERAGE_COLUMN not in header:
+            continue
+        custom_idx = header.index("自定义") if "自定义" in header else -1
         total = len(rows) - 1
+        if not view.complete:
+            out.append(f"{category}: {total} 条已确认记录（完整性未确认）")
+            continue
         if custom_idx >= 0:
             custom = sum(
                 1
                 for r in rows[1:]
                 if len(r) > custom_idx and r[custom_idx].strip() == "是"
             )
-            out.append(f"{tsv.stem}: {total} 行 (自定义 {custom})")
+            out.append(f"{category}: {total} 行 (自定义 {custom})")
         else:
-            out.append(f"{tsv.stem}: {total} 行")
+            out.append(f"{category}: {total} 行")
     # 记忆资产段: again/near 链的用户侧状态一屏可见
     memo = _memo_dir()
     last = _load_last_query()

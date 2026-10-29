@@ -33,6 +33,7 @@ from .save_report_query import (
     verify_save_report_sources,
     write_save_report,
 )
+from .save_text_encoding import SAVE_TEXT_ENCODINGS, normalize_save_text_encoding
 from .theme import BG, CARD, FONT, MONO_FONT, SUBTLE, TEXT, TITLE_FONT
 
 if TYPE_CHECKING:
@@ -99,6 +100,12 @@ class SaveWorkspace(ctk.CTkToplevel, GuiWorkerHostMixin):
         self.query_var = tk.StringVar(value=memo.get("query", ""))
         self.kind_var = tk.StringVar(value=memo.get("kind", "全部"))
         self.limit_var = tk.StringVar(value=memo.get("limit", "0"))
+        encoding = memo.get("text_encoding", "auto")
+        try:
+            encoding = normalize_save_text_encoding(encoding)
+        except ValueError:
+            encoding = "auto"
+        self.encoding_var = tk.StringVar(value=encoding)
         self.find_var = tk.StringVar()
         self._build_controls()
         self.protocol("WM_DELETE_WINDOW", self.destroy)
@@ -143,6 +150,25 @@ class SaveWorkspace(ctk.CTkToplevel, GuiWorkerHostMixin):
             source_row, text="读取 / 刷新", width=100, command=self.refresh
         ).pack(side="left", padx=(3, 7))
         self.source_entry.bind("<Return>", lambda _event: self.refresh())
+        encoding_row = ctk.CTkFrame(self, fg_color=CARD)
+        encoding_row.pack(fill="x", padx=12, pady=3)
+        ctk.CTkLabel(encoding_row, text="文本编码", width=72, font=(FONT, 12)).pack(
+            side="left", padx=4
+        )
+        self.encoding_menu = ctk.CTkOptionMenu(
+            encoding_row,
+            variable=self.encoding_var,
+            values=list(SAVE_TEXT_ENCODINGS),
+            width=135,
+            command=lambda _value: self.refresh(),
+        )
+        self.encoding_menu.pack(side="left", padx=4, pady=5)
+        ctk.CTkLabel(
+            encoding_row,
+            text="auto 自动识别；无 BOM 的 UTF-16 文本请明确选择 LE 或 BE。",
+            font=(FONT, 11),
+            text_color=SUBTLE,
+        ).pack(side="left", padx=6)
         map_row = ctk.CTkFrame(self, fg_color=CARD)
         map_row.pack(fill="x", padx=12, pady=3)
         ctk.CTkLabel(map_row, text="可选地图", width=72, font=(FONT, 12)).pack(
@@ -297,6 +323,7 @@ class SaveWorkspace(ctk.CTkToplevel, GuiWorkerHostMixin):
                 "query": self.query_var.get(),
                 "kind": self.kind_var.get(),
                 "limit": self.limit_var.get(),
+                "text_encoding": self.encoding_var.get(),
             }
         )
 
@@ -350,6 +377,7 @@ class SaveWorkspace(ctk.CTkToplevel, GuiWorkerHostMixin):
             return
         try:
             limit = parse_query_limit(self.limit_var.get())
+            text_encoding = normalize_save_text_encoding(self.encoding_var.get())
             query, kind = self.query_var.get(), self.kind_var.get()
             _ = select_save_report(
                 RealSaveReport("", (), ()), query, "" if kind == "全部" else kind, limit
@@ -388,7 +416,7 @@ class SaveWorkspace(ctk.CTkToplevel, GuiWorkerHostMixin):
                     owned = True
                 if ticket.cancellation.is_set():
                     return
-                report = analyze_real_save_path(source, md)
+                report = analyze_real_save_path(source, md, text_encoding=text_encoding)
                 if ticket.cancellation.is_set():
                     return
                 elapsed = monotonic() - started
@@ -466,6 +494,7 @@ class SaveWorkspace(ctk.CTkToplevel, GuiWorkerHostMixin):
         self._show_text(
             "# 概览\n\n"
             + f"来源: {report.source}\n地图: {report.map_path if report.map_associated else '未选择，未做地图关联'}\n完整性: {report.complete}\n"
+            + f"文本编码选择: {report.text_encoding}\n"
             + f"总文件数: {selection.total_files}\n匹配: {selection.matched_files}\n显示: {len(selection.files)}\n显式限制省略: {selection.omitted_files}\n\n"
             + (
                 "从左侧选择一个文件查看其全部记录、SHA256、容器和偏移。"

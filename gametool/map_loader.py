@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 from collections.abc import Mapping
+from dataclasses import replace
+from functools import partial
 from typing import Final
 
 from .archive_inventory import InventoryArchive, build_archive_inventory
@@ -19,6 +21,7 @@ from .extraction_diagnostics import (
     read_component,
     record_component_failure,
     record_diagnostic,
+    record_component_parse_issue,
 )
 from .item_relation_builder import build_item_relation_index
 from .load_context import MapLoadContext
@@ -35,7 +38,10 @@ from .map_data import GameObject, MapData
 from .mpq import MPQArchive
 from .mpq_files import list_archive_files
 from .mpq_storage import MPQSourceIdentity, SourceIdentityArchive
-from .object_candidates import OBJECT_EXTS, collect_object_candidates
+from .object_candidates import collect_object_candidates
+from .object_candidate_models import ObjectCandidate
+from .object_layers import binary_object_members
+from .object_inheritance import inherit_campaign_candidates, shared_scope_candidates
 from .object_pipeline import populate_object_pipeline_from_context
 from .references import build_reference_graph
 from .script_sources import analysis_script_sources, collect_readable_scripts
@@ -86,10 +92,15 @@ def _load_map_impl(
     _depth: int,
     shared_index: Mapping[tuple[str, str], GameObject] | None,
     load_context: MapLoadContext,
+    *,
+    shared_candidates: tuple[ObjectCandidate, ...] = (),
+    shared_diagnostics: tuple[ExtractionDiagnostic, ...] = (),
 ) -> MapData:
     md = MapData(
         path=path, name=_map_name(archive), archive_source=PathArchiveSource(path)
     )
+    for diagnostic in shared_diagnostics:
+        record_diagnostic(md, diagnostic)
     script_collection = collect_readable_scripts(archive, md=md)
     wts = {}
     wts_raw = script_collection.wts_raw
@@ -122,10 +133,14 @@ def _load_map_impl(
     external_report = validate_external_names(archive, load_context.external_names)
     md.external_listfile = external_report if load_context.external_names else None
 
-    candidates = list(collect_object_candidates(archive, wts, prefix="war3map", md=md))
+    candidates = [
+        *shared_candidates,
+        *collect_object_candidates(archive, wts, prefix="war3map", md=md),
+    ]
     cwts = {}
+    campaign_candidates: tuple[ObjectCandidate, ...] = ()
     if archive.has_file("war3campaign.wts") or any(
-        archive.has_file("war3campaign." + ext) for ext in OBJECT_EXTS
+        archive.has_file(member) for member in binary_object_members("war3campaign")
     ):
         if archive.has_file("war3campaign.wts"):
             parsed_cwts = read_component(
@@ -136,13 +151,32 @@ def _load_map_impl(
             )
             if parsed_cwts is not None:
                 cwts = retain_wts_evidence(md, parsed_cwts)
-        candidates.extend(
-            collect_object_candidates(archive, cwts, prefix="war3campaign", md=md),
+        campaign_candidates = collect_object_candidates(
+            archive, cwts, prefix="war3campaign", md=md
         )
+        candidates.extend(campaign_candidates)
     base_objects = merge_client_base_objects(
         BASE_OBJECTS, load_context.client_base_objects
     )
+    local_identities = {
+        (candidate.category, candidate.obj_id)
+        for candidate in candidates[len(shared_candidates) :]
+    }
+    declared_candidates = tuple(candidates)
+    if campaign_candidates or shared_candidates or path.lower().endswith(".w3n"):
+        inherited, inheritance_notes = inherit_campaign_candidates(
+            candidates, base_objects
+        )
+        candidates = list(inherited)
+        for note in inheritance_notes:
+            record_component_parse_issue(
+                md, "object-inheritance", "object-bases", note, stage="resolve"
+            )
     populate_object_pipeline_from_context(md, candidates, base_objects, load_context)
+    for candidate in shared_candidates:
+        identity = (candidate.category, candidate.obj_id)
+        if identity not in local_identities:
+            md.obj_identity_index[identity].ext = "campaign"
 
     md.scripts.update(script_collection.texts)
     _add_w3i(md, archive, wts)
@@ -203,7 +237,18 @@ def _load_map_impl(
             inner_maps,
             _depth,
             load_context,
-            _load_map_impl,
+            partial(
+                _load_map_impl,
+                shared_candidates=shared_scope_candidates(
+                    declared_candidates, candidates, md.obj_identity_index, path
+                ),
+                shared_diagnostics=tuple(
+                    replace(diagnostic, source=f"{path}!{diagnostic.source}")
+                    for diagnostic in md.diagnostics
+                    if diagnostic.component
+                    in {"object-binary", "object-text", "slk", "wts"}
+                ),
+            ),
             max_retained_bytes=_MAX_CAMPAIGN_CHILD_BYTES,
             max_read_bytes=_MAX_CAMPAIGN_READ_BYTES,
         )

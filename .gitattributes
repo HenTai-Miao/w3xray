@@ -1,0 +1,3 @@
+# Byte hashes and the reproducible metadata generator use canonical LF text.
+data/field_metadata/*.json text eol=lf
+gametool/field_meta.py text eol=lf

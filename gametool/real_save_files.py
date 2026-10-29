@@ -39,6 +39,7 @@ from .pack_query_objects import object_category
 from .script_sources import script_language
 from .script_lexing import script_views
 from .save_source_paths import iter_save_source_files, save_source_path_error
+from .save_text_encoding import inspect_save_text, normalize_save_text_encoding
 
 if TYPE_CHECKING:
     from .api import GameObject, MapData
@@ -94,6 +95,7 @@ class RealSaveFile:
     source_stable: bool = True
     raw_text: str | None = None
     unknown_ranges: tuple[dict[str, object], ...] = ()
+    text_decoding: dict[str, object] | None = None
 
     def _record_dict(self) -> dict[str, object]:
         return {
@@ -122,6 +124,7 @@ class RealSaveFile:
             "source_stable": self.source_stable,
             "raw_text": self.raw_text,
             "unknown_ranges": list(self.unknown_ranges),
+            "text_decoding": self.text_decoding,
             "caches": [cache.to_dict() for cache in self.caches],
             "codes": [code.to_dict() for code in self.codes],
             "text_carriers": [carrier.to_dict() for carrier in self.text_carriers],
@@ -163,6 +166,7 @@ class RealSaveReport:
     source_files: tuple[str, ...] = ()
     source_is_directory: bool = False
     unverified_files: tuple[RealSaveFile, ...] = ()
+    text_encoding: str = "auto"
 
     def metadata_dict(self) -> dict[str, object]:
         return {
@@ -180,6 +184,7 @@ class RealSaveReport:
             ),
             "source_files": list(self.source_files),
             "source_is_directory": self.source_is_directory,
+            "text_encoding": self.text_encoding,
         }
 
     def to_dict(self) -> dict[str, object]:
@@ -191,9 +196,10 @@ class RealSaveReport:
 
 
 def analyze_real_save_path(
-    path: str | Path, md: MapData | None = None
+    path: str | Path, md: MapData | None = None, *, text_encoding: str = "auto"
 ) -> RealSaveReport:
     """Read every physical source; preserve partial evidence and re-prove its SHA."""
+    text_encoding = normalize_save_text_encoding(text_encoding)
     source = Path(path).absolute()
     candidates, warnings = _candidate_files(source)
     if not candidates and not warnings:
@@ -227,7 +233,14 @@ def analyze_real_save_path(
             before.st_ctime_ns,
             before.st_mode,
         )
-        record = _analyze_file(candidate, relative, payload, expected_keys, md)
+        record = _analyze_file(
+            candidate,
+            relative,
+            payload,
+            expected_keys,
+            md,
+            text_encoding=text_encoding,
+        )
         record = replace(
             record,
             source_identity=dict(
@@ -299,6 +312,7 @@ def analyze_real_save_path(
         ),
         source_is_directory=source == root,
         unverified_files=tuple(unverified),
+        text_encoding=text_encoding,
     )
 
 
@@ -364,6 +378,8 @@ def _analyze_file(
     expected_keys: tuple[str, ...],
     md: MapData | None,
     ancestors: frozenset[str] = frozenset(),
+    *,
+    text_encoding: str = "auto",
 ) -> RealSaveFile:
     digest = hashlib.sha256(payload).hexdigest()
     if looks_like_save_container(payload):
@@ -405,7 +421,12 @@ def _analyze_file(
                 diagnostics=("嵌套归档重复祖先身份，未猜测其记录。",),
             )
         members, diagnostic, diagnostics = _read_mpq_members(
-            payload, relative, expected_keys, md, ancestors | {digest}
+            payload,
+            relative,
+            expected_keys,
+            md,
+            ancestors | {digest},
+            text_encoding=text_encoding,
         )
         return RealSaveFile(
             relative,
@@ -426,7 +447,8 @@ def _analyze_file(
             complete=not diagnostics and all(member.complete for member in members),
             diagnostics=diagnostics,
         )
-    text = _decode_text(payload)
+    decoded = inspect_save_text(payload, text_encoding)
+    text = decoded.text
     kind = _classify_text(path, text)
     diagnostic = _diagnostic(kind)
     text_diagnostics: tuple[str, ...] = ()
@@ -450,29 +472,31 @@ def _analyze_file(
             (),
             diagnostic,
             complete=False,
-            diagnostics=(diagnostic,),
+            diagnostics=(diagnostic, *decoded.diagnostics),
             unknown_ranges=_unknown_ranges(payload, 0, relative),
+            text_decoding=decoded.to_dict(payload),
         )
     keys, object_matches, strings = _text_evidence(text, expected_keys, md)
-    decoded = decode_save_text(payload)
-    encoding = decoded[1] if decoded is not None else ""
-    carriers = (
-        ()
-        if decoded is None
-        else tuple(
-            extract_save_text_carriers(
-                decoded[0],
-                relative,
-                lua=script_language(relative),
-                encoding=decoded[1],
-                bom_bytes=decoded[2],
-                include_plain_prefixes=True,
-                byte_source=payload,
-            )
+    encoding = decoded.encoding
+    diagnostic += f"；文本编码 {encoding}（{'自动识别' if text_encoding == 'auto' else '明确指定'}），完整字节往返校验通过"
+    carriers = tuple(
+        extract_save_text_carriers(
+            text,
+            relative,
+            lua=script_language(relative),
+            encoding=encoding,
+            bom_bytes=decoded.bom_bytes,
+            include_plain_prefixes=True,
+            byte_source=payload,
         )
     )
     codes = tuple(
-        extract_save_codes_bytes(payload, relative, lua=script_language(relative))
+        extract_save_codes_bytes(
+            payload,
+            relative,
+            lua=script_language(relative),
+            text_encoding=text_encoding,
+        )
     )
     if any(not carrier.literal_complete for carrier in (*carriers, *codes)):
         text_diagnostics = (
@@ -494,6 +518,7 @@ def _analyze_file(
         raw_text=text,
         complete=not text_diagnostics,
         diagnostics=text_diagnostics,
+        text_decoding=decoded.to_dict(payload),
     )
 
 
@@ -853,6 +878,8 @@ def _read_mpq_members(
     expected_keys: tuple[str, ...],
     md: MapData | None,
     ancestors: frozenset[str],
+    *,
+    text_encoding: str = "auto",
 ) -> tuple[tuple[RealSaveFile, ...], str, tuple[str, ...]]:
     """Traverse named nested archives with an explicit stack and stable snapshots."""
     # Index identities preserve duplicate member names instead of overwriting them.
@@ -932,6 +959,7 @@ def _read_mpq_members(
                     expected_keys,
                     md,
                     parents | {digest},
+                    text_encoding=text_encoding,
                 )
         children[index] = tuple(child_ids)
     return records[0].members, records[0].diagnostic, records[0].diagnostics

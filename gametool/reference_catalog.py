@@ -303,9 +303,18 @@ def _map_record(
             fields.field_type(field.key),
             field_source,
             field.source,
-            "inherited-evidence"
-            if field.key.casefold().startswith("base:")
-            else "map-evidence",
+            (
+                "campaign-inherited"
+                if dict(field.extras).get("证据角色") == "继承物化字段"
+                else "inherited-evidence"
+                if field.key.casefold().startswith("base:")
+                else "map-evidence"
+            )
+            if field.confirmed
+            else "overridden-campaign"
+            if field.state == "overridden"
+            and dict(field.extras).get("来源优先级") in {"11", "12"}
+            else field.state,
             _field_aliases(field.key, field.label),
             field.extras,
             category,

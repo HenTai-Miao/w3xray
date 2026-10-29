@@ -14,11 +14,17 @@ from typing import Final, final
 
 from .game_data_source import GameDataSource
 from .object_candidates import ObjectFieldValue, collect_object_candidates
+from .object_layers import binary_object_members
 from .object_materialization import BaseObjectTable, merge_object_candidates
+from .object_text_names import trusted_names
+from .slk_objects import SLK_CATEGORY_FILES, _PREFIXES as _SLK_PREFIXES
+from .wts import parse_wts
 
 # 客户端快照内容不变（同一份游戏导出数据反复解析是纯浪费），
 # 按全部输入文件的内容摘要做磁盘缓存；任何缓存异常都回退到现算。
-_SNAPSHOT_CACHE_TAG: Final = "gamexray-client-snapshot-v3"  # SLK 完整证据与显式空值
+_SNAPSHOT_CACHE_TAG: Final = (
+    "gamexray-client-snapshot-v4"  # 完整来源快照、Skin 与二进制字段证据
+)
 
 _RACES: Final[tuple[str, ...]] = (
     "Human",
@@ -92,20 +98,33 @@ class _ClientObjectArchive:
     source: GameDataSource
     path: str
     _data: bytes | mmap.mmap
+    _inputs: dict[str, bytes | None] | None
 
     def __init__(self, source: GameDataSource) -> None:
         self.source = source
         self.path = "client-data"
         self._data = b""
+        self._inputs = None
+
+    def _has_source_file(self, name: str) -> bool:
+        if self._inputs is not None:
+            return self._inputs.get(name) is not None
+        return self.source.has_file(name)
 
     def has_file(self, name: str) -> bool:
-        return any(self.source.has_file(path) for path in locale_text_candidates(name))
+        return any(self._has_source_file(path) for path in locale_text_candidates(name))
 
     def read_file(self, name: str) -> bytes:
         # 语言变体对采集器透明：请求名保持中立路径，优先读 zhCN 文本。
         for path in locale_text_candidates(name):
-            if self.source.has_file(path):
+            if self._has_source_file(path):
+                if self._inputs is not None:
+                    payload = self._inputs[path]
+                    assert payload is not None
+                    return payload
                 return self.source.read_file(path)
+        if self._inputs is not None:
+            raise FileNotFoundError(name)
         return self.source.read_file(name)
 
     def list_files(self) -> list[str]:
@@ -114,30 +133,98 @@ class _ClientObjectArchive:
     def close(self) -> None:
         """The load-context owner closes the wrapped client source."""
 
+    def capture_inputs(self) -> None:
+        """Bind parsing to the exact named bytes included in the cache key."""
+        inputs: dict[str, bytes | None] = {}
+
+        def capture(name: str) -> bool:
+            for path in locale_text_candidates(name):
+                if path not in inputs:
+                    inputs[path] = (
+                        self.source.read_file(path)
+                        if self.source.has_file(path)
+                        else None
+                    )
+                if inputs[path] is not None:
+                    return True
+            return False
+
+        for name in trusted_names(self, ()):
+            capture(name)
+        for prefix in ("war3map", "war3campaign"):
+            for name in (*binary_object_members(prefix), f"{prefix}.wts"):
+                capture(name)
+        # Match the existing SLK reader's first present named alias. Keep every
+        # preceding absence, so a newly available higher-priority alias changes
+        # the key, without retaining repeated copies of the same large table.
+        for files in SLK_CATEGORY_FILES.values():
+            for name in files:
+                aliases = (
+                    prefix + variant
+                    for prefix in _SLK_PREFIXES
+                    for variant in dict.fromkeys((name, name.lower(), name.upper()))
+                )
+                for alias in aliases:
+                    if capture(alias):
+                        break
+        self._inputs = dict(sorted(inputs.items()))
+
+    def input_fingerprint(self) -> str:
+        """Hash complete bytes, presence, names, and the extraction semantics."""
+        assert self._inputs is not None
+        digest = hashlib.sha256(_SNAPSHOT_CACHE_TAG.encode("ascii") + b"\0")
+        for name, payload in self._inputs.items():
+            encoded_name = name.encode("utf-8")
+            digest.update(len(encoded_name).to_bytes(8, "little"))
+            digest.update(encoded_name)
+            digest.update(b"\0" if payload is None else b"\1")
+            if payload is not None:
+                digest.update(len(payload).to_bytes(8, "little"))
+                digest.update(payload)
+        return digest.hexdigest()
+
+    def verify_inputs(self) -> None:
+        """Never deliver or cache a snapshot whose source changed during the call."""
+        if self._inputs is None:
+            return
+        for name, expected in self._inputs.items():
+            current = (
+                self.source.read_file(name) if self.source.has_file(name) else None
+            )
+            if current != expected:
+                raise OSError(f"Warcraft client object source changed: {name}")
+
 
 def collect_client_base_objects(
     source: GameDataSource | None,
 ) -> tuple[ClientBaseObject, ...]:
-    """Parse bounded object tables without retaining the source handle."""
+    """Parse complete named object tables without retaining the source handle."""
     return snapshot_client_base_objects(source).objects
 
 
 def snapshot_client_base_objects(source: GameDataSource | None) -> ClientObjectSnapshot:
-    """Snapshot every client text candidate before its source closes.
+    """Snapshot every named client object source before its source closes.
 
     真实目录数据源默认启用内容寻址磁盘缓存；测试用假数据源不受影响。
     """
     if source is None:
         return ClientObjectSnapshot((), False)
     archive = _ClientObjectArchive(source)
-    text_available = any(archive.has_file(name) for name in _CLIENT_TEXT_NAMES)
     cache_path = _snapshot_cache_path(archive)
+    text_available = any(archive.has_file(name) for name in _CLIENT_TEXT_NAMES)
     if cache_path is not None:
         cached = _load_snapshot_cache(cache_path)
         if cached is not None:
+            archive.verify_inputs()
             return cached
     try:
-        candidates = collect_object_candidates(archive, {})
+        candidates = tuple(
+            candidate
+            for prefix in ("war3campaign", "war3map")
+            for candidate in collect_object_candidates(
+                archive, _client_wts(archive, prefix), prefix=prefix
+            )
+        )
     except OSError, ValueError:
         return ClientObjectSnapshot((), text_available)
     objects = merge_object_candidates(candidates, {})
@@ -165,9 +252,20 @@ def snapshot_client_base_objects(source: GameDataSource | None) -> ClientObjectS
         and (item.fields or evidence_by_object.get((item.category, item.obj_id)))
     )
     result = ClientObjectSnapshot(snapshot, text_available)
+    archive.verify_inputs()
     if cache_path is not None:
         _store_snapshot_cache(cache_path, result)
     return result
+
+
+def _client_wts(archive: _ClientObjectArchive, prefix: str) -> dict[int, str]:
+    name = f"{prefix}.wts"
+    if not archive.has_file(name):
+        return {}
+    try:
+        return parse_wts(archive.read_file(name))
+    except KeyError, OSError, ValueError:
+        return {}
 
 
 def _snapshot_cache_path(archive: _ClientObjectArchive) -> Path | None:
@@ -198,15 +296,10 @@ def _snapshot_cache_path(archive: _ClientObjectArchive) -> Path | None:
         ),
     ):
         return None
-    digest = hashlib.sha256()
-    for name in _CLIENT_TEXT_NAMES:
-        for candidate in locale_text_candidates(name):
-            if not archive.source.has_file(candidate):
-                continue
-            digest.update(name.encode("utf-8"))
-            digest.update(b"\0")
-            digest.update(archive.source.read_file(candidate))
-            break
+    try:
+        archive.capture_inputs()
+    except KeyError, OSError, ValueError:
+        return None
     cache_root = os.environ.get("GAMEXRAY_CACHE_DIR")
     if cache_root:
         base = Path(cache_root)
@@ -214,7 +307,7 @@ def _snapshot_cache_path(archive: _ClientObjectArchive) -> Path | None:
         base = Path(os.environ["LOCALAPPDATA"]) / "gamexray" / "cache"
     else:
         base = Path(tempfile.gettempdir()) / "gamexray-cache"
-    return base / "client-snapshots" / f"{digest.hexdigest()}.pkl"
+    return base / "client-snapshots" / f"{archive.input_fingerprint()}.pkl"
 
 
 def _load_snapshot_cache(path: Path) -> ClientObjectSnapshot | None:
@@ -243,7 +336,7 @@ def _store_snapshot_cache(path: Path, snapshot: ClientObjectSnapshot) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         handle, temp_name = tempfile.mkstemp(
-            dir=str(path.parent), prefix=path.name, suffix=".tmp"
+            dir=str(path.parent), prefix="snapshot-", suffix=".tmp"
         )
         with os.fdopen(handle, "wb") as temp_file:
             temp_file.write(blob)
