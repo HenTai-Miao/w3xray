@@ -95,5 +95,8 @@ def test_release_acceptance_exercises_all_query_modes(tmp_path: Path) -> None:
     )
     check = next(item for item in report.checks if item.name == "pack_query_workflow")
     assert check.status is acceptance_runner.AcceptanceStatus.PASS, check.detail
-    assert "modes=27" in check.detail
+    from gametool.pack_query_cli import _QUERIES
+
+    assert "calls" in _QUERIES
+    assert f"modes={len(_QUERIES)};" in check.detail
     assert "export=" in check.detail

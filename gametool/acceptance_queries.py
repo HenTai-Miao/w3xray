@@ -32,6 +32,7 @@ def check_query_workflow(pack: Path) -> str:
         "shop": "",
         "tech": "",
         "cmd": "",
+        "calls": "",
         "refs": target,
         "near": "0 0 500",
         "locate": target,
@@ -104,3 +105,16 @@ def _require_structured_result(result: PackQueryResult) -> None:
         raise ValueError("查询退出状态与结构化结果不一致")
     if not result.sections or not all(section.lines for section in result.sections):
         raise ValueError("查询没有给出证据或空结果恢复说明")
+    if result.command == "calls":
+        if not (
+            isinstance(payload.get("calls"), list)
+            and isinstance(payload.get("call_diagnostics"), list)
+            and isinstance(payload.get("checked_packs"), list)
+            and payload.get("source_stable") is True
+            and type(payload.get("calls_total")) is int
+            and type(payload.get("calls_omitted")) is int
+            and payload["calls_omitted"] >= 0
+            and payload["calls_total"]
+            == len(payload["calls"]) + payload["calls_omitted"]
+        ):
+            raise ValueError("脚本调用缺少完整记录计数、来源稳定性或结构化诊断")
