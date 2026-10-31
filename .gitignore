@@ -20,3 +20,9 @@ third_party/CascLib/bin/win-x64/CascLib.dll.sha256
 
 # AI 自改进产出（人工审阅用，不入库）
 ai_suggestions/
+
+# 本地地图分析产物与临时数据（保留文件，不纳入源码）
+/cache/
+/zvsh_analysis/
+/tmp_maps_decoded.txt
+/%SystemDrive%/
