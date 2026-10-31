@@ -128,6 +128,10 @@ def build_topbar(app) -> None:
         command=lambda: _open_hotkey_config(app),
     )
     app.data_tools_menu.add_command(
+        label="War3Tools 配置总览（离线）",
+        command=lambda: _open_war3tools_config(app),
+    )
+    app.data_tools_menu.add_command(
         label="分析真实存档文件", command=app.on_analyze_real_save_file
     )
     app.data_tools_menu.add_command(
@@ -239,7 +243,7 @@ def build_topbar(app) -> None:
     )
     _attach_tooltip(
         app.data_tools_button,
-        "本地资料包/外部ID查询/离线报告/存档工作台/装备方案/改键方案检查/导出",
+        "本地资料包/外部ID查询/离线报告/存档工作台/装备方案/改键方案/War3Tools 配置/导出",
     )
     app.data_tools_button.pack(side="left", padx=(0, 4))
     actions = ctk.CTkFrame(bar, fg_color="transparent")
@@ -430,6 +434,13 @@ def _open_hotkey_config(app) -> None:
     from .gui_hotkey_config import open_hotkey_config_dialog
 
     open_hotkey_config_dialog(app)
+
+
+def _open_war3tools_config(app) -> None:
+    """Inspect an explicitly selected tool directory or INI configuration."""
+    from .gui_war3tools_config import open_war3tools_config_dialog
+
+    open_war3tools_config_dialog(app)
 
 
 def _open_map_reference_catalog(app) -> None:

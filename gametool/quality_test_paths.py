@@ -583,6 +583,11 @@ tests/test_w3obj.py
 tests/test_w3obj_evidence.py
 tests/test_w3world.py
 tests/test_war3_encoding.py
+tests/test_war3tools_config.py
+tests/test_war3tools_config_cli.py
+tests/test_war3tools_adoption_integration.py
+tests/test_gui_war3tools_config.py
+tests/test_pack_query_combat_evidence.py
 tests/test_wct.py
 tests/test_windows_acceptance_assets.py
 tests/test_windows_acceptance_support.py

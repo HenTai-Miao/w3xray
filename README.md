@@ -86,6 +86,8 @@ uv run main.py reference --map <地图或战役> --kind objects --json # 直接�
 uv run main.py reference --id-table <盒子兼容ID目录> --kind objects --json  # 外部ID来源
 uv run main.py hotkeys inspect <config.json> --json    # 离线配置诊断
 uv run main.py hotkeys diff <旧config.json> <新config.json> --json
+uv run main.py war3tools <War3Tools配置目录或单个INI> --json # 离线查看全部配置与按键冲突
+uv run main.py war3tools <配置目录> --query "冷却 || Camera" --export <目录外的新报告.json>
 uv run main.py current         # 获取游戏进程正在使用的地图并解析只读快照
 uv run main.py wgc <配置.wgc>   # 命令行查看 World Editor AI 测试配置
 uv run main.py casc --help      # CASC Root 全量清单 / 单文件导出
@@ -94,6 +96,10 @@ uv run main.py acceptance --help # 源码或打包 EXE 验收并生成 JSON
 uv run main.py batch <地图目录> --output <新输出目录> --game-data <客户端证据目录>
 uv run gamexray-test             # 运行测试（Windows 下避开 pytest.exe trampoline）
 ```
+
+War3Tools 配置也可从 GUI 的「数据工具 → War3Tools 配置总览（离线）」打开，支持文件/目录选择、完整字段搜索和 JSON/Markdown/TSV 报告。目录模式递归读取全部 INI，保留重复键、未知字段、编码与原始来源；按键冲突区分声明证据与未证实的激活条件。解析和导出完全离线，不需要安装或运行 `.mix` 插件，报告不能当作插件配置导入。源文件改变会明确提示刷新，导出使用来源目录之外的新文件。
+
+地图查询的 `units` / `heroes` 会按地图声明的默认技能 `uabi` 与可学习技能 `uhab` 联查技能完整字段，并支持通过关联技能字段找到单位；`skills` 同时提供逐级冷却、蓝耗、施法距离、作用范围和持续时间等静态参数摘要。原字段、来源、冲突和空覆盖证据完整保留，限量选取整条单位/技能记录。这些值描述地图声明，不等于游戏当时的剩余冷却或实际战斗数值。
 
 ## Schema 6 批量资料包与证据
 

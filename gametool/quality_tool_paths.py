@@ -254,6 +254,7 @@ gametool/gui_loader.py
 gametool/gui_loader_host.py
 gametool/gui_loader_runner.py
 gametool/gui_loadout_workbench.py
+gametool/gui_war3tools_config.py
 gametool/gui_map_resources.py
 gametool/gui_module_refresh.py
 gametool/gui_object_detail.py
@@ -443,6 +444,8 @@ gametool/pack_query_item_details.py
 gametool/pack_query_item_prices.py
 gametool/pack_query_numeric_values.py
 gametool/pack_query_object_details.py
+gametool/pack_query_combat_evidence.py
+gametool/pack_query_unit_abilities.py
 gametool/pack_query_objects.py
 gametool/pack_query_options.py
 gametool/pack_query_placement_index.py
@@ -587,6 +590,11 @@ gametool/w3i_reader.py
 gametool/w3obj.py
 gametool/w3world.py
 gametool/war3_encoding.py
+gametool/war3tools_config.py
+gametool/war3tools_config_cli.py
+gametool/war3tools_config_models.py
+gametool/war3tools_config_report.py
+gametool/war3tools_config_schema.py
 gametool/wct.py
 gametool/westrings.py
 gametool/windows_output_paths.py

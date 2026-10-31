@@ -8,6 +8,8 @@ from typing import Protocol
 from .object_codes import decode_object_id_query
 from .pack_query_field_evidence import ObjectFields, object_field_indexes
 from .pack_query_objects import ObjectTable
+from .pack_query_combat_evidence import render_combat_parameters
+from .pack_query_unit_abilities import UnitAbilityEvidence, unit_ability_evidence
 from .search import compile_query
 
 
@@ -23,6 +25,8 @@ class ObjectRecord:
     row: tuple[str, ...]
     evidence: ObjectFields
     from_fields: bool = False
+    unit_abilities: UnitAbilityEvidence | None = None
+    fields_complete: bool = True
 
     def search_fields(self, sources: ObjectDetailSources) -> Iterator[str]:
         yield self.row[1]
@@ -32,6 +36,8 @@ class ObjectRecord:
         yield from (sources._clean(value) for value in (*self.row[2:4], *self.row[5:]))
         for field in self.evidence.fields:
             yield from field.search_fields(sources._clean)
+        if self.unit_abilities is not None:
+            yield from self.unit_abilities.search_fields()
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,19 +56,42 @@ def load_object_catalog(
 ) -> dict[str, ObjectDetailIndex]:
     requested = tuple(dict.fromkeys(tables))
     field_view = sources._named_table(pack, "对象字段.tsv")
-    fields = object_field_indexes(field_view.rows, requested, sources._clean)
+    field_categories = (
+        (*requested, "技能")
+        if any(table in {"单位", "英雄"} for table in requested)
+        else requested
+    )
+    fields = object_field_indexes(field_view.rows, field_categories, sources._clean)
+    ability_search: dict[str, tuple[str, ...]] = {}
+
+    def make_record(
+        row: tuple[str, ...], evidence: ObjectFields, from_fields: bool = False
+    ) -> ObjectRecord:
+        abilities = (
+            unit_ability_evidence(
+                evidence.fields,
+                fields.get("技能", {}),
+                sources._clean,
+                fields_complete=field_view.complete,
+                search_cache=ability_search,
+            )
+            if row[0] in {"单位", "英雄"}
+            else None
+        )
+        return ObjectRecord(row, evidence, from_fields, abilities, field_view.complete)
+
     catalog: dict[str, ObjectDetailIndex] = {}
     for table in requested:
         view = sources._named_table(pack, f"对象ID/{table}.tsv", table)
         index = fields.get(table, {})
         records = [
-            ObjectRecord(row, index.get(row[1]) or ObjectFields(row[1], (), ()))
+            make_record(row, index.get(row[1]) or ObjectFields(row[1], (), ()))
             for row in view.rows[1:]
             if len(row) > 4
         ]
         known = {record.row[1] for record in records}
         records.extend(
-            ObjectRecord(
+            make_record(
                 (table, code, "", "", " / ".join(evidence.names) or code, "", ""),
                 evidence,
                 True,
@@ -113,6 +142,13 @@ def render_object_record(
     out.extend(
         f"  {label}: {sources._clean(value)}" for label, value in details if value
     )
+    out.extend(
+        render_combat_parameters(
+            row[0], record.evidence.fields, complete=record.fields_complete
+        )
+    )
+    if record.unit_abilities is not None:
+        out.extend(record.unit_abilities.render_lines())
     if record.evidence.fields:
         out.append("  完整对象字段:")
         for field in record.evidence.fields:
