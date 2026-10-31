@@ -37,19 +37,28 @@ class SplitCodesTest(unittest.TestCase):
     def test_pipe_separator(self):
         self.assertEqual(_split_codes("A001|A002"), ["A001", "A002"])
 
-    def test_filters_placeholders_and_numbers(self):
-        # 空占位、纯数字(计数而非码)、长度不为4 的都剔除
+    def test_declared_four_byte_references_keep_numeric_and_placeholder_spellings(self):
+        # 引用字段已有类型证据；四字节身份不能按外观或经验名单丢弃。
         self.assertEqual(
-            _split_codes("A001,_,____,0000,12,1234abc, ,hpea"), ["A001", "hpea"]
+            _split_codes("A001,_,____,0000,12,1234abc, ,hpea"),
+            ["A001", "____", "0000", "hpea"],
         )
 
     def test_non_string(self):
         self.assertEqual(_split_codes(5), [])
         self.assertEqual(_split_codes(None), [])
 
-    def test_denylist_words(self):
-        # 4 字符英文词/枚举值(targs 等)不是对象码，剔除
-        self.assertEqual(_split_codes("self,tree,none,A001,true"), ["A001"])
+    def test_declared_references_do_not_guess_enums_from_english_words(self):
+        self.assertEqual(
+            _split_codes("self,tree,none,A001,true"),
+            ["self", "tree", "none", "A001", "true"],
+        )
+
+    def test_codes_keep_punctuation_whitespace_names_and_case(self):
+        for code in (" A1 ", "0+!?", "A|01", "I,01", "\x00A\tB"):
+            self.assertEqual(_split_codes("完整(名称)(" + code + ")"), [code])
+        self.assertEqual(_split_codes("A001,a001,A001"), ["A001", "a001", "A001"])
+        self.assertEqual(_split_codes("中文四字"), [])
 
 
 class ExtractByTypeTest(unittest.TestCase):
@@ -65,7 +74,7 @@ class ExtractByTypeTest(unittest.TestCase):
 
     def test_empty_ref_field_dropped(self):
         ft = _FakeType({"uabi": "abilityList"})
-        mods = [Modification("uabi", 3, 0, "_,____")]  # 全是占位
+        mods = [Modification("uabi", 3, 0, "_,")]  # 未编码四字节身份
         self.assertEqual(extract_refs_by_type(mods, ft), [])
 
     def test_ref_types_cover_expected(self):
@@ -103,6 +112,25 @@ class ExtractByColumnTest(unittest.TestCase):
 
     def test_unknown_category(self):
         self.assertEqual(extract_refs_by_column({"abilList": "AHbz"}, "增益"), [])
+
+    def test_every_encoded_level_retains_its_declared_reference_role(self):
+        fields = {"BuffID5000": "B001", "UnitID9000": "0000", "UnitIDextra": "u001"}
+        self.assertEqual(
+            extract_refs_by_column(fields, "技能"),
+            [("BuffID5000", ["B001"]), ("UnitID9000", ["0000"])],
+        )
+        self.assertEqual(
+            extract_refs_by_column({"Requires5000": "R001"}, "单位"),
+            [("Requires5000", ["R001"])],
+        )
+
+    def test_numeric_codes_are_preserved_only_in_declared_reference_fields(self):
+        ft = _FakeType({"uabi": "abilityList", "uhpm": "int"})
+        mods = [
+            Modification("uabi", 3, 0, "0000,0000,1234"),
+            Modification("uhpm", 3, 0, "1234"),
+        ]
+        self.assertEqual(extract_refs_by_type(mods, ft), [("uabi", ["0000", "1234"])])
 
 
 def _obj(cat, oid, name, is_custom=True, ref_fields=None):

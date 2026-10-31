@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import bisect
 import hashlib
+import io
 import json
 import math
 import time
@@ -61,6 +62,11 @@ from .pack_query_options import (
     parse_query_limit,
 )
 from .pack_query_script_coverage import ScriptCoverage, build_script_coverage
+from .pack_query_table_snapshot import (
+    QuerySourceSnapshot,
+    ScriptDirectorySnapshot,
+    TableSourceSnapshot,
+)
 from .object_codes import decode_object_id_query, field_object_codes
 from .object_export_coverage import (
     OBJECT_COVERAGE_FILE,
@@ -165,6 +171,7 @@ _QUERY_SCRIPT_COVERAGE: dict[str, ScriptCoverage] | None = None
 _QUERY_FILES: set[tuple[str, str]] | None = None
 _QUERY_OBJECT_WARNINGS: dict[str, list[str]] | None = None
 _QUERY_OBJECT_COVERAGE: dict[str, ObjectCoverageInput] | None = None
+_QUERY_TABLE_SNAPSHOTS: dict[tuple[str, str], QuerySourceSnapshot] | None = None
 
 # 本进程内遇到的 OS 级锁死表 (杀软隔离/ACL 损坏): (pack_dir, rel) — 查询出口统一披露
 _LOCKED_FILES: set[tuple[str, str]] = set()
@@ -177,16 +184,23 @@ def _iter_tsv_lines(path: Path, *, newline: str | None = None):
         _QUERY_FILES.add(key)
     for _attempt in range(1 if key in _LOCKED_FILES else 3):
         try:
-            with path.open(
-                encoding="utf-8-sig", errors="replace", newline=newline
-            ) as handle:
+            with path.open("rb") as handle:
                 before = os.fstat(handle.fileno())
-                lines = list(handle)
+                payload = handle.read()
                 after = os.fstat(handle.fileno())
             if _table_identity(before) != _table_identity(after) or _table_identity(
                 after
             ) != _table_identity(path.stat()):
                 continue
+            if _QUERY_TABLE_SNAPSHOTS is not None:
+                _QUERY_TABLE_SNAPSHOTS[key] = TableSourceSnapshot(
+                    path, _table_identity(after), hashlib.sha256(payload).hexdigest()
+                )
+            lines = list(
+                io.StringIO(
+                    payload.decode("utf-8-sig", errors="replace"), newline=newline
+                )
+            )
             _LOCKED_FILES.discard(key)
             yield from lines
             return
@@ -232,13 +246,18 @@ def _read_rows_locked(pack_dir: Path, rel: str) -> list[list[str]]:
         try:
             with path.open("rb") as handle:
                 before = os.fstat(handle.fileno())
-                digest = hashlib.file_digest(handle, "sha256").hexdigest()
+                payload = handle.read()
                 after = os.fstat(handle.fileno())
             if _table_identity(before) != _table_identity(after) or _table_identity(
                 after
             ) != _table_identity(path.stat()):
                 continue
+            digest = hashlib.sha256(payload).hexdigest()
             fingerprint = (after.st_mtime_ns, after.st_size, digest)
+            if _QUERY_TABLE_SNAPSHOTS is not None:
+                _QUERY_TABLE_SNAPSHOTS[cache_key] = TableSourceSnapshot(
+                    path, _table_identity(after), digest
+                )
             cached = _ROWS_CACHE.get(cache_key)
             if cached is not None and cached[0] == fingerprint:
                 _LOCKED_FILES.discard(cache_key)
@@ -246,14 +265,20 @@ def _read_rows_locked(pack_dir: Path, rel: str) -> list[list[str]]:
             with full_csv_fields():
                 # Decode the file signature before CSV parses a quoted first
                 # cell; fingerprints above still include every original byte.
-                with path.open(encoding="utf-8-sig", newline="") as handle:
-                    rows = list(csv.reader(handle, delimiter="\t"))
+                rows = list(
+                    csv.reader(
+                        io.StringIO(payload.decode("utf-8-sig"), newline=""),
+                        delimiter="\t",
+                    )
+                )
             if _table_identity(after) != _table_identity(path.stat()):
                 continue
             _ROWS_CACHE[cache_key] = (fingerprint, rows)
             _LOCKED_FILES.discard(cache_key)
             return rows
         except FileNotFoundError:
+            if _QUERY_TABLE_SNAPSHOTS is not None:
+                _QUERY_TABLE_SNAPSHOTS[cache_key] = TableSourceSnapshot(path, None)
             _ROWS_CACHE.pop(cache_key, None)
             _LOCKED_FILES.discard(cache_key)
             return []
@@ -574,7 +599,7 @@ _tech_base_fields_cache: dict[str, dict[str, str]] | None = None
 
 
 def _tech_base_fields() -> dict[str, dict[str, str]]:
-    """基础科技四码(小写) -> {字段名: 值}（生成表 base_objects.BASE_OBJECTS）。"""
+    """Case-sensitive technology IDs -> static fields from BASE_OBJECTS."""
     global _tech_base_fields_cache
     if _tech_base_fields_cache is None:
         from .base_objects import BASE_OBJECTS
@@ -583,7 +608,7 @@ def _tech_base_fields() -> dict[str, dict[str, str]]:
         for code, entry in BASE_OBJECTS.items():
             if entry[0] != "科技":
                 continue
-            out[code.lower()] = dict(entry[1])
+            out[code] = dict(entry[1])
         _tech_base_fields_cache = out
     return _tech_base_fields_cache
 
@@ -1462,7 +1487,8 @@ def _acquisition_script_evidence(
                     )
                 )
             continue
-        legacy_sources.append(text)
+        if lua is False:
+            legacy_sources.append(text)
     if legacy_sources:
         # JASS functions may deliberately be split across exported WCT/main sources.
         # Keep that established linkage, excluding Lua strings from the JASS parser.
@@ -1478,7 +1504,7 @@ def _acquisition_script_evidence(
                     helper_records,
                     lambda value: names.get(value, value),
                     source="、".join(
-                        source for source, _text, lua in sources if lua is not True
+                        source for source, _text, lua in sources if lua is False
                     ),
                     target=code,
                     death=is_death,
@@ -1652,10 +1678,11 @@ _UNIT_VAR_RE = re.compile(
 def _balanced_call(body: str, start: int) -> str:
     """从 start 起按括号配平取完整调用语句——语句全文, 不截断。"""
     depth = 0
+    syntax = script_views(body, lua=False).syntax
     for i in range(start, len(body)):
-        if body[i] == "(":
+        if syntax[i] == "(":
             depth += 1
-        elif body[i] == ")":
+        elif syntax[i] == ")":
             depth -= 1
             if depth == 0:
                 return body[start : i + 1]
@@ -1665,10 +1692,10 @@ def _balanced_call(body: str, start: int) -> str:
 def _fourcc(literal: str, hex_value: str) -> str:
     """四码归一: 引号形态 'h016' 直接取; YDWE 整数形态 $68303136 -> h016。"""
     if literal:
-        return literal
+        return literal if valid_object_code(literal) else ""
     if len(hex_value) == 8:
         try:
-            return bytes.fromhex(hex_value).decode("ascii")
+            return bytes.fromhex(hex_value).decode("latin-1")
         except ValueError, UnicodeDecodeError:
             return ""
     return ""
@@ -1680,8 +1707,8 @@ def _unit_var_codes(script: str) -> dict[str, str]:
     YDWE 死亡判定常写 GetDyingUnit()==udg_X 或 gg_unit_码_0122==GetDyingUnit(),
     句柄比较本身不带四码, 靠初始化赋值与 gg_unit 变量名反推。"""
     codes: dict[str, str] = {}
-    for m in _UNIT_VAR_RE.finditer(script):
-        var = m.group(1).lower()
+    for m in _UNIT_VAR_RE.finditer(script_views(script, lua=False).code):
+        var = m.group(1)
         if m.group(4):
             g = re.match(r"gg_unit_(\w{4})_\d+", m.group(4), re.I)
             if g:
@@ -1696,12 +1723,13 @@ def _unit_var_codes(script: str) -> dict[str, str]:
 def _death_unit_codes(text: str, var_codes: dict[str, str]) -> list[str]:
     """死亡判定里的单位四码: 类型比较 (引号/整数) + 句柄比较 (gg_unit/udg) 归一。"""
     codes: list[str] = []
-    for du in _DEATH_UNIT_RE.finditer(text):
+    code_view = script_views(text, lua=False).code
+    for du in _DEATH_UNIT_RE.finditer(code_view):
         code = _fourcc(du.group(1), du.group(2))
         if code:
             codes.append(code)
-    for hm in _DEATH_HANDLE_RE.finditer(text):
-        token = (hm.group(1) or hm.group(2) or "").lower()
+    for hm in _DEATH_HANDLE_RE.finditer(code_view):
+        token = hm.group(1) or hm.group(2) or ""
         if not token:
             continue
         g = re.match(r"gg_unit_(\w{4})_\d+", token)
@@ -1731,9 +1759,9 @@ def _script_use_item_loot(script: str, code: str, names: dict[str, str]) -> list
     迷失国度 wbc 系统: 使用物品时创建池子, 逐次
     ItemPoolAddItemType(池, udg_ZBSD[GetRandomInt(1,44)], 1) 从 45 件
     数组随机取件, 定时器回调放置——数组内容静态可解, 满量列出。"""
-    want = code.lower()
+    want = code
     arrays: dict[str, list[tuple[int, str]]] = {}
-    for m in _ARRAY_SET_RE.finditer(script):
+    for m in _ARRAY_SET_RE.finditer(script_views(script, lua=False).code):
         acode = _fourcc(m.group(3), m.group(4))
         if acode:
             arrays.setdefault(m.group(1), []).append((int(m.group(2)), acode))
@@ -1743,10 +1771,10 @@ def _script_use_item_loot(script: str, code: str, names: dict[str, str]) -> list
     # 全脚本按变量名配对会把无关动作体当产出 (与 _item_trigger_blocks 同源)
     conds, _acts = _registration_maps(script)
     out: list[str] = []
-    for m in _DEATH_COND_BLOCK_RE.finditer(script):
+    for m in _DEATH_COND_BLOCK_RE.finditer(script_views(script, lua=False).code):
         cond_body = " ".join(m.group(2).split())
         hits = {
-            _fourcc(x.group(1), x.group(2)).lower()
+            _fourcc(x.group(1), x.group(2))
             for x in _USE_ITEM_COND_RE.finditer(cond_body)
         }
         if want not in hits:
@@ -1760,8 +1788,8 @@ def _script_use_item_loot(script: str, code: str, names: dict[str, str]) -> list
         act = _action_after_registration(var, pos, scope_body, scope_start)
         if not act:
             continue
-        action_body = _fn_body(script, act)
-        for pm in _ARRAY_POOL_RE.finditer(action_body):
+        action_body = _fn_body(script, act, preserve_whitespace=True)
+        for pm in _ARRAY_POOL_RE.finditer(script_views(action_body, lua=False).code):
             arr, cap = pm.group(1), int(pm.group(2))
             entries = sorted(arrays.get(arr, []))
             if not entries:
@@ -1789,7 +1817,8 @@ def _item_trigger_blocks(
     conds, acts = _registration_maps(script)
     blocks: list[tuple[str, tuple[str, ...], str, frozenset[str]]] = []
     seen_bodies: set[str] = set()
-    for m in _DEATH_COND_BLOCK_RE.finditer(script):
+    code_view = script_views(script, lua=False).code
+    for m in _DEATH_COND_BLOCK_RE.finditer(code_view):
         cond_body = " ".join(m.group(2).split())
         codes = [
             _fourcc(x.group(1), x.group(2))
@@ -1807,21 +1836,23 @@ def _item_trigger_blocks(
         act = _action_after_registration(var, pos, scope_body, scope_start)
         if not act:
             continue
-        body = _fn_body(script, act)
+        body = _fn_body(script, act, preserve_whitespace=True)
         if body == "(未找到函数体)":
             continue
         seen_bodies.add(act)
         events = _registration_events(var, pos, scope_body, scope_start)
         blocks.append((stem, tuple(codes), body, frozenset(events)))
-    for m in _FN_ALL_RE.finditer(script):
+    for m in _FN_ALL_RE.finditer(code_view):
         name = m.group(1)
         if name in seen_bodies:
             continue
-        body = m.group(2)
-        if "GetManipulatedItem" not in body:
+        matched_body = m.group(2)
+        body = script[m.start(2) : m.end(2)]
+        if "GetManipulatedItem" not in matched_body:
             continue
         codes = [
-            _fourcc(x.group(1), x.group(2)) for x in _USE_ITEM_COND_RE.finditer(body)
+            _fourcc(x.group(1), x.group(2))
+            for x in _USE_ITEM_COND_RE.finditer(matched_body)
         ]
         codes = [c for c in codes if c]
         if not codes:
@@ -1845,11 +1876,11 @@ def _item_trigger_grant_lines(
     拾取凭证/宝箱 → 给物品是 hxsj 世界商人/铜宝箱系统 (I03O 掷骰
     GetRandomInt(1,300)<=150 给 I01O/I02G/I032 即此类); 与数组池
     (use_item_loot_lines) 并行, 都按「条件命中物品 → 触发器 → 动作」解析。"""
-    wants = {c.lower() for c in codes}
+    wants = set(codes)
     out: list[str] = []
     seen: set[tuple[str, str, str]] = set()
     for stem, cond_codes, body, events in _item_trigger_blocks(script):
-        hit = [c for c in cond_codes if label_all or c.lower() in wants]
+        hit = [c for c in cond_codes if label_all or c in wants]
         if not hit:
             continue
         if "EVENT_PLAYER_UNIT_PICKUP_ITEM" in events:
@@ -1858,9 +1889,10 @@ def _item_trigger_grant_lines(
             kind = "使用"
         else:
             kind = "触发"
-        randoms = list(_RANDOM_CALL_RE.finditer(body))
+        code_view = script_views(body, lua=False).code
+        randoms = list(_RANDOM_CALL_RE.finditer(code_view))
         local: list[tuple[str, str]] = []
-        for dm in _DIRECT_PLACE_RE.finditer(body):
+        for dm in _DIRECT_PLACE_RE.finditer(code_view):
             icode = _fourcc(dm.group(1), dm.group(2))
             if not icode:
                 continue
@@ -1891,7 +1923,7 @@ def use_item_loot_lines(script: str, name_of) -> list[str]:
     物品列表 + 动作注册的数组池 (`udg_X[GetRandomInt(1,N)]`) → 数组内容
     静态全解满量列出 (迷失国度 wbc 系统 45/10/10/27 件四池即此法实证)。"""
     arrays: dict[str, list[tuple[int, str]]] = {}
-    for m in _ARRAY_SET_RE.finditer(script):
+    for m in _ARRAY_SET_RE.finditer(script_views(script, lua=False).code):
         acode = _fourcc(m.group(3), m.group(4))
         if acode:
             arrays.setdefault(m.group(1), []).append((int(m.group(2)), acode))
@@ -1904,7 +1936,7 @@ def use_item_loot_lines(script: str, name_of) -> list[str]:
             continue
         kind = "拾取" if "EVENT_PLAYER_UNIT_PICKUP_ITEM" in events else "使用"
         users = "、".join(f"{name_of(c)}({c})" for c in cond_codes)
-        for pm in _ARRAY_POOL_RE.finditer(action_body):
+        for pm in _ARRAY_POOL_RE.finditer(script_views(action_body, lua=False).code):
             arr, cap = pm.group(1), int(pm.group(2))
             entries = sorted(arrays.get(arr, []))
             if not entries:
@@ -1932,13 +1964,12 @@ def _script_pool_drops(
     script = load_script(pack) if script is None else script
     if script is None or len(code) != 4:
         return []
-    want = "'" + code.lower() + "'"
-    want_hex = "$" + code.encode("ascii", "replace").hex()
     var_codes = _unit_var_codes(script)
     # 处理器按注册位置配对 (变量复用问题同 _script_use_item_loot)
     conds, _acts = _registration_maps(script)
     pools: dict[tuple[str, str], list[tuple[str, float]]] = {}
-    for pm in _POOL_ITEM_RE.finditer(script):
+    code_view = script_views(script, lua=False).code
+    for pm in _POOL_ITEM_RE.finditer(code_view):
         pcode = _fourcc(pm.group(3), pm.group(4))
         if not pcode:
             continue
@@ -1950,14 +1981,9 @@ def _script_pool_drops(
     out: list[str] = []
     price_index: ItemPriceIndex | None = None
     described_prices: set[str] = set()
-    for m in _DEATH_COND_BLOCK_RE.finditer(script):
+    for m in _DEATH_COND_BLOCK_RE.finditer(code_view):
         body = m.group(2)
-        lower = body.lower()
-        matched = want in lower or want_hex.lower() in lower
-        if not matched:
-            matched = any(
-                c.lower() == code.lower() for c in _death_unit_codes(body, var_codes)
-            )
+        matched = code in _death_unit_codes(body, var_codes)
         if not matched or "GetDyingUnit" not in body:
             continue
         reg = conds.get(m.group(1) + "Conditions")
@@ -1968,15 +1994,16 @@ def _script_pool_drops(
         act = _action_after_registration(var, pos, scope_body, scope_start)
         if not act:
             continue
-        action_body = _fn_body(script, act)
-        placed = _PLACE_POOL_RE.findall(action_body)
+        action_body = _fn_body(script, act, preserve_whitespace=True)
+        action_code = script_views(action_body, lua=False).code
+        placed = _PLACE_POOL_RE.findall(action_code)
         if not placed:
             continue
-        denom = _ROLL_RE.findall(action_body)
+        denom = _ROLL_RE.findall(action_code)
         chance = f"1~{denom[0]} 掷骰" if denom else "掷骰"
-        if denom and re.search(rf"SaveInteger.*?,\s*{denom[0]}\s*\)", action_body):
+        if denom and re.search(rf"SaveInteger.*?,\s*{denom[0]}\s*\)", action_code):
             chance = f"{denom[0]}/{denom[0]}=必掉"
-        label = units.get(code, units.get(code.upper(), code))
+        label = units.get(code, code)
         out.append(f"{label} [{code}]  ⚠ 脚本死亡奖池 (脚本证据):")
         for pvar, pidx in placed:  # 全部奖池
             entries = pools.get((pvar, pidx), [])
@@ -2056,24 +2083,27 @@ def _death_blocks(script: str) -> tuple[tuple[str, str, str, str], ...]:
     label 是证据行展示名: 成对形态用「死亡条件 {stem}Conditions」。"""
     blocks: list[tuple[str, str, str, str]] = []
     done: set[str] = set()
-    for m in _DEATH_COND_BLOCK_RE.finditer(script):
+    code_view = script_views(script, lua=False).code
+    for m in _DEATH_COND_BLOCK_RE.finditer(code_view):
         stem = m.group(1)
         fname = stem + "Actions"
-        action = _fn_body(script, fname)
+        action = _fn_body(script, fname, preserve_whitespace=True)
         if action == "(未找到函数体)":
             continue
         done.add(fname)
         label = f"死亡条件 {stem}Conditions"
-        blocks.append((stem, label, " ".join(m.group(2).split()), action))
-    for m in _FN_ALL_RE.finditer(script):
+        blocks.append(
+            (stem, label, script[m.start(2) : m.end(2)].strip("\r\n"), action)
+        )
+    for m in _FN_ALL_RE.finditer(code_view):
         fname = m.group(1)
         if fname in done:
             continue
         sig = m.group(0)[: m.group(0).find("\n")]
         if "returns boolean" in sig:
             continue
-        body = m.group(2)
-        if "GetDyingUnit()" not in body:
+        body = script[m.start(2) : m.end(2)]
+        if "GetDyingUnit()" not in m.group(2):
             continue
         done.add(fname)
         stem = fname[: -len("Actions")] if fname.endswith("Actions") else fname
@@ -2107,13 +2137,15 @@ def _unit_death_random_drops(
     关联方式: 同函数内 EVENT_UNIT_DEATH 注册的 unit 变量取其前最近的
     set u=CreateUnit(...,'码',...) 单位码; 触发器变量取 TriggerAddAction。"""
     out: dict[tuple[str, str], list[tuple[str, int]]] = {}
-    for hm in _FN_HEAD_RE.finditer(script_views(script).syntax):
-        end = script_views(script).syntax.find("endfunction", hm.start())
+    syntax = script_views(script, lua=False).syntax
+    for hm in _FN_HEAD_RE.finditer(syntax):
+        end = syntax.find("endfunction", hm.start())
         body = script[hm.start() : len(script) if end < 0 else end]
-        creates = list(_CREATE_UNIT_VAR_RE.finditer(body))
+        code_view = script_views(body, lua=False).code
+        creates = list(_CREATE_UNIT_VAR_RE.finditer(code_view))
         if not creates:
             continue
-        for rm in _UNIT_DEATH_REG_RE.finditer(body):
+        for rm in _UNIT_DEATH_REG_RE.finditer(code_view):
             trigger_var, unit_var = rm.group(1), rm.group(2)
             code = ""
             for cm in creates:
@@ -2133,7 +2165,11 @@ def _unit_death_random_drops(
                 continue
             regs = [
                 (_fourcc(im.group(1), im.group(2)), int(im.group(3)))
-                for im in _RANDOM_DIST_ADD_RE.finditer(_fn_body(script, fn))
+                for im in _RANDOM_DIST_ADD_RE.finditer(
+                    script_views(
+                        _fn_body(script, fn, preserve_whitespace=True), lua=False
+                    ).code
+                )
             ]
             regs = [(c, w) for c, w in regs if c]
             if not regs:
@@ -2150,10 +2186,10 @@ def _script_unit_random_drops(
 ) -> list[str]:
     """单位维度: 该单位的 YDWE 死亡随机掉落模板内容 (权重满量)。"""
     del units  # 签名与关系表单位维度统一; 匹配靠 unit_code
-    want = unit_code.lower()
+    want = unit_code
     out: list[str] = []
     for ucode, fn, regs in _unit_death_random_drops(script):
-        if ucode.lower() != want:
+        if ucode != want:
             continue
         total = sum(w for _c, w in regs) or 1
         inner = "、".join(
@@ -2171,13 +2207,13 @@ def _script_random_dist_item_drops(
 ) -> list[str]:
     """物品维度: 该物品出现在哪些 YDWE 每单位死亡随机掉落模板里。"""
     del items  # 签名与单位维度统一; 匹配靠 code, units 用于单位名展示
-    want = code.lower()
+    want = code
     out: list[str] = []
     for ucode, fn, regs in _unit_death_random_drops(script):
-        hit = [(c, w) for c, w in regs if c.lower() == want]
+        hit = [(c, w) for c, w in regs if c == want]
         if not hit:
             continue
-        uname = units.get(ucode) or units.get(ucode.upper()) or ucode
+        uname = units.get(ucode) or ucode
         total = sum(w for _c, w in regs) or 1
         out.append(
             "⚠ 脚本死亡随机掉落 (YDWE 每单位模板, 关系表无行): "
@@ -2204,18 +2240,19 @@ def _script_direct_death_drops(
     本物品不猜, 以函数体全文为准 (防呆五闸④: 含随机数不写保底配方)。"""
     if len(code) != 4:
         return []
-    want = code.lower()
-    iname = next((un for c, (un, _ud) in items.items() if c.lower() == want), code)
+    want = code
+    iname = items.get(code, (code, ""))[0]
     out: list[str] = []
     seen: set[tuple[str, str]] = set()
     for stem, label, cond_body, action_body in _death_blocks(script):
-        if "GetDyingUnit" not in cond_body + action_body:
+        action_code = script_views(action_body, lua=False).code
+        if "GetDyingUnit" not in script_views(cond_body, lua=False).code + action_code:
             continue
-        randoms = list(_RANDOM_CALL_RE.finditer(action_body))
-        death_units = list(_DEATH_UNIT_RE.finditer(action_body))
+        randoms = list(_RANDOM_CALL_RE.finditer(action_code))
+        death_units = list(_DEATH_UNIT_RE.finditer(action_code))
         hits: list[list[str]] = []
-        for dm in _DIRECT_PLACE_RE.finditer(action_body):
-            if _fourcc(dm.group(1), dm.group(2)).lower() != want:
+        for dm in _DIRECT_PLACE_RE.finditer(action_code):
+            if _fourcc(dm.group(1), dm.group(2)) != want:
                 continue
             cs = action_body.rfind("call ", max(0, dm.start() - 5), dm.start())
             snippet = _balanced_call(action_body, cs if cs >= 0 else dm.start())
@@ -2239,7 +2276,7 @@ def _script_direct_death_drops(
             killers = [du for du in death_units if du.end() <= dm.start()]
             if killers:
                 ducode = _fourcc(killers[-1].group(1), killers[-1].group(2))
-                uname = units.get(ducode) or units.get(ducode.upper()) or ducode
+                uname = units.get(ducode) or ducode
                 lines.append(f"    死亡单位判定: {uname} [{ducode}]")
             lines.append("    " + gate)
             hits.append(lines)
@@ -2264,20 +2301,21 @@ def _script_unit_direct_drops(
     直落证据却缺席。以 GetUnitTypeId(Get(Dying|Trigger)Unit())==
     \'码\' 在条件体或动作体出现为准, 满量列出该触发器内全部直落
     语句与各自掷骰门槛 (不写保底配方)。"""
-    want = unit_code.lower()
-    iname = units.get(unit_code) or units.get(unit_code.upper()) or unit_code
+    want = unit_code
+    iname = units.get(unit_code) or unit_code
     var_codes = _unit_var_codes(script)
     out: list[str] = []
     seen: set[tuple[str, str, str]] = set()
     for stem, label, cond_body, action_body in _death_blocks(script):
         if not any(
-            c.lower() == want
+            c == want
             for c in _death_unit_codes(cond_body + "\n" + action_body, var_codes)
         ):
             continue
-        randoms = list(_RANDOM_CALL_RE.finditer(action_body))
+        action_code = script_views(action_body, lua=False).code
+        randoms = list(_RANDOM_CALL_RE.finditer(action_code))
         rows: list[str] = []
-        for dm in _DIRECT_PLACE_RE.finditer(action_body):
+        for dm in _DIRECT_PLACE_RE.finditer(action_code):
             icode = _fourcc(dm.group(1), dm.group(2))
             cs = action_body.rfind("call ", max(0, dm.start() - 5), dm.start())
             snippet = _balanced_call(action_body, cs if cs >= 0 else dm.start())
@@ -2293,10 +2331,7 @@ def _script_unit_direct_drops(
                 if prior
                 else "同函数掷骰: 无(本语句之前)"
             )
-            dname = next(
-                (n for c, (n, _d) in items.items() if c.lower() == icode.lower()),
-                icode,
-            )
+            dname = items.get(icode, (icode, ""))[0]
             rows.append(f"  死亡触发 {stem} -> 直落: {dname} [{icode}]: {snippet}")
             rows.append("    " + gate)
         if rows:
@@ -2310,11 +2345,11 @@ def _script_unit_direct_drops(
         # 无固定物品, 但死亡触发在运行时随机补货——如实报机制, 不报成
         # 「无死亡证据」(迷失国度 drs 死亡触发给商店随机上架即此类)。
         stock_counts: dict[tuple[str, str], int] = {}
-        for level, kind in _RANDOM_STOCK_RE.findall(action_body):
+        for level, kind in _RANDOM_STOCK_RE.findall(action_code):
             key = (level, kind)
             stock_counts[key] = stock_counts.get(key, 0) + 1
         stock_items: list[str] = []
-        for sm in _STOCK_ITEM_RE.finditer(action_body):
+        for sm in _STOCK_ITEM_RE.finditer(action_code):
             scode = _fourcc(sm.group(1), sm.group(2))
             if scode and scode not in stock_items:
                 stock_items.append(scode)
@@ -2327,10 +2362,7 @@ def _script_unit_direct_drops(
             )
         out.append(f"  死亡条件 {stem}Conditions: {cond_body}")
         for scode in stock_items:
-            sname = next(
-                (n for c, (n, _d) in items.items() if c.lower() == scode.lower()),
-                scode,
-            )
+            sname = items.get(scode, (scode, ""))[0]
             out.append(f"  死亡触发 {stem} -> 上架商店: {sname} [{scode}]")
         for (level, kind), count in stock_counts.items():
             suffix = f" ×{count}" if count > 1 else ""
@@ -2356,7 +2388,7 @@ def script_death_drop_lines(script: str, name_of) -> list[str]:
     门槛原文, 奖池保持「池子 N 选 1+权重」措辞 (防呆五闸④), 关系表
     UNIT_DROP 行之外的全部脚本死亡证据在此满量浮出。"""
     pool_items: dict[tuple[str, str], list[tuple[str, float]]] = {}
-    for pm in _POOL_ITEM_RE.finditer(script):
+    for pm in _POOL_ITEM_RE.finditer(script_views(script, lua=False).code):
         pcode = _fourcc(pm.group(3), pm.group(4))
         if not pcode:
             continue
@@ -2370,16 +2402,17 @@ def script_death_drop_lines(script: str, name_of) -> list[str]:
         unit_codes: list[str] = []
         seen_units: set[str] = set()
         for code in _death_unit_codes(cond_body + "\n" + action_body, var_codes):
-            if code.lower() in seen_units:
+            if code in seen_units:
                 continue
-            seen_units.add(code.lower())
+            seen_units.add(code)
             unit_codes.append(code)
         if not unit_codes:
             continue
-        randoms = list(_RANDOM_CALL_RE.finditer(action_body))
+        action_code = script_views(action_body, lua=False).code
+        randoms = list(_RANDOM_CALL_RE.finditer(action_code))
         direct: list[str] = []
         seen_entries: set[str] = set()
-        for dm in _DIRECT_PLACE_RE.finditer(action_body):
+        for dm in _DIRECT_PLACE_RE.finditer(action_code):
             icode = _fourcc(dm.group(1), dm.group(2))
             cs = action_body.rfind("call ", max(0, dm.start() - 5), dm.start())
             snippet = _balanced_call(action_body, cs if cs >= 0 else dm.start())
@@ -2390,7 +2423,7 @@ def script_death_drop_lines(script: str, name_of) -> list[str]:
             gate = _balanced_call(action_body, prior[-1].start()) if prior else "无掷骰"
             direct.append(f"{name_of(icode)}({icode}) 掷骰:{gate}")
         pools: list[str] = []
-        for pvar, pidx in _PLACE_POOL_RE.findall(action_body):
+        for pvar, pidx in _PLACE_POOL_RE.findall(action_code):
             regs = pool_items.get((pvar, pidx), [])
             if not regs:
                 continue
@@ -2398,12 +2431,12 @@ def script_death_drop_lines(script: str, name_of) -> list[str]:
             inner = "、".join(f"{name_of(ic)}({ic}) {w:g}/{total:g}" for ic, w in regs)
             pools.append(f"池 {pvar}[{pidx}] 共{len(regs)}件N选1: {inner}")
         stock_counts: dict[tuple[str, str], int] = {}
-        for level, kind in _RANDOM_STOCK_RE.findall(action_body):
+        for level, kind in _RANDOM_STOCK_RE.findall(action_code):
             key = (level, kind)
             stock_counts[key] = stock_counts.get(key, 0) + 1
         stock_items = [
             _fourcc(sm.group(1), sm.group(2))
-            for sm in _STOCK_ITEM_RE.finditer(action_body)
+            for sm in _STOCK_ITEM_RE.finditer(action_code)
         ]
         stock_items = [sc for sc in stock_items if sc]
         if not direct and not pools and not stock_counts and not stock_items:
@@ -2719,9 +2752,10 @@ def _registration_maps(
         return cached
     conds: dict[str, tuple[str, int]] = {}
     acts: dict[str, tuple[str, int]] = {}
-    for m in _SCOPE_ADD_COND_RE.finditer(script):
+    syntax = script_views(script, lua=False).syntax
+    for m in _SCOPE_ADD_COND_RE.finditer(syntax):
         conds.setdefault(m.group(2), (m.group(1), m.start()))
-    for m in _SCOPE_ADD_ACTION_RE.finditer(script):
+    for m in _SCOPE_ADD_ACTION_RE.finditer(syntax):
         acts.setdefault(m.group(2), (m.group(1), m.start()))
     _REGISTRATION_CACHE[script] = (conds, acts)
     return conds, acts
@@ -2792,11 +2826,11 @@ def load_script_sources(pack_dir: Path) -> tuple[tuple[str, str], ...]:
         return _QUERY_SCRIPT_SOURCES[key]
     original = _has_original_script_sources(pack_dir)
     d = pack_dir / ("脚本原始文本" if original else "脚本可读文本")
+    paths = _script_source_paths(pack_dir, d)
     if not d.is_dir():
         if original:
             _script_read_problem(pack_dir, d)
         return ()
-    paths = _script_source_paths(pack_dir, d)
     if original:
         present = {path.relative_to(d) for path in paths}
         for readable in _script_source_paths(pack_dir, pack_dir / "脚本可读文本"):
@@ -2814,18 +2848,26 @@ def load_script_sources(pack_dir: Path) -> tuple[tuple[str, str], ...]:
             try:
                 # The exported original has the same character offsets as the
                 # indexes. Universal-newline conversion would move CRLF sites.
-                with p.open(
-                    encoding="utf-8",
-                    errors="strict" if original else "replace",
-                    newline="",
-                ) as handle:
+                with p.open("rb") as handle:
                     before = os.fstat(handle.fileno())
-                    text = handle.read()
+                    payload = handle.read()
                     after = os.fstat(handle.fileno())
                 if _table_identity(before) != _table_identity(after) or _table_identity(
                     after
                 ) != _table_identity(p.stat()):
                     continue
+                if _QUERY_TABLE_SNAPSHOTS is not None:
+                    _QUERY_TABLE_SNAPSHOTS.setdefault(
+                        file_key,
+                        TableSourceSnapshot(
+                            p,
+                            _table_identity(after),
+                            hashlib.sha256(payload).hexdigest(),
+                        ),
+                    )
+                text = payload.decode(
+                    "utf-8", errors="strict" if original else "replace"
+                )
                 if not original:
                     # Legacy readable packs relied on CR-only normalization.
                     # Only the new original-source boundary promises offsets.
@@ -2847,6 +2889,11 @@ def _has_original_script_sources(pack: Path) -> bool:
     try:
         (pack / "脚本原始文本").lstat()
     except FileNotFoundError:
+        if _QUERY_TABLE_SNAPSHOTS is not None:
+            _QUERY_TABLE_SNAPSHOTS.setdefault(
+                (str(pack), "脚本原始文本"),
+                TableSourceSnapshot(pack / "脚本原始文本", None),
+            )
         return False
     except OSError:
         pass  # An inaccessible original is still an authoritative boundary.
@@ -2861,19 +2908,14 @@ def _script_read_problem(pack: Path, path: Path) -> None:
 
 
 def _script_source_paths(pack: Path, root: Path) -> list[Path]:
-    if not root.is_dir():
-        return []
-
-    def failed(error: OSError) -> None:
-        path = Path(error.filename) if isinstance(error.filename, str) else root
-        _script_read_problem(pack, path)
-
-    return sorted(
-        directory / name
-        for directory, _directories, names in root.walk(on_error=failed)
-        for name in names
-        if Path(name).suffix.lower() in (".j", ".lua", ".txt")
-    )
+    snapshot = ScriptDirectorySnapshot.capture(root)
+    if _QUERY_TABLE_SNAPSHOTS is not None:
+        _QUERY_TABLE_SNAPSHOTS.setdefault(
+            (str(pack), root.relative_to(pack).as_posix()), snapshot
+        )
+    if not snapshot.readable:
+        _script_read_problem(pack, root)
+    return [root / relative for relative in snapshot.entries]
 
 
 def _pack_script_type(pack_dir: Path) -> str:
@@ -2912,6 +2954,10 @@ def _script_coverage(pack: Path) -> ScriptCoverage:
         try:
             (pack / relative).lstat()
         except FileNotFoundError:
+            if _QUERY_TABLE_SNAPSHOTS is not None:
+                _QUERY_TABLE_SNAPSHOTS.setdefault(
+                    (str(pack), relative), TableSourceSnapshot(pack / relative, None)
+                )
             continue
         except OSError:
             failures.append(relative)
@@ -3356,27 +3402,69 @@ def _query_refs_result(pack: Path, query: str, limit: int) -> TextQueryResult:
     return _text_result(lines, True)
 
 
+class _LiveEvidenceRow(list[str]):
+    """Semantic cells decoded once, alongside unchanged encoded source cells."""
+
+    def __init__(self, row: list[str], ordinal: int, header: tuple[str, ...]) -> None:
+        from .batch_tsv import decode_tsv_cell
+
+        super().__init__(decode_tsv_cell(cell) for cell in row)
+        self.raw = tuple(row)
+        self.ordinal = ordinal
+        self.header = header
+
+    def detail_lines(self) -> list[str]:
+        return [
+            *(
+                f"  {self.header[column] if column < len(self.header) else f'扩展列{column + 1}'}: {value}"
+                for column, value in enumerate(self[3:], 3)
+            ),
+            f"  原始TSV单元格（逻辑记录{self.ordinal}）: "
+            + json.dumps(self.raw, ensure_ascii=False),
+        ]
+
+
+def _live_evidence_rows(pack: Path, relative: str) -> list[_LiveEvidenceRow]:
+    rows: list[_LiveEvidenceRow] = []
+    header: tuple[str, ...] = ()
+    for ordinal, row in enumerate(_read_rows(pack, relative), 1):
+        if (
+            ordinal == 1
+            and len(row) >= 3
+            and (
+                row[:3] == ["词缀名", "倍率", "属性"]
+                or row[0] == "消息名"
+                and row[1] in {"记录数", "序号"}
+                and row[2] == "记录JSON"
+            )
+        ):
+            header = tuple(row)
+            continue
+        if len(row) < 3:
+            if row and _QUERY_OBJECT_WARNINGS is not None:
+                _QUERY_OBJECT_WARNINGS.setdefault(str(pack), []).append(
+                    f"[⚠ {relative} — 逻辑记录{ordinal}缺少前三列，保留原始记录: "
+                    + json.dumps(row, ensure_ascii=False)
+                    + f" 来源: {pack}；可用 text 查看来源或重新导出。]"
+                )
+            continue
+        rows.append(_LiveEvidenceRow(row, ordinal, header))
+    return rows
+
+
 def _load_affixes(pack_dir: Path) -> list[tuple[str, str, str]]:
     """Retain distinct definitions even when several affixes share one name."""
     return list(
         dict.fromkeys(
             (row[0], row[1], row[2])
-            for row in _read_rows(pack_dir, "词缀表.tsv")
-            if len(row) >= 3 and row[:3] != ["词缀名", "倍率", "属性"]
+            for row in _live_evidence_rows(pack_dir, "词缀表.tsv")
         )
     )
 
 
-def _registered_data_rows(pack_dir: Path) -> list[list[str]]:
+def _registered_data_rows(pack_dir: Path) -> list[_LiveEvidenceRow]:
     """Accept exported headers and headerless legacy tables without losing row 1."""
-    return [
-        row
-        for row in _read_rows(pack_dir, "注册数据.tsv")
-        if len(row) >= 3
-        and not (
-            row[0] == "消息名" and row[1] in {"记录数", "序号"} and row[2] == "记录JSON"
-        )
-    ]
+    return _live_evidence_rows(pack_dir, "注册数据.tsv")
 
 
 def _load_registered_names(pack_dir: Path) -> dict[str, int]:
@@ -3393,7 +3481,10 @@ def _query_affix(pack: Path, query: str, limit: int) -> list[str]:
     读内存导出包的 词缀表.tsv (live --dump-objects 产出, 模式驱动无词表)。
     空查询 = 全量列出; 命中失败时给总量提示 (否定断言纪律)。
     """
-    affixes = _load_affixes(pack)
+    from .search import compile_query
+
+    compiled = compile_query(query)
+    affixes = _live_evidence_rows(pack, "词缀表.tsv")
     if not affixes:
         return [
             "本包无 词缀表.tsv (非内存导出包, 或该图未捕获到词缀定义)。",
@@ -3401,13 +3492,15 @@ def _query_affix(pack: Path, query: str, limit: int) -> list[str]:
             "  （GUI 用户: 数据工具菜单 →「导出运行时对象包 (词缀/注册)」）",
         ]
     blocks: list[list[str]] = []
-    for name, mult, stat in sorted(affixes):
-        if query and not _match(query, name, stat):
+    for row in sorted(affixes):
+        name, mult, stat = row[:3]
+        if query and (compiled.is_empty or compiled.score_fields(row) is None):
             continue
         unit = "点" if not stat.startswith("的") else ""
         block = [f"[{name}] {stat or '(特效型)'}"]
         if stat:
             block.append(f"  公式: 词条等级 × {mult} {unit}{stat}")
+        block.extend(row.detail_lines())
         blocks.append(block)
     return (
         _limit_result_blocks(blocks, limit)
@@ -3434,8 +3527,8 @@ def _query_registered(pack: Path, query: str, limit: int) -> list[str]:
     for row in rows:
         name, payload = row[0], row[2]
         counts[name] = counts.get(name, 0) + 1
-        if wanted and (wanted in name.casefold() or wanted in payload.casefold()):
-            matched.append([f"== {name} ==", "  " + payload])
+        if wanted and any(wanted in cell.casefold() for cell in row):
+            matched.append([f"== {name} ==", "  " + payload, *row.detail_lines()])
     if query:
         if not matched:
             return [

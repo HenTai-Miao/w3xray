@@ -328,3 +328,41 @@ def test_lua_function_in_table_constructor_still_tracks_its_local_assignments(
     script = "local callbacks={run=function() local t=CreateTrigger() TriggerRegisterPlayerChatEvent(t,Player(0),'-test',true) TriggerAddAction(t,function() BJDebugMsg('TABLE_CALLBACK') end) t=CreateTrigger() TriggerAddAction(t,function() BJDebugMsg('OTHER_TRIGGER') end) end}"
     output = _query(tmp_path, script)
     assert "TABLE_CALLBACK" in output and "OTHER_TRIGGER" not in output
+
+
+@pytest.mark.parametrize(
+    "prefix, expression",
+    [
+        ("local Condition=OtherFunction ", "Condition(Check)"),
+        ("local Filter=OtherFunction ", "Filter(Check)"),
+        ("local _G=private ", "_G.Condition(Check)"),
+        ("local _ENV=private ", "Condition(Check)"),
+        ("", "Condition(Check) or OtherHandler()"),
+        ("", "Condition(Check) + OtherHandler()"),
+        ("", "_G:Condition(Check)"),
+        ("", "_ENV:Filter(Check)"),
+    ],
+)
+def test_callback_wrapper_binding_and_complete_expression_are_required(
+    prefix: str, expression: str
+) -> None:
+    script = (
+        "local function Check() return true end "
+        + prefix
+        + f"TriggerAddCondition(t,{expression})"
+    )
+    (site,) = script_trigger_bindings(script, lua=True).sites
+    assert site.callback is not None
+    assert site.callback.functions == ()
+    assert site.callback.expression == expression
+    assert site.callback.diagnostic
+
+
+def test_captured_condition_alias_keeps_the_original_wrapper_binding() -> None:
+    script = (
+        "local wrap=Condition local Condition=OtherFunction "
+        "local function Check() return true end TriggerAddCondition(t,wrap(Check))"
+    )
+    (site,) = script_trigger_bindings(script, lua=True).sites
+    assert site.callback is not None and not site.callback.diagnostic
+    assert tuple(function.name for function in site.callback.functions) == ("Check",)

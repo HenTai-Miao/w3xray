@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
+
+import pytest
 
 from gametool.pack_query_cli import _query_affix, _query_registered
 
@@ -93,3 +96,77 @@ def test_registered_miss_lists_names(tmp_path: Path) -> None:
     lines = _query_registered(_make_registered_pack(tmp_path), "xxx", 0)
     assert lines and "共 2 种消息名" in lines[0]
     assert "save" in lines[0] and "load" in lines[0]  # miss 也列全部消息名
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "=formula",
+        "-23",
+        "+10",
+        "@name",
+        "'\u2060=literal",
+        'TAB\tCR\r\nLF\n\ufeff"quote',
+    ],
+)
+def test_real_runtime_exports_decode_exactly_one_safety_envelope(
+    tmp_path: Path, value: str
+) -> None:
+    from gametool import pack_query_cli as queries
+    from gametool.live_object_dump import _write_affixes_tsv, _write_registered_data_tsv
+
+    assert (
+        _write_affixes_tsv({value: {"multiplier": value, "stat": value}}, str(tmp_path))
+        == 1
+    )
+    assert queries._load_affixes(tmp_path) == [(value, value, value)]
+    affix_text = "\n".join(_query_affix(tmp_path, "", 0))
+    assert f"[{value}] {value}" in affix_text
+    assert f"词条等级 × {value}" in affix_text
+    assert "原始TSV单元格" in affix_text
+    assert (
+        _write_registered_data_tsv(
+            {value: {"records": [{"value": value}]}}, str(tmp_path)
+        )
+        == 1
+    )
+    rows = queries._registered_data_rows(tmp_path)
+    assert len(rows) == 1 and rows[0][0] == value
+    assert json.loads(rows[0][2]) == {"value": value}
+    assert tuple(queries._read_rows(tmp_path, "注册数据.tsv")[1]) == rows[0].raw
+    assert f"== {value} ==" in "\n".join(_query_registered(tmp_path, value, 0))
+
+
+def test_runtime_export_provenance_and_independent_variants_remain_queryable(
+    tmp_path: Path,
+) -> None:
+    from gametool.live_object_dump import (
+        AffixDefinitions,
+        RegisteredRecords,
+        RuntimeTextEvidence,
+        _write_affixes_tsv,
+        _write_registered_data_tsv,
+    )
+
+    affixes = AffixDefinitions()
+    affixes.evidence = tuple(
+        RuntimeTextEvidence(
+            address, b"raw", "=affix", ("-1", "@stat"), ("'\u2060=literal",)
+        )
+        for address in (1, 2)
+    )
+    assert _write_affixes_tsv(affixes, str(tmp_path)) == 1
+    text = "\n".join(_query_affix(tmp_path, "", 1))
+    assert "地址: 0x1" in text and "原始文本HEX: 726177" in text
+    assert "诊断: '\u2060=literal" in text and "其余 1 条未显示" in text
+    assert "地址: 0x2" not in text
+    registered = RegisteredRecords()
+    registered.evidence = (
+        RuntimeTextEvidence(
+            3, b"encoded", "=message", ('{"a":1,"a":2}',), ("@diagnostic",)
+        ),
+    )
+    assert _write_registered_data_tsv(registered, str(tmp_path)) == 2
+    text = "\n".join(_query_registered(tmp_path, "@diagnostic", 1))
+    assert '"a":1,"a":2' in text and "地址: 0x3" in text
+    assert "诊断: @diagnostic" in text and "原始TSV单元格" in text

@@ -113,7 +113,20 @@ def test_attribute_summaries_preserve_signs_and_numeric_spelling(
 
 
 @pytest.mark.parametrize(
-    "value", ["NaN", "Infinity", "-Infinity", "未确定表达式", "", "-", "'", "12 + 13"]
+    "value",
+    [
+        "NaN",
+        "Infinity",
+        "-Infinity",
+        "未确定表达式",
+        "",
+        "-",
+        "'",
+        "12 + 13",
+        "'123",
+        "''123",
+        "' 123",
+    ],
 )
 def test_unknown_numeric_values_remain_raw_field_evidence(
     tmp_path: Path, value: str

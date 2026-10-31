@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from decimal import Decimal, InvalidOperation
 import math
 import re
 
@@ -30,13 +31,15 @@ def _point(payload: object) -> tuple[str, str] | None:
 
 
 def _unique(pairs: Iterable[tuple[str, str]]) -> tuple[str, str] | None:
-    points: dict[tuple[float, float], tuple[str, str]] = {}
+    points: dict[tuple[Decimal, Decimal], tuple[str, str]] = {}
     for x, y in pairs:
         try:
-            point = (float(x), float(y))
-        except ValueError, OverflowError:
+            point = (Decimal(x), Decimal(y))
+        except InvalidOperation, ValueError:
             return None
-        if not all(math.isfinite(value) for value in point):
+        if not all(
+            value.is_finite() and math.isfinite(float(value)) for value in point
+        ):
             return None
         points.setdefault(point, (x, y))
         if len(points) > 1:
@@ -136,12 +139,15 @@ def _unique_radius(values: list[str]) -> str | None:
     if not values:
         return None
     try:
-        radii = {float(value) for value in values}
-    except ValueError, OverflowError:
+        radii = {Decimal(value) for value in values}
+    except InvalidOperation, ValueError:
         return None
     return (
         values[0]
         if len(radii) == 1
-        and all(math.isfinite(value) and value >= 0 for value in radii)
+        and all(
+            value.is_finite() and math.isfinite(float(value)) and value >= 0
+            for value in radii
+        )
         else None
     )

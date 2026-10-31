@@ -14,6 +14,63 @@ from gametool.wtg_models import (
 
 
 class TestGuiTriggerEca(GuiTestCase):
+    def test_deep_mixed_function_tree_search_and_selection_have_no_recursion_limit(
+        self,
+    ) -> None:
+        leaf = TriggerEcaFunction("深层触发器", 3, "最深目标函数", True, (), ())
+        function = leaf
+        depth = 1250
+        for index in range(depth):
+            parameters = (
+                (TriggerEcaParameter(2, "调用", nested_function=function),)
+                if index % 2
+                else ()
+            )
+            children = () if index % 2 else (function,)
+            function = TriggerEcaFunction(
+                "深层触发器", 2, f"外层{index}", True, parameters, children
+            )
+        self.app.map_data = _map_with_summary("深层图", (function,))
+        self.app._refresh_trigger_eca()
+        self.assertIn(str(depth + 1), self.app.trigger_eca_status.cget("text"))
+        self.app.trigger_eca_search.set("最深目标函数")
+        self.app._search_trigger_eca()
+        self.assertEqual(len(self.app._trigger_eca_nodes), depth + 1)
+        leaf_iid = next(
+            key
+            for key, node in self.app._trigger_eca_nodes.items()
+            if node.function is leaf
+        )
+        self.app.trigger_eca_tree.selection_set(leaf_iid)
+        self.app.trigger_eca_search.set("")
+        self.app._refresh_trigger_eca()
+        self.assertEqual(self.app.trigger_eca_tree.selection(), (leaf_iid,))
+        self.assertIn("最深目标函数", self.app.trigger_eca_detail.get("1.0", "end"))
+
+    def test_deep_array_indexers_keep_search_details_and_nested_calls(self) -> None:
+        nested = TriggerEcaFunction("数组深层", 3, "索引底部函数", True, (), ())
+        parameter = TriggerEcaParameter(
+            2, "索引底部原文", nested_function=nested, source_offset=0xABCD
+        )
+        depth = 1250
+        for index in range(depth):
+            parameter = TriggerEcaParameter(
+                1, f"数组{index}", array_indexer=parameter, have_array_indexer=1
+            )
+        function = TriggerEcaFunction("数组深层", 2, "数组根", True, (parameter,), ())
+        self.app.map_data = _map_with_summary("深数组图", (function,))
+        self.app._refresh_trigger_eca()
+        self.app.trigger_eca_search.set("索引底部原文")
+        self.app._search_trigger_eca()
+        self.app.trigger_eca_tree.selection_set("eca:0")
+        self.app._show_trigger_eca_detail()
+        text = self.app.trigger_eca_detail.get("1.0", "end")
+        self.assertIn("索引底部原文 @ 0xabcd", text)
+        self.assertIn("1" + ".索引" * depth + ".", text)
+        self.app.trigger_eca_search.set("索引底部函数")
+        self.app._search_trigger_eca()
+        self.assertEqual(len(self.app._trigger_eca_nodes), 2)
+
     def test_gui_trigger_tab_renders_function_hierarchy(self) -> None:
         # Given: a map with a top-level action and a nested function.
         md = _map_with_nested_eca()

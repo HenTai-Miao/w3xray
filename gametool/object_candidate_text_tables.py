@@ -12,7 +12,6 @@ from .object_candidate_models import ObjectCandidate, ObjectFieldValue, ObjectSo
 from .object_candidate_values import (
     resolved_source_value,
     resolved_value,
-    retain_field,
     wts_value_source,
 )
 from .object_text_sources import TextObjectSourceKind, collect_text_object_records
@@ -55,13 +54,6 @@ def collect_text_candidates(
             for key, value in sorted(
                 resolved.items(),
                 key=lambda item: (item[0].casefold(), item[0]),
-            )
-            if retain_field(
-                record.category,
-                key,
-                slk_col_label(key),
-                value,
-                field_type(key),
             )
         )
         result.append(

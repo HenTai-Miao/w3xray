@@ -364,7 +364,7 @@ def test_native_tech_scalar_state_survives_real_loading_exports_and_query(
         if record.row[1] == "Rhar"
     )
     notes: list[str] = []
-    scalar = _scalar(record, canonical, queries._tech_base_fields()["rhar"], notes)
+    scalar = _scalar(record, canonical, queries._tech_base_fields()["Rhar"], notes)
     assert scalar == (Decimal(300) if release else None)
     rendered = queries.execute_pack_query(
         PackQueryCliOptions(str(pack), "tech", "Rhar --level 2")

@@ -24,7 +24,6 @@ from .object_field_selection import object_field_identity
 from .references import extract_refs_by_column
 from .slk_objects import (
     SlkArchive,
-    is_noise_col,
     parse_category_evidence,
     slk_col_label,
 )
@@ -53,8 +52,6 @@ def collect_category_candidates(
                 if column is None or cell.x == 1:
                     continue
                 for name in column.candidate_names:
-                    if is_noise_col(name, category):
-                        continue
                     raw = table.records[cell.record_index].fields[cell.field_index].raw
                     semantic = cell.value if cell.value is not None else raw
                     encoded = json.dumps(

@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 import stat
 
+from .windows_output_paths import native_output_path, validate_output_root
+
 
 def _reparse(metadata: os.stat_result) -> bool:
     return stat.S_ISLNK(metadata.st_mode) or bool(
@@ -14,13 +16,18 @@ def _reparse(metadata: os.stat_result) -> bool:
     )
 
 
-def save_source_path_error(path: Path) -> str:
+def save_source_path_error(path: str | Path) -> str:
     """Inspect each lexical component without following a reparse point."""
+    try:
+        validate_output_root(os.fspath(path))
+    except (TypeError, ValueError) as exc:
+        return f"拒绝不明确的来源路径：{path} ({exc})"
+    path = Path(path)
     absolute = path.absolute()
     components = list(reversed((absolute, *absolute.parents)))
     for component in components:
         try:
-            metadata = component.lstat()
+            metadata = os.lstat(native_output_path(os.path.abspath(component)))
         except OSError as exc:
             return f"不可读取来源路径：{component} ({exc})"
         if _reparse(metadata):
@@ -44,7 +51,7 @@ def iter_save_source_files(
     if problem:
         return (), [problem]
     try:
-        metadata = source.lstat()
+        metadata = os.lstat(native_output_path(os.path.abspath(source)))
     except OSError as exc:
         return (), [f"不可读取来源：{source} ({exc})"]
     if stat.S_ISREG(metadata.st_mode):
@@ -62,14 +69,15 @@ def iter_save_source_files(
             diagnostics.append(problem)
             continue
         try:
-            with os.scandir(directory) as entries:
+            with os.scandir(native_output_path(os.path.abspath(directory))) as entries:
                 ordered = sorted(entries, key=lambda entry: entry.name)
         except OSError as exc:
             diagnostics.append(f"目录不可完整读取：{directory} ({exc})")
             continue
         directories: list[Path] = []
         for entry in ordered:
-            path = Path(entry.path)
+            # Preserve the caller's logical spelling, not the native I/O prefix.
+            path = directory / entry.name
             try:
                 metadata = entry.stat(follow_symlinks=False)
             except OSError as exc:

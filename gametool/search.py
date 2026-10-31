@@ -86,7 +86,7 @@ def _like_score(segs, anchored_start: bool, anchored_end: bool, text: str):
     return 1000 - first_idx
 
 
-# 全角标点 → 半角（引号/竖线/括号）。一次 translate 取代多次 replace。
+# 只规范语法标点；精确引号与反斜杠转义后的原文保持不变。
 _NORMALIZE = str.maketrans({"“": '"', "”": '"', "｜": "|", "（": "(", "）": ")"})
 
 
@@ -103,11 +103,10 @@ def encode_literal_query(value: str) -> str:
 # token: ('and',) ('or',) ('lp',) ('rp',)
 #        ('like', segs, anchored_start, anchored_end) ('eq', needle)
 def _lex(query: str):
-    query = query.translate(_NORMALIZE)
     toks = []
     i, n = 0, len(query)
     while i < n:
-        ch = query[i]
+        ch = query[i].translate(_NORMALIZE)
         if ch.isspace():
             i += 1
             continue
@@ -123,17 +122,18 @@ def _lex(query: str):
             toks.append(("and",))
             i += 2
             continue
-        if ch == "|" and i + 1 < n and query[i + 1] == "|":
+        if ch == "|" and i + 1 < n and query[i + 1].translate(_NORMALIZE) == "|":
             toks.append(("or",))
             i += 2
             continue
-        if ch == "=" and i + 1 < n and query[i + 1] == '"':
+        if ch == "=" and i + 1 < n and query[i + 1].translate(_NORMALIZE) == '"':
+            quotes = {'"'} if query[i + 1] == '"' else {'"', "“", "”"}
             j = i + 2
             buf = []
             while j < n:
-                if query[j] == '"':
-                    if j + 1 < n and query[j + 1] == '"':
-                        buf.append('"')
+                if query[j] in quotes:
+                    if j + 1 < n and query[j + 1] == query[j]:
+                        buf.append(query[j])
                         j += 2
                         continue
                     j += 1
@@ -147,14 +147,14 @@ def _lex(query: str):
         parts = []  # 元素: ('pct',) 通配符 | ('lit', ch) 字面量
         has_pct = False
         while i < n:
-            c = query[i]
+            c = query[i].translate(_NORMALIZE)
             if c.isspace() or c in "()":
                 break
             if c == "&" and i + 1 < n and query[i + 1] == "&":
                 break
-            if c == "|" and i + 1 < n and query[i + 1] == "|":
+            if c == "|" and i + 1 < n and query[i + 1].translate(_NORMALIZE) == "|":
                 break
-            if c == "=" and i + 1 < n and query[i + 1] == '"':
+            if c == "=" and i + 1 < n and query[i + 1].translate(_NORMALIZE) == '"':
                 break
             if c == "\\" and i + 1 < n:  # 转义：下一个字符取字面量
                 parts.append(("lit", query[i + 1]))

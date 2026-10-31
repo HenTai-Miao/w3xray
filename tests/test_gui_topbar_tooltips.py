@@ -15,6 +15,7 @@ _BUTTONS = (
     "minimap_button",
     "guide_button",
     "data_tools_button",
+    "map_label",
 )
 
 
@@ -40,7 +41,7 @@ def test_seven_buttons_have_tooltips() -> None:
 def test_no_duplicate_tooltips() -> None:
     calls = _calls()
     assert len(calls) == len(set(calls)), f"重复 tooltip: {calls}"
-    assert len(calls) == 8  # 包查询 + live 探针
+    assert len(calls) == 9  # 包查询 + live 探针 + 完整地图名
 
 
 def test_guide_near_reverse_guard() -> None:

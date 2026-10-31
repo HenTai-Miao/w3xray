@@ -17,6 +17,7 @@ class WctDiagnostic(StrEnum):
 
     TRUNCATED = "truncated"
     UNSUPPORTED_VERSION = "unsupported_version"
+    TRAILING_DATA = "trailing_data"
 
 
 @dataclass  # MUTABLE_OK, SLOTS_OK: preserve the legacy mutable result contract.
@@ -122,7 +123,12 @@ def parse_wct(data: bytes) -> WctScript:
             triggers=triggers,
             diagnostic=WctDiagnostic.TRUNCATED,
         )
-    return WctScript(comment, custom_code, triggers)
+    return WctScript(
+        comment,
+        custom_code,
+        triggers,
+        diagnostic=None if reader.at_end else WctDiagnostic.TRAILING_DATA,
+    )
 
 
 def _read_global_code(reader: _Reader) -> str:

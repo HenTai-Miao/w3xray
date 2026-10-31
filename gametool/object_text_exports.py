@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from collections import Counter
+from decimal import Decimal
 from typing import Final
 
 from .batch_tsv import format_tsv_rows
-from .base_names import BASE_CATEGORIES, BASE_NAMES_EN
+from .base_catalog import english_name_for, fine_category_for
 from .object_text_models import ObjectTextIndex, ObjectTextRecord, ObjectTextState
 
 OBJECT_TEXT_REPORT_HEADER: Final = (
@@ -42,14 +43,11 @@ OBJECT_TEXT_REPORT_LEGACY_HEADERS: Final[tuple[tuple[str, ...], ...]] = (
 
 
 def _english_name(record: ObjectTextRecord) -> str:
-    return (
-        BASE_NAMES_EN.get(record.base_id) or BASE_NAMES_EN.get(record.object_id) or ""
-    )
+    return english_name_for(record.base_id, record.object_id, category=record.category)
 
 
 def _fine_category(record: ObjectTextRecord) -> str:
-    fine = BASE_CATEGORIES.get(record.base_id) or BASE_CATEGORIES.get(record.object_id)
-    return "" if fine is None else fine[0]
+    return fine_category_for(record.base_id, record.object_id, category=record.category)
 
 
 def format_object_text_tsv(index: ObjectTextIndex) -> str:
@@ -66,7 +64,7 @@ def format_object_text_tsv(index: ObjectTextIndex) -> str:
             record.semantic_field,
             record.field_key,
             record.field_label,
-            "" if record.level is None else str(record.level),
+            "" if record.level is None else str(Decimal(record.level)),
             record.raw_value,
             record.readable_value,
             record.source_kind,

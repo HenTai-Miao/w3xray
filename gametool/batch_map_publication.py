@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import replace
 import os
 from pathlib import Path
-import shutil
 from uuid import uuid4
 
 from .batch_manifest_validation import verify_map_publication
@@ -20,7 +19,7 @@ from .batch_publication_models import (
 from .batch_publication_record import (
     load_transaction,
     new_transaction,
-    owned_source_digest,
+    owned_directory_identity,
     paths_for,
     publication_matches,
     record_path,
@@ -28,6 +27,11 @@ from .batch_publication_record import (
     write_transaction,
 )
 from .batch_publication_recovery import recover_map_publications
+from .batch_stage_cleanup import (
+    StageCleanupStatus,
+    create_owned_stage,
+    remove_owned_stage,
+)
 from .durable_io import sync_directory
 from .safe_output import safe_destination, safe_relative_path
 from .windows_output_paths import native_output_path
@@ -61,14 +65,17 @@ def create_map_stage(
     stage_io = _io_path(stage)
     if stage_io.exists() or stage_io.is_symlink():
         raise BatchMapPublicationError("map stage already exists")
-    stage_io.mkdir(mode=0o700)
+    publication = replace(publication, stage_identity=create_owned_stage(stage_io))
+    transaction = new_transaction(publication)
     try:
         _sync_map_root(maps_root)
         write_transaction(_io_path(maps_root), transaction)
-    except OSError, PublicationRecordError:
-        if stage_io.is_dir() and not stage_io.is_symlink():
-            shutil.rmtree(stage_io)
+    except (OSError, PublicationRecordError) as exc:
+        cleanup = remove_owned_stage(stage_io, publication.stage_identity)
+        if cleanup.status is StageCleanupStatus.REMOVED:
             _sync_map_root(maps_root)
+        elif cleanup.status is not StageCleanupStatus.MISSING:
+            exc.add_note(f"map stage retained: {stage}; {cleanup.detail}")
         raise
     return publication
 
@@ -93,9 +100,11 @@ def publish_map_stage(
     paths = paths_for(maps_root, prepared)
     current = prepared
     if _io_path(paths.destination).exists() or _io_path(paths.destination).is_symlink():
-        _require_owned_destination(paths.destination, publication.digest)
+        identity = owned_directory_identity(paths.destination, publication.digest)
         if _io_path(paths.backup).exists() or _io_path(paths.backup).is_symlink():
             raise BatchMapPublicationError("transaction backup already exists")
+        prepared = replace(prepared, backup_identity=identity)
+        write_transaction(_io_path(maps_root), prepared)
         _replace_directory(paths.destination, paths.backup)
         _sync_map_root(maps_root)
         current = replace(prepared, phase=PublicationPhase.BACKUP_READY)
@@ -109,7 +118,7 @@ def publish_map_stage(
     current = replace(current, phase=PublicationPhase.COMMITTED)
     write_transaction(_io_path(maps_root), current)
     if _io_path(paths.backup).exists() or _io_path(paths.backup).is_symlink():
-        _remove_owned_directory(paths.backup, publication.digest)
+        _remove_owned_directory(paths.backup, current.backup_identity)
         _sync_map_root(maps_root)
     remove_transaction(_io_path(maps_root), current)
     return paths.destination
@@ -157,17 +166,18 @@ def discard_map_stage(
                 transaction.transaction_id,
             ),
         )
-    stage_io = _io_path(publication.stage)
-    if stage_io.is_symlink() or (stage_io.exists() and not stage_io.is_dir()):
+    cleanup = remove_owned_stage(
+        _io_path(publication.stage), transaction.stage_identity
+    )
+    if cleanup.status not in (StageCleanupStatus.REMOVED, StageCleanupStatus.MISSING):
         return (
             RecoveryDiagnostic(
                 "unproved_path",
-                str(publication.stage),
+                f"{publication.stage}: {cleanup.detail}",
                 publication.transaction_id,
             ),
         )
-    if stage_io.exists():
-        shutil.rmtree(stage_io)
+    if cleanup.status is StageCleanupStatus.REMOVED:
         _sync_map_root(maps_root)
     remove_transaction(_io_path(maps_root), transaction)
     return ()
@@ -230,14 +240,10 @@ def _require_matching_record(
         or transaction.destination_name != expected.destination_name
         or transaction.backup_name != expected.backup_name
         or transaction.source_sha256 != expected.source_sha256
+        or transaction.stage_identity != expected.stage_identity
         or transaction.destination_name != destination_name
     ):
         raise BatchMapPublicationError("transaction record does not match stage")
-
-
-def _require_owned_destination(destination: Path, digest: str) -> None:
-    if owned_source_digest(_io_path(destination)) != digest:
-        raise BatchMapPublicationError("refusing to replace unowned map output")
 
 
 def _replace_directory(source: Path, destination: Path) -> None:
@@ -248,9 +254,10 @@ def _sync_map_root(maps_root: Path) -> None:
     sync_directory(maps_root)
 
 
-def _remove_owned_directory(path: Path, digest: str) -> None:
-    _require_owned_destination(path, digest)
-    shutil.rmtree(_io_path(path))
+def _remove_owned_directory(path: Path, identity: tuple[int, int] | None) -> None:
+    cleanup = remove_owned_stage(_io_path(path), identity)
+    if cleanup.status not in (StageCleanupStatus.REMOVED, StageCleanupStatus.MISSING):
+        raise BatchMapPublicationError(f"backup retained: {path}; {cleanup.detail}")
 
 
 def _io_path(path: Path) -> Path:

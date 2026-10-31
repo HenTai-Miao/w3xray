@@ -1601,7 +1601,11 @@ def match_unit_entries(units, query):
 
 
 def _looks_like_handle_manager(
-    reader: MemoryReader, hm: int, o: LiveHandleOffsets
+    reader: MemoryReader,
+    hm: int,
+    o: LiveHandleOffsets,
+    *,
+    budget: ScanBudget | None = None,
 ) -> bool:
     """结构校验: 双表指针入堆、bound 合理、且能找到存活的包装条目。"""
     hits = 0
@@ -1619,6 +1623,8 @@ def _looks_like_handle_manager(
             start = max(0, (region_base - base + 7) // 8)
             end = min(bound, (region_base + len(data) - base) // 8)
             for index in range(start, end):
+                if budget is not None and not index & 0xFFF and not budget.check():
+                    return False
                 marker, wrapper = struct.unpack_from(
                     "<II", data, base + index * 8 - region_base
                 )
@@ -1751,16 +1757,20 @@ def derive_offsets(
     loose-verify 仅在严格校验全军覆没后出现)。
     """
 
-    def _enter(name: str) -> None:
+    def _enter(name: str) -> bool:
+        if budget is not None and not budget.check():
+            return False
         if on_stage is not None:
             on_stage(DERIVE_STAGES[name])
+        return budget is None or budget.check()
 
     # scan_limit<=0 = 扫完整 DLL 段 (旧 64MB 默认曾截掉大体积 Game.dll 的后段候选)
     hi = min(dll_end, dll_base + scan_limit) if scan_limit > 0 else dll_end
     if hi <= dll_base:
         return None
     tpl = classic_template()
-    _enter("candidates")
+    if not _enter("candidates"):
+        return None
     hm_candidates: list[tuple[int, int]] = []
     seen_managers: set[int] = set()
     for _tick, (addr, value) in enumerate(_iter_dwords(reader, dll_base, hi), start=1):
@@ -1769,15 +1779,18 @@ def derive_offsets(
         if (
             _HEAP_LO <= value < _HEAP_HI
             and value not in seen_managers
-            and _looks_like_handle_manager(reader, value, tpl)
+            and _looks_like_handle_manager(reader, value, tpl, budget=budget)
         ):
             seen_managers.add(value)
             hm_candidates.append((addr, value))
             if 0 < max_hm_candidates <= len(hm_candidates):
                 break
-    _enter("build-systems")
+    if not _enter("build-systems"):
+        return None
     systems: list[tuple[LiveHandleOffsets, HandleSystem]] = []
     for hm_slot, _hm in hm_candidates:
+        if budget is not None and not budget.check():
+            return None
         stage = replace(tpl, handle_mgr_global_rva=hm_slot - dll_base)
         system = HandleSystem(reader, dll_base, stage)
         if system.valid:
@@ -1787,7 +1800,8 @@ def derive_offsets(
     # scan_bytes_many 多模式单轮思想): N 个候选从 2N 次遍历降到 2 次。
     # 顺序语义: 以地址序返回首个通过端到端验证的 (system, vmctx) 组合;
     # 多解同时通过时任意一组都是功能正确的读取配置。
-    _enter("strict-verify")
+    if not _enter("strict-verify"):
+        return None
     # 严格轮不提前返回: 收集全部通过候选后取地址序首个, 多解时把歧义
     # 标注进 source (学 trainer discovery_validation 三态 confirmed/
     # ambiguous/unresolved — 歧义可见而非静默选择; 推导是一次性成本,
@@ -1801,6 +1815,8 @@ def derive_offsets(
         if not (_HEAP_LO <= value < _HEAP_HI):
             continue
         for stage, system in systems:
+            if budget is not None and not budget.check():
+                return None
             if _selection_chain_valid(reader, system, tpl, value, True):
                 strict_hits.append((addr, stage))
     if strict_hits:
@@ -1817,10 +1833,12 @@ def derive_offsets(
                 )
             ),
         )
-        _enter("complete")
+        if not _enter("complete"):
+            return None
         return result
     for require_inventory in (False,):
-        _enter("loose-verify")
+        if not _enter("loose-verify"):
+            return None
         _tick = 0
         for addr, value in _iter_dwords(reader, dll_base, hi):
             _tick += 1
@@ -1829,6 +1847,8 @@ def derive_offsets(
             if not (_HEAP_LO <= value < _HEAP_HI):
                 continue
             for stage, system in systems:
+                if budget is not None and not budget.check():
+                    return None
                 if _selection_chain_valid(
                     reader, system, tpl, value, require_inventory
                 ):
@@ -1837,7 +1857,8 @@ def derive_offsets(
                         vmctx_global_rva=addr - dll_base,
                         source="结构特征自动推导 (classic 模板, 宽松校验)",
                     )
-                    _enter("complete")
+                    if not _enter("complete"):
+                        return None
                     return result
     return None
 

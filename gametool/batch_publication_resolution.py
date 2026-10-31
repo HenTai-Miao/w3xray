@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import replace
 import os
 from pathlib import Path
-import shutil
 
 from .batch_publication_models import (
     PublicationPhase,
@@ -19,6 +18,7 @@ from .batch_publication_record import (
     write_transaction,
 )
 from .durable_io import sync_directory
+from .batch_stage_cleanup import StageCleanupStatus, remove_owned_stage
 
 
 def commit_existing_destination(
@@ -77,8 +77,11 @@ def publish_prepared_stage(
     if paths.backup.exists():
         if not backup_owned:
             return (unproved_diagnostic(ready, paths.backup),)
-        shutil.rmtree(paths.backup)
-        sync_directory(maps_root)
+        diagnostic = _cleanup_directory(
+            maps_root, ready, paths.backup, ready.backup_identity
+        )
+        if diagnostic is not None:
+            return (diagnostic,)
     committed = replace(ready, phase=PublicationPhase.COMMITTED)
     write_transaction(maps_root, committed)
     remove_transaction(maps_root, committed)
@@ -123,17 +126,41 @@ def _cleanup_leftovers(
     diagnostics: list[RecoveryDiagnostic] = []
     if paths.stage.exists() or paths.stage.is_symlink():
         if stage_matches:
-            shutil.rmtree(paths.stage)
-            sync_directory(maps_root)
+            diagnostic = _cleanup_directory(
+                maps_root, transaction, paths.stage, transaction.stage_identity
+            )
+            if diagnostic is not None:
+                diagnostics.append(diagnostic)
         else:
             diagnostics.append(unproved_diagnostic(transaction, paths.stage))
     if paths.backup.exists() or paths.backup.is_symlink():
         if backup_owned:
-            shutil.rmtree(paths.backup)
-            sync_directory(maps_root)
+            diagnostic = _cleanup_directory(
+                maps_root, transaction, paths.backup, transaction.backup_identity
+            )
+            if diagnostic is not None:
+                diagnostics.append(diagnostic)
         else:
             diagnostics.append(unproved_diagnostic(transaction, paths.backup))
     return tuple(diagnostics)
+
+
+def _cleanup_directory(
+    maps_root: Path,
+    transaction: PublicationTransaction,
+    path: Path,
+    identity: tuple[int, int] | None,
+) -> RecoveryDiagnostic | None:
+    cleanup = remove_owned_stage(path, identity)
+    if cleanup.status is StageCleanupStatus.REMOVED:
+        sync_directory(maps_root)
+    elif cleanup.status is not StageCleanupStatus.MISSING:
+        return RecoveryDiagnostic(
+            "unproved_path",
+            f"{path}: {cleanup.detail}",
+            transaction.transaction_id,
+        )
+    return None
 
 
 def _diagnostic(

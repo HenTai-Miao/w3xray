@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 _LAST_KEYWORD = ""
 _LAST_MODE = "doc"
 _LAST_RESULT = ""
+_LAST_RESULT_PACK = ""
 _HISTORY: list[tuple[str, str]] = []  # (模式, 关键词) 历史落盘与下拉均保留全量。
 _WINDOW_GEOMETRY: dict[str, str] = {}  # 窗口名 -> "WxH" (进程级)
 
@@ -240,7 +241,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             keynum = _i if _i < 10 else 0  # near 排第 10 = Ctrl+0; again 第 11 位走不到
             if _i > 10:
                 break  # again 仅面板点击切换 (Ctrl+0 已归 near)
-            self.bind_all(
+            self.bind(
                 f"<Control-Key-{keynum}>",
                 lambda _e, c=_cmd: self._switch_mode(c),
             )
@@ -352,11 +353,11 @@ class _PackQueryWindow(ctk.CTkToplevel):
                     self._pinned_box.tag_add("sel", ppos, pend)
 
         find_entry.bind("<Return>", lambda _e: _find_next())
-        self.bind_all("<Control-f>", lambda _e: find_entry.focus_set() or "break")
+        self.bind("<Control-f>", lambda _e: find_entry.focus_set() or "break")
         # CapsLock 大写态变体 (Tk 绑定大小写敏感)
-        self.bind_all("<Control-F>", lambda _e: find_entry.focus_set() or "break")
+        self.bind("<Control-F>", lambda _e: find_entry.focus_set() or "break")
         # Ctrl+A 全选输出 (CTkTextbox 不默认绑)
-        self.bind_all(
+        self.bind(
             "<Control-a>",
             lambda _e: (
                 self._output.tag_add("sel", "1.0", "end"),
@@ -365,7 +366,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
             )[2],
         )
         # CapsLock 大写态变体 (Tk 绑定大小写敏感)
-        self.bind_all(
+        self.bind(
             "<Control-A>",
             lambda _e: (
                 self._output.tag_add("sel", "1.0", "end"),
@@ -375,8 +376,12 @@ class _PackQueryWindow(ctk.CTkToplevel):
         )
         self._output = ctk.CTkTextbox(self, font=("Consolas", 12), wrap="none")
         self._output.pack(fill="both", expand=True, padx=14, pady=10)
-        if _LAST_RESULT:
-            self._output.insert("1.0", _LAST_RESULT)
+        restored_result = _LAST_RESULT if _LAST_RESULT_PACK == pack_dir else ""
+        if restored_result:
+            self._output.insert(
+                "1.0",
+                "上次查询快照（未重新读取来源，请执行查询刷新）\n\n" + restored_result,
+            )
         else:
             self._output.insert(
                 "1.0",
@@ -433,13 +438,13 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self._pinned_box.bind(
             "<Button-3>", lambda e: pin_menu.tk_popup(e.x_root, e.y_root)
         )
-        self.bind_all("<Control-p>", lambda _e: self._pinned_box.focus_set() or "break")
+        self.bind("<Control-p>", lambda _e: self._pinned_box.focus_set() or "break")
         # CapsLock 大写态变体 (Tk 绑定大小写敏感)
-        self.bind_all("<Control-P>", lambda _e: self._pinned_box.focus_set() or "break")
+        self.bind("<Control-P>", lambda _e: self._pinned_box.focus_set() or "break")
 
         if prefill or prefill_command:
             self.after(120, lambda: self._run_initial(prefill_command or "doc"))
-        elif not _LAST_RESULT:
+        elif not restored_result:
             self.after(120, lambda: self._run_initial("stats"))
 
         menu = tk.Menu(self, tearoff=0)
@@ -757,9 +762,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         pack_b = ""
         if command == "diff":
             # 旧包来源: 关键词框填了用关键词 (CLI 同款语义), 否则用记忆的上次旧包
-            pack_b = (
-                keyword if keyword and os.path.isdir(keyword) else self._diff_against()
-            )
+            pack_b = keyword if keyword else self._diff_against()
             if pack_b and keyword and os.path.isdir(keyword):
                 self._save_diff_against(keyword)
         options = PackQueryCliOptions(
@@ -854,7 +857,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         self.clipboard_append(self._output.get("1.0", "end"))
 
     def _finish(self, text: str, elapsed: str = "") -> None:
-        global _LAST_RESULT
+        global _LAST_RESULT, _LAST_RESULT_PACK
         # export 模式: CLI 输出含 [已导出: 路径], 自动复制路径进剪贴板
         if "[已导出: " in text:
             exported = text.split("[已导出: ", 1)[1].split("]", 1)[0]
@@ -864,6 +867,7 @@ class _PackQueryWindow(ctk.CTkToplevel):
         if elapsed:
             text += f"\n──────────  {elapsed}  ──────────\n"
         _LAST_RESULT = text  # pyright: ignore[reportConstantRedefinition]
+        _LAST_RESULT_PACK = self._pack_dir  # pyright: ignore[reportConstantRedefinition]
         self.configure(cursor="")
         self._output.delete("1.0", "end")
         self._find_state["start"] = "1.0"

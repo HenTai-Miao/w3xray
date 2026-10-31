@@ -132,6 +132,61 @@ def _reforged_wtg():
 
 
 class WtgParseTest(unittest.TestCase):
+    def test_classic_later_header_truncation_keeps_confirmed_tree(self):
+        category = _i(42) + _z("system") + _i(0)
+        variable = _z("Count") + _z("integer") + _i(1) + _i(0) + _i(1) + _i(1) + _z("5")
+        header = b"WTG!" + _i(7)
+        cases = (
+            (header + _i(2) + category + _i(43), (1, 0, 0)),
+            (header + _i(1) + category + _i(0) + _i(2) + variable + b"bad", (1, 1, 0)),
+            (
+                header
+                + _i(1)
+                + category
+                + _i(0)
+                + _i(1)
+                + variable
+                + _i(2)
+                + _classic_trigger("confirmed")
+                + b"bad",
+                (1, 1, 1),
+            ),
+            (header + _i(2_147_483_647) + category, (1, 0, 0)),
+        )
+        for data, expected in cases:
+            with self.subTest(expected=expected, length=len(data)):
+                summary = parse_wtg(data)
+                self.assertEqual(
+                    (
+                        len(summary.categories),
+                        len(summary.variables),
+                        len(summary.triggers),
+                    ),
+                    expected,
+                )
+                self.assertTrue(summary.has_unexpanded_functions)
+                self.assertTrue(summary.parse_failures)
+                self.assertLessEqual(summary.parse_failures[0].offset, len(data))
+
+    def test_reforged_later_item_truncation_keeps_all_complete_records(self):
+        summary = parse_wtg(_reforged_wtg()[:-2])
+
+        self.assertEqual([row.name for row in summary.categories], ["Map", "Folder"])
+        self.assertEqual([row.name for row in summary.variables], ["loc1"])
+        self.assertEqual(
+            [row.name for row in summary.triggers], ["Init", "Note", "ScriptA"]
+        )
+        self.assertTrue(summary.parse_failures)
+        self.assertTrue(summary.has_unexpanded_functions)
+
+    def test_verified_wtg_layouts_report_unconsumed_trailing_bytes(self):
+        for data in (b"WTG!" + _i(7) + _i(0) * 4, _reforged_wtg()):
+            with self.subTest(length=len(data)):
+                summary = parse_wtg(data + b"tail")
+                self.assertTrue(summary.has_unexpanded_functions)
+                self.assertEqual(summary.parse_failures[0].offset, len(data))
+                self.assertIn("4 trailing WTG bytes", summary.parse_failures[0].reason)
+
     def test_parse_classic_wtg_summary(self):
         # Given: a classic TFT trigger file with categories, variables and trigger headers.
         data = _classic_wtg()

@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 import re
-import shutil
 from typing import Final
 
 from .batch_manifest_validation import verify_map_publication
@@ -32,6 +31,7 @@ from .batch_publication_resolution import (
     unproved_diagnostic,
 )
 from .durable_io import sync_directory
+from .batch_stage_cleanup import StageCleanupStatus, remove_owned_stage
 
 
 _RECORD_NAME: Final = re.compile(
@@ -147,10 +147,16 @@ def _discard_incomplete_build(
     paths = paths_for(maps_root, transaction)
     if paths.destination.exists() or paths.backup.exists() or paths.stage.is_symlink():
         return (unproved_diagnostic(transaction, paths.stage),)
-    if paths.stage.exists():
-        if not paths.stage.is_dir():
-            return (unproved_diagnostic(transaction, paths.stage),)
-        shutil.rmtree(paths.stage)
+    cleanup = remove_owned_stage(paths.stage, transaction.stage_identity)
+    if cleanup.status not in (StageCleanupStatus.REMOVED, StageCleanupStatus.MISSING):
+        return (
+            RecoveryDiagnostic(
+                "unproved_path",
+                f"{paths.stage}: {cleanup.detail}",
+                transaction.transaction_id,
+            ),
+        )
+    if cleanup.status is StageCleanupStatus.REMOVED:
         sync_directory(maps_root)
     remove_transaction(maps_root, transaction)
     return (

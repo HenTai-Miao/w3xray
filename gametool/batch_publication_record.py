@@ -23,6 +23,9 @@ from .bounded_file import read_bounded_regular_file
 from .durable_io import sync_directory
 from .safe_output import write_text_safely
 from .safe_output_models import SafeWriteStatus
+from .batch_stage_cleanup import StageCleanupStatus, remove_owned_record
+from .windows_output_paths import native_output_path
+from .windows_source_reads import WindowsSourceRoot
 
 
 TRANSACTION_PREFIX: Final = ".gamexray-map-transaction-"
@@ -47,6 +50,7 @@ def new_transaction(stage: MapPublicationStage) -> PublicationTransaction:
         f".gamexray-map-backup-{stage.transaction_id}",
         stage.digest,
         "",
+        stage.stage_identity,
     )
 
 
@@ -98,6 +102,10 @@ def write_transaction(maps_root: Path, transaction: PublicationTransaction) -> N
 def load_transaction(path: Path) -> PublicationTransaction:
     """Read and parse one bounded, no-follow transaction record."""
     payload, _identity = read_bounded_regular_file(path, _MAX_RECORD_BYTES)
+    return _parse_transaction_payload(payload)
+
+
+def _parse_transaction_payload(payload: bytes) -> PublicationTransaction:
     try:
         return parse_transaction(payload.decode("utf-8"))
     except UnicodeError as exc:
@@ -109,17 +117,26 @@ def remove_transaction(
     expected: PublicationTransaction,
 ) -> None:
     """Remove a record only while its full parsed value still matches."""
-    path = record_path(maps_root, expected.transaction_id)
-    if load_transaction(path) != expected:
+    path = Path(
+        native_output_path(
+            str(record_path(maps_root, expected.transaction_id).absolute())
+        )
+    )
+    payload, identity = read_bounded_regular_file(path, _MAX_RECORD_BYTES)
+    if _parse_transaction_payload(payload) != expected:
         raise BatchMapPublicationError("transaction record changed before cleanup")
-    path.unlink()
+    cleanup = remove_owned_record(path, (identity.device, identity.inode), payload)
+    if cleanup.status is not StageCleanupStatus.REMOVED:
+        raise BatchMapPublicationError(
+            f"transaction record retained: {cleanup.detail or cleanup.status.value}"
+        )
     sync_directory(maps_root)
 
 
 def format_transaction(transaction: PublicationTransaction) -> str:
     """Serialize one transaction deterministically after semantic validation."""
     _validate_transaction(transaction)
-    payload = {
+    payload: dict[str, JsonValue] = {
         "backup_name": transaction.backup_name,
         "destination_name": transaction.destination_name,
         "manifest_sha256": transaction.manifest_sha256,
@@ -128,6 +145,10 @@ def format_transaction(transaction: PublicationTransaction) -> str:
         "stage_name": transaction.stage_name,
         "transaction_id": transaction.transaction_id,
     }
+    if transaction.stage_identity is not None:
+        payload["stage_identity"] = list(transaction.stage_identity)
+    if transaction.backup_identity is not None:
+        payload["backup_identity"] = list(transaction.backup_identity)
     return json.dumps(payload, ensure_ascii=True, indent=2, sort_keys=True) + "\n"
 
 
@@ -148,7 +169,7 @@ def parse_transaction(text: str) -> PublicationTransaction:
         "stage_name",
         "transaction_id",
     }
-    if set(value) != expected:
+    if not expected <= set(value) <= expected | {"stage_identity", "backup_identity"}:
         raise PublicationRecordError("unexpected transaction keys")
     try:
         transaction = PublicationTransaction(
@@ -159,6 +180,8 @@ def parse_transaction(text: str) -> PublicationTransaction:
             _text(value["backup_name"], "backup name"),
             _text(value["source_sha256"], "source SHA-256"),
             _text(value["manifest_sha256"], "manifest SHA-256"),
+            _stage_identity(value.get("stage_identity")),
+            _stage_identity(value.get("backup_identity")),
         )
     except ValueError as exc:
         raise PublicationRecordError("invalid publication phase") from exc
@@ -201,6 +224,18 @@ def publication_matches(
     )
 
 
+def owned_directory_identity(directory: Path, digest: str) -> tuple[int, int]:
+    """Bind a source-owned existing directory while its ancestry remains held."""
+    path = Path(native_output_path(str(directory.absolute())))
+    with WindowsSourceRoot.open(path):
+        if owned_source_digest(path) != digest:
+            raise BatchMapPublicationError("refusing to replace unowned map output")
+        identity = path.stat(follow_symlinks=False)
+        if not identity.st_ino:
+            raise BatchMapPublicationError("map directory identity is unavailable")
+        return identity.st_dev, identity.st_ino
+
+
 def _validate_transaction(transaction: PublicationTransaction) -> None:
     transaction_id = transaction.transaction_id
     if _TRANSACTION_ID.fullmatch(transaction_id) is None:
@@ -225,6 +260,29 @@ def _validate_transaction(transaction: PublicationTransaction) -> None:
             raise PublicationRecordError("building transaction has a manifest hash")
     elif _SHA256.fullmatch(transaction.manifest_sha256) is None:
         raise PublicationRecordError("invalid manifest SHA-256")
+    if transaction.stage_identity is not None:
+        _stage_identity(list(transaction.stage_identity))
+    if transaction.backup_identity is not None:
+        _stage_identity(list(transaction.backup_identity))
+
+
+def _stage_identity(value: JsonValue) -> tuple[int, int] | None:
+    if value is None:
+        return None
+    if (
+        not isinstance(value, list)
+        or len(value) != 2
+        or any(
+            isinstance(item, bool) or not isinstance(item, int) or item < 0
+            for item in value
+        )
+    ):
+        raise PublicationRecordError("invalid stage directory identity")
+    device, inode = value
+    assert isinstance(device, int) and isinstance(inode, int)
+    if not inode:
+        raise PublicationRecordError("stage directory identity is unavailable")
+    return device, inode
 
 
 def _text(value: JsonValue, label: str) -> str:

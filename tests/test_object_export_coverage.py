@@ -99,7 +99,14 @@ def test_complete_selected_exports_write_all_empty_category_headers(
         count = counts.get(category, 0)
         assert f"{category}: {count} 行" in stats.render()
     heroes = execute_pack_query(PackQueryCliOptions(str(pack), "heroes", ""))
-    assert "本次可确认英雄对象记录共 0 项" in heroes.render()
+    assert heroes.exit_code == (0 if has_item else 2)
+    assert counts.get("英雄", 0) == 0
+    if has_item:
+        assert "对象ID/单位.tsv 明确声明基础 ID" in heroes.render()
+        assert "原始分类仍为单位" in heroes.render()
+        assert "该静态分类不证明当前可选、已生成或由玩家持有" in heroes.render()
+    else:
+        assert "本次可确认英雄对象记录共 0 项" in heroes.render()
     assert not any(note.startswith("[⚠") for note in heroes.diagnostics)
 
 

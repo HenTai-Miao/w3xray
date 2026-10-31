@@ -23,7 +23,7 @@ from .wts import parse_wts
 # 客户端快照内容不变（同一份游戏导出数据反复解析是纯浪费），
 # 按全部输入文件的内容摘要做磁盘缓存；任何缓存异常都回退到现算。
 _SNAPSHOT_CACHE_TAG: Final = (
-    "gamexray-client-snapshot-v4"  # 完整来源快照、Skin 与二进制字段证据
+    "gamexray-client-snapshot-v5"  # 完整空字段、SLK 分类及编辑器字段证据
 )
 
 _RACES: Final[tuple[str, ...]] = (
@@ -390,6 +390,11 @@ def merge_client_base_objects(
             merged[item.obj_id] = (item.category, item.fields)
             continue
         category, fields = existing
+        # Rawcodes can be reused by independent object categories. This legacy
+        # base-table projection has one category per code; the complete client
+        # snapshot retains the other category's fields separately.
+        if category != item.category:
+            continue
         combined = list(fields)
         labels = {label.casefold() for label, _value in combined}
         for label, value in item.fields:

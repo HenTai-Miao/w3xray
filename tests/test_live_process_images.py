@@ -570,11 +570,7 @@ def test_object_dump_consumes_image_architecture_and_complete_diagnostics(
         },
     )
     monkeypatch.setattr(live, "process_scan_limit", lambda _version: 1 << 47)
-    monkeypatch.setattr(
-        dump.ctypes,
-        "WinDLL",
-        lambda *_a, **_k: SimpleNamespace(CloseHandle=lambda _h: None),
-    )
+    monkeypatch.setattr(dump, "_close_process_handle", lambda _h: None)
     limits = []
 
     def snapshot(_handle, limit):

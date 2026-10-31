@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from decimal import Decimal
 
 from .map_data import GameObject, MapData
 from .object_text_models import ObjectTextRecord, TextSelectionReason
@@ -88,7 +89,7 @@ def _merge_identical_records(
 
 def _format_text_record(records: tuple[ObjectTextRecord, ...]) -> str:
     first = records[0]
-    level = "通用" if first.level is None else f"等级 {first.level}"
+    level = "通用" if first.level is None else f"等级 {Decimal(first.level)}"
     roles: list[str] = []
     for record in records:
         if record.role not in roles:

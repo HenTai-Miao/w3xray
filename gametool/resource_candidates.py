@@ -27,6 +27,7 @@ from .script_lexing import script_literals, script_views
 from .script_literal_decoding import decode_script_literal
 from .script_scopes import source_line_starts
 from .script_sources import analysis_script_sources
+from .slk_evidence_records import read_slk_records
 from .war3_encoding import decode_warcraft_string
 
 if TYPE_CHECKING:
@@ -180,10 +181,13 @@ def data_resource_candidates(source: str, raw: bytes) -> tuple[ResourceCandidate
     fingerprint = "bytes-sha256:" + _digest(raw)
     lines = source_line_starts(text)
     items: list[ResourceCandidate] = []
-    for start, end, value, form in _data_values(source, text):
+    for start, end, value, form, uncertainty in _data_values(source, text):
         if not _looks_like_resource(value):
             continue
         state, notes = _path_state(value)
+        if uncertainty:
+            state = "unknown"
+            notes += uncertainty
         items.append(
             ResourceCandidate(
                 _path(value),
@@ -354,23 +358,30 @@ def _discover(
     return items
 
 
-def _data_values(source: str, text: str) -> Iterable[tuple[int, int, str, str]]:
+def _data_values(
+    source: str, text: str
+) -> Iterable[tuple[int, int, str, str, tuple[str, ...]]]:
+    if _extension(source) == "slk":
+        records, cells, _diagnostics = read_slk_records(text)
+        for cell in cells:
+            if cell.value is None:
+                continue
+            record = records[cell.record_index]
+            field = record.fields[cell.field_index]
+            notes = (
+                ()
+                if cell.valid
+                else (
+                    "SLK 单元格含未确认的表达式或字段；未读取缓存路径。"
+                    f"完整原始记录: {record.raw!r}",
+                )
+            )
+            yield field.start, field.end, cell.value, "SLK K cell", notes
+        return
     offset = 0
-    slk = _extension(source) == "slk"
     for line in text.splitlines(keepends=True):
         body = line.rstrip("\r\n")
         stripped = body.lstrip()
-        if slk:
-            if stripped.startswith("C;"):
-                # Preserve complete semicolon-escaped K fields and raw offsets.
-                for start, end, field in _slk_fields(body):
-                    if field.startswith("K"):
-                        value = field[1:]
-                        if value.startswith('"') and value.endswith('"'):
-                            value = value[1:-1].replace('""', '"')
-                        yield offset + start, offset + end, value, "SLK K cell"
-            offset += len(line)
-            continue
         if not stripped or stripped.startswith(("//", "--", "#", ";")):
             offset += len(line)
             continue
@@ -381,6 +392,7 @@ def _data_values(source: str, text: str) -> Iterable[tuple[int, int, str, str]]:
                 offset + literal.end,
                 literal.value,
                 "quoted data value",
+                (),
             )
         if not literals:
             visible = script_views(body, lua=None).arguments.strip()
@@ -392,34 +404,9 @@ def _data_values(source: str, text: str) -> Iterable[tuple[int, int, str, str]]:
                     offset + start + len(value),
                     value,
                     "text field/line",
+                    (),
                 )
         offset += len(line)
-
-
-def _slk_fields(line: str) -> Iterable[tuple[int, int, str]]:
-    cursor, start = 0, 0
-    quoted = False
-    parts: list[str] = []
-    while cursor < len(line):
-        char = line[cursor]
-        if char == '"':
-            if quoted and line[cursor : cursor + 2] == '""':
-                parts.append('""')
-                cursor += 2
-                continue
-            quoted = not quoted
-        if char == ";" and line[cursor : cursor + 2] == ";;":
-            parts.append(";")
-            cursor += 2
-            continue
-        if char == ";" and not quoted:
-            yield start, cursor, "".join(parts)
-            start = cursor + 1
-            parts.clear()
-        else:
-            parts.append(char)
-        cursor += 1
-    yield start, len(line), "".join(parts)
 
 
 def _path_state(value: str) -> tuple[str, tuple[str, ...]]:

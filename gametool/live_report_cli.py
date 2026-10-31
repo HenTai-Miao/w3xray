@@ -13,7 +13,7 @@ from .live_report import (
     format_live_report_diff,
     read_live_report,
 )
-from .live_report_io import write_report_bytes
+from .live_report_io import verify_report_source, write_report_bytes
 from .live_report_json import format_report_json
 
 
@@ -51,33 +51,46 @@ def run_live_report_cli(argv: Sequence[str] | None = None) -> int:
         if options.command == "inspect":
             report = read_live_report(options.file)
             if options.json:
-                print(
-                    format_report_json(
-                        {
-                            "schema": "gamexray-live-report-inspection",
-                            "schema_version": 1,
-                            "input_error": False,
-                            "source": report.source,
-                            "document": report.metadata,
-                            "report": report,
-                        }
-                    )
+                output = format_report_json(
+                    {
+                        "schema": "gamexray-live-report-inspection",
+                        "schema_version": 1,
+                        "input_error": False,
+                        "source": report.source,
+                        "document": report.metadata,
+                        "report": report,
+                    }
                 )
             else:
-                print("实时报告离线查看（历史读数）")
-                print("来源: " + format_report_json(report.source))
-                print("文档: " + format_report_json(report.metadata))
-                print("完整原始报告:")
-                print(report.to_json())
+                output = "\n".join(
+                    (
+                        "实时报告离线查看（历史读数）",
+                        "来源: " + format_report_json(report.source),
+                        "文档: " + format_report_json(report.metadata),
+                        "完整原始报告:",
+                        report.to_json(),
+                    )
+                )
+            verify_report_source(report.source)
+            print(output)
             return 0
         old = read_live_report(options.old)
         new = read_live_report(options.new)
         result = compare_live_reports(old, new)
         output = result.to_json() if options.json else format_live_report_diff(result)
+
+        def verify_sources() -> None:
+            verify_report_source(old.source)
+            verify_report_source(new.source)
+
+        verify_sources()
         if options.output is not None:
             write_report_bytes(
-                options.output, (output + "\n").encode("utf-8", errors="strict")
+                options.output,
+                (output + "\n").encode("utf-8", errors="strict"),
+                verify_source=verify_sources,
             )
+        verify_sources()
         print(output)
         if result["comparison_complete"] is not True:
             return 2

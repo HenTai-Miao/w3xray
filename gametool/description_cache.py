@@ -8,6 +8,7 @@ from io import StringIO
 from pathlib import Path
 
 from .batch_tsv import decode_tsv_cell, format_tsv_rows
+from .csv_fields import full_csv_fields
 from .description_cache_models import (
     EMPTY_DESCRIPTION_CACHE,
     DescriptionCache,
@@ -42,7 +43,7 @@ def load_description_cache(path: str | None) -> DescriptionCache:
 def load_description_cache_text(text: str, source: str) -> DescriptionCache:
     """Parse strict cache text already protected by an outer trust boundary."""
     try:
-        with StringIO(text, newline="") as handle:
+        with full_csv_fields(), StringIO(text, newline="") as handle:
             rows = tuple(
                 tuple(decode_tsv_cell(cell) for cell in row)
                 for row in csv.reader(handle, delimiter="\t")

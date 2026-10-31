@@ -116,13 +116,15 @@ def test_conflicting_scalars_never_choose_a_winner_or_inherit_a_base_value(
     assert "金9007199254740997" not in text and "金100" not in text
 
 
-@pytest.mark.parametrize("value", ["", "bad", "NaN", "Infinity"])
+@pytest.mark.parametrize(
+    "value", ["", "bad", "NaN", "Infinity", "'100", "''100", "' 100"]
+)
 def test_explicit_invalid_cost_never_silently_falls_back_to_base(
     tmp_path: Path, value: str
 ) -> None:
     _write(
         tmp_path / "对象ID" / "科技.tsv",
-        [_ID_HEADER, ["科技", "R001", "1", "rhlh", "科技", "是", ""]],
+        [_ID_HEADER, ["科技", "R001", "1", "Rhlh", "科技", "是", ""]],
     )
     _write(
         tmp_path / "对象字段.tsv",
@@ -133,6 +135,19 @@ def test_explicit_invalid_cost_never_silently_falls_back_to_base(
     )
     text = _tech(tmp_path).render()
     assert "未确认" in text and "原始保留" in text and "金 100" not in text
+
+
+@pytest.mark.parametrize("base_id,confirmed", [("Rhlh", True), ("rhlh", False)])
+def test_technology_base_costs_require_case_sensitive_declared_identity(
+    tmp_path: Path, base_id: str, confirmed: bool
+) -> None:
+    _write(
+        tmp_path / "对象ID" / "科技.tsv",
+        [_ID_HEADER, ["科技", "R001", "1", base_id, "科技", "是", ""]],
+    )
+    text = _tech(tmp_path).render()
+    assert ("每级费用: 金 100" in text) is confirmed
+    assert f"基础: {base_id}" in text
 
 
 def test_default_schedule_does_not_allocate_from_huge_declared_level_count(

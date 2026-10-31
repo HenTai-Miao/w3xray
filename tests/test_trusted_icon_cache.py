@@ -166,6 +166,61 @@ def test_trusted_icon_cache_rejects_symlinked_evidence_parent(
         source.historical_icons_for(_MAP_DIGEST)
 
 
+def test_trusted_icon_cache_rejects_payload_link_installed_after_open(
+    tmp_path: Path,
+) -> None:
+    cache = _write_cache(tmp_path)
+    source = TrustedIconCacheDataSource(str(cache))
+    payload = cache / "Icons" / "BTNHero.blp"
+    outside = tmp_path / "outside.blp"
+    outside.write_bytes(_ICON_PAYLOAD)
+    payload.unlink()
+    payload.symlink_to(outside)
+
+    with pytest.raises(TrustedIconCacheError, match="unsafe|symlink|reparse"):
+        source.read_file(_ICON_PATH)
+    assert outside.read_bytes() == _ICON_PAYLOAD
+
+
+def test_trusted_icon_cache_rejects_payload_parent_link_installed_after_open(
+    tmp_path: Path,
+) -> None:
+    cache = _write_cache(tmp_path)
+    source = TrustedIconCacheDataSource(str(cache))
+    parent = cache / "Icons"
+    outside = tmp_path / "outside-icons"
+    parent.rename(outside)
+    parent.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(TrustedIconCacheError, match="unsafe|symlink|reparse"):
+        source.read_file(_ICON_PATH)
+    assert (outside / "BTNHero.blp").read_bytes() == _ICON_PAYLOAD
+
+
+def test_trusted_icon_evidence_preserves_long_object_names(tmp_path: Path) -> None:
+    cache = _write_cache(tmp_path)
+    name = "完整对象名称" * 30_000
+    evidence = cache / "地图图标证据" / f"{_MAP_DIGEST}.tsv"
+    _write_tsv(
+        evidence,
+        (
+            ("原始路径", "解析路径", "SHA256", "原客户端档案", "引用对象"),
+            (
+                _ICON_PATH,
+                _ICON_PATH,
+                hashlib.sha256(_ICON_PAYLOAD).hexdigest(),
+                "war3.mpq",
+                f"技能:A001:{name}",
+            ),
+        ),
+    )
+
+    source = TrustedIconCacheDataSource(str(cache))
+    (resource,) = source.historical_icons_for(_MAP_DIGEST).resources
+
+    assert resource.objects[0].object_name == name
+
+
 def _write_cache(
     root: Path,
     *,

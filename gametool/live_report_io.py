@@ -2,17 +2,28 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 import hashlib
 import os
 from pathlib import Path
 import stat
+import sys
 import tempfile
 from typing import Any
 
 from .durable_io import sync_directory, sync_file_descriptor
 from .live_report_json import LiveReportError
+from .report_file_proof import (
+    cleanup_report_paths,
+    report_metadata,
+    require_report_payload,
+)
+from .windows_output_paths import (
+    logical_output_path,
+    native_output_path,
+    validate_output_root,
+)
 
 
 def _identity(details: os.stat_result) -> tuple[int, ...]:
@@ -59,9 +70,16 @@ def _absolute(path: str | os.PathLike[str]) -> Path:
         text.encode("utf-8", errors="strict")
         if not text or "\0" in text:
             raise LiveReportError("Report path must be a nonempty ordinary path")
-        return Path(os.path.abspath(text))
-    except (TypeError, UnicodeError, OSError) as exc:
+        # Win32 abspath can erase trailing dots/spaces. Reject the caller's
+        # original spelling before canonicalization changes its meaning.
+        validate_output_root(text)
+        return Path(os.path.abspath(logical_output_path(text)))
+    except (TypeError, ValueError, OSError) as exc:
         raise LiveReportError(f"Invalid report path: {exc}") from exc
+
+
+def _native(path: Path) -> Path:
+    return Path(native_output_path(str(path)))
 
 
 def _ancestors(path: Path) -> list[Path]:
@@ -72,7 +90,7 @@ def _check_directories(
     snapshots: list[tuple[Path, tuple[int, int, int]]],
 ) -> None:
     for directory, expected in snapshots:
-        details = directory.lstat()
+        details = _native(directory).lstat()
         if _unsafe_link(details) or _directory_identity(details) != expected:
             raise LiveReportError(
                 f"Report parent changed or became a link: {directory}"
@@ -101,7 +119,15 @@ def _windows_directory_handle(path: Path) -> Iterator[None]:
     close.argtypes = [wintypes.HANDLE]
     close.restype = wintypes.BOOL
     # Share reads/writes, but not deletion/rename. Open reparse points themselves.
-    handle = create(str(path), 0, 0x1 | 0x2, None, 3, 0x02000000 | 0x00200000, None)
+    handle = create(
+        native_output_path(str(path)),
+        0,
+        0x1 | 0x2,
+        None,
+        3,
+        0x02000000 | 0x00200000,
+        None,
+    )
     if handle == ctypes.c_void_p(-1).value:
         raise ctypes.WinError(ctypes.get_last_error())
     try:
@@ -117,7 +143,7 @@ def _parents(path: Path) -> Iterator[list[tuple[Path, tuple[int, int, int]]]]:
     snapshots: list[tuple[Path, tuple[int, int, int]]] = []
     with ExitStack() as held:
         for directory in _ancestors(path):
-            details = directory.lstat()
+            details = _native(directory).lstat()
             if _unsafe_link(details) or not stat.S_ISDIR(details.st_mode):
                 raise LiveReportError(
                     f"Report parent must be an ordinary directory: {directory}"
@@ -146,7 +172,7 @@ def validate_report_destination(path: str | os.PathLike[str]) -> Path:
     target = _absolute(path)
     try:
         with _parents(target):
-            if os.path.lexists(target):
+            if os.path.lexists(_native(target)):
                 raise LiveReportError(
                     f"Report destination already exists; choose a new filename: {target}"
                 )
@@ -160,9 +186,10 @@ def validate_report_destination(path: str | os.PathLike[str]) -> Path:
 def read_report_bytes(path: str | os.PathLike[str]) -> tuple[bytes, dict[str, Any]]:
     """Read the complete regular file and prove source/ancestor stability."""
     target = _absolute(path)
+    target_io = _native(target)
     try:
         with _parents(target) as parents:
-            original = target.lstat()
+            original = target_io.lstat()
             if _unsafe_link(original) or not stat.S_ISREG(original.st_mode):
                 raise LiveReportError(
                     f"Report must be an ordinary regular file: {target}"
@@ -170,7 +197,7 @@ def read_report_bytes(path: str | os.PathLike[str]) -> tuple[bytes, dict[str, An
             flags = (
                 os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
             )
-            descriptor = os.open(target, flags)
+            descriptor = os.open(target_io, flags)
             with os.fdopen(descriptor, "rb") as stream:
                 opened = os.fstat(stream.fileno())
                 if _opened_identity(opened) != _opened_identity(original):
@@ -180,7 +207,7 @@ def read_report_bytes(path: str | os.PathLike[str]) -> tuple[bytes, dict[str, An
                     raise LiveReportError("Report changed while being read")
             _check_directories(parents)
             if (
-                _identity(target.lstat()) != _identity(original)
+                _identity(target_io.lstat()) != _identity(original)
                 or len(data) != original.st_size
             ):
                 raise LiveReportError("Report source changed before delivery")
@@ -193,6 +220,15 @@ def read_report_bytes(path: str | os.PathLike[str]) -> tuple[bytes, dict[str, An
                 "mtime_ns": original.st_mtime_ns,
                 "ctime_ns": original.st_ctime_ns,
                 "opened_ctime_ns": opened.st_ctime_ns,
+                "parents": [
+                    {
+                        "path": str(directory),
+                        "device": identity[0],
+                        "inode": identity[1],
+                        "mode": identity[2],
+                    }
+                    for directory, identity in parents
+                ],
             }
             return data, metadata
     except OSError as exc:
@@ -204,100 +240,80 @@ def read_report_bytes(path: str | os.PathLike[str]) -> tuple[bytes, dict[str, An
 
 
 def verify_report_source(metadata: dict[str, Any]) -> None:
-    """Recheck source identity after complete JSON validation."""
-    path = Path(metadata["path"])
-    try:
-        with _parents(path):
-            details = path.lstat()
-            expected = (
-                metadata["device"],
-                metadata["inode"],
-                metadata["size"],
-                metadata["mtime_ns"],
-                metadata["ctime_ns"],
-            )
-            actual = (
-                details.st_dev,
-                details.st_ino,
-                details.st_size,
-                details.st_mtime_ns,
-                details.st_ctime_ns,
-            )
-            if (
-                _unsafe_link(details)
-                or not stat.S_ISREG(details.st_mode)
-                or actual != expected
-            ):
-                raise LiveReportError("Report source changed during JSON validation")
-            descriptor = os.open(
-                path,
-                os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0),
-            )
-            try:
-                opened = os.fstat(descriptor)
-                if (
-                    _opened_identity(opened) != _opened_identity(details)
-                    or opened.st_ctime_ns != metadata["opened_ctime_ns"]
-                ):
-                    raise LiveReportError(
-                        "Report source changed during JSON validation"
-                    )
-            finally:
-                os.close(descriptor)
-    except OSError as exc:
-        raise LiveReportError(
-            f"Report source unavailable after validation: {exc}"
-        ) from exc
+    """Reprove every source byte and ancestor after analysis/serialization."""
+    _data, actual = read_report_bytes(metadata["path"])
+    if any(actual.get(key) != value for key, value in metadata.items()):
+        raise LiveReportError("Report source changed before final delivery")
 
 
-def write_report_bytes(path: str | os.PathLike[str], data: bytes) -> Path:
+def write_report_bytes(
+    path: str | os.PathLike[str],
+    data: bytes,
+    *,
+    verify_source: Callable[[], None] | None = None,
+) -> Path:
     """Publish a complete staged file without replacing any existing asset."""
     target = validate_report_destination(path)
-    stage: Path | None = None
-    stage_identity: tuple[int, int] | None = None
+    target_io = native_output_path(str(target))
+    digest = hashlib.sha256(data).hexdigest()
     try:
         with _parents(target) as parents:
-            descriptor, name = tempfile.mkstemp(
-                prefix=".gamexray-live-report-", suffix=".tmp", dir=target.parent
+            descriptor, stage = tempfile.mkstemp(
+                prefix=".gamexray-live-report-",
+                suffix=".tmp",
+                dir=native_output_path(str(target.parent)),
             )
-            stage = Path(name)
             details = os.fstat(descriptor)
             stage_identity = details.st_dev, details.st_ino
-            with os.fdopen(descriptor, "wb") as stream:
-                stream.write(data)
-                stream.flush()
-                sync_file_descriptor(stream.fileno())
-            _check_directories(parents)
-            staged = stage.lstat()
-            if _unsafe_link(staged) or (staged.st_dev, staged.st_ino) != stage_identity:
-                raise LiveReportError(
-                    "Report stage identity changed before publication"
+            completed = created = False
+            try:
+                with os.fdopen(descriptor, "wb", closefd=False) as stream:
+                    stream.write(data)
+                    stream.flush()
+                    sync_file_descriptor(stream.fileno())
+                expected = report_metadata(os.fstat(descriptor))
+                if expected[2] != len(data):
+                    raise LiveReportError("Report stage length changed")
+                _, named = require_report_payload(stage, descriptor, expected, digest)
+                _check_directories(parents)
+                if verify_source is not None:
+                    verify_source()
+                # Publish only the already verified inode; a concurrent owner
+                # of the destination always wins without being overwritten.
+                os.link(stage, target_io, follow_symlinks=False)
+                created = True
+                linked, _ = require_report_payload(
+                    stage,
+                    descriptor,
+                    expected,
+                    digest,
+                    expected_named=named,
+                    allow_link_change_time=True,
                 )
-            # A hard link publishes the already complete inode atomically and
-            # fails if a concurrent writer claimed the destination name.
-            os.link(stage, target, follow_symlinks=False)
-            _check_directories(parents)
-            published = target.lstat()
-            if (
-                _unsafe_link(published)
-                or (published.st_dev, published.st_ino) != stage_identity
-            ):
-                raise LiveReportError(
-                    "Published report identity changed; concurrent file retained"
+                require_report_payload(
+                    target_io, descriptor, linked, digest, expected_named=named
                 )
-            sync_directory(target.parent)
+                _check_directories(parents)
+                sync_directory(_native(target.parent))
+                if verify_source is not None:
+                    verify_source()
+                require_report_payload(
+                    target_io, descriptor, linked, digest, expected_named=named
+                )
+                _check_directories(parents)
+                completed = True
+            finally:
+                primary = sys.exc_info()[1]
+                os.close(descriptor)
+                retained = cleanup_report_paths(
+                    (target_io, stage) if created and not completed else (stage,),
+                    stage_identity,
+                )
+                if retained:
+                    message = "; ".join(retained)
+                    raise OSError(
+                        f"{primary}; {message}" if primary is not None else message
+                    ) from primary
         return target
     except OSError as exc:
         raise LiveReportError(f"Cannot publish fresh report {target}: {exc}") from exc
-    finally:
-        if stage is not None and stage_identity is not None:
-            try:
-                details = stage.lstat()
-                if (
-                    not _unsafe_link(details)
-                    and (details.st_dev, details.st_ino) == stage_identity
-                ):
-                    stage.unlink()
-            except OSError:
-                # Preserve a stage whose ownership or cleanup is uncertain.
-                pass

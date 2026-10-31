@@ -172,8 +172,10 @@ def _read_point_summary(
     end = start + cells * tile_size
     if end > len(data):
         return None
-    heights = []
-    water_heights = []
+    # The height transform is monotonic. Aggregate encoded extrema in constant
+    # space and decode four values once, rather than retain two floats per cell.
+    min_height_raw = min_water_raw = 0xFFFF
+    max_height_raw = max_water_raw = 0
     ramp = blighted = water = boundary = edge = 0
     texture_counts: dict[int, int] = {}
     cliff_texture_counts: dict[int, int] = {}
@@ -183,8 +185,15 @@ def _read_point_summary(
         flags = _read_tile_flags(data, pos, version)
         texture = _read_texture_index(data, pos, version)
         cliff_texture, cliff_level = _read_cliff_data(data, pos, version)
-        heights.append(_decode_height(raw_height))
-        water_heights.append(_decode_height(raw_water & _WATER_MASK))
+        water_height = raw_water & _WATER_MASK
+        if raw_height < min_height_raw:
+            min_height_raw = raw_height
+        if raw_height > max_height_raw:
+            max_height_raw = raw_height
+        if water_height < min_water_raw:
+            min_water_raw = water_height
+        if water_height > max_water_raw:
+            max_water_raw = water_height
         ramp += 1 if flags & _FLAG_RAMP else 0
         blighted += 1 if flags & _FLAG_BLIGHTED else 0
         water += 1 if flags & _FLAG_WATER else 0
@@ -195,10 +204,10 @@ def _read_point_summary(
         _increment_count(cliff_level_counts, cliff_level)
     return TerrainPointSummary(
         cells=cells,
-        min_height=min(heights),
-        max_height=max(heights),
-        min_water_height=min(water_heights),
-        max_water_height=max(water_heights),
+        min_height=_decode_height(min_height_raw),
+        max_height=_decode_height(max_height_raw),
+        min_water_height=_decode_height(min_water_raw),
+        max_water_height=_decode_height(max_water_raw),
         ramp=ramp,
         blighted=blighted,
         water=water,

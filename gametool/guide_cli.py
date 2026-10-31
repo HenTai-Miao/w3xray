@@ -18,7 +18,12 @@ from dataclasses import dataclass
 from .api import load_map
 from .archive_diagnostics import diagnose_archive_open
 from .cli_output import configure_cli_output
-from .guide_cache import load_cached_report, report_cache_path, store_cached_report
+from .guide_cache import (
+    load_cached_report,
+    report_cache_path,
+    store_cached_report,
+    verify_loaded_guide_source,
+)
 from .guide_report import GUIDE_SECTION_TITLES, format_guide_report
 from .load_context import build_map_load_context
 from .presentation_safety import single_line_text
@@ -131,6 +136,9 @@ def _run_guide_cli(options: GuideCliOptions) -> int:
     if not options.refresh and options.minimap_marks is None:
         cached = load_cached_report(cache_path)
         if cached is not None:
+            if report_cache_path(options.map_path) != cache_path:
+                print("地图来源在读取攻略缓存期间变化，请重新执行。", file=sys.stderr)
+                return 2
             print("（命中攻略缓存；--refresh 强制重算）", file=sys.stderr)
             _print_report_lines(cached, options.section, options.map_path)
             return 0
@@ -144,8 +152,20 @@ def _run_guide_cli(options: GuideCliOptions) -> int:
     try:
         try:
             # 缓存永远存完整报告，避免 --section 查询把残缺结果留给后续全量查询。
+            verify_loaded_guide_source(map_data)
             full_report = format_guide_report(map_data, None)
+            verify_loaded_guide_source(map_data)
+            if (
+                cache_path is not None
+                and report_cache_path(options.map_path) != cache_path
+            ):
+                raise OSError("地图来源在生成攻略期间变化，请重新执行")
             store_cached_report(cache_path, full_report)
+            if (
+                cache_path is not None
+                and report_cache_path(options.map_path) != cache_path
+            ):
+                raise OSError("地图来源在交付攻略期间变化，请重新执行")
             _print_report_lines(full_report, options.section, options.map_path)
             if options.minimap_marks is not None:
                 requested = options.minimap_marks

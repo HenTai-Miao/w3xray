@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 from .api import MapData
-from .knowledge_io import safe_filename, write_text
+from .knowledge_io import write_text
 from .safe_output import safe_relative_path
 from .script_sources import analysis_script_sources, analysis_script_texts
 from .script_text_export import ReadableScriptExport, build_readable_script_exports
@@ -35,9 +35,10 @@ def write_script_exports(
     count = 0
     for item in scripts:
         relative = safe_relative_path(item.name)
-        if relative is None:
-            continue
-        count += write_text(out_dir, safe_filename(relative.name), item.text)
+        # Invalid source names still enter the shared safe writer, so a pack
+        # session records their failure instead of silently dropping evidence.
+        name = item.name if relative is None else relative.as_posix()
+        count += write_text(out_dir, name, item.text)
     return count
 
 

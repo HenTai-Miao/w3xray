@@ -25,6 +25,7 @@ from .pack_query_regions import NearRegion
 from .pack_query_options import EMPTY_QUERY_COMMANDS, query_limit_error
 from .pack_query_diff import ComparisonDiagnostic, DiffQueryResult
 from .object_export_coverage import ObjectCoverageInput
+from .pack_query_table_snapshot import QuerySourceSnapshot
 from .pack_query_script_coverage import (
     SCRIPT_QUERY_COMMANDS,
     ScriptCoverage,
@@ -46,6 +47,7 @@ class QueryBackend(Protocol):
     _QUERY_FILES: set[tuple[str, str]] | None
     _QUERY_OBJECT_WARNINGS: dict[str, list[str]] | None
     _QUERY_OBJECT_COVERAGE: dict[str, ObjectCoverageInput] | None
+    _QUERY_TABLE_SNAPSHOTS: dict[tuple[str, str], QuerySourceSnapshot] | None
     _LOCKED_FILES: set[tuple[str, str]]
     _QUERIES: dict[str, Callable[[Path, str, int], list[str]]]
 
@@ -159,6 +161,10 @@ class PackQueryResult:
             "input_error": any(section.input_error for section in self.sections),
             "warnings": [note for note in self.diagnostics if note.startswith("[⚠")],
         }
+        if any(section.source_stable is not None for section in self.sections):
+            payload["source_stable"] = all(
+                section.source_stable is not False for section in self.sections
+            )
         if any(section.has_matches is not None for section in self.sections):
             payload["has_matches"] = any(
                 _section_has_result(self.command, section) for section in self.sections
@@ -224,6 +230,11 @@ class PackQueryResult:
                     "section": section.section,
                     "pack": section.pack,
                     "lines": list(section.lines),
+                    **(
+                        {"source_stable": section.source_stable}
+                        if section.source_stable is not None
+                        else {}
+                    ),
                     **(_call_payload((section,)) if self.command == "calls" else {}),
                     **(
                         {
@@ -289,6 +300,7 @@ def execute_query(
         previous_files = queries._QUERY_FILES
         previous_objects = queries._QUERY_OBJECT_WARNINGS
         previous_object_coverage = queries._QUERY_OBJECT_COVERAGE
+        previous_table_snapshots = queries._QUERY_TABLE_SNAPSHOTS
         queries._QUERY_ROWS = {}
         queries._QUERY_SCRIPTS = {}
         queries._QUERY_SCRIPT_SOURCES = {}
@@ -296,6 +308,7 @@ def execute_query(
         queries._QUERY_FILES = set()
         queries._QUERY_OBJECT_WARNINGS = {}
         queries._QUERY_OBJECT_COVERAGE = {}
+        queries._QUERY_TABLE_SNAPSHOTS = {}
         try:
             result = _collect_query(options, queries, remember=False)
         finally:
@@ -303,6 +316,7 @@ def execute_query(
             object_warnings = queries._QUERY_OBJECT_WARNINGS or {}
             source_coverages = queries._QUERY_SCRIPT_COVERAGE or {}
             object_coverages = queries._QUERY_OBJECT_COVERAGE or {}
+            table_snapshots = queries._QUERY_TABLE_SNAPSHOTS or {}
             queries._QUERY_ROWS = previous
             queries._QUERY_SCRIPTS = previous_scripts
             queries._QUERY_SCRIPT_SOURCES = previous_sources
@@ -310,10 +324,22 @@ def execute_query(
             queries._QUERY_FILES = previous_files
             queries._QUERY_OBJECT_WARNINGS = previous_objects
             queries._QUERY_OBJECT_COVERAGE = previous_object_coverage
+            queries._QUERY_TABLE_SNAPSHOTS = previous_table_snapshots
         coverage_changed = False
+        changed_packs: set[str] = set()
+        observed_packs = {pack for pack, _relative in table_snapshots}
+        for (pack, relative), table_snapshot in table_snapshots.items():
+            if note := table_snapshot.verify():
+                coverage_changed = True
+                changed_packs.add(pack)
+                object_warnings.setdefault(pack, []).append(
+                    f"[⚠ {relative} — {note} 来源: {pack}]"
+                )
         for pack, snapshot in object_coverages.items():
             if note := snapshot.verify():
                 coverage_changed = True
+                changed_packs.add(pack)
+                observed_packs.add(pack)
                 object_warnings.setdefault(pack, []).append(f"[⚠ {note}]")
         if coverage_changed:
             result = replace(
@@ -365,6 +391,21 @@ def execute_query(
                     key=lambda section: (section.pack != result.pack, section.pack)
                 )
             result = replace(result, sections=tuple(sections), campaign=campaign)
+        result = replace(
+            result,
+            sections=tuple(
+                replace(
+                    section,
+                    source_stable=(
+                        section.pack not in changed_packs
+                        and section.source_stable is not False
+                    ),
+                )
+                if section.pack in observed_packs
+                else section
+                for section in result.sections
+            ),
+        )
         diagnostics = (
             *dict.fromkeys(
                 note for notes in object_warnings.values() for note in notes

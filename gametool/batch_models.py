@@ -38,6 +38,13 @@ class SourceFingerprint:
     mtime_ns: int
     sha256: str
 
+    @property
+    def content_identity(self) -> tuple[str, int] | None:
+        """Return proved content identity, excluding the unreadable-source marker."""
+        if self.size == 0 and self.mtime_ns == 0 and self.sha256 == "0" * 64:
+            return None
+        return self.sha256, self.size
+
 
 @dataclass(frozen=True, slots=True)
 class MapBatchResult:

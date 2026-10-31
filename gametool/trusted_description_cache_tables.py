@@ -9,6 +9,7 @@ import re
 from typing import Final
 
 from .batch_tsv import decode_tsv_cell, format_tsv_rows
+from .csv_fields import full_csv_fields
 from .description_cache_migration_models import DescriptionCacheRejectionReason
 from .description_cache_schema import (
     DESCRIPTION_CACHE_REJECTION_HEADER,
@@ -109,7 +110,7 @@ def _parse_tsv(
 ) -> tuple[tuple[str, ...], ...]:
     try:
         text = payload.decode("utf-8")
-        with StringIO(text, newline="") as handle:
+        with full_csv_fields(), StringIO(text, newline="") as handle:
             rows = tuple(
                 tuple(decode_tsv_cell(cell) for cell in row)
                 for row in csv.reader(handle, delimiter="\t", strict=True)

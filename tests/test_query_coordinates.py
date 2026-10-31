@@ -53,6 +53,9 @@ def test_nested_selected_unit_wins_over_other_units(key: str) -> None:
         '{"x":NaN,"y":2}',
         "near 1e309 2",
         '"x":1,"y":2,"x":3,"y":4',
+        '{"x":9007199254740992,"y":2,"x":9007199254740993}',
+        "near 0.100000000000000001 2\nnear 0.100000000000000002 2",
+        "@(1e-999,2)\n@(2e-999,2)",
     ],
 )
 def test_missing_invalid_or_multiple_coordinates_are_refused(text: str) -> None:
@@ -63,6 +66,24 @@ def test_missing_invalid_or_multiple_coordinates_are_refused(text: str) -> None:
 def test_radius_preserves_scientific_notation(text: str) -> None:
     radius = radius_from_text(text)
     assert radius is not None and float(radius) == 1e-7
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        '{"radius":9007199254740992,"radius":9007199254740993}',
+        "半径 0.100000000000000001\n半径 0.100000000000000002",
+        "半径 1e-999\n半径 2e-999",
+    ],
+)
+def test_distinct_radius_evidence_is_not_collapsed_by_float_rounding(text: str) -> None:
+    assert radius_from_text(text) is None
+
+
+def test_equivalent_decimal_spellings_still_select_one_exact_point() -> None:
+    assert coordinates_from_text(
+        "near 0.100000000000000001 2\n@(1.00000000000000001e-1,2.0)"
+    ) == ("0.100000000000000001", "2")
 
 
 class _Entry:

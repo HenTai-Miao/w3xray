@@ -139,12 +139,12 @@ def pack(tmp_path):
         "科技\tR0AA\t改良伐木测试\tgub1:1\t扩展提示 (等级1)\t每级+1木\twar3map.w3q\n"
         "科技\tR0AA\t改良伐木测试\tgub1:10\t扩展提示 (等级10)\t高级+2木\twar3map.w3q\n"
         "科技\tR0AA\t改良伐木测试\tgreq:1\t依赖科技 (等级1)\tR0A9\twar3map.w3q\n"
-        "科技\tR0AA\t改良伐木测试\tbase:gglb\t基础金\t555\tbase:rhlh\n",
+        "科技\tR0AA\t改良伐木测试\tbase:gglb\t基础金\t555\tbase:Rhlh\n",
         encoding="utf-8",
     )
     (obj / "科技.tsv").write_text(
         "科技	四码	数值	四码2	名称	自定义	说明\n"
-        "科技	R0AA	1	rhlh	改良伐木测试	是	说明\n",
+        "科技	R0AA	1	Rhlh	改良伐木测试	是	说明\n",
         encoding="utf-8",
     )
     script_dir = tmp_path / "脚本可读文本"
@@ -402,9 +402,9 @@ def test_query_tech_sheet_custom_overrides_and_base_inherit(pack):
     assert "base:gglb" not in load_tech_fields(pack)["R0AA"]
     lines = _query_tech(pack, "R0AA", 20)
     text = "\n".join(lines)
-    assert lines[0] == "[R0AA] 改良伐木测试  (基础: rhlh)"
+    assert lines[0] == "[R0AA] 改良伐木测试  (基础: Rhlh)"
     assert "最大等级: 10" in text
-    # 金基数走 base_objects 继承(rhlh=100), 不吃 base: 行的 555
+    # 金基数走显式同码基础 Rhlh=100，不吃 base: 行的 555。
     assert "每级费用: 金 100+20/级, 木 100+20/级" in text
     assert "满级累计: 金1900 木1900" in text
     assert "效果(1级): 每级+1木" in text

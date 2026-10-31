@@ -118,14 +118,16 @@ class _Reader:
 
 def parse_regions(data: bytes, wts: Mapping[int, str] | None = None) -> list[Region]:
     wts = wts or {}
+    regions: list[Region] = []
     try:
         reader = _Reader(data)
         if reader.i32() != 5:
             return []
         count = reader.i32()
-        if count < 0 or count > len(data):
+        if count < 0:
             return []
-        regions: list[Region] = []
+        # Each successful record consumes bytes. A failed bounded read stops
+        # the loop while retaining its confirmed prefix, even for inflated counts.
         for _ in range(count):
             left = reader.f32()
             bottom = reader.f32()
@@ -155,7 +157,7 @@ def parse_regions(data: bytes, wts: Mapping[int, str] | None = None) -> list[Reg
             )
         return regions
     except struct.error, IndexError:
-        return []
+        return regions
 
 
 def parse_cameras(data: bytes) -> list[Camera]:
@@ -204,7 +206,7 @@ def parse_sounds(data: bytes) -> list[Sound]:
         reader = _Reader(data)
         version = reader.i32()
         count = reader.i32()
-        if count < 0 or count > len(data):
+        if count < 0:
             return []
     except struct.error, IndexError:
         return []

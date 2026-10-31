@@ -35,13 +35,16 @@ def build_topbar(app) -> None:
         app,
         fg_color=TOPBAR,
         corner_radius=0,
-        height=64,
+        height=104,
         border_width=1,
         border_color=BORDER,
     )
     bar.pack(fill="x", side="top")
     bar.pack_propagate(False)
-    brand = ctk.CTkFrame(bar, fg_color="transparent")
+    navigation = ctk.CTkFrame(bar, fg_color="transparent", height=62)
+    navigation.pack(fill="x")
+    navigation.pack_propagate(False)
+    brand = ctk.CTkFrame(navigation, fg_color="transparent")
     brand.pack(side="left", padx=(16, 14), pady=8)
     ctk.CTkLabel(
         brand, text="GAMEXRAY", font=(TITLE_FONT, 21, "bold"), text_color=ACCENT
@@ -50,7 +53,7 @@ def build_topbar(app) -> None:
         brand, text="Warcraft III map workbench", font=(FONT, 11), text_color=SUBTLE
     ).pack(anchor="w")
     app.open_map_button = ctk.CTkButton(
-        bar,
+        navigation,
         text="打开地图 / 战役",
         font=(FONT, 13, "bold"),
         width=140,
@@ -61,7 +64,7 @@ def build_topbar(app) -> None:
     _attach_tooltip(app.open_map_button, "打开本地地图或战役文件 (首次建议从这里开始)")
     app.open_map_button.pack(side="left", padx=(0, 12))
     app.current_map_button = ctk.CTkButton(
-        bar,
+        navigation,
         text="获取当前地图",
         font=(FONT, 13, "bold"),
         width=116,
@@ -72,7 +75,7 @@ def build_topbar(app) -> None:
     _attach_tooltip(app.current_map_button, "探测运行中的游戏正在玩哪张图 (只读)")
     app.current_map_button.pack(side="left", padx=(0, 12))
     app.map_label = ctk.CTkLabel(
-        bar,
+        navigation,
         text="未打开",
         font=(FONT, 12),
         text_color=TEXT,
@@ -80,9 +83,8 @@ def build_topbar(app) -> None:
         corner_radius=6,
         height=32,
     )
-    app.map_label.pack(side="left", fill="x", expand=True, padx=(0, 12))
     source_tools = ctk.CTkFrame(bar, fg_color="transparent")
-    source_tools.pack(side="right", padx=(0, 8))
+    source_tools.pack(fill="x", padx=14, pady=(0, 8))
     _add_source_selector(source_tools, "外部listfile", app.on_pick_external_listfile)
     app.external_listfile_label = _source_label(source_tools, "listfile: 未选")
     app.external_listfile_clear = ctk.CTkButton(
@@ -235,23 +237,30 @@ def build_topbar(app) -> None:
         "本地资料包/外部ID查询/离线报告/存档工作台/装备方案/导出",
     )
     app.data_tools_button.pack(side="left", padx=(0, 4))
-    actions = ctk.CTkFrame(bar, fg_color="transparent")
+    actions = ctk.CTkFrame(navigation, fg_color="transparent")
     actions.pack(side="right", padx=(0, 12))
+    app.export_buttons = {}
     for text, width, command in (
         ("导出全部", 88, app.on_export_all),
         ("导出脚本", 82, app.on_export_scripts),
         ("导出ID", 70, app.on_export_ids),
         ("资料包", 70, app.on_export_pack),
     ):
-        ctk.CTkButton(
+        button = ctk.CTkButton(
             actions,
             text=text,
             font=(FONT, 12),
             width=width,
             height=30,
             command=command,
+            state="disabled",
             **secondary_button_style(),
-        ).pack(side="left", padx=3)
+        )
+        button.pack(side="left", padx=3)
+        app.export_buttons[text] = button
+    # Allocate fixed actions before the flexible map label, including long map names.
+    app.map_label.pack(side="left", fill="x", expand=True, padx=(0, 12))
+    _attach_tooltip(app.map_label, "")
 
 
 def _add_source_selector(parent, text: str, command) -> None:
@@ -267,10 +276,14 @@ def _add_source_selector(parent, text: str, command) -> None:
 
 
 def _source_label(parent, text: str):
+    slot = ctk.CTkFrame(parent, fg_color="transparent", width=92, height=28)
+    slot.pack(side="left", padx=(0, 6))
+    slot.pack_propagate(False)
     label = ctk.CTkLabel(
-        parent, text=text, font=(FONT, 10), text_color=SUBTLE, width=92, anchor="w"
+        slot, text=text, font=(FONT, 10), text_color=SUBTLE, width=92, anchor="w"
     )
-    label.pack(side="left", padx=(0, 6))
+    label.pack(fill="both", expand=True)
+    _attach_tooltip(label, "")
     return label
 
 
@@ -499,20 +512,24 @@ def _show_guide(app, *, refresh: bool = False) -> None:
         messagebox.showinfo("攻略速查", "请先打开地图")
         return
     cached = getattr(app, "_guide_report_cache", None)
-    if cached and cached[0] is md and not refresh:
-        _open_guide_window(app, cached[1])
-        app.status.configure(text="攻略速查（缓存）已就绪")
-        return
+    use_cached = bool(cached and cached[0] is md and not refresh)
     app.status.configure(text="正在整理攻略速查 …")
     app.guide_button.configure(state="disabled")
 
     from .gui_worker_registry import GuiWorkerTicket
 
     def work(ticket: GuiWorkerTicket) -> None:
+        from .guide_cache import verify_loaded_guide_source
         from .guide_report import format_guide_report
 
         try:
-            log = format_guide_report(md)
+            verify_loaded_guide_source(md)
+            log = (
+                cached[1]
+                if use_cached and cached is not None
+                else format_guide_report(md)
+            )
+            verify_loaded_guide_source(md)
             rc = 0
         except Exception as exc:  # BROAD_EXCEPT_OK - GUI worker boundary.
             from .presentation_safety import format_user_exception
@@ -525,7 +542,9 @@ def _show_guide(app, *, refresh: bool = False) -> None:
             app.guide_button.configure(state="normal")
             if rc == 0 and log.strip():
                 app._guide_report_cache = (md, log)
-                app.status.configure(text="攻略速查已就绪")
+                app.status.configure(
+                    text="攻略速查（缓存）已就绪" if use_cached else "攻略速查已就绪"
+                )
                 _open_guide_window(app, log)
             else:
                 app.status.configure(text="攻略速查失败")
@@ -719,12 +738,23 @@ def _open_guide_window(app, text: str) -> None:
     guide_menu.add_command(
         label="导出报告 (.md)",
         command=lambda: (
-            _export_guide(app, box.get("1.0", "end")) if _guide_alive() else None
+            _export_guide(app, box.get("1.0", "end"), map_name=map_name)
+            if _guide_alive()
+            else None
         ),
     )
+
+    def _refresh_guide() -> None:
+        if not _guide_alive():
+            return
+        if getattr(app, "map_data", None) is not md:
+            app.status.configure(text="地图已切换，请从当前地图重新打开攻略速查")
+            return
+        _show_guide(app, refresh=True)
+
     guide_menu.add_command(
         label="强制重算 (清缓存刷新报告)",
-        command=lambda: _show_guide(app, refresh=True) if _guide_alive() else None,
+        command=_refresh_guide,
     )
     guide_menu.add_separator()
     guide_menu.add_command(
@@ -815,14 +845,16 @@ def _jump_to_section(box, title: str) -> None:
         box.mark_set("insert", pos)
 
 
-def _export_guide(app, text: str) -> None:
+def _export_guide(app, text: str, *, map_name: str | None = None) -> None:
     """攻略速查报告落盘 .txt 并复制路径 (与查询窗口导出 .md 同目录语义)。"""
     from .archive_export import tmp_extract_dir
 
     name = "guide"
-    md = getattr(app, "map_data", None)
-    if md and getattr(md, "name", ""):
-        name = "".join(ch if ch not in '\\/:*?"<>|' else "_" for ch in md.name)
+    if map_name is None:
+        md = getattr(app, "map_data", None)
+        map_name = getattr(md, "name", "") if md else ""
+    if map_name:
+        name = "".join(ch if ch not in '\\/:*?"<>|' else "_" for ch in map_name)
     out_dir = tmp_extract_dir("guide-export")
     out_path = os.path.join(out_dir, name + "-guide.md")
     with open(out_path, "w", encoding="utf-8") as handle:
@@ -859,7 +891,7 @@ def _attach_tooltip(widget, text: str) -> None:
         tip.wm_geometry(f"+{x}+{y}")
         label = tk.Label(
             tip,
-            text=text,
+            text=text or widget.cget("text"),
             justify="left",
             bg="#2a2a2a",
             fg="#ffffff",

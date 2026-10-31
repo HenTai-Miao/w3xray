@@ -124,23 +124,14 @@ def mem_setup():
 
 
 def find_war3_pids():
-    """全部 war3 进程 PID (多实例不猜 — 学自 trainer find_war3:
-    Multiple clients -> select an explicit PID)。"""
-    import subprocess
+    """Share complete exact-name discovery; unavailable is never an empty list."""
+    from .current_map_process import probe_game_processes
 
-    try:
-        out = subprocess.check_output(
-            [
-                "powershell",
-                "-NoProfile",
-                "-Command",
-                "(Get-Process -Name war3,warcraft* -ErrorAction SilentlyContinue).Id",
-            ],
-            text=True,
-        ).strip()
-        return sorted({int(x) for x in out.split() if x.strip().isdigit()})
-    except Exception:
-        return []
+    report = probe_game_processes()
+    if not report.available:
+        issue = report.issue.value if report.issue is not None else "unknown"
+        raise OSError(f"Warcraft III 进程探测不可用 ({issue})；尚未确认游戏是否运行")
+    return sorted({process.pid for process in report.processes})
 
 
 def open_process(pid):
@@ -1208,8 +1199,8 @@ def ncc_best(region, tmpl):
     if tstd < 1e-6:
         return -1.0, (0, 0)
     varw = np.maximum(S2 - S1 * S1 / n, 1e-9)
-    score = (cross - S1 * tmean) / (np.sqrt(varw) * tstd * n)
-    sub = score[: H - h + 1, : W - w + 1]
+    score = (cross - S1 * tmean) / (np.sqrt(varw) * tstd * math.sqrt(n))
+    sub = score[h - 1 : H, w - 1 : W]
     idx = int(np.argmax(sub))
     y, x = divmod(idx, sub.shape[1])
     return float(sub[y, x]), (int(x), int(y))
@@ -1257,8 +1248,8 @@ def match_image_full(
         tstd = t.std()
         if tstd < 1e-6:
             return -1.0, (0, 0)
-        score = (cross - S1 * tmean) / (np.sqrt(varw) * tstd * n)
-        sub = score[: Hr - h + 1, : Wr - w + 1]
+        score = (cross - S1 * tmean) / (np.sqrt(varw) * tstd * math.sqrt(n))
+        sub = score[h - 1 : Hr, w - 1 : Wr]
         idx = int(np.argmax(sub))
         y, x = divmod(idx, sub.shape[1])
         return float(sub[y, x]), (int(x), int(y))
@@ -1275,16 +1266,25 @@ def match_image_full(
                 best = (sc, pos, s)
         if best[0] > min_score:
             cands.append(
-                (best[0], iid, names.get(iid, iid), best[1], best[2] * downscale)
+                (
+                    best[0],
+                    iid,
+                    names.get(iid, names.get(iid.encode("latin-1"), iid)),
+                    best[1],
+                    best[2] * downscale,
+                )
             )
     cands.sort(reverse=True)
     picked = []
     for sc, iid, name, pos, s in cands:
+        scaled_pos = (pos[0] * downscale, pos[1] * downscale)
         if any(
-            abs(pos[0] - p[2][0]) < 20 and abs(pos[1] - p[2][1]) < 20 for p in picked
+            abs(scaled_pos[0] - p[3][0]) < 20 * downscale
+            and abs(scaled_pos[1] - p[3][1]) < 20 * downscale
+            for p in picked
         ):
             continue
-        picked.append((sc, iid, name, (pos[0] * downscale, pos[1] * downscale), s))
+        picked.append((sc, iid, name, scaled_pos, s))
         if len(picked) >= topk:
             break
     return picked
@@ -1293,7 +1293,8 @@ def match_image_full(
 def match_inventory(img, templates, names, max_slots=6, min_score=0.5):
     """右下角经典控制台区域匹配 (标准 UI)。"""
     W, H = img.size
-    crop = img.crop((int(W * 0.62), int(H * 0.60), W, H)).convert("L")
+    origin_x, origin_y = int(W * 0.62), int(H * 0.60)
+    crop = img.crop((origin_x, origin_y, W, H)).convert("L")
     region = np.asarray(crop, dtype=np.float64)
     cand = []
     for iid, path in templates.items():
@@ -1306,7 +1307,15 @@ def match_inventory(img, templates, names, max_slots=6, min_score=0.5):
             if sc > best[0]:
                 best = (sc, pos, s)
         if best[0] > min_score:
-            cand.append((best[0], iid, names.get(iid, iid), best[1], best[2]))
+            cand.append(
+                (
+                    best[0],
+                    iid,
+                    names.get(iid, names.get(iid.encode("latin-1"), iid)),
+                    (best[1][0] + origin_x, best[1][1] + origin_y),
+                    best[2],
+                )
+            )
     cand.sort(reverse=True)
     picked = []
     for sc, iid, name, pos, s in cand:
@@ -1796,7 +1805,11 @@ def _read_live(
     else:
         if not pure_icons:
             mem_setup()
-        pids = find_war3_pids()
+        try:
+            pids = find_war3_pids()
+        except OSError as exc:
+            report["notes"].append(str(exc))
+            return report
         if not pids:
             report["notes"].append("war3 未运行")
             return report

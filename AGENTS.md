@@ -55,6 +55,14 @@
 - Reference selections retain complete independent category/scope/source records and full diagnostics. Query handoffs require the selected record's own proved pack/child scope; an unrelated current-map pack is never a fallback.
 - Save-text encoding is explicit when auto decoding cannot prove it. Strict decoding and byte round trips retain unknown bytes and BOM conflicts; binary save formats remain separate from text decoding. All CLI/GUI save readers use the shared encoding boundary.
 
+## Whole-project review contracts
+- Text/SLK extraction retains every explicitly encoded field, including empty overrides and editor columns. Object/base-name/English-name/category/ID summaries use category-qualified identities; generated catalogs remain source-derived.
+- WTG ECA, parameter, semantic export and GUI traversal share complete stack-based processing. A malformed later header retains earlier confirmed categories, variables and triggers; trailing bytes remain diagnostics.
+- Script rewards, callback wrappers and guide text require proved standard bindings and language-correct argument types. Lua colon calls do not become ordinary Condition/Filter callbacks; JASS single-quoted rawcodes are not text strings.
+- Query delivery revalidates the exact consumed table and script bytes, source inventories and missing observations across campaign scopes. Only complete source proof may set source_stable; changed evidence returns 2 and preserves successful history.
+- Batch private stages and backups carry their created/observed directory identities. Cleanup uses held Windows handles and owned entries; unknown legacy identities, replaced names and failed disposal retain evidence instead of pathname recursive deletion.
+- Acceptance reports are exclusive new files. Validate raw output/report spelling before Path normalization, hold ordinary output ancestry while creating parents, and preserve existing inputs, reports and competing files.
+
 ## Trainer source adoption (0.12)
 - Content readers share `json_evidence` for lossless JSON tokens, duplicate members and source positions; `report_file_proof` preserves output parent/descriptor identities, payload hashes and owned-only cleanup. Save and loadout parsing must not depend on retired configuration tools.
 - Unit/hero queries resolve `uabi`/`uhab` through `pack_query_unit_abilities`; `pack_query_combat_evidence` renders static skill/combat parameters with their complete level/source evidence. Preserve empty custom overrides, conflicting links, category-qualified identities and all original fields. Related skill search selects whole units; static cooldown/range/damage fields never certify runtime values or DPS.

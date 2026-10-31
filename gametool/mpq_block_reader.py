@@ -118,7 +118,9 @@ def _read_sectors(
             storage.sector_size, block.file_size - index * storage.sector_size
         )
         if len(sector) < expected:
-            sector = decompress_mpq_block(sector, expected, block.flags)
+            # Prefix-oriented decoders may stop at their output allowance. One
+            # extra byte distinguishes a complete sector from a hidden overrun.
+            sector = decompress_mpq_block(sector, expected + 1, block.flags)
         if len(sector) != expected:
             raise MPQBlockError(
                 f"MPQ sector {index} decoded size {len(sector)} "
@@ -150,7 +152,12 @@ def read_mpq_block(
     if block.flags & FLAG_SINGLE_UNIT:
         buffer = _decrypt(raw, resolved_key) if resolved_key is not None else raw
         if compressed and block.comp_size < block.file_size:
-            buffer = decompress_mpq_block(buffer, block.file_size, block.flags)
+            buffer = decompress_mpq_block(buffer, block.file_size + 1, block.flags)
+            if len(buffer) != block.file_size:
+                raise MPQBlockError(
+                    f"MPQ decoded size {len(buffer)} does not match "
+                    f"declared size {block.file_size}"
+                )
         if len(buffer) < block.file_size:
             raise MPQBlockError(
                 f"MPQ decoded size {len(buffer)} is shorter than "
@@ -236,6 +243,13 @@ def peek_mpq_block(storage: MPQBlockStorage, block: _Block, size: int = 64) -> b
     try:
         raw = _raw_block(storage, block, b"")
         compressed = bool(block.flags & (FLAG_COMPRESS | FLAG_IMPLODE))
+        if block.file_size == 0:
+            return b""
+        if not compressed:
+            if len(raw) < block.file_size:
+                return b""
+            # Stored files have no sector offset table, even without SINGLE_UNIT.
+            return raw[: min(size, block.file_size)]
         if block.flags & FLAG_SINGLE_UNIT:
             if compressed and block.comp_size < block.file_size:
                 raw = decompress_mpq_block(raw, block.file_size, block.flags)

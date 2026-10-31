@@ -7,7 +7,9 @@ _NUMBER = re.compile(r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?
 
 
 def numeric_text(value: str) -> str:
-    return value.strip().removeprefix("'").strip()
+    # Table readers have already removed exactly one declared TSV envelope.
+    # An ordinary quote is literal source evidence, not a numeric escape.
+    return value.strip()
 
 
 def decimal_value(value: str) -> Decimal | None:

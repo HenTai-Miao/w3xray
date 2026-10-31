@@ -183,6 +183,46 @@ class TestWorldMetadataIntegration(unittest.TestCase):
         self.assertEqual(len(md.cameras), 1)
         self.assertEqual(len(md.sounds), 1)
 
+    def test_truncated_region_preserves_complete_preceding_region(self):
+        from gametool.api import MapData
+        from gametool.map_extras import add_world_metadata
+
+        complete = _region("TRIGSTR_001")
+        for truncated in (_region("broken")[:12], _region("broken")[:-1]):
+            with self.subTest(truncated_bytes=len(truncated)):
+                md = MapData(path="x", name="x")
+                data = _i(5) + _i(2) + complete + truncated
+                arch = _FakeArchive({"war3map.w3r": data})
+                add_world_metadata(md, arch, {1: "confirmed region"})  # pyright: ignore[reportArgumentType]
+                self.assertEqual([row.name for row in md.regions], ["confirmed region"])
+                self.assertTrue(
+                    any("recovered 1 of 2" in row.message for row in md.diagnostics)
+                )
+
+    def test_inflated_world_counts_keep_every_complete_record_and_diagnose(self):
+        from gametool.api import MapData
+        from gametool.map_extras import add_world_metadata
+
+        md = MapData(path="x", name="x")
+        declared = 2_147_483_647
+        arch = _FakeArchive(
+            {
+                "war3map.w3r": _i(5) + _i(declared) + _region(),
+                "war3map.w3s": _i(1) + _i(declared) + _sound_v1(),
+            }
+        )
+        add_world_metadata(md, arch, {})  # pyright: ignore[reportArgumentType]
+        self.assertEqual(len(md.regions), 1)
+        self.assertEqual(len(md.sounds), 1)
+        self.assertEqual(
+            {
+                row.source
+                for row in md.diagnostics
+                if f"recovered 1 of {declared}" in row.message
+            },
+            {"war3map.w3r", "war3map.w3s"},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

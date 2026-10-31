@@ -129,9 +129,7 @@ def _sheet(
 ) -> list[str]:
     row = record.row
     code, name = row[1], sources._clean(row[4]) or row[1]
-    base_id = (
-        row[3].lower() if not record.from_fields and valid_object_code(row[3]) else ""
-    )
+    base_id = row[3] if not record.from_fields and valid_object_code(row[3]) else ""
     base_fields = sources._tech_base_fields().get(base_id, {}) if base_id else {}
     notes: list[str] = []
     values = {key: _scalar(record, key, base_fields, notes) for key in _SCALARS}

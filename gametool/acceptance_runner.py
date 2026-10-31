@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 import json
 import hashlib
+import os
 from pathlib import Path
 import platform
 import sys
@@ -27,6 +29,8 @@ from .casclib_enumeration import CascNameType
 from .casclib_source import CascLibDataSource
 from .knowledge_pack import write_knowledge_pack_report
 from .knowledge_results import KnowledgeWriteStatus
+from .live_report_io import _parents, validate_report_destination, write_report_bytes
+from .windows_output_paths import native_output_path, validate_output_root
 
 
 class AcceptanceStatus(StrEnum):
@@ -257,10 +261,32 @@ def run_acceptance(config: AcceptanceConfig) -> AcceptanceReport:
     )
 
 
+@contextmanager
+def _acceptance_report_destination(path: Path) -> Iterator[Path]:
+    """Create missing ordinary parents while holding their existing ancestry."""
+    validate_output_root(os.fspath(path))
+    target = Path(os.path.abspath(path))
+    with ExitStack() as held:
+        for directory in reversed(target.parents):
+            native = Path(native_output_path(str(directory)))
+            if not os.path.lexists(native):
+                native.mkdir()
+            # The leaf is only a probe spelling; _parents never creates it.
+            held.enter_context(_parents(native / ".acceptance-parent"))
+        _ = validate_report_destination(target)
+        yield target
+
+
+def prepare_acceptance_report(path: Path) -> Path:
+    """Reject existing reports, map aliases and unsafe parents before any lane."""
+    with _acceptance_report_destination(path) as target:
+        return target
+
+
 def write_acceptance_report(report: AcceptanceReport, path: Path) -> None:
-    """Write acceptance JSON after all lanes have completed."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    _ = path.write_text(report.to_json(), encoding="utf-8")
+    """Publish a complete new report without replacing any existing asset."""
+    with _acceptance_report_destination(path) as target:
+        _ = write_report_bytes(target, report.to_json().encode("utf-8"))
 
 
 def _run_check(name: str, action: Callable[[], str]) -> AcceptanceCheck:

@@ -11,7 +11,7 @@ from .save_call_context import extract_call_args
 from .script_assignments import ScriptAssignment, reference_parts, script_assignments
 from .script_atoms import ScriptAtoms
 from .script_lexing import script_views
-from .script_names import qualified_name
+from .script_names import QUALIFIED_NAME, qualified_name
 from .script_geometry_values import GEOMETRY_BUILTINS
 from .script_object_literals import strip_outer_parentheses
 from .script_scopes import CallSpan, FunctionSpan, script_structure, source_line_starts
@@ -37,7 +37,13 @@ class ScriptFunctionBindings:
         self.text, self.lua = text, lua
         self.additional_builtins = frozenset(additional_builtins)
         self.builtins = frozenset(
-            {"FourCC", *GEOMETRY_BUILTINS, *self.additional_builtins}
+            {
+                "FourCC",
+                "Condition",
+                "Filter",
+                *GEOMETRY_BUILTINS,
+                *self.additional_builtins,
+            }
             | ({"select", "table.unpack"} if lua is True else set())
         )
         self.structure = script_structure(text, lua=lua)
@@ -175,10 +181,23 @@ class ScriptFunctionBindings:
         # Anonymous callback locations are taken from the source, never guessed by name.
         while (
             wrapper := re.match(
-                r"(?:_G\s*\.\s*)?(?:Condition|Filter)\s*\(",
+                r"(" + QUALIFIED_NAME + r")\s*\(",
                 script_views(value, lua=self.lua).syntax,
             )
         ) is not None:
+            wrapper_name = qualified_name(wrapper.group(1))
+            assert wrapper_name is not None
+            if ":" in wrapper_name or self.lua is False and "." in wrapper_name:
+                break  # Method receivers change the native wrapper's argument list.
+            reference = self.resolve(wrapper_name, start, owner)
+            if reference.builtin not in {"Condition", "Filter"}:
+                break
+            structure = script_structure(value, lua=self.lua)
+            if not any(
+                call.start == 0 and call.end == len(value) and call.complete
+                for call in structure.calls
+            ):
+                break
             args = extract_call_args(script_views(value, lua=self.lua), wrapper.end())
             if len(args) != 1 or not value.endswith(")"):
                 break

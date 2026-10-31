@@ -7,6 +7,21 @@ from gametool.object_filter import filter_objects_by_query
 
 
 class TestObjectFilter(unittest.TestCase):
+    def test_category_filter_does_not_borrow_a_hero_name_from_same_code_item(self):
+        from gametool.object_detail_presentation import format_object_summary
+
+        unit = GameObject("单位", "w3u", "x001", "Hpal", "英雄单位", True)
+        item = GameObject("物品", "w3t", "x002", "Hpal", "自定义物品", True)
+        md = MapData(
+            path="x.w3x", name="类别边界", objects={"单位": [unit], "物品": [item]}
+        )
+        result = filter_objects_by_query(md, "", fine_filter="英雄")
+        self.assertEqual(result.results_by_category["单位"], [unit])
+        self.assertEqual(result.results_by_category["物品"], [])
+        self.assertIn("英文名：Paladin", format_object_summary(unit))
+        self.assertNotIn("英文名：", format_object_summary(item))
+        self.assertNotIn("细类：", format_object_summary(item))
+
     def test_filters_each_category_when_query_matches_names(self):
         # Given: a map has objects in multiple categories.
         md = MapData(

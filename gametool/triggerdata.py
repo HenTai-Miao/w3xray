@@ -6,7 +6,7 @@ from collections.abc import Mapping
 import csv
 from dataclasses import dataclass
 import re
-from typing import Protocol, TYPE_CHECKING
+from typing import Protocol
 
 from .casc_source import CascUnsupportedError
 from .trigger_schema import (
@@ -17,9 +17,7 @@ from .trigger_schema import (
 )
 from .war3_encoding import decode_warcraft_string
 from .wts import resolve as resolve_wts
-
-if TYPE_CHECKING:
-    from .wtg_eca import TriggerEcaFunction, TriggerEcaParameter
+from .wtg_models import TriggerEcaFunction, TriggerEcaParameter
 
 _POSITION_RE = re.compile(r"%(\d+)")
 _BRACE_RE = re.compile(r"\{([^{}]+)\}")
@@ -94,16 +92,71 @@ def render_eca_semantic(
     object_names: Mapping[str, str] | None = None,
 ) -> str:
     """Render one WTG ECA function as a World Editor-like sentence."""
-    values = tuple(
-        _parameter_text(param, schema, wts=wts, object_names=object_names)
-        for param in function.parameters
+    return TriggerSemanticRenderer(schema, wts=wts, object_names=object_names).render(
+        function
     )
-    if schema is None:
-        return _fallback(function.name, values)
-    function_schema = _lookup_schema(schema, function)
-    if function_schema is None or function_schema.template is None:
-        return _fallback(function.name, values)
-    return _fill_template(function_schema.template, values)
+
+
+class TriggerSemanticRenderer:
+    """Render complete nested values with an explicit stack and per-export reuse."""
+
+    def __init__(
+        self,
+        schema: TriggerSchema | None,
+        *,
+        wts: Mapping[int, str] | None = None,
+        object_names: Mapping[str, str] | None = None,
+    ) -> None:
+        self.schema = schema
+        self.wts = wts or {}
+        self.object_names = object_names or {}
+        # Keep the nodes alive: an identity cache must never adopt a reused id.
+        self.values: dict[
+            int, tuple[TriggerEcaFunction | TriggerEcaParameter, str]
+        ] = {}
+
+    def render(self, function: TriggerEcaFunction) -> str:
+        pending: list[tuple[TriggerEcaFunction | TriggerEcaParameter, bool]] = [
+            (function, False)
+        ]
+        while pending:
+            node, ready = pending.pop()
+            if id(node) in self.values:
+                continue
+            if not ready:
+                pending.append((node, True))
+                if isinstance(node, TriggerEcaFunction):
+                    pending.extend((parameter, False) for parameter in node.parameters)
+                else:
+                    if node.nested_function is not None:
+                        pending.append((node.nested_function, False))
+                    if node.array_indexer is not None:
+                        pending.append((node.array_indexer, False))
+                continue
+            if isinstance(node, TriggerEcaFunction):
+                values = tuple(self.values[id(value)][1] for value in node.parameters)
+                definition = (
+                    _lookup_schema(self.schema, node)
+                    if self.schema is not None
+                    else None
+                )
+                value = (
+                    _fill_template(definition.template, values)
+                    if definition is not None and definition.template is not None
+                    else _fallback(node.name, values)
+                )
+            else:
+                if node.nested_function is not None:
+                    value = self.values[id(node.nested_function)][1]
+                else:
+                    value = str(resolve_wts(node.value, self.wts))
+                    name = self.object_names.get(value)
+                    if name and name != value:
+                        value = f"{name}({value})"
+                if node.array_indexer is not None:
+                    value += "[" + self.values[id(node.array_indexer)][1] + "]"
+            self.values[id(node)] = node, value
+        return self.values[id(function)][1]
 
 
 def _parse_sections(text: str) -> dict[str, dict[str, str]]:
@@ -186,36 +239,6 @@ def _is_flat_metadata_key(key: str, values: dict[str, str]) -> bool:
         if key.endswith(suffix) and key[: -len(suffix)] in values:
             return True
     return False
-
-
-def _parameter_text(
-    parameter: TriggerEcaParameter,
-    schema: TriggerSchema | None,
-    *,
-    wts: Mapping[int, str] | None,
-    object_names: Mapping[str, str] | None,
-) -> str:
-    if parameter.nested_function is not None:
-        value = render_eca_semantic(
-            parameter.nested_function,
-            schema,
-            wts=wts,
-            object_names=object_names,
-        )
-    else:
-        value = str(resolve_wts(parameter.value, wts or {}))
-        object_name = object_names.get(value) if object_names is not None else None
-        if object_name and object_name != value:
-            value = f"{object_name}({value})"
-    if parameter.array_indexer is None:
-        return value
-    index = _parameter_text(
-        parameter.array_indexer,
-        schema,
-        wts=wts,
-        object_names=object_names,
-    )
-    return f"{value}[{index}]"
 
 
 def _fill_template(template: str, values: tuple[str, ...]) -> str:

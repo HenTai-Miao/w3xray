@@ -8,6 +8,8 @@ import mmap
 import os
 import struct
 import tempfile
+import bz2
+import zlib
 import unittest
 from pathlib import Path
 
@@ -22,6 +24,7 @@ from gametool.mpq import (
     _decrypt,
     _parse_sector_offsets,
     FLAG_EXISTS,
+    FLAG_SINGLE_UNIT,
 )
 
 
@@ -70,6 +73,38 @@ def test_constructor_failure_closes_real_mmap_and_handle(
     assert len(source_handles) == 1 and source_handles[0].closed
 
 
+@pytest.mark.parametrize("single_unit", (False, True))
+@pytest.mark.parametrize("codec", ("zlib", "bzip2"))
+def test_block_read_rejects_decoded_overrun_without_publishing_truncated_prefix(
+    single_unit: bool, codec: str
+) -> None:
+    actual = b"x" * 128
+    compressed = (
+        b"\x02" + zlib.compress(actual)
+        if codec == "zlib"
+        else b"\x10" + bz2.compress(actual)
+    )
+    raw = (
+        compressed
+        if single_unit
+        else struct.pack("<II", 8, 8 + len(compressed)) + compressed
+    )
+    archive = object.__new__(MPQArchive)
+    archive._data = raw
+    archive.archive_offset = 0
+    archive.sector_size = 4096
+    block = _Block(
+        0,
+        len(raw),
+        64,
+        FLAG_EXISTS | FLAG_COMPRESS | (FLAG_SINGLE_UNIT if single_unit else 0),
+    )
+
+    with pytest.raises(ValueError, match="decoded size"):
+        archive._read_block(block, "overrun.txt")
+    assert archive.read_block_anon(block) is None
+
+
 class TestSectorOffsets(unittest.TestCase):
     def test_valid_offsets_pass(self):
         raw = struct.pack("<3I", 12, 16, 20) + b"x" * 8  # len(raw)=20
@@ -104,6 +139,34 @@ class TestBlockBounds(unittest.TestCase):
         blk = _Block(file_pos=10_000, comp_size=10, file_size=10, flags=FLAG_EXISTS)
         with self.assertRaises((KeyError, ValueError)):
             a._read_block(blk, "x")
+
+    def test_peek_uncompressed_sector_storage_keeps_payload_prefix(self):
+        payload = b"[H001]\r\nName=Confirmed\r\n" * 300
+        a = self._bare_archive(payload)
+        blk = _Block(
+            file_pos=0,
+            comp_size=len(payload),
+            file_size=len(payload),
+            flags=FLAG_EXISTS,
+        )
+
+        self.assertEqual(a._read_block(blk, "objects.txt"), payload)
+        self.assertEqual(a.peek_block(blk, 8192), payload[:8192])
+
+    def test_peek_uncompressed_storage_does_not_include_padding(self):
+        a = self._bare_archive(b"data-padding")
+        blk = _Block(file_pos=0, comp_size=12, file_size=4, flags=FLAG_EXISTS)
+
+        self.assertEqual(a.peek_block(blk, 64), b"data")
+
+    def test_peek_empty_compressed_storage_returns_empty_prefix(self):
+        a = self._bare_archive(struct.pack("<I", 4))
+        blk = _Block(
+            file_pos=0, comp_size=4, file_size=0, flags=FLAG_EXISTS | FLAG_COMPRESS
+        )
+
+        self.assertEqual(a._read_block(blk, "empty.txt"), b"")
+        self.assertEqual(a.peek_block(blk, 64), b"")
 
 
 class TestAnonymousKeyRecovery(unittest.TestCase):

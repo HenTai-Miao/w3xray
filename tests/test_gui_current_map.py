@@ -182,3 +182,45 @@ def test_direct_result_stays_queued_then_delegates_snapshot_only(
     assert harness.loaded == [str(snapshot.path)]
     assert harness.button_state() == "normal"
     assert harness.status_text() == "正在解析当前地图"
+
+
+@pytest.mark.parametrize("queued", (False, True))
+def test_new_explicit_load_rejects_pending_current_map_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, queued: bool
+) -> None:
+    from gametool.gui_loader_runner import BackgroundLoaderMixin
+    from gametool.gui_loader import LoaderError
+
+    class LoadingHarness(_Harness, BackgroundLoaderMixin):
+        pass
+
+    monkeypatch.setattr(
+        current_gui, "cleanup_stale_current_map_snapshots", lambda: None
+    )
+    harness = LoadingHarness()
+    snapshot = _snapshot(tmp_path / "stale-current.w3x")
+    discarded = []
+    monkeypatch.setattr(current_gui, "cleanup_current_map_snapshot", discarded.append)
+    harness._current_map_pending = True
+    generation = harness._current_map_generation
+    if queued:
+        harness._put_current_map_snapshot(generation, snapshot)
+    monkeypatch.setattr(harness, "_handle_loader_payload", lambda _payload: None)
+    try:
+        harness._start_loader_job(
+            status="正在解析手动选择的地图",
+            build_payload=lambda: LoaderError("fixture", "fixture", "fixture"),
+            error_status="fixture",
+            source_path=None,
+        )
+        if not queued:
+            harness._put_current_map_snapshot(generation, snapshot)
+        harness._poll_current_map_results()
+        assert harness.loaded == []
+        assert discarded == [snapshot]
+        assert harness._current_map_snapshots == []
+        assert harness.button_state() == "normal"
+        assert harness.status_text() == "正在解析手动选择的地图"
+    finally:
+        harness._shutdown_current_map_gui()
+        assert harness._shutdown_gui_worker_host(1) == ()

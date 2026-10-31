@@ -289,6 +289,7 @@ def _unused_destination(root: str, name: str) -> str | None:
 
 
 def _resource_name_variants(name: str) -> set[str]:
+    exact = name
     name = name.strip().strip("\"'")
     if not name:
         return set()
@@ -296,14 +297,20 @@ def _resource_name_variants(name: str) -> set[str]:
     if relative is None:
         return set()
     normalized = "\\".join(relative.parts)
-    names = {normalized}
-    lower = normalized.lower()
-    if lower in ("war3map.j", "war3map.lua"):
-        names.add("scripts\\" + normalized)
-    if lower.endswith(".mdl"):
-        names.add(normalized[:-4] + ".mdx")
-    if lower.endswith((".mdl", ".mdx")) and not lower[:-4].endswith("_portrait"):
-        names.add(normalized[:-4] + "_Portrait.mdx")
+    # Slash and backslash spellings have different MPQ hashes. Filesystem-safe
+    # normalization supplies another candidate; it must never replace the exact
+    # source spelling, including model-to-MDX and portrait-derived candidates.
+    names = {name, normalized}
+    if safe_relative_path(exact) is not None:
+        names.add(exact)
+    for candidate in tuple(names):
+        lower = candidate.lower()
+        if lower in ("war3map.j", "war3map.lua"):
+            names.add("scripts\\" + candidate)
+        if lower.endswith(".mdl"):
+            names.add(candidate[:-4] + ".mdx")
+        if lower.endswith((".mdl", ".mdx")) and not lower[:-4].endswith("_portrait"):
+            names.add(candidate[:-4] + "_Portrait.mdx")
     for candidate in tuple(names):
         if not candidate.lower().startswith("war3mapimported\\"):
             names.add("war3mapImported\\" + candidate)

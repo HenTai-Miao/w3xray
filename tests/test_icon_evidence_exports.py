@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from typing import Final
+import pytest
 
 from tests.real_map_text_acceptance import read_tsv_text
 from gametool.icon_evidence_exports import (
@@ -19,6 +20,14 @@ from gametool.icon_evidence_models import (
     UnresolvedIconEvidence,
 )
 from gametool.icon_resources import IconObjectReference
+from gametool.icon_gap_reference_codec import (
+    IconGapReferenceFormatError,
+    parse_icon_gap_references,
+)
+from gametool.icon_report_map_codec import (
+    IconReportMapIdentityFormatError,
+    parse_icon_report_map_identities,
+)
 
 _DIGEST: Final = "a" * 64
 _PATH: Final = r"Icons\Missing.blp"
@@ -35,6 +44,25 @@ _REFERENCE_KEYS: Final = {
     "map",
     "scope",
 }
+
+
+def test_icon_reference_rejects_duplicate_json_members_before_identity_selection() -> (
+    None
+):
+    payload = dict.fromkeys(_REFERENCE_KEYS, "")
+    payload.update(category="技能", rawcode="A001")
+    encoded = json.dumps(payload)
+    duplicate = '[{"rawcode":"I999",' + encoded[1:] + "]"
+    with pytest.raises(IconGapReferenceFormatError):
+        parse_icon_gap_references(duplicate)
+
+
+def test_icon_map_report_rejects_duplicate_json_members_before_identity_selection() -> (
+    None
+):
+    duplicate = '[{"map":"first.w3x","map":"second.w3x","sha256":"' + _DIGEST + '"}]'
+    with pytest.raises(IconReportMapIdentityFormatError):
+        parse_icon_report_map_identities(duplicate)
 
 
 def test_unresolved_report_has_one_path_row_with_every_reference() -> None:

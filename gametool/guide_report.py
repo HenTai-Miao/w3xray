@@ -21,7 +21,8 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from .base_names import BASE_CATEGORIES, BASE_NAMES
+from .base_catalog import fine_category_for
+from .base_objects import BASE_OBJECTS
 from .item_relation_models import (
     ItemRelation,
     ItemRelationKind,
@@ -39,7 +40,8 @@ from .script_trigger_acquisition import (
     format_trigger_acquisitions,
     trigger_acquisitions,
 )
-from .script_sources import analysis_script_texts
+from .script_behavior_index import ScriptBehaviorCall, build_script_behavior_index
+from .script_literal_decoding import decode_script_literal
 from .query_coordinates import coordinates_from_text
 from .placement_positions import (
     PositionGroups,
@@ -53,18 +55,14 @@ from .wts import map_wts_table, resolve
 if TYPE_CHECKING:
     from .map_data import MapData
 
-# CreateQuestBJ(bj_QUESTTYPE_REQ_DISCOVERED, "标题", "说明", "图标")
-_QUEST_CALL = re.compile(
-    r"CreateQuestBJ\s*\(\s*[A-Za-z_][A-Za-z0-9_]*\s*,\s*"
-    r'"((?:[^"\\]|\\.)*)"\s*,\s*"((?:[^"\\]|\\.)*)"'
-)
-# CreateTimerDialogBJ(timer, "字面标签")：拼接表达式不匹配，只有整串字面量才收
-_TIMER_LABEL = re.compile(r'CreateTimerDialogBJ\s*\([^,]+,\s*"((?:[^"\\]|\\.)*)"\s*\)')
-# 玩家可见播报文本（任务提示、波次公告等）
-_DISPLAY_TEXT = re.compile(
-    r"(?:DisplayTextToForce|DisplayTimedTextToForce|DisplayTextToPlayer|"
-    r'DisplayTimedTextToPlayer|BJDebugMsg)\s*\([^"]*?"((?:[^"\\]|\\.)*)"'
-)
+# Exact text argument roles; earlier player/force strings are not messages.
+_DISPLAY_ARGUMENTS = {
+    "DisplayTextToForce": 1,
+    "DisplayTimedTextToForce": 2,
+    "DisplayTextToPlayer": 3,
+    "DisplayTimedTextToPlayer": 4,
+    "BJDebugMsg": 0,
+}
 # 颜色码与换行占位：攻略速查里只留纯文本
 _COLOR_CODE = re.compile(r"\|c[0-9A-Fa-f]{8}|\|r")
 _NEWLINE_CODE = re.compile(r"\|n")
@@ -98,10 +96,11 @@ GUIDE_SECTION_TITLES: dict[str, str] = {
 def build_guide_sections(md: MapData) -> tuple[GuideSection, ...]:
     """按固定顺序组装攻略段落，证据缺失的段落直接省略。"""
     positions = _placement_coords(md)
+    calls = build_script_behavior_index(analysis_script_sources(md)).calls
     candidates = (
         GuideSection("basic", GUIDE_SECTION_TITLES["basic"], _basic_lines(md)),
         GuideSection("commands", GUIDE_SECTION_TITLES["commands"], _command_lines(md)),
-        GuideSection("quests", GUIDE_SECTION_TITLES["quests"], _quest_lines(md)),
+        GuideSection("quests", GUIDE_SECTION_TITLES["quests"], _quest_lines(md, calls)),
         GuideSection("heroes", GUIDE_SECTION_TITLES["heroes"], _hero_lines(md)),
         GuideSection("recipes", GUIDE_SECTION_TITLES["recipes"], _recipe_lines(md)),
         GuideSection(
@@ -111,7 +110,7 @@ def build_guide_sections(md: MapData) -> tuple[GuideSection, ...]:
             "drops", GUIDE_SECTION_TITLES["drops"], _drop_lines(md, positions)
         ),
         GuideSection("loot", GUIDE_SECTION_TITLES["loot"], _loot_lines(md)),
-        GuideSection("clues", GUIDE_SECTION_TITLES["clues"], _clue_lines(md)),
+        GuideSection("clues", GUIDE_SECTION_TITLES["clues"], _clue_lines(md, calls)),
     )
     return tuple(section for section in candidates if section.lines)
 
@@ -197,46 +196,72 @@ def _command_lines(md: MapData) -> tuple[str, ...]:
     return tuple(rows)
 
 
-def _quest_lines(md: MapData) -> tuple[str, ...]:
+def _quest_lines(md: MapData, calls: tuple[ScriptBehaviorCall, ...]) -> tuple[str, ...]:
     wts = map_wts_table(md)
     seen: set[tuple[str, str]] = set()
     rows: list[str] = []
-    for _source, text, lua in analysis_script_sources(md):
-        for match in _QUEST_CALL.finditer(text):
-            title = _resolve_text(match.group(1), wts)
-            body = _resolve_text(match.group(2), wts)
-            if not title or (title, body) in seen:
-                continue
-            seen.add((title, body))
-            rows.append(f"- ◆ {title}")
-            if body:
-                rows.append(f"  {body}")
+    for call in calls:
+        if _text_api(call) != "CreateQuestBJ":
+            continue
+        title, body = _call_text(call, 1, wts), _call_text(call, 2, wts)
+        if call.binding != "standard-global" or title is None or body is None:
+            rows.extend(_unresolved_text_call(call, "任务"))
+            continue
+        if not title or (title, body) in seen:
+            continue
+        seen.add((title, body))
+        rows.append(f"- ◆ {title}")
+        if body:
+            rows.append(f"  {body}")
     return tuple(rows)
 
 
 def _hero_lines(md: MapData) -> tuple[str, ...]:
+    objects = PlacementObjectIndex(md)
     counts: dict[str, int] = {}
+    candidates: list[str] = []
     for unit in md.units:
-        if _hero_fine_category(md, unit.type_id) != "英雄":
+        identity = objects.placement(unit.type_id, ("单位", "物品"))
+        if identity.category != "单位" or identity.fine != "英雄":
+            obj = objects.objects.get(("单位", unit.type_id))
+            if (
+                identity.diagnostic
+                and obj is not None
+                and fine_category_for(obj.base_id, obj.obj_id, category="单位")
+                == "英雄"
+            ):
+                candidates.append(
+                    f"- 未确认预放置英雄候选 {unit.type_id}"
+                    f" @({format_number(unit.x)},{format_number(unit.y)})：{identity.diagnostic}"
+                )
             continue
         counts[unit.type_id] = counts.get(unit.type_id, 0) + 1
     if not counts:
         # 预放置为 0 不等于没有英雄: 很多 RPG 由脚本/选择系统在运行时生成。
         # 对象表里确有英雄类单位时, 用一行说明替代整段缺失 (迷失国度即此形态)。
         hero_objs = [
-            code for code in md.obj_index if _hero_fine_category(md, code) == "英雄"
+            code
+            for (category, code), obj in objects.objects.items()
+            if category == "单位"
+            and obj.ext != "script"
+            and fine_category_for(obj.base_id, code, category=category) == "英雄"
         ]
         if not hero_objs:
-            return ()
+            return tuple(candidates)
         return (
-            f"- 无预放置英雄单位；对象表含 {len(hero_objs)} 个英雄类单位"
+            f"- {'未确认预放置英雄单位' if candidates else '无预放置英雄单位'}；对象表含 {len(hero_objs)} 个英雄类单位"
             "（英雄可能由脚本/选择系统在运行时生成）",
+            *candidates,
         )
     rows = [
-        f"- {_code_name(md, code)}({code}) — 预放置 ×{count}"
+        f"- {objects.name('单位', code)}({code}) — 预放置 ×{count}"
         for code, count in sorted(counts.items())
     ]
-    return (f"- 共 {len(rows)} 种英雄单位（含明选/隐藏/NPC 英雄模型）", *rows)
+    return (
+        f"- 共 {len(rows)} 种英雄单位（含明选/隐藏/NPC 英雄模型）",
+        *rows,
+        *candidates,
+    )
 
 
 def _recipe_lines(md: MapData) -> tuple[str, ...]:
@@ -308,6 +333,7 @@ def _shop_lines(md: MapData, coords: PositionGroups | None = None) -> tuple[str,
 
 
 def _drop_lines(md: MapData, coords: PositionGroups | None = None) -> tuple[str, ...]:
+    objects = PlacementObjectIndex(md)
     rows = list(
         _grouped_source_lines(
             md,
@@ -354,15 +380,22 @@ def _drop_lines(md: MapData, coords: PositionGroups | None = None) -> tuple[str,
     # drop 兜底同源正则, 语义一致: 掷骰不写保底, 奖池 N 选 1)。
     seen: set[str] = set(rows)
     for source, text, lua in analysis_script_sources(md):
+        if lua is None:
+            rows.append(
+                f"- 来源语言未知，保留脚本原文，未按 JASS/Lua 推断掉落：{source}"
+            )
+            continue
         evidence = (
             format_trigger_acquisitions(
                 trigger_acquisitions(text, lua=True),
-                lambda code: _code_name(md, code),
+                lambda code: _code_name(md, code, objects),
                 source=source,
                 death=True,
             )
             if lua is True
-            else script_death_drop_lines(text, lambda code: _code_name(md, code))
+            else script_death_drop_lines(
+                text, lambda code: _code_name(md, code, objects)
+            )
         )
         if lua is True:
             # Identical calls at different offsets remain separate evidence rows.
@@ -380,7 +413,7 @@ def _drop_lines(md: MapData, coords: PositionGroups | None = None) -> tuple[str,
                     for record in trigger_acquisitions(text, lua=False)
                     if record.graph is not None and (record.node or record.value_proof)
                 ),
-                lambda code: _code_name(md, code),
+                lambda code: _code_name(md, code, objects),
                 source=source,
                 death=True,
             )
@@ -391,8 +424,14 @@ def _drop_lines(md: MapData, coords: PositionGroups | None = None) -> tuple[str,
 def _loot_lines(md: MapData) -> tuple[str, ...]:
     """开箱与兑换产出: 使用/拾取触发的数组池与直接发放 (与 where 同源, 满量)。"""
     rows: list[str] = []
+    objects = PlacementObjectIndex(md)
     seen: set[str] = set()
     for source, text, lua in analysis_script_sources(md):
+        if lua is None:
+            rows.append(
+                f"- 来源语言未知，保留脚本原文，未按 JASS/Lua 推断开箱兑换：{source}"
+            )
+            continue
         if lua is True:
             records = tuple(
                 record
@@ -400,16 +439,21 @@ def _loot_lines(md: MapData) -> tuple[str, ...]:
                 if record.input_items or record.kind in {"拾取", "使用"}
             )
             lines = format_trigger_acquisitions(
-                records, lambda code: _code_name(md, code), source=source, death=False
+                records,
+                lambda code: _code_name(md, code, objects),
+                source=source,
+                death=False,
             )
             rows.extend(lines)
             seen.update(lines)
             continue
         else:
-            lines = list(use_item_loot_lines(text, lambda code: _code_name(md, code)))
+            lines = list(
+                use_item_loot_lines(text, lambda code: _code_name(md, code, objects))
+            )
             lines.extend(
                 _item_trigger_grant_lines(
-                    text, [], lambda code: _code_name(md, code), label_all=True
+                    text, [], lambda code: _code_name(md, code, objects), label_all=True
                 )
             )
         for line in lines:
@@ -425,30 +469,36 @@ def _loot_lines(md: MapData) -> tuple[str, ...]:
         )
         rows.extend(
             format_trigger_acquisitions(
-                records, lambda code: _code_name(md, code), source=source, death=False
+                records,
+                lambda code: _code_name(md, code, objects),
+                source=source,
+                death=False,
             )
         )
     return tuple(rows)
 
 
-def _clue_lines(md: MapData) -> tuple[str, ...]:
+def _clue_lines(md: MapData, calls: tuple[ScriptBehaviorCall, ...]) -> tuple[str, ...]:
     wts = map_wts_table(md)
     seen: set[str] = set()
     rows: list[str] = []
-    texts = analysis_script_texts(md)
-    all_text = "\n".join(text for _source, text in texts)
-    for match in _TIMER_LABEL.finditer(all_text):
-        label = _resolve_text(match.group(1), wts)
-        if not label or label in seen:
+    for call in calls:
+        api = _text_api(call)
+        index = 1 if api == "CreateTimerDialogBJ" else _DISPLAY_ARGUMENTS.get(api)
+        if index is None:
             continue
-        seen.add(label)
-        rows.append(f"- 计时器标签：{label}")
-    for match in _DISPLAY_TEXT.finditer(all_text):
-        clue = _resolve_text(match.group(1), wts)
-        if not clue or clue in seen or not _CLUE_KEYWORDS.search(clue):
+        value = _call_text(call, index, wts)
+        if call.binding != "standard-global" or value is None:
+            rows.extend(_unresolved_text_call(call, "计时器/播报"))
             continue
-        seen.add(clue)
-        rows.append(f"- 播报：{clue}")
+        if not value or value in seen:
+            continue
+        if api != "CreateTimerDialogBJ" and not _CLUE_KEYWORDS.search(value):
+            continue
+        seen.add(value)
+        rows.append(
+            f"- {'计时器标签' if api == 'CreateTimerDialogBJ' else '播报'}：{value}"
+        )
     return tuple(rows)  # 线索全量: 匹配多少收多少, 不设条数上限
 
 
@@ -573,28 +623,47 @@ def _clean(text: str) -> str:
     return _WHITESPACE.sub(" ", plain).strip()
 
 
-def _fine_category(code: str) -> str:
-    fine = BASE_CATEGORIES.get(code)
-    return "" if fine is None else fine[0]
+def _code_name(
+    md: MapData, code: str, objects: PlacementObjectIndex | None = None
+) -> str:
+    objects = objects if objects is not None else PlacementObjectIndex(md)
+    categories = set(objects.categories.get(code, ()))
+    base = BASE_OBJECTS.get(code)
+    if base is not None:
+        categories.add(base[0])
+    if len(categories) == 1:
+        return objects.name(next(iter(categories)), code)
+    if categories:
+        return "同码候选：" + " / ".join(
+            f"{objects.name(category, code)}[{category}]"
+            for category in sorted(categories)
+        )
+    return code
 
 
-def _hero_fine_category(md: MapData, code: str) -> str:
-    """细类判定：标准码直查；自定义码回退到对象定义的标准 base_id 再查。
-
-    自定义英雄（如基于 Hamg 的 H00R）不在原版细类表里，
-    但对象定义保留了标准基码，链一次即可判定。
-    """
-    fine = _fine_category(code)
-    if fine:
-        return fine
-    obj = md.obj_index.get(code)
-    if obj is not None:
-        return _fine_category(obj.base_id)
-    return ""
+def _text_api(call: ScriptBehaviorCall) -> str:
+    return call.canonical or call.callee.removeprefix("_G.").removeprefix("_ENV.")
 
 
-def _code_name(md: MapData, code: str) -> str:
-    obj = md.obj_index.get(code)
-    if obj is not None:
-        return str(obj.name) or code
-    return BASE_NAMES.get(code) or code
+def _call_text(call: ScriptBehaviorCall, index: int, wts: dict[int, str]) -> str | None:
+    if index >= len(call.arguments):
+        return None
+    argument = call.arguments[index].strip()
+    if call.language not in {"JASS", "Lua"} or (
+        call.language == "JASS" and not argument.startswith('"')
+    ):
+        return None
+    value = decode_script_literal(argument, lua=call.language == "Lua")
+    return (
+        _resolve_text(value.value, wts)
+        if value.complete and value.value is not None
+        else None
+    )
+
+
+def _unresolved_text_call(call: ScriptBehaviorCall, role: str) -> tuple[str, ...]:
+    notes = "; ".join(call.diagnostics) or "文本实参不是完整已知字面量"
+    return (
+        f"- 未确认{role}调用〔{call.source}:{call.line} / 偏移{call.offset}〕：{call.raw}",
+        "  诊断：" + notes,
+    )

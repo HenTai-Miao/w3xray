@@ -1,11 +1,12 @@
 """Complete dedicated object queries over ID rows and known field evidence."""
 
 from collections.abc import Iterable, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Protocol
 
 from .object_codes import decode_object_id_query
+from .base_names import BASE_CATEGORIES
 from .pack_query_field_evidence import ObjectFields, object_field_indexes
 from .pack_query_objects import ObjectTable
 from .pack_query_combat_evidence import render_combat_parameters
@@ -27,6 +28,7 @@ class ObjectRecord:
     from_fields: bool = False
     unit_abilities: UnitAbilityEvidence | None = None
     fields_complete: bool = True
+    hero_basis: str = ""
 
     def search_fields(self, sources: ObjectDetailSources) -> Iterator[str]:
         yield self.row[1]
@@ -109,6 +111,35 @@ def load_object_records(
     return load_object_catalog(pack, (table,), sources)[table]
 
 
+def load_hero_catalog(
+    pack: Path, sources: ObjectDetailSources
+) -> dict[str, ObjectDetailIndex]:
+    """Include unit records whose unique declared base is a catalog hero.
+
+    W3U heroes retain their unit category. A missing or conflicting base never
+    falls back to the object's spelling, name, attributes or another category.
+    """
+    catalog = load_object_catalog(pack, ("英雄", "单位"), sources)
+    units = catalog["单位"]
+    bases: dict[str, set[str]] = {}
+    for record in units.records:
+        if not record.from_fields:
+            bases.setdefault(record.row[1], set()).add(record.row[3])
+    selected: list[ObjectRecord] = []
+    for record in units.records:
+        declared = bases.get(record.row[1], set())
+        base = record.row[3]
+        if (
+            record.from_fields
+            or len(declared) != 1
+            or BASE_CATEGORIES.get(base, ("", ""))[0] != "英雄"
+        ):
+            continue
+        selected.append(replace(record, hero_basis=base))
+    catalog["单位"] = replace(units, records=tuple(selected))
+    return catalog
+
+
 def render_object_record(
     record: ObjectRecord,
     view: ObjectTable,
@@ -127,6 +158,13 @@ def render_object_record(
         f"[{row[1]}] {name} ({origin})"
         + (" — " + note if note and include_description else "")
     )
+    if record.hero_basis:
+        out.append(
+            "  英雄分类依据: 对象ID/单位.tsv 明确声明基础 ID "
+            + record.hero_basis
+            + "，内置基础目录将其列为英雄；原始分类仍为单位。"
+        )
+        out.append("  该静态分类不证明当前可选、已生成或由玩家持有。")
     if record.from_fields:
         out.append(
             "  该对象由对象字段.tsv确认；ID 清单未收录，基础 ID 及自定义标记未记录。"
@@ -171,11 +209,17 @@ def query_object_details(
             "未找到: 查询表达式没有关键词",
             '可输入名称、四码、字段词；组合使用 &&、||、%、括号或 ="精准词"。',
         ]
-    index = load_object_records(pack, table, sources)
-    view, records = index.view, index.records
+    catalog = (
+        load_hero_catalog(pack, sources)
+        if table == "英雄"
+        else {table: load_object_records(pack, table, sources)}
+    )
+    records = [
+        (record, index.view) for index in catalog.values() for record in index.records
+    ]
     matches = [
-        record
-        for record in records
+        (record, view)
+        for record, view in records
         if (
             record.row[1] == selected_id
             if selected_id is not None
@@ -183,16 +227,16 @@ def query_object_details(
             or compiled.score_fields(record.search_fields(sources)) is not None
         )
     ]
-    partial = not index.complete
+    partial = any(not index.complete for index in catalog.values())
     if not matches:
         return [
             "未找到: " + (query or table + "对象记录") + " (名称/ID/说明/完整字段过滤)",
             f"  本次可确认{table}对象记录共 {len(records)} 项；可换名称、四码或字段关键词，用 search <词> 跨八表查。",
-            f"  数据来源: 对象ID/{table}.tsv 与 对象字段.tsv；缺失时请重新导出，可用 text <词> 查其他文本。",
+            f"  数据来源: 对象ID/{table}.tsv{'、对象ID/单位.tsv 的明确英雄基础 ID' if table == '英雄' else ''} 与 对象字段.tsv；缺失时请重新导出，可用 text <词> 查其他文本。",
             "  若有坐标，可用 near <x> <y> 反查附近对象。",
             *(
                 [
-                    "  英雄类单位也可能记录在单位类别，可用 units <名称或四码> / search <词> 继续查。"
+                    "  单位记录缺少或冲突的基础 ID 不用于推断英雄身份；可用 units <名称或四码> / search <词> 继续查原始证据。"
                 ]
                 if table == "英雄"
                 else []
@@ -204,7 +248,7 @@ def query_object_details(
             ),
         ]
     out: list[str] = []
-    for record in matches[:limit] if limit else matches:
+    for record, view in matches[:limit] if limit else matches:
         out.extend(render_object_record(record, view, sources))
     if limit and len(matches) > limit:
         out.append(

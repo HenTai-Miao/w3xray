@@ -380,25 +380,42 @@ class ExportActionsMixin:
             try:
                 from .live_object_dump import dump_live_objects
 
-                out = tmp_extract_dir("runtime-objects", "运行时对象包", clean=True)
+                out = tmp_extract_dir("runtime-objects", "运行时对象包")
                 result = dump_live_objects(out)
-                if result.objects == 0:
-                    note = "；".join(result.notes) or "未捕获到对象"
-                    _ = self._post_gui_worker(
-                        ticket,
-                        lambda n=note: messagebox.showwarning(
-                            "未导出对象",
-                            f"{n}\n\n请确认 Warcraft III 正在运行且已进入对局，再试一次。",
-                        ),
-                    )
-                    return
-                _ = self._post_gui_worker(
-                    ticket,
-                    lambda out_dir=out: messagebox.showinfo(
+
+                def finish() -> None:
+                    notes = "\n".join(result.notes)
+                    if not result.completed:
+                        self.status.configure(text="运行时证据导出未完成")
+                        messagebox.showwarning(
+                            "导出未完成",
+                            (notes + "\n\n" if notes else "")
+                            + "请确认 Warcraft III 正在运行且已进入对局，再重试。",
+                        )
+                        return
+                    if not (
+                        result.objects
+                        or result.registered_records
+                        or result.affix_records
+                    ):
+                        self.status.configure(text="未捕获运行时证据")
+                        messagebox.showwarning(
+                            "未捕获运行时证据",
+                            f"空证据包与诊断已保留: {out}\n\n"
+                            + (notes + "\n\n" if notes else "")
+                            + "请确认已进入目标对局，再重试。",
+                        )
+                        return
+                    self.status.configure(text=f"运行时证据包已导出: {out}")
+                    messagebox.showinfo(
                         "导出完成",
-                        f"运行时对象包: {out_dir}（affixes/registered 可查）",
-                    ),
-                )
+                        f"运行时证据包: {out}\n"
+                        f"对象块 {result.records}，不同 ID {result.objects}；"
+                        f"注册记录 {result.registered_records}，词缀记录 {result.affix_records}"
+                        + ("\n\n" + notes if notes else ""),
+                    )
+
+                _ = self._post_gui_worker(ticket, finish)
             except Exception as exc:  # BROAD_EXCEPT_OK - GUI worker boundary.
                 error_text = format_user_exception(exc, paths=(out,))
                 _ = self._post_gui_worker(
@@ -424,8 +441,9 @@ def load_last_pack_dir() -> str:
     if not path:
         return ""
     try:
-        return open(path, encoding="utf-8").read().strip()
-    except OSError:
+        with open(path, encoding="utf-8") as handle:
+            return handle.read().strip()
+    except OSError, UnicodeError:
         return ""
 
 
@@ -438,5 +456,5 @@ def save_last_pack_dir(out: str) -> None:
 
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         Path(path).write_text(out, encoding="utf-8")
-    except OSError:
+    except OSError, UnicodeError:
         pass  # fail-open: 记忆失败不影响导出

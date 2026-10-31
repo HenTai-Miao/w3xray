@@ -25,6 +25,7 @@ class MapPublicationStage:
     transaction_id: str
     relative: str
     digest: str
+    stage_identity: tuple[int, int] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +39,8 @@ class PublicationTransaction:
     backup_name: str
     source_sha256: str
     manifest_sha256: str
+    stage_identity: tuple[int, int] | None = None
+    backup_identity: tuple[int, int] | None = None
 
 
 @dataclass(frozen=True, slots=True)

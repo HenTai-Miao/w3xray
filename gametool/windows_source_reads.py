@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
 import ctypes
 from dataclasses import dataclass
+import ntpath
 import os
 from pathlib import Path, PurePosixPath
 from types import TracebackType
@@ -232,7 +233,13 @@ class WindowsSourceRoot:
         if (
             relative.is_absolute()
             or not relative.parts
-            or any(part in {"", ".", ".."} for part in relative.parts)
+            or any(
+                part in {"", ".", ".."}
+                or "\\" in part
+                or ":" in part
+                or ntpath.isreserved(part)
+                for part in relative.parts
+            )
         ):
             raise WindowsSourceError(path, "source path is not canonical relative text")
         try:

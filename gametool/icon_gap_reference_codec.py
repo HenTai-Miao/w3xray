@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import json
 from typing import Final, override
 
-type JsonValue = (
-    str | int | float | bool | list["JsonValue"] | dict[str, "JsonValue"] | None
-)
+from .json_evidence import JsonNode, parse_json_evidence
 
 _REFERENCE_KEYS: Final = frozenset(
     (
@@ -58,20 +55,29 @@ class IconGapReferenceFormatError(ValueError):
 def parse_icon_gap_references(text: str) -> tuple[IconGapReferenceIdentity, ...]:
     """Parse an exact nonempty reference set and reject duplicate identities."""
     try:
-        value: JsonValue = json.loads(text)
-    except json.JSONDecodeError as exc:
+        nodes, root = parse_json_evidence(text)
+    except ValueError as exc:
         raise IconGapReferenceFormatError("malformed icon reference JSON") from exc
-    if not isinstance(value, list) or not value:
+    value = nodes[root]
+    if value.kind != "array" or not value.elements:
         raise IconGapReferenceFormatError("icon reference set is empty")
-    references = tuple(_parse_reference(item) for item in value)
+    references = tuple(_parse_reference(nodes, item) for item in value.elements)
     if len(set(references)) != len(references):
         raise IconGapReferenceFormatError("duplicate icon reference identity")
     return references
 
 
-def _parse_reference(value: JsonValue) -> IconGapReferenceIdentity:
-    if not isinstance(value, dict) or set(value) != _REFERENCE_KEYS:
+def _parse_reference(
+    nodes: tuple[JsonNode, ...], index: int
+) -> IconGapReferenceIdentity:
+    node = nodes[index]
+    if (
+        node.kind != "object"
+        or len(node.members) != len(_REFERENCE_KEYS)
+        or {member.key for member in node.members} != _REFERENCE_KEYS
+    ):
         raise IconGapReferenceFormatError("unexpected icon reference keys")
+    value = {member.key: nodes[member.node] for member in node.members}
     reference = IconGapReferenceIdentity(
         _text(value["category"]),
         _text(value["rawcode"]),
@@ -90,7 +96,7 @@ def _parse_reference(value: JsonValue) -> IconGapReferenceIdentity:
     return reference
 
 
-def _text(value: JsonValue) -> str:
-    if not isinstance(value, str):
+def _text(node: JsonNode) -> str:
+    if node.kind != "string" or not isinstance(node.value, str):
         raise IconGapReferenceFormatError("icon reference value is not text")
-    return value
+    return node.value

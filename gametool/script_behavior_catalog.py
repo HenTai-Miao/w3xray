@@ -27,6 +27,7 @@ REFERENCE_MEMBER_SHA256 = MappingProxyType(
 STANDARD_CALL_REFERENCES = MappingProxyType(
     {
         "AddWeatherEffect": ("world", "native", "classic/common.j", 2297),
+        "BJDebugMsg": ("text", "function", "classic/Blizzard.j", 644),
         "Condition": ("support", "native", "classic/common.j", 1055),
         "ConvertPlayerEvent": ("support", "native", "classic/common.j", 110),
         "ConvertPlayerUnitEvent": ("support", "native", "classic/common.j", 111),
@@ -39,6 +40,7 @@ STANDARD_CALL_REFERENCES = MappingProxyType(
         "CreateItem": ("item", "native", "classic/common.j", 1395),
         "CreateItemLoc": ("item", "function", "classic/Blizzard.j", 2637),
         "CreateNUnitsAtLoc": ("unit", "function", "classic/Blizzard.j", 3058),
+        "CreateQuestBJ": ("text", "function", "classic/Blizzard.j", 5387),
         "CreateTextTagLocBJ": ("text", "function", "classic/Blizzard.j", 6133),
         "CreateTimer": ("timer", "native", "classic/common.j", 912),
         "CreateTimerDialogBJ": ("timer", "function", "classic/Blizzard.j", 5611),
@@ -59,6 +61,7 @@ STANDARD_CALL_REFERENCES = MappingProxyType(
         "DialogDisplay": ("text", "native", "classic/common.j", 1791),
         "DialogSetMessage": ("text", "native", "classic/common.j", 1788),
         "DisableTrigger": ("trigger", "native", "classic/common.j", 1024),
+        "DisplayTextToForce": ("text", "function", "classic/Blizzard.j", 1606),
         "DisplayTextToPlayer": ("text", "native", "classic/common.j", 1972),
         "DisplayTimedTextToForce": ("text", "function", "classic/Blizzard.j", 1614),
         "DisplayTimedTextToPlayer": ("text", "native", "classic/common.j", 1973),

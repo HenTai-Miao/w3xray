@@ -7,7 +7,6 @@ from decimal import Decimal
 from typing import assert_never
 
 from .base_names import BASE_NAMES
-from .object_text_roles import classify_text_field
 from .script_string_references import trigstr_reference_id
 from .static_numbers import format_number
 from .textobj import _sub_westring
@@ -55,19 +54,6 @@ def wts_value_source(
             return ""
         case unreachable:
             assert_never(unreachable)
-
-
-def retain_field(
-    category: str,
-    key: str,
-    label: str,
-    value: str,
-    value_type: str = "",
-) -> bool:
-    """Retain nonempty data and explicitly present empty text fields."""
-    return (
-        bool(value) or classify_text_field(category, key, label, value_type) is not None
-    )
 
 
 def expand_codes(value: str) -> str:

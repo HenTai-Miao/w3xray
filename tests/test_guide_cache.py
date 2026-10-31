@@ -1,5 +1,6 @@
 """攻略报告缓存：键派生、fail-open 读写与段落切片。"""
 
+import os
 from pathlib import Path
 
 import pytest
@@ -56,6 +57,101 @@ def test_cache_disabled_via_environment(
     assert report_cache_path(str(map_file)) is None
     store_cached_report(None, "text")
     assert load_cached_report(None) is None
+
+
+def test_same_size_content_change_with_restored_mtime_invalidates_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("GAMEXRAY_CACHE_DIR", str(tmp_path / "cache"))
+    source = _fake_map(tmp_path)
+    before = source.stat()
+    old_path = report_cache_path(str(source))
+    store_cached_report(old_path, "old source report")
+    source.write_bytes(b"PK-next")
+    os.utime(source, ns=(before.st_atime_ns, before.st_mtime_ns))
+    assert source.stat().st_size == before.st_size
+    assert source.stat().st_mtime_ns == before.st_mtime_ns
+    assert report_cache_path(str(source)) != old_path
+    assert load_cached_report(report_cache_path(str(source))) is None
+    assert load_cached_report(old_path) == "old source report"
+
+
+def test_cached_cli_report_revalidates_source_before_printing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from gametool import guide_cli
+
+    source = _fake_map(tmp_path)
+    old_path = report_cache_path(str(source))
+    store_cached_report(old_path, "MUST-NOT-DELIVER-OLD-REPORT")
+    original = guide_cli.load_cached_report
+
+    def change_after_cache_read(path):
+        text = original(path)
+        source.write_bytes(b"PK-next")
+        return text
+
+    monkeypatch.setattr(guide_cli, "load_cached_report", change_after_cache_read)
+    assert guide_cli.run_guide_cli(guide_cli.GuideCliOptions(str(source))) == 2
+    result = capsys.readouterr()
+    assert "MUST-NOT-DELIVER" not in result.out
+    assert "来源" in result.err and "变化" in result.err
+
+
+@pytest.mark.parametrize("change_during_report", (False, True))
+def test_cli_never_publishes_old_loaded_map_under_a_new_source_key(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    change_during_report: bool,
+) -> None:
+    from gametool import guide_cli
+    from gametool.gui_offline_acceptance_support import _fixture_mpq
+    from gametool.map_loader import load_map
+
+    source = tmp_path / "changing.w3x"
+    original = _fixture_mpq({"war3map.j": b"// old source"})
+    changed = _fixture_mpq({"war3map.j": b"// new source"})
+    source.write_bytes(original)
+    before = source.stat()
+    loaded = load_map(str(source))
+    old_cache = report_cache_path(str(source))
+
+    def change_source() -> None:
+        source.write_bytes(changed)
+        os.utime(source, ns=(before.st_atime_ns, before.st_mtime_ns))
+
+    if not change_during_report:
+        change_source()
+    monkeypatch.setattr(guide_cli, "load_map", lambda *_args, **_kwargs: loaded)
+
+    def old_report(*_args):
+        change_source()
+        return "MUST-NOT-PUBLISH-OLD-MAP"
+
+    monkeypatch.setattr(guide_cli, "format_guide_report", old_report)
+    assert guide_cli.run_guide_cli(guide_cli.GuideCliOptions(str(source))) == 2
+    assert loaded._closed
+    assert load_cached_report(old_cache) is None
+    assert load_cached_report(report_cache_path(str(source))) is None
+    assert "MUST-NOT-PUBLISH" not in capsys.readouterr().out
+
+
+def test_new_report_semantics_do_not_reuse_the_previous_generation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from gametool import guide_cache
+
+    monkeypatch.setenv("GAMEXRAY_CACHE_DIR", str(tmp_path / "cache"))
+    map_file = _fake_map(tmp_path)
+    current = report_cache_path(str(map_file))
+    assert guide_cache.GUIDE_CACHE_VERSION == "guide-v43"
+    with monkeypatch.context() as older:
+        older.setattr(guide_cache, "GUIDE_CACHE_VERSION", "guide-v" + str(42))
+        previous = report_cache_path(str(map_file))
+        store_cached_report(previous, "previous report evidence")
+    assert current != previous and load_cached_report(current) is None
+    assert load_cached_report(previous) == "previous report evidence"
 
 
 def test_load_cached_report_fails_open(tmp_path: Path) -> None:

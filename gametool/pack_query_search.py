@@ -10,6 +10,7 @@ from .search import compile_query
 from .pack_query_objects import OBJECT_TABLES, object_category
 from .pack_query_object_details import (
     ObjectDetailSources,
+    load_hero_catalog,
     load_object_catalog,
     render_object_record,
 )
@@ -46,7 +47,11 @@ def query_search(
         ]
     total = 0
     output: list[str] = []
-    catalog = load_object_catalog(pack, (category,) if category else _TABLES, sources)
+    catalog = (
+        load_hero_catalog(pack, sources)
+        if category == "英雄"
+        else load_object_catalog(pack, (category,) if category else _TABLES, sources)
+    )
     partial = any(not index.complete for index in catalog.values())
     for table, index in catalog.items():
         total += len(index.records)
@@ -57,7 +62,12 @@ def query_search(
         ]
         if not hits:
             continue
-        output.append(f"== {table} ({len(hits)} 个)==")
+        label = (
+            "英雄类单位（原始分类：单位）"
+            if category == "英雄" and table == "单位"
+            else table
+        )
+        output.append(f"== {label} ({len(hits)} 个)==")
         for record in hits[:limit] if limit else hits:
             rendered = render_object_record(
                 record, index.view, sources, include_description=False

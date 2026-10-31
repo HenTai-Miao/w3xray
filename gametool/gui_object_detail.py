@@ -90,7 +90,20 @@ class ObjectDetailMixin:
 
     def _show_detail(self, item) -> None:
         self._selected_detail_object = item
+        self._set_object_detail_actions_enabled(True)
         self._render_selected_object_detail()
+
+    def _set_object_detail_actions_enabled(self, enabled: bool) -> None:
+        for name in (
+            "pack_where_button",
+            "pack_drop_button",
+            "pack_query_detail_button",
+            "pack_calls_button",
+            "copy_complete_text_button",
+        ):
+            button = getattr(self, name, None)
+            if button is not None:
+                button.configure(state="normal" if enabled else "disabled")
 
     def _render_selected_object_detail(self) -> None:
         obj = getattr(self, "_selected_detail_object", None)
@@ -101,7 +114,7 @@ class ObjectDetailMixin:
         )
         self.detail_icon.configure(image=self.detail_icon_image, text="")
         self.detail_title.configure(text=object_detail_title(obj))
-        fine = fine_category_for(obj.base_id, obj.obj_id)
+        fine = fine_category_for(obj.base_id, obj.obj_id, category=obj.category)
         category_label = obj.category if not fine else f"{obj.category}·{fine}"
         self.detail_sub.configure(
             text=f"{category_label}  ·  ID {obj.obj_id}  ·  基础 {obj.base_id}"

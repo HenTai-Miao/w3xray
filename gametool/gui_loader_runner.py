@@ -99,6 +99,9 @@ class BackgroundLoaderMixin(BackgroundLoaderHost):
         source_path: str | None,
         borrowed_map: MapData | None = None,
     ) -> None:
+        cancel_discovery = getattr(self, "_cancel_pending_current_map", None)
+        if cancel_discovery is not None:
+            cancel_discovery()
         self.status.configure(text=status)
 
         def work(ticket: GuiWorkerTicket) -> None:

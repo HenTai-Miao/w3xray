@@ -6,8 +6,9 @@ from collections import Counter
 from tkinter import font as tkfont, ttk
 from typing import TYPE_CHECKING
 
-from .base_names import BASE_NAMES, BASE_NAMES_EN
+from .base_catalog import base_name_for
 from .map_info import format_map_info
+from .placement_identity import PlacementIdentity, PlacementObjectIndex
 from .search import compile_query
 from .static_numbers import format_number
 from .theme import CARD, FONT, ROW_ALT
@@ -96,8 +97,9 @@ class DataRefreshMixin:
         compiled = compile_query(query)
         units = getattr(self.map_data, "units", []) or []
         doodads = getattr(self.map_data, "doodads", []) or []
-        shown_units = self._refresh_unit_rows(units, query, compiled)
-        shown_doodads = self._refresh_doodad_rows(doodads, query, compiled)
+        index = PlacementObjectIndex(self.map_data)
+        shown_units = self._refresh_unit_rows(units, query, compiled, index)
+        shown_doodads = self._refresh_doodad_rows(doodads, query, compiled, index)
         self.unit_title.configure(text=f"预放置单位  ({shown_units})")
         self.doodad_title.configure(text=f"装饰物 / 可破坏物  ({shown_doodads})")
         if units or doodads:
@@ -110,12 +112,18 @@ class DataRefreshMixin:
                 text="此图无预放置数据（war3mapUnits.doo / war3map.doo 缺失或为空）"
             )
 
-    def _refresh_unit_rows(self, units, query: str, compiled) -> int:
+    def _refresh_unit_rows(
+        self, units, query: str, compiled, index: PlacementObjectIndex
+    ) -> int:
         self.unit_tree.delete(*self.unit_tree.get_children())
         shown = 0
         for unit in units:
-            name = self._item_name(unit.type_id)
-            if query and compiled.score(self._search_blob(unit.type_id, name)) is None:
+            identity = index.placement(unit.type_id, ("单位", "物品"))
+            name = _placement_label(unit.type_id, identity)
+            if (
+                query
+                and compiled.score(f"{name} {unit.type_id} {identity.english}") is None
+            ):
                 continue
             hp = "默认" if unit.hp < 0 else str(unit.hp)
             mana = "默认" if unit.mana < 0 else str(unit.mana)
@@ -138,18 +146,23 @@ class DataRefreshMixin:
         self.unit_tree.tag_configure("even", background=CARD)
         return shown
 
-    def _refresh_doodad_rows(self, doodads, query: str, compiled) -> int:
+    def _refresh_doodad_rows(
+        self, doodads, query: str, compiled, index: PlacementObjectIndex
+    ) -> int:
         self.doodad_tree.delete(*self.doodad_tree.get_children())
         shown = 0
         for doodad in doodads:
-            name = self._item_name(doodad.type_id)
+            identity = index.placement(doodad.type_id, ("装饰物", "可破坏物"))
+            name = _placement_label(doodad.type_id, identity)
             if (
                 query
-                and compiled.score(self._search_blob(doodad.type_id, name)) is None
+                and compiled.score(f"{name} {doodad.type_id} {identity.english}")
+                is None
             ):
                 continue
             drops = "  ".join(
-                f"{self._item_name(item)}×{count}%" for item, count in doodad.drops
+                f"{self._item_name(item, index)}×{count}%"
+                for item, count in doodad.drops
             )
             scale = format_number(doodad.scale[0]) if doodad.scale else "1"
             self.doodad_tree.insert(
@@ -170,19 +183,15 @@ class DataRefreshMixin:
         self.doodad_tree.tag_configure("even", background=CARD)
         return shown
 
-    def _search_blob(self, code, name):
-        # 预放置搜索并入英文名（footman / town hall 等可直接命中）
-        blob = f"{name} {code}"
-        english = BASE_NAMES_EN.get(code, "")
-        return f"{blob} {english}" if english else blob
-
-    def _item_name(self, code):
-        if self.map_data:
-            obj = self.map_data.obj_index.get(code)
-            if obj and obj.name and obj.name != code:
-                return f"{obj.name}({code})"
-        base_name = BASE_NAMES.get(code)
-        return f"{base_name}({code})" if base_name else code
+    def _item_name(self, code: str, index: PlacementObjectIndex | None = None) -> str:
+        if index is None and self.map_data is not None:
+            index = PlacementObjectIndex(self.map_data)
+        name = (
+            index.name("物品", code)
+            if index is not None
+            else base_name_for(code, category="物品")
+        )
+        return f"{name}({code})" if name and name != code else code
 
     _rec_font: tkfont.Font | None = None
 
@@ -208,9 +217,14 @@ class DataRefreshMixin:
         shown = 0
         widest = 0
         font = self._measure_font()
+        index = (
+            PlacementObjectIndex(self.map_data) if self.map_data is not None else None
+        )
         for recipe in self.recipes:
-            result_name = self._item_name(recipe.result)
-            ingredients = _ingredient_text(recipe.ingredients, self._item_name)
+            result_name = self._item_name(recipe.result, index)
+            ingredients = _ingredient_text(
+                recipe.ingredients, lambda code: self._item_name(code, index)
+            )
             if query and compiled.score(result_name + " " + ingredients) is None:
                 continue
             self.rec_tree.insert(
@@ -269,6 +283,11 @@ class DataRefreshMixin:
             self.cmd_hint.configure(
                 text="未发现聊天指令（此图可能无聊天触发，或用了非标准写法）"
             )
+
+
+def _placement_label(code: str, identity: PlacementIdentity) -> str:
+    name = f"{identity.name}({code})" if identity.name != code else code
+    return f"{name}〔{identity.diagnostic}〕" if identity.diagnostic else name
 
 
 def _ingredient_text(ingredients, item_name) -> str:

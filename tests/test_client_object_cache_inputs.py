@@ -197,15 +197,15 @@ def test_text_and_locale_source_changes_refresh_the_cached_snapshot(
     assert len(tuple(cache.rglob("*.pkl"))) == 3
 
 
-def test_v3_cache_is_rejected_and_retained_beside_new_v4_results(
+def test_v4_cache_is_rejected_and_retained_beside_new_v5_results(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root, cache = _enable_cache(tmp_path, monkeypatch)
     _write(root, "war3mapSkin.w3t", _binary("w3t", "CURRENT"))
-    old = cache / "client-snapshots" / "old-v3.pkl"
+    old = cache / "client-snapshots" / "old-v4.pkl"
     old.parent.mkdir(parents=True)
     old.write_bytes(
-        b"gamexray-client-snapshot-v3\n"
+        b"gamexray-client-snapshot-v4\n"
         + pickle.dumps(client.ClientObjectSnapshot((), False))
     )
     retained = old.read_bytes(), old.stat().st_mtime_ns
@@ -216,7 +216,7 @@ def test_v3_cache_is_rejected_and_retained_beside_new_v4_results(
     assert "CURRENT" in _values(snapshot)
     assert (old.read_bytes(), old.stat().st_mtime_ns) == retained
     new = next(path for path in cache.rglob("*.pkl") if path != old)
-    assert new.read_bytes().startswith(b"gamexray-client-snapshot-v4\n")
+    assert new.read_bytes().startswith(b"gamexray-client-snapshot-v5\n")
 
 
 @pytest.mark.parametrize("cached", (False, True))

@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import MappingProxyType
 from typing import Final
 
@@ -24,8 +24,11 @@ from .script_call_argument_index import (
     build_script_call_argument_index,
 )
 from .script_sources import analysis_script_sources
-from .script_scopes import source_line_starts
+from .script_scopes import source_line_starts, script_structure
 from .script_trigger_bindings import script_trigger_bindings
+from .script_behavior_index import ScriptBehaviorCall, build_script_behavior_index
+from .script_lexing import ScriptViews, script_views
+from .script_object_literals import literal_object_code, strip_outer_parentheses
 from bisect import bisect_right
 
 
@@ -69,12 +72,6 @@ _SIGNATURES: Final[Mapping[str, _CallSignature]] = MappingProxyType(
         "AddItemToAllStock": _CallSignature(1),
     }
 )
-_DIRECT_PATTERNS: Final = (
-    re.compile(r"^'[A-Za-z0-9]{4}'$"),
-    re.compile(r"""^FourCC\s*\(\s*["'][A-Za-z0-9]{4}["']\s*\)$""", re.IGNORECASE),
-    re.compile(r"^(?:\$|0[xX])[0-9A-Fa-f]{8}$"),
-    re.compile(r"^\d{10}$"),
-)
 
 
 def build_script_item_relations(md: MapData) -> tuple[ItemRelation, ...]:
@@ -91,21 +88,91 @@ def build_script_call_item_relations(md: MapData) -> tuple[ItemRelation, ...]:
 
 def _script_call_relations(md: MapData) -> tuple[ItemRelation, ...]:
     calls = _call_groups(build_script_call_argument_index(md).arguments)
+    sources = analysis_script_sources(md)
+    source_by_name = {source.source: source for source in sources}
+    behavior = {
+        (call.source, call.offset, call.callee): call
+        for call in build_script_behavior_index(sources).calls
+    }
+    legacy_bindings: dict[
+        tuple[str, int, str, bool, tuple[str, ...]], list[ScriptBehaviorCall]
+    ] = {}
+    if any(call.offset is None for call in calls):
+        for binding in behavior.values():
+            key = (
+                binding.source,
+                binding.line,
+                binding.callee,
+                binding.primary,
+                binding.arguments,
+            )
+            legacy_bindings.setdefault(key, []).append(binding)
     death_contexts = _death_contexts(md)
     scopes = {
         source: script_trigger_bindings(text, lua=lua).structure.scopes
-        for source, text, lua in analysis_script_sources(md)
+        for source, text, lua in sources
+    }
+    source_views = {
+        source.source: script_views(source.text, lua=source.lua) for source in sources
     }
     rows: list[ItemRelation] = []
     for call in calls:
-        signature = _SIGNATURES.get(call.call.removeprefix("_G."))
+        if call.offset is None and tuple(
+            argument.position for argument in call.arguments
+        ) == tuple(range(1, len(call.arguments) + 1)):
+            candidates = legacy_bindings.get(
+                (
+                    call.source,
+                    call.line,
+                    call.call,
+                    call.primary,
+                    tuple(argument.argument for argument in call.arguments),
+                ),
+                (),
+            )
+            if len(candidates) == 1:
+                call = replace(call, offset=candidates[0].offset)
+        binding = (
+            behavior.get((call.source, call.offset, call.call))
+            if call.offset is not None
+            else None
+        )
+        signature = _SIGNATURES.get(
+            binding.canonical
+            if binding is not None and binding.canonical
+            else call.call.removeprefix("_G.").removeprefix("_ENV.")
+        )
         if signature is None or _is_nested_call(call):
             continue
         item_argument = call.at(signature.item_position)
-        if item_argument is None or len(item_argument.object_codes) != 1:
+        if item_argument is None:
             continue
-        item_id = item_argument.object_codes[0]
-        direct = _is_direct_argument(item_argument.argument)
+        source = source_by_name[call.source]
+        literal = literal_object_code(item_argument.argument)
+        if source.lua is True and strip_outer_parentheses(
+            item_argument.argument
+        ).startswith("'"):
+            literal = ""  # A Lua string is not an integer object identifier.
+        codes = (literal,) if literal else item_argument.object_codes
+        if len(codes) != 1:
+            continue
+        item_id = codes[0]
+        binding_note = (
+            ""
+            if binding is not None and binding.binding == "standard-global"
+            else "调用绑定未确认为标准物品函数"
+            + (
+                ": " + "; ".join(binding.diagnostics)
+                if binding is not None and binding.diagnostics
+                else "；同名源码函数或动态绑定仅保留为线索"
+            )
+        )
+        direct = bool(literal) and not binding_note
+        if direct:
+            direct, literal_note = _literal_binding(
+                call, item_argument, source_views[call.source], behavior
+            )
+            binding_note = literal_note
         confidence = RelationConfidence.CONFIRMED if direct else RelationConfidence.CLUE
         lookup = scopes.get(call.source)
         owner = (
@@ -119,23 +186,29 @@ def _script_call_relations(md: MapData) -> tuple[ItemRelation, ...]:
         if contexts and confidence is RelationConfidence.CONFIRMED:
             confidence = RelationConfidence.INFERRED
         item, resolved = resolve_relation_object(md, item_id, "物品")
-        completeness, reason = _script_completeness(item_id, resolved, direct)
-        x = _float_argument(call.at(signature.x_position))
-        y = _float_argument(call.at(signature.y_position))
+        completeness, reason = _script_completeness(item_id, resolved, bool(literal))
+        if binding_note and completeness is RelationCompleteness.COMPLETE:
+            completeness = RelationCompleteness.PARTIAL
+        reason = "; ".join(filter(None, (reason, binding_note)))
+        x = _float_argument(call.at(signature.x_position)) if not binding_note else None
+        y = _float_argument(call.at(signature.y_position)) if not binding_note else None
         rows.append(
             ItemRelation(
                 kind=ItemRelationKind.SCRIPT_REWARD,
                 item=item,
                 x=x,
                 y=y,
-                slot=_int_argument(call.at(signature.slot_position)),
+                slot=_int_argument(call.at(signature.slot_position))
+                if not binding_note
+                else None,
                 evidence=RelationEvidence(
                     source=call.source,
                     function=call.function,
                     line=call.line,
                     offset=call.offset or 0,
                     location=_call_location(call, signature),
-                    raw=_raw_evidence(call.summary, contexts),
+                    raw=_raw_evidence(call.summary, contexts)
+                    + ("\n绑定诊断: " + binding_note if binding_note else ""),
                 ),
                 confidence=confidence,
                 completeness=completeness,
@@ -225,11 +298,42 @@ def _is_nested_call(call: _CallGroup) -> bool:
     return prefix.count("(") > prefix.count(")")
 
 
-def _is_direct_argument(argument: str) -> bool:
-    normalized = "".join(argument.split())
-    return any(
-        pattern.fullmatch(normalized) is not None for pattern in _DIRECT_PATTERNS
-    )
+def _literal_binding(
+    call: _CallGroup,
+    argument: ScriptCallArgument,
+    views: ScriptViews,
+    behavior: Mapping[tuple[str, int, str], ScriptBehaviorCall],
+) -> tuple[bool, str]:
+    """A FourCC spelling requires the same proved binding as the outer call."""
+    nested = script_structure(argument.argument, lua=views.lua).calls
+    if not nested:
+        return True, ""
+    if call.offset is None:
+        return False, "对象码构造函数缺少源码偏移，绑定未确定"
+    outer = behavior.get((call.source, call.offset, call.call))
+    if outer is None:
+        return False, "对象码构造函数缺少源码调用证据，绑定未确定"
+    cursor = views.syntax.find("(", call.offset, outer.end_offset) + 1
+    start = -1
+    for item in call.arguments:
+        start = views.arguments.find(item.argument, cursor, outer.end_offset)
+        if start < 0:
+            return False, "对象码实参未能绑定到原始源码偏移"
+        if item is argument:
+            break
+        cursor = start + len(item.argument)
+    notes: list[str] = []
+    for inner in nested:
+        resolved = behavior.get((call.source, start + inner.start, inner.name))
+        if (
+            resolved is None
+            or resolved.binding != "standard-global"
+            or resolved.canonical != "FourCC"
+        ):
+            notes.extend(resolved.diagnostics if resolved is not None else ())
+            if not notes:
+                notes.append("源码函数或动态绑定未确认为标准 FourCC")
+    return not notes, "对象码构造函数绑定未确定: " + "; ".join(notes) if notes else ""
 
 
 def _script_completeness(

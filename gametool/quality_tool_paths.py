@@ -94,6 +94,7 @@ gametool/batch_retirement_quarantine.py
 gametool/batch_runner.py
 gametool/batch_runtime.py
 gametool/batch_semantic_validation.py
+gametool/batch_stage_cleanup.py
 gametool/batch_state_io.py
 gametool/batch_state_parser.py
 gametool/batch_state_validation.py
@@ -111,6 +112,7 @@ gametool/casc_cli.py
 gametool/casc_inventory.py
 gametool/casc_source.py
 gametool/casclib_api.py
+gametool/casclib_dist.py
 gametool/casclib_enumeration.py
 gametool/casclib_source.py
 gametool/cheats.py
@@ -148,6 +150,7 @@ gametool/description_cache_owned_schema.py
 gametool/description_cache_publication.py
 gametool/description_cache_publication_absent.py
 gametool/description_cache_publication_backup_finalization.py
+gametool/description_cache_publication_build.py
 gametool/description_cache_publication_commit.py
 gametool/description_cache_publication_descriptor_close.py
 gametool/description_cache_publication_errors.py
@@ -294,8 +297,6 @@ gametool/guide_minimap.py
 gametool/guide_report.py
 gametool/hero_chain.py
 gametool/historical_icon_bindings.py
-gametool/json_evidence.py
-gametool/report_file_proof.py
 gametool/huffman.py
 gametool/icon_candidate_bindings.py
 gametool/icon_evidence_builder.py
@@ -327,6 +328,7 @@ gametool/item_relation_recipes.py
 gametool/item_relation_scripts.py
 gametool/item_relation_wtg.py
 gametool/jass_natives.py
+gametool/json_evidence.py
 gametool/knowledge_assets.py
 gametool/knowledge_audit.py
 gametool/knowledge_diagnostics.py
@@ -433,6 +435,7 @@ gametool/order_ids.py
 gametool/orders.py
 gametool/pack_query_call_records.py
 gametool/pack_query_cli.py
+gametool/pack_query_combat_evidence.py
 gametool/pack_query_diff.py
 gametool/pack_query_execution.py
 gametool/pack_query_field_evidence.py
@@ -441,8 +444,6 @@ gametool/pack_query_item_details.py
 gametool/pack_query_item_prices.py
 gametool/pack_query_numeric_values.py
 gametool/pack_query_object_details.py
-gametool/pack_query_combat_evidence.py
-gametool/pack_query_unit_abilities.py
 gametool/pack_query_objects.py
 gametool/pack_query_options.py
 gametool/pack_query_placement_index.py
@@ -457,8 +458,10 @@ gametool/pack_query_script_coverage.py
 gametool/pack_query_script_snapshot.py
 gametool/pack_query_search.py
 gametool/pack_query_spatial.py
+gametool/pack_query_table_snapshot.py
 gametool/pack_query_tech_details.py
 gametool/pack_query_text_records.py
+gametool/pack_query_unit_abilities.py
 gametool/placement_identity.py
 gametool/placement_positions.py
 gametool/presentation_safety.py
@@ -476,6 +479,7 @@ gametool/reference_cli.py
 gametool/reference_models.py
 gametool/reference_sources.py
 gametool/references.py
+gametool/report_file_proof.py
 gametool/resource_candidate_sources.py
 gametool/resource_candidates.py
 gametool/resource_content_refs.py

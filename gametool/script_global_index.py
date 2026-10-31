@@ -114,7 +114,7 @@ def _parse_global(source: str, line_no: int, line: str) -> ScriptGlobal | None:
     is_array = match.group("array") is not None
     is_constant = match.group("constant") is not None
     string_value = _first_string(initial)
-    object_codes = tuple(sorted(set(_codes_in(initial))))
+    object_codes = tuple(sorted(set(_codes_in(script_views(initial, lua=False).code))))
     return ScriptGlobal(
         source=source,
         line=line_no,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Generator, Mapping
 from dataclasses import dataclass
+import hashlib
 import os
 from typing import final, override
 import zlib
@@ -116,16 +117,27 @@ def decode_blte(data: bytes) -> bytes:
     if len(data) < header_size:
         raise CascUnsupportedError("truncated BLTE header")
     count, table_pos = _chunk_count(data)
+    if not count or header_size != table_pos + count * 24:
+        raise CascUnsupportedError("BLTE chunk count does not match complete header")
     chunks: list[bytes] = []
     payload_pos = header_size
     for index in range(count):
         entry_pos = table_pos + index * 24
         comp_size = int.from_bytes(data[entry_pos : entry_pos + 4], "big")
+        decoded_size = int.from_bytes(data[entry_pos + 4 : entry_pos + 8], "big")
         chunk = data[payload_pos : payload_pos + comp_size]
-        if len(chunk) != comp_size:
+        if not comp_size or len(chunk) != comp_size:
             raise CascUnsupportedError("truncated BLTE chunk")
-        chunks.append(_decode_chunk(chunk))
+        expected_hash = data[entry_pos + 8 : entry_pos + 24]
+        if any(expected_hash) and hashlib.md5(chunk).digest() != expected_hash:
+            raise CascUnsupportedError("BLTE chunk checksum mismatch")
+        decoded = _decode_chunk(chunk, expected_size=decoded_size)
+        if len(decoded) != decoded_size:
+            raise CascUnsupportedError("BLTE decoded chunk size mismatch")
+        chunks.append(decoded)
         payload_pos += comp_size
+    if payload_pos != len(data):
+        raise CascUnsupportedError("unaccounted bytes after BLTE chunks")
     return b"".join(chunks)
 
 
@@ -208,34 +220,48 @@ def _read_data_block(data_dir: str, entry: CascIndexEntry) -> bytes:
         _ = handle.seek(entry.offset)
         raw = handle.read(entry.size + 30)
     if raw[:4] == b"BLTE":
-        return decode_blte(raw)
+        if len(raw) < entry.size:
+            raise CascUnsupportedError("truncated data block")
+        return decode_blte(raw[: entry.size])
     if len(raw) < 30:
         raise CascUnsupportedError("truncated data block")
     size = int.from_bytes(raw[16:20], "little")
+    if size < 30 or size > len(raw):
+        raise CascUnsupportedError("truncated or invalid data block size")
     payload = raw[30:size]
     return decode_blte(payload)
 
 
 def _chunk_count(data: bytes) -> tuple[int, int]:
-    if len(data) >= 12 and data[8] == 0x0F:
-        return int.from_bytes(data[9:12], "big"), 12
-    if len(data) >= 12:
-        return int.from_bytes(data[10:12], "big"), 12
-    raise CascUnsupportedError("truncated BLTE chunk table")
+    if len(data) < 12:
+        raise CascUnsupportedError("truncated BLTE chunk table")
+    if data[8] != 0x0F:
+        raise CascUnsupportedError("invalid BLTE chunk table marker")
+    return int.from_bytes(data[9:12], "big"), 12
 
 
-def _decode_chunk(chunk: bytes) -> bytes:
+def _decode_chunk(chunk: bytes, *, expected_size: int | None = None) -> bytes:
     if not chunk:
-        return b""
+        raise CascUnsupportedError("missing BLTE chunk mode")
     mode = chunk[:1]
     payload = chunk[1:]
     if mode == b"N":
         return payload
     if mode == b"Z":
-        try:
-            return zlib.decompress(payload)
-        except zlib.error:
-            return zlib.decompress(payload, -15)
+        for window in (zlib.MAX_WBITS, -zlib.MAX_WBITS):
+            try:
+                decoder = zlib.decompressobj(window)
+                decoded = decoder.decompress(
+                    payload, 0 if expected_size is None else expected_size + 1
+                )
+            except zlib.error:
+                continue
+            if not decoder.eof or decoder.unused_data or decoder.unconsumed_tail:
+                raise CascUnsupportedError(
+                    "incomplete or trailing BLTE compressed data"
+                )
+            return decoded
+        raise CascUnsupportedError("invalid BLTE compressed data")
     if mode == b"E":
         raise CascUnsupportedError("encrypted BLTE chunk")
     raise CascUnsupportedError(f"BLTE mode {mode!r}")

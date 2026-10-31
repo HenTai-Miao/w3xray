@@ -7,6 +7,7 @@ import json
 import os
 import re
 import tempfile
+from collections import deque
 from contextlib import suppress
 from dataclasses import dataclass, replace
 from enum import StrEnum
@@ -18,8 +19,11 @@ from .bounded_file import (
     read_bounded_regular_file,
     sha256_regular_file,
 )
-from .mpq import MPQArchive
+from .mpq import HASH_NAME_A, HASH_NAME_B, MPQArchive
+from .mpq_crypto import hash_name_bytes
+from .mpq_files import STATIC_MAP_FILES
 from .mpq_layout import locate_mpq_layout
+from .mpq_names import HashEntry, encoded_name_candidates
 from .presentation_safety import tsv_cell as _tsv
 from .save_analysis import build_save_report
 from .save_container import inspect_save_container, looks_like_save_container
@@ -96,6 +100,7 @@ class RealSaveFile:
     raw_text: str | None = None
     unknown_ranges: tuple[dict[str, object], ...] = ()
     text_decoding: dict[str, object] | None = None
+    archive_member: dict[str, object] | None = None
 
     def _record_dict(self) -> dict[str, object]:
         return {
@@ -125,6 +130,7 @@ class RealSaveFile:
             "raw_text": self.raw_text,
             "unknown_ranges": list(self.unknown_ranges),
             "text_decoding": self.text_decoding,
+            "archive_member": self.archive_member,
             "caches": [cache.to_dict() for cache in self.caches],
             "codes": [code.to_dict() for code in self.codes],
             "text_carriers": [carrier.to_dict() for carrier in self.text_carriers],
@@ -200,8 +206,11 @@ def analyze_real_save_path(
 ) -> RealSaveReport:
     """Read every physical source; preserve partial evidence and re-prove its SHA."""
     text_encoding = normalize_save_text_encoding(text_encoding)
+    source_problem = save_source_path_error(path)
     source = Path(path).absolute()
-    candidates, warnings = _candidate_files(source)
+    candidates, warnings = (
+        ((), [source_problem]) if source_problem else _candidate_files(source)
+    )
     if not candidates and not warnings:
         warnings.append(
             "来源目录为空，没有可分析的普通文件；请选择包含存档的目录或文件。"
@@ -209,7 +218,7 @@ def analyze_real_save_path(
     expected_keys = _expected_save_keys(md) if md is not None else ()
     records: list[RealSaveFile] = []
     identities: list[tuple[Path, tuple[int, ...]]] = []
-    root = source if source.is_dir() else source.parent
+    root = source if not source_problem and source.is_dir() else source.parent
     for candidate in candidates:
         relative = candidate.relative_to(root).as_posix()
         try:
@@ -292,13 +301,15 @@ def analyze_real_save_path(
             unverified.append(record)
             continue
         verified.append(record)
-    final_candidates, final_warnings = _candidate_files(source)
+    final_candidates, final_warnings = (
+        ((), []) if source_problem else _candidate_files(source)
+    )
     warnings.extend(note for note in final_warnings if note not in warnings)
     if candidates != final_candidates:
         warnings.append("来源文件清单在分析期间改变；请刷新后重新读取完整目录。")
     inventory_complete = bool(verified) and not warnings
     return RealSaveReport(
-        str(source),
+        os.fspath(path) if source_problem else str(source),
         tuple(verified),
         tuple(warnings),
         md.path if md is not None else "",
@@ -891,6 +902,7 @@ def _read_mpq_members(
         (0, source, snapshot, ancestors - {hashlib.sha256(snapshot).hexdigest()}, False)
     ]
     records: dict[int, RealSaveFile] = {}
+    provenance: dict[int, dict[str, object]] = {}
     children: dict[int, tuple[int, ...]] = {}
     notes: dict[int, str] = {}
     issues: dict[int, tuple[str, ...]] = {}
@@ -923,6 +935,7 @@ def _read_mpq_members(
                 complete=not issues[index]
                 and all(member.complete for member in members),
                 diagnostics=issues[index],
+                archive_member=provenance.get(index),
             )
             continue
         if digest in parents:
@@ -937,6 +950,7 @@ def _read_mpq_members(
                 "nested archive repeats an ancestor identity; no guessed recursion",
                 complete=False,
                 diagnostics=("嵌套归档重复祖先身份，未猜测其记录。",),
+                archive_member=provenance.get(index),
             )
             continue
         snapshots, note, diagnostics = _mpq_snapshots(payload)
@@ -944,10 +958,11 @@ def _read_mpq_members(
         issues[index] = diagnostics
         child_ids: list[int] = []
         stack.append((index, name, payload, parents, True))
-        for member_name, member_payload in snapshots:
+        for member_name, member_payload, member_identity in snapshots:
             child = next_index
             next_index += 1
             child_ids.append(child)
+            provenance[child] = member_identity
             child_name = f"{name}::{member_name}"
             if _named_mpq_member(
                 member_name, member_payload
@@ -956,14 +971,17 @@ def _read_mpq_members(
                     (child, child_name, member_payload, parents | {digest}, False)
                 )
             else:
-                records[child] = _analyze_file(
-                    Path(member_name),
-                    child_name,
-                    member_payload,
-                    expected_keys,
-                    md,
-                    parents | {digest},
-                    text_encoding=text_encoding,
+                records[child] = replace(
+                    _analyze_file(
+                        Path(member_name),
+                        child_name,
+                        member_payload,
+                        expected_keys,
+                        md,
+                        parents | {digest},
+                        text_encoding=text_encoding,
+                    ),
+                    archive_member=member_identity,
                 )
         children[index] = tuple(child_ids)
     return records[0].members, records[0].diagnostic, records[0].diagnostics
@@ -971,27 +989,87 @@ def _read_mpq_members(
 
 def _mpq_snapshots(
     snapshot: bytes,
-) -> tuple[tuple[tuple[str, bytes], ...], str, tuple[str, ...]]:
+) -> tuple[tuple[tuple[str, bytes, dict[str, object]], ...], str, tuple[str, ...]]:
     descriptor, temporary_path = tempfile.mkstemp(
         prefix="gamexray-save-", suffix=".mpq"
     )
-    members: list[tuple[str, bytes]] = []
+    members: list[tuple[str, bytes, dict[str, object]]] = []
     diagnostics: list[str] = []
     try:
         with os.fdopen(descriptor, "wb") as handle:
             _ = handle.write(snapshot)
         with MPQArchive(temporary_path) as archive:
             named_blocks: set[int] = set()
-            for name in archive.list_files():
-                block_index = archive.block_index_of(name)
-                if block_index is None:
-                    diagnostics.append(f"{name}: named member has no block identity")
-                    continue
-                named_blocks.add(block_index)
-                try:
-                    members.append((name, archive.read_file(name)))
-                except (KeyError, OSError, ValueError) as exc:
-                    diagnostics.append(f"{name}: {type(exc).__name__}: {exc}")
+            entries: dict[tuple[int, int], list[tuple[int, HashEntry]]] = {}
+            for hash_index, raw_entry in enumerate(archive.hash_table):
+                entry = HashEntry(*raw_entry)
+                if entry.block_index not in (0xFFFFFFFE, 0xFFFFFFFF):
+                    entries.setdefault((entry.name_a, entry.name_b), []).append(
+                        (hash_index, entry)
+                    )
+            seen: set[tuple[str, int]] = set()
+            listed_names = archive.list_files()
+            declared_names = set(listed_names)
+            pending = deque(dict.fromkeys((*listed_names, *STATIC_MAP_FILES)))
+            queued = set(pending)
+            unmatched: set[str] = set()
+            while pending:
+                name = pending.popleft()
+                matched = False
+                # list_files can include a standard-name alias resolved by the
+                # ordinary reader's scripts\\ fallback. Prove its actual name
+                # and every locale/platform independently before adopting it.
+                for candidate in (name, "scripts\\" + name):
+                    pairs = dict.fromkeys(
+                        (
+                            hash_name_bytes(raw, HASH_NAME_A),
+                            hash_name_bytes(raw, HASH_NAME_B),
+                        )
+                        for raw in encoded_name_candidates(
+                            candidate, archive.legacy_codecs
+                        )
+                    )
+                    for pair in pairs:
+                        for hash_index, entry in entries.get(pair, ()):
+                            matched = True
+                            if (candidate, hash_index) in seen:
+                                continue
+                            seen.add((candidate, hash_index))
+                            identity: dict[str, object] = {
+                                "name": candidate,
+                                "hash_index": hash_index,
+                                "name_a": entry.name_a,
+                                "name_b": entry.name_b,
+                                "locale": entry.locale,
+                                "platform": entry.platform,
+                                "block_index": entry.block_index,
+                            }
+                            try:
+                                payload = archive.read_file_entry(candidate, entry)
+                            except (KeyError, OSError, ValueError) as exc:
+                                diagnostics.append(
+                                    f"{identity!r}: exact member read failed: {type(exc).__name__}: {exc}"
+                                )
+                                continue
+                            named_blocks.add(entry.block_index)
+                            members.append((candidate, payload, identity))
+                            if candidate == "(listfile)":
+                                decoded = inspect_save_text(payload)
+                                if decoded.text is not None:
+                                    for raw_name in decoded.text.splitlines():
+                                        listed_name = raw_name.strip()
+                                        if not listed_name:
+                                            continue
+                                        declared_names.add(listed_name)
+                                        if listed_name not in queued:
+                                            queued.add(listed_name)
+                                            pending.append(listed_name)
+                if not matched:
+                    unmatched.add(name)
+            diagnostics.extend(
+                f"{name}: named member has no exact hash-entry identity"
+                for name in sorted(unmatched & declared_names)
+            )
             if callable(getattr(archive, "iter_blocks", None)):
                 diagnostics.extend(
                     f"未具名 MPQ 块 {index}，声明大小 {block.file_size}；内部记录格式未验证，原始归档 SHA256 保留。"

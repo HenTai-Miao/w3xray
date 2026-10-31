@@ -85,3 +85,20 @@ class ScriptGlobalIndexTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_global_string_initializers_do_not_publish_object_code_mentions() -> None:
+    from gametool.script_global_index import build_script_global_index
+
+    md = MapData(path="synthetic.w3x", name="全局字符串证据")
+    md.scripts = {
+        "war3map.j": (
+            "globals\n"
+            "string Text = \"展示 'I001' 和 0x49303032\"\n"
+            "integer Code = 'I003'\n"
+            "endglobals"
+        )
+    }
+    text, code = build_script_global_index(md).globals
+    assert text.object_codes == () and code.object_codes == ("I003",)
+    assert text.string_value == "展示 'I001' 和 0x49303032"

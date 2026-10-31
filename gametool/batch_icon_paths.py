@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import os
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
+from .bounded_file import sha256_regular_file
 from .safe_output import safe_relative_path
+from .windows_output_paths import native_output_path, validate_output_root
 
 
 def collision_path(
@@ -26,20 +28,35 @@ def collision_path(
     relative = safe_relative_path(name)
     if relative is None:
         return name
-    destination = os.path.join(root, *relative.parts)
-    if not os.path.isfile(destination):
-        return name
-    if digest is None:
-        digest = hashlib.sha256(payload).hexdigest()
-    try:
-        if os.path.getsize(destination) == len(payload):
-            with open(destination, "rb") as handle:
-                if hashlib.sha256(handle.read()).hexdigest() == digest:
-                    return name
-    except OSError:
-        return name
     path = PurePosixPath(name.replace("\\", "/"))
-    return str(path.with_name(f"{path.stem}_{digest[:8]}{path.suffix}"))
+    candidate = name
+    ordinal = 0
+    try:
+        validate_output_root(root)
+        root = os.path.abspath(root)
+    except ValueError:
+        return name
+    while True:
+        try:
+            destination = Path(native_output_path(os.path.join(root, *relative.parts)))
+        except ValueError:
+            return candidate
+        if not destination.is_file():
+            return candidate
+        if digest is None:
+            digest = hashlib.sha256(payload).hexdigest()
+        try:
+            if destination.stat().st_size == len(payload):
+                existing_digest, _identity = sha256_regular_file(destination)
+                if existing_digest == digest:
+                    return candidate
+        except OSError:
+            # Unknown existing bytes are occupied, never permission to overwrite.
+            pass
+        ordinal += 1
+        suffix = digest[:8] if ordinal == 1 else f"{digest[:8]}_{ordinal}"
+        relative = path.with_name(f"{path.stem}_{suffix}{path.suffix}")
+        candidate = str(relative)
 
 
 def icon_path_suffix(path: str) -> str:

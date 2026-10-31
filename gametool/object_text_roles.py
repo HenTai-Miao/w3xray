@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Final
 
 from .object_layers import split_field_column
@@ -149,13 +150,13 @@ def _key_and_level(key: str, label: str) -> tuple[str, int | None]:
     )
     base, separator, suffix = normalized.rpartition(":")
     if separator and suffix.isdecimal():
-        return base, int(suffix)
+        return base, int(Decimal(suffix))
     label_level = _LEVEL_IN_LABEL.search(label)
     if label_level is not None:
-        return normalized, int(label_level.group(1))
+        return normalized, int(Decimal(label_level.group(1)))
     trailing = _TRAILING_LEVEL_KEY.fullmatch(normalized)
     if trailing is not None:
-        return normalized, int(trailing.group(2))
+        return normalized, int(Decimal(trailing.group(2)))
     return normalized, None
 
 

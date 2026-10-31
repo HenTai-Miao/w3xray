@@ -108,6 +108,8 @@ class SaveWorkspace(ctk.CTkToplevel, GuiWorkerHostMixin):
         self.encoding_var = tk.StringVar(value=encoding)
         self.find_var = tk.StringVar()
         self._build_controls()
+        for variable in (self.source_var, self.map_var, self.encoding_var):
+            variable.trace_add("write", self._invalidate_source)
         self.protocol("WM_DELETE_WINDOW", self.destroy)
         self.bind("<Destroy>", self._on_destroy, add="+")
         self.bind("<Escape>", lambda _event: self.destroy())
@@ -325,6 +327,19 @@ class SaveWorkspace(ctk.CTkToplevel, GuiWorkerHostMixin):
                 "limit": self.limit_var.get(),
                 "text_encoding": self.encoding_var.get(),
             }
+        )
+
+    def _invalidate_source(self, *_args) -> None:
+        """Editing an input retires results before another read can finish."""
+        self._generation += 1
+        self._tree_epoch += 1
+        self._report = None
+        self._selection = None
+        for group in ("save-analysis", "save-query", "save-detail", "save-export"):
+            self._cancel_gui_worker_group(group)
+        self.export_button.configure(state="disabled")
+        self.status.configure(
+            text="来源、关联地图或编码已改变；请点击「读取 / 刷新」，当前内容为上次快照。"
         )
 
     def _schedule(self, callback: Callable[[], object]) -> None:

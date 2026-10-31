@@ -102,6 +102,16 @@ class CurrentMapGuiMixin(CurrentMapHost):
         for snapshot in snapshots:
             cleanup_current_map_snapshot(snapshot)
 
+    def _cancel_pending_current_map(self) -> None:
+        """A newer explicit load supersedes discovery still running in the background."""
+        with self._current_map_lock:
+            if not self._current_map_pending:
+                return
+            self._current_map_generation += 1
+            self._current_map_pending = False
+        self._cancel_gui_worker_group("current-map")
+        self.current_map_button.configure(state="normal")
+
     def _put_current_map_event(
         self, generation: int, event: ResolutionReady | WorkerError
     ) -> None:
@@ -152,8 +162,8 @@ class CurrentMapGuiMixin(CurrentMapHost):
                 continue
             match event:
                 case SnapshotReady(snapshot=snapshot):
-                    self._start_path_load(str(snapshot.path))
                     self._finish_current_map_request(generation)
+                    self._start_path_load(str(snapshot.path))
                 case ResolutionReady(resolution=resolution):
                     self._handle_current_map_resolution(generation, resolution)
                 case WorkerError():

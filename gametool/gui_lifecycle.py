@@ -304,6 +304,8 @@ class GuiLifecycleMixin:
             btn = getattr(self, _btn_name, None)
             if btn is not None:
                 btn.configure(state="normal")
+        for btn in getattr(self, "export_buttons", {}).values():
+            btn.configure(state="normal")
         self._reset_detail_panel()
         self._refresh_enabled_modules(cmds, recipes)
         self._refresh_trigger_eca()

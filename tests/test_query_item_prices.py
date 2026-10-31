@@ -129,7 +129,9 @@ def test_conflicting_gold_fields_never_choose_the_last_value_or_base(
     assert "附加金币证据0" in text and "附加金币证据1" in text
 
 
-@pytest.mark.parametrize("value", ["", "NaN", "Infinity", "not-a-number"])
+@pytest.mark.parametrize(
+    "value", ["", "NaN", "Infinity", "not-a-number", "'123", "''123", "' 123"]
+)
 @pytest.mark.parametrize("command", ["price", "item", "shop"])
 def test_invalid_custom_gold_suppresses_inheritance_and_retains_raw_value(
     tmp_path: Path, value: str, command: str
@@ -180,7 +182,7 @@ def test_custom_gold_overrides_inherited_evidence_without_erasing_it(
 def test_equivalent_numeric_spellings_are_not_conflicting_and_keep_each_source(
     tmp_path: Path,
 ) -> None:
-    _pack(tmp_path, values=("'00123", "+123.00", "1.23e2"))
+    _pack(tmp_path, values=("00123", "+123.00", "1.23e2"))
     text = _query(tmp_path).render()
     assert "未确认" not in text and "金币字段冲突" not in text
     assert "00123" in text and "+123.00" in text and "1.23e2" in text

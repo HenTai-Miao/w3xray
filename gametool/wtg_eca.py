@@ -2,12 +2,41 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
+from typing import cast
 
 from .trigger_schema import TriggerFunctionKind, TriggerSchema
 from .wtg_diagnostics import EcaParseError
 from .wtg_models import TriggerEcaFunction, TriggerEcaParameter
 from .wtg_reader import WtgReader
+
+type _ParseNode = TriggerEcaFunction | TriggerEcaParameter
+type _ParseSteps = Generator[_ParseSteps, _ParseNode, _ParseNode]
+
+
+def _complete_steps(initial: _ParseSteps) -> _ParseNode:
+    """Drive nested grammar operations on a heap stack instead of Python frames."""
+    stack = [initial]
+    completed: _ParseNode | None = None
+    try:
+        while stack:
+            try:
+                nested = (
+                    next(stack[-1]) if completed is None else stack[-1].send(completed)
+                )
+            except StopIteration as end:
+                completed = cast(_ParseNode, end.value)
+                stack.pop()
+            else:
+                stack.append(nested)
+                completed = None
+    finally:
+        # A bad nested record releases all suspended parsers without recursively
+        # unwinding a potentially deep chain of generators.
+        for suspended in reversed(stack):
+            suspended.close()
+    assert completed is not None
+    return completed
 
 
 def parse_eca_functions(
@@ -43,6 +72,31 @@ def read_eca(
     ordinal: int = 0,
 ) -> TriggerEcaFunction:
     """Read one TriggerFunction using TriggerData for its parameter count."""
+    result = _complete_steps(
+        _eca_steps(
+            reader,
+            trigger_name,
+            schema,
+            has_branch=has_branch,
+            version=version,
+            depth=depth,
+            ordinal=ordinal,
+        )
+    )
+    assert isinstance(result, TriggerEcaFunction)
+    return result
+
+
+def _eca_steps(
+    reader: WtgReader,
+    trigger_name: str,
+    schema: TriggerSchema,
+    *,
+    has_branch: bool,
+    version: int,
+    depth: int,
+    ordinal: int,
+) -> _ParseSteps:
     source_offset = reader.offset
     function_type = reader.i32()
     branch = reader.i32() if has_branch else 0
@@ -54,8 +108,9 @@ def read_eca(
         raise EcaParseError(
             trigger_name, name, source_offset, "missing TriggerData schema"
         )
-    parameters = tuple(
-        _read_parameter(
+    parameters: list[TriggerEcaParameter] = []
+    for type_name in function_schema.parameter_types:
+        parameter = yield _parameter_steps(
             reader,
             trigger_name,
             name,
@@ -64,11 +119,12 @@ def read_eca(
             version=version,
             depth=depth + 1,
         )
-        for type_name in function_schema.parameter_types
-    )
+        assert isinstance(parameter, TriggerEcaParameter)
+        parameters.append(parameter)
     child_count = reader.bounded_count("child ECA") if version >= 7 else 0
-    children = tuple(
-        read_eca(
+    children: list[TriggerEcaFunction] = []
+    for index in range(child_count):
+        child = yield _eca_steps(
             reader,
             trigger_name,
             schema,
@@ -77,15 +133,15 @@ def read_eca(
             depth=depth + 1,
             ordinal=index + 1,
         )
-        for index in range(child_count)
-    )
+        assert isinstance(child, TriggerEcaFunction)
+        children.append(child)
     return TriggerEcaFunction(
         trigger_name=trigger_name,
         function_type=function_type,
         name=name,
         is_enabled=is_enabled,
-        parameters=parameters,
-        children=children,
+        parameters=tuple(parameters),
+        children=tuple(children),
         depth=depth,
         ordinal=ordinal,
         branch=branch,
@@ -105,7 +161,7 @@ def parameter_type_label(value: int) -> str:
     )
 
 
-def _read_parameter(
+def _parameter_steps(
     reader: WtgReader,
     trigger_name: str,
     function_name: str,
@@ -114,7 +170,7 @@ def _read_parameter(
     *,
     version: int,
     depth: int,
-) -> TriggerEcaParameter:
+) -> _ParseSteps:
     source_offset = reader.offset
     parameter_type = reader.i32()
     if parameter_type < -1 or parameter_type > 3:
@@ -135,7 +191,7 @@ def _read_parameter(
                 source_offset,
                 "nested function on non-function parameter",
             )
-        nested = read_eca(
+        nested = yield _eca_steps(
             reader,
             trigger_name,
             schema,
@@ -144,6 +200,7 @@ def _read_parameter(
             depth=depth,
             ordinal=0,
         )
+        assert isinstance(nested, TriggerEcaFunction)
     have_array = reader.i32()
     array_indexer = None
     if have_array:
@@ -154,7 +211,7 @@ def _read_parameter(
                 source_offset,
                 "array indexer on non-variable parameter",
             )
-        array_indexer = _read_parameter(
+        array_indexer = yield _parameter_steps(
             reader,
             trigger_name,
             function_name,
@@ -163,6 +220,7 @@ def _read_parameter(
             version=version,
             depth=depth + 1,
         )
+        assert isinstance(array_indexer, TriggerEcaParameter)
     return TriggerEcaParameter(
         parameter_type=parameter_type,
         value=value,

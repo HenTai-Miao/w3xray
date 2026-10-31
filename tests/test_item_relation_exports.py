@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
+from dataclasses import replace
 
 from gametool.batch_tsv import decode_tsv_cell
 from gametool.item_relation_exports import (
@@ -154,6 +155,43 @@ def test_relation_exports_fill_bilingual_columns_for_vanilla_ids() -> None:
     assert acquisition[0]["装备细类"] == "神器"
     assert skills[0]["装备英文名"] == "Amulet of Recall"
     assert skills[0]["技能英文名"] == "Item Damage Bonus"
+
+
+def test_relation_export_catalog_metadata_keeps_endpoint_category() -> None:
+    item = RelationObject("物品", "hpea", "自定义物品")
+    drop = replace(_drop_relation(), item=item)
+    acquisition = list(
+        csv.DictReader(
+            io.StringIO(format_item_acquisition_tsv(ItemRelationIndex.build((drop,)))),
+            delimiter="\t",
+        )
+    )
+    assert acquisition[0]["装备英文名"] == ""
+    assert acquisition[0]["装备细类"] == ""
+    equipment = replace(
+        _item_ability_relation(),
+        item=item,
+        skill=RelationObject("技能", "hpea", "技能"),
+    )
+    skills = list(
+        csv.DictReader(
+            io.StringIO(
+                format_equipment_skills_tsv(ItemRelationIndex.build((equipment,)))
+            ),
+            delimiter="\t",
+        )
+    )
+    assert skills[0]["装备英文名"] == skills[0]["技能英文名"] == ""
+    custom = replace(drop, item=RelationObject("物品", "I999", "自定义神器", "神器"))
+    rows = list(
+        csv.DictReader(
+            io.StringIO(
+                format_item_acquisition_tsv(ItemRelationIndex.build((custom,)))
+            ),
+            delimiter="\t",
+        )
+    )
+    assert rows[0]["装备细类"] == "神器"
 
 
 def test_acquisition_export_keeps_coordinates_groups_materials_and_evidence() -> None:

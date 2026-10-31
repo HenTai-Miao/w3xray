@@ -22,6 +22,8 @@ class ModuleRefreshMixin:
     """Apply per-module load options to visible GUI surfaces."""
 
     def _reset_detail_panel(self) -> None:
+        self._selected_detail_object = None
+        self._set_object_detail_actions_enabled(False)
         self.detail_title.configure(text="选择对象查看详情")
         self.detail_sub.configure(text="")
         if hasattr(self, "detail_icon"):
@@ -32,10 +34,12 @@ class ModuleRefreshMixin:
         self.detail.configure(state="disabled")
 
     def _refresh_enabled_modules(self, cmds, recipes) -> None:
+        # Retire both pending filters and visible rows before adopting another map.
+        # Until its new result arrives, old rows must not become new-map evidence.
+        self._shutdown_object_filter_runner()
+        self._clear_object_browser()
         if self._load_option_enabled(OBJECT_BROWSER_KEY):
             self._refresh_list()
-        else:
-            self._clear_object_browser()
 
         self.commands = cmds if self._load_option_enabled(COMMANDS_KEY) else []
         self._refresh_cmds() if self._load_option_enabled(

@@ -19,6 +19,7 @@ from tests.save_structure_fixture import (
     embedded_cache,
     hero_bytes,
 )
+from tests.test_archive_export_recovery import _archive_bytes
 
 
 def _definitions() -> MapData:
@@ -86,42 +87,42 @@ def test_saved_fields_are_category_qualified_and_inputs_stay_unchanged(
 
 
 def test_named_mpq_members_keep_independent_encoding_offsets_and_cache_records(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
-    import gametool.real_save_files as module
-
     raw = cache_bytes(((), (), (), (("hero", hero_bytes("classic")),), ()))
     text = b"\xef\xbb\xbfPreload('-load CODE123')"
-    members = {"Campaigns.w3v": raw, "nested/war3map.lua": text}
-
-    class Archive:
-        def __init__(self, _path: str) -> None:
-            pass
-
-        def __enter__(self) -> Archive:
-            return self
-
-        def __exit__(self, *_args: object) -> None:
-            pass
-
-        def list_files(self) -> list[str]:
-            return list(members)
-
-        def block_index_of(self, _name: str) -> int:
-            return 0
-
-        def read_file(self, name: str) -> bytes:
-            return members[name]
-
-    monkeypatch.setattr(module, "MPQArchive", Archive)
+    payload = _archive_bytes(
+        [
+            ("(listfile)", 0, 0, b"Campaigns.w3v\nnested/war3map.lua\n", False),
+            ("Campaigns.w3v", 0, 0, raw, False),
+            ("nested/war3map.lua", 0, 0, text, False),
+        ]
+    )
     source = tmp_path / "archive.sav"
-    source.write_bytes(b"MPQ\x1a" + b"\0" * 40)
-    record = analyze_real_save_path(source, _definitions()).files[0]
-    assert len(record.members) == 2
-    assert record.members[0].caches[0].complete
-    code = record.members[1].codes[0]
+    source.write_bytes(payload)
+    report = analyze_real_save_path(source, _definitions())
+    assert report.complete
+    record = report.files[0]
+    assert len(record.members) == 3  # Both payloads and the actual listfile.
+    members = {
+        member.relative_path: member
+        for member in record.members
+        if member.relative_path != "archive.sav::(listfile)"
+    }
+    assert len(members) == 2
+    saved_cache = members["archive.sav::Campaigns.w3v"]
+    script = members["archive.sav::nested/war3map.lua"]
+    assert saved_cache.caches[0].complete
+    assert saved_cache.caches[0].raw == raw
+    assert saved_cache.caches[0].source == "archive.sav::Campaigns.w3v"
+    assert script.encoding == "utf-8"
+    assert script.text_decoding is not None
+    assert script.text_decoding["bom_bytes"] == 3
+    code = script.codes[0]
     assert code.source == "archive.sav::nested/war3map.lua"
     assert text[code.byte_offset : code.byte_end] == code.raw.encode()
+    assert code.raw_hex == text[code.byte_offset : code.byte_end].hex()
+    assert source.read_bytes() == payload
 
 
 def test_public_save_json_uses_existing_real_map_fixture_in_private_cache(

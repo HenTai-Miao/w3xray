@@ -47,6 +47,10 @@ def _iter_text_files(
     pack_dir: str, diagnostics: list[str] | None = None
 ) -> list[tuple[str, str]]:
     """Every named script/text carrier below the pack, without following links."""
+    if problem := save_source_path_error(pack_dir):
+        if diagnostics is not None:
+            diagnostics.append(problem)
+        return []
     root = Path(pack_dir)
     directory = root.is_dir()
     files, notes = iter_save_source_files(

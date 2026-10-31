@@ -19,7 +19,7 @@ from gametool.presentation_safety import format_user_exception, single_line_text
 from gametool.slk import SlkParseError, parse_slk
 from gametool.terrain import parse_w3e_header
 from gametool.w3f import parse_w3f
-from gametool.wtg import parse_wtg
+from gametool.wtg import TriggerParseFailure, parse_wtg
 
 
 def test_minimap_retains_more_than_one_hundred_thousand_icons() -> None:
@@ -66,8 +66,30 @@ def test_wtg_retains_large_category_tables() -> None:
     )
     summary = parse_wtg(payload)
     assert summary.category_count == len(summary.categories) == count
-    with pytest.raises(ValueError):
-        parse_wtg(b"WTG!" + struct.pack("<ii", 7, 2**31 - 1))
+    assert summary.categories[-1].category_id == 42
+    assert not summary.has_unexpanded_functions
+    assert summary.parse_failures == ()
+
+    # A declared sequence with no encoded records is incomplete evidence,
+    # rather than a successful empty table or a reason to discard a parsed header.
+    truncated = b"WTG!" + struct.pack("<ii", 7, 2**31 - 1)
+    incomplete = parse_wtg(truncated)
+    assert incomplete.version == 7
+    assert not incomplete.is_reforged
+    assert incomplete.category_count == 0
+    assert incomplete.variable_count == 0
+    assert incomplete.trigger_count == 0
+    assert incomplete.comment_count == 0
+    assert incomplete.script_count == 0
+    assert incomplete.categories == ()
+    assert incomplete.variables == ()
+    assert incomplete.triggers == ()
+    assert incomplete.eca_functions == ()
+    assert incomplete.has_unexpanded_functions
+    assert incomplete.missing_schema_functions == ()
+    assert incomplete.parse_failures == (
+        TriggerParseFailure("", "", len(truncated), "expected 4 bytes"),
+    )
 
 
 def test_w3f_keeps_every_campaign_map_after_ten_thousand() -> None:

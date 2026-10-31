@@ -119,12 +119,14 @@ def export_all_files(
     try:
         names = tuple(external_names) + read_external_listfile(external_listfile_path)
         # 运行时为 MPQArchive (MPQ 源); 结构性差异经 cast 桥接, 由 _export_all_impl 内部 except 兜底
-        return _export_all_impl(
+        result = _export_all_impl(
             cast(ExportArchive, cast(object, archive)),
             out_dir,
             _depth,
             external_names=names,
         )
+        archive.verify_source()
+        return result
     finally:
         archive.close()
 

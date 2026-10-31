@@ -152,14 +152,15 @@ def checkpoint_state(
     for result in previous_results:
         grouped.setdefault(_path_key(result.source.path), []).append(result)
     current_identities = {
-        (result.source.sha256, result.source.size) for result in current_results
+        identity
+        for result in current_results
+        if (identity := result.source.content_identity) is not None
     }
     tail = tuple(
         grouped[key][0]
         for path in remaining_paths
         if len(grouped.get(key := _path_key(path), ())) == 1
-        and (grouped[key][0].source.sha256, grouped[key][0].source.size)
-        not in current_identities
+        and grouped[key][0].source.content_identity not in current_identities
     )
     return BatchState(BATCH_SCHEMA_VERSION, (*current_results, *tail))
 

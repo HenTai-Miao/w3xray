@@ -246,11 +246,11 @@ class LiveProbeWindow(ctk.CTkToplevel):
                 self._find_state["start"] = end
 
         find_entry.bind("<Return>", lambda _e: _find_next())
-        self.bind_all("<Control-f>", lambda _e: find_entry.focus_set() or "break")
+        self.bind("<Control-f>", lambda _e: find_entry.focus_set() or "break")
         # CapsLock 大写态变体 (Tk 绑定大小写敏感)
-        self.bind_all("<Control-F>", lambda _e: find_entry.focus_set() or "break")
+        self.bind("<Control-F>", lambda _e: find_entry.focus_set() or "break")
         # Ctrl+A 全选输出 (CTkTextbox 不默认绑)
-        self.bind_all(
+        self.bind(
             "<Control-a>",
             lambda _e: (
                 self._active_textbox().tag_add("sel", "1.0", "end"),
@@ -259,7 +259,7 @@ class LiveProbeWindow(ctk.CTkToplevel):
             )[2],
         )
         # CapsLock 大写态变体 (Tk 绑定大小写敏感)
-        self.bind_all(
+        self.bind(
             "<Control-A>",
             lambda _e: (
                 self._active_textbox().tag_add("sel", "1.0", "end"),

@@ -14,6 +14,13 @@ import zlib
 import pytest
 
 from gametool.api import GameObject, MapData
+from gametool.mpq_crypto import hash_name_bytes
+from gametool.mpq_names import HashEntry
+
+
+def _named_entry(name: str, index: int) -> HashEntry:
+    raw = name.encode("utf-8")
+    return HashEntry(hash_name_bytes(raw, 1), hash_name_bytes(raw, 2), 0, 0, index)
 
 
 def _map_with_save_contract() -> MapData:
@@ -249,6 +256,8 @@ def test_mpq_member_is_read_whatever_its_declared_size(
 
     class FakeArchive:
         block_table = (OversizedBlock(),)
+        hash_table = (_named_entry("huge.txt", 0),)
+        legacy_codecs = ("utf-8",)
 
         def __init__(self, _path: str) -> None:
             return None
@@ -262,10 +271,7 @@ def test_mpq_member_is_read_whatever_its_declared_size(
         def list_files(self) -> list[str]:
             return ["huge.txt"]
 
-        def block_index_of(self, _name: str) -> int:
-            return 0
-
-        def read_file(self, _name: str) -> bytes:
+        def read_file_entry(self, _name: str, _entry: HashEntry) -> bytes:
             nonlocal read_calls
             read_calls += 1
             return b"must not be allocated"
@@ -296,6 +302,10 @@ def test_mpq_named_text_reads_every_member(
 
     class FakeArchive:
         block_table = tuple(Block() for _index in range(5))
+        hash_table = tuple(
+            _named_entry(f"part-{index}.txt", index) for index in range(5)
+        )
+        legacy_codecs = ("utf-8",)
 
         def __init__(self, _path: str) -> None:
             return None
@@ -309,10 +319,7 @@ def test_mpq_named_text_reads_every_member(
         def list_files(self) -> list[str]:
             return [f"part-{index}.txt" for index in range(5)]
 
-        def block_index_of(self, name: str) -> int:
-            return int(name.removeprefix("part-").removesuffix(".txt"))
-
-        def read_file(self, _name: str) -> bytes:
+        def read_file_entry(self, _name: str, _entry: HashEntry) -> bytes:
             nonlocal read_calls
             read_calls += 1
             return b"x" * member_size
@@ -342,6 +349,10 @@ def test_mpq_binary_members_are_still_read_and_classified(
 
     class FakeArchive:
         block_table = tuple(Block() for _index in range(5))
+        hash_table = tuple(
+            _named_entry(f"part-{index}.bin", index) for index in range(5)
+        )
+        legacy_codecs = ("utf-8",)
 
         def __init__(self, _path: str) -> None:
             return None
@@ -355,10 +366,7 @@ def test_mpq_binary_members_are_still_read_and_classified(
         def list_files(self) -> list[str]:
             return [f"part-{index}.bin" for index in range(5)]
 
-        def block_index_of(self, name: str) -> int:
-            return int(name.removeprefix("part-").removesuffix(".bin"))
-
-        def read_file(self, _name: str) -> bytes:
+        def read_file_entry(self, _name: str, _entry: HashEntry) -> bytes:
             nonlocal read_calls
             read_calls += 1
             return b"\0" * member_size

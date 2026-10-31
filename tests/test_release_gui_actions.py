@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import threading
+from types import SimpleNamespace
 
 import pytest
 
@@ -52,6 +53,77 @@ class _ActionHost(_WorkerHost, ExportActionsMixin, BackgroundLoaderMixin):
 
     def _open_dir(self, out, n, kind) -> None:
         self.opened.append((out, n, kind))
+
+
+@pytest.mark.parametrize(
+    ("completed", "objects", "registered", "affixes", "title"),
+    (
+        (False, 2, 1, 1, "导出未完成"),
+        (True, 0, 0, 0, "未捕获运行时证据"),
+        (True, 2, 0, 0, "导出完成"),
+        (True, 0, 1, 0, "导出完成"),
+        (True, 0, 0, 1, "导出完成"),
+    ),
+)
+def test_runtime_export_reports_completion_and_retains_previous_outputs(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    completed: bool,
+    objects: int,
+    registered: int,
+    affixes: int,
+    title: str,
+) -> None:
+    from gametool import archive_export, live_object_dump
+
+    host = _ActionHost()
+    monkeypatch.setattr(host, "current_map_pack_dir", lambda: str(tmp_path))
+    outputs: list[Path] = []
+    dialogs: list[tuple[str, str]] = []
+    original_mkdtemp = archive_export.tempfile.mkdtemp
+    monkeypatch.setattr(
+        archive_export.tempfile,
+        "mkdtemp",
+        lambda **kwargs: original_mkdtemp(**(kwargs | {"dir": str(tmp_path)})),
+    )
+
+    def dump(out: str):
+        path = Path(out)
+        (path / "preserved-evidence.txt").write_text(
+            "complete source text", encoding="utf-8"
+        )
+        outputs.append(path)
+        return SimpleNamespace(
+            completed=completed,
+            objects=objects,
+            records=objects + 3 if objects else 0,
+            registered_records=registered,
+            affix_records=affixes,
+            notes=("范围边界第一条", "分类未确认第二条"),
+        )
+
+    monkeypatch.setattr(live_object_dump, "dump_live_objects", dump)
+    for method in ("showinfo", "showwarning"):
+        monkeypatch.setattr(
+            exports.messagebox,
+            method,
+            lambda title, message: dialogs.append((title, message)),
+        )
+    try:
+        for _ in range(2):
+            host.on_dump_runtime_objects()
+            host.pump()
+        assert len(outputs) == 2 and outputs[0] != outputs[1]
+        assert all(
+            (path / "preserved-evidence.txt").read_text(encoding="utf-8")
+            == "complete source text"
+            for path in outputs
+        )
+        assert [value[0] for value in dialogs] == [title, title]
+        assert all("范围边界第一条\n分类未确认第二条" in value[1] for value in dialogs)
+        assert "正在" not in host.status.values["text"]
+    finally:
+        assert host._shutdown_gui_worker_host(1) == ()
 
 
 def test_script_export_preparation_runs_in_worker(
@@ -203,6 +275,31 @@ def test_startup_directory_scans_preserve_both_source_modes(
         assert host._shutdown_gui_worker_host(1) == ()
 
 
+@pytest.mark.parametrize("mode", ["battle", "campaign"])
+def test_directory_scan_failure_retains_previous_results_and_reports_retry(
+    monkeypatch: pytest.MonkeyPatch, mode: str
+) -> None:
+    host = _Browser()
+    host.battle = [("old.w3x", "已加载地图")]
+    host.campaign = [{"path": "old.w3n", "name": "已加载战役"}]
+
+    def fail(*_args, **_kwargs):
+        raise OSError("source disappeared during scan")
+
+    monkeypatch.setattr(browser, "scan_battle_maps", fail)
+    monkeypatch.setattr(browser.glob, "glob", fail)
+    try:
+        host._scan_dir("source", mode)
+        host.pump()
+        assert host.battle == [("old.w3x", "已加载地图")]
+        assert host.campaign == [{"path": "old.w3n", "name": "已加载战役"}]
+        assert "扫描失败" in host.status.values["text"]
+        assert "刷新" in host.status.values["text"]
+        assert "source disappeared" in host.status.values["text"]
+    finally:
+        assert host._shutdown_gui_worker_host(1) == ()
+
+
 def test_guide_uses_loaded_campaign_child_and_ignores_late_result(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -231,6 +328,41 @@ def test_guide_uses_loaded_campaign_child_and_ignores_late_result(
         assert shown == ["chapter report"]
     finally:
         assert host._shutdown_gui_worker_host(1) == ()
+
+
+def test_gui_cached_guide_rejects_changed_loaded_source(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    import os
+
+    from gametool.gui_offline_acceptance_support import _fixture_mpq
+    from gametool.map_loader import load_map
+
+    source = tmp_path / "guide.w3x"
+    source.write_bytes(_fixture_mpq({"war3map.j": b"// old source"}))
+    before = source.stat()
+    host = _ActionHost()
+    host.map_data = load_map(str(source))
+    monkeypatch.setattr(
+        host, "_guide_report_cache", (host.map_data, "old cached guide"), raising=False
+    )
+    source.write_bytes(_fixture_mpq({"war3map.j": b"// new source"}))
+    os.utime(source, ns=(before.st_atime_ns, before.st_mtime_ns))
+    shown = []
+    errors = []
+    monkeypatch.setattr(topbar, "_open_guide_window", lambda *_args: shown.append(True))
+    monkeypatch.setattr(
+        topbar.messagebox, "showerror", lambda *_args: errors.append(True)
+    )
+    try:
+        topbar._show_guide(host)
+        host.pump()
+        assert shown == [] and errors == [True]
+        assert host.status.values["text"] == "攻略速查失败"
+        assert host.guide_button.values["state"] == "normal"
+    finally:
+        assert host._shutdown_gui_worker_host(1) == ()
+        host.map_data.close()
 
 
 def test_minimap_uses_loaded_map_and_private_output(

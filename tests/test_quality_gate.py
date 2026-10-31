@@ -92,6 +92,17 @@ def test_quality_gate_paths_are_one_unique_immutable_set() -> None:
     assert "gametool/description_cache_batch.py" not in paths
 
 
+def test_quality_gate_covers_every_runtime_python_module() -> None:
+    actual = {
+        path.relative_to(_ROOT).as_posix()
+        for path in (_ROOT / "gametool").rglob("*.py")
+    }
+    missing = actual.difference(quality_gate.STRICT_PATHS)
+    assert not missing, (
+        f"Runtime modules missing from the strict gate: {sorted(missing)}"
+    )
+
+
 def test_quality_gate_covers_audit_gap_core_modules() -> None:
     # Given
     expected_paths = {

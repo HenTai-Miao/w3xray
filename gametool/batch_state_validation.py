@@ -12,6 +12,13 @@ from .safe_output import safe_relative_path
 
 def validate_result_state(result: MapBatchResult) -> None:
     """Reject published and terminal results with contradictory state."""
+    if (
+        result.source.content_identity is None
+        and result.publication_result is not PublicationResult.FAILED
+    ):
+        raise BatchStateFormatError(
+            "unreadable source cannot claim a completed fingerprint"
+        )
     error = batch_semantics_error(
         BatchSemanticEvidence(
             publication=result.publication_result,
@@ -84,11 +91,12 @@ def require_unique_results(results: tuple[MapBatchResult, ...]) -> None:
     outputs: set[str] = set()
     for result in results:
         path_key = result.source.path.casefold()
-        identity = result.source.sha256, result.source.size
-        if path_key in paths or identity in identities:
+        identity = result.source.content_identity
+        if path_key in paths or (identity is not None and identity in identities):
             raise BatchStateFormatError("duplicate source result")
         paths.add(path_key)
-        identities.add(identity)
+        if identity is not None:
+            identities.add(identity)
         if result.output_directory:
             output_key = result.output_directory.casefold()
             if output_key in outputs:

@@ -14,6 +14,7 @@ from .map_data import MapData
 from .gui_worker_registry import GuiWorkerTicket
 from .map_directory import scan_battle_maps
 from .map_gallery import MapEntry, MapGallery, render_map_gallery
+from .presentation_safety import format_user_exception
 
 
 class SourceBrowserMixin:
@@ -80,29 +81,38 @@ class SourceBrowserMixin:
         self.update_idletasks()
 
         def work(ticket: GuiWorkerTicket) -> None:
-            if mode == "campaign":
-                files = glob.glob(
-                    os.path.join(directory, "**", "*.w3n"), recursive=True
-                )
-                files = sorted(set(files), key=os.path.getmtime, reverse=True)
-                items = [
-                    {
-                        "path": path or "",
-                        "name": os.path.basename(path),
-                        "loaded": False,
-                        "views": None,
-                    }
-                    for path in files
-                ]
+            try:
+                if mode == "campaign":
+                    files = glob.glob(
+                        os.path.join(directory, "**", "*.w3n"), recursive=True
+                    )
+                    files = sorted(set(files), key=os.path.getmtime, reverse=True)
+                    items = [
+                        {
+                            "path": path or "",
+                            "name": os.path.basename(path),
+                            "loaded": False,
+                            "views": None,
+                        }
+                        for path in files
+                    ]
+                    _ = self._post_gui_worker(
+                        ticket,
+                        lambda: self._fill_campaign(items),
+                    )
+                else:
+                    items = scan_battle_maps(directory)
+                    _ = self._post_gui_worker(
+                        ticket,
+                        lambda: self._fill_battle(items),
+                    )
+            except Exception as exc:  # BROAD_EXCEPT_OK - directory worker failures must leave a usable, diagnosed view.
+                message = format_user_exception(exc, paths=(directory,))
                 _ = self._post_gui_worker(
                     ticket,
-                    lambda: self._fill_campaign(items),
-                )
-            else:
-                items = scan_battle_maps(directory)
-                _ = self._post_gui_worker(
-                    ticket,
-                    lambda: self._fill_battle(items),
+                    lambda: self.status.configure(
+                        text=f"目录扫描失败：{message}；已保留原列表，可点击「刷新」重试。"
+                    ),
                 )
 
         group = "source-scan-campaign" if mode == "campaign" else "source-scan"

@@ -5,8 +5,9 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass
 import hashlib
+from io import StringIO
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 from types import MappingProxyType
 from typing import Final, Mapping, final, override
@@ -16,7 +17,10 @@ from .icon_resources import (
     IconObjectReference,
     NamedIconResource,
 )
+from .bounded_file import read_bounded_regular_file
+from .csv_fields import full_csv_fields
 from .safe_output import safe_destination, safe_relative_path
+from .windows_source_reads import WindowsSourceRoot
 
 TRUSTED_ICON_CACHE_MARKER: Final = ".gamexray-trusted-icon-cache"
 _PAYLOAD_MANIFEST: Final = "可信图标缓存.tsv"
@@ -102,11 +106,10 @@ class TrustedIconCacheDataSource:
         entry = self._payloads.get(_path_key(name))
         if entry is None:
             raise FileNotFoundError(name)
-        try:
-            with open(entry.payload_path, "rb") as handle:
-                payload = handle.read()
-        except OSError as exc:
-            raise TrustedIconCacheError(entry.payload_path, str(exc)) from exc
+        destination = safe_destination(self.root, entry.virtual_path)
+        if destination != entry.payload_path:
+            raise TrustedIconCacheError(entry.payload_path, "unsafe payload path")
+        payload = _read_regular_payload(Path(entry.payload_path))
         if hashlib.sha256(payload).hexdigest() != entry.digest:
             raise TrustedIconCacheError(entry.payload_path, "payload hash mismatch")
         return payload
@@ -177,7 +180,7 @@ class TrustedIconCacheDataSource:
         if marker.is_symlink() or not marker.is_file():
             raise TrustedIconCacheError(self.root, "ownership marker missing")
         try:
-            schema = marker.read_text(encoding="ascii").splitlines()
+            schema = _read_regular_payload(marker).decode("ascii").splitlines()
         except (OSError, UnicodeError) as exc:
             raise TrustedIconCacheError(str(marker), str(exc)) from exc
         if not schema or schema[0] != "schema=2":
@@ -205,7 +208,8 @@ def _read_tsv(path: Path, header: tuple[str, ...]) -> tuple[tuple[str, ...], ...
     if path.is_symlink() or not path.is_file():
         raise TrustedIconCacheError(str(path), "table missing")
     try:
-        with path.open("r", encoding="utf-8", newline="") as handle:
+        text = _read_regular_payload(path).decode("utf-8")
+        with full_csv_fields(), StringIO(text, newline="") as handle:
             rows = tuple(tuple(row) for row in csv.reader(handle, delimiter="\t"))
     except (OSError, UnicodeError, csv.Error) as exc:
         raise TrustedIconCacheError(str(path), str(exc)) from exc
@@ -214,6 +218,20 @@ def _read_tsv(path: Path, header: tuple[str, ...]) -> tuple[tuple[str, ...], ...
     if any(len(row) != len(header) for row in rows[1:]):
         raise TrustedIconCacheError(str(path), "malformed table row")
     return rows[1:]
+
+
+def _read_regular_payload(path: Path) -> bytes:
+    """Keep source ancestry fixed and reject replacements during a complete read."""
+    try:
+        if os.name == "nt":
+            with (
+                WindowsSourceRoot.open(path.parent) as root,
+                root.protect(PurePosixPath(path.name)),
+            ):
+                return read_bounded_regular_file(path)[0]
+        return read_bounded_regular_file(path)[0]
+    except OSError as exc:
+        raise TrustedIconCacheError(str(path), str(exc)) from exc
 
 
 def _parse_icon_path(value: str, source: str) -> str:

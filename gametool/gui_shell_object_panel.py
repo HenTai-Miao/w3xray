@@ -193,6 +193,7 @@ def build_detail_panel(host: ObjectPanelHost, paned: tk.PanedWindow) -> None:
             height=26,
             font=(FONT, 11),
             command=lambda c=_cmd: _pack_query_selected(host, c),
+            state="disabled",
         )
         button.pack(side="right", padx=(4, 0))
         setattr(host, _attr, button)
@@ -215,11 +216,13 @@ def build_detail_panel(host: ObjectPanelHost, paned: tk.PanedWindow) -> None:
 
 
 def _pack_query_selected(host, command: str = "doc") -> None:
-    obj = getattr(host, "_selected_detail_object", None)
+    obj: GameObject | None = getattr(host, "_selected_detail_object", None)
+    if obj is None:
+        return
 
     # 按对象类型智能路由: where/drop 语义只对物品/单位成立,
     # 技能/增益/科技/装饰物点上会得到「未找到」— 改路由到专属命令。
-    if command in ("where", "drop") and obj is not None:
+    if command in ("where", "drop"):
         category = getattr(obj, "category", "")
         if category == "技能":
             command = "skills"
@@ -229,7 +232,7 @@ def _pack_query_selected(host, command: str = "doc") -> None:
         elif category in ("增益", "科技", "装饰物", "可破坏物"):
             command = "buffs" if category == "增益" else "doc"
 
-    prefill = obj.obj_id if obj is not None else ""
+    prefill = obj.obj_id
     host.on_pack_query(
         prefill=prefill,
         prefill_command=command,

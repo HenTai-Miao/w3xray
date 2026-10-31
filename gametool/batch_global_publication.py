@@ -5,7 +5,7 @@ import os
 from collections.abc import Mapping
 from dataclasses import replace
 from pathlib import Path
-import shutil
+import sys
 from typing import Final
 from uuid import uuid4
 
@@ -33,6 +33,11 @@ from .batch_output_lock import (
     BatchOutputLease,
     hold_batch_output_lock,
     lease_is_current,
+)
+from .batch_stage_cleanup import (
+    StageCleanupStatus,
+    create_owned_stage,
+    remove_owned_stage,
 )
 from .bounded_file import read_bounded_regular_file
 from .durable_io import sync_directory
@@ -86,7 +91,7 @@ def _publish_global_generation_locked(
     bundle = build_global_payloads(output, state, cache_text, diagnostics_text)
     payloads = bundle.payloads
     stage_io = _io_path(stage)
-    stage_io.mkdir(mode=0o700)
+    stage_identity = create_owned_stage(stage_io)
     try:
         sync_directory(global_root)
         for name, text in payloads.items():
@@ -107,9 +112,16 @@ def _publish_global_generation_locked(
         _publish_compatibility_mirrors(output, payloads)
         return generation
     finally:
-        if stage_io.is_dir() and not stage_io.is_symlink():
-            shutil.rmtree(stage_io)
+        cleanup = remove_owned_stage(stage_io, stage_identity)
+        if cleanup.status is StageCleanupStatus.REMOVED:
             sync_directory(global_root)
+        elif cleanup.status is not StageCleanupStatus.MISSING:
+            detail = f"global stage retained: {stage}; {cleanup.detail}"
+            primary = sys.exc_info()[1]
+            if primary is not None:
+                primary.add_note(detail)
+            else:
+                raise GlobalPublicationError(detail)
 
 
 def load_current_generation(output_root: str | Path) -> GlobalGeneration | None:

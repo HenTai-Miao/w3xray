@@ -352,7 +352,11 @@ def main():
         print("离线快照", sum(len(d) for _, d in regions) // 1048576, "MB")
     else:
         mem_setup()
-        pids = find_war3_pids()
+        try:
+            pids = find_war3_pids()
+        except OSError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
         if not pids:
             print("war3 未运行")
             return 1

@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from .base_catalog import english_name_for, fine_category_for
-from .base_names import BASE_NAMES
+from .base_catalog import base_name_for, english_name_for, fine_category_for
 from .base_objects import BASE_OBJECTS
 from .item_relation_models import (
     RelationCompleteness,
@@ -26,9 +25,9 @@ def find_relation_game_object(
     return legacy if legacy is not None and legacy.category == category else None
 
 
-def _fine_category_for(base_id: str, object_id: str) -> str:
+def _fine_category_for(base_id: str, object_id: str, category: str) -> str:
     """细类中文名（按基础码优先），未知返回空串。"""
-    return fine_category_for(base_id, object_id)
+    return fine_category_for(base_id, object_id, category=category)
 
 
 def resolve_relation_object(
@@ -45,13 +44,15 @@ def resolve_relation_object(
             resolved.category,
             resolved.obj_id,
             name,
-            _fine_category_for(resolved.base_id, resolved.obj_id),
+            _fine_category_for(resolved.base_id, resolved.obj_id, resolved.category),
         )
         return endpoint, has_object_data
     base = BASE_OBJECTS.get(object_id)
     if base is not None and base[0] == category:
         # 中文名优先，缺失时回退英文名（社区 enUS 快照）
-        name = BASE_NAMES.get(object_id) or english_name_for(object_id)
+        name = base_name_for(object_id, category=category) or english_name_for(
+            object_id, category=category
+        )
     else:
         name = None
     return (
@@ -59,7 +60,7 @@ def resolve_relation_object(
             category,
             object_id,
             name or "未解析",
-            _fine_category_for("", object_id) if name is not None else "",
+            _fine_category_for("", object_id, category) if name is not None else "",
         ),
         name is not None,
     )

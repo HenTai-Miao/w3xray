@@ -174,6 +174,7 @@ def select_save_report(
 def verify_save_report_sources(report: RealSaveReport) -> RealSaveReport:
     """Rehash all inputs before a later export, preserving the original snapshot."""
     warnings = list(report.warnings)
+    source_problem = save_source_path_error(report.source)
     source = Path(report.source).absolute()
     root = source if report.source_is_directory else source.parent
     confirmed: list[RealSaveFile] = []
@@ -181,6 +182,8 @@ def verify_save_report_sources(report: RealSaveReport) -> RealSaveReport:
     for record in report.files:
         path = root / record.relative_path
         try:
+            if source_problem:
+                raise ValueError(source_problem)
             if problem := save_source_path_error(path):
                 raise ValueError(problem)
             metadata = path.lstat()
@@ -215,7 +218,9 @@ def verify_save_report_sources(report: RealSaveReport) -> RealSaveReport:
             )
         else:
             confirmed.append(record)
-    candidates, issues = iter_save_source_files(source)
+    candidates, issues = (
+        ((), [source_problem]) if source_problem else iter_save_source_files(source)
+    )
     warnings.extend(issues)
     names = tuple(path.relative_to(root).as_posix() for path in candidates)
     if report.source_files and names != report.source_files:

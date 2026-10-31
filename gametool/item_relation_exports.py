@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Final
 
-from .base_names import BASE_CATEGORIES, BASE_NAMES_EN
+from .base_catalog import english_name_for, fine_category_for
 from .batch_tsv import format_tsv_rows
 from .item_relation_models import (
     ItemRelation,
@@ -13,6 +13,7 @@ from .item_relation_models import (
     ItemRelationKind,
     RelationCompleteness,
     RelationConfidence,
+    RelationObject,
 )
 
 _SKILL_KINDS: Final = frozenset(
@@ -170,8 +171,9 @@ def _acquisition_row(relation: ItemRelation) -> tuple[str, ...]:
         relation.confidence.value,
         relation.completeness.value,
         relation.unresolved_reason,
-        _english_name(relation.item.object_id),
-        _fine_category(relation.item.object_id),
+        _english_name(relation.item),
+        relation.item.fine_category
+        or fine_category_for(relation.item.object_id, category=relation.item.category),
     )
 
 
@@ -189,20 +191,14 @@ def _skill_row(relation: ItemRelation) -> tuple[str, ...]:
         relation.confidence.value,
         relation.completeness.value,
         relation.unresolved_reason,
-        _english_name(relation.item.object_id),
-        "" if skill is None else _english_name(skill.object_id),
+        _english_name(relation.item),
+        "" if skill is None else _english_name(skill),
     )
 
 
-def _english_name(object_id: str) -> str:
+def _english_name(endpoint: RelationObject) -> str:
     """社区 enUS 快照英文名；未知返回空串（列保持对齐）。"""
-    return BASE_NAMES_EN.get(object_id, "")
-
-
-def _fine_category(object_id: str) -> str:
-    """标准化细类中文名（如 神器/英雄技能）；未知返回空串。"""
-    fine = BASE_CATEGORIES.get(object_id)
-    return "" if fine is None else fine[0]
+    return english_name_for(endpoint.object_id, category=endpoint.category)
 
 
 def _optional_int(value: int | None) -> str:

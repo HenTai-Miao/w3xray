@@ -37,7 +37,7 @@ def read_bounded_regular_file(
     expected: FileIdentity | None = None,
 ) -> tuple[bytes, FileIdentity]:
     """Read one stable regular-file identity without following a final symlink."""
-    descriptor, identity = _open_regular_file(path, max_bytes, expected)
+    descriptor, identity, named_before = _open_regular_file(path, max_bytes, expected)
     payload = bytearray()
     try:
         before = os.fstat(descriptor)
@@ -50,7 +50,7 @@ def read_bounded_regular_file(
                 raise BoundedFileError(path, f"size exceeds limit {max_bytes}")
             if len(payload) > identity.size:
                 raise BoundedFileError(path, "file grew while reading")
-        _require_unchanged(path, descriptor, before, len(payload))
+        _require_unchanged(path, descriptor, before, named_before, len(payload))
     except OSError as exc:
         if isinstance(exc, BoundedFileError):
             raise
@@ -65,7 +65,7 @@ def sha256_regular_file(
     max_bytes: int | None = None,
 ) -> tuple[str, FileIdentity]:
     """Hash one stable regular-file identity with an optional byte limit."""
-    descriptor, identity = _open_regular_file(path, max_bytes, None)
+    descriptor, identity, named_before = _open_regular_file(path, max_bytes, None)
     digest = hashlib.sha256()
     total = 0
     try:
@@ -77,7 +77,7 @@ def sha256_regular_file(
             if total > identity.size:
                 raise BoundedFileError(path, "file grew while hashing")
             digest.update(chunk)
-        _require_unchanged(path, descriptor, before, total)
+        _require_unchanged(path, descriptor, before, named_before, total)
     except OSError as exc:
         if isinstance(exc, BoundedFileError):
             raise
@@ -88,10 +88,17 @@ def sha256_regular_file(
 
 
 def _require_unchanged(
-    path: Path, descriptor: int, before: os.stat_result, size: int
+    path: Path,
+    descriptor: int,
+    before: os.stat_result,
+    named_before: os.stat_result,
+    size: int,
 ) -> None:
     after = os.fstat(descriptor)
     named = os.lstat(path)
+    # Keep each metadata channel continuous: on Windows fstat and lstat may
+    # report different ctime meanings/precision for the same newly written file.
+    # The named inode/size was tied to the descriptor by _open_regular_file.
     if (
         size != before.st_size
         or (
@@ -111,8 +118,22 @@ def _require_unchanged(
             after.st_mode,
         )
         or not stat.S_ISREG(named.st_mode)
-        or (named.st_dev, named.st_ino, named.st_size, named.st_mtime_ns)
-        != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+        or (
+            named.st_dev,
+            named.st_ino,
+            named.st_size,
+            named.st_mtime_ns,
+            named.st_ctime_ns,
+            named.st_mode,
+        )
+        != (
+            named_before.st_dev,
+            named_before.st_ino,
+            named_before.st_size,
+            named_before.st_mtime_ns,
+            named_before.st_ctime_ns,
+            named_before.st_mode,
+        )
     ):
         raise BoundedFileError(path, "file identity or metadata changed while reading")
 
@@ -121,7 +142,7 @@ def _open_regular_file(
     path: Path,
     max_bytes: int | None,
     expected: FileIdentity | None,
-) -> tuple[int, FileIdentity]:
+) -> tuple[int, FileIdentity, os.stat_result]:
     try:
         before = os.lstat(path)
     except OSError as exc:
@@ -154,4 +175,4 @@ def _open_regular_file(
     except OSError, BoundedFileError:
         os.close(descriptor)
         raise
-    return descriptor, identity
+    return descriptor, identity, before

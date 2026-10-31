@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 from .script_sources import analysis_script_sources
+from .object_codes import field_object_codes
 
 from collections.abc import Mapping
 
@@ -102,25 +103,11 @@ REF_COLUMNS = {
 }
 
 
-# 4 字符但绝非对象码的"词/枚举/标志"值（targs 等字段里常见），防御性剔除。
-# 仅收明确不会与真实对象码(如 hpea/ngol/A001)冲突的词；宁缺勿滥，避免误删真码。
-_NOT_A_CODE = {"self", "none", "true", "null", "dead", "tree", "both", "item"}
-
-
 def _split_codes(value) -> list[str]:
-    """把字段值拆成 4cc 码列表。单值(单 4cc)与逗号列表都走这里；过滤空/占位/非码。"""
+    """Read declared reference fields through the shared four-byte identity parser."""
     if not isinstance(value, str):
         return []
-    out = []
-    for tok in value.replace("|", ",").split(","):
-        t = tok.strip().strip("\x00")
-        # 对象码恒为 4 字符；剔除 _ / - / 0 这类"空"占位与纯数字(多为计数而非码)
-        if len(t) != 4 or t in ("____", "----", "0000"):
-            continue
-        if t.isdigit() or t in _NOT_A_CODE:
-            continue
-        out.append(t)
-    return out
+    return list(field_object_codes(value))
 
 
 def extract_refs_by_type(mods, field_type) -> list[tuple[str, list[str]]]:
@@ -132,18 +119,12 @@ def extract_refs_by_type(mods, field_type) -> list[tuple[str, list[str]]]:
     """
     # 按 field_id 聚合并去重：w3a/w3q 的引用字段会逐等级各出现一次(同 field_id 多条)，
     # 若不聚合，同一引用会重复成边(反向"被谁引用"里出现多条相同项)。这里按 field_id 合并去重。
-    agg: dict[str, list[str]] = {}
-    order: list[str] = []
+    agg: dict[str, dict[str, None]] = {}
     for m in mods:
         if field_type(m.field_id) in REF_TYPES:
             for c in _split_codes(m.value):
-                lst = agg.get(m.field_id)
-                if lst is None:
-                    lst = agg[m.field_id] = []
-                    order.append(m.field_id)
-                if c not in lst:
-                    lst.append(c)
-    return [(fid, agg[fid]) for fid in order]
+                agg.setdefault(m.field_id, {}).setdefault(c, None)
+    return [(fid, list(codes)) for fid, codes in agg.items()]
 
 
 def extract_refs_by_column(
@@ -157,10 +138,11 @@ def extract_refs_by_column(
     cols = REF_COLUMNS.get(category)
     if not cols:
         return []
+    levelled = {re.sub(r"[0-9]+$", "", column) for column in cols}
     refs = []
-    for col in cols:
-        if col in fields:
-            codes = _split_codes(fields[col])
+    for col, value in fields.items():
+        if col in cols or re.sub(r"[0-9]+$", "", col) in levelled:
+            codes = _split_codes(value)
             if codes:
                 refs.append((col, codes))
     return refs

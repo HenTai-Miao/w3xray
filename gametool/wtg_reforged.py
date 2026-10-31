@@ -26,37 +26,50 @@ def parse_reforged(
     reader: WtgReader, schema: TriggerSchema | None
 ) -> TriggerTreeSummary:
     version = reader.i32()
-    type_counts = _read_type_counts(reader)
-    reader.i32()
-    variables = tuple(
-        _read_variable(reader) for _ in range(reader.bounded_count("variable"))
-    )
-    object_count = reader.bounded_count("trigger item")
+    type_counts: dict[int, int] = {}
+    variables: list[TriggerVariable] = []
     categories: list[TriggerCategory] = []
     triggers: list[TriggerHeader] = []
     eca_functions = []
     missing: list[UnknownTriggerFunction] = []
     failures: list[TriggerParseFailure] = []
-    for _index in range(object_count):
-        object_type = reader.i32()
-        if object_type in (1, 4):
-            categories.append(_read_category(reader))
-        elif object_type in (8, 16, 32):
-            trigger = _read_trigger(reader, object_type)
-            triggers.append(trigger)
-            if not _read_trigger_functions(
-                reader, trigger, schema, version, eca_functions, missing, failures
-            ):
-                break
-        elif object_type == 64:
-            _read_variable_tree_item(reader)
-        else:
-            failures.append(
-                TriggerParseFailure(
-                    "", "", reader.offset - 4, f"unsupported item type {object_type}"
+    try:
+        _read_type_counts(reader, type_counts)
+        reader.i32()
+        for _ in range(reader.bounded_count("variable", minimum_size=0)):
+            variables.append(_read_variable(reader))
+        object_count = reader.bounded_count("trigger item", minimum_size=0)
+        for _index in range(object_count):
+            object_type = reader.i32()
+            if object_type in (1, 4):
+                categories.append(_read_category(reader))
+            elif object_type in (8, 16, 32):
+                trigger = _read_trigger(reader, object_type)
+                triggers.append(trigger)
+                if not _read_trigger_functions(
+                    reader, trigger, schema, version, eca_functions, missing, failures
+                ):
+                    break
+            elif object_type == 64:
+                _read_variable_tree_item(reader)
+            else:
+                failures.append(
+                    TriggerParseFailure(
+                        "",
+                        "",
+                        reader.offset - 4,
+                        f"unsupported item type {object_type}",
+                    )
                 )
+                break
+    except WtgReadError as exc:
+        failures.append(TriggerParseFailure("", "", exc.offset, exc.reason))
+    if not (missing or failures) and reader.remaining:
+        failures.append(
+            TriggerParseFailure(
+                "", "", reader.offset, f"{reader.remaining} trailing WTG bytes"
             )
-            break
+        )
     return TriggerTreeSummary(
         version=version,
         is_reforged=True,
@@ -66,7 +79,7 @@ def parse_reforged(
         comment_count=type_counts.get(16, 0),
         script_count=type_counts.get(32, 0),
         categories=tuple(categories),
-        variables=variables,
+        variables=tuple(variables),
         triggers=tuple(triggers),
         eca_functions=tuple(eca_functions),
         has_unexpanded_functions=bool(missing or failures),
@@ -75,14 +88,12 @@ def parse_reforged(
     )
 
 
-def _read_type_counts(reader: WtgReader) -> dict[int, int]:
-    counts: dict[int, int] = {}
+def _read_type_counts(reader: WtgReader, counts: dict[int, int]) -> None:
     for item_type in _ITEM_TYPES:
         counts[item_type] = reader.bounded_count("trigger item type", minimum_size=0)
         deleted_count = reader.bounded_count("deleted trigger item", minimum_size=4)
         for _index in range(deleted_count):
             reader.i32()
-    return counts
 
 
 def _read_variable(reader: WtgReader) -> TriggerVariable:

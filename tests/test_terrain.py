@@ -119,6 +119,38 @@ class TerrainTest(unittest.TestCase):
     def test_terrain_info_from_missing_map_returns_none(self):
         self.assertIsNone(terrain_info_from_map_path("missing-test-map.w3x"))
 
+    def test_ground_and_masked_water_extrema_are_independent(self):
+        for version in (11, 12):
+            with self.subTest(version=version):
+                header = (
+                    b"W3E!"
+                    + struct.pack("<i", version)
+                    + b"L"
+                    + struct.pack("<iii", 0, 0, 0)
+                    + struct.pack("<iiff", 2, 2, 0.0, 0.0)
+                )
+                tiles = bytearray()
+                for ground, water in (
+                    (0, 8192),
+                    (0xFFFF, 0x4000),
+                    (8192, 0xFFFF),
+                    (9216, 8704),
+                ):
+                    tiles.extend(struct.pack("<HH", ground, water))
+                    tiles.extend(bytes(4 if version >= 12 else 3))
+                info = parse_w3e_header(header + tiles)
+                self.assertIsNotNone(info)
+                assert info is not None
+                self.assertIsNotNone(info.point_summary)
+                assert info.point_summary is not None
+                summary = info.point_summary
+                self.assertEqual(summary.cells, 4)
+                self.assertEqual(summary.min_height, -16.0)
+                self.assertEqual(summary.max_height, (0xFFFF - 8192) / 512)
+                self.assertEqual(summary.min_water_height, -16.0)
+                self.assertEqual(summary.max_water_height, (0x3FFF - 8192) / 512)
+                self.assertEqual(summary.edge, 2)
+
     def test_describe_terrain_tile_adds_editor_name_and_texture_path(self):
         # Given: a standard Lordaeron Summer terrain tile id.
         # When: the tile id is described.

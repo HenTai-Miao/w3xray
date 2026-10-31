@@ -1,7 +1,7 @@
 """攻略速查报告的按图磁盘缓存：同一地图版本重复查询零解析。
 
-缓存键 = 工具版本标签 + 地图路径 + 大小 + mtime，地图被编辑器改动
-即失效。遵守 fail-open：任何异常都当作未命中。
+缓存键包含工具版本、地图路径与完整源字节 SHA-256；读取和交付边界
+重新验证来源。缓存 I/O 遵守 fail-open，已加载来源变化必须明确失败。
 """
 
 from __future__ import annotations
@@ -10,13 +10,20 @@ import hashlib
 import os
 import tempfile
 from pathlib import Path
+from typing import TYPE_CHECKING
 
+from .archive_source import BytesArchiveSource
+from .bounded_file import sha256_regular_file
 from .cache_root import gamexray_cache_root
+
+if TYPE_CHECKING:
+    from .map_data import MapData
 
 __all__ = (
     "load_cached_report",
     "report_cache_path",
     "store_cached_report",
+    "verify_loaded_guide_source",
 )
 
 # 报告段落逻辑变化时同步 bump，使旧缓存整体失效。
@@ -33,22 +40,42 @@ __all__ = (
 # v7: 战役容器 (.w3n) 报告尾附逐关查询指引 (旧 v6 容器报告无解释)——
 # 旧 v6 整体退役。
 # v8: 容器 --section 空段改为输出同一指引 (旧 v7 空段什么都不印)——旧 v7 退役。
-GUIDE_CACHE_VERSION = "guide-v42"  # v42: 独立地图继承、UTF-16 WTS 与 W3F v3
+GUIDE_CACHE_VERSION = "guide-v43"  # v43: 完整对象证据与脚本解析语义修复
 
 
 def report_cache_path(map_path: str) -> Path | None:
-    """按地图文件身份（路径+大小+mtime纳秒）派生缓存文件路径。"""
+    """Derive the key from one complete, stable source-byte fingerprint."""
     if os.environ.get("GAMEXRAY_GUIDE_CACHE", "1") != "1":
         return None
     try:
-        stat = os.stat(map_path)
+        source_hash, _identity = sha256_regular_file(Path(map_path))
         resolved = os.path.abspath(map_path)
     except OSError:
         return None
     digest = hashlib.sha256(
-        f"{GUIDE_CACHE_VERSION}|{resolved}|{stat.st_size}|{stat.st_mtime_ns}".encode()
+        f"{GUIDE_CACHE_VERSION}|sha256|{resolved}|{source_hash}".encode()
     )
     return gamexray_cache_root() / "guide-reports" / f"{digest.hexdigest()}.txt"
+
+
+def verify_loaded_guide_source(md: MapData) -> None:
+    """Keep retained map evidence bound to its original bytes before reporting."""
+    source = md.archive_source
+    if source is None:
+        # Explicit in-memory MapData has no external path identity to certify.
+        return
+    if isinstance(source, BytesArchiveSource):
+        # Campaign members are immutable owned bytes, not filesystem paths.
+        if source.is_closed:
+            raise OSError("攻略来源快照已关闭，请重新打开地图")
+        return
+    ledger = md.extraction_ledger
+    if ledger is None:
+        raise OSError("攻略来源缺少加载时的完整字节指纹，请重新打开地图")
+    with source.open():
+        current_hash, _identity = sha256_regular_file(Path(source.path))
+    if current_hash != ledger.source_sha256:
+        raise OSError("地图来源字节已变化，当前已加载内容属于旧快照；请重新打开地图")
 
 
 def load_cached_report(path: Path | None) -> str | None:

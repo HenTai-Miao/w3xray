@@ -6,6 +6,7 @@ slk_objects 能解出对象与字段，并配合 references.extract_refs_by_colu
 """
 
 import hashlib
+import json
 from pathlib import Path
 import unittest
 
@@ -183,13 +184,21 @@ class ReferenceSlkMapTest(unittest.TestCase):
         codes = [o.obj_id for objs in self.md.objects.values() for o in objs]
         self.assertEqual(len(codes), len(set(codes)))
 
-    def test_noise_hidden_and_levels_labeled(self):
-        # AHbz：编辑器噪声列(code/comments/version)应被隐藏；等级后缀列应是中文带等级
+    def test_complete_source_fields_and_levels_labeled(self):
+        # AHbz：完整保留编辑器列及其 SLK 来源；等级后缀列仍为中文带等级。
         o = self.md.obj_index.get("AHbz")
         self.assertIsNotNone(o)
-        labels = [lab for lab, _ in o.fields]  # pyright: ignore[reportOptionalMemberAccess]
-        for noise in ("code", "comments", "version", "sort", "InBeta"):
-            self.assertNotIn(noise, labels)
+        assert o is not None
+        labels = [lab for lab, _ in o.fields]
+        for key in ("code", "comments", "version", "sort", "InBeta"):
+            self.assertIn(key, labels)
+            evidence = [row for row in o.field_evidence if row.key == key]
+            self.assertTrue(evidence)
+            for row in evidence:
+                self.assertTrue(row.source.casefold().endswith(".slk"))
+                encoded = json.loads(row.encoded_evidence)
+                self.assertEqual(encoded["source"], row.source)
+                self.assertIn(encoded["cell"]["raw"], encoded["record"]["raw"])
         self.assertTrue(any("(等级" in lab for lab in labels))  # 如 施法间隔 (等级2)
 
 

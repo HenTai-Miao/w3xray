@@ -358,6 +358,10 @@ class LocalIdTableSources:
                 if isinstance(selected, LocalIdTableInput)
                 else LocalIdTableInput(selected)
             )
+            if problem := save_source_path_error(request.path):
+                roots.append(os.fspath(request.path))
+                self.diagnostics.append(problem)
+                continue
             path = Path(request.path).absolute()
             roots.append(str(path))
             try:

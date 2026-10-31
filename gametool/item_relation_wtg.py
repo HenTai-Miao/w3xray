@@ -16,6 +16,7 @@ from .item_relation_models import (
     RelationEvidence,
 )
 from .map_data import MapData
+from .object_codes import valid_object_code
 from .wtg_models import TriggerEcaFunction, TriggerEcaParameter
 
 
@@ -82,20 +83,20 @@ def build_wtg_item_relations(md: MapData) -> tuple[ItemRelation, ...]:
 def _walk_functions(
     nodes: Iterable[TriggerEcaFunction],
 ) -> Iterator[TriggerEcaFunction]:
-    for node in nodes:
-        yield node
-        for parameter in node.parameters:
-            yield from _parameter_functions(parameter)
-        yield from _walk_functions(node.children)
-
-
-def _parameter_functions(
-    parameter: TriggerEcaParameter,
-) -> Iterator[TriggerEcaFunction]:
-    if parameter.nested_function is not None:
-        yield from _walk_functions((parameter.nested_function,))
-    if parameter.array_indexer is not None:
-        yield from _parameter_functions(parameter.array_indexer)
+    pending: list[TriggerEcaFunction | TriggerEcaParameter] = list(
+        reversed(tuple(nodes))
+    )
+    while pending:
+        node = pending.pop()
+        if isinstance(node, TriggerEcaFunction):
+            yield node
+            pending.extend(reversed(node.children))
+            pending.extend(reversed(node.parameters))
+        else:
+            if node.array_indexer is not None:
+                pending.append(node.array_indexer)
+            if node.nested_function is not None:
+                pending.append(node.nested_function)
 
 
 def _fixed_item_code(parameter: TriggerEcaParameter) -> str | None:
@@ -106,10 +107,7 @@ def _fixed_item_code(parameter: TriggerEcaParameter) -> str | None:
         return None
     if parameter.nested_function is not None or parameter.array_indexer is not None:
         return None
-    value = parameter.value.strip().strip("\x00")
-    if len(value) != 4 or not value.isascii() or not value.isalnum():
-        return None
-    return value
+    return parameter.value if valid_object_code(parameter.value) else None
 
 
 def _eca_location(node: TriggerEcaFunction) -> str:

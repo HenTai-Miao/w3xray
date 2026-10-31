@@ -182,7 +182,7 @@ def parse_live_cli_options(argv: Sequence[str]) -> LiveCliOptions:
     )
 
 
-LIVE_PACK_CACHE_VERSION = "live-pack-v35"
+LIVE_PACK_CACHE_VERSION = "live-pack-v36"
 
 
 def live_pack_cache_dir(map_path: str) -> Path:
@@ -449,7 +449,12 @@ def run_live_cli(options: LiveCliOptions) -> int:
         except Exception as exc:
             print(f"实时对象导出失败：{type(exc).__name__}: {exc}", file=sys.stderr)
             return 2
-        return 0 if result.objects else 2
+        return (
+            0
+            if result.completed
+            and (result.objects or result.registered_records or result.affix_records)
+            else 2
+        )
     if options.strategy == "icons":
         memory_arguments = _icons_memory_arguments(options)
         if memory_arguments:

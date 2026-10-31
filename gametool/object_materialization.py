@@ -8,7 +8,7 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import replace
 from typing import Final
 
-from .base_names import BASE_CATEGORIES, BASE_NAMES, BASE_NAMES_EN
+from .base_catalog import base_name_for, english_name_for, fine_category_names_for
 from .base_objects import BASE_OBJECTS
 from .map_data import GameObject, GameObjectFieldEvidence
 from .object_candidates import ObjectCandidate, ObjectFieldValue, ObjectSourceKind
@@ -216,7 +216,7 @@ def _build_named_base_candidates(
 ) -> tuple[ObjectCandidate, ...]:
     result: list[ObjectCandidate] = []
     for code, (category, fields) in sorted(base_objects.items()):
-        name = BASE_NAMES.get(code)
+        name = base_name_for(code, category=category)
         if not name:
             continue
         values = [
@@ -304,8 +304,7 @@ def _materialize(
         ) or selected_display_value(selected, "display:propernames")
         if not name:
             name = (
-                BASE_NAMES.get(representative.base_id)
-                or BASE_NAMES.get(obj_id)
+                base_name_for(representative.base_id, obj_id, category=category)
                 or obj_id
             )
     name = name.split("\n", 1)[0]  # 整行名称, 不截断
@@ -328,8 +327,8 @@ def _materialize(
     )
     refs = _merge_refs(candidates)
     # 搜索文本并入英文名与细类（对象浏览/关系工作区可用英文关键字命中）
-    en_name = BASE_NAMES_EN.get(representative.base_id) or BASE_NAMES_EN.get(obj_id)
-    fine = BASE_CATEGORIES.get(representative.base_id) or BASE_CATEGORIES.get(obj_id)
+    en_name = english_name_for(representative.base_id, obj_id, category=category)
+    fine = fine_category_names_for(representative.base_id, obj_id, category=category)
     search_text = " ".join(
         value
         for value in (

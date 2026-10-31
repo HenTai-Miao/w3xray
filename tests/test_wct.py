@@ -110,6 +110,16 @@ class TestParseWct(unittest.TestCase):
         self.assertEqual(w.triggers, ["call Reforged()", ""])
         self.assertIsNone(w.diagnostic)
 
+    def test_classic_trailing_data_keeps_declared_scripts_and_diagnoses_tail(self):
+        for tail in (b"\x01", _block("call Undeclared()")):
+            with self.subTest(tail=tail):
+                w = parse_wct(_wct("note", "call Global()", ["call Declared()"]) + tail)
+
+                self.assertEqual(w.custom_comment, "note")
+                self.assertEqual(w.custom_code, "call Global()")
+                self.assertEqual(w.triggers, ["call Declared()"])
+                self.assertIs(w.diagnostic, WctDiagnostic.TRAILING_DATA)
+
     def test_result_preserves_legacy_mutable_fields(self):
         # Given: the long-standing mutable WCT result returned by the parser.
         w = parse_wct(_wct("comment", "call Original()", ["call First()"]))

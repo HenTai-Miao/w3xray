@@ -136,7 +136,7 @@ def _assignment_row(
     variable = match.group("name")
     index = (match.group("index") or "").strip()
     string_value = _first_string(value, lua=lua)
-    object_codes = tuple(sorted(set(_codes_in(value))))
+    object_codes = tuple(sorted(set(_codes_in(script_views(value, lua=lua).code))))
     return ScriptAssignment(
         source=source,
         line=line_no,

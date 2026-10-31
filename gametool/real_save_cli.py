@@ -23,7 +23,9 @@ def run_real_save_cli(argv: tuple[str, ...]) -> int:
     """Analyze a local save independently, with optional static map correlation."""
     parser = argparse.ArgumentParser(prog="gamexray save")
     parser.add_argument("--map", type=Path, help="可选：关联地图中的存档键和对象")
-    parser.add_argument("--save", required=True, type=Path)
+    # Preserve the caller's spelling until the source reader validates it;
+    # Path() can normalize extended-path separators before that boundary.
+    parser.add_argument("--save", required=True)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--author-bundle", type=Path)
     parser.add_argument(

@@ -22,7 +22,7 @@ class ObjectFilterResult:
 
 def object_fine_category(obj: GameObject) -> str:
     """对象的标准化细类（基础码优先），未知返回空串。"""
-    return fine_category_for(obj.base_id, obj.obj_id)
+    return fine_category_for(obj.base_id, obj.obj_id, category=obj.category)
 
 
 def filter_objects_by_query(

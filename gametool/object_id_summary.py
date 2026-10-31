@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from .api import GameObject, MapData
@@ -43,7 +43,7 @@ def format_object_id_usage_summary(md: MapData) -> str:
         "\t预放置引用\t状态\t详情\t英文名\t细类"
     ]
     for code in codes:
-        obj = object_lookup.get(code)
+        objects = object_lookup.get(code, ())
         save_rows = save_rows_by_code.get(code, ())
         placed = preplaced_by_code.get(code, ())
         rows.append(
@@ -51,16 +51,16 @@ def format_object_id_usage_summary(md: MapData) -> str:
                 (
                     tsv(code),
                     str(code_decimal(code)),
-                    tsv(_category(obj)),
-                    tsv(_name(obj, code)),
-                    tsv(_source(obj)),
+                    tsv(_category(objects)),
+                    tsv(_name(objects, code)),
+                    tsv(_source(objects)),
                     str(script_counts.get(code, 0)),
                     str(len(save_rows)),
                     str(field_counts.get(code, 0)),
                     str(len(placed)),
                     tsv(
                         _status(
-                            obj,
+                            objects,
                             script_counts.get(code, 0),
                             len(save_rows),
                             field_counts.get(code, 0),
@@ -68,8 +68,8 @@ def format_object_id_usage_summary(md: MapData) -> str:
                         )
                     ),
                     tsv(_detail(md, usage, save_rows, placed, code)),
-                    tsv(_english_name(obj, code)),
-                    tsv(_fine_category(obj, code)),
+                    tsv(_english_name(objects, code)),
+                    tsv(_fine_category(objects, code)),
                 )
             )
         )
@@ -98,7 +98,7 @@ def preplaced_code_uses(md: MapData) -> Iterable[PreplacedCodeUse]:
 
 
 def _summary_codes(
-    object_lookup: dict[str, GameObject],
+    object_lookup: dict[str, tuple[GameObject, ...]],
     usage: ObjectIdUsageReport,
     save_report: SaveReport,
     field_counts: dict[str, int],
@@ -112,52 +112,72 @@ def _summary_codes(
     return tuple(sorted(codes))
 
 
-def _object_lookup(md: MapData) -> dict[str, GameObject]:
-    lookup = {obj.obj_id: obj for objects in md.objects.values() for obj in objects}
-    for code, obj in md.obj_index.items():
-        if isinstance(code, str) and isinstance(obj, GameObject):
-            lookup.setdefault(code, obj)
-    return lookup
+def _object_lookup(md: MapData) -> dict[str, tuple[GameObject, ...]]:
+    grouped: dict[str, dict[tuple[str, str, str, str], GameObject]] = {}
+    for obj in (
+        *(obj for objects in md.objects.values() for obj in objects),
+        *md.obj_index.values(),
+    ):
+        identity = (obj.category, obj.base_id, obj.ext, obj.name)
+        grouped.setdefault(obj.obj_id, {}).setdefault(identity, obj)
+    return {
+        code: tuple(rows[key] for key in sorted(rows)) for code, rows in grouped.items()
+    }
 
 
-def _category(obj: GameObject | None) -> str:
-    if obj is None:
-        return "未知"
-    return obj.category
+def _category(objects: tuple[GameObject, ...]) -> str:
+    return "/".join(dict.fromkeys(obj.category for obj in objects)) or "未知"
 
 
-def _name(obj: GameObject | None, code: str) -> str:
-    if obj is not None:
-        return obj.name
+def _name(objects: tuple[GameObject, ...], code: str) -> str:
+    if objects:
+        return _joined_objects(objects, lambda obj: obj.name)
     return BASE_NAMES.get(code) or english_name_for(code) or ""
 
 
-def _english_name(obj: GameObject | None, code: str) -> str:
+def _english_name(objects: tuple[GameObject, ...], code: str) -> str:
     """英文名按基础码优先（自定义对象显示其基底英文名）。"""
-    return english_name_for(obj.base_id if obj is not None else "", code)
+    if not objects:
+        return english_name_for(code)
+    return _joined_objects(
+        objects, lambda obj: english_name_for(obj.base_id, code, category=obj.category)
+    )
 
 
-def _fine_category(obj: GameObject | None, code: str) -> str:
-    return fine_category_for(obj.base_id if obj is not None else "", code)
+def _fine_category(objects: tuple[GameObject, ...], code: str) -> str:
+    if not objects:
+        return fine_category_for(code)
+    return _joined_objects(
+        objects, lambda obj: fine_category_for(obj.base_id, code, category=obj.category)
+    )
 
 
-def _source(obj: GameObject | None) -> str:
-    if obj is None:
-        return "未解析"
-    return obj.ext
+def _source(objects: tuple[GameObject, ...]) -> str:
+    return _joined_objects(objects, lambda obj: obj.ext) if objects else "未解析"
+
+
+def _joined_objects(
+    objects: tuple[GameObject, ...], render: Callable[[GameObject], str]
+) -> str:
+    if len(objects) == 1:
+        return render(objects[0])
+    return " / ".join(f"{obj.category}:{render(obj)}" for obj in objects)
 
 
 def _status(
-    obj: GameObject | None,
+    objects: tuple[GameObject, ...],
     script_count: int,
     save_count: int,
     field_count: int,
     preplaced_count: int,
 ) -> str:
     used = script_count > 0 or save_count > 0 or field_count > 0 or preplaced_count > 0
-    if obj is None:
+    if not objects:
         return "未在对象表中解析"
-    return "已解析" if used else "仅对象表"
+    state = "已解析" if used else "仅对象表"
+    if len(objects) > 1:
+        state += "；同码对象来源计数按ID汇总，未归属到单一类别"
+    return state
 
 
 def _detail(

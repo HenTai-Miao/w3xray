@@ -9,11 +9,13 @@ import struct
 
 import pytest
 
+import gametool.archive_export as archive_export
 from gametool.api import export_all_files
 from gametool.archive_export_recovery import _resource_name_candidates
 from gametool.mpq import MPQArchive
 from gametool.mpq_crypto import _decrypt, hash_name_bytes
 from gametool.mpq_names import HashEntry
+from gametool.mpq_storage import MPQStorageError
 
 from .test_mpq_names_locale import _encrypt
 
@@ -54,7 +56,7 @@ def _archive_bytes(
                 slot = (slot + 1) & (capacity - 1)
             hashes[slot] = entry
         flags = 0x81000000 | (0x10000 if encrypted else 0)
-        key = hash_name_bytes(raw_name.rsplit(b"\\", 1)[-1], 3)
+        key = hash_name_bytes(raw_name.replace(b"/", b"\\").rsplit(b"\\", 1)[-1], 3)
         stored = _encrypt(payload, key) if encrypted else payload
         blocks.append(struct.pack("<IIII", position, len(stored), len(payload), flags))
         payloads.append(stored)
@@ -418,3 +420,74 @@ def test_modl_chunks_follow_encoded_boundaries_without_a_chunk_count_limit() -> 
     # A truncated declared chunk is not treated as a confirmed MODL string.
     malformed = prefix + struct.pack("<4sI", b"MODL", 81) + payload
     assert _resource_name_candidates(malformed) == set()
+
+
+def test_recovery_preserves_slash_member_spelling_and_derived_model_names(
+    tmp_path: Path,
+) -> None:
+    slash_model = b'MDLX\0"Textures/slash.blp"\0'
+    backslash_model = b"MDLXseparate-backslash-member"
+    source = _archive_bytes(
+        [
+            ("war3map.j", 0, 0, b'"Models/Hero.mdl"', True),
+            ("Models/Hero.mdx", 0, 0, slash_model, True),
+            (r"Models\Hero.mdx", 0, 0, backslash_model, True),
+            ("Models/Hero_Portrait.mdx", 0, 0, b"MDLXslash-portrait", True),
+            ("Textures/slash.blp", 0, 0, b"BLP1slash-texture", True),
+        ]
+    )
+
+    output = _export(tmp_path, source)
+
+    rows = _manifest(output)
+    assert {row["block"] for row in rows} == {"1", "2", "3", "4"}
+    payloads = {(output / json.loads(row["path"])).read_bytes() for row in rows}
+    assert payloads == {
+        slash_model,
+        backslash_model,
+        b"MDLXslash-portrait",
+        b"BLP1slash-texture",
+    }
+    assert not (output / "UnknownRaw").exists()
+
+
+def test_external_slash_name_recovers_other_locales_and_their_references(
+    tmp_path: Path,
+) -> None:
+    name = "Private/source.mdx"
+    localized = b'MDLX\0"Textures/localized.blp"\0'
+    source = _archive_bytes(
+        [
+            (name, 0, 0, b"MDLXneutral", True),
+            (name, 0x0409, 0, localized, True),
+            ("Textures/localized.blp", 0, 0, b"BLP1localized", True),
+        ]
+    )
+
+    output = _export(tmp_path, source, external_names=(name,))
+
+    rows = _manifest(output)
+    assert {row["block"] for row in rows} == {"1", "2"}
+    assert (output / "Textures" / "localized.blp").read_bytes() == b"BLP1localized"
+    row = next(row for row in rows if row["block"] == "1")
+    assert (output / json.loads(row["path"])).read_bytes() == localized
+
+
+def test_raw_archive_export_revalidates_source_before_returning_success(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "map.w3x"
+    original = _archive_bytes([("war3map.j", 0, 0, b"confirmed snapshot", False)])
+    source.write_bytes(original)
+    export_impl = archive_export._export_all_impl
+
+    def export_then_change(*args, **kwargs):
+        result = export_impl(*args, **kwargs)
+        source.write_bytes(original + b"changed-before-delivery")
+        return result
+
+    monkeypatch.setattr(archive_export, "_export_all_impl", export_then_change)
+
+    with pytest.raises(MPQStorageError, match="source identity"):
+        export_all_files(str(source), str(tmp_path / "out"))
+    assert (tmp_path / "out" / "war3map.j").read_bytes() == b"confirmed snapshot"

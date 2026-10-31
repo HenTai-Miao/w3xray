@@ -7,7 +7,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Final
 
-from .base_names import BASE_CATEGORIES, BASE_NAMES_EN
+from .base_catalog import english_name_for, fine_category_names_for
 from .fields import (
     ability_field_applicable,
     ability_field_bounds,
@@ -118,8 +118,10 @@ def object_detail_title(obj: GameObject) -> str:
 
 def format_object_summary(obj: GameObject) -> str:
     """Return the stable identity summary shown before all object evidence."""
-    english_name = BASE_NAMES_EN.get(obj.base_id) or BASE_NAMES_EN.get(obj.obj_id)
-    fine_category = BASE_CATEGORIES.get(obj.base_id) or BASE_CATEGORIES.get(obj.obj_id)
+    english_name = english_name_for(obj.base_id, obj.obj_id, category=obj.category)
+    fine_category = fine_category_names_for(
+        obj.base_id, obj.obj_id, category=obj.category
+    )
     lines = [
         "【对象摘要】",
         f"名称：{clean_text(obj.name) or obj.obj_id}",

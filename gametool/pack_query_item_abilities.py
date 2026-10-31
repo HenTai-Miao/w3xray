@@ -42,7 +42,7 @@ def _summaries(ability: AbilityEvidence) -> tuple[str, ...]:
         match = _ATTRIBUTE.fullmatch(key)
         if match is None:
             continue
-        value = row.value.strip().lstrip("'").strip()
+        value = row.value.strip()
         if not _NUMBER.fullmatch(value):
             continue
         field = match.group(1)

@@ -82,3 +82,18 @@ class ScriptAssignmentIndexTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_assignment_text_keeps_literal_codes_as_text_only() -> None:
+    from gametool.script_assignment_index import build_script_assignment_index
+
+    md = MapData(path="synthetic.w3x", name="字符串证据")
+    md.scripts = {
+        "war3map.j": "set udg_Text = \"展示 'I001' 和 0x49303032\"\nset udg_Code = 'I003'",
+        "war3map.lua": "udg_Text = [=[展示 'I004' 和 FourCC('I005')]=]\nudg_Code = FourCC('I006')",
+    }
+    rows = build_script_assignment_index(md).assignments
+    assert len(rows) == 4
+    assert [row.object_codes for row in rows] == [(), ("I003",), (), ("I006",)]
+    assert "'I001'" in rows[0].string_value
+    assert "FourCC('I005')" in rows[2].string_value

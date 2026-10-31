@@ -102,6 +102,7 @@ tests/save_structure_fixture.py
 tests/skin_layers_fixture.py
 tests/source_parent_swap_fixture.py
 tests/symlink_capability.py
+tests/test_acceptance_report_safety.py
 tests/test_acceptance_requested_scope.py
 tests/test_acceptance_runner.py
 tests/test_acquisition_record_schema.py
@@ -126,6 +127,7 @@ tests/test_batch_e2e.py
 tests/test_batch_execution.py
 tests/test_batch_execution_windows_pipe.py
 tests/test_batch_extraction_gaps.py
+tests/test_batch_failed_source_identity.py
 tests/test_batch_global_evidence.py
 tests/test_batch_global_fix_acceptance.py
 tests/test_batch_global_publication.py
@@ -152,9 +154,11 @@ tests/test_batch_runner.py
 tests/test_batch_runtime.py
 tests/test_batch_runtime_runner.py
 tests/test_batch_soak.py
+tests/test_batch_stage_ownership.py
 tests/test_batch_state_reports.py
 tests/test_batch_status.py
 tests/test_blp.py
+tests/test_build_base_names.py
 tests/test_calls_execution_integration_v12.py
 tests/test_campaign.py
 tests/test_campaign_child_spellings.py
@@ -162,6 +166,7 @@ tests/test_campaign_object_inheritance.py
 tests/test_campaign_shared_object_identity.py
 tests/test_campaign_sources.py
 tests/test_campaign_spatial_diagnostics.py
+tests/test_casc_blte_validation.py
 tests/test_casc_browser.py
 tests/test_casc_cli_sources.py
 tests/test_casc_inventory.py
@@ -272,6 +277,7 @@ tests/test_gui_preplaced.py
 tests/test_gui_reference_catalog.py
 tests/test_gui_reference_selection.py
 tests/test_gui_reports.py
+tests/test_gui_review_regressions.py
 tests/test_gui_scroll.py
 tests/test_gui_source_browser_worker.py
 tests/test_gui_topbar_tooltips.py
@@ -284,8 +290,6 @@ tests/test_guide_positions_complete.py
 tests/test_guide_report.py
 tests/test_guide_window_callbacks.py
 tests/test_historical_icon_backfill.py
-tests/test_json_evidence.py
-tests/test_report_file_proof.py
 tests/test_huffman.py
 tests/test_icon_candidate_bindings.py
 tests/test_icon_candidate_input_normalization.py
@@ -307,9 +311,11 @@ tests/test_item_query_details.py
 tests/test_item_relation_exports.py
 tests/test_item_relation_models.py
 tests/test_item_relation_resilience.py
+tests/test_item_relation_script_bindings.py
 tests/test_item_relation_scripts.py
 tests/test_item_relations.py
 tests/test_jass_natives.py
+tests/test_json_evidence.py
 tests/test_knowledge_pack.py
 tests/test_knowledge_pack_item_relations.py
 tests/test_knowledge_pack_manifest.py
@@ -330,15 +336,19 @@ tests/test_knowledge_pack_script_trigger_registration_index.py
 tests/test_knowledge_pack_script_variable_usage_index.py
 tests/test_knowledge_pack_world.py
 tests/test_knowledge_results.py
+tests/test_knowledge_script_exports.py
 tests/test_live_cli.py
 tests/test_live_field_evidence.py
 tests/test_live_handle_chain.py
 tests/test_live_handle_validation.py
+tests/test_live_icon_matching.py
 tests/test_live_icon_paths.py
 tests/test_live_inventory_chain.py
 tests/test_live_inventory_names_roundtrip.py
+tests/test_live_names_fallback.py
 tests/test_live_object_dump.py
 tests/test_live_owned_units.py
+tests/test_live_process_discovery.py
 tests/test_live_process_images.py
 tests/test_live_profile.py
 tests/test_live_profile_json.py
@@ -346,6 +356,7 @@ tests/test_live_profile_validation.py
 tests/test_live_report.py
 tests/test_live_report_cli.py
 tests/test_live_resource_layout.py
+tests/test_live_scan_cancellation.py
 tests/test_live_selection_complete.py
 tests/test_live_unit_query.py
 tests/test_load_context_compat.py
@@ -389,15 +400,18 @@ tests/test_object_materialization.py
 tests/test_object_pipeline.py
 tests/test_object_pipeline_priority.py
 tests/test_object_skin_layers.py
+tests/test_object_source_completeness.py
 tests/test_object_text_identity.py
 tests/test_object_text_index.py
 tests/test_object_text_pipeline.py
 tests/test_object_text_priority.py
 tests/test_object_text_roles.py
 tests/test_object_text_sources.py
+tests/test_offline_report_boundaries.py
 tests/test_orders.py
 tests/test_pack_query_affix.py
 tests/test_pack_query_cli.py
+tests/test_pack_query_combat_evidence.py
 tests/test_pack_query_script_calls.py
 tests/test_pack_query_script_calls_snapshot.py
 tests/test_pack_query_tooltip_hints.py
@@ -416,9 +430,11 @@ tests/test_query_diff_integrity.py
 tests/test_query_evidence_complete.py
 tests/test_query_execution.py
 tests/test_query_field_tables.py
+tests/test_query_heroes_main_category.py
 tests/test_query_indexed_placement_evidence.py
 tests/test_query_item_ability_evidence.py
 tests/test_query_item_prices.py
+tests/test_query_legacy_script_identity.py
 tests/test_query_limit_contract.py
 tests/test_query_object_field_details.py
 tests/test_query_object_lists_complete.py
@@ -432,6 +448,7 @@ tests/test_query_search_complete.py
 tests/test_query_search_field_records.py
 tests/test_query_search_records.py
 tests/test_query_spatial_source_identity.py
+tests/test_query_table_delivery.py
 tests/test_query_tech_details.py
 tests/test_query_text_records.py
 tests/test_query_tsv_bom.py
@@ -439,6 +456,7 @@ tests/test_real_map_item_relation_acceptance.py
 tests/test_real_map_text_acceptance.py
 tests/test_real_save_files.py
 tests/test_real_save_json_classification.py
+tests/test_real_save_mpq_entries.py
 tests/test_real_session_extraction_coverage.py
 tests/test_real_session_live_api.py
 tests/test_real_session_live_capture.py
@@ -479,9 +497,11 @@ tests/test_release_platform_live_cli.py
 tests/test_release_query_workflows.py
 tests/test_release_readiness.py
 tests/test_release_script_evidence.py
+tests/test_report_file_proof.py
 tests/test_requirement_coverage_dynamic.py
 tests/test_resource_candidates.py
 tests/test_resource_inventory.py
+tests/test_resource_slk_values.py
 tests/test_resources.py
 tests/test_safe_output.py
 tests/test_save_analysis.py
@@ -559,6 +579,7 @@ tests/test_spatial_query_completeness.py
 tests/test_standalone_object_inheritance.py
 tests/test_static_extraction_workflow.py
 tests/test_static_numbers.py
+tests/test_storage_cache_boundaries.py
 tests/test_supplemental_conflicts.py
 tests/test_supplemented_archive.py
 tests/test_task7_followup.py
@@ -569,6 +590,7 @@ tests/test_test_scope.py
 tests/test_text_table_icon_fields.py
 tests/test_textobj.py
 tests/test_textobj_lossless.py
+tests/test_trigger_deep_exports.py
 tests/test_trigger_schema.py
 tests/test_triggerdata_semantics.py
 tests/test_trusted_description_cache.py
@@ -582,7 +604,6 @@ tests/test_w3obj.py
 tests/test_w3obj_evidence.py
 tests/test_w3world.py
 tests/test_war3_encoding.py
-tests/test_pack_query_combat_evidence.py
 tests/test_wct.py
 tests/test_windows_acceptance_assets.py
 tests/test_windows_acceptance_support.py
@@ -590,8 +611,10 @@ tests/test_windows_only_distribution.py
 tests/test_windows_real_install_workflow.py
 tests/test_windows_safe_output_paths.py
 tests/test_windows_source_reads.py
+tests/test_windows_source_relative_paths.py
 tests/test_windows_worker_memory.py
 tests/test_wtg.py
+tests/test_wtg_deep_tree.py
 tests/test_wtg_eca_exports.py
 tests/test_wtg_real_fixture.py
 tests/test_wts.py

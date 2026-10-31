@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from typing import TYPE_CHECKING, assert_never
 
-from .base_names import BASE_NAMES
+from .base_catalog import base_name_for
 from .base_objects import BASE_OBJECTS
 from .map_archive_reader import MapArchiveReader
 from .map_data import GameObject, MapData
@@ -86,7 +86,7 @@ def _cached_base_candidates(
                 ObjectFieldValue(
                     "display:name",
                     "名称",
-                    BASE_NAMES.get(base_id, base_id),
+                    base_name_for(base_id, category=category) or base_id,
                     "base names",
                     ObjectSourceKind.BASE,
                 ),
@@ -115,15 +115,15 @@ def populate_object_pipeline_from_context(
 
 
 def _object_source_counts(candidates: tuple[ObjectCandidate, ...]) -> dict[str, int]:
-    identities: set[tuple[str, str]] = set()
+    identities: set[tuple[str, str, str]] = set()
     for candidate in candidates:
         kinds = {field.source_kind for field in candidate.fields}
         if not kinds:
             kinds = {_source_kind_from_ext(candidate.ext)}
         for kind in kinds:
-            identities.add((_source_label(kind), candidate.obj_id))
+            identities.add((_source_label(kind), candidate.category, candidate.obj_id))
     counts: dict[str, int] = {}
-    for label, _obj_id in sorted(identities):
+    for label, _category, _obj_id in sorted(identities):
         counts[label] = counts.get(label, 0) + 1
     return counts
 
@@ -191,18 +191,19 @@ def add_base_objects(
     base_objects: BaseObjectTable = BASE_OBJECTS,
 ) -> None:
     """Compatibility path that adds named bases without creating duplicates."""
-    existing = build_object_index(
+    identities = build_object_identity_index(
         item for values in md.objects.values() for item in values
     )
     additions = merge_object_candidates(
         named_base_candidates(base_objects), base_objects
     )
     for item in additions:
-        if item.obj_id in existing:
+        identity = (item.category, item.obj_id)
+        if identity in identities:
             continue
         md.objects.setdefault(item.category, []).append(item)
-        existing[item.obj_id] = item
-    md.obj_index = existing
-    md.obj_identity_index = build_object_identity_index(
+        identities[identity] = item
+    md.obj_index = build_object_index(
         item for values in md.objects.values() for item in values
     )
+    md.obj_identity_index = identities

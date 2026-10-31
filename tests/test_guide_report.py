@@ -3,6 +3,7 @@
 import pytest
 
 from gametool.base_names import BASE_CATEGORIES, BASE_NAMES
+from gametool.base_objects import BASE_OBJECTS
 from gametool.doo import Unit
 from gametool.guide_cli import GuideCliOptionError, parse_guide_cli_options
 from gametool.guide_report import format_guide_report
@@ -116,6 +117,7 @@ def _map_data(monkeypatch: pytest.MonkeyPatch) -> MapData:
     monkeypatch.setitem(BASE_CATEGORIES, "Zh0", ("英雄", "Hero"))
     monkeypatch.setitem(BASE_CATEGORIES, "hpea", ("单位", "Peasant"))
     monkeypatch.setitem(BASE_NAMES, "Zh0", "测试英雄")
+    monkeypatch.setitem(BASE_OBJECTS, "Zh0", ("单位", []))
     return MapData(
         path="t.w3x",
         name="测试图",
@@ -391,6 +393,95 @@ def test_empty_evidence_keeps_only_basic_section() -> None:
     assert "【任务说明】" not in report
     assert "【英雄阵容】" not in report
     assert "【合成配方】" not in report
+
+
+def test_guide_text_calls_ignore_comments_and_displayed_source_examples() -> None:
+    md = MapData(path="synthetic.w3x", name="文本绑定")
+    md.scripts = {
+        "war3map.lua": """
+-- CreateQuestBJ(0,"假任务注释","隐藏假波次","icon")
+local example=[=[CreateQuestBJ(0,"假任务文本","假内容","icon")]=]
+local example2=[=[BJDebugMsg("第999波假公告")]=]
+CreateQuestBJ(0,'真实任务',[=[真实说明]=],'icon')
+CreateTimerDialogBJ(timer,'真实倒计时')
+DisplayTextToPlayer(ChoosePlayer('第888波接收者参数'),0,0,[=[第1波真实公告]=])
+"""
+    }
+    quests = format_guide_report(md, "quests")
+    clues = format_guide_report(md, "clues")
+    assert "◆ 真实任务" in quests and "真实说明" in quests
+    assert "假任务" not in quests
+    assert "计时器标签：真实倒计时" in clues
+    assert "播报：第1波真实公告" in clues
+    assert "第999波" not in clues and "第888波" not in clues
+
+
+def test_shadowed_guide_text_functions_keep_complete_unconfirmed_calls() -> None:
+    md = MapData(path="synthetic.w3x", name="未确认文本")
+    md.scripts = {
+        "war3map.lua": "local CreateQuestBJ=custom local BJDebugMsg=custom "
+        "CreateQuestBJ(0,'候选任务','候选内容','icon') BJDebugMsg('第9波候选')"
+    }
+    quests = format_guide_report(md, "quests")
+    clues = format_guide_report(md, "clues")
+    assert "- ◆ 候选任务" not in quests and "未确认任务调用" in quests
+    assert "CreateQuestBJ(0,'候选任务','候选内容','icon')" in quests
+    assert "- 播报：第9波候选" not in clues and "未确认计时器/播报调用" in clues
+    assert "BJDebugMsg('第9波候选')" in clues
+    assert "war3map.lua:1 / 偏移" in quests and "诊断" in clues
+
+
+def test_guide_quest_keeps_dynamic_suffix_without_publishing_partial_title() -> None:
+    md = MapData(path="synthetic.w3x", name="完整任务实参")
+    md.scripts = {"war3map.lua": "CreateQuestBJ(0,'标题'..suffix,'说明','icon')"}
+    report = format_guide_report(md, "quests")
+    assert "- ◆ 标题" not in report
+    assert "'标题'..suffix" in report and "文本实参不是完整已知字面量" in report
+
+
+def test_jass_object_literals_are_not_guide_text() -> None:
+    md = MapData(path="synthetic.w3x", name="JASS 文本类型")
+    md.scripts = {
+        "war3map.j": "function Init takes nothing returns nothing\n"
+        'call CreateQuestBJ(0,\'Q001\',"body","icon")\n'
+        "call BJDebugMsg('boss')\n"
+        'call CreateQuestBJ(0,"真实标题","真实说明","icon")\n'
+        'call BJDebugMsg("第1波真实播报")\n'
+        "endfunction"
+    }
+    quests = format_guide_report(md, "quests")
+    clues = format_guide_report(md, "clues")
+    assert "◆ Q001" not in quests and "未确认任务调用" in quests
+    assert 'CreateQuestBJ(0,\'Q001\',"body","icon")' in quests
+    assert "- 播报：boss" not in clues and "未确认计时器/播报调用" in clues
+    assert "BJDebugMsg('boss')" in clues
+    assert "◆ 真实标题" in quests and "真实说明" in quests
+    assert "播报：第1波真实播报" in clues
+
+
+def test_guide_hero_category_collision_keeps_candidate_and_both_names() -> None:
+    unit = GameObject("单位", "w3u", "X001", "Hpal", "英雄候选", True)
+    item = GameObject("物品", "w3t", "X001", "Hpal", "物品候选", True)
+    md = MapData(path="synthetic.w3x", name="同码对象")
+    md.objects = {"单位": [unit], "物品": [item]}
+    md.obj_index = {"X001": item}
+    md.units = [Unit(type_id="X001", variation=0, x=1, y=2, z=0, angle=0, player=0)]
+    report = format_guide_report(md, "heroes")
+    assert "未确认预放置英雄候选 X001" in report
+    assert "英雄候选" in report and "物品候选" in report
+    assert "预放置 ×1" not in report
+    md.objects = {"物品": [item]}
+    assert format_guide_report(md, "heroes") == ""
+
+
+def test_unknown_script_language_is_not_interpreted_as_jass_acquisition() -> None:
+    md = MapData(path="synthetic.w3x", name="未知源码语言")
+    md.scripts = {"unknown.txt": _SCRIPT}
+    drops = format_guide_report(md, "drops")
+    loot = format_guide_report(md, "loot")
+    assert "来源语言未知" in drops and "unknown.txt" in drops
+    assert "脚本死亡掉落" not in drops
+    assert "来源语言未知" in loot and "随机产出" not in loot
 
 
 def test_parse_guide_cli_options_accepts_section() -> None:

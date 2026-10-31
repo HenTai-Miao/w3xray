@@ -45,6 +45,38 @@ def test_doubled_quotes_backslashes_and_boolean_composition_are_literal() -> Non
     assert compile_query(encode_literal_query(quotes)).score(quotes) is not None
 
 
+@pytest.mark.parametrize(
+    "value", ["剑（神话）", "名字｜说明", "带“引号”的名字", "全角）||（符号"]
+)
+def test_exact_literal_preserves_fullwidth_and_smart_punctuation(value: str) -> None:
+    compiled = compile_query(encode_literal_query(value))
+    assert compiled.score(value) is not None
+    changed = value.translate(
+        str.maketrans({"（": "(", "）": ")", "｜": "|", "“": '"', "”": '"'})
+    )
+    assert compiled.score(changed) is None
+
+
+def test_smart_syntax_is_normalized_only_outside_exact_literals() -> None:
+    compiled = compile_query('（=“火焰” ｜｜ ="寒冰（强化）"） && ="装备”标签"')
+    assert compiled.score_fields(("火焰", "装备”标签")) is not None
+    assert compiled.score_fields(("寒冰（强化）", "装备”标签")) is not None
+    assert compiled.score_fields(("寒冰(强化)", "装备”标签")) is None
+    assert compile_query(r"\（词\）").score("（词）") is not None
+
+
+def test_exact_fullwidth_object_name_reaches_public_query(tmp_path: Path) -> None:
+    pack = _pack(tmp_path, "单位", "x001")
+    path = pack / "对象ID" / "单位.tsv"
+    path.write_bytes(
+        path.read_bytes().replace("目标记录".encode(), "英雄（觉醒）".encode())
+    )
+    result = execute_pack_query(
+        PackQueryCliOptions(str(pack), "units", encode_literal_query("英雄（觉醒）"))
+    )
+    assert result.exit_code == 0 and "[x001] 英雄（觉醒）" in result.render()
+
+
 def _pack(tmp_path: Path, category: str, code: str) -> Path:
     pack = tmp_path / "pack"
     tables = pack / "对象ID"

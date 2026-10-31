@@ -202,7 +202,9 @@ def test_context_commands_preserve_copy_export_refresh_query_and_near(
     monkeypatch.setattr(guide.box, "clipboard_clear", lambda: None)
     monkeypatch.setattr(guide.box, "clipboard_append", copied.append)
     monkeypatch.setattr(
-        gui_topbar, "_export_guide", lambda app, text: exported.append((app, text))
+        gui_topbar,
+        "_export_guide",
+        lambda app, text, *, map_name: exported.append((app, text, map_name)),
     )
     monkeypatch.setattr(
         gui_topbar,
@@ -215,7 +217,7 @@ def test_context_commands_preserve_copy_export_refresh_query_and_near(
     assert copied == ["物品 [I001]", guide.box.get("1.0", "end")]
     guide.menu.invoke("导出报告 (.md)")
     guide.menu.invoke("强制重算 (清缓存刷新报告)")
-    assert exported == [(guide.root, guide.box.get("1.0", "end"))]
+    assert exported == [(guide.root, guide.box.get("1.0", "end"), "合成攻略")]
     assert refreshed == [(guide.root, True)]
     for label in (
         "用选中/剪贴板码查包查询",
@@ -237,6 +239,30 @@ def test_context_commands_preserve_copy_export_refresh_query_and_near(
         "1.25 -2.5 500",
         "1.25 -2.5 100",
     ]
+    assert guide.errors == []
+
+
+def test_guide_export_keeps_source_name_and_refresh_rejects_switched_map(
+    guide: Guide, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    exports = []
+    refreshes = []
+    monkeypatch.setattr(
+        gui_topbar,
+        "_export_guide",
+        lambda _app, text, *, map_name: exports.append((map_name, text)),
+    )
+    monkeypatch.setattr(
+        gui_topbar, "_show_guide", lambda *args, **kwargs: refreshes.append(args)
+    )
+    monkeypatch.setattr(
+        guide.root, "map_data", MapData(path="other-map.w3x", name="另一张地图")
+    )
+    guide.menu.invoke("导出报告 (.md)")
+    guide.menu.invoke("强制重算 (清缓存刷新报告)")
+    assert exports == [("合成攻略", guide.box.get("1.0", "end"))]
+    assert refreshes == []
+    assert "地图已切换" in getattr(guide.root, "status").cget("text")
     assert guide.errors == []
 
 

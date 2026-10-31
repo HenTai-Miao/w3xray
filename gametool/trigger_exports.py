@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from .wtg import TriggerCategory, TriggerTreeSummary
     from .wtg_eca import TriggerEcaFunction, TriggerEcaParameter
 
-from .triggerdata import TriggerDataTable, render_eca_semantic
+from .triggerdata import TriggerDataTable, TriggerSemanticRenderer
 from .wtg_eca import function_type_label, parameter_type_label
 
 
@@ -73,13 +73,12 @@ def format_trigger_eca_tsv(
     ]
     if summary is None:
         return "\n".join(rows) + "\n"
+    renderer = TriggerSemanticRenderer(trigger_data, wts=wts, object_names=object_names)
     for function in summary.eca_functions:
         _append_eca_function(
             rows,
             function,
-            trigger_data,
-            wts,
-            object_names,
+            renderer,
             depth=function.depth,
             row_type="顶层函数",
             parent_parameter=None,
@@ -122,9 +121,65 @@ def _category_names(categories: tuple[TriggerCategory, ...]) -> dict[int, str]:
 def _append_eca_function(
     rows: list[str],
     function: TriggerEcaFunction,
-    trigger_data: TriggerDataTable | None,
-    wts: Mapping[int, str] | None,
-    object_names: Mapping[str, str] | None,
+    renderer: TriggerSemanticRenderer,
+    *,
+    depth: int,
+    row_type: str,
+    parent_parameter: int | None,
+) -> None:
+    pending: list[
+        tuple[TriggerEcaFunction, TriggerEcaParameter | None, int, int, str, int | None]
+    ] = [(function, None, 0, depth, row_type, parent_parameter)]
+    while pending:
+        function, parameter, index, depth, row_type, parent_parameter = pending.pop()
+        if parameter is not None:
+            _append_eca_parameter(
+                rows,
+                function,
+                index,
+                parameter,
+                row_type=row_type,
+                depth=depth,
+                parent_parameter=parent_parameter,
+            )
+            if parameter.array_indexer is not None:
+                pending.append(
+                    (
+                        function,
+                        parameter.array_indexer,
+                        index,
+                        depth + 1,
+                        "数组索引",
+                        index,
+                    )
+                )
+            if parameter.nested_function is not None:
+                pending.append(
+                    (parameter.nested_function, None, 0, depth + 1, "嵌套函数", index)
+                )
+            continue
+        _append_eca_function_row(
+            rows,
+            function,
+            renderer,
+            depth=depth,
+            row_type=row_type,
+            parent_parameter=parent_parameter,
+        )
+        pending.extend(
+            (child, None, 0, depth + 1, "子ECA", None)
+            for child in reversed(function.children)
+        )
+        pending.extend(
+            (function, parameter, index, depth, "参数", None)
+            for index, parameter in reversed(tuple(enumerate(function.parameters)))
+        )
+
+
+def _append_eca_function_row(
+    rows: list[str],
+    function: TriggerEcaFunction,
+    renderer: TriggerSemanticRenderer,
     *,
     depth: int,
     row_type: str,
@@ -143,44 +198,13 @@ def _append_eca_function(
                 "",
                 "",
                 "",
-                _tsv(
-                    render_eca_semantic(
-                        function,
-                        trigger_data,
-                        wts=wts,
-                        object_names=object_names,
-                    )
-                ),
+                _tsv(renderer.render(function)),
                 str(function.ordinal),
                 str(function.branch),
                 "" if parent_parameter is None else str(parent_parameter),
             )
         )
     )
-    for index, parameter in enumerate(function.parameters):
-        _append_eca_parameter(
-            rows,
-            function,
-            index,
-            parameter,
-            trigger_data,
-            wts,
-            object_names,
-            row_type="参数",
-            depth=depth,
-            parent_parameter=None,
-        )
-    for child in function.children:
-        _append_eca_function(
-            rows,
-            child,
-            trigger_data,
-            wts,
-            object_names,
-            depth=depth + 1,
-            row_type="子ECA",
-            parent_parameter=None,
-        )
 
 
 def _append_eca_parameter(
@@ -188,9 +212,6 @@ def _append_eca_parameter(
     function: TriggerEcaFunction,
     index: int,
     parameter: TriggerEcaParameter,
-    trigger_data: TriggerDataTable | None,
-    wts: Mapping[int, str] | None,
-    object_names: Mapping[str, str] | None,
     *,
     row_type: str,
     depth: int,
@@ -216,30 +237,6 @@ def _append_eca_parameter(
             )
         )
     )
-    if parameter.nested_function is not None:
-        _append_eca_function(
-            rows,
-            parameter.nested_function,
-            trigger_data,
-            wts,
-            object_names,
-            depth=depth + 1,
-            row_type="嵌套函数",
-            parent_parameter=index,
-        )
-    if parameter.array_indexer is not None:
-        _append_eca_parameter(
-            rows,
-            function,
-            index,
-            parameter.array_indexer,
-            trigger_data,
-            wts,
-            object_names,
-            row_type="数组索引",
-            depth=depth + 1,
-            parent_parameter=index,
-        )
 
 
 def _append_diagnostics(

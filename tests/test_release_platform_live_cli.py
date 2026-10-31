@@ -2,6 +2,7 @@
 
 import builtins
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -42,6 +43,41 @@ def test_dump_failure_returns_diagnostic_exit_two(
 
     assert status == 2
     assert "fixture snapshot failure" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("completed", "objects", "registered", "affixes", "expected"),
+    (
+        (True, 1, 0, 0, 0),
+        (True, 0, 1, 0, 0),
+        (True, 0, 0, 1, 0),
+        (True, 0, 0, 0, 2),
+        (False, 1, 0, 0, 2),
+        (False, 0, 1, 1, 2),
+    ),
+)
+def test_dump_success_requires_complete_publication_with_any_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    completed: bool,
+    objects: int,
+    registered: int,
+    affixes: int,
+    expected: int,
+) -> None:
+    result = SimpleNamespace(
+        completed=completed,
+        objects=objects,
+        registered_records=registered,
+        affix_records=affixes,
+    )
+    monkeypatch.setattr(
+        "gametool.live_object_dump.dump_live_objects", lambda *args: result
+    )
+    assert (
+        live_cli.run_live_cli(live_cli.LiveCliOptions(dump_objects=str(tmp_path)))
+        == expected
+    )
 
 
 def test_missing_pack_stops_before_live_process_access(

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 from collections import defaultdict
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import assert_never
 
 from .object_text_evidence import (
@@ -142,7 +143,14 @@ def _conflict_group(
     raw_values: set[str],
 ) -> str:
     payload = "\x1f".join(
-        (*map(str, identity), str(priority), *sorted(raw_values)),
+        (
+            *(
+                str(Decimal(value)) if isinstance(value, int) else str(value)
+                for value in identity
+            ),
+            str(priority),
+            *sorted(raw_values),
+        ),
     )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
 

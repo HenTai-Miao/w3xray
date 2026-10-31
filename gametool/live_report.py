@@ -202,7 +202,13 @@ def write_live_report(path: str | os.PathLike[str], report: Mapping[str, Any]) -
         "report": payload,
     }
     encoded = (format_report_json(document) + "\n").encode("utf-8", errors="strict")
-    return write_report_bytes(path, encoded)
+    return write_report_bytes(
+        path,
+        encoded,
+        verify_source=(lambda: verify_report_source(report.source))
+        if isinstance(report, LiveReport) and report.source
+        else None,
+    )
 
 
 def read_live_report(path: str | os.PathLike[str]) -> LiveReport:
@@ -254,7 +260,13 @@ def compare_live_reports(
 
     old_value = _validate_report(parse_report_json(format_report_json(old)))
     new_value = _validate_report(parse_report_json(format_report_json(new)))
-    return LiveReportDiff(compare_report_values(old_value, new_value, old=old, new=new))
+    result = LiveReportDiff(
+        compare_report_values(old_value, new_value, old=old, new=new)
+    )
+    for report in (old, new):
+        if isinstance(report, LiveReport) and report.source:
+            verify_report_source(report.source)
+    return result
 
 
 def format_live_report_diff(result: Mapping[str, Any]) -> str:

@@ -66,7 +66,7 @@ def test_transient_table_failure_can_recover_in_the_same_process(
         raise PermissionError("temporary lock")
 
     with monkeypatch.context() as scoped:
-        scoped.setattr(queries.hashlib, "file_digest", denied)
+        scoped.setattr(Path, "open", denied)
         scoped.setattr(queries.time, "sleep", lambda _delay: None)
         assert queries._read_rows(tmp_path, path.name) == []
     assert queries._read_rows(tmp_path, path.name) == [["key", "value"]]

@@ -168,3 +168,35 @@ def test_repeating_the_same_export_reuses_both_stable_paths(tmp_path: Path) -> N
     # Then
     assert second.original_relative_path == first.original_relative_path
     assert second.png_relative_path == first.png_relative_path
+
+
+def test_hash_suffix_collision_preserves_every_different_original(
+    tmp_path: Path,
+) -> None:
+    original = _named_resource("Icons/BTN.blp", b"BLP1first")
+    incoming = _named_resource("Icons/BTN.blp", b"BLP1second")
+    occupying = _named_resource(
+        f"Icons/BTN_{incoming.sha256[:8]}.blp", b"BLP1occupied suffix"
+    )
+    first = export_named_icon(str(tmp_path), original)
+    occupied = export_named_icon(str(tmp_path), occupying)
+
+    added = export_named_icon(str(tmp_path), incoming)
+    repeated = export_named_icon(str(tmp_path), incoming)
+
+    assert (tmp_path / first.original_relative_path).read_bytes() == original.payload
+    assert (
+        tmp_path / occupied.original_relative_path
+    ).read_bytes() == occupying.payload
+    assert (tmp_path / added.original_relative_path).read_bytes() == incoming.payload
+    assert (
+        len(
+            {
+                first.original_relative_path,
+                occupied.original_relative_path,
+                added.original_relative_path,
+            }
+        )
+        == 3
+    )
+    assert repeated.original_relative_path == added.original_relative_path

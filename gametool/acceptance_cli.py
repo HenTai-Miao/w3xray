@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 from contextlib import contextmanager
 from collections.abc import Iterator
 from pathlib import Path
@@ -11,10 +12,13 @@ from pathlib import Path
 from .acceptance_runner import (
     AcceptanceConfig,
     AcceptanceStatus,
+    prepare_acceptance_report,
     run_acceptance,
     write_acceptance_report,
 )
 from .dev_test import create_test_environment
+from .presentation_safety import format_user_exception
+from .windows_output_paths import validate_output_root
 
 
 @contextmanager
@@ -50,8 +54,8 @@ def run_acceptance_cli(argv: tuple[str, ...]) -> int:
         default=_environment_war3_dir(),
         help="可选：真实 CASC 安装目录；未提供时不请求此检查",
     )
-    parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--report", type=Path)
+    parser.add_argument("--output", required=True, type=_output_path)
+    parser.add_argument("--report", type=_output_path)
     parser.add_argument("--repeat", type=_positive_int, default=5)
     parser.add_argument("--require-windows", action="store_true")
     parser.add_argument("--no-gui", action="store_true")
@@ -66,9 +70,19 @@ def run_acceptance_cli(argv: tuple[str, ...]) -> int:
         run_gui=not args.no_gui,
         require_windows=args.require_windows,
     )
-    with _private_acceptance_environment():
-        report = run_acceptance(config)
-    write_acceptance_report(report, report_path)
+    try:
+        report_path = prepare_acceptance_report(report_path)
+        with _private_acceptance_environment():
+            report = run_acceptance(config)
+        write_acceptance_report(report, report_path)
+    except (OSError, ValueError) as exc:
+        print(
+            "验收无法完成："
+            + format_user_exception(exc, paths=(str(report_path),))
+            + "；请选择新的报告文件和可写的普通输出目录。",
+            file=sys.stderr,
+        )
+        return 2
     for check in report.checks:
         print(f"[{check.status.value.upper()}] {check.name}: {check.detail}")
     for check in report.not_requested:
@@ -87,6 +101,15 @@ def _positive_int(value: str) -> int:
     if parsed < 1:
         raise argparse.ArgumentTypeError("must be greater than zero")
     return parsed
+
+
+def _output_path(value: str) -> Path:
+    """Validate Windows spellings before Path can normalize their separators."""
+    try:
+        validate_output_root(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+    return Path(value)
 
 
 def _war3_dir(value: str) -> Path:

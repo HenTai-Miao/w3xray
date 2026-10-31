@@ -9,10 +9,7 @@ import re
 from typing import Final, TypedDict, override
 
 from .icon_resources import IconObjectReference
-
-type JsonValue = (
-    str | int | float | bool | list["JsonValue"] | dict[str, "JsonValue"] | None
-)
+from .json_evidence import JsonNode, parse_json_evidence
 
 _IDENTITY_KEYS: Final = frozenset(("map", "sha256"))
 _SHA256: Final = re.compile(r"[0-9a-f]{64}")
@@ -62,23 +59,35 @@ def parse_icon_report_map_identities(
 ) -> tuple[IconReportMapIdentity, ...]:
     """Parse a nonempty, unique set of exact logical map identities."""
     try:
-        value: JsonValue = json.loads(text)
-    except json.JSONDecodeError as exc:
+        nodes, root = parse_json_evidence(text)
+    except ValueError as exc:
         raise IconReportMapIdentityFormatError("malformed icon map JSON") from exc
-    if not isinstance(value, list) or not value:
+    value = nodes[root]
+    if value.kind != "array" or not value.elements:
         raise IconReportMapIdentityFormatError("icon map identity set is empty")
-    identities = tuple(_parse_identity(item) for item in value)
+    identities = tuple(_parse_identity(nodes, item) for item in value.elements)
     if len(set(identities)) != len(identities):
         raise IconReportMapIdentityFormatError("duplicate icon map identity")
     return identities
 
 
-def _parse_identity(value: JsonValue) -> IconReportMapIdentity:
-    if not isinstance(value, dict) or set(value) != _IDENTITY_KEYS:
+def _parse_identity(nodes: tuple[JsonNode, ...], index: int) -> IconReportMapIdentity:
+    node = nodes[index]
+    if (
+        node.kind != "object"
+        or len(node.members) != len(_IDENTITY_KEYS)
+        or {member.key for member in node.members} != _IDENTITY_KEYS
+    ):
         raise IconReportMapIdentityFormatError("unexpected icon map identity keys")
-    map_path = value["map"]
-    map_sha256 = value["sha256"]
-    if not isinstance(map_path, str) or not isinstance(map_sha256, str):
+    value = {member.key: nodes[member.node] for member in node.members}
+    map_path = value["map"].value
+    map_sha256 = value["sha256"].value
+    if (
+        value["map"].kind != "string"
+        or value["sha256"].kind != "string"
+        or not isinstance(map_path, str)
+        or not isinstance(map_sha256, str)
+    ):
         raise IconReportMapIdentityFormatError("icon map identity value is not text")
     if not map_path or _SHA256.fullmatch(map_sha256) is None:
         raise IconReportMapIdentityFormatError("invalid icon map identity")

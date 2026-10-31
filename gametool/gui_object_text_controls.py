@@ -32,6 +32,7 @@ class ObjectTextControlsMixin:
             font=(FONT, 12, "bold"),
             width=112,
             command=self._copy_complete_text,
+            state="disabled",
             fg_color=SECONDARY,
             hover_color=SECONDARY_HOVER,
             text_color=TEXT,

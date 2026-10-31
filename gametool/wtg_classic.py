@@ -22,62 +22,74 @@ from .wtg_reader import WtgReader
 def parse_classic(
     reader: WtgReader, version: int, schema: TriggerSchema | None
 ) -> TriggerTreeSummary:
-    categories = tuple(
-        _read_category(reader, version) for _ in range(reader.bounded_count("category"))
-    )
-    reader.i32()
-    variables = tuple(
-        _read_variable(reader, version) for _ in range(reader.bounded_count("variable"))
-    )
-    trigger_count = reader.bounded_count("trigger")
+    categories: list[TriggerCategory] = []
+    variables: list[TriggerVariable] = []
+    trigger_count = 0
     triggers: list[TriggerHeader] = []
     eca_functions = []
     missing: list[UnknownTriggerFunction] = []
     failures: list[TriggerParseFailure] = []
-    for _index in range(trigger_count):
-        trigger = _read_trigger(reader, version)
-        triggers.append(trigger)
-        if trigger.function_count <= 0:
-            continue
-        if schema is None:
+    try:
+        # Reads stop at the first incomplete record, preserving every complete
+        # predecessor even when a corrupt declared count exceeds the byte bound.
+        for _ in range(reader.bounded_count("category", minimum_size=0)):
+            categories.append(_read_category(reader, version))
+        reader.i32()
+        for _ in range(reader.bounded_count("variable", minimum_size=0)):
+            variables.append(_read_variable(reader, version))
+        trigger_count = reader.bounded_count("trigger", minimum_size=0)
+        for _index in range(trigger_count):
+            trigger = _read_trigger(reader, version)
+            triggers.append(trigger)
+            if trigger.function_count <= 0:
+                continue
+            if schema is None:
+                try:
+                    missing.append(
+                        _read_missing_function(reader, trigger.name, has_branch=False)
+                    )
+                except WtgReadError as exc:
+                    failures.append(
+                        TriggerParseFailure(trigger.name, "", exc.offset, exc.reason)
+                    )
+                break
             try:
-                missing.append(
-                    _read_missing_function(reader, trigger.name, has_branch=False)
+                eca_functions.extend(
+                    parse_eca_functions(
+                        reader,
+                        trigger.name,
+                        trigger.function_count,
+                        schema,
+                        version=version,
+                    )
                 )
+            except EcaParseError as exc:
+                if exc.reason == "missing TriggerData schema":
+                    missing.append(
+                        UnknownTriggerFunction(
+                            trigger.name, exc.function_name, 0, exc.offset
+                        )
+                    )
+                else:
+                    failures.append(
+                        TriggerParseFailure(
+                            trigger.name, exc.function_name, exc.offset, exc.reason
+                        )
+                    )
+                break
             except WtgReadError as exc:
                 failures.append(
                     TriggerParseFailure(trigger.name, "", exc.offset, exc.reason)
                 )
-            break
-        try:
-            eca_functions.extend(
-                parse_eca_functions(
-                    reader,
-                    trigger.name,
-                    trigger.function_count,
-                    schema,
-                    version=version,
-                )
+                break
+    except WtgReadError as exc:
+        failures.append(TriggerParseFailure("", "", exc.offset, exc.reason))
+    if not (missing or failures) and reader.remaining:
+        failures.append(
+            TriggerParseFailure(
+                "", "", reader.offset, f"{reader.remaining} trailing WTG bytes"
             )
-        except EcaParseError as exc:
-            if exc.reason == "missing TriggerData schema":
-                missing.append(
-                    UnknownTriggerFunction(
-                        trigger.name, exc.function_name, 0, exc.offset
-                    )
-                )
-            else:
-                failures.append(
-                    TriggerParseFailure(
-                        trigger.name, exc.function_name, exc.offset, exc.reason
-                    )
-                )
-            break
-        except WtgReadError as exc:
-            failures.append(
-                TriggerParseFailure(trigger.name, "", exc.offset, exc.reason)
-            )
-            break
+        )
     return TriggerTreeSummary(
         version=version,
         is_reforged=False,
@@ -86,8 +98,8 @@ def parse_classic(
         trigger_count=trigger_count,
         comment_count=sum(1 for trigger in triggers if trigger.is_comment),
         script_count=sum(1 for trigger in triggers if trigger.is_custom_text),
-        categories=categories,
-        variables=variables,
+        categories=tuple(categories),
+        variables=tuple(variables),
         triggers=tuple(triggers),
         eca_functions=tuple(eca_functions),
         has_unexpanded_functions=bool(missing or failures),

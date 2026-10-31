@@ -163,17 +163,18 @@ class TriggerEcaViewMixin:
         compiled = compile_query(query)
         for group in self._trigger_eca_groups:
             group_match = not query or compiled.score(group.name) is not None
+            matched = (
+                set() if group_match else _matching_node_ids(group.children, compiled)
+            )
             visible = tuple(
-                node
-                for node in group.children
-                if group_match or _node_matches(node, compiled)
+                node for node in group.children if group_match or node.iid in matched
             )
             if not visible:
                 continue
             tree.insert("", "end", iid=group.iid, text=group.name, open=True)
             for node in visible:
                 if query and not group_match:
-                    self._insert_filtered_node(group.iid, node, compiled)
+                    self._insert_filtered_node(group.iid, node, compiled, matched)
                 else:
                     self._insert_trigger_node(
                         group.iid,
@@ -196,36 +197,44 @@ class TriggerEcaViewMixin:
         eager_children: bool,
         reveal_iid: str = "",
     ) -> None:
-        reveal_children = bool(reveal_iid) and reveal_iid.startswith(f"{node.iid}:")
-        self.trigger_eca_tree.insert(
-            parent,
-            "end",
-            iid=node.iid,
-            text=node.function.name,
-            open=eager_children or reveal_children,
-        )
-        self._trigger_eca_nodes[node.iid] = node
-        if eager_children or reveal_children:
-            for child in node.children:
-                self._insert_trigger_node(
-                    node.iid,
-                    child,
-                    eager_children=False,
-                    reveal_iid=reveal_iid,
-                )
-        elif node.children:
+        pending = [(parent, node, eager_children)]
+        while pending:
+            parent, node, eager = pending.pop()
+            reveal = bool(reveal_iid) and reveal_iid.startswith(f"{node.iid}:")
             self.trigger_eca_tree.insert(
-                node.iid, "end", iid=f"{node.iid}:lazy", text=""
+                parent,
+                "end",
+                iid=node.iid,
+                text=node.function.name,
+                open=eager or reveal,
             )
+            self._trigger_eca_nodes[node.iid] = node
+            if eager or reveal:
+                pending.extend(
+                    (node.iid, child, False) for child in reversed(node.children)
+                )
+            elif node.children:
+                self.trigger_eca_tree.insert(
+                    node.iid, "end", iid=f"{node.iid}:lazy", text=""
+                )
 
-    def _insert_filtered_node(self, parent: str, node: _EcaNode, compiled) -> None:
-        self.trigger_eca_tree.insert(
-            parent, "end", iid=node.iid, text=node.function.name, open=True
-        )
-        self._trigger_eca_nodes[node.iid] = node
-        for child in node.children:
-            if _node_matches(child, compiled):
-                self._insert_filtered_node(node.iid, child, compiled)
+    def _insert_filtered_node(
+        self, parent: str, node: _EcaNode, compiled, matched: set[str] | None = None
+    ) -> None:
+        if matched is None:
+            matched = _matching_node_ids((node,), compiled)
+        pending = [(parent, node)]
+        while pending:
+            parent, node = pending.pop()
+            self.trigger_eca_tree.insert(
+                parent, "end", iid=node.iid, text=node.function.name, open=True
+            )
+            self._trigger_eca_nodes[node.iid] = node
+            pending.extend(
+                (node.iid, child)
+                for child in reversed(node.children)
+                if child.iid in matched
+            )
 
     def _on_trigger_eca_open(self, _event=None) -> None:
         iid = self.trigger_eca_tree.focus()
@@ -290,35 +299,66 @@ def _group_functions(
 
 
 def _build_node(function: TriggerEcaFunction, iid: str) -> _EcaNode:
-    nested = tuple(
-        node
-        for index, parameter in enumerate(function.parameters)
-        for node in _build_parameter_nodes(parameter, f"{iid}:p{index}")
-    )
-    children = tuple(
-        _build_node(child, f"{iid}:c{index}")
-        for index, child in enumerate(function.children)
-    )
-    return _EcaNode(iid, function, nested + children)
+    pending = [(function, iid, False)]
+    completed: dict[str, _EcaNode] = {}
+    while pending:
+        current, key, visited = pending.pop()
+        children: list[tuple[TriggerEcaFunction, str]] = []
+        for index, parameter in enumerate(current.parameters):
+            parameter_key = f"{key}:p{index}"
+            while True:
+                if parameter.nested_function is not None:
+                    children.append((parameter.nested_function, f"{parameter_key}:f"))
+                if parameter.array_indexer is None:
+                    break
+                parameter, parameter_key = parameter.array_indexer, f"{parameter_key}:a"
+        children.extend(
+            (child, f"{key}:c{index}") for index, child in enumerate(current.children)
+        )
+        if visited:
+            completed[key] = _EcaNode(
+                key,
+                current,
+                tuple(completed.pop(child_key) for _, child_key in children),
+            )
+        else:
+            pending.append((current, key, True))
+            pending.extend(
+                (child, child_key, False) for child, child_key in reversed(children)
+            )
+    return completed[iid]
 
 
 def _build_parameter_nodes(
     parameter: TriggerEcaParameter, iid: str
 ) -> tuple[_EcaNode, ...]:
-    nodes = (
-        ()
-        if parameter.nested_function is None
-        else (_build_node(parameter.nested_function, f"{iid}:f"),)
-    )
-    if parameter.array_indexer is None:
-        return nodes
-    return nodes + _build_parameter_nodes(parameter.array_indexer, f"{iid}:a")
+    nodes = []
+    while True:
+        if parameter.nested_function is not None:
+            nodes.append(_build_node(parameter.nested_function, f"{iid}:f"))
+        if parameter.array_indexer is None:
+            return tuple(nodes)
+        parameter, iid = parameter.array_indexer, f"{iid}:a"
 
 
 def _node_matches(node: _EcaNode, compiled) -> bool:
-    return compiled.score(_function_search_text(node.function)) is not None or any(
-        _node_matches(child, compiled) for child in node.children
-    )
+    return node.iid in _matching_node_ids((node,), compiled)
+
+
+def _matching_node_ids(nodes: tuple[_EcaNode, ...], compiled) -> set[str]:
+    """Evaluate each function once and retain every ancestor of a matching node."""
+    matched: set[str] = set()
+    pending = [(node, False) for node in reversed(nodes)]
+    while pending:
+        node, visited = pending.pop()
+        if not visited:
+            pending.append((node, True))
+            pending.extend((child, False) for child in reversed(node.children))
+        elif compiled.score(_function_search_text(node.function)) is not None or any(
+            child.iid in matched for child in node.children
+        ):
+            matched.add(node.iid)
+    return matched
 
 
 def _function_search_text(function: TriggerEcaFunction) -> str:
@@ -329,10 +369,12 @@ def _function_search_text(function: TriggerEcaFunction) -> str:
 
 
 def _parameter_search_text(parameter: TriggerEcaParameter) -> str:
-    own = f"{parameter.expected_type} {parameter.value}"
-    if parameter.array_indexer is None:
-        return own
-    return f"{own} {_parameter_search_text(parameter.array_indexer)}"
+    parts = []
+    while True:
+        parts.append(f"{parameter.expected_type} {parameter.value}")
+        if parameter.array_indexer is None:
+            return " ".join(parts)
+        parameter = parameter.array_indexer
 
 
 def _format_function_detail(function: TriggerEcaFunction) -> str:
@@ -357,21 +399,29 @@ def _format_function_detail(function: TriggerEcaFunction) -> str:
 def _append_parameter_detail(
     lines: list[str], label: str, parameter: TriggerEcaParameter
 ) -> None:
-    expected = f" / {parameter.expected_type}" if parameter.expected_type else ""
-    lines.append(
-        f"{label}. {parameter_type_label(parameter.parameter_type)}{expected}: "
-        f"{parameter.value} @ 0x{parameter.source_offset:x}"
-    )
-    if parameter.array_indexer is not None:
-        _append_parameter_detail(lines, f"{label}.索引", parameter.array_indexer)
+    while True:
+        expected = f" / {parameter.expected_type}" if parameter.expected_type else ""
+        lines.append(
+            f"{label}. {parameter_type_label(parameter.parameter_type)}{expected}: "
+            f"{parameter.value} @ 0x{parameter.source_offset:x}"
+        )
+        if parameter.array_indexer is None:
+            return
+        parameter, label = parameter.array_indexer, f"{label}.索引"
 
 
 def _count_functions(functions: tuple[TriggerEcaFunction, ...]) -> int:
-    return sum(_count_function(function) for function in functions)
+    pending = list(functions)
+    total = 0
+    while pending:
+        function = pending.pop()
+        total += 1
+        pending.extend(_function_children(function))
+    return total
 
 
 def _count_function(function: TriggerEcaFunction) -> int:
-    return 1 + sum(_count_function(child) for child in _function_children(function))
+    return _count_functions((function,))
 
 
 def _function_children(function: TriggerEcaFunction) -> tuple[TriggerEcaFunction, ...]:
@@ -386,9 +436,10 @@ def _function_children(function: TriggerEcaFunction) -> tuple[TriggerEcaFunction
 def _parameter_functions(
     parameter: TriggerEcaParameter,
 ) -> tuple[TriggerEcaFunction, ...]:
-    functions = (
-        () if parameter.nested_function is None else (parameter.nested_function,)
-    )
-    if parameter.array_indexer is None:
-        return functions
-    return functions + _parameter_functions(parameter.array_indexer)
+    functions = []
+    while True:
+        if parameter.nested_function is not None:
+            functions.append(parameter.nested_function)
+        if parameter.array_indexer is None:
+            return tuple(functions)
+        parameter = parameter.array_indexer
