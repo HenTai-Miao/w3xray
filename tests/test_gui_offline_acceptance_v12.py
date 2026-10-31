@@ -33,11 +33,11 @@ from gametool.script_behavior_index import build_script_behavior_index
 from gametool.script_sources import AnalysisScriptSource
 
 
-def test_additive_gui_export_inventory_keeps_every_original_file() -> None:
-    assert len(LEGACY_EXPORT_NAMES) == len(set(LEGACY_EXPORT_NAMES)) == 22
+def test_gui_export_inventory_keeps_all_content_analysis_files() -> None:
+    assert len(LEGACY_EXPORT_NAMES) == len(set(LEGACY_EXPORT_NAMES)) == 20
     assert len(V12_EXPORT_NAMES) == len(set(V12_EXPORT_NAMES)) == 8
     assert len(V12_CASE_NAMES) == len(set(V12_CASE_NAMES)) == 3
-    assert len(expected_export_names()) == 31
+    assert len(expected_export_names()) == 29
     assert set(LEGACY_EXPORT_NAMES) < expected_export_names()
 
 

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import base64
-from copy import deepcopy
 import hashlib
 import json
 from pathlib import Path
@@ -82,37 +80,6 @@ def _create_fixtures() -> _Fixtures:
     pack_root = root / "reference-pack"
     pack_child = pack_root / "子地图" / "章一"
     unrelated_pack = root / "unrelated-pack"
-    config: dict[str, Any] = {
-        "language": "auto",
-        "active_profile": "One",
-        "profiles": {
-            "One": {
-                "bindings": [
-                    {
-                        "binding_id": "ability_1",
-                        "source": "M",
-                        "target": "M",
-                        "group": "ability",
-                        "slot_index": 0,
-                    }
-                ]
-            },
-            "Two": {
-                "bindings": [
-                    {
-                        "binding_id": "item_1",
-                        "source": "1",
-                        "target": "1",
-                        "group": "item",
-                        "slot_index": 0,
-                    }
-                ]
-            },
-        },
-    }
-    changed = deepcopy(config)
-    changed["profiles"]["One"]["bindings"][0]["smartcast"] = True
-    hotkeys_old, hotkeys_new = root / "hotkeys-old.json", root / "hotkeys-new.json"
     payloads = {
         map_path: _fixture_map(map_names, descriptions),
         id_table: b"\xef\xbb\xbf" + "".join(blocks).encode("utf-8"),
@@ -125,12 +92,6 @@ def _create_fixtures() -> _Fixtures:
             f'[save]\r\nnote="{marker} beta 完整记录"\r\ngold=0\r\n'
         ).encode("utf-8"),
         save_utf16: save_utf16_text.encode("utf-16-le"),
-        hotkeys_old: (json.dumps(config, ensure_ascii=False, indent=2) + "\n").encode(
-            "utf-8"
-        ),
-        hotkeys_new: (json.dumps(changed, ensure_ascii=False, indent=2) + "\n").encode(
-            "utf-8"
-        ),
     }
     from .batch_tsv import format_tsv_rows
 
@@ -181,8 +142,6 @@ def _create_fixtures() -> _Fixtures:
         pack_root,
         pack_child,
         unrelated_pack,
-        hotkeys_old,
-        hotkeys_new,
         payloads,
         {path: _identity(path) for path in payloads},
     )
@@ -796,132 +755,6 @@ def _exercise_utf16_save(
     )
 
 
-def _check_hotkey_profiles(inspection, payload: bytes) -> None:
-    _require(
-        inspection.inspection_complete and not inspection.input_error,
-        "键位方案检查不完整",
-    )
-    _require(
-        inspection.source.stable and not inspection.runtime_verified,
-        "静态方案来源状态错误",
-    )
-    _require(
-        inspection.source.sha256 == hashlib.sha256(payload).hexdigest(),
-        "键位来源 SHA 错误",
-    )
-    _require(
-        base64.b64decode(inspection.source.raw_base64) == payload,
-        "键位来源原字节被改写",
-    )
-    _require(
-        inspection.profiles_total == 2 and len(inspection.profiles) == 2,
-        "键位方案数错误",
-    )
-    _require(
-        sum(len(profile.bindings) for profile in inspection.profiles) == 2,
-        "原声明两绑定被推导条目替换",
-    )
-    _require(
-        all(
-            len(profile.compatibility_bindings) == 42 for profile in inspection.profiles
-        ),
-        "每方案42条兼容推导不完整",
-    )
-
-
-def _exercise_hotkeys(
-    app: App, fixtures: _Fixtures, owned: list[tk.Toplevel], errors: list[str]
-) -> None:
-    from . import gui_hotkey_config as hotkeys
-    from .hotkey_config_models import HotkeyDiff, HotkeyInspection
-
-    window = hotkeys._HotkeyConfigDialog(app)
-    owned.append(window)
-    window._path_var.set(str(fixtures.hotkeys_old))
-    window._compare_var.set("")
-    window._profile_var.set("")
-    window._mode.set("检查详情")
-    window._run_button.invoke()
-    _wait_for(app, lambda: not window._busy, "键位方案真实后台检查", errors)
-    _require(
-        isinstance(window._result, HotkeyInspection) and window._result_fresh,
-        "键位检查未交付",
-    )
-    inspection = window._result
-    assert isinstance(inspection, HotkeyInspection)
-    _check_hotkey_profiles(inspection, fixtures.payloads[fixtures.hotkeys_old])
-    text = window._output.get("1.0", "end-1c")
-    _require(
-        "== 原声明 ==" in text and "== 原工具兼容推导 ==" in text,
-        "声明与推导没有分开呈现",
-    )
-    for profile in inspection.profiles:
-        _require(
-            all(
-                binding.binding_id in text for binding in profile.compatibility_bindings
-            ),
-            "键位检查正文丢推导记录",
-        )
-    window._mode.set("完整 JSON")
-    window._switch_mode("完整 JSON")
-    displayed = json.loads(window._output.get("1.0", "end-1c"))
-    _require(
-        displayed["report_type"] == "hotkeys_inspection"
-        and not displayed["runtime_verified"],
-        "键位完整 JSON 不是静态检查",
-    )
-    destination = fixtures.root / "exports" / "hotkeys-inspect.json"
-    with _dialog_response(hotkeys.filedialog, "asksaveasfilename", str(destination)):
-        window._export_button.invoke()
-    _wait_for(
-        app,
-        lambda: destination.is_file() and not window._busy,
-        "键位 GUI 检查导出",
-        errors,
-    )
-    _require(_read_json(destination) == displayed, "键位导出与完整检查 JSON 不一致")
-    window._path_var.set(str(fixtures.hotkeys_new))
-    window._compare_var.set(str(fixtures.hotkeys_old))
-    window._run_button.invoke()
-    _wait_for(app, lambda: not window._busy, "键位方案真实后台比较", errors)
-    difference = window._result
-    _require(
-        isinstance(difference, HotkeyDiff) and window._result_fresh, "键位比较未交付"
-    )
-    assert isinstance(difference, HotkeyDiff)
-    _require(
-        difference.comparison_complete
-        and difference.has_changes
-        and difference.differences,
-        "键位比较未确认变化",
-    )
-    _require(
-        any(
-            "smartcast" in row.path and row.after == "true"
-            for row in difference.differences
-        ),
-        "smartcast 变化未完整交付",
-    )
-    _check_hotkey_profiles(difference.old, fixtures.payloads[fixtures.hotkeys_old])
-    _check_hotkey_profiles(difference.new, fixtures.payloads[fixtures.hotkeys_new])
-    displayed = json.loads(window._output.get("1.0", "end-1c"))
-    _require(
-        displayed["report_type"] == "hotkeys_diff"
-        and not displayed["runtime_verified"],
-        "键位比较 JSON 失去静态来源",
-    )
-    destination = fixtures.root / "exports" / "hotkeys-diff.json"
-    with _dialog_response(hotkeys.filedialog, "asksaveasfilename", str(destination)):
-        window._export_button.invoke()
-    _wait_for(
-        app,
-        lambda: destination.is_file() and not window._busy,
-        "键位 GUI 比较导出",
-        errors,
-    )
-    _require(_read_json(destination) == displayed, "键位导出丢失完整比较结构")
-
-
 def exercise_offline_workspaces(app: App) -> str:
     """Exercise real GUI workflows before a map is loaded, using private assets."""
     _require(
@@ -952,7 +785,6 @@ def exercise_offline_workspaces(app: App) -> str:
                 "pack-scope-real-query-handoff",
                 "save-independent-full-files",
                 "save-explicit-utf16le-no-bom",
-                "hotkeys-complete-static-projections",
                 "upgrade-explicit-category-full-exports",
                 "archive-all-export-exact-recovered-members",
                 "script-diagnostics-visible-complete-evidence",
@@ -988,7 +820,6 @@ def exercise_offline_workspaces(app: App) -> str:
                     _exercise_pack_handoff,
                     _exercise_save,
                     _exercise_utf16_save,
-                    _exercise_hotkeys,
                     exercise_upgrade_metadata,
                     exercise_archive_recovery,
                     exercise_script_diagnostics,
@@ -1071,16 +902,16 @@ def exercise_offline_workspaces(app: App) -> str:
                 )
         _raise_callback_errors(errors)
     return (
-        "offline-workspaces=reference/map-reference/pack-handoff/save/utf16-save/hotkeys/upgrade/archive/diagnostics/calls/loadout/unicode; offline-id-records=2; "
+        "offline-workspaces=reference/map-reference/pack-handoff/save/utf16-save/upgrade/archive/diagnostics/calls/loadout/unicode; offline-id-records=2; "
         "offline-map-records=2; offline-map-filtered=1; "
-        "offline-save-files=2; hotkeys-declared-bindings=2; hotkeys-projection=2x42; "
+        "offline-save-files=2; "
         "offline-selected-exports=json/tsv/md; offline-pack-handoffs=2; offline-utf16-carriers=2; "
         "upgrade-field-records=37; upgrade-field-exports=json/tsv; archive-recovered-members=7; "
         "diagnostic-maps=4; diagnostic-groups=4; diagnostic-mutations=4; diagnostic-static-only=True; "
         "calls-source-records=10; loadout-gui-exports=6; unicode-wts-carriers=2; w3f-version=3; "
-        "legacy-gui-exports=22; resource-hint-catalogs=1; v12-gui-exports=8; "
+        "legacy-gui-exports=20; resource-hint-catalogs=1; v12-gui-exports=8; "
         f"offline-gui-exports={sum(path.is_file() for path in (fixtures.root / 'exports').rglob('*'))}; "
-        f"offline-acceptance-cases={len(inventory['cases'])}; hotkeys-runtime-verified=False; "
+        f"offline-acceptance-cases={len(inventory['cases'])}; "
         f"offline-artifacts={fixtures.root}"
     )
 

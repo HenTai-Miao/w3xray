@@ -777,12 +777,12 @@ def _classify_text(path: Path, text: str | None) -> SaveFileKind:
         return SaveFileKind.BINARY
     suffix = path.suffix.lower()
     if suffix == ".json":
-        from .hotkey_config import parse_hotkey_json
+        from .json_evidence import parse_json_evidence
 
         try:
             # Classification needs syntax, not Python integers or a recursive
             # object tree. Keep arbitrary numeric tokens and duplicate keys.
-            parse_hotkey_json(text)
+            parse_json_evidence(text)
         except ValueError:
             return SaveFileKind.TEXT
         return SaveFileKind.JSON

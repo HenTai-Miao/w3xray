@@ -124,14 +124,6 @@ def build_topbar(app) -> None:
         label="离线装备方案", command=lambda: _open_loadout_workspace(app)
     )
     app.data_tools_menu.add_command(
-        label="检查 / 比较改键方案（离线）",
-        command=lambda: _open_hotkey_config(app),
-    )
-    app.data_tools_menu.add_command(
-        label="War3Tools 配置总览（离线）",
-        command=lambda: _open_war3tools_config(app),
-    )
-    app.data_tools_menu.add_command(
         label="分析真实存档文件", command=app.on_analyze_real_save_file
     )
     app.data_tools_menu.add_command(
@@ -156,9 +148,6 @@ def build_topbar(app) -> None:
     app.data_tools_menu.add_command(
         label="导出运行时对象包 (词缀/注册)",
         command=app.on_dump_runtime_objects,
-    )
-    app.data_tools_menu.add_command(
-        label="键盘速查", command=lambda: _show_hotkeys(app)
     )
     app.data_tools_menu.add_command(
         label="分析真实存档目录", command=app.on_analyze_real_save_directory
@@ -243,7 +232,7 @@ def build_topbar(app) -> None:
     )
     _attach_tooltip(
         app.data_tools_button,
-        "本地资料包/外部ID查询/离线报告/存档工作台/装备方案/改键方案/War3Tools 配置/导出",
+        "本地资料包/外部ID查询/离线报告/存档工作台/装备方案/导出",
     )
     app.data_tools_button.pack(side="left", padx=(0, 4))
     actions = ctk.CTkFrame(bar, fg_color="transparent")
@@ -427,20 +416,6 @@ def _open_loadout_workspace(app) -> None:
     from .gui_loadout_workbench import open_loadout_workbench
 
     open_loadout_workbench(app)
-
-
-def _open_hotkey_config(app) -> None:
-    """Inspect a chosen configuration without running a keyboard engine."""
-    from .gui_hotkey_config import open_hotkey_config_dialog
-
-    open_hotkey_config_dialog(app)
-
-
-def _open_war3tools_config(app) -> None:
-    """Inspect an explicitly selected tool directory or INI configuration."""
-    from .gui_war3tools_config import open_war3tools_config_dialog
-
-    open_war3tools_config_dialog(app)
 
 
 def _open_map_reference_catalog(app) -> None:
@@ -903,127 +878,3 @@ def _attach_tooltip(widget, text: str) -> None:
     widget.bind("<Enter>", _show, add="+")
     widget.bind("<Leave>", _hide, add="+")
     widget.bind("<ButtonPress>", _hide, add="+")
-
-
-def _show_hotkeys(app) -> None:
-    """键盘流速查弹窗 (与 README 速查表同源)。"""
-    import customtkinter as ctk
-
-    win = ctk.CTkToplevel(app)
-    win.title("键盘速查")
-    win.transient(app)
-    destroy_hotkeys = win.destroy
-    closed = False
-
-    def close_hotkeys(_event=None) -> None:
-        nonlocal closed
-        if closed:
-            return
-        closed = True
-        from .gui_tk_callbacks import cancel_widget_callbacks
-
-        cancel_widget_callbacks(win)
-        destroy_hotkeys()
-
-    win.destroy = close_hotkeys
-    win.protocol("WM_DELETE_WINDOW", close_hotkeys)
-    from gametool.gui_pack_query import bind_geometry_memory
-
-    bind_geometry_memory(win, "gui-hotkeys", "520x360")
-    win.grab_set()
-    win.bind("<Escape>", close_hotkeys)
-    rows = (
-        (
-            "Ctrl+1..9, Ctrl+0",
-            "直切 doc/search/list/buffs/export/synth/skills/units/locate/near 模式",
-        ),
-        (
-            "包查询勾选 JSON",
-            "输出 {section,lines} 单行 JSON 供脚本解析",
-        ),
-        (
-            "pack-query again",
-            "重跑最近一次成功查询 (CLI/GUI 共享记忆)",
-        ),
-        (
-            "live 探针弹窗",
-            "只读读局: Ctrl+R 重探; 勾选玩家/全单位/资源; JSON 自动复制",
-        ),
-        ("回车", "执行当前模式查询 / 跳下一处搜索命中"),
-        ("Ctrl+F", "聚焦内搜框 (结果找完续搜收藏框)"),
-        ("Esc", "关闭弹窗"),
-        ("双击卡片", "对象全景查询"),
-        ("右键卡片", "哪来/谁掉/全景 三键直达"),
-        ("右键结果区", "复制全部 / 导出 .md"),
-        ("右键收藏", "复制收藏 / 清空 / 导出收藏 .md"),
-    )
-    box = ctk.CTkTextbox(win, font=("Consolas", 13), wrap="word")
-    box.pack(fill="both", expand=True, padx=10, pady=10)
-    for key, desc in rows:
-        box.insert("end", f"{key:<12} {desc}\n")
-    box.configure(state="disabled")
-
-    def _export_hotkeys_md(content: str) -> None:
-        from .archive_export import tmp_extract_dir
-
-        out_dir = tmp_extract_dir("hotkeys-export")
-        out_path = os.path.join(out_dir, "键盘速查.md")
-        with open(out_path, "w", encoding="utf-8") as handle:
-            handle.write(content)
-        win.clipboard_clear()
-        win.clipboard_append(out_path)
-        messagebox.showinfo("已导出", out_path)
-
-    _bind_textbox_search(win, box, exporter=_export_hotkeys_md)
-
-
-def _bind_textbox_search(win, box, exporter=None) -> None:
-    """CTkTextbox 内搜: Ctrl+F 聚焦, 回车逐处跳并高亮 (定位双通道惯例)。"""
-    import tkinter as tk
-
-    bar = ctk.CTkFrame(win)
-    bar.pack(fill="x", padx=10, pady=(10, 0))
-    entry = ctk.CTkEntry(bar, placeholder_text="Ctrl+F 搜索… 回车跳下一处")
-    entry.pack(side="left", fill="x", expand=True)
-    state = {"pos": "1.0"}
-
-    def _find(_event=None) -> None:
-        kw = entry.get().strip()
-        box.tag_remove("hit", "1.0", "end")
-        if not kw:
-            state["pos"] = "1.0"
-            return
-        start = box.search(kw, state["pos"], stopindex="end", nocase=True)
-        if not start:
-            state["pos"] = "1.0"
-            start = box.search(kw, "1.0", stopindex="end", nocase=True)
-            if not start:
-                return
-        end = f"{start}+{len(kw)}c"
-        box.tag_add("hit", start, end)
-        box.see(start)
-        state["pos"] = end
-
-    box.tag_config("hit", background="#8a6d00", foreground="white")
-    menu = tk.Menu(win, tearoff=0)
-    menu.add_command(
-        label="复制全部",
-        command=lambda: (
-            win.clipboard_clear(),
-            win.clipboard_append(box.get("1.0", "end")),
-        ),
-    )
-    if exporter is not None:
-        menu.add_command(
-            label="导出 (.md)",
-            command=lambda: exporter(box.get("1.0", "end")),
-        )
-    box.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
-    entry.bind("<Return>", _find)
-    entry.bind(
-        "<Escape>", lambda _e: (box.tag_remove("hit", "1.0", "end"), win.focus_set())
-    )
-    win.bind("<Control-f>", lambda _e: entry.focus_set() or None)
-
-    # CapsLock 大写态变体 (Tk 绑定大小写敏感)
-    win.bind("<Control-F>", lambda _e: entry.focus_set() or None)

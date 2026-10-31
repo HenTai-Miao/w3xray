@@ -284,9 +284,8 @@ tests/test_guide_positions_complete.py
 tests/test_guide_report.py
 tests/test_guide_window_callbacks.py
 tests/test_historical_icon_backfill.py
-tests/test_hotkey_config.py
-tests/test_hotkey_config_cli.py
-tests/test_hotkey_config_gui.py
+tests/test_json_evidence.py
+tests/test_report_file_proof.py
 tests/test_huffman.py
 tests/test_icon_candidate_bindings.py
 tests/test_icon_candidate_input_normalization.py
@@ -583,10 +582,6 @@ tests/test_w3obj.py
 tests/test_w3obj_evidence.py
 tests/test_w3world.py
 tests/test_war3_encoding.py
-tests/test_war3tools_config.py
-tests/test_war3tools_config_cli.py
-tests/test_war3tools_adoption_integration.py
-tests/test_gui_war3tools_config.py
 tests/test_pack_query_combat_evidence.py
 tests/test_wct.py
 tests/test_windows_acceptance_assets.py

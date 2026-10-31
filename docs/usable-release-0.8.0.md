@@ -79,27 +79,6 @@ JSON、TSV、Markdown 导出包含来源哈希、完整结构、偏移、原字�
 '-load EXAMPLE123' | & '.\GameXRay 游戏档案透视器.exe' savecodes --stdin --json
 ```
 
-## 离线检查与比较改键方案
-
-进入「数据工具 → 检查 / 比较改键方案（离线）」，明确选择 `config.json`，点击检查。
-有旧文件时可以比较两份方案；查看原声明、冲突、完整 JSON 和兼容推导，并导出独立新报告。
-来源和筛选改变后，旧后台结果不会替代新选择；导出保留原配置和已有报告。
-
-读取合同来自给定 `War3ReforgedHotkeys-v2.0.0.exe` 的静态证据。
-原声明与原工具补齐的每方案 42 槽分别列出：旧组名迁移、非空 target 改为 source、
-未知 ID 被忽略、重复 ID 后项覆盖及缺槽补齐均可见。未知字段、重复 JSON 键、重复绑定、
-数值原始拼写及原字节仍保留，源文件不会因此改写。
-
-```powershell
-& '.\GameXRay 游戏档案透视器.exe' hotkeys inspect 'D:\方案\config.json' --json
-& '.\GameXRay 游戏档案透视器.exe' hotkeys inspect 'D:\方案\config.json' --profile 'Default' --output 'D:\报告\检查.json' --json
-& '.\GameXRay 游戏档案透视器.exe' hotkeys diff 'D:\方案\旧.json' 'D:\方案\新.json' --output 'D:\报告\差异.json' --json
-```
-
-退出码 0 表示完整且没有问题；1 表示完整检查发现问题或比较发现差异；2 表示输入、身份或完整性问题。
-报告保留 `runtime_verified=false`：静态读取合同不是官方导出认证或游戏实机效果保证。
-该窗口不应用改键、不安装钩子、不发送输入，也不自动搜索用户的真实 AppData 配置。
-
 ## SLK 地图来源与空值
 
 SLK 解析保留原始记录、列、单元格、稀疏坐标、字段位置和完整诊断。

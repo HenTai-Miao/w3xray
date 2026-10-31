@@ -7,6 +7,7 @@ from unittest.mock import patch
 import customtkinter as ctk
 
 from gametool.gui_live_probe import LiveProbeWindow
+from gametool.gui_loadout_workbench import LoadoutWorkbench
 from gametool.gui_profile_settings import ExtractionProfileDialog
 from gametool.gui_topbar import _GUIDE_SCROLL, _open_guide_window
 from gametool.map_data import MapData
@@ -58,7 +59,7 @@ class ToolbarDialogCallbackTest(GuiTestCase):
         finally:
             dialog.destroy()
 
-    def test_neighboring_host_callbacks_open_live_and_hotkey_dialogs(self) -> None:
+    def test_neighboring_host_callbacks_open_live_and_loadout_dialogs(self) -> None:
         errors: list[str] = []
         with (
             patch.object(LiveProbeWindow, "_start", return_value=None),
@@ -81,16 +82,38 @@ class ToolbarDialogCallbackTest(GuiTestCase):
             live.destroy()
 
             existing = set(self.app.winfo_children())
-            self.app.data_tools_menu.invoke("键盘速查")
-            hotkeys = next(
+            self.app.data_tools_menu.invoke("离线装备方案")
+            loadout = next(
                 child
                 for child in self.app.winfo_children()
-                if child not in existing and isinstance(child, ctk.CTkToplevel)
+                if child not in existing and isinstance(child, LoadoutWorkbench)
             )
             self.app.update_idletasks()
             self.app.update()
-            assert hotkeys.master is self.app
-            hotkeys.destroy()
+            assert loadout.master is self.app
+            assert loadout.winfo_exists()
+            loadout.destroy()
             self.app.update()
 
         assert errors == []
+
+    def test_data_tools_keep_content_workspaces_without_key_tool_entries(self) -> None:
+        menu = self.app.data_tools_menu
+        end = menu.index("end")
+        assert end is not None
+        labels = {
+            menu.entrycget(index, "label")
+            for index in range(end + 1)
+            if menu.type(index) == "command"
+        }
+        assert {
+            "离线存档工作台",
+            "离线装备方案",
+            "直接打开地图对象目录（离线）",
+            "打开本地资料包查询（离线）",
+        } <= labels
+        assert not labels & {
+            "检查 / 比较改键方案（离线）",
+            "War3Tools 配置总览（离线）",
+            "键盘速查",
+        }

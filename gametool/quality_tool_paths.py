@@ -237,7 +237,6 @@ gametool/gui_data_tabs.py
 gametool/gui_export_actions.py
 gametool/gui_external_data.py
 gametool/gui_extraction_reports.py
-gametool/gui_hotkey_config.py
 gametool/gui_icon_cache.py
 gametool/gui_icon_evidence_loader.py
 gametool/gui_icon_gap_layout.py
@@ -254,7 +253,6 @@ gametool/gui_loader.py
 gametool/gui_loader_host.py
 gametool/gui_loader_runner.py
 gametool/gui_loadout_workbench.py
-gametool/gui_war3tools_config.py
 gametool/gui_map_resources.py
 gametool/gui_module_refresh.py
 gametool/gui_object_detail.py
@@ -296,9 +294,8 @@ gametool/guide_minimap.py
 gametool/guide_report.py
 gametool/hero_chain.py
 gametool/historical_icon_bindings.py
-gametool/hotkey_config.py
-gametool/hotkey_config_cli.py
-gametool/hotkey_config_models.py
+gametool/json_evidence.py
+gametool/report_file_proof.py
 gametool/huffman.py
 gametool/icon_candidate_bindings.py
 gametool/icon_evidence_builder.py
@@ -590,11 +587,6 @@ gametool/w3i_reader.py
 gametool/w3obj.py
 gametool/w3world.py
 gametool/war3_encoding.py
-gametool/war3tools_config.py
-gametool/war3tools_config_cli.py
-gametool/war3tools_config_models.py
-gametool/war3tools_config_report.py
-gametool/war3tools_config_schema.py
 gametool/wct.py
 gametool/westrings.py
 gametool/windows_output_paths.py

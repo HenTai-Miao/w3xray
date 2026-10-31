@@ -186,8 +186,6 @@ class _Fixtures:
     pack_root: Path
     pack_child: Path
     unrelated_pack: Path
-    hotkeys_old: Path
-    hotkeys_new: Path
     payloads: dict[Path, bytes]
     identities: dict[Path, tuple[int, ...]]
 

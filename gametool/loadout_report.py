@@ -12,14 +12,14 @@ import tempfile
 from typing import Any
 
 from .batch_tsv import format_tsv_rows
-from .hotkey_config_cli import (
-    _cleanup_report_paths,
-    _parent_proof,
-    _report_metadata,
-    _require_report_payload,
-)
 from .live_report_io import _parents, read_report_bytes
 from .loadout_documents import LoadoutDocument, LoadoutRecord, inspect_loadout_document
+from .report_file_proof import (
+    cleanup_report_paths,
+    report_metadata,
+    report_parent_proof,
+    require_report_payload,
+)
 from .search import compile_query
 from .windows_output_paths import native_output_path, validate_output_root
 
@@ -65,11 +65,20 @@ def _same_source(expected: dict[str, Any], actual: dict[str, Any]) -> bool:
     return all(actual.get(key) == value for key, value in expected.items())
 
 
+def _read_loadout_source(path: str | Path) -> tuple[bytes, dict[str, Any]]:
+    """Use native Windows I/O without changing the reported source spelling."""
+    validate_output_root(os.fspath(path))
+    display_path = os.path.abspath(path)
+    raw, metadata = read_report_bytes(native_output_path(display_path))
+    metadata["path"] = display_path
+    return raw, metadata
+
+
 def revalidate_loadout_source(report: LoadoutReport) -> None:
     """Re-read every source byte, including changes with restored size/mtime."""
     if not report.stable:
         raise ValueError("来源未通过稳定复验；请重新读取后导出。")
-    _raw, metadata = read_report_bytes(report.source_metadata["path"])
+    _raw, metadata = _read_loadout_source(report.source_metadata["path"])
     if not _same_source(report.source_metadata, metadata):
         raise ValueError("方案来源的完整字节或身份已变化；请点击读取 / 刷新后重试。")
 
@@ -77,7 +86,7 @@ def revalidate_loadout_source(report: LoadoutReport) -> None:
 def read_loadout_report(
     path: str | Path, *, text_encoding: str = "auto"
 ) -> LoadoutReport:
-    raw, metadata = read_report_bytes(path)
+    raw, metadata = _read_loadout_source(path)
     document = inspect_loadout_document(
         raw, metadata["path"], text_encoding=text_encoding
     )
@@ -296,7 +305,7 @@ def write_loadout_export(
     if os.path.lexists(destination_io):
         raise ValueError("导出路径必须是不存在的新文件；原方案和已有报告保持不变。")
     revalidate_loadout_source(selection.report)
-    proof = _parent_proof(destination)
+    proof = report_parent_proof(destination)
     data = loadout_report_payload(selection, format).encode("utf-8")
     revalidate_loadout_source(selection.report)
     digest = hashlib.sha256(data).hexdigest()
@@ -314,14 +323,14 @@ def write_loadout_export(
                 stream.write(data)
                 stream.flush()
                 os.fsync(stream.fileno())
-            expected = _report_metadata(os.fstat(descriptor))
-            if expected[2] != len(data) or _parent_proof(destination) != proof:
+            expected = report_metadata(os.fstat(descriptor))
+            if expected[2] != len(data) or report_parent_proof(destination) != proof:
                 raise OSError("报告长度或输出目录变化；未确认发布。")
-            _, named = _require_report_payload(stage, descriptor, expected, digest)
+            _, named = require_report_payload(stage, descriptor, expected, digest)
             revalidate_loadout_source(selection.report)
             os.link(stage, destination_io)
             created = True
-            linked, _ = _require_report_payload(
+            linked, _ = require_report_payload(
                 stage,
                 descriptor,
                 expected,
@@ -329,17 +338,17 @@ def write_loadout_export(
                 expected_named=named,
                 allow_link_change_time=True,
             )
-            _require_report_payload(
+            require_report_payload(
                 destination_io, descriptor, linked, digest, expected_named=named
             )
-            if _parent_proof(destination) != proof:
+            if report_parent_proof(destination) != proof:
                 raise OSError("报告父目录在发布时变化。")
             revalidate_loadout_source(selection.report)
             completed = True
         finally:
             primary = sys.exc_info()[1]
             os.close(descriptor)
-            retained = _cleanup_report_paths(
+            retained = cleanup_report_paths(
                 (destination_io, stage) if created and not completed else (stage,),
                 owned_identity,
             )

@@ -13,8 +13,7 @@ import hashlib
 import json
 import re
 
-from .hotkey_config import parse_hotkey_json
-from .hotkey_config_models import JsonNode
+from .json_evidence import JsonNode, parse_json_evidence
 from .object_codes import valid_object_code
 from .save_text_encoding import inspect_save_text
 
@@ -518,7 +517,7 @@ def inspect_loadout_document(
             reader.diagnostic("text-encoding", "$", message)
     else:
         try:
-            nodes, root = parse_hotkey_json(text)
+            nodes, root = parse_json_evidence(text)
         except ValueError as exc:
             status = "partial"
             reader.diagnostic(

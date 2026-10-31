@@ -3,6 +3,7 @@
 > **X-ray game archives.** 当前支持 Warcraft III 地图/战役；通过 `gametool/games/` 适配层可插拔扩展更多游戏。
 
 当前只维护 Windows 版，发行目标为 Windows x64，提供目录版和单文件版。
+产品聚焦地图、战役、存档和资料文件的内容解析、证据查询与结果导出。
 
 从零实现的**游戏档案透视工具**；Warcraft III 地图 MPQ 解析为纯 Python，并包含基于 CascLib 3.0 的 Windows 原生 CASC 后端。
 核心管线只认通用提取类目（对象/单位/技能/触发器/关系/世界/预放置/脚本/资源/基础），游戏专属规则全部隔离在适配层——**新增游戏 = 新增一个适配器模块，不改核心代码**。
@@ -40,7 +41,7 @@ Skin 对象层、完整二进制字段、参考库批量导出、存档编码选
 [0.10.0 使用说明](docs/usable-release-0.10.0.md)。
 直接打开地图、地图信息与 WTS 原始证据的既有步骤见
 [0.9.0 地图直接查询与证据使用说明](docs/usable-release-0.9.0.md)。
-存档、改键方案和外部 ID 的既有操作见
+存档和外部 ID 的既有操作见
 [0.8.0 离线资料与存档工作台使用说明](docs/usable-release-0.8.0.md)。
 地图导出和已有查询的操作说明另见 [0.6.2 使用与验收说明](docs/usable-release-0.6.2.md)。
 
@@ -48,7 +49,7 @@ Skin 对象层、完整二进制字段、参考库批量导出、存档编码选
 见 [2026-10-27 静态审计](docs/analysis/war3-tools-audit-2026-10-27.md)。
 该审计固定于 0.6.2 源码基线；加入存档盒子后的七工具复核与本次落地范围见
 [2026-10-28 审计与实施对照](docs/analysis/war3-tools-adoption-2026-10-28.md)。
-当前版本可导入用户本地的盒子兼容 ID 文本、无地图分析存档，以及离线检查和比较改键方案。
+当前版本可导入用户本地的盒子兼容 ID 文本，并在没有地图的情况下分析存档内容。
 未验证的运行时布局仍单列状态。
 新增两份 Trainer 输入的全量静态差异、功能归属与本版实现见
 [2.1.21 / R8 复核与实施对照](docs/analysis/war3-trainer-2.1.21-adoption-2026-10-28.md)。
@@ -84,10 +85,6 @@ uv run main.py reference --kind versions --json         # 档案支持与来源
 uv run main.py reference --pack <资料包> --kind fields   # 字段说明与完整证据
 uv run main.py reference --map <地图或战役> --kind objects --json # 直接建立完整对象目录
 uv run main.py reference --id-table <盒子兼容ID目录> --kind objects --json  # 外部ID来源
-uv run main.py hotkeys inspect <config.json> --json    # 离线配置诊断
-uv run main.py hotkeys diff <旧config.json> <新config.json> --json
-uv run main.py war3tools <War3Tools配置目录或单个INI> --json # 离线查看全部配置与按键冲突
-uv run main.py war3tools <配置目录> --query "冷却 || Camera" --export <目录外的新报告.json>
 uv run main.py current         # 获取游戏进程正在使用的地图并解析只读快照
 uv run main.py wgc <配置.wgc>   # 命令行查看 World Editor AI 测试配置
 uv run main.py casc --help      # CASC Root 全量清单 / 单文件导出
@@ -96,8 +93,6 @@ uv run main.py acceptance --help # 源码或打包 EXE 验收并生成 JSON
 uv run main.py batch <地图目录> --output <新输出目录> --game-data <客户端证据目录>
 uv run gamexray-test             # 运行测试（Windows 下避开 pytest.exe trampoline）
 ```
-
-War3Tools 配置也可从 GUI 的「数据工具 → War3Tools 配置总览（离线）」打开，支持文件/目录选择、完整字段搜索和 JSON/Markdown/TSV 报告。目录模式递归读取全部 INI，保留重复键、未知字段、编码与原始来源；按键冲突区分声明证据与未证实的激活条件。解析和导出完全离线，不需要安装或运行 `.mix` 插件，报告不能当作插件配置导入。源文件改变会明确提示刷新，导出使用来源目录之外的新文件。
 
 地图查询的 `units` / `heroes` 会按地图声明的默认技能 `uabi` 与可学习技能 `uhab` 联查技能完整字段，并支持通过关联技能字段找到单位；`skills` 同时提供逐级冷却、蓝耗、施法距离、作用范围和持续时间等静态参数摘要。原字段、来源、冲突和空覆盖证据完整保留，限量选取整条单位/技能记录。这些值描述地图声明，不等于游戏当时的剩余冷却或实际战斗数值。
 
@@ -111,7 +106,6 @@ uv run main.py batch <maps-root> --output <v6-root> --game-data <client-or-trust
 ```
 
 每张已发布地图必须包含 `图标未解析.tsv`，逐项保留规范路径、主原因、诊断标志和对象引用；
-GUI 快捷键与弹窗惯例在应用内随时可查：数据工具菜单 →「键盘速查」（Ctrl+F 内搜、右键复制/导出 .md、尺寸跨会话记忆）。
 `对象完整描述.tsv` 保留全部证据，并以 `是否当前值` 区分当前选择。GUI 对象详情可在
 「当前文本」和「全部证据」之间切换，两种视图都不截断正文。掉落、商店、合成、地面放置、
 脚本奖励及装备技能仍可从关系证据跳转到对应对象。
@@ -321,16 +315,6 @@ powershell -ExecutionPolicy Bypass -File tools/run_windows_acceptance.ps1 `
   双击卡片默认全景——浏览列表时悬停哪行查哪行。
 - **增益/技能/单位清单**：`buffs` / `skills` / `units` [关键词]——三张效果表专属清单，
   名称/ID/效果三路过滤，说明自动剥色码（8 张对象表全部有专属清单入口）。
-- **键盘流速查**：
-
-  | 按键 | 作用 | 窗口 |
-  |---|---|---|
-  | `Ctrl+1..9` | 直切 doc/search/list/buffs/export/synth/skills/units/locate 模式 | 包查询 |
-  | `回车` | 执行当前模式查询 / 跳下一处搜索命中 | 两弹窗 |
-  | `Ctrl+F` | 聚焦内搜框（结果区找完自动续搜收藏框） | 两弹窗 |
-  | `Esc` | 关闭弹窗 | 两弹窗 |
-  | `双击卡片` | 对象全景查询 | 对象列表 |
-  | `右键卡片/结果/收藏` | 三键直达 / 复制 / 导出 .md | 全局 |
 - **运行时只读透视**：`main.py live` 从运行中的游戏进程只读提取地图与对象信息（`ReadProcessMemory`，绝不写入），加密壳图静态解析失败时经内存层导出完整知识包：`live --dump-objects <目录>` 产出对象表/字段/注册数据/词缀表 TSV，供 `pack-query` 查询。
 - **获取当前地图**：GUI 顶栏按钮或 CLI `main.py current` 根据游戏进程与磁盘证据定位 `.w3x/.w3m/.w3n`，通过置信度门槛后只解析私有临时快照，不改源地图。
 - **局内定位反查**：`live` 输出尾部的探针 JSON 带当前坐标，复制进

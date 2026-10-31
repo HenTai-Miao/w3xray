@@ -58,8 +58,6 @@ LEGACY_EXPORT_NAMES = (
     "selected-map.md",
     "save-report.json",
     "save-utf16le.json",
-    "hotkeys-inspect.json",
-    "hotkeys-diff.json",
     "upgrade-fields.json",
     "upgrade-fields-selected.tsv",
     "archive-recovery/war3map.j",

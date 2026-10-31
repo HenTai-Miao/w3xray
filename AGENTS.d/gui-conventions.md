@@ -69,7 +69,5 @@
 ## 通用接入点（八九至九一轮新增）
 
 - **`bind_geometry_memory(win, name, fallback)`**（gui_pack_query.py）：尺寸记忆一行接入——还原记忆尺寸 + 关闭落盘一体化，新弹窗不再各写一遍。旧手写模式（get+_remember 分开写）已全库清零迁移（159 轮）：攻略/速查窗均走本接入点，外部直接引用 `_WINDOW_GEOMETRY` 属违规。适用边界：**内容区型弹窗**（查询/报告/速查，用户会调大小）接记忆；**表单型固定尺寸对话框**（如提取设置 520x600，尺寸由内容决定、模态短生命周期）豁免。
-- **`_bind_textbox_search(win, box)`**（gui_topbar.py）：CTkTextbox 内搜一行接入——Ctrl+F 聚焦 + 回车逐处跳 + 黄底高亮，到尾自动回卷。四态实证背书（九十六至九十九轮真窗验证）：事件派发（handler 直调 + `when="now"`）/ 单命中回卷同位 / 双命中 1→2→1 循环 / 换词 pos 残留兜底 / 空词回车=清除搜索。冒烟注意：CTk 双层绑定在窗口未 realize 时不派发事件，`event_generate` 需 `update_idletasks()+update()+when="now"` 三件套，盲跑 0 命中是脚本问题不是实现问题。
 - **`_attach_tooltip(widget, text)`**（gui_topbar.py）：hover 提示一行接入——Enter 显示 / Leave+点击 销毁轻量 Toplevel；顶栏七按钮已全接入，新按钮加提示照抄一行。回归锁定: tests/test_gui_topbar_tooltips.py 三断言。
-- **键盘速查窗**（gui_topbar.py `_show_hotkeys`）：新弹窗 checklist 的活样板——六件套全齐（Esc+grab_set/尺寸记忆/内搜/右键复制+导出 .md/等宽对齐/速查表数据源与 README 同步）。
 

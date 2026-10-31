@@ -31,19 +31,19 @@ def test_save_workspace_captures_optional_map_without_requiring_it(
     assert calls == [(host, {"map_data": original})]
 
 
-def test_offline_hotkey_entry_requires_no_map_or_process(
+def test_offline_loadout_entry_requires_no_map_or_process(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from gametool import gui_hotkey_config
+    from gametool import gui_loadout_workbench
 
     host = SimpleNamespace()
     calls = []
-    monkeypatch.setattr(gui_hotkey_config, "open_hotkey_config_dialog", calls.append)
-    gui_topbar._open_hotkey_config(host)
+    monkeypatch.setattr(gui_loadout_workbench, "open_loadout_workbench", calls.append)
+    gui_topbar._open_loadout_workspace(host)
     assert calls == [host]
 
 
-def test_main_dispatches_real_hotkeys_help_without_creating_gui(
+def test_main_dispatches_real_loadout_help_without_creating_gui(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     from gametool import gui
@@ -52,13 +52,38 @@ def test_main_dispatches_real_hotkeys_help_without_creating_gui(
         pytest.fail("A public offline help command must never open the GUI")
 
     monkeypatch.setattr(gui, "App", unexpected_gui)
-    monkeypatch.setattr(sys, "argv", ["gamexray", "hotkeys", "--help"])
+    monkeypatch.setattr(sys, "argv", ["gamexray", "loadout", "--help"])
     with pytest.raises(SystemExit) as stopped:
         app.main()
     assert stopped.value.code == 0
     help_text = capsys.readouterr().out
-    assert "inspect" in help_text and "diff" in help_text
-    assert "hotkeys" in app.top_level_help()
+    assert "--query" in help_text and "--export" in help_text
+    assert "loadout" in app.top_level_help()
+
+
+@pytest.mark.parametrize("command", ("hotkeys", "war3tools"))
+@pytest.mark.parametrize("arguments", ((), ("--help",)))
+def test_removed_key_tool_commands_reject_without_creating_gui(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    command: str,
+    arguments: tuple[str, ...],
+) -> None:
+    from gametool import gui
+
+    def unexpected_gui() -> None:
+        pytest.fail("An unknown command must never open the GUI")
+
+    monkeypatch.setattr(gui, "App", unexpected_gui)
+    monkeypatch.setattr(sys, "argv", ["gamexray", command, *arguments])
+    with pytest.raises(SystemExit) as stopped:
+        app.main()
+    assert stopped.value.code == 2
+    result = capsys.readouterr()
+    assert "未知子命令或选项" in result.err
+    assert command in result.err and "gamexray --help" in result.err
+    assert result.out == ""
+    assert command not in app.top_level_help()
 
 
 def test_main_reference_accepts_a_real_external_id_file(

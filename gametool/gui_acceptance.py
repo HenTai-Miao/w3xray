@@ -36,11 +36,6 @@ def run_gui_acceptance(
             _exercise_dialog(
                 app, getattr(app, "profile_settings_button").invoke, "提取设置"
             )
-            _exercise_dialog(
-                app,
-                lambda: getattr(app, "data_tools_menu").invoke("键盘速查"),
-                "键盘速查",
-            )
             offline_detail = exercise_offline_workspaces(app)
             app._on_loaded(
                 payload.active,
@@ -92,7 +87,7 @@ def run_gui_acceptance(
             detail = (
                 f"loaded={payload.active.name}; tabs={len(visited)}; "
                 f"{','.join(visited)}{query_detail}; guide-open-close; "
-                f"settings-hotkeys-open-close; {offline_detail}"
+                f"settings-open-close; {offline_detail}"
             )
         finally:
             try:

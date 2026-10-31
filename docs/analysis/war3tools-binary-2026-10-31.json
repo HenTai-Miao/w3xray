@@ -16228,7 +16228,7 @@
     }
   ],
   "adoption_status": {
-    "offline_full_configuration_gui_cli": "implemented_independent_offline_workflow",
+    "offline_full_configuration_gui_cli": "removed_from_product_at_user_request",
     "unit_hero_linked_ability_level_fields": "implemented_static_map_evidence_queries",
     "acceptance_report": "docs/analysis/tool-adoption-status-2026-10-31.md",
     "runtime_binary_parity": "not_claimed"
